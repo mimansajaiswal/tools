@@ -7,9 +7,9 @@
     <title>PDF Stack Designer</title>
 
     <!-- Tailwind CSS for UI -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        window.tailwind = window.tailwind || {};
-        window.tailwind.config = {
+        tailwind.config = {
             theme: {
                 extend: {
                     fontFamily: {
@@ -58,7 +58,6 @@
             }
         };
     </script>
-    <script src="https://cdn.tailwindcss.com"></script>
 
     <!-- PDF.js for parsing PDF files -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -71,6 +70,24 @@
             font-family: 'Inter', sans-serif;
             background-color: #f5eee3;
             color: #292524;
+        }
+
+        .btn-accent {
+            background-color: #866fa3;
+            color: #fdfaf7;
+        }
+
+        .btn-accent:hover {
+            background-color: #6f598d;
+        }
+
+        .btn-charcoal {
+            background-color: #3c3631;
+            color: #fdfaf7;
+        }
+
+        .btn-charcoal:hover {
+            background-color: #2d2a27;
         }
 
         /* Custom Scrollbar for the settings panel */
@@ -96,10 +113,15 @@
             background-image:
                 linear-gradient(45deg, #eadcc5 25%, transparent 25%),
                 linear-gradient(-45deg, #eadcc5 25%, transparent 25%),
-                linear-gradient(45deg, transparent 75%, #eadcc5 75%),
-                linear-gradient(-45deg, transparent 75%, #eadcc5 75%);
-            background-size: 20px 20px;
+                linear-gradient(45deg, transparent 75%, rgba(149, 134, 114, 0.2) 75%),
+                linear-gradient(-45deg, transparent 75%, rgba(149, 134, 114, 0.2) 75%);
+            background-size: 24px 24px;
             background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+
+        input[type="range"],
+        input[type="checkbox"] {
+            accent-color: #9f86c0;
         }
     </style>
 
@@ -123,7 +145,7 @@
         </div>
         <div class="flex gap-3">
             <label for="pdf-upload"
-                class="cursor-pointer bg-amethyst-500 hover:bg-amethyst-600 text-white px-4 py-2 rounded-md text-sm font-medium transition shadow-sm flex items-center gap-2">
+                class="cursor-pointer btn-accent px-4 py-2 rounded-md text-sm font-medium transition shadow-sm flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
                     stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -134,7 +156,7 @@
             <input type="file" id="pdf-upload" accept="application/pdf" class="hidden" />
 
             <button id="download-btn"
-                class="bg-charcoal-600 hover:bg-charcoal-700 text-white px-4 py-2 rounded-md text-sm font-medium transition shadow-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                class="btn-charcoal px-4 py-2 rounded-md text-sm font-medium transition shadow-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled>
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
                     stroke="currentColor">
@@ -169,6 +191,7 @@
                             <option value="ltr">Left to Right</option>
                             <option value="rtl">Right to Left</option>
                             <option value="ttb">Top to Bottom</option>
+                            <option value="btt">Bottom to Top</option>
                         </select>
                     </div>
 
@@ -214,7 +237,37 @@
                             class="w-full h-2 bg-linen-200 rounded-lg appearance-none cursor-pointer accent-amethyst-500">
                     </div>
 
+                    <!-- Margin Crop -->
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <label class="block text-sm font-medium text-earth-700">Margin Crop (After First)</label>
+                            <span id="margin-crop-value" class="text-xs text-earth-400 font-semibold">0%</span>
+                        </div>
+                        <input type="range" id="margin-crop" min="0" max="30" value="0"
+                            class="mt-1 w-full h-2 bg-linen-200 rounded-lg appearance-none cursor-pointer accent-amethyst-500">
+                        <p class="text-[11px] text-earth-500 mt-1">Trims the leading edge (based on stack direction) so
+                            inner pages reveal more content.</p>
+                    </div>
+
                     <!-- Shadow -->
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <label class="block text-sm font-medium text-earth-700">Drop Shadow</label>
+                            <div class="flex items-center gap-2">
+                                <span id="shadow-toggle-value" class="text-xs text-earth-400 font-semibold">On</span>
+                                <label class="inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="shadow-toggle" class="sr-only peer" checked>
+                                    <span
+                                        class="w-10 h-5 bg-earth-200 peer-checked:bg-amethyst-500 rounded-full transition-colors relative">
+                                        <span
+                                            class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5"></span>
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+                        <p class="text-[11px] text-earth-500 mt-1">Toggle drop shadows for more minimal stacks.</p>
+                    </div>
+
                     <div>
                         <label class="block text-sm font-medium text-earth-700 mb-1">Shadow Intensity</label>
                         <input type="range" id="shadow-blur" min="0" max="100" value="40"
@@ -223,15 +276,26 @@
 
                     <!-- Background -->
                     <div>
-                        <label class="block text-sm font-medium text-earth-700 mb-1">Background</label>
-                        <div class="flex items-center gap-2">
-                            <input type="checkbox" id="transparent-bg" checked
-                                class="w-4 h-4 text-amethyst-500 rounded focus:ring-amethyst-300 border-earth-300">
-                            <span class="text-sm text-earth-600">Transparent</span>
+                        <div class="flex items-center justify-between">
+                            <label class="block text-sm font-medium text-earth-700">Canvas Background</label>
+                            <div class="flex items-center gap-2">
+                                <span id="bg-toggle-value"
+                                    class="text-xs text-earth-400 font-semibold">Transparent</span>
+                                <label class="inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="transparent-bg" class="sr-only peer" checked>
+                                    <span
+                                        class="w-10 h-5 bg-earth-200 peer-checked:bg-amethyst-500 rounded-full transition-colors relative">
+                                        <span
+                                            class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5"></span>
+                                    </span>
+                                </label>
+                            </div>
                         </div>
-                        <div id="bg-color-wrapper" class="mt-2 hidden">
+                        <div id="bg-color-wrapper" class="mt-3 hidden">
+                            <label class="text-xs uppercase tracking-wide text-earth-500 font-semibold mb-1 block">Fill
+                                Color</label>
                             <input type="color" id="bg-color" value="#ffffff"
-                                class="w-full h-8 cursor-pointer rounded-md border border-earth-300">
+                                class="w-full h-9 cursor-pointer rounded-md border border-earth-300">
                         </div>
                     </div>
                 </div>
@@ -240,7 +304,7 @@
         </aside>
 
         <!-- Main Preview Area -->
-        <main class="flex-1 bg-linen-200 checkerboard flex items-center justify-center overflow-auto p-8 relative"
+        <main class="flex-1 bg-linen-200 flex items-center justify-center overflow-auto p-8 relative"
             id="canvas-container">
             <div class="text-center text-earth-500" id="placeholder-text">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto mb-4 text-earth-400" fill="none"
@@ -267,10 +331,14 @@
                 vStep: 10,
                 rotation: -5,
                 jitter: 2,
+                marginCrop: 0,
+                shadowEnabled: true,
                 shadowBlur: 40,
                 transparentBg: true,
                 bgColor: '#ffffff'
-            }
+            },
+            renderToken: 0,
+            limitDebounce: null
         };
 
         // --- DOM Elements ---
@@ -290,6 +358,8 @@
                 vStep: document.getElementById('v-step'),
                 rotation: document.getElementById('rotation'),
                 jitter: document.getElementById('jitter'),
+                marginCrop: document.getElementById('margin-crop'),
+                shadowEnabled: document.getElementById('shadow-toggle'),
                 shadowBlur: document.getElementById('shadow-blur'),
                 transparentBg: document.getElementById('transparent-bg'),
                 bgColor: document.getElementById('bg-color')
@@ -310,19 +380,35 @@
                     if (key === 'pageLimit') document.getElementById('limit-val').innerText = `(${el.value})`;
                     if (key === 'transparentBg') {
                         document.getElementById('bg-color-wrapper').style.display = el.checked ? 'none' : 'block';
+                        document.getElementById('bg-toggle-value').innerText = el.checked ? 'Transparent' : 'Solid';
+                    }
+                    if (key === 'marginCrop') {
+                        document.getElementById('margin-crop-value').innerText = `${el.value}%`;
+                    }
+                    if (key === 'shadowEnabled') {
+                        document.getElementById('shadow-toggle-value').innerText = el.checked ? 'On' : 'Off';
                     }
 
                     // Redraw if we have images
                     if (state.pageImages.length > 0) {
                         if (key === 'pageLimit') {
-                            // Re-render PDF pages if limit changes
-                            loadPagesFromDoc();
+                            if (state.limitDebounce) clearTimeout(state.limitDebounce);
+                            state.limitDebounce = setTimeout(() => {
+                                loadPagesFromDoc();
+                            }, 200);
                         } else {
                             drawStack();
                         }
                     }
                 });
             });
+
+            document.getElementById('margin-crop-value').innerText = `${state.config.marginCrop}%`;
+            document.getElementById('shadow-toggle-value').innerText = state.config.shadowEnabled ? 'On' : 'Off';
+            els.inputs.shadowEnabled.checked = state.config.shadowEnabled;
+            document.getElementById('bg-toggle-value').innerText = state.config.transparentBg ? 'Transparent' : 'Solid';
+            els.inputs.transparentBg.checked = state.config.transparentBg;
+            document.getElementById('bg-color-wrapper').style.display = state.config.transparentBg ? 'none' : 'block';
 
             els.fileInput.addEventListener('change', handleFileUpload);
             els.downloadBtn.addEventListener('click', downloadImage);
@@ -365,6 +451,7 @@
         // --- PDF Rendering (To Offscreen Canvas) ---
         async function loadPagesFromDoc() {
             if (!state.pdfDoc) return;
+            const currentToken = ++state.renderToken;
 
             state.pageImages = [];
             const count = Math.min(state.pdfDoc.numPages, state.config.pageLimit);
@@ -388,6 +475,7 @@
                 };
 
                 await page.render(renderContext).promise;
+                if (currentToken !== state.renderToken) return; // Abort if a new render started
 
                 state.pageImages.push({
                     canvas: offCanvas,
@@ -400,8 +488,181 @@
                 });
             }
 
+            if (currentToken !== state.renderToken) return;
             els.status.textContent = "Rendering complete.";
             drawStack();
+        }
+
+        function sampleEdgeColor(canvas, sx, sy, sw, sh) {
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return 'rgba(255,255,255,1)';
+            const sampleW = Math.max(1, Math.min(20, Math.floor(sw)));
+            const sampleH = Math.max(1, Math.min(20, Math.floor(sh)));
+            const startX = Math.max(0, Math.min(canvas.width - sampleW, Math.round(sx + (sw - sampleW) / 2)));
+            const startY = Math.max(0, Math.min(canvas.height - sampleH, Math.round(sy + (sh - sampleH) / 2)));
+            try {
+                const data = ctx.getImageData(startX, startY, sampleW, sampleH).data;
+                let r = 0, g = 0, b = 0, a = 0;
+                const pixels = sampleW * sampleH;
+                for (let i = 0; i < data.length; i += 4) {
+                    r += data[i];
+                    g += data[i + 1];
+                    b += data[i + 2];
+                    a += data[i + 3];
+                }
+                r = Math.round(r / pixels);
+                g = Math.round(g / pixels);
+                b = Math.round(b / pixels);
+                const alpha = (a / pixels) / 255;
+                return `rgba(${r}, ${g}, ${b}, ${alpha || 1})`;
+            } catch (err) {
+                return 'rgba(255,255,255,1)';
+            }
+        }
+
+        function getCropMetrics(img, index, config) {
+            const direction = config.direction;
+            const w = img.width;
+            const h = img.height;
+            const percent = index === 0 ? 0 : config.marginCrop;
+            const fraction = Math.max(0, Math.min(100, percent)) / 100;
+            const isVertical = direction === 'ttb' || direction === 'btt';
+            const baseAxis = isVertical ? h : w;
+            const cropPixelsRaw = baseAxis * fraction;
+            const cropPixels = Math.min(baseAxis, Math.round(cropPixelsRaw));
+            const hasCrop = cropPixels > 0;
+
+            const metrics = {
+                width: w,
+                height: h,
+                main: {
+                    sx: 0,
+                    sy: 0,
+                    sw: w,
+                    sh: h,
+                    dx: 0,
+                    dy: 0,
+                    dw: w,
+                    dh: h
+                },
+                filler: null
+            };
+
+            if (!hasCrop) return metrics;
+
+            if (!isVertical) {
+                if (direction === 'ltr') {
+                    const sw = Math.max(1, w - cropPixels);
+                    metrics.main.sw = sw;
+                    metrics.main.dw = sw;
+                    metrics.main.dx = cropPixels;
+                    metrics.filler = {
+                        dx: 0,
+                        dy: 0,
+                        dw: cropPixels,
+                        dh: h,
+                        orientation: 'horizontal',
+                        startColor: sampleEdgeColor(img.canvas, 0, 0, Math.min(4, w - cropPixels), h),
+                        endColor: sampleEdgeColor(img.canvas, w - cropPixels, 0, cropPixels, h)
+                    };
+                } else if (direction === 'rtl') {
+                    const sw = Math.max(1, w - cropPixels);
+                    metrics.main.sx = cropPixels;
+                    metrics.main.sw = sw;
+                    metrics.main.dw = sw;
+                    metrics.main.dx = 0;
+                    metrics.filler = {
+                        dx: w - cropPixels,
+                        dy: 0,
+                        dw: cropPixels,
+                        dh: h,
+                        orientation: 'horizontal',
+                        startColor: sampleEdgeColor(img.canvas, w - Math.min(4, w - cropPixels), 0, Math.min(4, w - cropPixels), h),
+                        endColor: sampleEdgeColor(img.canvas, 0, 0, cropPixels, h)
+                    };
+                }
+            } else {
+                if (direction === 'ttb') {
+                    const sh = Math.max(1, h - cropPixels);
+                    metrics.main.sh = sh;
+                    metrics.main.dh = sh;
+                    metrics.main.dy = cropPixels;
+                    metrics.filler = {
+                        dx: 0,
+                        dy: 0,
+                        dw: w,
+                        dh: cropPixels,
+                        orientation: 'vertical',
+                        startColor: sampleEdgeColor(img.canvas, 0, 0, w, Math.min(4, h - cropPixels)),
+                        endColor: sampleEdgeColor(img.canvas, 0, h - cropPixels, w, cropPixels)
+                    };
+                } else if (direction === 'btt') {
+                    const sh = Math.max(1, h - cropPixels);
+                    metrics.main.sy = cropPixels;
+                    metrics.main.sh = sh;
+                    metrics.main.dh = sh;
+                    metrics.main.dy = 0;
+                    metrics.filler = {
+                        dx: 0,
+                        dy: h - cropPixels,
+                        dw: w,
+                        dh: cropPixels,
+                        orientation: 'vertical',
+                        startColor: sampleEdgeColor(img.canvas, 0, h - Math.min(4, h - cropPixels), w, Math.min(4, h - cropPixels)),
+                        endColor: sampleEdgeColor(img.canvas, 0, 0, w, cropPixels)
+                    };
+                }
+            }
+
+            return metrics;
+        }
+
+        function composePageImage(img, metrics) {
+            if (!metrics.filler) return img.canvas;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = metrics.width;
+            canvas.height = metrics.height;
+            const ctx = canvas.getContext('2d');
+
+            // Fill the reconstructed margin with a gradient between existing edge and cropped region
+            if (metrics.filler.orientation === 'horizontal') {
+                const grad = ctx.createLinearGradient(
+                    metrics.filler.dx,
+                    metrics.filler.dy,
+                    metrics.filler.dx + metrics.filler.dw,
+                    metrics.filler.dy
+                );
+                grad.addColorStop(0, metrics.filler.startColor || 'rgba(255,255,255,1)');
+                grad.addColorStop(1, metrics.filler.endColor || 'rgba(255,255,255,1)');
+                ctx.fillStyle = grad;
+            } else {
+                const grad = ctx.createLinearGradient(
+                    metrics.filler.dx,
+                    metrics.filler.dy,
+                    metrics.filler.dx,
+                    metrics.filler.dy + metrics.filler.dh
+                );
+                grad.addColorStop(0, metrics.filler.startColor || 'rgba(255,255,255,1)');
+                grad.addColorStop(1, metrics.filler.endColor || 'rgba(255,255,255,1)');
+                ctx.fillStyle = grad;
+            }
+            ctx.fillRect(metrics.filler.dx, metrics.filler.dy, metrics.filler.dw, metrics.filler.dh);
+
+            // Draw main portion
+            ctx.drawImage(
+                img.canvas,
+                metrics.main.sx,
+                metrics.main.sy,
+                metrics.main.sw,
+                metrics.main.sh,
+                metrics.main.dx,
+                metrics.main.dy,
+                metrics.main.dw,
+                metrics.main.dh
+            );
+
+            return canvas;
         }
 
         // --- Core Stack Algorithm ---
@@ -411,25 +672,28 @@
             const ctx = els.canvas.getContext('2d');
             const config = state.config;
             const images = state.pageImages;
+            const direction = config.direction;
 
             // 1. Calculate Canvas Bounds
             // We need to simulate the draw first to find the total width/height needed.
             let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-
-            // Standard page size (using first page as reference)
-            const refW = images[0].width;
-            const refH = images[0].height;
+            const shadowActive = !!config.shadowEnabled;
 
             // Loop to determine bounding box
             images.forEach((img, index) => {
+                const metrics = getCropMetrics(img, index, config);
+                const w = metrics.width;
+                const h = metrics.height;
+
                 // Position Logic
                 let x = 0, y = 0;
                 const offset = index * config.spacing;
                 const vOffset = index * config.vStep;
 
-                if (config.direction === 'ltr') x = offset;
-                else if (config.direction === 'rtl') x = -offset;
-                else if (config.direction === 'ttb') { y = offset; x = 0; } // vertical stack
+                if (direction === 'ltr') x = offset;
+                else if (direction === 'rtl') x = -offset;
+                else if (direction === 'ttb') { y = offset; x = 0; }
+                else if (direction === 'btt') { y = -offset; x = 0; }
 
                 // Add jitter
                 x += img.jitterX * config.jitter;
@@ -437,13 +701,12 @@
                 y += vOffset; // add configured vertical step
 
                 // Rotation impacts bounding box. Approximate with a safety margin or use trig
-                // Using simple box expansion for simplicity + padding
-                const pad = config.shadowBlur + 50; // Padding for shadow and rotation
+                const pad = (shadowActive ? config.shadowBlur : 0) + 50; // Padding for shadow and rotation
 
                 minX = Math.min(minX, x - pad);
-                maxX = Math.max(maxX, x + refW + pad);
+                maxX = Math.max(maxX, x + w + pad);
                 minY = Math.min(minY, y - pad);
-                maxY = Math.max(maxY, y + refH + pad);
+                maxY = Math.max(maxY, y + h + pad);
             });
 
             // 2. Resize Canvas
@@ -459,15 +722,12 @@
             }
 
             // 4. Draw Images
-            // IMPORTANT: We need to decide draw order (Z-index).
-            // "First page full" implies the top page is index 0.
-            // In a physical stack, if Page 1 is on top, we must draw Page N (bottom) first, then N-1, etc.
-
-            // Create a copy to sort/reverse for drawing
             const drawOrder = images.map((img, i) => ({ ...img, originalIndex: i })).reverse();
 
             drawOrder.forEach((img) => {
                 const index = img.originalIndex;
+                const metrics = getCropMetrics(img, index, config);
+                const pageCanvas = metrics.filler ? composePageImage(img, metrics) : img.canvas;
 
                 ctx.save();
 
@@ -476,40 +736,57 @@
                 const offset = index * config.spacing;
                 const vOffset = index * config.vStep;
 
-                if (config.direction === 'ltr') x = offset;
-                else if (config.direction === 'rtl') x = -offset;
-                else if (config.direction === 'ttb') { y = offset; x = 0; }
+                if (direction === 'ltr') x = offset;
+                else if (direction === 'rtl') x = -offset;
+                else if (direction === 'ttb') { y = offset; x = 0; }
+                else if (direction === 'btt') { y = -offset; x = 0; }
 
                 // Adjust coordinate system to center the stack in the canvas
-                // The bounding box starts at minX, minY. We subtract that to map to 0,0
                 const drawX = x - minX + (img.jitterX * config.jitter);
                 const drawY = y - minY + vOffset + (img.jitterY * config.jitter);
 
                 // Move to center of where the page should be to rotate
-                const centerX = drawX + img.width / 2;
-                const centerY = drawY + img.height / 2;
+                const centerX = drawX + metrics.width / 2;
+                const centerY = drawY + metrics.height / 2;
 
                 ctx.translate(centerX, centerY);
 
                 // Rotate
                 const baseRot = config.rotation * (Math.PI / 180);
-                const jitRot = (img.jitterRot * config.jitter) * (Math.PI / 180); // Jitter rotation is subtle
+                const jitRot = (img.jitterRot * config.jitter) * (Math.PI / 180);
                 ctx.rotate(baseRot + jitRot);
 
                 // Shadow
-                ctx.shadowColor = "rgba(0, 0, 0, 0.3)";
-                ctx.shadowBlur = config.shadowBlur;
-                ctx.shadowOffsetX = 10;
-                ctx.shadowOffsetY = 10;
+                if (shadowActive) {
+                    ctx.shadowColor = "rgba(0, 0, 0, 0.3)";
+                    ctx.shadowBlur = config.shadowBlur;
+                    ctx.shadowOffsetX = 10;
+                    ctx.shadowOffsetY = 10;
+                } else {
+                    ctx.shadowColor = "transparent";
+                    ctx.shadowBlur = 0;
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 0;
+                }
 
-                // Draw Image (offset by half width/height because we translated to center)
-                ctx.drawImage(img.canvas, -img.width / 2, -img.height / 2);
+                // Draw composite page
+                ctx.drawImage(
+                    pageCanvas,
+                    0,
+                    0,
+                    metrics.width,
+                    metrics.height,
+                    -metrics.width / 2,
+                    -metrics.height / 2,
+                    metrics.width,
+                    metrics.height
+                );
 
-                // Optional: Add a subtle white border/stroke to define edges if pages are white
-                ctx.shadowColor = "transparent"; // Clear shadow for stroke
+                // Optional border
+                ctx.shadowColor = "transparent";
                 ctx.strokeStyle = "rgba(0,0,0,0.1)";
                 ctx.lineWidth = 1;
-                ctx.strokeRect(-img.width / 2, -img.height / 2, img.width, img.height);
+                ctx.strokeRect(-metrics.width / 2, -metrics.height / 2, metrics.width, metrics.height);
 
                 ctx.restore();
             });
