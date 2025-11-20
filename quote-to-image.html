@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text Shot - Aesthetic Quote Generator</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Libraries -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dom-to-image/2.6.0/dom-to-image.min.js"></script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap"
+        rel="stylesheet">
+
+    <style>
+        /* Custom Font Classes */
+        .font-serif-custom {
+            font-family: 'Playfair Display', serif;
+        }
+
+        .font-sans-custom {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .font-mono-custom {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #e5e7eb;
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #d1d5db;
+        }
+
+        /* Hide/Show utility */
+        .hidden-custom {
+            display: none !important;
+        }
+
+        /* Loader */
+        .loader {
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            width: 12px;
+            height: 12px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body class="flex flex-col h-screen bg-white text-gray-800 font-sans overflow-hidden">
+
+    <!-- Mobile Header -->
+    <div class="md:hidden h-14 border-b border-gray-200 flex items-center px-4 justify-between bg-white flex-shrink-0">
+        <div class="font-bold text-lg tracking-tight flex items-center gap-2">
+            <i data-lucide="image" class="text-orange-500 w-5 h-5"></i>
+            Text Shot
+        </div>
+        <button onclick="app.handleExport('png')" class="text-orange-600 font-medium text-sm">Export</button>
+    </div>
+
+    <div class="flex flex-1 overflow-hidden flex-col md:flex-row">
+
+        <!-- LEFT SIDEBAR -->
+        <div
+            class="w-full md:w-[400px] bg-white border-r border-gray-200 flex flex-col h-full overflow-y-auto z-20 shadow-lg flex-shrink-0">
+
+            <!-- Sidebar Header -->
+            <div
+                class="p-5 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur-sm z-10">
+                <div class="flex gap-1.5">
+                    <div class="w-3 h-3 rounded-full bg-red-400"></div>
+                    <div class="w-3 h-3 rounded-full bg-amber-400"></div>
+                    <div class="w-3 h-3 rounded-full bg-green-400"></div>
+                </div>
+                <button onclick="app.clearData()"
+                    class="text-xs font-medium text-gray-400 hover:text-red-500 transition-colors flex items-center gap-1 bg-gray-50 px-2 py-1 rounded hover:bg-red-50">
+                    <i data-lucide="rotate-ccw" class="w-3 h-3"></i> Clear
+                </button>
+            </div>
+
+            <div class="p-6 space-y-8">
+                <!-- Data Section -->
+                <section>
+                    <h3 class="text-xs font-bold text-gray-300 uppercase tracking-widest mb-4">Data</h3>
+
+                    <!-- Author Input -->
+                    <div class="mb-4 relative group">
+                        <label
+                            class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5 ml-1">Author</label>
+                        <div class="relative">
+                            <input type="text" id="input-author"
+                                class="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 pr-10 text-sm text-gray-800 focus:ring-2 focus:ring-orange-400 focus:border-transparent outline-none transition-all font-medium"
+                                placeholder="e.g. J.R.R. Tolkien">
+                            <button onclick="app.pasteTo('input-author')"
+                                class="absolute right-2 top-2 p-1.5 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-md transition-colors opacity-0 group-hover:opacity-100"
+                                title="Paste">
+                                <i data-lucide="clipboard" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Source Input -->
+                    <div class="mb-4 relative group">
+                        <label
+                            class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5 ml-1">Source</label>
+                        <div class="relative">
+                            <input type="text" id="input-source"
+                                class="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 pr-10 text-sm text-gray-800 focus:ring-2 focus:ring-orange-400 focus:border-transparent outline-none transition-all font-medium"
+                                placeholder="e.g. The Two Towers">
+                            <button onclick="app.pasteTo('input-source')"
+                                class="absolute right-2 top-2 p-1.5 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-md transition-colors opacity-0 group-hover:opacity-100"
+                                title="Paste">
+                                <i data-lucide="clipboard" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Speaker Input -->
+                    <div class="mb-4 relative group">
+                        <label
+                            class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5 ml-1">Speaker</label>
+                        <div class="relative">
+                            <input type="text" id="input-speaker"
+                                class="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 pr-10 text-sm text-gray-800 focus:ring-2 focus:ring-orange-400 focus:border-transparent outline-none transition-all font-medium"
+                                placeholder="e.g. Samwise Gamgee">
+                            <button onclick="app.pasteTo('input-speaker')"
+                                class="absolute right-2 top-2 p-1.5 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-md transition-colors opacity-0 group-hover:opacity-100"
+                                title="Paste">
+                                <i data-lucide="clipboard" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Quote Input -->
+                    <div class="mb-4 relative group">
+                        <label
+                            class="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1.5 ml-1">Quote</label>
+                        <div class="relative">
+                            <textarea id="input-quote"
+                                class="w-full bg-gray-50 border border-gray-200 rounded-lg p-3 pr-10 text-sm text-gray-800 focus:ring-2 focus:ring-orange-400 focus:border-transparent outline-none transition-all resize-none min-h-[120px] font-medium"
+                                placeholder="Enter your quote here..."></textarea>
+                            <button onclick="app.pasteTo('input-quote')"
+                                class="absolute right-2 top-2 p-1.5 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-md transition-colors opacity-0 group-hover:opacity-100"
+                                title="Paste">
+                                <i data-lucide="clipboard" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Customise Section -->
+                <section>
+                    <h3 class="text-xs font-bold text-gray-300 uppercase tracking-widest mb-4">Customise</h3>
+
+                    <div class="space-y-4">
+                        <!-- Highlight Font -->
+                        <div
+                            class="flex items-center justify-between bg-gray-50 p-2 px-3 rounded-lg border border-gray-200">
+                            <label class="text-sm font-medium text-gray-600 flex items-center gap-2">
+                                <i data-lucide="type" class="w-3.5 h-3.5"></i> Highlight Font
+                            </label>
+                            <select id="select-highlight-font"
+                                class="bg-transparent text-sm font-semibold text-gray-800 outline-none cursor-pointer text-right w-32">
+                                <option value="serif">Serif</option>
+                                <option value="sans">Sans-Serif</option>
+                                <option value="mono">Mono</option>
+                                <option value="custom">Custom</option>
+                            </select>
+                        </div>
+
+                        <!-- Title Font -->
+                        <div
+                            class="flex items-center justify-between bg-gray-50 p-2 px-3 rounded-lg border border-gray-200">
+                            <label class="text-sm font-medium text-gray-600 flex items-center gap-2">
+                                <i data-lucide="type" class="w-3.5 h-3.5"></i> Title Font
+                            </label>
+                            <select id="select-title-font"
+                                class="bg-transparent text-sm font-semibold text-gray-800 outline-none cursor-pointer text-right w-32">
+                                <option value="sans">Sans-Serif</option>
+                                <option value="serif">Serif</option>
+                                <option value="mono">Mono</option>
+                                <option value="custom">Custom</option>
+                            </select>
+                        </div>
+
+                        <!-- Size -->
+                        <div
+                            class="flex items-center justify-between bg-gray-50 p-2 px-3 rounded-lg border border-gray-200">
+                            <label class="text-sm font-medium text-gray-600 flex items-center gap-2">Size</label>
+                            <select id="select-size"
+                                class="bg-transparent text-sm font-semibold text-gray-800 outline-none cursor-pointer text-right w-32">
+                                <option value="small">Compact</option>
+                                <option value="regular">Regular</option>
+                                <option value="large">Large</option>
+                                <option value="twitter">Twitter (16:9)</option>
+                                <option value="instagram">Instagram (1:1)</option>
+                            </select>
+                        </div>
+
+                        <!-- Markdown Toggle -->
+                        <div class="flex items-center gap-3 pt-2" onclick="app.toggleMarkdown()">
+                            <button id="btn-markdown"
+                                class="w-5 h-5 rounded border flex items-center justify-center transition-colors bg-orange-500 border-orange-500 text-white">
+                                <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                            </button>
+                            <label class="text-sm text-gray-600 cursor-pointer select-none">Markdown Formatting</label>
+                        </div>
+
+                        <!-- Themes -->
+                        <div class="mt-4 grid grid-cols-5 gap-2" id="theme-container">
+                            <!-- Injected via JS -->
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Advanced Settings -->
+                <div class="border border-gray-200 rounded-xl overflow-hidden">
+                    <button onclick="app.toggleAdvanced()"
+                        class="w-full px-4 py-3 bg-gray-50 flex items-center justify-between text-xs font-bold text-gray-500 uppercase tracking-wider hover:bg-gray-100 transition-colors">
+                        <span class="flex items-center gap-2"><i data-lucide="settings" class="w-3.5 h-3.5"></i>
+                            Advanced</span>
+                        <i id="icon-advanced-chevron" data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+                    </button>
+
+                    <div id="advanced-panel" class="p-4 bg-white space-y-5 hidden-custom">
+                        <!-- Custom Fonts -->
+                        <div>
+                            <h4 class="text-xs font-semibold text-gray-800 mb-3">Custom Fonts</h4>
+                            <p class="text-[10px] text-gray-400 mb-2">Enter font name from Google Fonts (e.g. "Oswald",
+                                "Lobster")</p>
+                            <div class="space-y-2">
+                                <input type="text" id="input-custom-hl-name" placeholder="Highlight Font Name"
+                                    class="w-full p-2 text-xs border rounded bg-gray-50">
+                                <input type="text" id="input-custom-title-name" placeholder="Title Font Name"
+                                    class="w-full p-2 text-xs border rounded bg-gray-50">
+                            </div>
+                        </div>
+
+                        <!-- Custom Theme Colors -->
+                        <div id="custom-theme-controls" class="hidden-custom">
+                            <h4 class="text-xs font-semibold text-gray-800 mb-3">Custom Theme</h4>
+                            <div class="grid grid-cols-1 gap-3">
+                                <!-- Background -->
+                                <div class="flex flex-col gap-1.5">
+                                    <label class="text-[10px] font-semibold text-gray-400 uppercase">Background</label>
+                                    <div
+                                        class="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg p-2">
+                                        <div
+                                            class="relative w-8 h-8 rounded-full overflow-hidden border border-gray-300 shadow-sm shrink-0">
+                                            <input type="color" id="color-bg"
+                                                class="absolute -top-2 -left-2 w-12 h-12 p-0 cursor-pointer border-0">
+                                        </div>
+                                        <input type="text" id="text-color-bg"
+                                            class="flex-1 min-w-0 bg-transparent text-xs font-mono text-gray-600 outline-none uppercase">
+                                    </div>
+                                </div>
+                                <!-- Text -->
+                                <div class="flex flex-col gap-1.5">
+                                    <label class="text-[10px] font-semibold text-gray-400 uppercase">Text Color</label>
+                                    <div
+                                        class="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg p-2">
+                                        <div
+                                            class="relative w-8 h-8 rounded-full overflow-hidden border border-gray-300 shadow-sm shrink-0">
+                                            <input type="color" id="color-text"
+                                                class="absolute -top-2 -left-2 w-12 h-12 p-0 cursor-pointer border-0">
+                                        </div>
+                                        <input type="text" id="text-color-text"
+                                            class="flex-1 min-w-0 bg-transparent text-xs font-mono text-gray-600 outline-none uppercase">
+                                    </div>
+                                </div>
+                                <!-- Accent -->
+                                <div class="flex flex-col gap-1.5">
+                                    <label class="text-[10px] font-semibold text-gray-400 uppercase">Accent Line</label>
+                                    <div
+                                        class="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg p-2">
+                                        <div
+                                            class="relative w-8 h-8 rounded-full overflow-hidden border border-gray-300 shadow-sm shrink-0">
+                                            <input type="color" id="color-accent"
+                                                class="absolute -top-2 -left-2 w-12 h-12 p-0 cursor-pointer border-0">
+                                        </div>
+                                        <input type="text" id="text-color-accent"
+                                            class="flex-1 min-w-0 bg-transparent text-xs font-mono text-gray-600 outline-none uppercase">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="h-10"></div>
+            </div>
+        </div>
+
+        <!-- RIGHT PREVIEW AREA -->
+        <div class="flex-1 bg-gray-50 flex flex-col relative overflow-hidden">
+
+            <!-- Toolbar -->
+            <div
+                class="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-6 shadow-sm z-20 flex-shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-gray-500">
+                        <i data-lucide="image" class="w-4.5 h-4.5"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-sm font-bold text-gray-800">Preview</h1>
+                        <p id="preview-dimensions"
+                            class="text-[10px] text-gray-400 font-medium uppercase tracking-wide">Auto</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <button onclick="app.handleShare()" id="btn-share"
+                        class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded-lg transition-colors border border-orange-100 bg-white">
+                        <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
+                        <span id="lbl-share">Share URL</span>
+                    </button>
+
+                    <div class="w-px h-6 bg-gray-200 mx-1"></div>
+
+                    <button onclick="app.copyAltText()" id="btn-copy-alt"
+                        class="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200 bg-white">
+                        <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                        <span id="lbl-copy-alt">Alt Text</span>
+                    </button>
+
+                    <div class="flex rounded-lg bg-gray-900 p-0.5">
+                        <button onclick="app.handleExport('png')"
+                            class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white hover:bg-gray-800 rounded-md transition-all">
+                            <i data-lucide="download" class="w-3.5 h-3.5"></i> PNG
+                        </button>
+                        <div class="w-px bg-gray-700 my-1"></div>
+                        <button onclick="app.handleExport('svg')"
+                            class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white hover:bg-gray-800 rounded-md transition-all">
+                            SVG
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Preview Canvas Container -->
+            <div id="preview-container" class="flex-1 overflow-auto flex items-center justify-center p-8 bg-gray-50">
+                <!-- The Card -->
+                <div id="canvas-card"
+                    class="relative shadow-2xl transition-all duration-500 ease-in-out overflow-hidden flex flex-col bg-white text-black"
+                    style="border-radius: 4px;">
+
+                    <!-- Center Content Container -->
+                    <div id="canvas-content-wrapper" class="flex-1 flex flex-col">
+                        <!-- Quote Block -->
+                        <div class="flex gap-6 items-stretch">
+                            <!-- Accent Line -->
+                            <div id="canvas-accent-line"
+                                class="w-1.5 flex-shrink-0 opacity-80 rounded-full bg-gray-800"></div>
+
+                            <div class="flex flex-col gap-6 w-full py-1">
+                                <!-- Quote Text -->
+                                <div id="canvas-quote" class="leading-relaxed font-medium text-2xl">
+                                    <!-- Content goes here -->
+                                </div>
+
+                                <!-- Speaker -->
+                                <p id="canvas-speaker-container"
+                                    class="italic opacity-70 text-lg flex items-center hidden-custom">
+                                    <span class="inline-block w-5 border-t border-current opacity-60 mr-3 mb-1"></span>
+                                    <span id="canvas-speaker"></span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Footer -->
+                    <div id="canvas-footer" class="mt-8 pt-2 flex-shrink-0 hidden-custom">
+                        <p id="canvas-author" class="font-bold tracking-tight mb-1 text-lg"></p>
+                        <p id="canvas-source" class="font-medium text-sm opacity-60"></p>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Background Grid -->
+            <div class="absolute inset-0 pointer-events-none opacity-[0.03]"
+                style="background-image: radial-gradient(#000 1px, transparent 1px); background-size: 20px 20px;"></div>
+
+        </div>
+    </div>
+
+    <!-- Application Logic -->
+    <script>
+        const app = {
+            state: {
+                quote: "They kept going because they were holding on to something. That there's some good in this world, Mr. Frodo, and it's worth fighting for.",
+                author: "J.R.R. Tolkien",
+                source: "The Lord of the Rings: The Two Towers",
+                speaker: "Samwise Gamgee",
+                theme: 'cream',
+                highlightFont: 'serif',
+                titleFont: 'sans',
+                size: 'regular',
+                showMarkdown: true,
+                customHighlightName: '',
+                customTitleName: '',
+                customColors: {
+                    bg: '#ffffff',
+                    text: '#000000',
+                    accent: '#000000'
+                }
+            },
+
+            themes: {
+                cream: { bg: '#FFF9F0', text: '#2D2D2D', accent: '#2D2D2D', previewBg: 'bg-white' },
+                light: { bg: '#FFFFFF', text: '#111827', accent: '#111827', previewBg: 'bg-gray-50' },
+                dark: { bg: '#1F2937', text: '#FFFFFF', accent: '#FFFFFF', previewBg: 'bg-gray-900' },
+                black: { bg: '#000000', text: '#FFFFFF', accent: '#FFFFFF', previewBg: 'bg-gray-800' }
+            },
+
+            sizeConfig: {
+                small: { width: '400px', minHeight: 'auto', padding: '2rem', text: 'text-lg', flex: false },
+                regular: { width: '600px', minHeight: 'auto', padding: '3rem', text: 'text-2xl', flex: false },
+                large: { width: '800px', minHeight: 'auto', padding: '4rem', text: 'text-4xl', flex: false },
+                twitter: { width: '900px', height: '506px', padding: '3.5rem', text: 'text-3xl', flex: true },
+                instagram: { width: '800px', height: '800px', padding: '4rem', text: 'text-3xl', flex: true },
+            },
+
+            init() {
+                this.loadParams();
+                this.bindEvents();
+                this.renderThemes();
+                this.updatePreview();
+                lucide.createIcons();
+            },
+
+            loadParams() {
+                const params = new URLSearchParams(window.location.search);
+                if (params.has('q')) this.state.quote = params.get('q');
+                if (params.has('a')) this.state.author = params.get('a');
+                if (params.has('s')) this.state.source = params.get('s');
+                if (params.has('sp')) this.state.speaker = params.get('sp');
+                if (params.has('t')) this.state.theme = params.get('t');
+                if (params.has('hf')) this.state.highlightFont = params.get('hf');
+                if (params.has('tf')) this.state.titleFont = params.get('tf');
+                if (params.has('sz')) this.state.size = params.get('sz');
+                if (params.has('md')) this.state.showMarkdown = params.get('md') === 'true';
+
+                if (params.has('chn')) this.state.customHighlightName = params.get('chn');
+                if (params.has('ctn')) this.state.customTitleName = params.get('ctn');
+
+                if (params.has('c_bg')) this.state.customColors.bg = params.get('c_bg');
+                if (params.has('c_tx')) this.state.customColors.text = params.get('c_tx');
+                if (params.has('c_ac')) this.state.customColors.accent = params.get('c_ac');
+
+                // Sync UI with loaded state
+                document.getElementById('input-quote').value = this.state.quote;
+                document.getElementById('input-author').value = this.state.author;
+                document.getElementById('input-source').value = this.state.source;
+                document.getElementById('input-speaker').value = this.state.speaker;
+                document.getElementById('select-highlight-font').value = this.state.highlightFont;
+                document.getElementById('select-title-font').value = this.state.titleFont;
+                document.getElementById('select-size').value = this.state.size;
+                document.getElementById('input-custom-hl-name').value = this.state.customHighlightName;
+                document.getElementById('input-custom-title-name').value = this.state.customTitleName;
+
+                // Colors
+                document.getElementById('color-bg').value = this.state.customColors.bg;
+                document.getElementById('text-color-bg').value = this.state.customColors.bg;
+                document.getElementById('color-text').value = this.state.customColors.text;
+                document.getElementById('text-color-text').value = this.state.customColors.text;
+                document.getElementById('color-accent').value = this.state.customColors.accent;
+                document.getElementById('text-color-accent').value = this.state.customColors.accent;
+
+                // Show advanced if needed
+                if (this.state.customHighlightName || this.state.customTitleName || this.state.theme === 'custom') {
+                    this.toggleAdvanced(true);
+                }
+            },
+
+            bindEvents() {
+                // Text Inputs
+                ['quote', 'author', 'source', 'speaker'].forEach(field => {
+                    document.getElementById(`input-${field}`).addEventListener('input', (e) => {
+                        this.state[field] = e.target.value;
+                        this.updatePreview();
+                    });
+                });
+
+                // Selects
+                document.getElementById('select-highlight-font').addEventListener('change', (e) => {
+                    this.state.highlightFont = e.target.value;
+                    this.updatePreview();
+                });
+                document.getElementById('select-title-font').addEventListener('change', (e) => {
+                    this.state.titleFont = e.target.value;
+                    this.updatePreview();
+                });
+                document.getElementById('select-size').addEventListener('change', (e) => {
+                    this.state.size = e.target.value;
+                    this.updatePreview();
+                });
+
+                // Custom Font Names
+                document.getElementById('input-custom-hl-name').addEventListener('input', (e) => {
+                    this.state.customHighlightName = e.target.value;
+                    this.updateGoogleFonts();
+                    this.updatePreview();
+                });
+                document.getElementById('input-custom-title-name').addEventListener('input', (e) => {
+                    this.state.customTitleName = e.target.value;
+                    this.updateGoogleFonts();
+                    this.updatePreview();
+                });
+
+                // Custom Colors
+                const bindColor = (key, type) => {
+                    const el = document.getElementById(`${type}-${key}`); // type is 'color' or 'text'
+                    el.addEventListener('input', (e) => {
+                        this.state.customColors[key] = e.target.value;
+                        // Sync the other input
+                        const otherType = type === 'color' ? 'text-color' : 'color';
+                        document.getElementById(`${otherType}-${key}`).value = e.target.value;
+                        this.updatePreview();
+                    });
+                };
+                ['bg', 'text', 'accent'].forEach(k => {
+                    bindColor(k, 'color');
+                    bindColor(k, 'text-color');
+                });
+            },
+
+            renderThemes() {
+                const container = document.getElementById('theme-container');
+                container.innerHTML = '';
+                const themeKeys = ['light', 'cream', 'dark', 'black', 'custom'];
+
+                themeKeys.forEach(key => {
+                    const btn = document.createElement('button');
+                    const isCustom = key === 'custom';
+                    const themeData = this.themes[key];
+
+                    btn.className = `h-10 rounded-lg border-2 flex items-center justify-center transition-all hover:scale-105`;
+
+                    if (this.state.theme === key) {
+                        btn.classList.add('border-orange-500', 'ring-2', 'ring-orange-100', 'scale-105');
+                    } else {
+                        btn.classList.add('border-transparent');
+                        if (isCustom) btn.classList.add('border-gray-200');
+                    }
+
+                    if (isCustom) {
+                        btn.style.background = 'transparent';
+                        btn.innerHTML = '<i data-lucide="palette" class="w-4 h-4 text-gray-500"></i>';
+                    } else {
+                        btn.style.backgroundColor = themeData.bg;
+                        const textColor = (key === 'cream' || key === 'light') ? '#000' : '#fff';
+                        btn.innerHTML = `<span class="font-serif text-sm font-bold" style="color:${textColor}">Aa</span>`;
+                    }
+
+                    btn.onclick = () => {
+                        this.state.theme = key;
+                        this.renderThemes(); // Re-render to update active state
+
+                        // Show/Hide custom controls
+                        const customControls = document.getElementById('custom-theme-controls');
+                        if (key === 'custom') {
+                            customControls.classList.remove('hidden-custom');
+                            this.toggleAdvanced(true);
+                        } else {
+                            customControls.classList.add('hidden-custom');
+                        }
+
+                        this.updatePreview();
+                    };
+
+                    container.appendChild(btn);
+                });
+                lucide.createIcons();
+            },
+
+            updatePreview() {
+                // 1. Colors
+                let activeTheme = this.state.theme === 'custom'
+                    ? { bg: this.state.customColors.bg, text: this.state.customColors.text, accent: this.state.customColors.accent, previewBg: 'bg-gray-100' }
+                    : this.themes[this.state.theme];
+
+                const card = document.getElementById('canvas-card');
+                const container = document.getElementById('preview-container');
+
+                card.style.backgroundColor = activeTheme.bg;
+                card.style.color = activeTheme.text;
+                document.getElementById('canvas-accent-line').style.backgroundColor = activeTheme.accent;
+                document.getElementById('canvas-source').style.color = activeTheme.text;
+
+                // Update Preview Background
+                container.className = `flex-1 overflow-auto flex items-center justify-center p-8 ${activeTheme.previewBg}`;
+
+                // 2. Dimensions & Layout
+                const sizeConfig = this.sizeConfig[this.state.size];
+                card.style.width = sizeConfig.width;
+                card.style.padding = sizeConfig.padding;
+
+                if (sizeConfig.height) {
+                    card.style.height = sizeConfig.height;
+                    card.style.minHeight = sizeConfig.height;
+                } else {
+                    card.style.height = 'auto';
+                    card.style.minHeight = 'auto';
+                }
+
+                const contentWrapper = document.getElementById('canvas-content-wrapper');
+                if (sizeConfig.flex) {
+                    contentWrapper.classList.add('justify-center');
+                } else {
+                    contentWrapper.classList.remove('justify-center');
+                }
+
+                document.getElementById('preview-dimensions').innerText = `${sizeConfig.width} x ${sizeConfig.height || 'Auto'}`;
+
+                // 3. Fonts
+                const getFontStack = (type, setting) => {
+                    if (setting === 'custom') {
+                        const name = type === 'highlight' ? this.state.customHighlightName : this.state.customTitleName;
+                        return name ? `"${name}", sans-serif` : '"Inter", sans-serif';
+                    }
+                    if (setting === 'serif') return '"Playfair Display", serif';
+                    if (setting === 'mono') return '"JetBrains Mono", monospace';
+                    return '"Inter", sans-serif';
+                };
+
+                const hlFont = getFontStack('highlight', this.state.highlightFont);
+                const titleFont = getFontStack('title', this.state.titleFont);
+
+                const quoteEl = document.getElementById('canvas-quote');
+                const speakerEl = document.getElementById('canvas-speaker-container');
+                const footerEl = document.getElementById('canvas-footer');
+
+                quoteEl.style.fontFamily = hlFont;
+                speakerEl.style.fontFamily = hlFont;
+                footerEl.style.fontFamily = titleFont;
+
+                // Update Font Size class
+                quoteEl.className = `leading-relaxed font-medium ${sizeConfig.text}`;
+
+                // 4. Text Content & Markdown
+                const parseMd = (text) => {
+                    if (!text) return 'Start typing...';
+                    let html = text
+                        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                        .replace(/__(.*?)__/g, '<strong>$1</strong>')
+                        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                        .replace(/_(.*?)_/g, '<em>$1</em>')
+                        .replace(/~~(.*?)~~/g, '<del>$1</del>')
+                        .replace(/\n/g, '<br />');
+                    return html;
+                };
+
+                quoteEl.innerHTML = this.state.showMarkdown ? parseMd(this.state.quote) : (this.state.quote || "Start typing...");
+
+                // Speaker
+                const speakerTextEl = document.getElementById('canvas-speaker');
+                if (this.state.speaker) {
+                    speakerTextEl.innerText = this.state.speaker;
+                    speakerEl.classList.remove('hidden-custom');
+                } else {
+                    speakerEl.classList.add('hidden-custom');
+                }
+
+                // Footer
+                const authorEl = document.getElementById('canvas-author');
+                const sourceEl = document.getElementById('canvas-source');
+
+                authorEl.innerText = this.state.author;
+                sourceEl.innerText = this.state.source;
+
+                if (this.state.author || this.state.source) {
+                    footerEl.classList.remove('hidden-custom');
+                    authorEl.style.display = this.state.author ? 'block' : 'none';
+                    sourceEl.style.display = this.state.source ? 'block' : 'none';
+                } else {
+                    footerEl.classList.add('hidden-custom');
+                }
+
+                // Update markdown button style
+                const mdBtn = document.getElementById('btn-markdown');
+                if (this.state.showMarkdown) {
+                    mdBtn.classList.remove('bg-white', 'border-gray-300', 'text-transparent');
+                    mdBtn.classList.add('bg-orange-500', 'border-orange-500', 'text-white');
+                } else {
+                    mdBtn.classList.remove('bg-orange-500', 'border-orange-500', 'text-white');
+                    mdBtn.classList.add('bg-white', 'border-gray-300', 'text-transparent');
+                }
+            },
+
+            updateGoogleFonts() {
+                const fonts = [];
+                if (this.state.customHighlightName) fonts.push(this.state.customHighlightName);
+                if (this.state.customTitleName) fonts.push(this.state.customTitleName);
+
+                if (fonts.length === 0) return;
+
+                const linkId = 'custom-google-fonts';
+                let link = document.getElementById(linkId);
+                const familyString = [...new Set(fonts)]
+                    .map(name => `family=${name.trim().replace(/ /g, '+')}:wght@300;400;500;700`)
+                    .join('&');
+
+                if (!link) {
+                    link = document.createElement('link');
+                    link.id = linkId;
+                    link.rel = 'stylesheet';
+                    document.head.appendChild(link);
+                }
+                link.href = `https://fonts.googleapis.com/css2?${familyString}&display=swap`;
+            },
+
+            toggleMarkdown() {
+                this.state.showMarkdown = !this.state.showMarkdown;
+                this.updatePreview();
+            },
+
+            toggleAdvanced(forceOpen = false) {
+                const panel = document.getElementById('advanced-panel');
+                const chevron = document.getElementById('icon-advanced-chevron');
+                const isHidden = panel.classList.contains('hidden-custom');
+
+                if (isHidden || forceOpen) {
+                    panel.classList.remove('hidden-custom');
+                    chevron.setAttribute('data-lucide', 'chevron-up');
+                } else {
+                    panel.classList.add('hidden-custom');
+                    chevron.setAttribute('data-lucide', 'chevron-down');
+                }
+                lucide.createIcons();
+            },
+
+            pasteTo(id) {
+                navigator.clipboard.readText().then(text => {
+                    const el = document.getElementById(id);
+                    el.value = text;
+                    el.dispatchEvent(new Event('input'));
+                }).catch(err => console.error('Paste failed', err));
+            },
+
+            clearData() {
+                this.state.quote = '';
+                this.state.author = '';
+                this.state.source = '';
+                this.state.speaker = '';
+
+                ['quote', 'author', 'source', 'speaker'].forEach(id => {
+                    document.getElementById(`input-${id}`).value = '';
+                });
+                this.updatePreview();
+            },
+
+            copyAltText() {
+                const text = `${this.state.quote} - ${this.state.speaker}. ${this.state.author}, ${this.state.source}.`;
+                this.copyToClipboard(text);
+
+                const btnLabel = document.getElementById('lbl-copy-alt');
+                const original = btnLabel.innerText;
+                btnLabel.innerText = 'Copied';
+                setTimeout(() => btnLabel.innerText = original, 2000);
+            },
+
+            handleShare() {
+                const p = new URLSearchParams();
+                const s = this.state;
+
+                if (s.quote) p.set('q', s.quote);
+                if (s.author) p.set('a', s.author);
+                if (s.source) p.set('s', s.source);
+                if (s.speaker) p.set('sp', s.speaker);
+
+                p.set('t', s.theme);
+                p.set('hf', s.highlightFont);
+                p.set('tf', s.titleFont);
+                p.set('sz', s.size);
+                p.set('md', s.showMarkdown);
+
+                if (s.customHighlightName) p.set('chn', s.customHighlightName);
+                if (s.customTitleName) p.set('ctn', s.customTitleName);
+
+                if (s.theme === 'custom') {
+                    p.set('c_bg', s.customColors.bg);
+                    p.set('c_tx', s.customColors.text);
+                    p.set('c_ac', s.customColors.accent);
+                }
+
+                const url = `${window.location.origin}${window.location.pathname}?${p.toString()}`;
+                this.copyToClipboard(url);
+
+                try {
+                    window.history.replaceState({}, '', url);
+                } catch (e) {
+                    console.warn('Could not update URL history:', e);
+                }
+
+                const btnLabel = document.getElementById('lbl-share');
+                const original = btnLabel.innerText;
+                btnLabel.innerText = 'Link Copied!';
+                setTimeout(() => btnLabel.innerText = original, 2000);
+            },
+
+            copyToClipboard(text) {
+                const ta = document.createElement("textarea");
+                ta.value = text;
+                ta.style.position = "fixed";
+                ta.style.left = "-9999px";
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                try { document.execCommand('copy'); } catch (err) { console.error(err); }
+                document.body.removeChild(ta);
+            },
+
+            async handleExport(format) {
+                const node = document.getElementById('canvas-card');
+                const rect = node.getBoundingClientRect();
+                const filename = `text-shot-${Date.now()}`;
+
+                if (format === 'svg') {
+                    try {
+                        const dataUrl = await domtoimage.toSvg(node, {
+                            filter: (n) => n.tagName !== 'link',
+                            width: rect.width,
+                            height: rect.height,
+                            style: { transform: 'none', margin: 0, boxShadow: 'none' }
+                        });
+                        this.downloadLink(dataUrl, `${filename}.svg`);
+                    } catch (e) { alert('SVG Export failed'); console.error(e); }
+                } else {
+                    try {
+                        const canvas = await html2canvas(node, {
+                            scale: 3,
+                            backgroundColor: null,
+                            useCORS: true,
+                            allowTaint: true
+                        });
+                        this.downloadLink(canvas.toDataURL('image/png'), `${filename}.png`);
+                    } catch (e) { alert('PNG Export failed'); console.error(e); }
+                }
+            },
+
+            downloadLink(href, name) {
+                const link = document.createElement('a');
+                link.download = name;
+                link.href = href;
+                link.click();
+            }
+        };
+
+        // Init on load
+        window.addEventListener('DOMContentLoaded', () => app.init());
+    </script>
+</body>
+
+</html>
