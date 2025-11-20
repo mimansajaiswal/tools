@@ -261,7 +261,7 @@
             // { section: "Image and Media", name: "Color Picker", url: "./color/", desc: "extract colors from images" },
             // --- Data Transformation ---
             { section: "Data Transformation", name: "CSV Row Editor", url: "./csv-row-editor.html", desc: "edit CSV data row by row", made_by: "Gemini 3" },
-            
+
             // --- Daily Life ---
             { section: "🛠️ Daily Life", name: "Weight Trajectory", url: "./weight-progress.html", desc: "Graph weight progress easily", made_by: "Gemini 3" },
         ];
@@ -305,7 +305,7 @@
                     return `
                     <li class="tool-item mb-2">
                         <div class="inline-flex flex-wrap items-baseline gap-x-2">
-                            <a href="${tool.url}" class="tool-link font-medium text-lg">${tool.name}</a> 
+                            <a href="${tool.url}" target="_blank" rel="noopener" class="tool-link font-medium text-lg">${tool.name}</a> 
                             ${badgeHtml}
                             <span class="text-sm opacity-70">- ${tool.desc}</span>
                         </div>
