@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern CSV Studio 2.2</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+
+        /* Custom scrollbar */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* Smooth input transitions */
+        .input-field {
+            transition: all 0.2s ease;
+        }
+
+        .input-field:focus {
+            transform: translateY(-1px);
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(5px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Tag Styles for Multi-select */
+        .tag-pill {
+            display: inline-flex;
+            align-items: center;
+            background-color: #e0e7ff;
+            color: #4338ca;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            margin-right: 0.25rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .tag-remove {
+            margin-left: 4px;
+            cursor: pointer;
+            opacity: 0.6;
+        }
+
+        .tag-remove:hover {
+            opacity: 1;
+        }
+    </style>
+</head>
+
+<body class="text-slate-800 h-screen flex flex-col overflow-hidden">
+
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shadow-sm z-10">
+        <div class="flex items-center gap-3">
+            <div class="bg-indigo-600 text-white p-2 rounded-lg shadow-lg shadow-indigo-200">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold tracking-tight text-slate-900">CSV Studio</h1>
+                <p class="text-xs text-slate-500">Advanced Editor</p>
+            </div>
+        </div>
+
+        <div class="flex gap-3">
+            <label for="fileInput"
+                class="cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-md font-medium text-sm transition flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                Import
+            </label>
+            <input type="file" id="fileInput" accept=".csv" class="hidden">
+
+            <button id="downloadBtn" disabled
+                class="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md font-medium text-sm transition flex items-center gap-2 shadow-md">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                Export
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Layout -->
+    <main class="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
+
+        <!-- Empty State -->
+        <div id="emptyState"
+            class="absolute inset-0 z-20 bg-slate-50/80 backdrop-blur-sm flex flex-col items-center justify-center text-center p-8">
+            <div class="bg-white p-8 rounded-2xl shadow-xl border border-slate-100 max-w-md w-full">
+                <div
+                    class="bg-indigo-50 text-indigo-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <path d="M14 2v6h6"></path>
+                        <path d="M16 13H8"></path>
+                        <path d="M16 17H8"></path>
+                        <path d="M10 9H8"></path>
+                    </svg>
+                </div>
+                <h2 class="text-2xl font-bold text-slate-800 mb-2">No File Loaded</h2>
+                <p class="text-slate-500 mb-6">Upload a CSV to start editing. <br>Supports String, Number, Select &
+                    Multi-select fields.</p>
+                <button onclick="document.getElementById('fileInput').click()"
+                    class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-lg font-semibold transition shadow-lg shadow-indigo-200">Select
+                    CSV File</button>
+            </div>
+        </div>
+
+        <!-- Sidebar: Configuration -->
+        <aside id="sidebar"
+            class="w-full lg:w-80 bg-white border-r border-slate-200 flex flex-col transition-all duration-300 hidden z-10 shadow-lg lg:shadow-none">
+            <div class="p-4 border-b border-slate-100 bg-slate-50">
+                <h3 class="font-semibold text-slate-700 text-sm uppercase tracking-wider">Column Setup</h3>
+            </div>
+            <div class="flex-1 overflow-y-auto p-2 custom-scrollbar" id="columnList">
+                <!-- Config Items injected here -->
+            </div>
+            <div class="p-3 border-t border-slate-100 bg-slate-50 flex gap-2 justify-between">
+                <button id="selectAllCols"
+                    class="text-xs font-medium text-indigo-600 hover:bg-indigo-50 px-3 py-2 rounded transition flex-1">All</button>
+                <button id="deselectAllCols"
+                    class="text-xs font-medium text-slate-500 hover:bg-slate-100 px-3 py-2 rounded transition flex-1">None</button>
+            </div>
+        </aside>
+
+        <!-- Editor Area -->
+        <section id="editorArea" class="flex-1 flex flex-col bg-slate-50/50 hidden">
+
+            <!-- Navigation Bar -->
+            <div class="flex items-center justify-between p-4 lg:px-8 lg:py-4 bg-white border-b border-slate-200">
+                <div class="flex flex-col">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Row</span>
+                    <span class="text-2xl font-bold text-slate-800 font-mono" id="rowCounter">#1</span>
+                </div>
+
+                <div class="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
+                    <button id="prevBtn"
+                        class="p-2 hover:bg-white hover:shadow-sm text-slate-600 hover:text-indigo-600 rounded-md transition disabled:opacity-30">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="15 18 9 12 15 6"></polyline>
+                        </svg>
+                    </button>
+                    <div
+                        class="px-4 font-mono text-slate-500 text-sm border-x border-slate-200 mx-1 bg-white h-8 flex items-center rounded-sm">
+                        <span id="currentIndexDisplay">1</span> <span class="mx-1 text-slate-300">/</span> <span
+                            id="totalIndexDisplay">0</span>
+                    </div>
+                    <button id="nextBtn"
+                        class="p-2 hover:bg-white hover:shadow-sm text-slate-600 hover:text-indigo-600 rounded-md transition disabled:opacity-30">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="9 18 15 12 9 6"></polyline>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Form Canvas -->
+            <div class="flex-1 overflow-y-auto px-4 lg:px-8 py-6 custom-scrollbar">
+                <div id="formContainer"
+                    class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 max-w-7xl mx-auto pb-20 fade-in">
+                    <!-- Dynamic Inputs -->
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div
+                class="bg-white border-t border-slate-200 px-6 py-2 text-xs text-slate-400 text-center flex justify-center gap-6">
+                <span><kbd class="font-sans bg-slate-100 border border-slate-300 rounded px-1 text-slate-600">Tab</kbd>
+                    Next Field</span>
+                <span><kbd class="font-sans bg-slate-100 border border-slate-300 rounded px-1 text-slate-600">Ctrl</kbd>
+                    + <kbd
+                        class="font-sans bg-slate-100 border border-slate-300 rounded px-1 text-slate-600">Arrows</kbd>
+                    Nav Rows</span>
+            </div>
+        </section>
+    </main>
+
+    <!-- Toast -->
+    <div id="toast"
+        class="fixed bottom-5 right-5 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-50 flex items-center gap-3">
+        <span id="toastMsg">Notification</span>
+    </div>
+
+    <!-- Custom Input Modal -->
+    <div id="customModal"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm hidden opacity-0 transition-opacity duration-200">
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm transform scale-95 transition-all duration-200"
+            id="modalPanel">
+            <h3 id="modalTitle" class="text-lg font-bold text-slate-800 mb-2">Input Required</h3>
+            <input type="text" id="modalInput"
+                class="w-full border border-slate-300 rounded-lg px-3 py-2 mb-4 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                placeholder="Enter value...">
+            <div class="flex justify-end gap-2">
+                <button id="modalCancel"
+                    class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-medium transition">Cancel</button>
+                <button id="modalConfirm"
+                    class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- STATE ---
+        const state = {
+            headers: [],
+            data: [], // Array of Arrays
+            visibleColumns: new Set(),
+            colConfigs: [], // { type: 'text'|'number'|'select'|'multiselect', options: [], separator: ', ' }
+            currentIndex: 0,
+            filename: 'export'
+        };
+
+        // --- DOM ---
+        const els = {
+            fileInput: document.getElementById('fileInput'),
+            emptyState: document.getElementById('emptyState'),
+            sidebar: document.getElementById('sidebar'),
+            editorArea: document.getElementById('editorArea'),
+            columnList: document.getElementById('columnList'),
+            formContainer: document.getElementById('formContainer'),
+            downloadBtn: document.getElementById('downloadBtn'),
+            prevBtn: document.getElementById('prevBtn'),
+            nextBtn: document.getElementById('nextBtn'),
+            currentIndexDisplay: document.getElementById('currentIndexDisplay'),
+            totalIndexDisplay: document.getElementById('totalIndexDisplay'),
+            rowCounter: document.getElementById('rowCounter'),
+            selectAllCols: document.getElementById('selectAllCols'),
+            deselectAllCols: document.getElementById('deselectAllCols'),
+            toast: document.getElementById('toast'),
+            toastMsg: document.getElementById('toastMsg')
+        };
+
+        // --- CUSTOM PROMPT LOGIC ---
+        function askUser(title, defaultValue = '') {
+            return new Promise((resolve) => {
+                const modal = document.getElementById('customModal');
+                const panel = document.getElementById('modalPanel');
+                const titleEl = document.getElementById('modalTitle');
+                const inputEl = document.getElementById('modalInput');
+                const confirmBtn = document.getElementById('modalConfirm');
+                const cancelBtn = document.getElementById('modalCancel');
+
+                // Setup
+                titleEl.innerText = title;
+                inputEl.value = defaultValue;
+
+                // Show
+                modal.classList.remove('hidden');
+                // RAF for animation frame to ensure opacity transition works
+                requestAnimationFrame(() => {
+                    modal.classList.remove('opacity-0');
+                    panel.classList.remove('scale-95');
+                    panel.classList.add('scale-100');
+                    inputEl.focus();
+                    inputEl.select();
+                });
+
+                const close = (value) => {
+                    modal.classList.add('opacity-0');
+                    panel.classList.remove('scale-100');
+                    panel.classList.add('scale-95');
+                    setTimeout(() => {
+                        modal.classList.add('hidden');
+                    }, 200);
+                    cleanup();
+                    resolve(value);
+                };
+
+                const handleConfirm = () => close(inputEl.value);
+                const handleCancel = () => close(null);
+                const handleKey = (e) => {
+                    if (e.key === 'Enter') handleConfirm();
+                    if (e.key === 'Escape') handleCancel();
+                };
+
+                const cleanup = () => {
+                    confirmBtn.removeEventListener('click', handleConfirm);
+                    cancelBtn.removeEventListener('click', handleCancel);
+                    inputEl.removeEventListener('keydown', handleKey);
+                };
+
+                confirmBtn.addEventListener('click', handleConfirm);
+                cancelBtn.addEventListener('click', handleCancel);
+                inputEl.addEventListener('keydown', handleKey);
+            });
+        }
+
+        // --- LOGIC ---
+
+        // 1. File Import
+        els.fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            state.filename = file.name.replace('.csv', '');
+
+            Papa.parse(file, {
+                skipEmptyLines: true,
+                complete: function (results) {
+                    if (results.data.length < 1) {
+                        showToast("Error: Empty CSV");
+                        return;
+                    }
+
+                    state.headers = results.data[0];
+                    if (results.data.length > 1) {
+                        state.data = results.data.slice(1);
+                    } else {
+                        state.data = [];
+                    }
+
+                    // Normalize row lengths
+                    state.data = state.data.map(row => {
+                        while (row.length < state.headers.length) row.push("");
+                        return row;
+                    });
+
+                    // Init Configs
+                    state.colConfigs = state.headers.map(() => ({
+                        type: 'text',
+                        options: [],
+                        separator: ', '
+                    }));
+
+                    state.visibleColumns = new Set(state.headers.map((_, i) => i));
+                    state.currentIndex = 0;
+
+                    initUI();
+                }
+            });
+        });
+
+        function initUI() {
+            els.emptyState.classList.add('hidden');
+            els.sidebar.classList.remove('hidden');
+            els.editorArea.classList.remove('hidden');
+            els.downloadBtn.disabled = false;
+
+            renderSidebar();
+            updateNavigation();
+            renderForm();
+            showToast(`Loaded ${state.data.length} rows`);
+        }
+
+        // 2. Sidebar & Type Configuration
+        function renderSidebar() {
+            els.columnList.innerHTML = '';
+            state.headers.forEach((header, index) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'flex flex-col p-3 mb-2 bg-white border border-slate-200 rounded-lg shadow-sm hover:border-indigo-300 transition';
+
+                // Top row: Checkbox & Label
+                const topRow = document.createElement('div');
+                topRow.className = 'flex items-center justify-between mb-2 cursor-pointer';
+
+                const leftSide = document.createElement('div');
+                leftSide.className = 'flex items-center gap-3 flex-1 overflow-hidden';
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = state.visibleColumns.has(index);
+                checkbox.className = 'w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500';
+
+                const label = document.createElement('span');
+                label.className = 'text-sm font-medium text-slate-700 truncate select-none';
+                label.innerText = header || `Column ${index + 1}`;
+
+                leftSide.appendChild(checkbox);
+                leftSide.appendChild(label);
+                topRow.appendChild(leftSide);
+
+                // Bottom row: Type Selector
+                const typeSelect = document.createElement('select');
+                typeSelect.className = 'text-xs border border-slate-200 rounded px-2 py-1 bg-slate-50 text-slate-600 focus:outline-none focus:border-indigo-500 w-full';
+                typeSelect.innerHTML = `
+                    <option value="text">Text (String)</option>
+                    <option value="number">Number</option>
+                    <option value="select">Select (Dropdown)</option>
+                    <option value="multiselect">Multi-select</option>
+                `;
+                typeSelect.value = state.colConfigs[index].type;
+
+                // Event Handlers
+                const toggleVis = () => {
+                    if (checkbox.checked) state.visibleColumns.add(index);
+                    else state.visibleColumns.delete(index);
+                    renderForm();
+                };
+
+                checkbox.addEventListener('change', toggleVis);
+                topRow.addEventListener('click', (e) => {
+                    if (e.target !== checkbox && e.target !== typeSelect) {
+                        checkbox.checked = !checkbox.checked;
+                        toggleVis();
+                    }
+                });
+
+                typeSelect.addEventListener('change', (e) => {
+                    handleTypeChange(index, e.target.value);
+                });
+
+                wrapper.appendChild(topRow);
+                wrapper.appendChild(typeSelect);
+                els.columnList.appendChild(wrapper);
+            });
+        }
+
+        async function handleTypeChange(colIndex, newType) {
+            const config = state.colConfigs[colIndex];
+            config.type = newType;
+
+            if (newType === 'multiselect') {
+                const sep = await askUser("Enter separator for multi-select values:", config.separator || ", ");
+                if (sep !== null) {
+                    config.separator = sep;
+                    scanOptions(colIndex, true);
+                } else {
+                    config.type = 'text';
+                    renderSidebar(); // Revert selection in sidebar
+                    return;
+                }
+            } else if (newType === 'select') {
+                scanOptions(colIndex, false);
+            }
+
+            renderForm();
+        }
+
+        function scanOptions(colIndex, isMulti) {
+            const config = state.colConfigs[colIndex];
+            const optionsSet = new Set();
+
+            state.data.forEach(row => {
+                const val = row[colIndex];
+                if (!val) return;
+
+                if (isMulti) {
+                    const parts = val.split(config.separator).map(s => s.trim()).filter(s => s);
+                    parts.forEach(p => optionsSet.add(p));
+                } else {
+                    optionsSet.add(val.trim());
+                }
+            });
+
+            config.options = Array.from(optionsSet).sort();
+            showToast(`Found ${config.options.length} unique options`);
+        }
+
+        // 3. Render Editor Form
+        function renderForm(restoreFocusCol = null) {
+            els.formContainer.innerHTML = '';
+
+            // Animation reset
+            els.formContainer.classList.remove('fade-in');
+            void els.formContainer.offsetWidth;
+            els.formContainer.classList.add('fade-in');
+
+            if (state.data.length === 0) {
+                els.formContainer.innerHTML = `<div class="col-span-full text-center text-slate-400 italic">No data available</div>`;
+                return;
+            }
+
+            const row = state.data[state.currentIndex];
+
+            state.headers.forEach((header, colIndex) => {
+                if (!state.visibleColumns.has(colIndex)) return;
+
+                const config = state.colConfigs[colIndex];
+                const cellValue = row[colIndex] || "";
+
+                const wrapper = document.createElement('div');
+                wrapper.className = 'bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all';
+
+                // Label
+                const label = document.createElement('label');
+                label.className = 'flex justify-between items-center text-xs font-bold text-slate-400 uppercase tracking-wider mb-2';
+                label.innerHTML = `<span>${header}</span> <span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">${config.type}</span>`;
+                wrapper.appendChild(label);
+
+                // Input based on type
+                let inputEl;
+
+                if (config.type === 'text') {
+                    inputEl = document.createElement('textarea');
+                    inputEl.className = 'input-field w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-none';
+                    inputEl.rows = 2;
+                    inputEl.value = cellValue;
+                    inputEl.addEventListener('input', (e) => updateCell(colIndex, e.target.value));
+                }
+                else if (config.type === 'number') {
+                    inputEl = document.createElement('input');
+                    inputEl.type = 'number';
+                    inputEl.step = 'any';
+                    inputEl.className = 'input-field w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none';
+                    inputEl.value = cellValue;
+                    inputEl.addEventListener('input', (e) => updateCell(colIndex, e.target.value));
+                }
+                else if (config.type === 'select') {
+                    inputEl = document.createElement('select');
+                    inputEl.className = 'input-field w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none';
+
+                    const nullOpt = document.createElement('option');
+                    nullOpt.value = "";
+                    nullOpt.text = "-- Select --";
+                    inputEl.appendChild(nullOpt);
+
+                    config.options.forEach(opt => {
+                        const option = document.createElement('option');
+                        option.value = opt;
+                        option.text = opt;
+                        option.selected = (opt === cellValue);
+                        inputEl.appendChild(option);
+                    });
+
+                    // Value not in list?
+                    if (cellValue && !config.options.includes(cellValue)) {
+                        const tempOpt = document.createElement('option');
+                        tempOpt.value = cellValue;
+                        tempOpt.text = `${cellValue} (Current)`;
+                        tempOpt.selected = true;
+                        inputEl.appendChild(tempOpt);
+                    }
+
+                    // Add Create New Option
+                    const createOpt = document.createElement('option');
+                    createOpt.value = "__NEW__";
+                    createOpt.className = "font-bold text-indigo-600 bg-indigo-50";
+                    createOpt.text = "+ Create New Option...";
+                    inputEl.appendChild(createOpt);
+
+                    inputEl.addEventListener('change', async (e) => {
+                        if (e.target.value === '__NEW__') {
+                            const newVal = await askUser("Enter name for the new option:");
+                            if (newVal) {
+                                const trimmed = newVal.trim();
+                                if (trimmed && !config.options.includes(trimmed)) {
+                                    config.options.push(trimmed);
+                                    config.options.sort();
+                                }
+                                if (trimmed) {
+                                    updateCell(colIndex, trimmed);
+                                    renderForm(colIndex); // Re-render to reflect new structure
+                                } else {
+                                    e.target.value = ""; // Reset if empty
+                                }
+                            } else {
+                                e.target.value = cellValue; // Reset if cancelled
+                            }
+                        } else {
+                            updateCell(colIndex, e.target.value);
+                        }
+                    });
+                }
+                else if (config.type === 'multiselect') {
+                    inputEl = renderMultiSelect(colIndex, cellValue, config);
+                }
+
+                if (inputEl) {
+                    if (config.type === 'multiselect') {
+                        const sel = inputEl.querySelector('select');
+                        if (sel) sel.dataset.colIndex = colIndex;
+                    } else {
+                        inputEl.dataset.colIndex = colIndex;
+                    }
+                    wrapper.appendChild(inputEl);
+                }
+
+                els.formContainer.appendChild(wrapper);
+            });
+
+            if (restoreFocusCol !== null) {
+                const target = document.querySelector(`[data-col-index="${restoreFocusCol}"]`);
+                if (target) {
+                    target.focus();
+                    if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT') {
+                        const len = target.value.length;
+                        if (target.setSelectionRange) target.setSelectionRange(len, len);
+                    }
+                }
+            }
+        }
+
+        function renderMultiSelect(colIndex, currentVal, config) {
+            const container = document.createElement('div');
+            container.className = 'flex flex-col gap-2';
+
+            // Parse current values
+            let selected = currentVal ? currentVal.split(config.separator).map(s => s.trim()).filter(s => s) : [];
+
+            // 1. Tags Area
+            const tagsArea = document.createElement('div');
+            tagsArea.className = 'flex flex-wrap gap-1 bg-slate-50 border border-slate-200 rounded-lg p-2 min-h-[42px]';
+
+            const renderTags = () => {
+                tagsArea.innerHTML = '';
+                if (selected.length === 0) {
+                    tagsArea.innerHTML = '<span class="text-slate-400 text-xs italic py-1">No items selected</span>';
+                }
+                selected.forEach(tag => {
+                    const pill = document.createElement('span');
+                    pill.className = 'tag-pill';
+                    pill.innerHTML = `${tag} <span class="tag-remove">&times;</span>`;
+                    pill.querySelector('.tag-remove').onclick = () => {
+                        selected = selected.filter(s => s !== tag);
+                        save();
+                    };
+                    tagsArea.appendChild(pill);
+                });
+            };
+            renderTags();
+
+            // 2. Add Dropdown
+            const addSelect = document.createElement('select');
+            addSelect.className = 'text-xs border border-slate-200 rounded p-1.5 bg-white text-slate-600 focus:ring-2 focus:ring-indigo-500 outline-none';
+            addSelect.innerHTML = '<option value="">+ Add item...</option>';
+
+            config.options.forEach(opt => {
+                const option = document.createElement('option');
+                option.value = opt;
+                option.text = opt;
+                addSelect.appendChild(option);
+            });
+
+            // Add Create New Option
+            const createOpt = document.createElement('option');
+            createOpt.value = "__NEW__";
+            createOpt.className = "font-bold text-indigo-600 bg-indigo-50";
+            createOpt.text = "+ Create New Tag...";
+            addSelect.appendChild(createOpt);
+
+            addSelect.addEventListener('change', async (e) => {
+                const val = e.target.value;
+                if (val === '__NEW__') {
+                    const newVal = await askUser("Enter new tag name:");
+                    if (newVal) {
+                        const trimmed = newVal.trim();
+                        if (trimmed && !config.options.includes(trimmed)) {
+                            config.options.push(trimmed);
+                            config.options.sort();
+                        }
+                        if (trimmed && !selected.includes(trimmed)) {
+                            selected.push(trimmed);
+                            save();
+                            renderForm(colIndex);
+                            return;
+                        }
+                    }
+                    e.target.value = "";
+                    return;
+                }
+
+                if (val && !selected.includes(val)) {
+                    selected.push(val);
+                    save();
+                }
+                e.target.value = "";
+            });
+
+            // Save function
+            const save = () => {
+                const newVal = selected.join(config.separator);
+                updateCell(colIndex, newVal);
+                renderTags();
+            };
+
+            container.appendChild(tagsArea);
+            container.appendChild(addSelect);
+            return container;
+        }
+
+        function updateCell(colIndex, value) {
+            state.data[state.currentIndex][colIndex] = value;
+        }
+
+        // 4. Navigation
+        function updateNavigation() {
+            const len = state.data.length;
+            els.currentIndexDisplay.innerText = len > 0 ? state.currentIndex + 1 : 0;
+            els.totalIndexDisplay.innerText = len;
+            els.rowCounter.innerText = len > 0 ? `#${state.currentIndex + 1}` : '-';
+
+            els.prevBtn.disabled = state.currentIndex <= 0;
+            els.nextBtn.disabled = state.currentIndex >= len - 1;
+        }
+
+        function getFocusedCol() {
+            const active = document.activeElement;
+            if (active && active.dataset.colIndex) return active.dataset.colIndex;
+            return null;
+        }
+
+        function goNext() {
+            if (state.currentIndex < state.data.length - 1) {
+                const foc = getFocusedCol();
+                state.currentIndex++;
+                updateNavigation();
+                renderForm(foc);
+            }
+        }
+
+        function goPrev() {
+            if (state.currentIndex > 0) {
+                const foc = getFocusedCol();
+                state.currentIndex--;
+                updateNavigation();
+                renderForm(foc);
+            }
+        }
+
+        els.prevBtn.addEventListener('click', goPrev);
+        els.nextBtn.addEventListener('click', goNext);
+
+        // Keyboard Shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (state.data.length === 0) return;
+            if (e.ctrlKey || e.metaKey) {
+                if (e.key === 'ArrowRight') { e.preventDefault(); goNext(); }
+                if (e.key === 'ArrowLeft') { e.preventDefault(); goPrev(); }
+            }
+        });
+
+        // Tab Cycling
+        els.formContainer.addEventListener('keydown', (e) => {
+            if (e.key === 'Tab') {
+                const inputs = Array.from(els.formContainer.querySelectorAll('textarea, input, select'));
+                if (inputs.length === 0) return;
+
+                const first = inputs[0];
+                const last = inputs[inputs.length - 1];
+
+                if (e.shiftKey && document.activeElement === first) {
+                    e.preventDefault();
+                    last.focus();
+                } else if (!e.shiftKey && document.activeElement === last) {
+                    e.preventDefault();
+                    first.focus();
+                }
+            }
+        });
+
+        // 5. Sidebar Bulk Actions
+        els.selectAllCols.addEventListener('click', () => {
+            state.headers.forEach((_, i) => state.visibleColumns.add(i));
+            renderSidebar(); renderForm();
+        });
+        els.deselectAllCols.addEventListener('click', () => {
+            state.visibleColumns.clear();
+            renderSidebar(); renderForm();
+        });
+
+        // 6. Export
+        els.downloadBtn.addEventListener('click', () => {
+            if (state.data.length === 0) return;
+            const csv = Papa.unparse({ fields: state.headers, data: state.data });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', `${state.filename}_edited.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast("Export started...");
+        });
+
+        function showToast(msg) {
+            els.toastMsg.innerText = msg;
+            els.toast.classList.remove('opacity-0', 'translate-y-20');
+            setTimeout(() => els.toast.classList.add('opacity-0', 'translate-y-20'), 3000);
+        }
+    </script>
+</body>
+
+</html>
