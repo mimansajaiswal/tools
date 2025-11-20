@@ -251,8 +251,11 @@
          * - made_by: (Optional) Creator name to display as a badge (e.g., "Mimansa", "Claude")
          */
         const toolsData = [
-             // --- Dev Utilities ---
+            // --- Dev Utilities ---
             { section: "Dev Utilities", name: "CSV Row Editor", url: "./csv-row-editor.html", desc: "Edit CSV data row by row", made_by: "Gemini 3" },
+
+            // --- Research Tools ---
+            { section: "🔬 Research Tools", name: "PDF Annotation Extractor", url: "./pdf-annotation-extractor.html", desc: "Extract annotated (incl handwritten) pdf content into markdown", made_by: "Gemini 3 + GPT 5.1 Codex" },
 
             // --- Daily Life ---
             { section: "🛠️ Daily Life", name: "Weight Trajectory", url: "./weight-progress.html", desc: "Graph weight progress easily", made_by: "Gemini 3" },
@@ -262,7 +265,8 @@
 
             // --- Design ---
             { section: "Design", name: "Quote Image Generator", url: "./quote-to-image.html", desc: "Convert Quotes to Image", made_by: "Gemini 3" },
-           
+            { section: "Design", name: "PDF Stack Designer", url: "./pdf-stack-designer.html", desc: "Create stack of pages image from your pdf", made_by: "Gemini 3" },
+
         ];
 
         // --- RENDER LOGIC ---

@@ -7,6 +7,57 @@
     <title>PDF Stack Designer</title>
 
     <!-- Tailwind CSS for UI -->
+    <script>
+        window.tailwind = window.tailwind || {};
+        window.tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif']
+                    },
+                    colors: {
+                        linen: {
+                            50: '#fdfaf7',
+                            100: '#f5eee3',
+                            200: '#ebdcc5',
+                            300: '#d7c4a6'
+                        },
+                        oatmeal: {
+                            100: '#f2e6d5',
+                            200: '#e3d1b8',
+                            300: '#d2b793',
+                            400: '#bc9e78'
+                        },
+                        earth: {
+                            50: '#fafaf9',
+                            100: '#f5f5f4',
+                            200: '#e7e5e4',
+                            300: '#d6d3d1',
+                            400: '#a8a29e',
+                            500: '#78716c',
+                            600: '#57534e',
+                            700: '#44403c',
+                            800: '#292524',
+                            900: '#1c1917'
+                        },
+                        charcoal: {
+                            400: '#70675f',
+                            500: '#564f48',
+                            600: '#3c3631',
+                            700: '#2d2a27',
+                            800: '#1f1a17'
+                        },
+                        amethyst: {
+                            300: '#cbbbdc',
+                            400: '#b8aac7',
+                            500: '#9f86c0',
+                            600: '#6a5a7d'
+                        }
+                    }
+                }
+            }
+        };
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
 
     <!-- PDF.js for parsing PDF files -->
@@ -18,6 +69,8 @@
     <style>
         body {
             font-family: 'Inter', sans-serif;
+            background-color: #f5eee3;
+            color: #292524;
         }
 
         /* Custom Scrollbar for the settings panel */
@@ -26,25 +79,25 @@
         }
 
         .custom-scroll::-webkit-scrollbar-track {
-            background: #f1f1f1;
+            background: #f5eee3;
         }
 
         .custom-scroll::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
+            background: #d7c4a6;
             border-radius: 3px;
         }
 
         .custom-scroll::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
+            background: #9f86c0;
         }
 
         /* Checkerboard pattern for transparent background */
         .checkerboard {
             background-image:
-                linear-gradient(45deg, #e5e7eb 25%, transparent 25%),
-                linear-gradient(-45deg, #e5e7eb 25%, transparent 25%),
-                linear-gradient(45deg, transparent 75%, #e5e7eb 75%),
-                linear-gradient(-45deg, transparent 75%, #e5e7eb 75%);
+                linear-gradient(45deg, #eadcc5 25%, transparent 25%),
+                linear-gradient(-45deg, #eadcc5 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, #eadcc5 75%),
+                linear-gradient(-45deg, transparent 75%, #eadcc5 75%);
             background-size: 20px 20px;
             background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
         }
