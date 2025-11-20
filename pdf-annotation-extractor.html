@@ -135,6 +135,10 @@
             overflow-x: auto;
             overflow-y: hidden;
         }
+
+        #lightboxImage {
+            touch-action: none;
+        }
     </style>
 </head>
 
@@ -421,7 +425,7 @@ annotation
                     <!-- Added transition-all for smooth zooming -->
                     <div class="min-h-full min-w-full flex items-center justify-center p-8" id="imageContainer">
                         <img id="lightboxImage" src=""
-                            class="max-w-full max-h-full shadow-lg rounded transition-all duration-200 ease-out object-contain">
+                            class="max-w-full max-h-full shadow-lg rounded transition-all duration-200 ease-out object-contain cursor-grab select-none">
                     </div>
                 </div>
 
@@ -469,8 +473,16 @@ annotation
         // State structure: Array of objects { id, page, part, totalParts, base64, text, status }
         let sliceState = [];
 
-        // Zoom State
+        // Zoom & Pan State
         let currentZoom = 1.0;
+        let panX = 0;
+        let panY = 0;
+        let isPanning = false;
+        let panStartX = 0;
+        let panStartY = 0;
+
+        const lightboxImageEl = document.getElementById('lightboxImage');
+        const lightboxScrollAreaEl = document.getElementById('lightboxScrollArea');
 
         // Concurrency Limit for AI calls
         const CONCURRENCY_LIMIT = 3;
@@ -918,10 +930,15 @@ annotation
 
             // Reset zoom on open
             resetZoom();
+            if (lightboxImageEl) {
+                lightboxImageEl.onload = () => resetZoom();
+            }
 
             const label = slice.totalParts > 1 ? `Page ${slice.page} - Part ${slice.part}` : `Page ${slice.page}`;
             document.getElementById('lightboxTitle').textContent = label;
-            document.getElementById('lightboxImage').src = slice.fullBase64;
+            if (lightboxImageEl) {
+                lightboxImageEl.src = slice.fullBase64;
+            }
             document.getElementById('lightboxModal').classList.remove('hidden');
 
             // Update Text Panel
@@ -967,44 +984,112 @@ annotation
             }
         }
 
-        // Zoom Functions
-        function updateZoomUI() {
-            const img = document.getElementById('lightboxImage');
+        // Zoom & Pan Functions
+        const MIN_ZOOM = 0.25;
+        const MAX_ZOOM = 4.0;
 
-            // If 100% or less, use CSS classes for "Fit"
+        function applyZoomTransform() {
+            if (!lightboxImageEl) return;
+            lightboxImageEl.style.transformOrigin = 'center center';
+            lightboxImageEl.style.transform = `translate(${panX}px, ${panY}px) scale(${currentZoom})`;
+        }
+
+        function updateZoomUI() {
+            if (!lightboxImageEl) return;
+
             if (currentZoom <= 1.0) {
-                img.classList.add('max-w-full', 'max-h-full');
-                // Reset explicit dimensions so CSS classes take over
-                img.style.width = '';
-                img.style.height = '';
+                panX = 0;
+                panY = 0;
+                lightboxImageEl.classList.remove('cursor-grabbing');
+                lightboxImageEl.classList.add('cursor-grab');
             } else {
-                // If > 100%, remove constraints and set explicit width
-                img.classList.remove('max-w-full', 'max-h-full');
-                img.style.width = `${currentZoom * 100}%`;
-                img.style.height = 'auto';
+                if (!lightboxImageEl.classList.contains('cursor-grabbing')) {
+                    lightboxImageEl.classList.add('cursor-grab');
+                }
             }
 
+            applyZoomTransform();
             document.getElementById('zoomDisplay').textContent = `${Math.round(currentZoom * 100)}%`;
         }
 
+        function setZoom(value) {
+            const clamped = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
+            if (clamped === currentZoom) return;
+            currentZoom = clamped;
+            updateZoomUI();
+        }
+
         function zoomIn() {
-            if (currentZoom < 4.0) { // Limit to 400%
-                currentZoom += 0.25;
-                updateZoomUI();
-            }
+            setZoom(currentZoom + 0.25);
         }
 
         function zoomOut() {
-            if (currentZoom > 0.25) { // Limit to 25%
-                currentZoom -= 0.25;
-                updateZoomUI();
-            }
+            setZoom(currentZoom - 0.25);
         }
 
         function resetZoom() {
             currentZoom = 1.0;
+            panX = 0;
+            panY = 0;
+            isPanning = false;
             updateZoomUI();
         }
+
+        function beginPan(event) {
+            if (!lightboxImageEl || currentZoom <= 1.0) return;
+            isPanning = true;
+            panStartX = event.clientX - panX;
+            panStartY = event.clientY - panY;
+            lightboxImageEl.setPointerCapture(event.pointerId);
+            lightboxImageEl.classList.add('cursor-grabbing');
+            lightboxImageEl.classList.remove('cursor-grab');
+            event.preventDefault();
+        }
+
+        function panMove(event) {
+            if (!isPanning) return;
+            panX = event.clientX - panStartX;
+            panY = event.clientY - panStartY;
+            applyZoomTransform();
+        }
+
+        function endPan(event) {
+            if (!isPanning) return;
+            isPanning = false;
+            try {
+                lightboxImageEl.releasePointerCapture(event.pointerId);
+            } catch (_) { }
+            lightboxImageEl.classList.remove('cursor-grabbing');
+            lightboxImageEl.classList.add('cursor-grab');
+        }
+
+        function handleLightboxWheel(event) {
+            if (event.ctrlKey) {
+                event.preventDefault();
+                const direction = event.deltaY < 0 ? 1 : -1;
+                setZoom(currentZoom + direction * 0.1);
+                return;
+            }
+
+            if (currentZoom <= 1.0) return;
+            event.preventDefault();
+            panX -= event.deltaX;
+            panY -= event.deltaY;
+            applyZoomTransform();
+        }
+
+        if (lightboxImageEl) {
+            lightboxImageEl.addEventListener('pointerdown', beginPan);
+            lightboxImageEl.addEventListener('pointermove', panMove);
+            lightboxImageEl.addEventListener('pointerup', endPan);
+            lightboxImageEl.addEventListener('pointercancel', endPan);
+        }
+
+        if (lightboxScrollAreaEl) {
+            lightboxScrollAreaEl.addEventListener('wheel', handleLightboxWheel, { passive: false });
+        }
+
+        updateZoomUI();
 
         async function rerunSlice(index) {
             const slice = sliceState[index];
