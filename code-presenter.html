@@ -1,0 +1,1190 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodePresenter</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Marked for Markdown -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <!-- Diff Match Patch -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/diff_match_patch/20121119/diff_match_patch.js"></script>
+
+    <!-- LZ-String -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
+
+    <!-- Html2Canvas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <!-- Shiki Loader (Main App) -->
+    <script type="module">
+        import { getHighlighter } from 'https://esm.sh/shiki@1.0.0';
+
+        window.initShiki = async () => {
+            try {
+                const highlighter = await getHighlighter({
+                    themes: ['vitesse-light', 'vitesse-dark', 'solarized-light', 'rose-pine-moon'],
+                    langs: ['javascript', 'jsx', 'python', 'css', 'html', 'markdown']
+                });
+                window.shikiHighlighter = highlighter;
+                window.dispatchEvent(new Event('shiki-ready'));
+            } catch (e) {
+                console.error("Shiki failed to load:", e);
+            }
+        };
+        window.initShiki();
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        :root {
+            --bg-light: 253 250 247;
+            --text-light: 45 42 39;
+            --accent-light: 95 50 140;
+            /* Default Font */
+            --font-code: 'JetBrains Mono', monospace;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: rgb(var(--bg-light));
+            color: rgb(var(--text-light));
+            overflow: hidden;
+        }
+
+        /* Global Code Font Application */
+        .font-mono,
+        code,
+        pre {
+            font-family: var(--font-code) !important;
+        }
+
+        .canvas-bg {
+            background-color: rgb(var(--bg-light));
+            background-image: radial-gradient(#e5e7eb 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+
+        .mac-window {
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        /* Scrollbars */
+        .custom-scroll::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        .custom-scroll::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: rgba(128, 128, 128, 0.2);
+            border-radius: 5px;
+        }
+
+        .custom-scroll::-webkit-scrollbar-thumb:hover {
+            background: rgba(128, 128, 128, 0.4);
+        }
+
+        .custom-scroll::-webkit-scrollbar-corner {
+            background: transparent;
+        }
+
+        /* Magic Move Container */
+        .shiki-magic-move-container {
+            position: relative;
+            font-family: var(--font-code) !important;
+            /* Fix 2: Apply var */
+            font-size: 15px;
+            line-height: 1.5;
+            white-space: pre;
+            tab-size: 4;
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            text-align: left;
+            display: block;
+        }
+
+        .shiki-magic-move-item {
+            display: inline-block;
+            vertical-align: baseline;
+            transition: all var(--smm-duration) var(--smm-easing);
+            will-change: transform, opacity, color;
+        }
+
+        .shiki-magic-move-enter-from,
+        .shiki-magic-move-leave-to {
+            opacity: 0;
+            transform: scale(0.9);
+        }
+
+        .shiki-magic-move-leave-active {
+            position: absolute;
+            pointer-events: none;
+        }
+
+        /* Editor Layers */
+        .editor-textarea {
+            color: transparent;
+            background: transparent;
+            caret-color: currentColor;
+            z-index: 10;
+            resize: none;
+            outline: none;
+            white-space: pre !important;
+            font-family: var(--font-code) !important;
+            /* Fix 2: Apply var */
+        }
+
+        .syntax-layer {
+            pointer-events: none;
+            z-index: 1;
+            display: block;
+            font-family: var(--font-code) !important;
+            /* Fix 2: Apply var */
+        }
+
+        /* Line Numbers */
+        .line-numbers {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 40px;
+            text-align: right;
+            padding-top: 32px;
+            padding-right: 8px;
+            font-family: var(--font-code) !important;
+            /* Fix 2: Apply var */
+            font-size: 15px;
+            line-height: 1.5;
+            user-select: none;
+            opacity: 0.4;
+            border-right: 1px solid rgba(128, 128, 128, 0.1);
+            z-index: 20;
+            cursor: pointer;
+            overflow: hidden;
+        }
+
+        .line-numbers div:hover {
+            color: var(--accent-light);
+            opacity: 1;
+            font-weight: bold;
+        }
+
+        .line-numbers div.focused {
+            color: var(--accent-light);
+            opacity: 1;
+            font-weight: bold;
+        }
+
+        /* Highlights */
+        .dimmed {
+            opacity: 0.25;
+            filter: blur(0.8px);
+            transition: all 0.4s ease;
+        }
+
+        /* Markdown */
+        .markdown-preview {
+            font-family: 'Inter', sans-serif;
+            padding: 32px;
+            padding-bottom: 4px !important;
+            overflow: auto;
+            height: 100%;
+            color: inherit;
+        }
+
+        .markdown-preview h1 {
+            font-size: 2em;
+            font-weight: 700;
+            margin-bottom: 0.5em;
+        }
+
+        .markdown-preview p {
+            margin-bottom: 1em;
+            line-height: 1.6;
+        }
+
+        .markdown-preview code {
+            background: rgba(128, 128, 128, 0.2);
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-family: var(--font-code) !important;
+            font-size: 0.9em;
+        }
+
+        /* EXACT ALIGNMENT CSS */
+        .code-area-shared {
+            font-family: var(--font-code) !important;
+            /* Fix 2: Apply var */
+            font-size: 15px;
+            line-height: 1.5;
+            padding: 32px;
+            padding-bottom: 4px !important;
+            white-space: pre !important;
+            overflow: auto;
+            box-sizing: border-box;
+            tab-size: 4;
+            border: 0;
+            margin: 0;
+            display: block !important;
+            height: 100%;
+            width: 100%;
+        }
+
+        /* UI Utils */
+        .modal-backdrop {
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(2px);
+        }
+
+        .resize-handle {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 20px;
+            height: 20px;
+            cursor: nwse-resize;
+            z-index: 100;
+            background: linear-gradient(135deg, transparent 50%, rgba(128, 128, 128, 0.3) 50%);
+            border-bottom-right-radius: 12px;
+        }
+
+        .resize-handle:hover {
+            background: linear-gradient(135deg, transparent 50%, rgba(128, 128, 128, 0.6) 50%);
+        }
+
+        .title-input {
+            background: transparent;
+            border: none;
+            outline: none;
+            color: inherit;
+            font-family: inherit;
+            font-size: 12px;
+            text-align: center;
+            opacity: 0.6;
+            width: 100%;
+        }
+
+        .title-input:focus {
+            opacity: 1;
+        }
+
+        /* Shiki Styles override */
+        .shiki {
+            background: transparent !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            font-family: var(--font-code) !important;
+        }
+
+        /* Custom Toggle Color */
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #7c3aed;
+        }
+
+        .toggle-checkbox:checked+.toggle-label {
+            background-color: #7c3aed;
+        }
+    </style>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        cp: {
+                            bg: 'rgb(253, 250, 247)',
+                            text: 'rgb(45, 42, 39)',
+                            accent: '#7c3aed', /* Dull Purple */
+                            link: 'rgb(60, 75, 95)',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo, useLayoutEffect } = React;
+
+        // --- THEMES (Shiki) ---
+        const THEMES = {
+            carbon: { name: 'Carbon (Dark)', shikiTheme: 'vitesse-dark', bg: '#121212', text: '#dbd7caee', chrome: '#1e1e1e' },
+            dawn: { name: 'Dawn (Light)', shikiTheme: 'vitesse-light', bg: '#ffffff', text: '#393a34', chrome: '#f4f4f5' },
+            solarized: { name: 'Solarized (Light)', shikiTheme: 'solarized-light', bg: '#fdf6e3', text: '#657b83', chrome: '#eee8d5' },
+            midnight: { name: 'Midnight (Blue)', shikiTheme: 'rose-pine-moon', bg: '#232136', text: '#e0def4', chrome: '#2a273f' }
+        };
+
+        // --- ICONS ---
+        const Icon = ({ name, size = 18, className }) => {
+            const iconData = window.lucide && window.lucide.icons ? window.lucide.icons[name] : null;
+            if (!iconData) return null;
+            return (
+                <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                    {iconData.map(([tag, attrs], index) => React.createElement(tag, { ...attrs, key: index }))}
+                </svg>
+            );
+        };
+
+        const generateId = () => Math.random().toString(36).substr(2, 9);
+
+        // --- MAGIC MOVE RENDERER ---
+        const CLASS_PREFIX = 'shiki-magic-move';
+
+        class MagicMoveRenderer {
+            constructor(target, options = {}) {
+                this.options = { globalScale: 1, duration: 500, delayMove: 0.1, delayLeave: 0.1, delayEnter: 0.2, easing: 'ease-in-out', animateContainer: true, ...options };
+                this.mapDom = new Map();
+                this.isFirstRender = true;
+                if (typeof target === 'string') this.container = document.querySelector(target);
+                else this.container = target;
+                this.anchor = document.createElement('span');
+                Object.assign(this.anchor.style, { position: 'absolute', top: '0', left: '0', height: '1px', width: '1px', visibility: 'hidden' });
+                this.container.prepend(this.anchor);
+                this.container.classList.add('shiki-magic-move-container');
+            }
+            applyElement(el, token) {
+                if (token.content === '\n') { el.textContent = ''; } else { el.textContent = token.content; el.classList.add(CLASS_PREFIX + '-item'); }
+                if (token.htmlClass && token.content !== '\n') { el.className = [CLASS_PREFIX + '-item', token.htmlClass].join(' '); }
+                if (token.color) el.style.color = token.color;
+            }
+            registerTransitionEnd(el, cb) {
+                return () => {
+                    let resolved = false;
+                    const promise = new Promise((resolve) => {
+                        const anims = el.getAnimations();
+                        Promise.allSettled(anims.map(a => a.finished)).then(() => { if (resolved) return; resolved = true; cb(); resolve(); });
+                        setTimeout(() => { if (resolved) return; resolved = true; cb(); resolve(); }, this.options.duration + 100);
+                    });
+                    return promise;
+                }
+            }
+            setCssVariables() {
+                this.container.style.setProperty('--smm-duration', `${this.options.duration}ms`);
+                this.container.style.setProperty('--smm-easing', this.options.easing);
+            }
+            render(step) {
+                this.setCssVariables();
+                const newDomMap = new Map();
+                const move = [], enter = [], leave = [];
+                const promises = [];
+                const postReflow = [];
+                const { globalScale: scale } = this.options;
+                const position = new Map();
+                let anchorRect = this.anchor.getBoundingClientRect();
+                for (const el of this.mapDom.values()) {
+                    const rect = el.getBoundingClientRect();
+                    position.set(el, { x: rect.x - anchorRect.x, y: rect.y - anchorRect.y });
+                }
+                const newChildren = step.tokens.map((token) => {
+                    if (this.mapDom.has(token.key)) {
+                        const el = this.mapDom.get(token.key);
+                        this.applyElement(el, token);
+                        move.push(el);
+                        newDomMap.set(token.key, el);
+                        this.mapDom.delete(token.key);
+                        return el;
+                    } else {
+                        const el = document.createElement(token.content === '\n' ? 'br' : 'span');
+                        this.applyElement(el, token);
+                        enter.push(el);
+                        newDomMap.set(token.key, el);
+                        return el;
+                    }
+                });
+                for (const [_, el] of this.mapDom) { if (el.tagName !== 'BR') leave.push(el); }
+                this.container.replaceChildren(this.anchor, ...newChildren, ...leave);
+                this.mapDom = newDomMap;
+                leave.forEach((el) => {
+                    el.style.position = 'absolute';
+                    const pos = position.get(el);
+                    if (pos) { el.style.top = `${pos.y / scale}px`; el.style.left = `${pos.x / scale}px`; }
+                    el.classList.add(CLASS_PREFIX + '-leave-from', CLASS_PREFIX + '-leave-active');
+                    requestAnimationFrame(() => { el.classList.remove(CLASS_PREFIX + '-leave-from'); el.classList.add(CLASS_PREFIX + '-leave-to'); });
+                    promises.push(this.registerTransitionEnd(el, () => el.remove()));
+                });
+                if (!this.isFirstRender) {
+                    enter.forEach((el) => {
+                        if (el.tagName === 'BR') return;
+                        el.classList.add(CLASS_PREFIX + '-enter-from', CLASS_PREFIX + '-enter-active');
+                        requestAnimationFrame(() => { el.classList.remove(CLASS_PREFIX + '-enter-from'); el.classList.add(CLASS_PREFIX + '-enter-to'); });
+                        promises.push(this.registerTransitionEnd(el, () => { el.classList.remove(CLASS_PREFIX + '-enter-active', CLASS_PREFIX + '-enter-to'); }));
+                    });
+                }
+                anchorRect = this.anchor.getBoundingClientRect();
+                move.forEach((el) => {
+                    if (el.tagName === 'BR') return;
+                    const newRect = el.getBoundingClientRect();
+                    const newPos = { x: newRect.x - anchorRect.x, y: newRect.y - anchorRect.y };
+                    const oldPos = position.get(el);
+                    if (oldPos) {
+                        el.style.transitionDuration = '0ms';
+                        const dx = (oldPos.x - newPos.x) / scale;
+                        const dy = (oldPos.y - newPos.y) / scale;
+                        el.style.transform = `translate(${dx}px, ${dy}px)`;
+                        requestAnimationFrame(() => {
+                            el.classList.add(CLASS_PREFIX + '-move');
+                            el.style.transform = '';
+                            el.style.transitionDuration = '';
+                        });
+                        promises.push(this.registerTransitionEnd(el, () => el.classList.remove(CLASS_PREFIX + '-move')));
+                    }
+                });
+                this.isFirstRender = false;
+            }
+        }
+
+        // --- RENDERER SOURCE FOR EXPORT ---
+        const RENDERER_BODY = `
+            const CLASS_PREFIX = 'shiki-magic-move';
+            const defaultOptions = { globalScale: 1, duration: 500, delayMove: 0.1, delayLeave: 0.1, delayEnter: 0.2, easing: 'ease-in-out', animateContainer: true };
+            class MagicMoveRenderer {
+                constructor(target, options = {}) {
+                    this.options = { ...defaultOptions, ...options };
+                    this.mapDom = new Map();
+                    this.isFirstRender = true;
+                    if (typeof target === 'string') this.container = document.querySelector(target);
+                    else this.container = target;
+                    this.anchor = document.createElement('span');
+                    Object.assign(this.anchor.style, { position: 'absolute', top: '0', left: '0', height: '1px', width: '1px', visibility: 'hidden' });
+                    this.container.prepend(this.anchor);
+                    this.container.classList.add('shiki-magic-move-container');
+                }
+                applyElement(el, token) {
+                    if (token.content === '\\n') { el.textContent = ''; } else { el.textContent = token.content; el.classList.add(CLASS_PREFIX + '-item'); }
+                    if (token.htmlClass && token.content !== '\\n') { el.className = [CLASS_PREFIX + '-item', token.htmlClass].join(' '); }
+                    if (token.color) el.style.color = token.color;
+                }
+                registerTransitionEnd(el, cb) {
+                    return () => {
+                        let resolved = false;
+                        const promise = new Promise((resolve) => {
+                            const anims = el.getAnimations();
+                            Promise.allSettled(anims.map(a => a.finished)).then(() => { if(resolved) return; resolved = true; cb(); resolve(); });
+                            setTimeout(() => { if(resolved) return; resolved = true; cb(); resolve(); }, this.options.duration + 100);
+                        });
+                        return promise;
+                    }
+                }
+                setCssVariables() {
+                    this.container.style.setProperty('--smm-duration', \`\${this.options.duration}ms\`);
+                    this.container.style.setProperty('--smm-easing', this.options.easing);
+                }
+                render(step) {
+                    this.setCssVariables();
+                    const newDomMap = new Map();
+                    const move = [], enter = [], leave = [];
+                    const { globalScale: scale } = this.options;
+                    const position = new Map();
+                    let anchorRect = this.anchor.getBoundingClientRect();
+                    for (const el of this.mapDom.values()) {
+                        const rect = el.getBoundingClientRect();
+                        position.set(el, { x: rect.x - anchorRect.x, y: rect.y - anchorRect.y });
+                    }
+                    const newChildren = step.tokens.map((token) => {
+                        if (this.mapDom.has(token.key)) {
+                            const el = this.mapDom.get(token.key);
+                            this.applyElement(el, token);
+                            move.push(el);
+                            newDomMap.set(token.key, el);
+                            this.mapDom.delete(token.key);
+                            return el;
+                        } else {
+                            const el = document.createElement(token.content === '\\n' ? 'br' : 'span');
+                            this.applyElement(el, token);
+                            enter.push(el);
+                            newDomMap.set(token.key, el);
+                            return el;
+                        }
+                    });
+                    for (const [_, el] of this.mapDom) { if (el.tagName !== 'BR') leave.push(el); }
+                    this.container.replaceChildren(this.anchor, ...newChildren, ...leave);
+                    this.mapDom = newDomMap;
+                    leave.forEach((el) => {
+                        el.style.position = 'absolute';
+                        const pos = position.get(el);
+                        if(pos) { el.style.top = \`\${pos.y / scale}px\`; el.style.left = \`\${pos.x / scale}px\`; }
+                        el.classList.add(CLASS_PREFIX + '-leave-from', CLASS_PREFIX + '-leave-active');
+                        requestAnimationFrame(() => { el.classList.remove(CLASS_PREFIX + '-leave-from'); el.classList.add(CLASS_PREFIX + '-leave-to'); });
+                        this.registerTransitionEnd(el, () => el.remove())();
+                    });
+                    if (!this.isFirstRender) {
+                        enter.forEach((el) => {
+                            if(el.tagName === 'BR') return; 
+                            el.classList.add(CLASS_PREFIX + '-enter-from', CLASS_PREFIX + '-enter-active');
+                            requestAnimationFrame(() => { el.classList.remove(CLASS_PREFIX + '-enter-from'); el.classList.add(CLASS_PREFIX + '-enter-to'); });
+                            this.registerTransitionEnd(el, () => { el.classList.remove(CLASS_PREFIX + '-enter-active', CLASS_PREFIX + '-enter-to'); })();
+                        });
+                    }
+                    anchorRect = this.anchor.getBoundingClientRect();
+                    move.forEach((el) => {
+                        if(el.tagName === 'BR') return;
+                        const newRect = el.getBoundingClientRect();
+                        const newPos = { x: newRect.x - anchorRect.x, y: newRect.y - anchorRect.y };
+                        const oldPos = position.get(el);
+                        if (oldPos) {
+                            el.style.transitionDuration = '0ms';
+                            const dx = (oldPos.x - newPos.x) / scale;
+                            const dy = (oldPos.y - newPos.y) / scale;
+                            el.style.transform = \`translate(\${dx}px, \${dy}px)\`;
+                            requestAnimationFrame(() => { el.classList.add(CLASS_PREFIX + '-move'); el.style.transform = ''; el.style.transitionDuration = ''; });
+                            this.registerTransitionEnd(el, () => el.classList.remove(CLASS_PREFIX + '-move'))();
+                        }
+                    });
+                    this.isFirstRender = false;
+                }
+            }
+        `;
+
+        // --- DIFF UTILS ---
+        const calculateMatches = (a, b) => {
+            if (!window.diff_match_patch) return [];
+            const dmp = new diff_match_patch();
+            const diffs = dmp.diff_main(a, b);
+            dmp.diff_cleanupSemantic(diffs);
+            const matches = [];
+            let aOffset = 0, bOffset = 0;
+            diffs.forEach(([op, text]) => {
+                if (op === 0) {
+                    matches.push({ from: [aOffset, aOffset + text.length], to: [bOffset, bOffset + text.length], content: text });
+                    aOffset += text.length; bOffset += text.length;
+                } else if (op === -1) aOffset += text.length;
+                else if (op === 1) bOffset += text.length;
+            });
+            return matches;
+        };
+
+        // --- TOKENIZER ---
+        const processCodeToTokens = async (code, language, theme, focusedLines = []) => {
+            if (!window.shikiHighlighter) return { tokens: [] };
+            code = code.replace(/\r\n/g, '\n');
+
+            const { tokens } = window.shikiHighlighter.codeToTokens(code, { lang: language, theme: theme });
+
+            const flattened = [];
+            let offset = 0;
+
+            tokens.forEach(line => {
+                line.forEach(token => {
+                    flattened.push({
+                        content: token.content,
+                        color: token.color,
+                        htmlClass: 'token',
+                        offset: offset
+                    });
+                    offset += token.content.length;
+                });
+                flattened.push({ content: '\n', htmlClass: 'break', offset: offset });
+                offset += 1;
+            });
+
+            if (focusedLines && focusedLines.length > 0) {
+                let lineIdx = 1;
+                flattened.forEach(t => {
+                    if (t.content === '\n') lineIdx++;
+                    else if (!focusedLines.includes(lineIdx)) {
+                        t.htmlClass += ' dimmed';
+                    }
+                });
+            }
+
+            const counts = {};
+            return {
+                tokens: flattened.map((t, i) => {
+                    const keyBase = t.content.trim();
+                    const keySuffix = t.content === '\n' ? `break-${i}` : keyBase;
+                    counts[keySuffix] = (counts[keySuffix] || 0) + 1;
+                    return {
+                        ...t,
+                        key: t.content === '\n' ? `break-${i}` : `${keyBase}-${counts[keySuffix]}`
+                    };
+                })
+            };
+        };
+
+        const syncTokens = (prevTokens, currTokens, prevCode, currCode) => {
+            const matches = calculateMatches(prevCode, currCode);
+            matches.forEach(match => {
+                const tokensFrom = prevTokens.filter(t => t.offset >= match.from[0] && t.offset + t.content.length <= match.from[1]);
+                const tokensTo = currTokens.filter(t => t.offset >= match.to[0] && t.offset + t.content.length <= match.to[1]);
+                let idxF = 0, idxT = 0;
+                while (idxF < tokensFrom.length && idxT < tokensTo.length) {
+                    const tF = tokensFrom[idxF], tT = tokensTo[idxT];
+                    if (tF.content === tT.content) { tT.key = tF.key; idxF++; idxT++; } else { idxT++; }
+                }
+            });
+            return { tokens: currTokens };
+        };
+
+        // --- EDITOR COMPONENTS ---
+        // Fix 1: Use useMemo for synchronous rendering of HTML
+        const SimpleHighlighter = ({ code, language, theme, focusedLines = [], shikiReady }) => {
+            const html = useMemo(() => {
+                if (!window.shikiHighlighter) return code.replace(/</g, '&lt;');
+                try {
+                    const h = window.shikiHighlighter.codeToHtml(code, { lang: language, theme: theme });
+                    // Apply dimming logic directly to generated HTML string or DOM nodes
+                    // Since Shiki returns a string, we parse it to apply classes
+                    if (focusedLines.length > 0) {
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(h, 'text/html');
+                        const lines = doc.querySelectorAll('.line');
+                        lines.forEach((line, idx) => {
+                            if (!focusedLines.includes(idx + 1)) line.classList.add('dimmed');
+                        });
+                        return doc.body.innerHTML;
+                    }
+                    return h;
+                } catch (e) { return code; }
+            }, [code, language, theme, focusedLines, shikiReady]);
+
+            return <div className="code-area-shared syntax-layer" dangerouslySetInnerHTML={{ __html: html }} />;
+        };
+
+        const MagicMove = ({ code, language, theme, focusedLines, prevCodeRef, prevTokensRef, shikiReady }) => {
+            const containerRef = useRef(null);
+            const rendererRef = useRef(null);
+
+            useLayoutEffect(() => {
+                if (containerRef.current && !rendererRef.current) {
+                    rendererRef.current = new MagicMoveRenderer(containerRef.current);
+                }
+            }, []);
+
+            useEffect(() => {
+                if (rendererRef.current && window.shikiHighlighter) {
+                    processCodeToTokens(code, language, theme, focusedLines).then(rawStep => {
+                        let finalStep = rawStep;
+                        if (prevCodeRef.current && prevTokensRef.current) {
+                            finalStep = syncTokens(prevTokensRef.current, rawStep.tokens, prevCodeRef.current, code);
+                        }
+                        rendererRef.current.render(finalStep);
+                        prevCodeRef.current = code;
+                        prevTokensRef.current = finalStep.tokens;
+                    });
+                }
+            }, [code, language, theme, focusedLines, shikiReady]);
+
+            return <div ref={containerRef} className="code-area-shared syntax-layer overflow-hidden" />;
+        };
+
+        // --- SLIDE DATA ---
+        const INITIAL_SLIDES = [
+            { id: generateId(), title: 'README.md', language: 'markdown', focusedLines: [], code: `# CodePresenter\n\nTransform your code into **cinematic animations**.\n\n- 🪄 Magic Move Transitions\n- 🎨 Rich Syntax Highlighting\n- 🎥 Video & HTML Export\n- ⚡ Zero Dependencies` },
+            { id: generateId(), title: 'transformer.py', language: 'python', focusedLines: [], code: `import torch\nimport torch.nn as nn\n\nclass Transformer(nn.Module):\n    def __init__(self, dim, depth):\n        super().__init__()\n        self.layers = nn.ModuleList([])\n\n    def forward(self, x):\n        return x` },
+            { id: generateId(), title: 'transformer.py', language: 'python', focusedLines: [], code: `import torch\nimport torch.nn as nn\n\nclass Transformer(nn.Module):\n    def __init__(self, dim, depth, heads):\n        super().__init__()\n        self.layers = nn.ModuleList([\n            Attention(dim, heads)\n            for _ in range(depth)\n        ])\n\n    def forward(self, x):\n        for attn in self.layers:\n            x = attn(x)\n        return x` },
+            { id: generateId(), title: 'transformer.py', language: 'python', focusedLines: [], code: `import torch\nimport torch.nn as nn\n\nclass Transformer(nn.Module):\n    def __init__(self, dim, depth, heads, mlp_dim):\n        super().__init__()\n        self.layers = nn.ModuleList([\n            nn.ModuleList([\n                Attention(dim, heads),\n                FeedForward(dim, mlp_dim)\n            ])\n            for _ in range(depth)\n        ])\n\n    def forward(self, x):\n        for attn, ff in self.layers:\n            x = attn(x) + x\n            x = ff(x) + x\n        return x` },
+            { id: generateId(), title: 'transformer.py', language: 'python', focusedLines: [16], code: `import torch\nimport torch.nn as nn\n\nclass Transformer(nn.Module):\n    def __init__(self, dim, depth, heads, mlp_dim):\n        super().__init__()\n        self.layers = nn.ModuleList([\n            nn.ModuleList([\n                Attention(dim, heads),\n                FeedForward(dim, mlp_dim)\n            ])\n            for _ in range(depth)\n        ])\n        self.norm = nn.LayerNorm(dim)\n\n    def forward(self, x):\n        for attn, ff in self.layers:\n            x = attn(x) + x\n            x = ff(x) + x\n        return self.norm(x)` }
+        ];
+
+        const Toggle = ({ label, checked, onChange }) => (
+            <div className="flex items-center justify-between text-xs text-gray-600 py-1">
+                <span>{label}</span>
+                <div className="relative inline-block w-8 h-4 align-middle select-none transition duration-200 ease-in">
+                    <input type="checkbox" name="toggle" id={label} className="toggle-checkbox absolute block w-4 h-4 rounded-full bg-white border-2 appearance-none cursor-pointer" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+                    <label htmlFor={label} className={`toggle-label block overflow-hidden h-4 rounded-full cursor-pointer ${checked ? 'bg-[#7c3aed]' : 'bg-gray-300'}`}></label>
+                </div>
+            </div>
+        );
+
+        // --- MAIN APP ---
+        const App = () => {
+            const [slides, setSlides] = useState(INITIAL_SLIDES);
+            const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+            const [isPlaying, setIsPlaying] = useState(false);
+            const [frameSize, setFrameSize] = useState({ width: 800, height: 500 });
+            const [currentThemeKey, setCurrentThemeKey] = useState('carbon');
+            const [toastMessage, setToastMessage] = useState(null);
+            const [isRenderingVideo, setIsRenderingVideo] = useState(false);
+            const [exportModalOpen, setExportModalOpen] = useState(false);
+            const [settingsOpen, setSettingsOpen] = useState(false);
+            const [animatingKey, setAnimatingKey] = useState(null);
+            const [shikiReady, setShikiReady] = useState(false);
+
+            // States for UI Settings
+            const [settings, setSettings] = useState({ showLineNumbers: true, showCopyButton: true, showFrame: true, fontFamily: 'JetBrains Mono' });
+
+            const [copyState, setCopyState] = useState('idle');
+            const [exportCopyState, setExportCopyState] = useState('idle');
+
+            const textareaRef = useRef(null);
+            const lineNumbersRef = useRef(null);
+            const frameRef = useRef(null);
+            const prevCodeRef = useRef(null);
+            const prevTokensRef = useRef(null);
+
+            const isResizing = useRef(false);
+            const resizeStartPos = useRef({ x: 0, y: 0 });
+            const resizeStartSize = useRef({ width: 0, height: 0 });
+
+            const currentSlide = slides[currentSlideIndex];
+            const currentTheme = THEMES[currentThemeKey];
+
+            // Load Font Effect
+            useEffect(() => {
+                document.documentElement.style.setProperty('--font-code', `'${settings.fontFamily}', monospace`);
+                if (settings.fontFamily !== 'JetBrains Mono') {
+                    const id = 'custom-font-link';
+                    let link = document.getElementById(id);
+                    if (!link) {
+                        link = document.createElement('link');
+                        link.id = id;
+                        link.rel = 'stylesheet';
+                        document.head.appendChild(link);
+                    }
+                    link.href = `https://fonts.googleapis.com/css2?family=${settings.fontFamily.trim().replace(/\s+/g, '+')}:wght@400;500;700&display=swap`;
+                }
+            }, [settings.fontFamily]);
+
+            // Listen for Shiki
+            useEffect(() => {
+                const handler = () => setShikiReady(true);
+                window.addEventListener('shiki-ready', handler);
+                if (window.shikiHighlighter) setShikiReady(true);
+                return () => window.removeEventListener('shiki-ready', handler);
+            }, []);
+
+            // Load state
+            useEffect(() => {
+                const hash = window.location.hash.slice(1);
+                if (hash) {
+                    try {
+                        const decompressed = LZString.decompressFromEncodedURIComponent(hash);
+                        if (decompressed) {
+                            const data = JSON.parse(decompressed);
+                            if (data && data.length > 0) setSlides(data);
+                        }
+                    } catch (e) { }
+                } else {
+                    const local = localStorage.getItem('cp-state');
+                    if (local) setSlides(JSON.parse(local));
+                }
+            }, []);
+
+            useEffect(() => { localStorage.setItem('cp-state', JSON.stringify(slides)); }, [slides]);
+
+            const handleResizeStart = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                isResizing.current = true;
+                resizeStartPos.current = { x: e.clientX, y: e.clientY };
+                resizeStartSize.current = { ...frameSize };
+                document.addEventListener('mousemove', handleResizeMove);
+                document.addEventListener('mouseup', handleResizeEnd);
+            };
+            const handleResizeMove = (e) => {
+                if (!isResizing.current) return;
+                setFrameSize({ width: Math.max(400, resizeStartSize.current.width + (e.clientX - resizeStartPos.current.x)), height: Math.max(200, resizeStartSize.current.height + (e.clientY - resizeStartPos.current.y)) });
+            };
+            const handleResizeEnd = () => {
+                isResizing.current = false;
+                document.removeEventListener('mousemove', handleResizeMove);
+                document.removeEventListener('mouseup', handleResizeEnd);
+            };
+
+            const changeSlide = (idx) => {
+                if (idx < 0 || idx >= slides.length) return;
+                setAnimatingKey(Date.now());
+                setCurrentSlideIndex(idx);
+                setTimeout(() => setAnimatingKey(null), 600);
+            };
+
+            const updateSlide = (key, val) => {
+                const n = [...slides];
+                n[currentSlideIndex] = { ...n[currentSlideIndex], [key]: val };
+                setSlides(n);
+            };
+
+            const toggleFocus = (lineNum) => {
+                const lines = currentSlide.focusedLines || [];
+                updateSlide('focusedLines', lines.includes(lineNum) ? lines.filter(l => l !== lineNum) : [...lines, lineNum]);
+            };
+
+            const copyText = (text) => {
+                const t = document.createElement("textarea");
+                t.value = text; t.style.position = "fixed"; t.style.left = "-9999px";
+                document.body.appendChild(t); t.focus(); t.select();
+                try {
+                    document.execCommand('copy');
+                    setCopyState('copied');
+                    setTimeout(() => setCopyState('idle'), 2000);
+                } catch (e) { }
+                document.body.removeChild(t);
+            };
+
+            const generateShareLink = () => {
+                const url = `${window.location.origin}${window.location.pathname}#${LZString.compressToEncodedURIComponent(JSON.stringify(slides))}`;
+                const t = document.createElement("textarea"); t.value = url; t.style.position = "fixed"; t.style.left = "-9999px";
+                document.body.appendChild(t); t.focus(); t.select();
+                try { document.execCommand('copy'); setToastMessage("Link Copied!"); } catch (e) { }
+                document.body.removeChild(t);
+            };
+
+            const addSlide = () => {
+                const n = [...slides];
+                n.splice(currentSlideIndex + 1, 0, { ...currentSlide, id: generateId(), focusedLines: [] });
+                setSlides(n);
+                changeSlide(currentSlideIndex + 1);
+            };
+
+            const duplicateSlide = () => {
+                const n = [...slides];
+                n.splice(currentSlideIndex + 1, 0, {
+                    ...currentSlide,
+                    id: generateId(),
+                    focusedLines: [...(currentSlide.focusedLines || [])]
+                });
+                setSlides(n);
+                changeSlide(currentSlideIndex + 1);
+            };
+
+            const addNewSlide = () => {
+                const n = [...slides];
+                n.splice(currentSlideIndex + 1, 0, {
+                    id: generateId(),
+                    title: 'Untitled',
+                    language: currentSlide.language,
+                    code: '',
+                    focusedLines: []
+                });
+                setSlides(n);
+                changeSlide(currentSlideIndex + 1);
+            };
+
+            // Keyboard nav
+            useEffect(() => {
+                const handleKey = (e) => {
+                    if (e.key === 'Escape' && isPlaying) setIsPlaying(false);
+                    if (isPlaying) {
+                        if (e.key === 'ArrowRight') changeSlide(currentSlideIndex + 1);
+                        if (e.key === 'ArrowLeft') changeSlide(currentSlideIndex - 1);
+                    }
+                };
+                window.addEventListener('keydown', handleKey);
+                return () => window.removeEventListener('keydown', handleKey);
+            }, [isPlaying, currentSlideIndex]);
+
+            useEffect(() => {
+                if (toastMessage) { const t = setTimeout(() => setToastMessage(null), 3000); return () => clearTimeout(t); }
+            }, [toastMessage]);
+
+            const SVG_COPY = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`;
+            const SVG_CHECK = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+
+            // --- EXPORT COMPONENT GENERATOR ---
+            const generateComponent = () => {
+                const id = `cp-${generateId()}`;
+                const slideData = JSON.stringify(slides);
+
+                const styles = `
+                    [id="${id}"] { width:${frameSize.width}px;height:${frameSize.height}px;background:${currentTheme.bg};color:${currentTheme.text};${settings.showFrame ? 'border-radius:12px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,0.2);' : ''}display:flex;flex-direction:column;font-family:'${settings.fontFamily}',monospace;position:relative; }
+                    [id="${id}"] .h { height:40px;background:${currentTheme.chrome};display:${settings.showFrame ? 'flex' : 'none'};align-items:center;padding:0 16px;border-bottom:1px solid rgba(0,0,0,0.1); }
+                    [id="${id}"] .b { flex:1;position:relative;overflow:hidden;display:flex; }
+                    [id="${id}"] .ln { padding-top:32px;text-align:right;width:40px;opacity:0.4;user-select:none;border-right:1px solid rgba(128,128,128,0.1);display:${settings.showLineNumbers ? 'block' : 'none'};font-size:15px;line-height:1.5;font-family:'${settings.fontFamily}',monospace; }
+                    [id="${id}"] .c-wrap { flex:1;position:relative; }
+                    [id="${id}"] .shiki-magic-move-container { font-size:15px;line-height:1.5;white-space:pre;padding:32px;padding-bottom:32px;width:100%;height:100%;display:block;overflow:auto;font-family:'${settings.fontFamily}',monospace; }
+                    [id="${id}"] .shiki-magic-move-item { display:inline-block;vertical-align:baseline;transition:all 500ms ease-in-out; }
+                    [id="${id}"] .shiki-magic-move-enter-from, [id="${id}"] .shiki-magic-move-leave-to { opacity:0;transform:scale(0.9); }
+                    [id="${id}"] .shiki-magic-move-leave-active { position:absolute;pointer-events:none; }
+                    [id="${id}"] .dimmed { opacity:0.25;filter:blur(0.5px);transition:all 0.4s; }
+                    [id="${id}"] .md-view { padding:32px;height:100%;overflow:auto;color:${currentTheme.text};font-family:sans-serif; }
+                    [id="${id}"] .md-view h1 { font-size:2em;font-weight:700;margin-bottom:.5em }
+                    [id="${id}"] .copy-btn { margin-left:auto;background:none;border:none;color:${currentTheme.text};opacity:0.5;cursor:pointer;display:${settings.showCopyButton ? 'block' : 'none'}; }
+                    [id="${id}"] .copy-btn-float { position:absolute;top:10px;right:10px;z-index:50;background:${currentTheme.chrome};border-radius:4px;padding:4px;opacity:0.6;color:${currentTheme.text};border:1px solid rgba(128,128,128,0.2);cursor:pointer;display:${settings.showCopyButton && !settings.showFrame ? 'block' : 'none'}; }
+                    [id="${id}"] .nav { position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:8px;background:rgba(128,128,128,0.2);padding:4px;border-radius:20px;opacity:0;transition:0.2s; }
+                    [id="${id}"]:hover .nav { opacity:1; }
+                    [id="${id}"] .nav button { background:none;border:none;color:${currentTheme.text};cursor:pointer;padding:4px; }
+                `;
+
+                return `<!-- CodePresenter Component -->
+<div id="${id}">
+<script type="module">import { getHighlighter } from 'https://esm.sh/shiki@1.0.0';import diff from 'https://esm.sh/diff-match-patch@1.0.5';window.dmp = new diff.diff_match_patch();window.shikiLoader = getHighlighter({themes:['${currentTheme.shikiTheme}'], langs:['javascript','python','jsx','css','html','markdown']});<\/script>
+${settings.fontFamily !== 'JetBrains Mono' ? `<link href="https://fonts.googleapis.com/css2?family=${settings.fontFamily.replace(/\s+/g, '+')}:wght@400;500;700&display=swap" rel="stylesheet" />` : ''}
+<style>${styles}</style>
+<div class="h">
+ <div style="display:flex;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f56"></div><div style="width:12px;height:12px;border-radius:50%;background:#ffbd2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#27c93f"></div></div>
+ <div id="${id}-t" style="flex:1;text-align:center;font-size:12px;color:${currentTheme.text};opacity:0.6"></div>
+ <button class="copy-btn" id="${id}-cp">${SVG_COPY}</button>
+</div>
+<div class="b">
+ <div id="${id}-l" class="ln"></div>
+ <div id="${id}-c" class="c-wrap"></div>
+ <button class="copy-btn-float" id="${id}-cp-float">${SVG_COPY}</button>
+</div>
+<div class="nav"><button id="${id}-p">←</button><button id="${id}-n">→</button></div>
+<script>
+(function(){
+ const s=${slideData}, c=document.getElementById('${id}-c'), l=document.getElementById('${id}-l'), t=document.getElementById('${id}-t'), cp1=document.getElementById('${id}-cp'), cp2=document.getElementById('${id}-cp-float');
+ let i=0, pc=null, pt=null, hl=null;
+ ${RENDERER_BODY}
+ const ren = new MagicMoveRenderer(c);
+ async function init() {
+     if(!window.marked) { const sc=document.createElement('script'); sc.src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"; document.head.appendChild(sc); }
+     const checkShiki = setInterval(async () => { if(window.shikiLoader && window.dmp) { clearInterval(checkShiki); hl = await window.shikiLoader; up(); } }, 100);
+ }
+ const tok=(code,lang,foc)=>{
+  if(!hl) return [];
+  const {tokens} = hl.codeToTokens(code, {lang, theme:'${currentTheme.shikiTheme}'});
+  let flat=[], off=0;
+  tokens.forEach(line=>{ line.forEach(tk=>{ flat.push({content:tk.content,color:tk.color,htmlClass:'token',offset:off}); off+=tk.content.length; }); flat.push({content:'\\n',htmlClass:'break',offset:off}); off++; });
+  if(foc && foc.length){ let ln=1; flat.forEach(t=>{ if(t.content==='\\n')ln++; else if(!foc.includes(ln)) t.htmlClass+=' dimmed'; }); }
+  const cnt={}; return flat.map((t,idx)=>{ const k=t.content.trim(); const ks=t.content==='\\n'?('br-'+idx):k; cnt[ks]=(cnt[ks]||0)+1; return{...t, key:t.content==='\\n'?('br-'+idx):(k+'-'+cnt[ks])}; });
+ };
+ const sync=(pT,cT,pC,cC)=>{
+   const df=window.dmp.diff_main(pC,cC); window.dmp.diff_cleanupSemantic(df);
+   let a=0,b=0; df.forEach(([op,tx])=>{ if(op===0){
+     const f=pT.filter(t=>t.offset>=a && t.offset+t.content.length<=a+tx.length);
+     const to=cT.filter(t=>t.offset>=b && t.offset+t.content.length<=b+tx.length);
+     let x=0,y=0; while(x<f.length&&y<to.length){ if(f[x].content===to[y].content){to[y].key=f[x].key;x++;y++;}else{y++;} }
+     a+=tx.length;b+=tx.length; } else if(op===-1)a+=tx.length; else if(op===1)b+=tx.length;
+   }); return cT;
+ };
+ const copyFn = () => { 
+    const el=document.createElement('textarea'); el.value=s[i].code; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); 
+    const svg='${SVG_CHECK}'; if(cp1) cp1.innerHTML=svg; if(cp2) cp2.innerHTML=svg; setTimeout(()=>{ const orig='${SVG_COPY}'; if(cp1) cp1.innerHTML=orig; if(cp2) cp2.innerHTML=orig; }, 2000); 
+ };
+ if(cp1) cp1.onclick = copyFn; if(cp2) cp2.onclick = copyFn;
+
+ const up=()=>{
+  const sl=s[i]; t.innerText=sl.title;
+  if(l) l.innerHTML = sl.code.split('\\n').map((_,x)=>'<div>'+(x+1)+'</div>').join('');
+  if(sl.language==='markdown' && window.marked) { c.innerHTML='<div class="md-view">'+marked.parse(sl.code)+'</div>'; ren.mapDom.clear(); pc=null; pt=null; }
+  else if (hl) { let tk=tok(sl.code, sl.language, sl.focusedLines); if(pc && pt && sl.language!=='markdown') tk=sync(pt,tk,pc,sl.code); ren.render({tokens:tk}); pc=sl.code; pt=tk; }
+ };
+ document.getElementById('${id}-p').onclick=()=>{if(i>0){i--;up()}}; document.getElementById('${id}-n').onclick=()=>{if(i<s.length-1){i++;up()}}; init();
+ c.onscroll = () => { l.scrollTop = c.scrollTop; };
+})();
+<\/script></div>`;
+            };
+
+            const renderVideo = async () => {
+                setIsRenderingVideo(true);
+                const canvas = document.createElement('canvas');
+                canvas.width = frameSize.width * 2; canvas.height = frameSize.height * 2;
+                const ctx = canvas.getContext('2d'); ctx.scale(2, 2);
+                const stream = canvas.captureStream(30);
+                const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+                const chunks = [];
+                recorder.ondataavailable = e => chunks.push(e.data);
+                recorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: 'video/webm' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a'); a.href = url; a.download = 'slide.webm'; a.click();
+                    setIsRenderingVideo(false); setToastMessage("Video Exported!");
+                };
+                recorder.start();
+                for (let i = 0; i < slides.length; i++) {
+                    setCurrentSlideIndex(i); setAnimatingKey(Date.now());
+                    await new Promise(r => setTimeout(r, 100));
+                    for (let f = 0; f < 60; f++) {
+                        if (frameRef.current) {
+                            const shot = await html2canvas(frameRef.current, { backgroundColor: null, scale: 2, logging: false });
+                            ctx.drawImage(shot, 0, 0, frameSize.width, frameSize.height);
+                        }
+                        await new Promise(r => setTimeout(r, 33));
+                    }
+                }
+                recorder.stop();
+            };
+
+            // Helpers for render
+            const isEditor = !isPlaying && !isRenderingVideo;
+            const effectiveShowFrame = isEditor ? true : settings.showFrame;
+            const effectiveShowLines = isEditor ? (currentSlide.language !== 'markdown') : (settings.showLineNumbers && currentSlide.language !== 'markdown');
+            const effectiveShowCopy = isEditor ? true : settings.showCopyButton;
+            const floatingCopy = !effectiveShowFrame && effectiveShowCopy;
+
+            const showMagicMove = isPlaying || animatingKey !== null || isRenderingVideo;
+
+            return (
+                <div className="flex h-screen w-screen overflow-hidden text-sm" style={{ color: currentTheme.text }}>
+                    {toastMessage && <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[300] bg-gray-900 text-white px-4 py-2 rounded-full shadow-lg animate-in fade-in slide-in-from-top-2">{toastMessage}</div>}
+
+                    {exportModalOpen && (
+                        <div className="fixed inset-0 z-[200] bg-black/50 flex items-center justify-center p-4">
+                            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6 space-y-4 text-gray-900">
+                                <h3 className="font-bold text-lg">Export HTML Component</h3>
+                                <textarea className="w-full h-64 bg-gray-100 p-3 font-mono text-xs rounded" readOnly value={generateComponent()} />
+                                <div className="flex justify-end gap-2">
+                                    <button onClick={() => setExportModalOpen(false)} className="px-4 py-2 rounded hover:bg-gray-100">Close</button>
+                                    <button onClick={() => {
+                                        const t = document.createElement("textarea");
+                                        t.value = generateComponent();
+                                        document.body.appendChild(t); t.select();
+                                        document.execCommand('copy'); document.body.removeChild(t);
+                                        setExportCopyState('copied'); setTimeout(() => setExportCopyState('idle'), 2000);
+                                    }} className="px-4 py-2 bg-[#7c3aed] text-white rounded hover:bg-[#6d28d9] flex items-center gap-2">{exportCopyState === 'copied' ? 'Copied!' : 'Copy Code'}</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {isEditor && (
+                        <div className="w-64 border-r border-gray-200 flex flex-col z-20 shadow-xl bg-white">
+                            <div className="p-4 border-b border-gray-100 font-bold flex items-center gap-2 text-gray-800 justify-between">
+                                <div className="flex items-center gap-2"><Icon name="Code2" /> CodePresenter</div>
+                                <button onClick={() => setSettingsOpen(!settingsOpen)} className="p-1 hover:bg-gray-100 rounded"><Icon name="Settings" size={16} /></button>
+                            </div>
+                            {settingsOpen && (
+                                <div className="p-4 bg-gray-50 border-b border-gray-200 space-y-2">
+                                    <Toggle label="Show Line Numbers" checked={settings.showLineNumbers} onChange={(v) => setSettings({ ...settings, showLineNumbers: v })} />
+                                    <Toggle label="Show Copy Button" checked={settings.showCopyButton} onChange={(v) => setSettings({ ...settings, showCopyButton: v })} />
+                                    <Toggle label="Show Window Frame" checked={settings.showFrame} onChange={(v) => setSettings({ ...settings, showFrame: v })} />
+                                    <div className="flex flex-col gap-1 py-2">
+                                        <label className="text-xs text-gray-500 font-medium">Font Family (Google Fonts)</label>
+                                        <input className="w-full bg-white border border-gray-200 rounded px-2 py-1 text-xs font-mono text-gray-900" value={settings.fontFamily} onChange={(e) => setSettings({ ...settings, fontFamily: e.target.value })} placeholder="e.g. Fira Code" />
+                                    </div>
+                                </div>
+                            )}
+                            <div className="p-2 grid grid-cols-2 gap-2 border-b border-gray-100 bg-gray-50/50">
+                                <button onClick={addNewSlide} className="flex items-center justify-center gap-1.5 px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs font-medium text-gray-600 hover:border-[#7c3aed] hover:text-[#7c3aed] transition-colors shadow-sm"><Icon name="Plus" size={14} /> New</button>
+                                <button onClick={duplicateSlide} className="flex items-center justify-center gap-1.5 px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs font-medium text-gray-600 hover:border-[#7c3aed] hover:text-[#7c3aed] transition-colors shadow-sm"><Icon name="Copy" size={14} /> Duplicate</button>
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                                {slides.map((s, i) => (
+                                    <div key={s.id} onClick={() => changeSlide(i)} className={`p-3 rounded-lg cursor-pointer border transition-all group ${i === currentSlideIndex ? 'bg-white border-[#7c3aed]/30 shadow-md ring-1 ring-[#7c3aed]/10' : 'bg-transparent border-transparent hover:bg-gray-100'}`}>
+                                        <div className="flex justify-between items-center mb-1.5">
+                                            <span className={`text-[10px] font-bold ${i === currentSlideIndex ? 'text-[#7c3aed]' : 'text-gray-400'}`}>SLIDE {i + 1}</span>
+                                            <button onClick={(e) => { e.stopPropagation(); if (slides.length <= 1) return; const n = slides.filter((_, x) => x !== i); setSlides(n); if (i <= currentSlideIndex && currentSlideIndex > 0) setCurrentSlideIndex(currentSlideIndex - 1); }} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="Trash2" size={12} /></button>
+                                        </div>
+                                        <div className="font-medium text-xs truncate text-gray-700 mb-2 flex items-center gap-1"><Icon name="FileCode" size={10} className="opacity-50" />{s.title || 'Untitled'}</div>
+                                        <div className="h-16 bg-gray-50 border border-gray-200 rounded overflow-hidden relative"><div className="absolute inset-0 p-1.5 text-[6px] leading-relaxed text-gray-600 font-mono whitespace-pre select-none pointer-events-none">{s.code ? s.code.substring(0, 300) : <span className="italic opacity-50">Empty slide</span>}</div><div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-gray-50 to-transparent"></div></div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="p-4 border-t border-gray-100 bg-gray-50 space-y-2">
+                                <button onClick={() => setIsPlaying(true)} className="w-full py-2 bg-[#7c3aed] text-white rounded shadow hover:bg-[#6d28d9] flex justify-center gap-2"><Icon name="Play" size={16} /> Present</button>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button onClick={() => setExportModalOpen(true)} className="py-2 bg-white border rounded text-gray-600 hover:bg-gray-50 text-xs flex items-center justify-center gap-1"><Icon name="Code" size={12} /> Component</button>
+                                    <button onClick={renderVideo} className="py-2 bg-white border rounded text-gray-600 hover:bg-gray-50 text-xs flex items-center justify-center gap-1"><Icon name="Video" size={12} /> Video</button>
+                                </div>
+                                <button onClick={generateShareLink} className="w-full py-2 bg-gray-100 border rounded text-gray-600 hover:bg-gray-200 text-xs flex items-center justify-center gap-1"><Icon name="Share2" size={12} /> Share</button>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="flex-1 relative flex items-center justify-center overflow-hidden bg-gray-100">
+                        <div className="canvas-bg absolute inset-0"></div>
+                        {isEditor && (
+                            <div className="absolute top-4 z-30 bg-white/90 backdrop-blur p-2 rounded-lg shadow-sm border flex items-center gap-2">
+                                <select value={currentThemeKey} onChange={(e) => setCurrentThemeKey(e.target.value)} className="bg-transparent text-xs font-medium outline-none text-gray-700 cursor-pointer">
+                                    {Object.entries(THEMES).map(([k, v]) => <option key={k} value={k}>{v.name}</option>)}
+                                </select>
+                                <div className="w-px h-4 bg-gray-300"></div>
+                                <select value={currentSlide.language} onChange={(e) => updateSlide('language', e.target.value)} className="bg-transparent text-xs outline-none text-gray-500 cursor-pointer">
+                                    <option value="javascript">JS</option><option value="jsx">JSX</option><option value="python">Python</option><option value="markdown">MD</option>
+                                </select>
+                            </div>
+                        )}
+
+                        <div ref={frameRef} className={`mac-window relative z-10 shrink-0 ${settings.showFrame || isEditor ? 'framed' : 'frameless'}`} style={{ width: frameSize.width, height: frameSize.height, background: currentTheme.bg, color: currentTheme.text, transform: isPlaying ? 'scale(1.1)' : 'scale(1)', transition: 'transform 0.5s' }}>
+                            {effectiveShowFrame && (
+                                <div style={{ background: currentTheme.chrome, borderColor: 'rgba(0,0,0,0.1)' }} className="h-10 flex items-center px-4 border-b shrink-0 select-none">
+                                    <div className="flex gap-2"><div className="w-3 h-3 rounded-full bg-red-400"></div><div className="w-3 h-3 rounded-full bg-yellow-400"></div><div className="w-3 h-3 rounded-full bg-green-400"></div></div>
+                                    <input className="title-input flex-1" value={currentSlide.title} onChange={(e) => updateSlide('title', e.target.value)} />
+                                    {effectiveShowCopy && (
+                                        <button onClick={() => copyText(currentSlide.code)} className="opacity-50 hover:opacity-100" title="Copy">
+                                            {copyState === 'copied' ? <Icon name="Check" size={14} className="text-green-500" /> : <Icon name="Copy" size={14} />}
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="flex-1 relative overflow-hidden" onClick={() => isEditor && textareaRef.current?.focus()}>
+                                {floatingCopy && (
+                                    <button onClick={() => copyText(currentSlide.code)} className="copy-btn-floating" title="Copy">
+                                        {copyState === 'copied' ? <Icon name="Check" size={14} className="text-green-500" /> : <Icon name="Copy" size={14} />}
+                                    </button>
+                                )}
+
+                                {effectiveShowLines && (
+                                    <div ref={lineNumbersRef} className="line-numbers custom-scroll" style={{ background: currentTheme.bg }} onClick={(e) => e.stopPropagation()}>
+                                        {currentSlide.code.split('\n').map((_, i) => (
+                                            <div key={i} onClick={(e) => { e.stopPropagation(); toggleFocus(i + 1); }} className={(currentSlide.focusedLines || []).includes(i + 1) ? 'focused' : ''}>{i + 1}</div>
+                                        ))}
+                                    </div>
+                                )}
+                                <div className="absolute inset-0" style={{ left: effectiveShowLines ? 40 : 0 }}>
+                                    {currentSlide.language === 'markdown' && showMagicMove ? (
+                                        <div className="markdown-preview" dangerouslySetInnerHTML={{ __html: window.marked ? marked.parse(currentSlide.code) : currentSlide.code }} />
+                                    ) : (
+                                        <>
+                                            <div className="absolute inset-0 z-0 pointer-events-none">
+                                                {showMagicMove ?
+                                                    <MagicMove code={currentSlide.code} language={currentSlide.language} theme={currentTheme.shikiTheme} focusedLines={currentSlide.focusedLines || []} prevCodeRef={prevCodeRef} prevTokensRef={prevTokensRef} shikiReady={shikiReady} />
+                                                    : <SimpleHighlighter code={currentSlide.code} language={currentSlide.language} theme={currentTheme.shikiTheme} focusedLines={currentSlide.focusedLines || []} shikiReady={shikiReady} />
+                                                }
+                                            </div>
+                                            {isEditor && (
+                                                <textarea
+                                                    ref={textareaRef}
+                                                    className="editor-textarea code-area-shared absolute inset-0 w-full h-full custom-scroll"
+                                                    style={{ caretColor: currentTheme.text }}
+                                                    value={currentSlide.code}
+                                                    onChange={(e) => updateSlide('code', e.target.value)}
+                                                    onScroll={(e) => {
+                                                        const v = e.target.previousSibling.firstChild || e.target.previousSibling;
+                                                        if (v) { v.scrollTop = e.target.scrollTop; v.scrollLeft = e.target.scrollLeft; }
+                                                        if (lineNumbersRef.current) lineNumbersRef.current.scrollTop = e.target.scrollTop;
+                                                    }}
+                                                    spellCheck="false"
+                                                />
+                                            )}
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+
+                            {isEditor && <div className="resize-handle" onMouseDown={handleResizeStart} title="Drag to resize"></div>}
+                        </div>
+
+                        {isPlaying && (
+                            <div className="fixed bottom-10 z-50 bg-black/80 text-white px-6 py-3 rounded-full flex items-center gap-4 backdrop-blur">
+                                <button onClick={() => currentSlideIndex > 0 && changeSlide(currentSlideIndex - 1)}><Icon name="ArrowLeft" /></button>
+                                <span className="text-xs font-mono opacity-50">{currentSlideIndex + 1} / {slides.length}</span>
+                                <button onClick={() => currentSlideIndex < slides.length - 1 && changeSlide(currentSlideIndex + 1)}><Icon name="ArrowRight" /></button>
+                                <button onClick={() => setIsPlaying(false)} className="text-red-400 ml-4"><Icon name="X" /></button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>
