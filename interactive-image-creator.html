@@ -366,9 +366,12 @@
                                 <option value="eager">Immediate (LCP) - High Priority</option>
                             </select>
                             <p class="text-[10px] text-gray-400 mt-1">
-                                {{ config.loadingStrategy === 'lazy' ? 'Defers loading of images and scripts until
-                                needed. Best for PageSpeed.' : 'Loads immediately. Use ONLY if this is the very first
-                                thing user sees.' }}
+                                <span v-if="config.loadingStrategy === 'lazy'">
+                                    Defers loading of images and scripts until needed. Best for PageSpeed.
+                                </span>
+                                <span v-else>
+                                    Loads immediately. Use ONLY if this is the very first thing user sees.
+                                </span>
                             </p>
                         </div>
 
@@ -986,11 +989,21 @@
                     isAddingMode.value = false; // Exit add mode
                 };
 
+                const getPopupPosition = (xPercent, yPercent) => {
+                    const buffer = 5; // keep popup from hugging the viewport edges
+                    const clamp = (value) => Math.min(100 - buffer, Math.max(buffer, value));
+                    return {
+                        x: clamp(xPercent),
+                        y: clamp(yPercent)
+                    };
+                };
+
                 const openContextPopup = (hotspot) => {
+                    const coords = getPopupPosition(hotspot.x, hotspot.y);
                     contextPopup.value = {
                         visible: true,
-                        x: hotspot.x,
-                        y: hotspot.y,
+                        x: coords.x,
+                        y: coords.y,
                         hotspot: hotspot,
                         tempTargetId: hotspot.targetSceneId
                     };
@@ -1032,9 +1045,7 @@
                     if (index === -1) return;
 
                     const sceneToRemove = scenes.value[index];
-                    if (activeSceneId.value === sceneToRemove.id) {
-                        activeSceneId.value = null;
-                    }
+                    const removedActive = activeSceneId.value === sceneToRemove.id;
                     scenes.value.splice(index, 1);
 
                     scenes.value.forEach(s => {
@@ -1042,6 +1053,17 @@
                             if (h.targetSceneId === sceneToRemove.id) h.targetSceneId = null;
                         });
                     });
+
+                    if (removedActive) {
+                        if (scenes.value.length) {
+                            const fallbackIndex = Math.min(index, scenes.value.length - 1);
+                            activeSceneId.value = scenes.value[fallbackIndex].id;
+                        } else {
+                            activeSceneId.value = null;
+                        }
+                        selectedHotspot.value = null;
+                        closeContextPopup();
+                    }
                 };
 
                 const getSceneName = (id) => {

@@ -483,6 +483,22 @@
         // Concurrency Limit for AI calls
         const CONCURRENCY_LIMIT = 3;
         const USER_PROMPT_STORAGE_KEY = 'pdf-annotation-extractor:user-instructions';
+        const MODEL_DEFAULTS = {
+            gemini: 'gemini-2.5-flash',
+            openai: 'gpt-5-mini',
+            anthropic: 'claude-haiku-4-5'
+        };
+        const API_KEY_STORE = {
+            gemini: '',
+            openai: '',
+            anthropic: ''
+        };
+        const providerSelectEl = document.getElementById('aiProvider');
+        const apiKeyInputEl = document.getElementById('apiKey');
+        let currentProvider = providerSelectEl ? providerSelectEl.value : 'gemini';
+        if (apiKeyInputEl) {
+            API_KEY_STORE[currentProvider] = apiKeyInputEl.value || '';
+        }
 
         function initInstructionPersistence() {
             const promptEl = document.getElementById('userPrompt');
@@ -532,16 +548,30 @@
             const apiKeyInput = document.getElementById('apiKey');
             const modelInput = document.getElementById('aiModel');
 
+            // Persist the current key before switching providers
+            if (apiKeyInput && currentProvider) {
+                API_KEY_STORE[currentProvider] = apiKeyInput.value;
+            }
+
             if (provider === 'openai') {
                 apiKeyInput.placeholder = "sk-... (OpenAI Key)";
-                modelInput.value = "gpt-5-mini";
             } else if (provider === 'anthropic') {
                 apiKeyInput.placeholder = "sk-ant-... (Anthropic Key)";
-                modelInput.value = "claude-haiku-4-5";
-            } else if (provider === 'gemini') {
+            } else {
                 apiKeyInput.placeholder = "AIza... (Google Gemini Key)";
-                modelInput.value = "gemini-2.5-flash";
             }
+
+            if (apiKeyInput) {
+                apiKeyInput.value = API_KEY_STORE[provider] || '';
+            }
+
+            const previousDefault = MODEL_DEFAULTS[currentProvider] || "";
+            const nextDefault = MODEL_DEFAULTS[provider] || modelInput.value;
+            // Only reset the model field if the user hasn't customized it yet.
+            if (!modelInput.value.trim() || modelInput.value === previousDefault) {
+                modelInput.value = nextDefault;
+            }
+            currentProvider = provider;
         }
 
         function setSplit(num) {
@@ -894,40 +924,53 @@
             }
         }
 
-        function copyResults() {
+        async function copyResults() {
             // Simplified copy: Strictly copy RAW Markdown text as requested
-            try {
-                // Generate plain text from state
-                let plainText = "";
-                sliceState.forEach(slice => {
-                    const header = slice.totalParts > 1 ? `**Page ${slice.page} (Part ${slice.part}):**` : `**Page ${slice.page}:**`;
+            // Generate plain text from state
+            let plainText = "";
+            sliceState.forEach(slice => {
+                const header = slice.totalParts > 1 ? `**Page ${slice.page} (Part ${slice.part}):**` : `**Page ${slice.page}:**`;
 
-                    if (slice.status === 'success' && slice.text) {
-                        plainText += `${header}\n${slice.text}\n\n---\n\n`;
-                    }
-                });
-
-                const textarea = document.createElement('textarea');
-                textarea.value = plainText;
-                textarea.style.position = 'fixed';
-                textarea.style.left = '-9999px';
-                textarea.style.top = '0';
-                document.body.appendChild(textarea);
-
-                textarea.focus();
-                textarea.select();
-
-                const successful = document.execCommand('copy');
-                document.body.removeChild(textarea);
-
-                if (successful) {
-                    alert("Copied results (Markdown) to clipboard!");
-                } else {
-                    alert("Could not copy automatically. Please select text and copy manually.");
+                if (slice.status === 'success' && slice.text) {
+                    plainText += `${header}\n${slice.text}\n\n---\n\n`;
                 }
+            });
+
+            const fallbackCopy = () => {
+                try {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = plainText;
+                    textarea.style.position = 'fixed';
+                    textarea.style.left = '-9999px';
+                    textarea.style.top = '0';
+                    document.body.appendChild(textarea);
+
+                    textarea.focus();
+                    textarea.select();
+
+                    const successful = document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    return successful;
+                } catch (fallbackErr) {
+                    console.error("Fallback copy failed:", fallbackErr);
+                    return false;
+                }
+            };
+
+            try {
+                if (navigator.clipboard?.writeText) {
+                    await navigator.clipboard.writeText(plainText);
+                } else if (!fallbackCopy()) {
+                    throw new Error("Clipboard API unavailable");
+                }
+                alert("Copied results (Markdown) to clipboard!");
             } catch (err) {
                 console.error("Copy failed:", err);
-                alert("Error copying text. Please copy manually.");
+                if (!fallbackCopy()) {
+                    alert("Could not copy automatically. Please select text and copy manually.");
+                } else {
+                    alert("Copied results (Markdown) to clipboard!");
+                }
             }
         }
 

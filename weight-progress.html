@@ -589,6 +589,7 @@
         };
 
         let chartInstance = null;
+        const WEIGHT_CONVERSION_FACTOR = 2.20462;
 
         // --- INITIALIZATION ---
         document.addEventListener('DOMContentLoaded', () => {
@@ -650,32 +651,59 @@
 
             // Integrated Toggles
             dom.btns.heightToggle.addEventListener('click', () => {
-                state.inputUnits.height = state.inputUnits.height === 'metric' ? 'imperial' : 'metric';
-                // Conversion logic
-                if (state.inputUnits.height === 'imperial') {
-                    const cm = parseFloat(dom.inputs.heightCm.value) || 0;
-                    const totalInches = cm / 2.54;
-                    dom.inputs.heightFt.value = Math.floor(totalInches / 12);
-                    dom.inputs.heightIn.value = Math.round(totalInches % 12);
+                const prevUnit = state.inputUnits.height;
+                const nextUnit = prevUnit === 'metric' ? 'imperial' : 'metric';
+
+                if (nextUnit === 'imperial') {
+                    const cm = parseFloat(dom.inputs.heightCm.value);
+                    if (Number.isFinite(cm) && cm > 0) {
+                        const totalInches = cm / 2.54;
+                        let feet = Math.floor(totalInches / 12);
+                        let inches = Math.round((totalInches - (feet * 12)) * 10) / 10;
+                        if (inches >= 12) {
+                            feet += 1;
+                            inches = 0;
+                        }
+                        setNumberInputValue(dom.inputs.heightFt, feet, 0);
+                        setNumberInputValue(dom.inputs.heightIn, inches, 1);
+                    } else {
+                        setNumberInputValue(dom.inputs.heightFt, null, 0);
+                        setNumberInputValue(dom.inputs.heightIn, null, 1);
+                    }
                 } else {
                     const ft = parseFloat(dom.inputs.heightFt.value) || 0;
                     const inc = parseFloat(dom.inputs.heightIn.value) || 0;
-                    dom.inputs.heightCm.value = Math.round(((ft * 12) + inc) * 2.54);
+                    const totalInches = (ft * 12) + inc;
+                    if (totalInches > 0) {
+                        const cmValue = totalInches * 2.54;
+                        setNumberInputValue(dom.inputs.heightCm, cmValue, 1);
+                    } else {
+                        setNumberInputValue(dom.inputs.heightCm, null, 1);
+                    }
                 }
+
+                state.inputUnits.height = nextUnit;
                 updateHeightUI();
                 saveState();
                 updateSimulation();
             });
 
             dom.btns.weightToggle.addEventListener('click', () => {
-                const isNowImperial = state.inputUnits.weight === 'metric'; // switching to imperial?
-                state.inputUnits.weight = isNowImperial ? 'imperial' : 'metric';
+                const prevUnit = state.inputUnits.weight;
+                const nextUnit = prevUnit === 'metric' ? 'imperial' : 'metric';
 
-                const multiplier = isNowImperial ? 2.20462 : (1 / 2.20462);
-                if (dom.inputs.weightCurrent.value) dom.inputs.weightCurrent.value = Math.round(dom.inputs.weightCurrent.value * multiplier);
-                if (dom.inputs.weightTarget.value) dom.inputs.weightTarget.value = Math.round(dom.inputs.weightTarget.value * multiplier);
+                [dom.inputs.weightCurrent, dom.inputs.weightTarget].forEach(input => {
+                    const converted = convertWeightValue(input.value, prevUnit, nextUnit);
+                    if (converted === null) {
+                        input.value = '';
+                    } else {
+                        setNumberInputValue(input, converted, 2);
+                    }
+                });
 
-                // Sync chart preference usually
+                state.inputUnits.weight = nextUnit;
+
+                // Sync chart preference
                 state.chartUnit = state.inputUnits.weight;
                 dom.btns.chartLabel.innerText = state.chartUnit === 'imperial' ? 'LBS' : 'KG';
 
@@ -697,6 +725,28 @@
                 saveState();
                 updateSimulation();
             });
+        }
+
+        function setNumberInputValue(input, value, precision = 1) {
+            if (!input) return;
+            if (value === null || value === undefined || !Number.isFinite(value)) {
+                input.value = '';
+                return;
+            }
+            const factor = Math.pow(10, precision);
+            const rounded = Math.round(value * factor) / factor;
+            if (Number.isInteger(rounded)) {
+                input.value = rounded.toString();
+            } else {
+                input.value = parseFloat(rounded.toFixed(precision)).toString();
+            }
+        }
+
+        function convertWeightValue(value, fromUnit, toUnit) {
+            const numericValue = parseFloat(value);
+            if (!Number.isFinite(numericValue)) return null;
+            const weightInKg = fromUnit === 'imperial' ? numericValue / WEIGHT_CONVERSION_FACTOR : numericValue;
+            return toUnit === 'imperial' ? weightInKg * WEIGHT_CONVERSION_FACTOR : weightInKg;
         }
 
         function updateHeightUI() {
@@ -813,12 +863,22 @@
             const { weight: startKg, target: targetKg, height } = getNormalizedValues();
             const age = parseInt(dom.inputs.age.value) || 30;
             const gender = dom.inputs.gender.value;
-            const dailyIntake = parseInt(dom.inputs.caloriesIn.value) || 2000;
+            const dailyIntakeRaw = parseInt(dom.inputs.caloriesIn.value, 10);
+            const dailyIntake = Number.isFinite(dailyIntakeRaw) && dailyIntakeRaw > 0 ? dailyIntakeRaw : null;
 
             updateBMIBadge(dom.badges.currentBMI, calculateBMI(startKg, height));
             updateBMIBadge(dom.badges.targetBMI, calculateBMI(targetKg, height));
 
-            if (!startKg || !targetKg || !height || !dailyIntake) return;
+            const missingFields = [];
+            if (!startKg || !Number.isFinite(startKg) || startKg <= 0) missingFields.push('starting weight');
+            if (!targetKg || !Number.isFinite(targetKg) || targetKg <= 0) missingFields.push('target weight');
+            if (!height || !Number.isFinite(height) || height <= 0) missingFields.push('height');
+            if (!dailyIntake) missingFields.push('daily calorie intake');
+
+            if (missingFields.length) {
+                handleMissingInputs(missingFields);
+                return;
+            }
 
             let currentKg = startKg;
             let dayCount = 0;
@@ -855,6 +915,25 @@
             dataPoints.push({ x: dayCount, y: currentKg });
             updateStatsUI(dayCount, maxDays, plateauReached, reached);
             renderChart(dataPoints, targetKg);
+        }
+
+        function handleMissingInputs(missingFields) {
+            dom.stats.tdee.innerText = '--';
+            dom.stats.date.innerText = '--';
+            dom.stats.duration.innerText = '--';
+            const details = missingFields.join(', ');
+            dom.stats.alertMsg.innerHTML = `<strong>Need info:</strong> Please add ${details}.`;
+            dom.stats.alert.classList.remove('hidden');
+
+            if (chartInstance) {
+                chartInstance.destroy();
+                chartInstance = null;
+            }
+            const canvas = document.getElementById('weightChart');
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
         }
 
         function updateStatsUI(days, maxDays, plateau, reached) {

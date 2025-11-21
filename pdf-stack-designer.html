@@ -57,6 +57,7 @@
                 }
             }
         };
+
     </script>
 
     <!-- PDF.js for parsing PDF files -->
@@ -108,19 +109,39 @@
             background: #9f86c0;
         }
 
-        /* Checkerboard pattern for transparent background */
-        .checkerboard {
-            background-image:
-                linear-gradient(45deg, #eadcc5 25%, transparent 25%),
-                linear-gradient(-45deg, #eadcc5 25%, transparent 25%),
-                linear-gradient(45deg, transparent 75%, rgba(149, 134, 114, 0.2) 75%),
-                linear-gradient(-45deg, transparent 75%, rgba(149, 134, 114, 0.2) 75%);
-            background-size: 24px 24px;
-            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        /* Outline to hint transparent canvas bounds */
+        .canvas-outline {
+            border: 2px dashed rgba(87, 83, 78, 0.4);
+            border-radius: 10px;
+            background-color: transparent;
+        }
+
+        .status-panel {
+            transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+            outline: none;
+        }
+
+        .status-panel.status-info {
+            background-color: #f5eee3;
+            border-color: #d7c4a6;
+            color: #57534e;
+        }
+
+        .status-panel.status-success {
+            background-color: #e6f4ea;
+            border-color: #8bc48a;
+            color: #2f5d37;
+        }
+
+        .status-panel.status-error {
+            background-color: #fde8e4;
+            border-color: #f19c8b;
+            color: #8c2f22;
         }
 
         #main-canvas {
-            background-color: #FEFAF8;
+            background-color: transparent;
+            transition: background 0.2s ease;
         }
 
         input[type="range"],
@@ -201,7 +222,8 @@
 
                 <!-- Status -->
                 <div id="status-area"
-                    class="text-xs font-mono p-3 bg-linen-50 rounded border border-earth-200 text-earth-500">
+                    class="status-panel status-info text-xs font-mono p-3 bg-linen-50 rounded border border-earth-200 text-earth-500"
+                    role="status" aria-live="polite" aria-atomic="true" tabindex="-1">
                     Waiting for file...
                 </div>
 
@@ -247,6 +269,16 @@
                             <span id="v-step-value" class="text-xs text-earth-400 font-semibold">10px</span>
                         </div>
                         <input type="range" id="v-step" min="-50" max="50" value="10"
+                            class="w-full h-2 bg-linen-200 rounded-lg appearance-none cursor-pointer accent-amethyst-500">
+                    </div>
+
+                    <!-- Image Quality -->
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-sm font-medium text-earth-700">Image Quality</label>
+                            <span id="scale-value" class="text-xs text-earth-400 font-semibold">1.5x</span>
+                        </div>
+                        <input type="range" id="render-scale" min="0.5" max="3" step="0.1" value="1.5"
                             class="w-full h-2 bg-linen-200 rounded-lg appearance-none cursor-pointer accent-amethyst-500">
                     </div>
                 </div>
@@ -367,6 +399,7 @@
             pageLimit: 5,
             spacing: 100,
             vStep: 10,
+            renderScale: 1.5,
             rotation: -5,
             jitter: 2,
             marginCrop: 0,
@@ -381,6 +414,7 @@
             pageLimit: { type: 'int', min: 1, max: 20 },
             spacing: { type: 'int', min: 0, max: 300 },
             vStep: { type: 'int', min: -50, max: 50 },
+            renderScale: { type: 'float', min: 0.5, max: 3 },
             rotation: { type: 'int', min: -45, max: 45 },
             jitter: { type: 'int', min: 0, max: 20 },
             marginCrop: { type: 'int', min: 0, max: 30 },
@@ -421,6 +455,7 @@
                 pageLimit: document.getElementById('page-limit'),
                 spacing: document.getElementById('spacing'),
                 vStep: document.getElementById('v-step'),
+                renderScale: document.getElementById('render-scale'),
                 rotation: document.getElementById('rotation'),
                 jitter: document.getElementById('jitter'),
                 marginCrop: document.getElementById('margin-crop'),
@@ -430,6 +465,34 @@
                 bgColor: document.getElementById('bg-color')
             }
         };
+
+        const STATUS_CLASS_MAP = {
+            info: 'status-info',
+            success: 'status-success',
+            error: 'status-error'
+        };
+
+        function setStatus(message, tone = 'info', options = {}) {
+            if (!els.status) return;
+            Object.values(STATUS_CLASS_MAP).forEach((cls) => els.status.classList.remove(cls));
+            const className = STATUS_CLASS_MAP[tone] || STATUS_CLASS_MAP.info;
+            els.status.classList.add(className);
+            els.status.textContent = message;
+            if (tone === 'error' && !options.suppressFocus) {
+                els.status.focus();
+            }
+        }
+
+        function updateCanvasBackdrop() {
+            if (!els.canvas) return;
+            if (state.config.transparentBg) {
+                els.canvas.classList.add('canvas-outline');
+                els.canvas.style.backgroundColor = 'transparent';
+            } else {
+                els.canvas.classList.remove('canvas-outline');
+                els.canvas.style.backgroundColor = state.config.bgColor || '#ffffff';
+            }
+        }
 
         // --- Config Helpers ---
         function clamp(value, min, max) {
@@ -444,6 +507,11 @@
                     return schema.options.includes(value) ? value : null;
                 case 'int': {
                     const num = parseInt(value, 10);
+                    if (Number.isNaN(num)) return null;
+                    return clamp(num, schema.min, schema.max);
+                }
+                case 'float': {
+                    const num = parseFloat(value);
                     if (Number.isNaN(num)) return null;
                     return clamp(num, schema.min, schema.max);
                 }
@@ -555,12 +623,15 @@
             if (spacingLabel) spacingLabel.innerText = `${state.config.spacing}px`;
             const vStepLabel = document.getElementById('v-step-value');
             if (vStepLabel) vStepLabel.innerText = `${state.config.vStep}px`;
+            const scaleLabel = document.getElementById('scale-value');
+            if (scaleLabel) scaleLabel.innerText = `${state.config.renderScale.toFixed(1)}x`;
             const rotationLabel = document.getElementById('rotation-value');
             if (rotationLabel) rotationLabel.innerText = `${state.config.rotation}°`;
             const jitterLabel = document.getElementById('jitter-value');
             if (jitterLabel) jitterLabel.innerText = `${state.config.jitter}`;
             const shadowBlurLabel = document.getElementById('shadow-blur-value');
             if (shadowBlurLabel) shadowBlurLabel.innerText = `${state.config.shadowBlur}px`;
+            updateCanvasBackdrop();
         }
 
         async function shareCurrentConfig() {
@@ -570,7 +641,7 @@
             try {
                 if (navigator.clipboard && navigator.clipboard.writeText) {
                     await navigator.clipboard.writeText(shareUrl);
-                    els.status.textContent = successMessage;
+                    setStatus(successMessage, 'success');
                     return;
                 }
                 throw new Error('Clipboard API unavailable');
@@ -578,9 +649,9 @@
                 console.warn('Clipboard copy failed, using fallback', err);
                 const copied = window.prompt('Copy this configuration URL:', shareUrl);
                 if (copied !== null) {
-                    els.status.textContent = successMessage;
+                    setStatus(successMessage, 'success');
                 } else {
-                    els.status.textContent = 'Copy the URL shown to share this configuration.';
+                    setStatus('Copy the URL shown to share this configuration.', 'info');
                 }
             }
         }
@@ -590,6 +661,7 @@
             state.config = loadConfigFromPersistence();
             applyConfigToInputs();
             persistConfig();
+            setStatus('Waiting for file...');
 
             // Attach listeners to all inputs
             Object.entries(els.inputs).forEach(([key, el]) => {
@@ -598,6 +670,7 @@
                     // Update state
                     if (el.type === 'checkbox') newValue = el.checked;
                     else if (key === 'direction' || key === 'bgColor') newValue = el.value;
+                    else if (key === 'renderScale') newValue = parseFloat(el.value);
                     else newValue = parseInt(el.value);
                     state.config[key] = newValue;
 
@@ -623,6 +696,12 @@
                         const vStepLabel = document.getElementById('v-step-value');
                         if (vStepLabel) vStepLabel.innerText = `${newValue}px`;
                     }
+                    if (key === 'renderScale') {
+                        const scaleLabel = document.getElementById('scale-value');
+                        if (scaleLabel && typeof newValue === 'number') {
+                            scaleLabel.innerText = `${newValue.toFixed(1)}x`;
+                        }
+                    }
                     if (key === 'rotation') {
                         const rotationLabel = document.getElementById('rotation-value');
                         if (rotationLabel) rotationLabel.innerText = `${newValue}°`;
@@ -634,6 +713,10 @@
                     if (key === 'shadowBlur') {
                         const shadowBlurLabel = document.getElementById('shadow-blur-value');
                         if (shadowBlurLabel) shadowBlurLabel.innerText = `${newValue}px`;
+                    }
+
+                    if (key === 'transparentBg' || key === 'bgColor') {
+                        updateCanvasBackdrop();
                     }
 
                     persistConfig();
@@ -687,26 +770,26 @@
             if (!file) return;
 
             if (file.type !== 'application/pdf') {
-                alert('Please upload a valid PDF file.');
+                setStatus('Please upload a valid PDF file.', 'error');
+                e.target.value = '';
                 return;
             }
 
-            els.status.textContent = "Loading PDF...";
+            setStatus('Loading PDF...');
             els.placeholder.style.display = 'none';
 
             try {
                 const arrayBuffer = await file.arrayBuffer();
                 state.pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
-                els.status.textContent = `PDF Loaded (${state.pdfDoc.numPages} pages). Rendering...`;
+                setStatus(`PDF Loaded (${state.pdfDoc.numPages} pages). Rendering...`);
                 await loadPagesFromDoc();
 
                 els.downloadBtn.disabled = false;
                 els.canvas.classList.remove('hidden');
             } catch (err) {
                 console.error(err);
-                els.status.textContent = "Error: " + err.message;
-                alert("Error loading PDF. Ensure it is not password protected.");
+                setStatus(`Error loading PDF: ${err.message}`, 'error');
             }
         }
 
@@ -714,7 +797,8 @@
             if (!els.pdfUrlInput) return;
             const rawUrl = els.pdfUrlInput.value.trim();
             if (!rawUrl) {
-                alert('Please enter a PDF URL to load.');
+                setStatus('Please enter a PDF URL to load.', 'error', { suppressFocus: true });
+                els.pdfUrlInput.focus();
                 return;
             }
 
@@ -722,31 +806,32 @@
             try {
                 parsedUrl = new URL(rawUrl, window.location.href);
             } catch (err) {
-                alert('Please enter a valid URL.');
+                setStatus('Please enter a valid URL.', 'error', { suppressFocus: true });
+                els.pdfUrlInput.focus();
                 return;
             }
 
             if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-                alert('Only HTTP(S) links are supported.');
+                setStatus('Only HTTP(S) links are supported.', 'error', { suppressFocus: true });
+                els.pdfUrlInput.focus();
                 return;
             }
 
-            els.status.textContent = "Loading PDF from URL...";
+            setStatus('Loading PDF from URL...');
             els.placeholder.style.display = 'none';
             if (els.loadUrlBtn) els.loadUrlBtn.disabled = true;
 
             try {
                 state.pdfDoc = await pdfjsLib.getDocument({ url: parsedUrl.toString(), withCredentials: false }).promise;
 
-                els.status.textContent = `PDF Loaded (${state.pdfDoc.numPages} pages). Rendering...`;
+                setStatus(`PDF Loaded (${state.pdfDoc.numPages} pages). Rendering...`);
                 await loadPagesFromDoc();
 
                 els.downloadBtn.disabled = false;
                 els.canvas.classList.remove('hidden');
             } catch (err) {
                 console.error(err);
-                els.status.textContent = "Error: " + err.message;
-                alert("Error loading PDF from URL. Ensure the link is accessible and supports CORS.");
+                setStatus(`Error loading PDF from URL: ${err.message}`, 'error');
             } finally {
                 if (els.loadUrlBtn) els.loadUrlBtn.disabled = false;
             }
@@ -759,11 +844,13 @@
 
             state.pageImages = [];
             const count = Math.min(state.pdfDoc.numPages, state.config.pageLimit);
-            const scale = 1.5; // High quality for output
+            const scale = state.config.renderScale || DEFAULT_CONFIG.renderScale;
 
-            els.status.textContent = `Rendering ${count} pages...`;
+            setStatus(`Rendering ${count} page${count === 1 ? '' : 's'}...`);
 
             for (let i = 1; i <= count; i++) {
+                if (currentToken !== state.renderToken) return;
+                setStatus(`Rendering page ${i} of ${count}...`);
                 const page = await state.pdfDoc.getPage(i);
                 const viewport = page.getViewport({ scale: scale });
 
@@ -793,7 +880,7 @@
             }
 
             if (currentToken !== state.renderToken) return;
-            els.status.textContent = "Rendering complete.";
+            setStatus('Rendering complete.', 'success');
             drawStack();
         }
 
@@ -972,6 +1059,7 @@
         // --- Core Stack Algorithm ---
         function drawStack() {
             if (state.pageImages.length === 0) return;
+            updateCanvasBackdrop();
 
             const ctx = els.canvas.getContext('2d');
             const config = state.config;

@@ -455,11 +455,30 @@
             },
 
             init() {
+                this.loadStoredState();
                 this.loadParams();
                 this.bindEvents();
                 this.renderThemes();
                 this.updatePreview();
                 lucide.createIcons();
+            },
+
+            loadStoredState() {
+                try {
+                    const cached = localStorage.getItem('textShotState');
+                    if (!cached) return;
+                    const parsed = JSON.parse(cached);
+                    this.state = {
+                        ...this.state,
+                        ...parsed,
+                        customColors: {
+                            ...this.state.customColors,
+                            ...(parsed.customColors || {})
+                        }
+                    };
+                } catch (e) {
+                    console.warn('Failed to load saved state:', e);
+                }
             },
 
             loadParams() {
@@ -565,10 +584,14 @@
 
                 themeKeys.forEach(key => {
                     const btn = document.createElement('button');
+                    btn.type = 'button';
                     const isCustom = key === 'custom';
                     const themeData = this.themes[key];
+                    const readableName = key.charAt(0).toUpperCase() + key.slice(1);
 
                     btn.className = `h-10 rounded-lg border-2 flex items-center justify-center transition-all hover:scale-105`;
+                    btn.setAttribute('aria-label', isCustom ? 'Select custom theme' : `Select ${readableName} theme`);
+                    btn.setAttribute('aria-pressed', String(this.state.theme === key));
 
                     if (this.state.theme === key) {
                         btn.classList.add('border-orange-500', 'ring-2', 'ring-orange-100', 'scale-105');
@@ -720,6 +743,16 @@
                     mdBtn.classList.remove('bg-orange-500', 'border-orange-500', 'text-white');
                     mdBtn.classList.add('bg-white', 'border-gray-300', 'text-transparent');
                 }
+
+                this.saveState();
+            },
+
+            saveState() {
+                try {
+                    localStorage.setItem('textShotState', JSON.stringify(this.state));
+                } catch (e) {
+                    console.warn('Failed to save state:', e);
+                }
             },
 
             updateGoogleFonts() {
@@ -784,9 +817,18 @@
                 this.updatePreview();
             },
 
-            copyAltText() {
-                const text = `${this.state.quote} - ${this.state.speaker}. ${this.state.author}, ${this.state.source}.`;
-                this.copyToClipboard(text);
+            async copyAltText() {
+                const fragments = [];
+                if (this.state.quote) fragments.push(this.state.quote.trim());
+                if (this.state.speaker) fragments.push(`— ${this.state.speaker.trim()}`);
+
+                const meta = [];
+                if (this.state.author) meta.push(this.state.author.trim());
+                if (this.state.source) meta.push(this.state.source.trim());
+                if (meta.length) fragments.push(meta.join(', '));
+
+                const text = fragments.length ? fragments.join(' ') : 'Quote image';
+                await this.copyToClipboard(text);
 
                 const btnLabel = document.getElementById('lbl-copy-alt');
                 const original = btnLabel.innerText;
@@ -794,7 +836,7 @@
                 setTimeout(() => btnLabel.innerText = original, 2000);
             },
 
-            handleShare() {
+            async handleShare() {
                 const p = new URLSearchParams();
                 const s = this.state;
 
@@ -819,7 +861,7 @@
                 }
 
                 const url = `${window.location.origin}${window.location.pathname}?${p.toString()}`;
-                this.copyToClipboard(url);
+                await this.copyToClipboard(url);
 
                 try {
                     window.history.replaceState({}, '', url);
@@ -833,16 +875,35 @@
                 setTimeout(() => btnLabel.innerText = original, 2000);
             },
 
-            copyToClipboard(text) {
-                const ta = document.createElement("textarea");
-                ta.value = text;
-                ta.style.position = "fixed";
-                ta.style.left = "-9999px";
-                document.body.appendChild(ta);
-                ta.focus();
-                ta.select();
-                try { document.execCommand('copy'); } catch (err) { console.error(err); }
-                document.body.removeChild(ta);
+            async copyToClipboard(text) {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    try {
+                        await navigator.clipboard.writeText(text);
+                        return true;
+                    } catch (err) {
+                        console.warn('Async clipboard copy failed, attempting fallback:', err);
+                    }
+                }
+
+                let ta;
+                try {
+                    ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.style.position = 'fixed';
+                    ta.style.left = '-9999px';
+                    document.body.appendChild(ta);
+                    ta.focus();
+                    ta.select();
+                    document.execCommand('copy');
+                    return true;
+                } catch (err) {
+                    console.error('Clipboard copy failed:', err);
+                    return false;
+                } finally {
+                    if (ta && ta.parentNode) {
+                        ta.parentNode.removeChild(ta);
+                    }
+                }
             },
 
             async handleExport(format) {

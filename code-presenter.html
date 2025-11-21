@@ -28,9 +28,6 @@
     <!-- LZ-String -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.4.4/lz-string.min.js"></script>
 
-    <!-- Html2Canvas -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-
     <!-- Shiki Loader (Main App) -->
     <script type="module">
         import { getHighlighter } from 'https://esm.sh/shiki@1.0.0';
@@ -227,7 +224,18 @@
 
         .markdown-preview p {
             margin-bottom: 1em;
-            line-height: 1.6;
+            line-height: 2;
+        }
+
+        .markdown-preview ul,
+        .markdown-preview ol {
+            padding-left: 1.5rem;
+            margin: 0 0 1em 0;
+        }
+
+        .markdown-preview li {
+            margin-bottom: 0.6em;
+            line-height: 2;
         }
 
         .markdown-preview code {
@@ -699,6 +707,10 @@
             return <div ref={containerRef} className="code-area-shared syntax-layer overflow-hidden" />;
         };
 
+        const DEFAULT_FONT = 'JetBrains Mono';
+        const normalizeFontName = (value = '') => value.replace(/[^0-9a-zA-Z\s-]/g, ' ').replace(/\s+/g, ' ').trim();
+        const buildGoogleFontUrl = (fontName) => fontName ? `https://fonts.googleapis.com/css2?family=${fontName.split(/\s+/).join('+')}:wght@400;500;700&display=swap` : '';
+
         // --- SLIDE DATA ---
         const INITIAL_SLIDES = [
             { id: generateId(), title: 'README.md', language: 'markdown', focusedLines: [], code: `# CodePresenter\n\nTransform your code into **cinematic animations**.\n\n- 🪄 Magic Move Transitions\n- 🎨 Rich Syntax Highlighting\n- 🎥 Video & HTML Export\n- ⚡ Zero Dependencies` },
@@ -726,14 +738,15 @@
             const [frameSize, setFrameSize] = useState({ width: 800, height: 500 });
             const [currentThemeKey, setCurrentThemeKey] = useState('carbon');
             const [toastMessage, setToastMessage] = useState(null);
-            const [isRenderingVideo, setIsRenderingVideo] = useState(false);
             const [exportModalOpen, setExportModalOpen] = useState(false);
             const [settingsOpen, setSettingsOpen] = useState(false);
             const [animatingKey, setAnimatingKey] = useState(null);
             const [shikiReady, setShikiReady] = useState(false);
 
             // States for UI Settings
-            const [settings, setSettings] = useState({ showLineNumbers: true, showCopyButton: true, showFrame: true, fontFamily: 'JetBrains Mono' });
+            const [settings, setSettings] = useState({ showLineNumbers: true, showCopyButton: true, showFrame: true, fontFamily: DEFAULT_FONT });
+            const [appliedFont, setAppliedFont] = useState(DEFAULT_FONT);
+            const [fontStatus, setFontStatus] = useState(null);
 
             const [copyState, setCopyState] = useState('idle');
             const [exportCopyState, setExportCopyState] = useState('idle');
@@ -751,20 +764,71 @@
             const currentSlide = slides[currentSlideIndex];
             const currentTheme = THEMES[currentThemeKey];
 
-            // Load Font Effect
+            // Load Font Effect (debounced)
             useEffect(() => {
-                document.documentElement.style.setProperty('--font-code', `'${settings.fontFamily}', monospace`);
-                if (settings.fontFamily !== 'JetBrains Mono') {
-                    const id = 'custom-font-link';
-                    let link = document.getElementById(id);
-                    if (!link) {
-                        link = document.createElement('link');
-                        link.id = id;
-                        link.rel = 'stylesheet';
-                        document.head.appendChild(link);
+                let cancelled = false;
+                let debounceId = null;
+
+                const setFontState = (font, message = null) => {
+                    if (cancelled) return;
+                    setAppliedFont(font);
+                    setFontStatus(message);
+                    document.documentElement.style.setProperty('--font-code', `'${font}', monospace`);
+                };
+
+                const removeLink = (id) => {
+                    const link = document.getElementById(id);
+                    if (link) link.remove();
+                };
+
+                const applyFontPreference = () => {
+                    if (cancelled) return;
+                    setFontStatus(null);
+                    const rawInput = settings.fontFamily || '';
+                    const normalizedInput = normalizeFontName(rawInput);
+                    const hasRawInput = rawInput.trim().length > 0;
+
+                    if (!normalizedInput && hasRawInput) {
+                        removeLink('custom-font-link-pending');
+                        removeLink('custom-font-link');
+                        setFontState(DEFAULT_FONT, 'Only letters, numbers, spaces, and hyphens are allowed. Showing JetBrains Mono.');
+                        return;
                     }
-                    link.href = `https://fonts.googleapis.com/css2?family=${settings.fontFamily.trim().replace(/\s+/g, '+')}:wght@400;500;700&display=swap`;
-                }
+
+                    const desiredFont = normalizedInput || DEFAULT_FONT;
+
+                    if (desiredFont === DEFAULT_FONT) {
+                        removeLink('custom-font-link-pending');
+                        removeLink('custom-font-link');
+                        setFontState(DEFAULT_FONT, null);
+                        return;
+                    }
+
+                    removeLink('custom-font-link-pending');
+                    const pendingLink = document.createElement('link');
+                    pendingLink.id = 'custom-font-link-pending';
+                    pendingLink.rel = 'stylesheet';
+                    pendingLink.href = buildGoogleFontUrl(desiredFont);
+                    pendingLink.onload = () => {
+                        if (cancelled) return;
+                        removeLink('custom-font-link');
+                        pendingLink.id = 'custom-font-link';
+                        setFontState(desiredFont, null);
+                    };
+                    pendingLink.onerror = () => {
+                        if (cancelled) return;
+                        pendingLink.remove();
+                        setFontState(DEFAULT_FONT, 'Font not found on Google Fonts. Showing JetBrains Mono.');
+                    };
+                    document.head.appendChild(pendingLink);
+                };
+
+                debounceId = window.setTimeout(applyFontPreference, 400);
+
+                return () => {
+                    cancelled = true;
+                    if (debounceId) clearTimeout(debounceId);
+                };
             }, [settings.fontFamily]);
 
             // Listen for Shiki
@@ -813,11 +877,16 @@
                 document.removeEventListener('mouseup', handleResizeEnd);
             };
 
-            const changeSlide = (idx) => {
+            const changeSlide = (idx, { animate } = {}) => {
                 if (idx < 0 || idx >= slides.length) return;
-                setAnimatingKey(Date.now());
+                const shouldAnimate = typeof animate === 'boolean' ? animate : isPlaying;
+                if (shouldAnimate) {
+                    setAnimatingKey(Date.now());
+                    setTimeout(() => setAnimatingKey(null), 600);
+                } else {
+                    setAnimatingKey(null);
+                }
                 setCurrentSlideIndex(idx);
-                setTimeout(() => setAnimatingKey(null), 600);
             };
 
             const updateSlide = (key, val) => {
@@ -906,31 +975,49 @@
             const generateComponent = () => {
                 const id = `cp-${generateId()}`;
                 const slideData = JSON.stringify(slides);
+                const safeFont = normalizeFontName(appliedFont) || DEFAULT_FONT;
+                const fontLink = buildGoogleFontUrl(safeFont);
 
                 const styles = `
-                    [id="${id}"] { width:${frameSize.width}px;height:${frameSize.height}px;background:${currentTheme.bg};color:${currentTheme.text};${settings.showFrame ? 'border-radius:12px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,0.2);' : ''}display:flex;flex-direction:column;font-family:'${settings.fontFamily}',monospace;position:relative; }
+                    [id="${id}"] { width:${frameSize.width}px;height:${frameSize.height}px;background:${currentTheme.bg};color:${currentTheme.text};${settings.showFrame ? 'border-radius:12px;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,0.2);' : ''}display:flex;flex-direction:column;font-family:'${safeFont}',monospace;position:relative; }
                     [id="${id}"] .h { height:40px;background:${currentTheme.chrome};display:${settings.showFrame ? 'flex' : 'none'};align-items:center;padding:0 16px;border-bottom:1px solid rgba(0,0,0,0.1); }
                     [id="${id}"] .b { flex:1;position:relative;overflow:hidden;display:flex; }
-                    [id="${id}"] .ln { padding-top:32px;text-align:right;width:40px;opacity:0.4;user-select:none;border-right:1px solid rgba(128,128,128,0.1);display:${settings.showLineNumbers ? 'block' : 'none'};font-size:15px;line-height:1.5;font-family:'${settings.fontFamily}',monospace; }
+                    [id="${id}"] .ln { padding-top:32px;text-align:right;width:40px;opacity:0.4;user-select:none;border-right:1px solid rgba(128,128,128,0.1);display:${settings.showLineNumbers ? 'block' : 'none'};font-size:15px;line-height:1.5;font-family:'${safeFont}',monospace; }
                     [id="${id}"] .c-wrap { flex:1;position:relative; }
-                    [id="${id}"] .shiki-magic-move-container { font-size:15px;line-height:1.5;white-space:pre;padding:32px;padding-bottom:32px;width:100%;height:100%;display:block;overflow:auto;font-family:'${settings.fontFamily}',monospace; }
+                    [id="${id}"] .shiki-magic-move-container { font-size:15px;line-height:1.5;white-space:pre;padding:32px;padding-bottom:32px;width:100%;height:100%;display:block;overflow:auto;font-family:'${safeFont}',monospace; }
                     [id="${id}"] .shiki-magic-move-item { display:inline-block;vertical-align:baseline;transition:all 500ms ease-in-out; }
                     [id="${id}"] .shiki-magic-move-enter-from, [id="${id}"] .shiki-magic-move-leave-to { opacity:0;transform:scale(0.9); }
                     [id="${id}"] .shiki-magic-move-leave-active { position:absolute;pointer-events:none; }
                     [id="${id}"] .dimmed { opacity:0.25;filter:blur(0.5px);transition:all 0.4s; }
-                    [id="${id}"] .md-view { padding:32px;height:100%;overflow:auto;color:${currentTheme.text};font-family:sans-serif; }
-                    [id="${id}"] .md-view h1 { font-size:2em;font-weight:700;margin-bottom:.5em }
+                    [id="${id}"] .md-view { padding:32px;height:100%;overflow:auto;color:${currentTheme.text};font-family:'Inter',sans-serif;line-height:1.5; }
+                    [id="${id}"] .md-view h1,
+                    [id="${id}"] .md-view h2,
+                    [id="${id}"] .md-view h3,
+                    [id="${id}"] .md-view h4,
+                    [id="${id}"] .md-view h5,
+                    [id="${id}"] .md-view h6,
+                    [id="${id}"] .md-view p,
+                    [id="${id}"] .md-view ul,
+                    [id="${id}"] .md-view ol,
+                    [id="${id}"] .md-view li {
+                        margin: 0;
+                        line-height: 1.5;
+                    }
+                    [id="${id}"] .md-view h1 { font-size:2em;font-weight:700; }
+                    [id="${id}"] .md-view ul,[id="${id}"] .md-view ol { padding-left:1.5rem; }
+                    [id="${id}"] .md-view li { list-style-position:outside; line-height:0; }
+                    [id="${id}"] .md-view code { background:rgba(128,128,128,0.2);padding:2px 4px;border-radius:4px;font-family:'${safeFont}',monospace;font-size:0.9em; }
                     [id="${id}"] .copy-btn { margin-left:auto;background:none;border:none;color:${currentTheme.text};opacity:0.5;cursor:pointer;display:${settings.showCopyButton ? 'block' : 'none'}; }
                     [id="${id}"] .copy-btn-float { position:absolute;top:10px;right:10px;z-index:50;background:${currentTheme.chrome};border-radius:4px;padding:4px;opacity:0.6;color:${currentTheme.text};border:1px solid rgba(128,128,128,0.2);cursor:pointer;display:${settings.showCopyButton && !settings.showFrame ? 'block' : 'none'}; }
-                    [id="${id}"] .nav { position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:8px;background:rgba(128,128,128,0.2);padding:4px;border-radius:20px;opacity:0;transition:0.2s; }
-                    [id="${id}"]:hover .nav { opacity:1; }
-                    [id="${id}"] .nav button { background:none;border:none;color:${currentTheme.text};cursor:pointer;padding:4px; }
+                    [id="${id}"] .nav { position:absolute;bottom:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:10px 18px;background:rgba(15,15,15,0.25);backdrop-filter:blur(10px);border-top:1px solid rgba(255,255,255,0.08); }
+                    [id="${id}"] .nav button { background:rgba(255,255,255,0.15);border:none;color:${currentTheme.text};cursor:pointer;padding:6px 14px;border-radius:9999px;font-size:11px;font-weight:600;letter-spacing:0.02em;display:flex;align-items:center;gap:6px;transition:background 0.2s, transform 0.2s; }
+                    [id="${id}"] .nav button:hover { background:rgba(255,255,255,0.25);transform:translateY(-1px); }
+                    [id="${id}"] .nav-count { font-size:11px;font-weight:600;color:${currentTheme.text};text-transform:uppercase;letter-spacing:0.1em;opacity:0.8; }
                 `;
 
                 return `<!-- CodePresenter Component -->
 <div id="${id}">
-<script type="module">import { getHighlighter } from 'https://esm.sh/shiki@1.0.0';import diff from 'https://esm.sh/diff-match-patch@1.0.5';window.dmp = new diff.diff_match_patch();window.shikiLoader = getHighlighter({themes:['${currentTheme.shikiTheme}'], langs:['javascript','python','jsx','css','html','markdown']});<\/script>
-${settings.fontFamily !== 'JetBrains Mono' ? `<link href="https://fonts.googleapis.com/css2?family=${settings.fontFamily.replace(/\s+/g, '+')}:wght@400;500;700&display=swap" rel="stylesheet" />` : ''}
+    ${fontLink ? `<link href="${fontLink}" rel="stylesheet" />` : ''}
 <style>${styles}</style>
 <div class="h">
  <div style="display:flex;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f56"></div><div style="width:12px;height:12px;border-radius:50%;background:#ffbd2e"></div><div style="width:12px;height:12px;border-radius:50%;background:#27c93f"></div></div>
@@ -942,90 +1029,266 @@ ${settings.fontFamily !== 'JetBrains Mono' ? `<link href="https://fonts.googleap
  <div id="${id}-c" class="c-wrap"></div>
  <button class="copy-btn-float" id="${id}-cp-float">${SVG_COPY}</button>
 </div>
-<div class="nav"><button id="${id}-p">←</button><button id="${id}-n">→</button></div>
-<script>
-(function(){
- const s=${slideData}, c=document.getElementById('${id}-c'), l=document.getElementById('${id}-l'), t=document.getElementById('${id}-t'), cp1=document.getElementById('${id}-cp'), cp2=document.getElementById('${id}-cp-float');
- let i=0, pc=null, pt=null, hl=null;
- ${RENDERER_BODY}
- const ren = new MagicMoveRenderer(c);
- async function init() {
-     if(!window.marked) { const sc=document.createElement('script'); sc.src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"; document.head.appendChild(sc); }
-     const checkShiki = setInterval(async () => { if(window.shikiLoader && window.dmp) { clearInterval(checkShiki); hl = await window.shikiLoader; up(); } }, 100);
- }
- const tok=(code,lang,foc)=>{
-  if(!hl) return [];
-  const {tokens} = hl.codeToTokens(code, {lang, theme:'${currentTheme.shikiTheme}'});
-  let flat=[], off=0;
-  tokens.forEach(line=>{ line.forEach(tk=>{ flat.push({content:tk.content,color:tk.color,htmlClass:'token',offset:off}); off+=tk.content.length; }); flat.push({content:'\\n',htmlClass:'break',offset:off}); off++; });
-  if(foc && foc.length){ let ln=1; flat.forEach(t=>{ if(t.content==='\\n')ln++; else if(!foc.includes(ln)) t.htmlClass+=' dimmed'; }); }
-  const cnt={}; return flat.map((t,idx)=>{ const k=t.content.trim(); const ks=t.content==='\\n'?('br-'+idx):k; cnt[ks]=(cnt[ks]||0)+1; return{...t, key:t.content==='\\n'?('br-'+idx):(k+'-'+cnt[ks])}; });
- };
- const sync=(pT,cT,pC,cC)=>{
-   const df=window.dmp.diff_main(pC,cC); window.dmp.diff_cleanupSemantic(df);
-   let a=0,b=0; df.forEach(([op,tx])=>{ if(op===0){
-     const f=pT.filter(t=>t.offset>=a && t.offset+t.content.length<=a+tx.length);
-     const to=cT.filter(t=>t.offset>=b && t.offset+t.content.length<=b+tx.length);
-     let x=0,y=0; while(x<f.length&&y<to.length){ if(f[x].content===to[y].content){to[y].key=f[x].key;x++;y++;}else{y++;} }
-     a+=tx.length;b+=tx.length; } else if(op===-1)a+=tx.length; else if(op===1)b+=tx.length;
-   }); return cT;
- };
- const copyFn = () => { 
-    const el=document.createElement('textarea'); el.value=s[i].code; document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); 
-    const svg='${SVG_CHECK}'; if(cp1) cp1.innerHTML=svg; if(cp2) cp2.innerHTML=svg; setTimeout(()=>{ const orig='${SVG_COPY}'; if(cp1) cp1.innerHTML=orig; if(cp2) cp2.innerHTML=orig; }, 2000); 
- };
- if(cp1) cp1.onclick = copyFn; if(cp2) cp2.onclick = copyFn;
+ <div class="nav"><button id="${id}-p">← Prev</button><span class="nav-count" id="${id}-count"></span><button id="${id}-n">Next →</button></div>
+<script type="module">
+${RENDERER_BODY}
+const slides = ${slideData};
+const themeKey = '${currentTheme.shikiTheme}';
+const rootId = '${id}';
+const svgCopy = '${SVG_COPY}';
+const svgCheck = '${SVG_CHECK}';
 
- const up=()=>{
-  const sl=s[i]; t.innerText=sl.title;
-  if(l) l.innerHTML = sl.code.split('\\n').map((_,x)=>'<div>'+(x+1)+'</div>').join('');
-  if(sl.language==='markdown' && window.marked) { c.innerHTML='<div class="md-view">'+marked.parse(sl.code)+'</div>'; ren.mapDom.clear(); pc=null; pt=null; }
-  else if (hl) { let tk=tok(sl.code, sl.language, sl.focusedLines); if(pc && pt && sl.language!=='markdown') tk=sync(pt,tk,pc,sl.code); ren.render({tokens:tk}); pc=sl.code; pt=tk; }
- };
- document.getElementById('${id}-p').onclick=()=>{if(i>0){i--;up()}}; document.getElementById('${id}-n').onclick=()=>{if(i<s.length-1){i++;up()}}; init();
- c.onscroll = () => { l.scrollTop = c.scrollTop; };
-})();
+const ensureLoader = () => {
+    if (window.__CP_ASYNC_LOADER__) return window.__CP_ASYNC_LOADER__;
+    const store = {
+        shikiModulePromise: null,
+        highlighterPromises: new Map(),
+        diffPromise: null,
+        markedPromise: null
+    };
+    const loader = {
+        getHighlighter(theme) {
+            if (!store.highlighterPromises.has(theme)) {
+                if (!store.shikiModulePromise) {
+                    store.shikiModulePromise = import('https://esm.sh/shiki@1.0.0');
+                }
+                store.highlighterPromises.set(theme, store.shikiModulePromise.then(mod => mod.getHighlighter({
+                    themes: [theme],
+                    langs: ['javascript', 'python', 'jsx', 'css', 'html', 'markdown']
+                })));
+            }
+            return store.highlighterPromises.get(theme);
+        },
+        getDiff() {
+            if (!store.diffPromise) {
+                store.diffPromise = import('https://esm.sh/diff-match-patch@1.0.5').then(mod => {
+                    const Ctor = mod.diff_match_patch || mod.default || mod;
+                    return new Ctor();
+                });
+            }
+            return store.diffPromise;
+        },
+        getMarked() {
+            if (!store.markedPromise) {
+                store.markedPromise = import('https://esm.sh/marked@12?bundle').then(mod => {
+                    if (mod.marked) return mod.marked;
+                    if (typeof mod.default === 'function' || (mod.default && typeof mod.default.parse === 'function')) return mod.default;
+                    return mod;
+                });
+            }
+            return store.markedPromise;
+        }
+    };
+    window.__CP_ASYNC_LOADER__ = loader;
+    return loader;
+};
+
+const runComponent = async () => {
+    const root = document.getElementById(rootId);
+    if (!root) return;
+
+    const elements = {
+        code: document.getElementById('${id}-c'),
+        lines: document.getElementById('${id}-l'),
+        title: document.getElementById('${id}-t'),
+        count: document.getElementById('${id}-count'),
+        copy: document.getElementById('${id}-cp'),
+        copyFloat: document.getElementById('${id}-cp-float'),
+        prev: document.getElementById('${id}-p'),
+        next: document.getElementById('${id}-n')
+    };
+
+    if (!elements.code) return;
+
+    const loader = ensureLoader();
+    const [highlighter, dmp, markedLib] = await Promise.all([
+        loader.getHighlighter(themeKey),
+        loader.getDiff(),
+        loader.getMarked()
+    ]);
+
+    const renderer = new MagicMoveRenderer(elements.code);
+    let index = 0;
+    let previousCode = '';
+    let previousTokens = null;
+
+    const parseMarkdown = (text) => {
+        if (!markedLib) return text;
+        if (typeof markedLib.parse === 'function') return markedLib.parse(text);
+        if (markedLib.marked && typeof markedLib.marked.parse === 'function') return markedLib.marked.parse(text);
+        return text;
+    };
+
+    const tokenize = (code, language, focus = []) => {
+        const source = typeof code === 'string' ? code : '';
+        const lang = language || 'javascript';
+        const { tokens } = highlighter.codeToTokens(source, { lang, theme: themeKey });
+        let flat = [];
+        let offset = 0;
+        tokens.forEach(line => {
+            line.forEach(token => {
+                flat.push({ content: token.content, color: token.color, htmlClass: 'token', offset });
+                offset += token.content.length;
+            });
+            flat.push({ content: '\\n', htmlClass: 'break', offset });
+            offset += 1;
+        });
+        if (focus.length) {
+            let lineIdx = 1;
+            flat.forEach(token => {
+                if (token.content === '\\n') lineIdx++;
+                else if (!focus.includes(lineIdx)) token.htmlClass += ' dimmed';
+            });
+        }
+        const counts = {};
+        return flat.map((token, idx) => {
+            const keyBase = token.content.trim();
+            const keySuffix = token.content === '\\n' ? 'br-' + idx : keyBase;
+            counts[keySuffix] = (counts[keySuffix] || 0) + 1;
+            return { ...token, key: token.content === '\\n' ? 'br-' + idx : keyBase + '-' + counts[keySuffix] };
+        });
+    };
+
+    const syncTokenKeys = (fromTokens, toTokens, oldCode, newCode) => {
+        if (!fromTokens || !fromTokens.length) return toTokens;
+        const diffs = dmp.diff_main(oldCode, newCode);
+        dmp.diff_cleanupSemantic(diffs);
+        let fromOffset = 0;
+        let toOffset = 0;
+        diffs.forEach(([op, text]) => {
+            if (op === 0) {
+                const fromSegment = fromTokens.filter(t => t.offset >= fromOffset && t.offset + t.content.length <= fromOffset + text.length);
+                const toSegment = toTokens.filter(t => t.offset >= toOffset && t.offset + t.content.length <= toOffset + text.length);
+                let x = 0, y = 0;
+                while (x < fromSegment.length && y < toSegment.length) {
+                    if (fromSegment[x].content === toSegment[y].content) {
+                        toSegment[y].key = fromSegment[x].key;
+                        x++;
+                        y++;
+                    } else {
+                        y++;
+                    }
+                }
+                fromOffset += text.length;
+                toOffset += text.length;
+            } else if (op === -1) {
+                fromOffset += text.length;
+            } else if (op === 1) {
+                toOffset += text.length;
+            }
+        });
+        return toTokens;
+    };
+
+    const updateLineNumbers = (slide) => {
+        if (!elements.lines) return;
+        const focus = slide.focusedLines || [];
+        const text = typeof slide.code === 'string' ? slide.code : '';
+        if (slide.language === 'markdown') {
+            elements.lines.style.display = 'none';
+            elements.lines.innerHTML = '';
+            return;
+        }
+        elements.lines.style.display = 'block';
+        elements.lines.innerHTML = text.split('\\n').map((_, idx) => {
+            const cls = focus.includes(idx + 1) ? 'focused' : '';
+            return '<div class="' + cls + '">' + (idx + 1) + '</div>';
+        }).join('');
+    };
+
+    const renderMarkdown = (slide) => {
+        if (!elements.code) return;
+        const html = parseMarkdown(typeof slide.code === 'string' ? slide.code : '');
+        elements.code.innerHTML = '<div class="md-view">' + html + '</div>';
+        renderer.mapDom.clear();
+        renderer.isFirstRender = true;
+        previousTokens = null;
+        previousCode = '';
+    };
+
+    const renderCode = (slide) => {
+        if (!elements.code) return;
+        const source = typeof slide.code === 'string' ? slide.code : '';
+        let tokens = tokenize(source, slide.language, slide.focusedLines || []);
+        if (previousTokens && previousCode) {
+            tokens = syncTokenKeys(previousTokens, tokens, previousCode, source);
+        }
+        renderer.render({ tokens });
+        previousTokens = tokens;
+        previousCode = source;
+    };
+
+    const update = () => {
+        const slide = slides[index];
+        if (!slide) return;
+        if (elements.title) elements.title.textContent = slide.title || '';
+        if (elements.count) elements.count.textContent = \`Slide \${index + 1} / \${slides.length}\`;
+        if (elements.prev) elements.prev.style.visibility = index === 0 ? 'hidden' : 'visible';
+        if (elements.next) elements.next.style.visibility = index === slides.length - 1 ? 'hidden' : 'visible';
+        updateLineNumbers(slide);
+        if (slide.language === 'markdown') renderMarkdown(slide);
+        else renderCode(slide);
+    };
+
+    const setCopyIcon = (icon) => {
+        if (elements.copy) elements.copy.innerHTML = icon;
+        if (elements.copyFloat) elements.copyFloat.innerHTML = icon;
+    };
+
+    const copyFn = () => {
+        const slide = slides[index];
+        if (!slide) return;
+        const area = document.createElement('textarea');
+        area.value = typeof slide.code === 'string' ? slide.code : '';
+        area.style.position = 'fixed';
+        area.style.left = '-9999px';
+        document.body.appendChild(area);
+        area.select();
+        document.execCommand('copy');
+        document.body.removeChild(area);
+        setCopyIcon(svgCheck);
+        setTimeout(() => setCopyIcon(svgCopy), 2000);
+    };
+
+    if (elements.copy) elements.copy.addEventListener('click', copyFn);
+    if (elements.copyFloat) elements.copyFloat.addEventListener('click', copyFn);
+
+    if (elements.prev) elements.prev.addEventListener('click', () => {
+        if (index > 0) {
+            index -= 1;
+            update();
+        }
+    });
+    if (elements.next) elements.next.addEventListener('click', () => {
+        if (index < slides.length - 1) {
+            index += 1;
+            update();
+        }
+    });
+
+    if (elements.code && elements.lines) {
+        elements.code.addEventListener('scroll', () => {
+            elements.lines.scrollTop = elements.code.scrollTop;
+        });
+    }
+
+    update();
+};
+
+runComponent();
 <\/script></div>`;
             };
 
-            const renderVideo = async () => {
-                setIsRenderingVideo(true);
-                const canvas = document.createElement('canvas');
-                canvas.width = frameSize.width * 2; canvas.height = frameSize.height * 2;
-                const ctx = canvas.getContext('2d'); ctx.scale(2, 2);
-                const stream = canvas.captureStream(30);
-                const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
-                const chunks = [];
-                recorder.ondataavailable = e => chunks.push(e.data);
-                recorder.onstop = () => {
-                    const blob = new Blob(chunks, { type: 'video/webm' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a'); a.href = url; a.download = 'slide.webm'; a.click();
-                    setIsRenderingVideo(false); setToastMessage("Video Exported!");
-                };
-                recorder.start();
-                for (let i = 0; i < slides.length; i++) {
-                    setCurrentSlideIndex(i); setAnimatingKey(Date.now());
-                    await new Promise(r => setTimeout(r, 100));
-                    for (let f = 0; f < 60; f++) {
-                        if (frameRef.current) {
-                            const shot = await html2canvas(frameRef.current, { backgroundColor: null, scale: 2, logging: false });
-                            ctx.drawImage(shot, 0, 0, frameSize.width, frameSize.height);
-                        }
-                        await new Promise(r => setTimeout(r, 33));
-                    }
-                }
-                recorder.stop();
-            };
-
             // Helpers for render
-            const isEditor = !isPlaying && !isRenderingVideo;
+            const isEditor = !isPlaying;
             const effectiveShowFrame = isEditor ? true : settings.showFrame;
             const effectiveShowLines = isEditor ? (currentSlide.language !== 'markdown') : (settings.showLineNumbers && currentSlide.language !== 'markdown');
             const effectiveShowCopy = isEditor ? true : settings.showCopyButton;
             const floatingCopy = !effectiveShowFrame && effectiveShowCopy;
 
-            const showMagicMove = isPlaying || animatingKey !== null || isRenderingVideo;
+            const showMagicMove = isPlaying || animatingKey !== null;
+            const canGoPrev = currentSlideIndex > 0;
+            const canGoNext = currentSlideIndex < slides.length - 1;
 
             return (
                 <div className="flex h-screen w-screen overflow-hidden text-sm" style={{ color: currentTheme.text }}>
@@ -1064,6 +1327,7 @@ ${settings.fontFamily !== 'JetBrains Mono' ? `<link href="https://fonts.googleap
                                     <div className="flex flex-col gap-1 py-2">
                                         <label className="text-xs text-gray-500 font-medium">Font Family (Google Fonts)</label>
                                         <input className="w-full bg-white border border-gray-200 rounded px-2 py-1 text-xs font-mono text-gray-900" value={settings.fontFamily} onChange={(e) => setSettings({ ...settings, fontFamily: e.target.value })} placeholder="e.g. Fira Code" />
+                                        {fontStatus && <p className="text-[10px] text-red-500 mt-1">{fontStatus}</p>}
                                     </div>
                                 </div>
                             )}
@@ -1085,9 +1349,8 @@ ${settings.fontFamily !== 'JetBrains Mono' ? `<link href="https://fonts.googleap
                             </div>
                             <div className="p-4 border-t border-gray-100 bg-gray-50 space-y-2">
                                 <button onClick={() => setIsPlaying(true)} className="w-full py-2 bg-[#7c3aed] text-white rounded shadow hover:bg-[#6d28d9] flex justify-center gap-2"><Icon name="Play" size={16} /> Present</button>
-                                <div className="grid grid-cols-2 gap-2">
+                                <div className="grid grid-cols-1 gap-2">
                                     <button onClick={() => setExportModalOpen(true)} className="py-2 bg-white border rounded text-gray-600 hover:bg-gray-50 text-xs flex items-center justify-center gap-1"><Icon name="Code" size={12} /> Component</button>
-                                    <button onClick={renderVideo} className="py-2 bg-white border rounded text-gray-600 hover:bg-gray-50 text-xs flex items-center justify-center gap-1"><Icon name="Video" size={12} /> Video</button>
                                 </div>
                                 <button onClick={generateShareLink} className="w-full py-2 bg-gray-100 border rounded text-gray-600 hover:bg-gray-200 text-xs flex items-center justify-center gap-1"><Icon name="Share2" size={12} /> Share</button>
                             </div>
@@ -1171,9 +1434,21 @@ ${settings.fontFamily !== 'JetBrains Mono' ? `<link href="https://fonts.googleap
 
                         {isPlaying && (
                             <div className="fixed bottom-10 z-50 bg-black/80 text-white px-6 py-3 rounded-full flex items-center gap-4 backdrop-blur">
-                                <button onClick={() => currentSlideIndex > 0 && changeSlide(currentSlideIndex - 1)}><Icon name="ArrowLeft" /></button>
+                                <button
+                                    onClick={() => canGoPrev && changeSlide(currentSlideIndex - 1)}
+                                    className={!canGoPrev ? 'opacity-30 cursor-not-allowed' : ''}
+                                    disabled={!canGoPrev}
+                                >
+                                    <Icon name="ArrowLeft" />
+                                </button>
                                 <span className="text-xs font-mono opacity-50">{currentSlideIndex + 1} / {slides.length}</span>
-                                <button onClick={() => currentSlideIndex < slides.length - 1 && changeSlide(currentSlideIndex + 1)}><Icon name="ArrowRight" /></button>
+                                <button
+                                    onClick={() => canGoNext && changeSlide(currentSlideIndex + 1)}
+                                    className={!canGoNext ? 'opacity-30 cursor-not-allowed' : ''}
+                                    disabled={!canGoNext}
+                                >
+                                    <Icon name="ArrowRight" />
+                                </button>
                                 <button onClick={() => setIsPlaying(false)} className="text-red-400 ml-4"><Icon name="X" /></button>
                             </div>
                         )}

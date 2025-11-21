@@ -101,7 +101,8 @@
 <body class="h-screen flex flex-col overflow-hidden">
 
     <!-- Header -->
-    <header class="bg-[var(--earth-surface)] border-b border-[var(--earth-border)] px-6 py-4 flex justify-between items-center z-10">
+    <header
+        class="bg-[var(--earth-surface)] border-b border-[var(--earth-border)] px-6 py-4 flex justify-between items-center z-10">
         <div class="flex items-center gap-3">
             <div class="bg-[var(--earth-accent)] text-white p-2 rounded-lg">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
@@ -193,13 +194,15 @@
         <section id="editorArea" class="flex-1 flex flex-col bg-[var(--earth-panel)] hidden">
 
             <!-- Navigation Bar -->
-            <div class="flex items-center justify-between p-4 lg:px-8 lg:py-4 bg-[var(--earth-surface)] border-b border-[var(--earth-border)]">
+            <div
+                class="flex items-center justify-between p-4 lg:px-8 lg:py-4 bg-[var(--earth-surface)] border-b border-[var(--earth-border)]">
                 <div class="flex flex-col">
                     <span class="text-xs font-bold text-[#6b625a] uppercase tracking-wider">Row</span>
                     <span class="text-2xl font-bold text-[#2d2a27] font-mono" id="rowCounter">#1</span>
                 </div>
 
-                <div class="flex items-center bg-[var(--earth-soft)] p-1 rounded-lg border border-[var(--earth-border)]">
+                <div
+                    class="flex items-center bg-[var(--earth-soft)] p-1 rounded-lg border border-[var(--earth-border)]">
                     <button id="prevBtn"
                         class="p-2 hover:bg-[#fdfbf6] text-[#4f4d48] hover:text-[var(--earth-accent)] rounded-md transition disabled:opacity-30">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
@@ -233,9 +236,11 @@
             <!-- Footer -->
             <div
                 class="bg-[var(--earth-surface)] border-t border-[var(--earth-border)] px-6 py-2 text-xs text-[#6b625a] text-center flex justify-center gap-6">
-                <span><kbd class="font-sans bg-[var(--earth-soft)] border border-[var(--earth-border)] rounded px-1 text-[#4f4d48]">Tab</kbd>
+                <span><kbd
+                        class="font-sans bg-[var(--earth-soft)] border border-[var(--earth-border)] rounded px-1 text-[#4f4d48]">Tab</kbd>
                     Next Field</span>
-                <span><kbd class="font-sans bg-[var(--earth-soft)] border border-[var(--earth-border)] rounded px-1 text-[#4f4d48]">Ctrl</kbd>
+                <span><kbd
+                        class="font-sans bg-[var(--earth-soft)] border border-[var(--earth-border)] rounded px-1 text-[#4f4d48]">Ctrl</kbd>
                     + <kbd
                         class="font-sans bg-[var(--earth-soft)] border border-[var(--earth-border)] rounded px-1 text-[#4f4d48]">Arrows</kbd>
                     Nav Rows</span>
@@ -363,7 +368,23 @@
 
             Papa.parse(file, {
                 skipEmptyLines: true,
+                beforeFirstChunk: function (chunk) {
+                    // Trim BOM and normalize chunk to avoid phantom header characters
+                    if (chunk.charCodeAt(0) === 0xfeff) {
+                        return chunk.slice(1);
+                    }
+                    return chunk;
+                },
+                error: function (err) {
+                    showToast(err?.message || "Failed to read file");
+                },
                 complete: function (results) {
+                    if (results.errors && results.errors.length) {
+                        const first = results.errors[0];
+                        const rowInfo = typeof first.row === 'number' ? ` on row ${first.row + 1}` : '';
+                        showToast(`Parse error${rowInfo}: ${first.message}`);
+                        return;
+                    }
                     if (results.data.length < 1) {
                         showToast("Error: Empty CSV");
                         return;

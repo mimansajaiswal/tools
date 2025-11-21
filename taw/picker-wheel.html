@@ -526,6 +526,7 @@
 
                 // Edit state
                 this.editingId = null;
+                this.idCounter = 0;
 
                 // Audio State
                 this.isMuted = localStorage.getItem('destinyDialMuted') === 'true';
@@ -533,6 +534,8 @@
 
                 // Theme State
                 this.themeMode = localStorage.getItem('destinyDialTheme') || 'system'; // light, dark, system
+
+                this.resizeCanvas();
 
                 // Init
                 this.initTheme();
@@ -609,8 +612,9 @@
                 if (urlData) {
                     try {
                         const parsed = JSON.parse(decodeURIComponent(urlData));
-                        if (Array.isArray(parsed) && parsed.length > 0) {
-                            this.items = parsed;
+                        const normalized = this.normalizeItems(parsed);
+                        if (normalized.length > 0) {
+                            this.items = normalized;
                             this.showToast('Loaded shared wheel!');
                             window.history.replaceState({}, document.title, window.location.pathname);
                             this.saveData();
@@ -623,11 +627,18 @@
 
                 const saved = localStorage.getItem('destinyWheelItems');
                 if (saved) {
-                    this.items = JSON.parse(saved);
+                    try {
+                        const normalized = this.normalizeItems(JSON.parse(saved));
+                        this.items = normalized.length > 0 ? normalized : JSON.parse(JSON.stringify(DEFAULT_ITEMS));
+                    } catch (e) {
+                        console.error('Failed to parse saved data', e);
+                        this.items = JSON.parse(JSON.stringify(DEFAULT_ITEMS));
+                    }
                 } else {
                     this.items = JSON.parse(JSON.stringify(DEFAULT_ITEMS));
                 }
                 this.renderList();
+                this.drawWheel();
             }
 
             saveData() {
@@ -661,6 +672,44 @@
                 }, 300);
             }
 
+            // --- Validation & Helpers ---
+
+            sanitizeWeight(value) {
+                if (value === undefined || value === null) return null;
+                const raw = typeof value === 'string' ? value.trim() : value;
+                if (raw === '') return null;
+                const num = Number(raw);
+                if (!Number.isFinite(num)) return null;
+                const rounded = Math.round(num);
+                const clamped = Math.min(99, Math.max(1, rounded));
+                return clamped;
+            }
+
+            normalizeItems(rawItems) {
+                if (!Array.isArray(rawItems)) return [];
+                const normalized = [];
+                rawItems.forEach((item) => {
+                    if (!item || typeof item !== 'object') return;
+                    const label = typeof item.label === 'string' ? item.label.trim() : '';
+                    if (!label) return;
+                    const desc = typeof item.desc === 'string' ? item.desc.trim() : '';
+                    const link = typeof item.link === 'string' ? item.link.trim() : '';
+                    const weight = this.sanitizeWeight(item.weight);
+                    normalized.push({
+                        id: typeof item.id === 'string' && item.id.trim() ? item.id.trim() : this.generateId(),
+                        label,
+                        weight: weight ?? 1,
+                        desc,
+                        link: link || null
+                    });
+                });
+                return normalized;
+            }
+
+            generateId() {
+                return `item-${Date.now().toString(36)}-${this.idCounter++}`;
+            }
+
             addItem(e) {
                 e.preventDefault();
                 const nameInput = document.getElementById('newItemName');
@@ -670,10 +719,11 @@
 
                 if (!nameInput.value.trim()) return;
 
+                const sanitizedWeight = this.sanitizeWeight(weightInput.value);
                 const newItem = {
-                    id: Date.now().toString(),
+                    id: this.generateId(),
                     label: nameInput.value.trim(),
-                    weight: parseInt(weightInput.value) || 1,
+                    weight: sanitizedWeight ?? 1,
                     desc: descInput.value.trim(),
                     link: linkInput.value.trim() || null
                 };
@@ -697,7 +747,13 @@
             updateWeight(id, newWeight) {
                 const item = this.items.find(i => i.id === id);
                 if (item) {
-                    item.weight = Math.max(1, parseInt(newWeight));
+                    const sanitized = this.sanitizeWeight(newWeight);
+                    if (sanitized === null) {
+                        // Re-render to reset the visual input back to the last valid value
+                        this.renderList();
+                        return;
+                    }
+                    item.weight = sanitized;
                     this.saveData();
                 }
             }
@@ -770,9 +826,14 @@
                         // Use jsyaml.load to parse YAML (or JSON since JSON is subset of YAML)
                         const imported = jsyaml.load(e.target.result);
                         if (Array.isArray(imported)) {
-                            this.items = imported;
-                            this.saveData();
-                            this.showToast('Import successful!');
+                            const normalized = this.normalizeItems(imported);
+                            if (normalized.length === 0) {
+                                alert('No valid entries were found in the YAML file.');
+                            } else {
+                                this.items = normalized;
+                                this.saveData();
+                                this.showToast('Import successful!');
+                            }
                         } else {
                             alert('Invalid YAML data: Expected an array.');
                         }
@@ -864,6 +925,30 @@
 
                 totalEl.innerText = this.items.length;
                 weightEl.innerText = totalWeight;
+            }
+
+            // --- Canvas Handling ---
+
+            resizeCanvas() {
+                if (!this.canvas) return;
+                const container = this.canvas.parentElement;
+                if (!container) return;
+                const rect = container.getBoundingClientRect();
+                const targetSize = Math.min(rect.width, rect.height || rect.width);
+                if (!targetSize) return;
+                const dpr = window.devicePixelRatio || 1;
+                const pixelSize = Math.floor(targetSize * dpr);
+                if (this.canvas.width !== pixelSize || this.canvas.height !== pixelSize) {
+                    this.canvas.width = pixelSize;
+                    this.canvas.height = pixelSize;
+                }
+                this.canvas.style.width = `${targetSize}px`;
+                this.canvas.style.height = `${targetSize}px`;
+            }
+
+            handleResize() {
+                this.resizeCanvas();
+                this.drawWheel();
             }
 
             drawWheel() {
@@ -1046,7 +1131,7 @@
 
                 this.spinVelocity = 0;
                 this.maxSpeed = Math.random() * 0.2 + 0.35;
-                this.windUpFrames = 150 + Math.random() * 30;
+                this.windUpFrames = 220 + Math.random() * 60;
                 this.currentWindUpFrame = 0;
                 this.deceleration = 0.985 + (Math.random() * 0.005);
             }
@@ -1056,7 +1141,8 @@
                     if (this.isAccelerating) {
                         this.currentWindUpFrame++;
                         const t = Math.min(1, this.currentWindUpFrame / this.windUpFrames);
-                        this.spinVelocity = this.maxSpeed * Math.pow(t, 2.5);
+                        const eased = t * t * t; // cubic ease-in for a smoother wind-up
+                        this.spinVelocity = this.maxSpeed * eased;
                         if (this.currentWindUpFrame >= this.windUpFrames) {
                             this.isAccelerating = false;
                         }
@@ -1160,7 +1246,7 @@
         }
 
         const app = new PickerApp();
-        window.addEventListener('resize', () => app.drawWheel());
+        window.addEventListener('resize', () => app.handleResize());
     </script>
 </body>
 
