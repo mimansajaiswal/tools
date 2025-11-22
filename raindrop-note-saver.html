@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raindrop Note Saver</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap"
+        rel="stylesheet">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Config -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        linen: '#F7F5F0',
+                        oatmeal: '#EDEADD',
+                        earth: '#5C5751',
+                        charcoal: '#2E2D2B',
+                        dullpurple: '#9F96A3',
+                        dullpink: '#D6B8B8',
+                        fadedtext: '#8A8580',
+                        success: '#6B8E23',
+                        error: '#CD5C5C'
+                    },
+                    fontFamily: {
+                        serif: ['"Playfair Display"', 'serif'],
+                        sans: ['"Inter"', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #D6B8B8;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #9F96A3;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(5px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Tag Pills */
+        .tag-pill {
+            animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes popIn {
+            from {
+                transform: scale(0.8);
+                opacity: 0;
+            }
+
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .suggestion-active {
+            background-color: #F7F5F0;
+            /* linen */
+            color: #2E2D2B;
+            /* charcoal */
+        }
+    </style>
+</head>
+
+<body
+    class="bg-linen text-charcoal min-h-screen flex items-center justify-center font-sans p-4 selection:bg-dullpink selection:text-white">
+
+    <main class="w-full max-w-xl relative">
+
+        <!-- Decoration -->
+        <div class="absolute -top-12 left-0 w-full flex justify-center opacity-50 pointer-events-none">
+            <div class="w-1 h-12 bg-dullpurple"></div>
+        </div>
+
+        <div
+            class="bg-oatmeal border border-earth/10 p-8 rounded-sm shadow-sm relative overflow-hidden min-h-[650px] flex flex-col">
+
+            <!-- Corner Accent -->
+            <div
+                class="absolute top-0 right-0 w-20 h-20 translate-x-10 -translate-y-10 bg-dullpurple/10 rounded-full pointer-events-none">
+            </div>
+
+            <!-- Header / Nav -->
+            <header class="flex justify-between items-end mb-8 border-b border-earth/10 pb-4">
+                <div>
+                    <h1 class="font-serif text-2xl md:text-3xl text-charcoal italic">Raindrop Saver</h1>
+                    <p class="text-earth text-[10px] uppercase tracking-widest mt-1">Direct API Integration</p>
+                </div>
+                <button id="settingsBtn" onclick="toggleSettings()"
+                    class="text-xs font-medium uppercase tracking-wider text-dullpurple hover:text-charcoal transition-colors">
+                    Setup / Token
+                </button>
+            </header>
+
+            <!-- VIEW: SETUP (Visible if no token) -->
+            <div id="setupView" class="hidden flex-1 flex flex-col">
+                <div class="bg-white/50 p-6 rounded mb-6 border border-dullpink/20">
+                    <h2 class="font-bold text-earth text-sm uppercase mb-4">Authentication</h2>
+                    <div class="space-y-4">
+                        <p class="text-xs text-earth leading-relaxed">
+                            To use this app, you need a <strong>Test Token</strong> from Raindrop. This token stays in
+                            your browser and is never sent to any server other than <code>api.raindrop.io</code>.
+                        </p>
+
+                        <!-- Toggle Guide -->
+                        <div class="border-l-2 border-dullpurple pl-4 py-2 my-4 bg-linen/50">
+                            <button onclick="toggleGuide()"
+                                class="flex items-center gap-2 text-xs font-bold text-dullpurple hover:text-charcoal transition-colors w-full text-left">
+                                <span>How to get a token</span>
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </button>
+                            <div id="guideContent" class="hidden mt-3 space-y-2 text-[11px] text-earth">
+                                <p>1. Go to <a href="https://app.raindrop.io/settings/integrations" target="_blank"
+                                        class="underline text-charcoal">Raindrop Integrations</a>.</p>
+                                <p>2. Click <strong>"Create New App"</strong>.</p>
+                                <p>3. Name it "Note Saver" (or anything).</p>
+                                <p>4. Click on the app you just created.</p>
+                                <p>5. Click <strong>"Create Test Token"</strong>.</p>
+                                <p>6. Copy the long string starting with <code>ey...</code>.</p>
+                            </div>
+                        </div>
+
+                        <div class="group">
+                            <label class="block text-[10px] font-bold text-earth uppercase tracking-wider mb-1">Test
+                                Token</label>
+                            <input type="password" id="apiTokenInput" placeholder="Paste your token here..."
+                                class="w-full bg-linen border border-earth/20 p-3 text-xs text-charcoal focus:border-dullpurple focus:outline-none rounded-sm">
+                        </div>
+                    </div>
+                </div>
+                <button onclick="saveToken()"
+                    class="mt-auto w-full py-3 bg-earth text-linen text-xs uppercase font-bold tracking-widest hover:bg-charcoal transition-colors">
+                    Save & Connect
+                </button>
+            </div>
+
+            <!-- VIEW: MAIN (Visible if token exists) -->
+            <div id="mainView" class="hidden flex-1 flex flex-col relative">
+
+                <!-- Controls: Refresh Data (Moved further down for spacing) -->
+                <div class="flex justify-end mb-4 mt-2">
+                    <button onclick="refreshData()" title="Refresh Collections & Tags"
+                        class="text-dullpurple hover:text-earth text-[10px] uppercase flex items-center gap-1 transition-colors px-2 py-1 hover:bg-linen/50 rounded">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                            </path>
+                        </svg>
+                        Refresh Data
+                    </button>
+                </div>
+
+                <div class="space-y-4 flex-1">
+
+                    <!-- Title -->
+                    <div>
+                        <label
+                            class="block text-[10px] font-bold text-earth uppercase tracking-wider mb-1">Title</label>
+                        <input type="text" id="titleInput" placeholder="Note Title..."
+                            class="w-full bg-linen border-b-2 border-earth/10 focus:border-dullpurple px-3 py-2 text-lg font-serif text-charcoal outline-none placeholder-fadedtext/50">
+                    </div>
+
+                    <!-- Description -->
+                    <div>
+                        <label
+                            class="block text-[10px] font-bold text-earth uppercase tracking-wider mb-1">Description</label>
+                        <textarea id="descInput" rows="2" placeholder="Short summary..."
+                            class="w-full bg-linen border border-earth/10 focus:border-dullpink p-3 text-sm text-charcoal outline-none resize-none placeholder-fadedtext/50"></textarea>
+                    </div>
+
+                    <!-- Personal Note -->
+                    <div>
+                        <label class="block text-[10px] font-bold text-earth uppercase tracking-wider mb-1">Personal
+                            Note</label>
+                        <textarea id="noteInput" rows="3" placeholder="Your thoughts..."
+                            class="w-full bg-linen border border-earth/10 focus:border-earth p-3 text-sm text-charcoal outline-none resize-none placeholder-fadedtext/50"></textarea>
+                    </div>
+
+                    <!-- Meta Row -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                        <!-- Collection (Custom Dropdown) -->
+                        <div class="relative group z-20">
+                            <label
+                                class="block text-[10px] font-bold text-earth uppercase tracking-wider mb-1">Collection</label>
+
+                            <!-- The Search/Display Input -->
+                            <input type="text" id="collectionInput" placeholder="Search collections..."
+                                class="w-full bg-linen border border-earth/10 p-2 text-xs text-charcoal outline-none focus:border-dullpurple truncate cursor-pointer"
+                                autocomplete="off">
+
+                            <!-- Hidden ID Store -->
+                            <input type="hidden" id="collectionIdStore" value="-1">
+
+                            <!-- The Dropdown List -->
+                            <div id="collectionDropdownList"
+                                class="hidden absolute top-full left-0 w-full bg-white border border-earth/10 max-h-48 overflow-y-auto shadow-lg mt-1 rounded-sm z-30">
+                                <!-- Populated via JS -->
+                            </div>
+                        </div>
+
+                        <!-- Tags (Multi-Select) -->
+                        <div class="relative z-10">
+                            <label
+                                class="block text-[10px] font-bold text-earth uppercase tracking-wider mb-1">Tags</label>
+
+                            <!-- Tag Container -->
+                            <div class="w-full bg-linen border border-earth/10 min-h-[34px] p-1 flex flex-wrap gap-1 relative focus-within:border-dullpurple transition-colors cursor-text"
+                                onclick="document.getElementById('tagSearchInput').focus()">
+                                <!-- Selected Pills will go here -->
+                                <div id="selectedTagsContainer" class="contents"></div>
+
+                                <!-- Input -->
+                                <input type="text" id="tagSearchInput"
+                                    class="bg-transparent outline-none text-xs text-charcoal p-1 flex-1 min-w-[60px]"
+                                    placeholder="Add tag..." autocomplete="off">
+                            </div>
+
+                            <!-- Suggestions Dropdown -->
+                            <div id="tagsDropdown"
+                                class="hidden absolute top-full left-0 w-full bg-white border border-earth/10 max-h-40 overflow-y-auto shadow-lg mt-1 rounded-sm">
+                                <!-- Items populated via JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action -->
+                <div class="mt-6 pt-4 border-t border-earth/10">
+                    <button id="saveBtn" onclick="createRaindrop()"
+                        class="w-full py-3 bg-earth hover:bg-charcoal text-linen text-xs uppercase font-bold tracking-widest transition-all active:scale-[0.99] flex justify-center items-center gap-2">
+                        <span>Save to Raindrop</span>
+                    </button>
+                    <p id="statusText" class="text-center text-[10px] mt-2 h-4 text-dullpurple transition-colors"></p>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        const API_BASE = 'https://api.raindrop.io/rest/v1';
+
+        // -- State --
+        let apiToken = localStorage.getItem('rd_token') || '';
+        let collections = JSON.parse(localStorage.getItem('rd_collections') || '[]');
+        let allTags = JSON.parse(localStorage.getItem('rd_tags') || '[]');
+
+        // Persistent User Choices
+        // Changed: No longer defaulting to 'Unsorted' to allow empty state detection
+        let selectedTags = JSON.parse(localStorage.getItem('rd_last_tags') || '[]');
+        let lastCollectionId = localStorage.getItem('rd_last_collection');
+        let lastCollectionTitle = localStorage.getItem('rd_last_collection_title');
+
+        let isSubmitting = false;
+
+        // Dropdown states
+        let activeTagIndex = -1;
+        let filteredTags = [];
+
+        let activeColIndex = -1;
+        let filteredCollections = [];
+
+        // -- Init --
+        function init() {
+            const hasToken = !!apiToken;
+            toggleView(hasToken ? 'main' : 'setup');
+
+            if (hasToken) {
+                if (collections.length === 0) {
+                    refreshData();
+                } else {
+                    initCollectionInput();
+                    renderSelectedTags();
+                }
+            }
+
+            // Tag Search Listeners
+            const tagInput = document.getElementById('tagSearchInput');
+            tagInput.addEventListener('input', handleTagInput);
+            tagInput.addEventListener('keydown', handleTagKeydown);
+
+            // Collection Search Listeners
+            const colInput = document.getElementById('collectionInput');
+            colInput.addEventListener('focus', openCollectionDropdown);
+            colInput.addEventListener('input', handleCollectionInput);
+            colInput.addEventListener('keydown', handleCollectionKeydown);
+            colInput.addEventListener('click', openCollectionDropdown); // Re-open on click if closed
+
+            // Close dropdowns on click outside
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('#tagsDropdown') && !e.target.closest('#tagSearchInput')) {
+                    document.getElementById('tagsDropdown').classList.add('hidden');
+                    activeTagIndex = -1;
+                }
+                if (!e.target.closest('#collectionDropdownList') && !e.target.closest('#collectionInput')) {
+                    document.getElementById('collectionDropdownList').classList.add('hidden');
+                    activeColIndex = -1;
+                }
+            });
+        }
+
+        // -- Persistence --
+        function persistSelection() {
+            const colId = document.getElementById('collectionIdStore').value;
+            const colTitle = document.getElementById('collectionInput').value;
+
+            localStorage.setItem('rd_last_collection', colId);
+            localStorage.setItem('rd_last_collection_title', colTitle);
+            localStorage.setItem('rd_last_tags', JSON.stringify(selectedTags));
+        }
+
+        // -- View Management --
+        function toggleView(view) {
+            const setup = document.getElementById('setupView');
+            const main = document.getElementById('mainView');
+            const settingsBtn = document.getElementById('settingsBtn');
+
+            if (view === 'setup') {
+                setup.classList.remove('hidden');
+                main.classList.add('hidden');
+                settingsBtn.classList.add('opacity-0', 'pointer-events-none');
+                document.getElementById('apiTokenInput').value = apiToken;
+            } else {
+                setup.classList.add('hidden');
+                main.classList.remove('hidden');
+                settingsBtn.classList.remove('opacity-0', 'pointer-events-none');
+            }
+        }
+
+        function toggleSettings() {
+            const main = document.getElementById('mainView');
+            if (main.classList.contains('hidden')) {
+                toggleView('main');
+            } else {
+                toggleView('setup');
+            }
+        }
+
+        function toggleGuide() {
+            document.getElementById('guideContent').classList.toggle('hidden');
+        }
+
+        // -- Auth --
+        function saveToken() {
+            const input = document.getElementById('apiTokenInput').value.trim();
+            if (!input) return alert('Please enter a token');
+
+            apiToken = input;
+            localStorage.setItem('rd_token', apiToken);
+            localStorage.removeItem('rd_collections');
+            localStorage.removeItem('rd_tags');
+            refreshData();
+        }
+
+        // -- Data Fetching --
+        async function refreshData() {
+            setStatus('Fetching collections and tags...', 'text-dullpurple');
+
+            try {
+                const [rootRes, childRes] = await Promise.all([
+                    fetch(`${API_BASE}/collections`, { headers: { Authorization: `Bearer ${apiToken}` } }),
+                    fetch(`${API_BASE}/collections/childrens`, { headers: { Authorization: `Bearer ${apiToken}` } })
+                ]);
+
+                if (!rootRes.ok) throw new Error('Failed to fetch collections. Check token.');
+
+                const rootData = await rootRes.json();
+                const childData = await childRes.json();
+
+                // Process Collections
+                const roots = rootData.items;
+                const children = childData.items;
+                const childrenMap = {};
+
+                children.forEach(c => {
+                    if (c.parent && c.parent.$id) {
+                        const pid = c.parent.$id;
+                        if (!childrenMap[pid]) childrenMap[pid] = [];
+                        childrenMap[pid].push(c);
+                    }
+                });
+
+                const flattened = [];
+                // Manually add Unsorted at the top
+                flattened.push({ _id: -1, title: 'Unsorted', level: 0 });
+
+                const traverse = (items, level = 0) => {
+                    items.sort((a, b) => a.title.localeCompare(b.title));
+                    items.forEach(col => {
+                        col.level = level;
+                        flattened.push(col);
+                        if (childrenMap[col._id]) {
+                            traverse(childrenMap[col._id], level + 1);
+                        }
+                    });
+                };
+
+                traverse(roots);
+                collections = flattened;
+                localStorage.setItem('rd_collections', JSON.stringify(collections));
+
+                // Fetch Tags
+                const tagRes = await fetch(`${API_BASE}/tags`, { headers: { Authorization: `Bearer ${apiToken}` } });
+                const tagData = await tagRes.json();
+
+                allTags = tagData.items.sort((a, b) => b.count - a.count);
+                localStorage.setItem('rd_tags', JSON.stringify(allTags));
+
+                initCollectionInput();
+                setStatus('Data refreshed.', 'text-success');
+                setTimeout(() => setStatus(''), 2000);
+                toggleView('main');
+
+            } catch (err) {
+                console.error(err);
+                setStatus('Error: ' + err.message, 'text-error');
+            }
+        }
+
+        // -- Collection Custom Dropdown Logic --
+        function initCollectionInput() {
+            const input = document.getElementById('collectionInput');
+            const idStore = document.getElementById('collectionIdStore');
+
+            // Restore last selection OR default to empty/unsorted
+            if (lastCollectionId) {
+                idStore.value = lastCollectionId;
+                input.value = lastCollectionTitle || ''; // Ensure no 'undefined' text
+            } else {
+                // First load logic: Empty visual, ID is -1 (Unsorted)
+                idStore.value = '-1';
+                input.value = '';
+            }
+        }
+
+        function openCollectionDropdown() {
+            const input = document.getElementById('collectionInput');
+            handleCollectionInput({ target: input }); // Trigger render
+        }
+
+        function handleCollectionInput(e) {
+            const val = e.target.value.toLowerCase();
+            const dropdown = document.getElementById('collectionDropdownList');
+
+            // Filter based on input, but if input is empty show all
+            if (val === '') {
+                filteredCollections = collections;
+            } else {
+                filteredCollections = collections.filter(c => c.title.toLowerCase().includes(val));
+            }
+
+            renderCollectionList();
+            dropdown.classList.remove('hidden');
+            activeColIndex = -1;
+        }
+
+        function renderCollectionList() {
+            const dropdown = document.getElementById('collectionDropdownList');
+            dropdown.innerHTML = '';
+
+            if (filteredCollections.length === 0) {
+                const div = document.createElement('div');
+                div.className = 'p-2 text-[10px] text-fadedtext italic';
+                div.textContent = 'No collections found';
+                dropdown.appendChild(div);
+                return;
+            }
+
+            filteredCollections.forEach((col, idx) => {
+                const div = document.createElement('div');
+                // Use padding-left for hierarchy indentation
+                const paddingLeft = (col.level * 16) + 8;
+                div.style.paddingLeft = `${paddingLeft}px`;
+
+                div.className = 'py-2 pr-2 hover:bg-linen text-xs cursor-pointer text-charcoal border-b border-linen truncate';
+                div.textContent = col.title;
+
+                // Add subtle border for nested items to guide the eye
+                if (col.level > 0) {
+                    div.classList.add('border-l-2', 'border-earth/10');
+                }
+
+                div.onmousedown = (e) => {
+                    e.preventDefault();
+                    selectCollection(col);
+                };
+
+                dropdown.appendChild(div);
+            });
+        }
+
+        function selectCollection(col) {
+            document.getElementById('collectionInput').value = col.title;
+            document.getElementById('collectionIdStore').value = col._id;
+            document.getElementById('collectionDropdownList').classList.add('hidden');
+            persistSelection();
+        }
+
+        function handleCollectionKeydown(e) {
+            const dropdown = document.getElementById('collectionDropdownList');
+            const isVisible = !dropdown.classList.contains('hidden');
+
+            if (!isVisible && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+                openCollectionDropdown();
+                return;
+            }
+
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (isVisible && activeColIndex >= 0) {
+                    selectCollection(filteredCollections[activeColIndex]);
+                } else {
+                    // If they type exact name and hit enter, try to find it
+                    const val = e.target.value.toLowerCase();
+                    const match = collections.find(c => c.title.toLowerCase() === val);
+                    if (match) selectCollection(match);
+                    else dropdown.classList.add('hidden'); // Close if no selection
+                }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                activeColIndex++;
+                if (activeColIndex >= filteredCollections.length) activeColIndex = 0;
+                highlightCollection();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                activeColIndex--;
+                if (activeColIndex < 0) activeColIndex = filteredCollections.length - 1;
+                highlightCollection();
+            } else if (e.key === 'Escape') {
+                dropdown.classList.add('hidden');
+                // Revert text to saved ID if cancelled? Optionally.
+                // For now let's just close.
+            }
+        }
+
+        function highlightCollection() {
+            const list = document.getElementById('collectionDropdownList');
+            const items = list.children;
+            for (let i = 0; i < items.length; i++) {
+                if (i === activeColIndex) {
+                    items[i].classList.add('bg-linen');
+                    items[i].scrollIntoView({ block: 'nearest' });
+                } else {
+                    items[i].classList.remove('bg-linen');
+                }
+            }
+        }
+
+
+        // -- Tag System Logic (Same as before but with updated listeners) --
+
+        function renderSelectedTags() {
+            const container = document.getElementById('selectedTagsContainer');
+            container.innerHTML = '';
+
+            selectedTags.forEach((tag, index) => {
+                const pill = document.createElement('div');
+                pill.className = 'tag-pill bg-dullpurple/20 text-charcoal text-[10px] px-2 py-1 rounded-sm flex items-center gap-1 border border-dullpurple/20';
+                pill.innerHTML = `
+                    <span>${tag}</span>
+                    <button onclick="removeTag(${index})" class="text-dullpurple hover:text-error font-bold ml-1">&times;</button>
+                `;
+                container.appendChild(pill);
+            });
+            persistSelection();
+        }
+
+        function addTag(tagName) {
+            const clean = tagName.trim();
+            if (clean && !selectedTags.includes(clean)) {
+                selectedTags.push(clean);
+                renderSelectedTags();
+            }
+            document.getElementById('tagSearchInput').value = '';
+            document.getElementById('tagsDropdown').classList.add('hidden');
+            activeTagIndex = -1;
+        }
+
+        function removeTag(index) {
+            selectedTags.splice(index, 1);
+            renderSelectedTags();
+        }
+
+        function handleTagInput(e) {
+            const val = e.target.value.trim().toLowerCase();
+            const dropdown = document.getElementById('tagsDropdown');
+
+            if (!val) {
+                dropdown.classList.add('hidden');
+                return;
+            }
+
+            filteredTags = allTags
+                .filter(t => t._id.toLowerCase().includes(val) && !selectedTags.includes(t._id))
+                .slice(0, 8);
+
+            renderTagSuggestions(val);
+        }
+
+        function renderTagSuggestions(inputVal) {
+            const dropdown = document.getElementById('tagsDropdown');
+            dropdown.innerHTML = '';
+            activeTagIndex = -1;
+
+            if (filteredTags.length === 0) {
+                const div = document.createElement('div');
+                div.className = 'p-2 text-[10px] text-fadedtext italic border-b border-linen';
+                div.textContent = `Create tag "${inputVal}"...`;
+                div.onmousedown = (e) => { e.preventDefault(); addTag(inputVal); };
+                dropdown.appendChild(div);
+            } else {
+                filteredTags.forEach((tag, idx) => {
+                    const div = document.createElement('div');
+                    div.className = 'p-2 hover:bg-linen text-[10px] cursor-pointer text-earth border-b border-linen';
+                    div.textContent = tag._id;
+                    div.onmousedown = (e) => { e.preventDefault(); addTag(tag._id); };
+                    dropdown.appendChild(div);
+                });
+            }
+            dropdown.classList.remove('hidden');
+        }
+
+        function handleTagKeydown(e) {
+            const dropdown = document.getElementById('tagsDropdown');
+            const isVisible = !dropdown.classList.contains('hidden');
+            const val = e.target.value;
+
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (isVisible && activeTagIndex >= 0) {
+                    addTag(filteredTags[activeTagIndex]._id);
+                } else if (val.trim()) {
+                    addTag(val);
+                }
+            } else if (e.key === 'Backspace' && !val && selectedTags.length > 0) {
+                removeTag(selectedTags.length - 1);
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (!isVisible) return;
+                activeTagIndex++;
+                if (activeTagIndex >= filteredTags.length) activeTagIndex = 0;
+                highlightTag();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (!isVisible) return;
+                activeTagIndex--;
+                if (activeTagIndex < 0) activeTagIndex = filteredTags.length - 1;
+                highlightTag();
+            } else if (e.key === 'Escape') {
+                dropdown.classList.add('hidden');
+            }
+        }
+
+        function highlightTag() {
+            const items = document.getElementById('tagsDropdown').children;
+            for (let i = 0; i < items.length; i++) {
+                if (i === activeTagIndex) items[i].classList.add('suggestion-active');
+                else items[i].classList.remove('suggestion-active');
+            }
+        }
+
+        // -- Save Logic --
+        async function createRaindrop() {
+            if (isSubmitting) return;
+
+            const title = document.getElementById('titleInput').value.trim();
+            const desc = document.getElementById('descInput').value.trim();
+            const note = document.getElementById('noteInput').value.trim();
+            const collectionId = document.getElementById('collectionIdStore').value;
+
+            if (!title) {
+                setStatus('Title is required', 'text-error');
+                return;
+            }
+
+            isSubmitting = true;
+            const btn = document.getElementById('saveBtn');
+            const originalBtnText = btn.innerHTML;
+            btn.innerHTML = 'Saving...';
+            btn.classList.add('opacity-50');
+
+            try {
+                const uniqueUrl = 'https://raindrop.note/?entry=' + crypto.randomUUID().substring(0, 12);
+
+                const payload = {
+                    link: uniqueUrl,
+                    title: title,
+                    excerpt: desc,
+                    note: note,
+                    collection: { $id: parseInt(collectionId) },
+                    tags: selectedTags,
+                    created: new Date().toISOString()
+                };
+
+                const res = await fetch(`${API_BASE}/raindrop`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!res.ok) {
+                    const errData = await res.json();
+                    throw new Error(errData.errorMessage || 'Failed to save');
+                }
+
+                setStatus('Saved successfully!', 'text-success');
+
+                // Reset Fields
+                document.getElementById('titleInput').value = '';
+                document.getElementById('descInput').value = '';
+                document.getElementById('noteInput').value = '';
+
+            } catch (err) {
+                console.error(err);
+                setStatus('Error: ' + err.message, 'text-error');
+            } finally {
+                isSubmitting = false;
+                btn.innerHTML = originalBtnText;
+                btn.classList.remove('opacity-50');
+                setTimeout(() => { if (document.getElementById('statusText').textContent.includes('Success')) setStatus(''); }, 3000);
+            }
+        }
+
+        function setStatus(msg, colorClass) {
+            const el = document.getElementById('statusText');
+            el.className = `text-center text-[10px] mt-2 h-4 transition-colors ${colorClass || 'text-dullpurple'}`;
+            el.textContent = msg;
+        }
+
+        // Run
+        init();
+
+    </script>
+</body>
+
+</html>
