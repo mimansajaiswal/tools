@@ -198,7 +198,7 @@
     </aside>
 
     <!-- Main Content -->
-    <main class="order-1 md:order-2 flex-1 flex flex-col h-full relative" id="mainView">
+    <main class="order-1 md:order-2 flex-1 flex flex-col min-h-0 relative" id="mainView">
 
         <!-- Header -->
         <header
@@ -958,6 +958,8 @@ async function handleRequest(request, env) {
                 if (!diary || !diary.originalDbId) return;
 
                 SyncManager.updateUI('syncing');
+                App.state.isLoading = true; // Set loading state
+                App.renderDiaryView(); // Render loading state
 
                 try {
                     // 1. PUSH
@@ -967,7 +969,7 @@ async function handleRequest(request, env) {
                             const notionId = await SyncManager.pushEntryToNotion(diary.originalDbId, entry);
                             Storage.updateEntrySyncStatus(diaryId, entry.id, true, notionId);
                             App.state.diaries = Storage.getData();
-                            App.renderDiaryView();
+                            // Don't re-render here to avoid flickering during load, waiting for full pull
                         } catch (err) {
                             console.error("Failed to push entry", entry, err);
                             App.showToast(`Sync failed for entry "${entry.title}".`, "error");
@@ -1040,8 +1042,6 @@ async function handleRequest(request, env) {
                     Storage.setLastFetch(diaryId, new Date().toISOString());
 
                     App.state.diaries = currentData;
-                    App.renderDiaryView();
-                    App.renderSidebar();
 
                     SyncManager.updateUI('synced');
                     SyncManager.fetchTags(true);
@@ -1050,6 +1050,10 @@ async function handleRequest(request, env) {
                     console.error("Sync Error", e);
                     SyncManager.updateUI('error');
                     if (e.message.includes("CORS")) App.showToast(e.message, 'error');
+                } finally {
+                    App.state.isLoading = false;
+                    App.renderDiaryView();
+                    App.renderSidebar();
                 }
             },
 
@@ -1106,7 +1110,8 @@ async function handleRequest(request, env) {
                 mirrorVideo: false,
                 // New Diary State
                 selectedDb: null,
-                cachedDbs: [] // In-memory cache for filtering
+                cachedDbs: [], // In-memory cache for filtering
+                isLoading: false // Global loading state for entries
             },
 
             collageConfigs: {
@@ -1422,6 +1427,15 @@ async function handleRequest(request, env) {
                 if (!diary) return;
                 title.innerText = diary.title;
                 gallery.innerHTML = '';
+
+                // Loading State
+                if (App.state.isLoading && diary.entries.length === 0) {
+                    gallery.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-center text-earth-metal/60">
+                        <div class="loader w-8 h-8 border-4 border-dull-purple border-t-transparent rounded-full mb-4"></div>
+                        <p>Loading entries...</p>
+                    </div>`;
+                    return;
+                }
 
                 if (diary.entries.length === 0) {
                     gallery.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-center text-earth-metal/60"><i data-lucide="camera" class="w-12 h-12 mb-4 opacity-50"></i><p>Empty.</p></div>`;
