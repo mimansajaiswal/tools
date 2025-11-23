@@ -70,7 +70,7 @@
 
         /* Camera Overlay Transition */
         .overlay-ghost {
-            transition: opacity 0.3s ease;
+            transition: opacity 0.3s ease, clip-path 0.3s ease;
             pointer-events: none;
         }
 
@@ -120,6 +120,12 @@
             white-space: pre-wrap;
             word-wrap: break-word;
         }
+
+        /* Grid Lines */
+        .grid-line {
+            position: absolute;
+            pointer-events: none;
+        }
     </style>
 </head>
 
@@ -129,6 +135,9 @@
     <!-- Toast Container -->
     <div id="toastContainer"
         class="fixed top-4 right-4 z-[100] flex flex-col gap-2 w-full max-w-sm pointer-events-none"></div>
+
+    <!-- Hidden Canvas for Processing (Global) -->
+    <canvas id="photoCanvas" class="hidden"></canvas>
 
     <!-- Sidebar (Desktop) / Bottom Nav (Mobile) -->
     <aside
@@ -229,7 +238,8 @@
 
     <!-- 1. Settings Modal -->
     <div id="settingsModal"
-        class="fixed inset-0 bg-charcoal/20 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+        class="fixed inset-0 bg-charcoal/20 backdrop-blur-sm hidden items-center justify-center z-50 p-4"
+        onclick="if(event.target===this) App.closeModal('settingsModal')">
         <div
             class="bg-white-linen w-full max-w-md p-6 rounded-xl shadow-xl border border-oatmeal-dark relative max-h-full overflow-y-auto">
             <button onclick="App.closeModal('settingsModal')"
@@ -250,7 +260,7 @@
                     </div>
                     <div class="flex gap-2 mb-2">
                         <button
-                            onclick="window.location.href='https://notion-oauth-handler.mimansa-jaiswal.workers.dev/auth/login'"
+                            onclick="window.location.href='https://notion-oauth-handler.mimansa-jaiswal.workers.dev/auth/login?from=/tools/chronice-photos-tracker.html'"
                             class="flex-1 bg-charcoal text-white-linen py-2 rounded flex items-center justify-center gap-2 hover:bg-black transition-colors shadow-sm">
                             <span class="text-sm font-medium">Connect Notion</span>
                         </button>
@@ -292,7 +302,8 @@
 
     <!-- 2. Worker Help Modal -->
     <div id="workerHelpModal"
-        class="fixed inset-0 bg-charcoal/20 backdrop-blur-sm hidden items-center justify-center z-[60] p-4">
+        class="fixed inset-0 bg-charcoal/20 backdrop-blur-sm hidden items-center justify-center z-[60] p-4"
+        onclick="if(event.target===this) App.closeModal('workerHelpModal')">
         <div
             class="bg-white-linen w-full max-w-2xl h-[80vh] p-6 rounded-xl shadow-2xl border border-oatmeal-dark flex flex-col">
             <div class="flex justify-between items-center mb-4 border-b border-oatmeal-dark pb-2">
@@ -405,7 +416,8 @@ async function handleRequest(request, env) {
 
     <!-- 3. New Diary Modal -->
     <div id="newDiaryModal"
-        class="fixed inset-0 bg-charcoal/20 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+        class="fixed inset-0 bg-charcoal/20 backdrop-blur-sm hidden items-center justify-center z-50 p-4"
+        onclick="if(event.target===this) App.closeModal('newDiaryModal')">
         <div
             class="bg-white-linen w-full max-w-md p-6 rounded-xl shadow-xl border border-oatmeal-dark max-h-full overflow-y-auto">
             <h3 class="font-serif text-xl mb-4 text-charcoal">New Diary</h3>
@@ -467,7 +479,26 @@ async function handleRequest(request, env) {
         </div>
     </div>
 
-    <!-- 4. Entry Modal (New Layout) -->
+    <!-- 4. Delete Confirmation Modal -->
+    <div id="deleteModal"
+        class="fixed inset-0 bg-charcoal/20 backdrop-blur-sm hidden items-center justify-center z-[70] p-4"
+        onclick="if(event.target===this) App.closeModal('deleteModal')">
+        <div class="bg-white-linen w-full max-w-sm p-6 rounded-xl shadow-xl border border-oatmeal-dark">
+            <h3 class="font-serif text-lg text-charcoal mb-2">Delete Entry?</h3>
+            <p class="text-sm text-earth-metal/80 mb-6">This will remove the entry from your <b>local storage</b> AND
+                <b>Notion</b>. This action cannot be undone.
+            </p>
+            <div class="flex justify-end gap-3">
+                <button onclick="App.closeModal('deleteModal')"
+                    class="px-4 py-2 rounded text-earth-metal hover:bg-oatmeal text-sm">Cancel</button>
+                <button onclick="App.executeDelete()"
+                    class="px-4 py-2 rounded bg-red-500 text-white hover:bg-red-600 text-sm font-medium">Delete
+                    Everywhere</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. Entry Modal (Live Composite Layout) -->
     <div id="entryModal" class="fixed inset-0 bg-white-linen z-50 hidden flex-col overflow-hidden">
 
         <!-- Close Button -->
@@ -476,54 +507,90 @@ async function handleRequest(request, env) {
             <i data-lucide="x" class="w-6 h-6"></i>
         </button>
 
-        <!-- Top Section: Camera / Photo Preview (Only visible when taking photo) -->
+        <!-- Top Section: Camera Viewfinder (Canvas-based) -->
         <div id="cameraSection"
-            class="relative w-full h-[45%] md:h-[55%] bg-zinc-100 flex-shrink-0 flex items-center justify-center overflow-hidden group">
+            class="relative w-full h-[40%] md:h-[50%] max-h-[600px] bg-zinc-100 flex-shrink-0 flex items-center justify-center overflow-hidden group">
 
-            <!-- Live Video (Object Contain ensures WYSIWYG) -->
-            <video id="cameraVideo" autoplay playsinline
-                class="absolute inset-0 w-full h-full object-contain z-10"></video>
-            <!-- Upload Preview (Fallback) -->
-            <img id="uploadPreview" class="absolute inset-0 w-full h-full object-contain z-10 hidden">
+            <!-- Hidden Video Source -->
+            <video id="videoSource" autoplay playsinline class="hidden"></video>
 
-            <!-- Ghost Overlay -->
+            <!-- The Viewfinder Canvas (Live Composite) -->
+            <canvas id="viewfinder" class="w-full h-full object-contain z-10"></canvas>
+
+            <!-- Ghost Overlay (Only drawn when active) -->
             <img id="ghostOverlay"
-                class="absolute inset-0 w-full h-full object-contain z-30 opacity-30 pointer-events-none hidden transition-opacity duration-200">
-
-            <!-- Canvas (Hidden) -->
-            <canvas id="photoCanvas" class="hidden"></canvas>
+                class="absolute inset-0 w-full h-full object-contain z-30 pointer-events-none transition-opacity duration-200 opacity-0">
 
             <!-- Camera Controls -->
             <div id="camControls"
-                class="absolute bottom-4 left-0 right-0 z-40 flex items-center justify-center gap-6 transition-opacity duration-200">
-                <button onclick="App.flipCamera()"
-                    class="bg-black/40 backdrop-blur-md p-3 rounded-full hover:bg-black/60 text-white transition">
-                    <i data-lucide="refresh-ccw" class="w-6 h-6"></i>
-                </button>
+                class="absolute bottom-4 left-0 right-0 z-40 flex flex-col items-center gap-3 transition-opacity duration-200">
 
-                <label
-                    class="cursor-pointer bg-black/40 backdrop-blur-md p-3 rounded-full hover:bg-black/60 text-white transition">
-                    <i data-lucide="image" class="w-6 h-6"></i>
-                    <input type="file" id="fileInput" accept="image/*" class="hidden"
-                        onchange="App.handleFileUpload(event)">
-                </label>
+                <!-- Segment Indicator (If collage mode > 1) -->
+                <div id="segmentIndicator"
+                    class="text-charcoal/70 bg-white/80 px-2 py-1 rounded text-[10px] font-mono uppercase tracking-widest hidden shadow-sm">
+                    Segment <span id="segCurrent">1</span>/<span id="segTotal">1</span>
+                </div>
 
-                <button onclick="App.capturePhoto()"
-                    class="w-16 h-16 rounded-full border-4 border-white bg-white/20 flex items-center justify-center hover:bg-white/40 transition">
-                    <div class="w-12 h-12 bg-white rounded-full"></div>
-                </button>
+                <!-- Main Controls Row -->
+                <div class="flex items-center justify-center gap-4 md:gap-6">
 
-                <div class="relative flex items-center">
-                    <button onclick="App.toggleGhost()" id="ghostToggleBtn"
-                        class="bg-black/40 backdrop-blur-md p-3 rounded-full hover:bg-black/60 text-white transition opacity-50 peer">
-                        <i data-lucide="ghost" class="w-6 h-6"></i>
+                    <!-- Mirror Toggle (Front Camera Only) -->
+                    <button id="mirrorToggleBtn" onclick="App.toggleMirror()"
+                        class="hidden bg-black/40 backdrop-blur-md p-3 rounded-full hover:bg-black/60 text-white transition">
+                        <i data-lucide="flip-horizontal" class="w-6 h-6"></i>
                     </button>
-                    <!-- Slider ABOVE -->
-                    <div id="ghostSliderContainer"
-                        class="hidden absolute bottom-full mb-4 left-1/2 -translate-x-1/2 bg-black/60 p-2 rounded flex-col items-center">
-                        <input type="range" min="0" max="1" step="0.1" value="0.3"
-                            class="w-24 h-1 bg-white/50 rounded-lg appearance-none cursor-pointer"
-                            oninput="document.getElementById('ghostOverlay').style.opacity = this.value">
+
+                    <button onclick="App.flipCamera()"
+                        class="bg-black/40 backdrop-blur-md p-3 rounded-full hover:bg-black/60 text-white transition">
+                        <i data-lucide="refresh-ccw" class="w-6 h-6"></i>
+                    </button>
+
+                    <label
+                        class="cursor-pointer bg-black/40 backdrop-blur-md p-3 rounded-full hover:bg-black/60 text-white transition">
+                        <i data-lucide="image" class="w-6 h-6"></i>
+                        <input type="file" id="fileInput" accept="image/*" class="hidden"
+                            onchange="App.handleFileUpload(event)">
+                    </label>
+
+                    <!-- Capture Button -->
+                    <button onclick="App.captureSegment()" id="captureBtn"
+                        class="w-16 h-16 rounded-full border-4 border-white bg-white/20 flex items-center justify-center hover:bg-white/40 transition active:scale-95">
+                        <div class="w-12 h-12 bg-white rounded-full"></div>
+                    </button>
+
+                    <!-- Grid Mode Selector -->
+                    <div class="relative group">
+                        <button onclick="App.toggleCollageMenu()" id="gridBtn"
+                            class="bg-black/40 backdrop-blur-md p-3 rounded-full hover:bg-black/60 text-white transition font-bold text-xs flex items-center justify-center w-12 h-12">
+                            1x
+                        </button>
+
+                        <!-- Vertical Popup for Grid Selection -->
+                        <div id="collageMenu"
+                            class="hidden absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-black/80 backdrop-blur-md rounded-xl flex-col p-1 gap-1 transition-all shadow-lg">
+                            <button onclick="App.setCollageMode(1)"
+                                class="collage-btn w-10 h-10 rounded-lg text-xs font-bold text-white hover:bg-white/20 flex items-center justify-center">1x</button>
+                            <button onclick="App.setCollageMode(2)"
+                                class="collage-btn w-10 h-10 rounded-lg text-xs font-bold text-white hover:bg-white/20 flex items-center justify-center">2x</button>
+                            <button onclick="App.setCollageMode(3)"
+                                class="collage-btn w-10 h-10 rounded-lg text-xs font-bold text-white hover:bg-white/20 flex items-center justify-center">3x</button>
+                            <button onclick="App.setCollageMode(4)"
+                                class="collage-btn w-10 h-10 rounded-lg text-xs font-bold text-white hover:bg-white/20 flex items-center justify-center">4x</button>
+                        </div>
+                    </div>
+
+                    <div class="relative flex items-center">
+                        <button onclick="App.toggleGhost()" id="ghostToggleBtn"
+                            class="bg-black/40 backdrop-blur-md p-3 rounded-full hover:bg-black/60 text-white transition opacity-50 peer">
+                            <i data-lucide="ghost" class="w-6 h-6"></i>
+                        </button>
+                        <!-- Slider ABOVE -->
+                        <div id="ghostSliderContainer"
+                            class="hidden absolute bottom-full mb-4 left-1/2 -translate-x-1/2 bg-black/60 p-2 rounded flex-col items-center">
+                            <input type="range" min="0" max="1" step="0.1" value="0.3"
+                                class="w-24 h-1 bg-white/50 rounded-lg appearance-none cursor-pointer"
+                                oninput="document.getElementById('ghostOverlay').style.opacity = this.value">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -535,14 +602,21 @@ async function handleRequest(request, env) {
 
                 <!-- Taken Photo Preview & Retake UI (Hidden by default) -->
                 <div id="takenPhotoUI" class="hidden flex-col gap-3 mb-4">
-                    <div class="w-full h-64 bg-oatmeal rounded-lg overflow-hidden relative shadow-sm">
-                        <!-- Object Contain here too -->
+                    <div class="w-full h-64 bg-oatmeal rounded-lg overflow-hidden relative shadow-sm group cursor-pointer"
+                        onclick="App.handleCollageClick(event)">
                         <img id="smallPreview" class="w-full h-full object-contain">
+                        <!-- Hint overlay -->
+                        <div
+                            class="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-xs font-bold pointer-events-none">
+                            Click segment to retake
+                        </div>
                     </div>
-                    <button onclick="App.retakePhoto()"
-                        class="self-center text-xs bg-charcoal text-white px-4 py-2 rounded-full hover:bg-black flex items-center gap-2 transition">
-                        <i data-lucide="camera" class="w-3 h-3"></i> Retake Photo
-                    </button>
+                    <div class="flex justify-center gap-2">
+                        <button onclick="App.retakeAll()"
+                            class="text-xs bg-charcoal text-white px-4 py-2 rounded-full hover:bg-black flex items-center gap-2 transition">
+                            <i data-lucide="refresh-cw" class="w-3 h-3"></i> Retake All
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Title -->
@@ -589,9 +663,9 @@ async function handleRequest(request, env) {
                 </div>
 
                 <!-- Save Button -->
-                <div class="pt-4">
+                <div class="pt-4 flex justify-end">
                     <button onclick="App.saveEntry()" id="saveEntryBtn" disabled
-                        class="w-full bg-dull-purple disabled:bg-dull-purple/50 disabled:cursor-not-allowed text-white-linen px-8 py-4 rounded-xl hover:bg-dull-purple-hover transition-all shadow-md flex items-center justify-center gap-2 text-lg font-medium">
+                        class="bg-charcoal hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed text-white-linen px-8 py-3 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 text-base font-medium">
                         <span>Save Entry</span>
                         <i data-lucide="arrow-right" class="w-5 h-5"></i>
                     </button>
@@ -639,6 +713,14 @@ async function handleRequest(request, env) {
                 const data = Storage.getData();
                 data.push(diary);
                 Storage.setData(data);
+            },
+            deleteEntry: (diaryId, entryId) => {
+                const data = Storage.getData();
+                const diary = data.find(d => d.id === diaryId);
+                if (diary) {
+                    diary.entries = diary.entries.filter(e => e.id !== entryId);
+                    Storage.setData(data);
+                }
             },
             saveEntry: (diaryId, entry) => {
                 const data = Storage.getData();
@@ -950,7 +1032,19 @@ async function handleRequest(request, env) {
                 facingMode: 'environment',
                 capturedImage: null,
                 currentTags: [],
-                ghostMode: false
+                ghostMode: false,
+                // Collage State
+                collageMode: 1,
+                activeSegment: 0,
+                segments: [],
+                mirrorVideo: false // New mirror state
+            },
+
+            collageConfigs: {
+                1: [{ x: 0, y: 0, w: 1, h: 1 }], // 1x
+                2: [{ x: 0, y: 0, w: 0.5, h: 1 }, { x: 0.5, y: 0, w: 0.5, h: 1 }], // 2x
+                3: [{ x: 0, y: 0, w: 1 / 3, h: 1 }, { x: 1 / 3, y: 0, w: 1 / 3, h: 1 }, { x: 2 / 3, y: 0, w: 1 / 3, h: 1 }], // 3x (Precise)
+                4: [{ x: 0, y: 0, w: 0.5, h: 0.5 }, { x: 0.5, y: 0, w: 0.5, h: 0.5 }, { x: 0, y: 0.5, w: 0.5, h: 0.5 }, { x: 0.5, y: 0.5, w: 0.5, h: 0.5 }] // 4x
             },
 
             init: () => {
@@ -974,7 +1068,21 @@ async function handleRequest(request, env) {
                     else App.renderWelcomeState();
                 }
 
+                // Add Global Escape Key Listener
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        const modals = ['settingsModal', 'newDiaryModal', 'workerHelpModal', 'deleteModal', 'entryModal'];
+                        modals.forEach(id => {
+                            const el = document.getElementById(id);
+                            if (el && !el.classList.contains('hidden')) App.closeModal(id);
+                        });
+                    }
+                });
+
                 SyncManager.init();
+
+                // Start rendering loop for camera canvas
+                requestAnimationFrame(App.drawLoop);
             },
 
             showToast: (message, type = 'info') => {
@@ -987,7 +1095,7 @@ async function handleRequest(request, env) {
                 el.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5 mt-0.5"></i><div class="flex-1">${message}</div>`;
                 container.appendChild(el);
                 lucide.createIcons();
-                let timeout = type === 'error' ? 4000 : 2500;
+                let timeout = type === 'error' ? 3000 : 1500; // Fast
                 setTimeout(() => { el.classList.add('toast-exit'); setTimeout(() => el.remove(), 300); }, timeout);
             },
 
@@ -1072,7 +1180,7 @@ async function handleRequest(request, env) {
 
                 displayEntries.forEach(entry => {
                     const card = document.createElement('div');
-                    card.className = "bg-white-linen rounded-xl overflow-hidden shadow-sm border border-oatmeal-dark hover:shadow-md transition-shadow flex flex-col";
+                    card.className = "relative group bg-white-linen rounded-xl overflow-hidden shadow-sm border border-oatmeal-dark hover:shadow-md transition-shadow flex flex-col";
 
                     const imgHtml = entry.photoDataURL
                         ? `<img src="${entry.photoDataURL}" class="w-full h-48 object-contain bg-oatmeal" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNjY2MiIHN0cm9rZS13aWR0aD0iMiI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiPjwvcmVjdD48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSI+PC9jaXJjbGU+PHBvbHlsaW5lIHBvaW50cz0iMjEgMTUgMTYgMTAgNSAyMSI+PC9wb2x5bGluZT48L3N2Zz4n">`
@@ -1081,7 +1189,17 @@ async function handleRequest(request, env) {
                     const tagsHtml = (entry.tags || []).map(t => `<span class="text-[10px] uppercase font-bold text-dull-purple bg-dull-purple/10 px-2 py-1 rounded">${t}</span>`).join('');
                     const dispTitle = entry.title || "Untitled";
 
+                    // Delete Button Overlay
+                    const deleteBtn = `
+                        <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                            <button onclick="event.stopPropagation(); App.confirmDelete('${diary.id}', '${entry.id}')" class="bg-white/80 hover:bg-white text-red-500 p-2 rounded-full shadow-sm backdrop-blur-sm transition">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    `;
+
                     card.innerHTML = `
+                        ${deleteBtn}
                         ${imgHtml}
                         <div class="p-4 flex flex-col gap-2 flex-1">
                             <div class="flex justify-between items-start">
@@ -1111,6 +1229,11 @@ async function handleRequest(request, env) {
                 App.state.activeDiaryId = id;
                 App.renderSidebar();
                 App.renderDiaryView();
+                // Close mobile sidebar if open
+                if (window.innerWidth < 768) {
+                    document.getElementById('sidebar').classList.add('-translate-x-full');
+                    document.getElementById('mobileSidebarOverlay').classList.add('hidden');
+                }
                 SyncManager.syncCurrentDiary();
             },
 
@@ -1127,6 +1250,19 @@ async function handleRequest(request, env) {
                     App.openModal('settingsModal');
                 } else {
                     App.openModal('newDiaryModal');
+                }
+            },
+
+            toggleMobileSidebar: () => {
+                const sidebar = document.getElementById('sidebar');
+                const overlay = document.getElementById('mobileSidebarOverlay');
+
+                if (sidebar.classList.contains('-translate-x-full')) {
+                    sidebar.classList.remove('-translate-x-full');
+                    overlay.classList.remove('hidden');
+                } else {
+                    sidebar.classList.add('-translate-x-full');
+                    overlay.classList.add('hidden');
                 }
             },
 
@@ -1166,24 +1302,28 @@ async function handleRequest(request, env) {
                 }
             },
 
+            // Init Entry with Collage Reset
             initNewEntry: async () => {
-                // Clear all form states
                 App.state.currentTags = [];
                 App.state.capturedImage = null;
+                App.state.activeSegment = 0;
+                App.state.segments = [];
+                App.state.mirrorVideo = false; // Default mirror off
+
+                // Default to 1x mode
+                App.setCollageMode(1);
+
                 document.getElementById('entryNotes').value = '';
                 document.getElementById('entryTitle').value = '';
                 document.getElementById('entryDate').value = UTILS.toLocalISO(new Date());
                 document.getElementById('activeTags').innerHTML = '';
                 document.getElementById('tagInput').value = '';
                 document.getElementById('saveEntryBtn').disabled = true;
+                document.getElementById('mirrorToggleBtn').classList.add('hidden');
 
-                // Reset photo views
                 document.getElementById('takenPhotoUI').classList.remove('flex');
                 document.getElementById('takenPhotoUI').classList.add('hidden');
-
-                // Show Camera Section
-                const camSection = document.getElementById('cameraSection');
-                camSection.classList.remove('hidden');
+                document.getElementById('cameraSection').classList.remove('hidden');
 
                 const diary = App.state.diaries.find(d => d.id === App.state.activeDiaryId);
                 if (!diary) return App.showToast("Create a diary first.", "error");
@@ -1192,25 +1332,101 @@ async function handleRequest(request, env) {
                 const toggleBtn = document.getElementById('ghostToggleBtn');
                 const lastEntryWithPhoto = diary.entries.find(e => e.photoDataURL);
 
+                // Setup Ghost - Default OFF
                 if (lastEntryWithPhoto) {
                     ghostImg.src = lastEntryWithPhoto.photoDataURL;
-                    ghostImg.classList.remove('hidden');
+                    // Hidden by default as requested
+                    ghostImg.classList.add('opacity-0');
                     toggleBtn.classList.remove('hidden');
-                    App.state.ghostMode = true;
-                    document.getElementById('ghostSliderContainer').classList.remove('hidden');
+                    toggleBtn.classList.add('opacity-50'); // Dim state
+                    App.state.ghostMode = false;
+                    document.getElementById('ghostOverlay').style.opacity = 0.3;
+                    document.getElementById('ghostSliderContainer').classList.add('hidden');
                 } else {
-                    ghostImg.classList.add('hidden');
+                    ghostImg.classList.add('opacity-0');
                     toggleBtn.classList.add('hidden');
                     App.state.ghostMode = false;
                     document.getElementById('ghostSliderContainer').classList.add('hidden');
                 }
+
                 App.openModal('entryModal');
                 App.initCamera();
                 SyncManager.fetchTags(true);
             },
 
+            setCollageMode: (mode) => {
+                App.state.collageMode = mode;
+                App.state.activeSegment = 0;
+                App.state.segments = [];
+
+                document.querySelectorAll('.collage-btn').forEach((btn, idx) => {
+                    if (idx + 1 === mode) {
+                        btn.classList.remove('bg-white/20', 'hover:bg-white/10');
+                        btn.classList.add('bg-white', 'text-black');
+                    } else {
+                        btn.classList.add('bg-white/20', 'hover:bg-white/10');
+                        btn.classList.remove('bg-white', 'text-black');
+                    }
+                });
+
+                App.updateGridOverlay(); // Handled by drawLoop now, but we might need to refresh state
+                // Force ghost update to clip correctly for new mode
+                App.updateGhostClip();
+
+                const segInd = document.getElementById('segmentIndicator');
+                if (mode > 1) {
+                    segInd.classList.remove('hidden');
+                    document.getElementById('segTotal').innerText = App.collageConfigs[mode].length;
+                    document.getElementById('segCurrent').innerText = 1;
+                } else {
+                    segInd.classList.add('hidden');
+                }
+
+                // Toggle dropdown visibility
+                document.getElementById('collageMenu').classList.add('hidden');
+                document.getElementById('collageMenu').classList.remove('flex');
+
+                // Update main button text
+                document.getElementById('gridBtn').innerText = mode + "x";
+            },
+
+            toggleCollageMenu: () => {
+                const menu = document.getElementById('collageMenu');
+                if (menu.classList.contains('hidden')) {
+                    menu.classList.remove('hidden');
+                    menu.classList.add('flex');
+                } else {
+                    menu.classList.add('hidden');
+                    menu.classList.remove('flex');
+                }
+            },
+
+            updateGridOverlay: () => {
+                // No-op now as canvas handles it
+            },
+
+            updateGhostClip: () => {
+                // Ghost logic
+                // We need to clip the ghost image to ONLY the active segment rect
+                if (!App.state.ghostMode) return;
+
+                const ghost = document.getElementById('ghostOverlay');
+                if (App.state.ghostMode) ghost.classList.remove('opacity-0'); // Ensure visible if on
+
+                const layout = App.collageConfigs[App.state.collageMode];
+                const slot = layout[App.state.activeSegment];
+
+                // Clip-path: inset(top right bottom left)
+                const top = slot.y * 100;
+                const left = slot.x * 100;
+                const right = 100 - ((slot.x + slot.w) * 100);
+                const bottom = 100 - ((slot.y + slot.h) * 100);
+
+                ghost.style.clipPath = `inset(${top}% ${right}% ${bottom}% ${left}%)`;
+            },
+
             initCamera: async () => {
-                const video = document.getElementById('cameraVideo');
+                const video = document.getElementById('videoSource');
                 try {
                     if (App.state.stream) {
                         App.state.stream.getTracks().forEach(t => t.stop());
@@ -1220,16 +1436,108 @@ async function handleRequest(request, env) {
                         audio: false
                     });
                     video.srcObject = App.state.stream;
-                    video.classList.remove('hidden');
-                    document.getElementById('uploadPreview').classList.add('hidden');
+
+                    // Handle Mirror Button Visibility based on facing mode
+                    const mirrorBtn = document.getElementById('mirrorToggleBtn');
+                    if (App.state.facingMode === 'user') {
+                        mirrorBtn.classList.remove('hidden');
+                    } else {
+                        mirrorBtn.classList.add('hidden');
+                        App.state.mirrorVideo = false; // Force disable mirror on back cam
+                    }
                 } catch (e) {
-                    video.classList.add('hidden');
+                    // console.log("Cam fail");
                 }
+            },
+
+            // Main Render Loop for "Live Composite"
+            drawLoop: () => {
+                const video = document.getElementById('videoSource');
+                const cvs = document.getElementById('viewfinder');
+                const ctx = cvs.getContext('2d');
+
+                // Ensure internal resolution matches display
+                // Using a fixed high-res internal buffer helps quality
+                if (cvs.width !== 1280) { cvs.width = 1280; cvs.height = 960; }
+
+                const W = cvs.width;
+                const H = cvs.height;
+
+                // Clear with transparent to show container bg
+                ctx.clearRect(0, 0, W, H);
+
+                const layout = App.collageConfigs[App.state.collageMode];
+
+                layout.forEach((slot, idx) => {
+                    // Destination rect
+                    const dx = slot.x * W;
+                    const dy = slot.y * H;
+                    const dw = slot.w * W;
+                    const dh = slot.h * H;
+
+                    // Decide what to draw
+                    if (idx === App.state.activeSegment) {
+                        // DRAW LIVE VIDEO
+                        if (video.readyState === 4) {
+                            // Calculate center crop from video source to dest slot aspect ratio
+                            const vidW = video.videoWidth;
+                            const vidH = video.videoHeight;
+                            const srcRatio = vidW / vidH;
+                            const dstRatio = dw / dh;
+
+                            let sx, sy, sw, sh;
+                            if (srcRatio > dstRatio) {
+                                sh = vidH; sw = sh * dstRatio; sy = 0; sx = (vidW - sw) / 2;
+                            } else {
+                                sw = vidW; sh = sw / dstRatio; sx = 0; sy = (vidH - sh) / 2;
+                            }
+
+                            // Mirror Logic
+                            if (App.state.mirrorVideo && App.state.facingMode === 'user') {
+                                ctx.save();
+                                ctx.translate(dx + dw, dy); // Translate to slot origin + width
+                                ctx.scale(-1, 1); // Flip horizontal
+                                // Draw at relative 0,0 because we translated to the slot
+                                ctx.drawImage(video, sx, sy, sw, sh, 0, 0, dw, dh);
+                                ctx.restore();
+                            } else {
+                                ctx.drawImage(video, sx, sy, sw, sh, dx, dy, dw, dh);
+                            }
+                        }
+                    } else if (App.state.segments[idx]) {
+                        // DRAW CAPTURED SEGMENT
+                        ctx.drawImage(App.state.segments[idx], 0, 0, App.state.segments[idx].width, App.state.segments[idx].height, dx, dy, dw, dh);
+                    } else {
+                        // DRAW BLACK (Future segment) - Mask it out
+                        ctx.fillStyle = "#111";
+                        ctx.fillRect(dx, dy, dw, dh);
+                    }
+
+                    // Draw thin border between segments
+                    ctx.strokeStyle = "rgba(255,255,255,0.1)";
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(dx, dy, dw, dh);
+                });
+
+                requestAnimationFrame(App.drawLoop);
             },
 
             flipCamera: () => {
                 App.state.facingMode = App.state.facingMode === 'user' ? 'environment' : 'user';
                 App.initCamera();
+            },
+
+            toggleMirror: () => {
+                App.state.mirrorVideo = !App.state.mirrorVideo;
+                // Update UI state if needed (e.g. highlight button)
+                const btn = document.getElementById('mirrorToggleBtn');
+                if (App.state.mirrorVideo) {
+                    btn.classList.add('bg-white/40');
+                    btn.classList.remove('bg-black/40');
+                } else {
+                    btn.classList.remove('bg-white/40');
+                    btn.classList.add('bg-black/40');
+                }
             },
 
             toggleGhost: () => {
@@ -1238,11 +1546,12 @@ async function handleRequest(request, env) {
                 const slider = document.getElementById('ghostSliderContainer');
                 App.state.ghostMode = !App.state.ghostMode;
                 if (App.state.ghostMode) {
-                    ghost.classList.remove('hidden');
+                    ghost.classList.remove('opacity-0');
                     btn.classList.remove('opacity-50');
                     slider.classList.remove('hidden');
+                    App.updateGhostClip();
                 } else {
-                    ghost.classList.add('hidden');
+                    ghost.classList.add('opacity-0');
                     btn.classList.add('opacity-50');
                     slider.classList.add('hidden');
                 }
@@ -1254,7 +1563,6 @@ async function handleRequest(request, env) {
                 const diary = App.state.diaries.find(d => d.id === App.state.activeDiaryId);
                 const allTags = diary ? diary.tags : [];
 
-                // Show all if empty, filter if not
                 const matches = val
                     ? allTags.filter(t => t.toLowerCase().includes(val) && !App.state.currentTags.includes(t))
                     : allTags.filter(t => !App.state.currentTags.includes(t));
@@ -1298,6 +1606,44 @@ async function handleRequest(request, env) {
                 App.renderTags();
             },
 
+            confirmDelete: (diaryId, entryId) => {
+                App.state.pendingDelete = { diaryId, entryId };
+                App.openModal('deleteModal');
+            },
+
+            executeDelete: async () => {
+                const { diaryId, entryId } = App.state.pendingDelete;
+                if (!diaryId || !entryId) return;
+
+                App.closeModal('deleteModal');
+
+                // Get notion ID before local deletion
+                const diary = Storage.getData().find(d => d.id === diaryId);
+                const entry = diary?.entries.find(e => e.id === entryId);
+                const notionId = entry?.notionId;
+
+                // 1. Local Delete
+                Storage.deleteEntry(diaryId, entryId);
+                App.state.diaries = Storage.getData();
+                App.renderDiaryView();
+                App.renderSidebar();
+                App.showToast("Deleted locally", "success");
+
+                // 2. Notion Delete (Archive)
+                if (notionId) {
+                    try {
+                        // Notion API: Archive Page
+                        await API.request('PATCH', `/pages/${notionId}`, { archived: true });
+                        App.showToast("Deleted from Notion", "success");
+                    } catch (e) {
+                        console.error("Notion delete failed", e);
+                        App.showToast("Failed to delete from Notion", "error");
+                    }
+                }
+            },
+
+            // ... Real implementation below ...
+
             saveEntry: async () => {
                 const notes = document.getElementById('entryNotes').value;
                 const titleInput = document.getElementById('entryTitle').value;
@@ -1336,24 +1682,45 @@ async function handleRequest(request, env) {
                 const dsId = document.getElementById('newDiaryDataSourceId').value.trim();
                 const dbId = document.getElementById('newDiaryDbId').value.trim();
                 const desc = document.getElementById('newDiaryDesc').value;
+
                 if (!title) return App.showToast('Title required', 'error');
+
+                // Validation: Ensure at least one ID is present
+                if (!dsId && !dbId) return App.showToast("Enter a Data Source or DB ID.", "error");
+
+                App.showToast("Verifying access...", "info");
 
                 try {
                     let finalDS = dsId;
-                    if (!finalDS && dbId) {
-                        App.showToast("Resolving Data Source...", "info");
-                        const res = await API.request('GET', `/databases/${dbId}`);
-                        if (res.data_sources?.[0]) finalDS = res.data_sources[0].id;
-                        else throw new Error("No Data Source found in DB");
+                    let originalDbId = dbId;
+
+                    // 1. Resolve/Verify ID
+                    if (dsId) {
+                        // Verify direct DS access
+                        try {
+                            await API.request('GET', `/data_sources/${dsId}`);
+                        } catch (e) {
+                            throw new Error("Cannot access Data Source. Check ID or permissions.");
+                        }
+                    } else {
+                        // Resolve via DB
+                        try {
+                            const dbRes = await API.request('GET', `/databases/${dbId}`);
+                            if (!dbRes.data_sources || dbRes.data_sources.length === 0) {
+                                throw new Error("No Data Source found in this Database.");
+                            }
+                            finalDS = dbRes.data_sources[0].id;
+                        } catch (e) {
+                            throw new Error("Cannot access Database. Check ID or permissions.");
+                        }
                     }
-                    if (!finalDS) return App.showToast("ID missing", "error");
 
                     const newDiary = { id: UTILS.id(), title, notionDataSourceId: finalDS, originalDbId: dbId, description: desc, tags: [], entries: [] };
                     Storage.saveDiary(newDiary);
                     App.state.diaries = Storage.getData();
                     App.closeModal('newDiaryModal');
                     App.selectDiary(newDiary.id);
-                    // Removed redundant "Diary Created" toast as UI updates immediately
+                    // Toast removed as requested
                 } catch (e) { App.showToast(e.message, 'error'); }
             },
 
@@ -1374,59 +1741,168 @@ async function handleRequest(request, env) {
                 document.body.removeChild(textArea);
             },
 
-            capturePhoto: () => {
-                const canvas = document.getElementById('photoCanvas');
-                const video = document.getElementById('cameraVideo');
-                const preview = document.getElementById('uploadPreview');
-                canvas.width = video.videoWidth || 640; canvas.height = video.videoHeight || 480;
+            captureSegment: () => {
+                const video = document.getElementById('videoSource');
+                const canvas = document.createElement('canvas');
+                const W = 1280; const H = 960;
+                const layout = App.collageConfigs[App.state.collageMode];
+                const slot = layout[App.state.activeSegment];
+                const slotW = slot.w * W;
+                const slotH = slot.h * H;
+                canvas.width = slotW;
+                canvas.height = slotH;
                 const ctx = canvas.getContext('2d');
+                const vidW = video.videoWidth;
+                const vidH = video.videoHeight;
+                const srcRatio = vidW / vidH;
+                const dstRatio = slotW / slotH;
+                let sx, sy, sw, sh;
+                if (srcRatio > dstRatio) { sh = vidH; sw = sh * dstRatio; sy = 0; sx = (vidW - sw) / 2; }
+                else { sw = vidW; sh = sw / dstRatio; sx = 0; sy = (vidH - sh) / 2; }
+                if (App.state.mirrorVideo && App.state.facingMode === 'user') {
+                    ctx.save();
+                    ctx.translate(slotW, 0);
+                    ctx.scale(-1, 1);
+                    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, slotW, slotH);
+                    ctx.restore();
+                } else {
+                    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, slotW, slotH);
+                }
+                App.state.segments[App.state.activeSegment] = canvas;
 
-                if (!video.classList.contains('hidden')) ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                else ctx.drawImage(document.getElementById('uploadPreview'), 0, 0, canvas.width, canvas.height);
+                // Smart flow logic
+                const total = layout.length;
+                let allFilled = true;
+                let nextEmpty = -1;
+                for (let i = 0; i < total; i++) {
+                    if (!App.state.segments[i]) {
+                        allFilled = false;
+                        if (nextEmpty === -1) nextEmpty = i;
+                    }
+                }
 
-                App.state.capturedImage = canvas.toDataURL('image/jpeg', 0.7);
+                if (allFilled) {
+                    App.finalizeCollage();
+                } else {
+                    App.state.activeSegment = nextEmpty;
+                    document.getElementById('segCurrent').innerText = App.state.activeSegment + 1;
+                    App.updateGridOverlay();
+                    App.updateGhostClip();
+                }
+            },
 
-                // Hide Camera
+            finalizeCollage: () => {
+                const layout = App.collageConfigs[App.state.collageMode];
+                const finalCanvas = document.getElementById('photoCanvas');
+
+                if (!finalCanvas) return;
+
+                const W = 1280; const H = 960;
+                finalCanvas.width = W; finalCanvas.height = H;
+                const ctx = finalCanvas.getContext('2d');
+
+                ctx.fillStyle = "black";
+                ctx.fillRect(0, 0, W, H);
+
+                layout.forEach((slot, idx) => {
+                    const seg = App.state.segments[idx];
+                    if (seg) {
+                        ctx.drawImage(seg, 0, 0, seg.width, seg.height, slot.x * W, slot.y * H, slot.w * W, slot.h * H);
+                    }
+                });
+
+                App.state.capturedImage = finalCanvas.toDataURL('image/jpeg', 0.8);
+
                 document.getElementById('cameraSection').classList.add('hidden');
-
-                // Show Preview in Form
                 document.getElementById('smallPreview').src = App.state.capturedImage;
                 document.getElementById('takenPhotoUI').classList.remove('hidden');
                 document.getElementById('takenPhotoUI').classList.add('flex');
-
-                // Enable save
                 document.getElementById('saveEntryBtn').disabled = false;
 
                 if (App.state.stream) App.state.stream.getTracks().forEach(t => t.stop());
             },
-            retakePhoto: () => {
-                // Show Camera
-                document.getElementById('cameraSection').classList.remove('hidden');
 
-                // Hide Preview
+            handleCollageClick: (e) => {
+                if (App.state.collageMode === 1) return;
+                const img = e.target;
+                const rect = img.getBoundingClientRect();
+                const x = (e.clientX - rect.left) / rect.width;
+                const y = (e.clientY - rect.top) / rect.height;
+
+                const layout = App.collageConfigs[App.state.collageMode];
+                const clickedIdx = layout.findIndex(slot => x >= slot.x && x <= slot.x + slot.w && y >= slot.y && y <= slot.y + slot.h);
+
+                if (clickedIdx !== -1) {
+                    App.state.activeSegment = clickedIdx;
+                    App.retakePartial();
+                }
+            },
+
+            retakePartial: () => {
                 document.getElementById('takenPhotoUI').classList.add('hidden');
                 document.getElementById('takenPhotoUI').classList.remove('flex');
+                document.getElementById('cameraSection').classList.remove('hidden');
 
-                // Disable save and restart camera
-                document.getElementById('saveEntryBtn').disabled = true;
-                App.state.capturedImage = null;
                 App.initCamera();
+                App.updateGridOverlay();
+                App.updateGhostClip();
+                document.getElementById('segCurrent').innerText = App.state.activeSegment + 1;
             },
+
+            retakeAll: () => {
+                App.state.activeSegment = 0;
+                App.state.segments = [];
+                document.getElementById('takenPhotoUI').classList.add('hidden');
+                document.getElementById('takenPhotoUI').classList.remove('flex');
+                document.getElementById('cameraSection').classList.remove('hidden');
+                document.getElementById('saveEntryBtn').disabled = true;
+                App.initCamera();
+                App.setCollageMode(App.state.collageMode);
+            },
+
+            retakePhoto: () => { App.retakeAll(); },
+
             handleFileUpload: async (e) => {
                 const file = e.target.files[0];
                 if (file) {
                     const base64 = await UTILS.toBase64(file);
-                    App.state.capturedImage = base64;
+                    const img = new Image();
+                    img.src = base64;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
 
-                    // Hide Camera
-                    document.getElementById('cameraSection').classList.add('hidden');
+                        const W = 1280; const H = 960;
+                        const layout = App.collageConfigs[App.state.collageMode];
+                        const slot = layout[App.state.activeSegment];
+                        const slotW = slot.w * W;
+                        const slotH = slot.h * H;
 
-                    // Show Preview
-                    document.getElementById('smallPreview').src = base64;
-                    document.getElementById('takenPhotoUI').classList.remove('hidden');
-                    document.getElementById('takenPhotoUI').classList.add('flex');
+                        canvas.width = slotW;
+                        canvas.height = slotH;
+                        const ctx = canvas.getContext('2d');
 
-                    document.getElementById('saveEntryBtn').disabled = false;
+                        const srcRatio = img.width / img.height;
+                        const dstRatio = slotW / slotH;
+                        let sx, sy, sw, sh;
+                        if (srcRatio > dstRatio) { sh = img.height; sw = sh * dstRatio; sy = 0; sx = (img.width - sw) / 2; }
+                        else { sw = img.width; sh = sw / dstRatio; sx = 0; sy = (img.height - sh) / 2; }
+
+                        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, slotW, slotH);
+
+                        App.state.segments[App.state.activeSegment] = canvas;
+
+                        const total = layout.length;
+                        const filledCount = App.state.segments.filter(s => s).length;
+
+                        if (filledCount === total) {
+                            App.finalizeCollage();
+                        } else {
+                            App.state.activeSegment++;
+                            document.getElementById('segCurrent').innerText = App.state.activeSegment + 1;
+                            App.updateGridOverlay();
+                            App.updateGhostClip();
+                        }
+                    }
                 }
             },
             testConnection: async (btn) => {
