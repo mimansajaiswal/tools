@@ -673,24 +673,36 @@ async function handleRequest(request, env) {
 
                         <!-- Vertical Popup for Grid Selection -->
                         <div id="collageMenu"
-                            class="hidden absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-black/80 backdrop-blur-md rounded-xl flex-col p-1 gap-1 transition-all shadow-lg w-16 items-center">
+                            class="hidden absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-black/80 backdrop-blur-md rounded-xl flex-col p-2 gap-2 transition-all shadow-lg w-auto items-center z-50">
+
+                            <!-- 1x -->
                             <button onclick="App.setCollageMode(1)"
                                 class="collage-btn w-12 h-8 rounded text-[10px] font-bold text-white hover:bg-white/20 flex items-center justify-center">1x</button>
-                            <button onclick="App.setCollageMode(2)"
-                                class="collage-btn w-12 h-8 rounded text-[10px] font-bold text-white hover:bg-white/20 flex items-center justify-center">2x
-                                &rarr;</button>
-                            <button onclick="App.setCollageMode(5)"
-                                class="collage-btn w-12 h-8 rounded text-[10px] font-bold text-white hover:bg-white/20 flex items-center justify-center">2x
-                                &darr;</button>
-                            <button onclick="App.setCollageMode(3)"
-                                class="collage-btn w-12 h-8 rounded text-[10px] font-bold text-white hover:bg-white/20 flex items-center justify-center">3x
-                                &rarr;</button>
-                            <button onclick="App.setCollageMode(6)"
-                                class="collage-btn w-12 h-8 rounded text-[10px] font-bold text-white hover:bg-white/20 flex items-center justify-center">3x
-                                &darr;</button>
-                            <button onclick="App.setCollageMode(7)"
-                                class="collage-btn w-12 h-8 rounded text-[10px] font-bold text-white hover:bg-white/20 flex items-center justify-center">3x
-                                1/2</button>
+
+                            <!-- 2x Row -->
+                            <div class="flex gap-2">
+                                <button onclick="App.setCollageMode(2)"
+                                    class="collage-btn w-12 h-8 rounded text-[10px] font-bold text-white hover:bg-white/20 flex items-center justify-center">2x
+                                    &rarr;</button>
+                                <button onclick="App.setCollageMode(5)"
+                                    class="collage-btn w-12 h-8 rounded text-[10px] font-bold text-white hover:bg-white/20 flex items-center justify-center">2x
+                                    &darr;</button>
+                            </div>
+
+                            <!-- 3x Row -->
+                            <div class="flex gap-2">
+                                <button onclick="App.setCollageMode(3)"
+                                    class="collage-btn w-12 h-8 rounded text-[10px] font-bold text-white hover:bg-white/20 flex items-center justify-center">3x
+                                    &rarr;</button>
+                                <button onclick="App.setCollageMode(6)"
+                                    class="collage-btn w-12 h-8 rounded text-[10px] font-bold text-white hover:bg-white/20 flex items-center justify-center">3x
+                                    &darr;</button>
+                                <button onclick="App.setCollageMode(7)"
+                                    class="collage-btn w-12 h-8 rounded text-[10px] font-bold text-white hover:bg-white/20 flex items-center justify-center">3x
+                                    1/2</button>
+                            </div>
+
+                            <!-- 4x -->
                             <button onclick="App.setCollageMode(4)"
                                 class="collage-btn w-12 h-8 rounded text-[10px] font-bold text-white hover:bg-white/20 flex items-center justify-center">4x</button>
                         </div>
