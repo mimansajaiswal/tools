@@ -1,0 +1,1465 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chronicle Photos Tracker w/ Notion</title>
+
+    <!-- Tailwind CSS (CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Font: DM Serif Display (Headers) & Inter (Body) -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@300;400;500;600&display=swap"
+        rel="stylesheet">
+
+    <!-- Tailwind Config for Custom Palette -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        oatmeal: '#F3F0E6',
+                        'oatmeal-dark': '#E6E2D6',
+                        'earth-metal': '#4A4A4A',
+                        charcoal: '#2D2D2D',
+                        'white-linen': '#FAF9F6',
+                        'dull-purple': '#917FB3',
+                        'dull-purple-hover': '#7A6A9A',
+                        'muted-pink': '#D8A7B1',
+                        'muted-pink-dim': '#C696A0'
+                    },
+                    fontFamily: {
+                        serif: ['"DM Serif Display"', 'serif'],
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #F3F0E6;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #D8A7B1;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #917FB3;
+        }
+
+        /* Utility */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.4);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        /* Camera Overlay Transition */
+        .overlay-ghost {
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        /* Loader */
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #917FB3;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Toast Animation */
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .toast-enter {
+            animation: slideIn 0.3s ease-out forwards;
+        }
+
+        .toast-exit {
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+
+<body
+    class="bg-oatmeal text-earth-metal font-sans h-screen flex flex-col md:flex-row overflow-hidden selection:bg-dull-purple selection:text-white">
+
+    <!-- Toast Container -->
+    <div id="toastContainer"
+        class="fixed top-4 right-4 z-[100] flex flex-col gap-2 w-full max-w-sm pointer-events-none"></div>
+
+    <!-- Sidebar (Desktop) / Bottom Nav (Mobile) -->
+    <aside
+        class="order-2 md:order-1 w-full md:w-64 h-16 md:h-full flex-shrink-0 flex flex-row md:flex-col border-t md:border-t-0 md:border-r border-oatmeal-dark bg-oatmeal/50 transition-all duration-300 justify-between z-20">
+
+        <!-- Logo Area -->
+        <div class="hidden md:flex h-16 px-6 border-b border-oatmeal-dark items-center gap-3 flex-shrink-0">
+            <div class="w-8 h-8 rounded-full bg-dull-purple flex items-center justify-center text-white-linen">
+                <i data-lucide="history" class="w-5 h-5"></i>
+            </div>
+            <div class="flex flex-col">
+                <h1 class="font-serif text-lg text-charcoal tracking-wide leading-none">Chronicle</h1>
+                <span class="text-[9px] uppercase tracking-widest text-earth-metal/60">Photos Tracker w/ Notion</span>
+            </div>
+        </div>
+
+        <!-- Diary List -->
+        <div class="hidden md:flex flex-col flex-1 overflow-hidden">
+            <div class="flex-1 overflow-y-auto p-3 space-y-2" id="diaryListContainer">
+                <!-- Diaries injected here -->
+            </div>
+            <!-- Data Safety Notice (Sidebar) -->
+            <div
+                class="p-4 text-[10px] text-earth-metal/50 leading-tight border-t border-oatmeal-dark/50 bg-oatmeal/30">
+                <i data-lucide="info" class="w-3 h-3 inline mb-0.5 mr-1"></i>
+                This app displays content from your browser cache for speed. If your cache is cleared, don't worry—your
+                data is safe in Notion.
+            </div>
+        </div>
+
+        <!-- Mobile Nav Items (Only visible on small screens) -->
+        <div class="md:hidden flex w-full justify-around items-center px-4">
+            <button onclick="App.openModal('settingsModal')" class="p-2 text-earth-metal hover:text-dull-purple">
+                <i data-lucide="settings" class="w-6 h-6"></i>
+            </button>
+            <button onclick="App.initNewEntry()"
+                class="p-3 -mt-6 bg-dull-purple text-white rounded-full shadow-lg border-4 border-oatmeal">
+                <i data-lucide="plus" class="w-6 h-6"></i>
+            </button>
+            <button onclick="App.attemptNewDiary()" class="p-2 text-earth-metal hover:text-dull-purple">
+                <i data-lucide="book-plus" class="w-6 h-6"></i>
+            </button>
+        </div>
+
+        <!-- Sidebar Footer (Desktop) -->
+        <div class="hidden md:block p-4 border-t border-oatmeal-dark space-y-2 flex-shrink-0">
+            <button onclick="App.attemptNewDiary()"
+                class="w-full flex items-center justify-start gap-3 p-2 rounded-lg hover:bg-white-linen text-dull-purple transition-colors">
+                <i data-lucide="plus-circle" class="w-5 h-5"></i>
+                <span class="font-medium">New Diary</span>
+            </button>
+            <button onclick="App.openModal('settingsModal')"
+                class="w-full flex items-center justify-start gap-3 p-2 rounded-lg hover:bg-white-linen text-earth-metal transition-colors">
+                <i data-lucide="settings" class="w-5 h-5"></i>
+                <span class="font-medium">Settings</span>
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="order-1 md:order-2 flex-1 flex flex-col h-full relative" id="mainView">
+
+        <!-- Header -->
+        <header
+            class="h-16 border-b border-oatmeal-dark flex items-center justify-between px-4 md:px-6 bg-oatmeal/80 backdrop-blur-sm z-10 flex-shrink-0">
+            <div class="flex items-center gap-3 overflow-hidden">
+                <h2 id="activeDiaryTitle" class="font-serif text-xl md:text-2xl text-charcoal truncate">Select a Diary
+                </h2>
+                <span id="syncStatus"
+                    class="hidden flex-shrink-0 text-[10px] px-2 py-1 rounded-full bg-white border border-oatmeal-dark text-earth-metal items-center gap-1">
+                    <span class="w-2 h-2 rounded-full bg-gray-400"></span>
+                    <span>Init</span>
+                </span>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <button onclick="SyncManager.syncCurrentDiary()" title="Refresh Sync"
+                    class="p-2 hover:bg-white-linen rounded-full text-earth-metal transition-colors">
+                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                </button>
+                <!-- Desktop Add Button -->
+                <button id="addEntryBtn" onclick="App.initNewEntry()"
+                    class="hidden md:flex bg-dull-purple hover:bg-dull-purple-hover text-white-linen px-4 py-2 rounded-lg shadow-sm transition-all items-center gap-2">
+                    <i data-lucide="pen-tool" class="w-4 h-4"></i>
+                    <span>Add Entry</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Entry Gallery -->
+        <div id="entryGallery" class="flex-1 overflow-y-auto p-4 md:p-8 pb-24 md:pb-8">
+            <!-- Content injected via JS -->
+        </div>
+
+    </main>
+
+    <!-- MODALS -->
+
+    <!-- 1. Settings Modal -->
+    <div id="settingsModal"
+        class="fixed inset-0 bg-charcoal/20 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+        <div
+            class="bg-white-linen w-full max-w-md p-6 rounded-xl shadow-xl border border-oatmeal-dark relative max-h-full overflow-y-auto">
+            <button onclick="App.closeModal('settingsModal')"
+                class="absolute top-4 right-4 text-earth-metal/50 hover:text-earth-metal">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            <h3 class="font-serif text-xl mb-4 text-charcoal">Settings</h3>
+
+            <div class="space-y-6">
+                <div class="bg-oatmeal/50 p-4 rounded-lg border border-oatmeal-dark">
+                    <div class="flex justify-between items-center mb-2">
+                        <label
+                            class="block text-xs font-bold uppercase tracking-wider text-earth-metal">Authentication</label>
+                        <a href="https://developers.notion.com/docs/create-a-notion-integration#create-your-integration-in-notion"
+                            target="_blank" class="text-dull-purple hover:text-charcoal" title="How to get a token">
+                            <i data-lucide="info" class="w-4 h-4"></i>
+                        </a>
+                    </div>
+                    <div class="flex gap-2 mb-2">
+                        <button
+                            onclick="window.location.href='https://notion-oauth-handler.mimansa-jaiswal.workers.dev/auth/login'"
+                            class="flex-1 bg-charcoal text-white-linen py-2 rounded flex items-center justify-center gap-2 hover:bg-black transition-colors shadow-sm">
+                            <span class="text-sm font-medium">Connect Notion</span>
+                        </button>
+                    </div>
+                    <input type="password" id="settingAuthToken" placeholder="Or paste 'secret_...' token"
+                        class="w-full bg-white-linen border border-oatmeal-dark rounded p-2 text-xs outline-none">
+                </div>
+
+                <div class="space-y-3">
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal">API Proxy
+                                Worker URL</label>
+                            <button onclick="App.openModal('workerHelpModal')"
+                                class="text-dull-purple hover:text-charcoal" title="How to set up Worker">
+                                <i data-lucide="info" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                        <input type="text" id="settingWorkerUrl" placeholder="https://..."
+                            class="w-full bg-oatmeal border border-oatmeal-dark rounded p-2 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal mb-1">Proxy
+                            Secret (Optional)</label>
+                        <input type="password" id="settingProxyToken" placeholder="ALL_CORS_PROXY_MATCH_TOKEN"
+                            class="w-full bg-oatmeal border border-oatmeal-dark rounded p-2 text-sm">
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 flex justify-between items-center gap-3">
+                <button onclick="App.testConnection(this)" class="text-xs text-dull-purple hover:underline">Test
+                    Connection</button>
+                <button onclick="App.saveSettings()"
+                    class="px-4 py-2 rounded bg-dull-purple text-white-linen hover:bg-dull-purple-hover font-medium">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Worker Help Modal -->
+    <div id="workerHelpModal"
+        class="fixed inset-0 bg-charcoal/20 backdrop-blur-sm hidden items-center justify-center z-[60] p-4">
+        <div
+            class="bg-white-linen w-full max-w-2xl h-[80vh] p-6 rounded-xl shadow-2xl border border-oatmeal-dark flex flex-col">
+            <div class="flex justify-between items-center mb-4 border-b border-oatmeal-dark pb-2">
+                <h3 class="font-serif text-xl text-charcoal">Setup Cloudflare Worker</h3>
+                <button onclick="App.closeModal('workerHelpModal')" class="text-earth-metal/50 hover:text-earth-metal">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+            <div class="flex-1 overflow-y-auto space-y-4 text-sm text-earth-metal pr-2">
+                <p>To bypass Notion's CORS restrictions, you need a small proxy. We use Cloudflare Workers (Free).</p>
+                <ol class="list-decimal pl-5 space-y-2">
+                    <li>Go to <a href="https://workers.cloudflare.com/" target="_blank"
+                            class="text-dull-purple underline">Cloudflare Workers</a> and create a new Worker.</li>
+                    <li>Copy the code below and paste it into the Worker editor (replace default code).</li>
+                    <li>Save and Deploy.</li>
+                    <li>(Optional) In Worker Settings > Variables, add <code>ALL_CORS_PROXY_MATCH_TOKEN</code> with a
+                        secret password.</li>
+                    <li>Copy your Worker's URL (e.g., <code>https://my-proxy.user.workers.dev</code>) and paste it into
+                        the app settings.</li>
+                </ol>
+                <div class="relative">
+                    <button onclick="App.copyWorkerCode(this)"
+                        class="absolute top-2 right-2 bg-white/80 hover:bg-white px-2 py-1 rounded text-xs shadow text-charcoal font-bold">Copy
+                        Code</button>
+                    <pre id="workerCodeBlock"
+                        class="bg-charcoal text-white-linen p-4 rounded text-xs font-mono overflow-x-auto">
+const NOTION_API_END_POINT = "https://api.notion.com/v1";
+
+export default {
+  async fetch(request, env) {
+    return await handleRequest(request, env);
+  }
+};
+
+function getCorsHeaders(request) {
+  return {
+    "Access-Control-Allow-Origin": request.headers.get("Origin") || "*",
+    "Access-Control-Allow-Methods": "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, Notion-Version",
+  };
+}
+
+function handleOptions(request) {
+  return new Response(null, {
+    headers: getCorsHeaders(request),
+  });
+}
+
+async function handleRequest(request, env) {
+  if (request.method === "OPTIONS") {
+    return handleOptions(request);
+  }
+
+  const url = new URL(request.url);
+  const requiredToken = (env.ALL_CORS_PROXY_MATCH_TOKEN || "").trim();
+
+  if (requiredToken !== "") {
+    const providedToken = url.searchParams.get("token");
+    if (providedToken !== requiredToken) {
+      return new Response("Unauthorized", { status: 403 });
+    }
+    url.searchParams.delete("token");
+  }
+
+  const isGeneral = url.searchParams.has("url");
+  let targetUrl;
+  let secretKey = null;
+
+  if (isGeneral) {
+    targetUrl = url.searchParams.get("url");
+    url.searchParams.delete("url");
+    try {
+      targetUrl = new URL(targetUrl).toString();
+    } catch (err) {
+      return new Response("Invalid target URL", { status: 400 });
+    }
+  } else {
+    secretKey = url.searchParams.get("secret");
+    if (!secretKey) {
+      return new Response("Missing secret key parameter", { status: 400 });
+    }
+    url.searchParams.delete("secret");
+
+    let normalizedPath = url.pathname.replace(/\/{2,}/g, '/');
+    const base = NOTION_API_END_POINT.replace(/\/$/, "");
+    const path = normalizedPath.startsWith("/") ? normalizedPath : "/" + normalizedPath;
+    targetUrl = base + path + url.search;
+  }
+
+  const modifiedRequest = new Request(targetUrl, request);
+  modifiedRequest.headers.set("Origin", new URL(targetUrl).origin);
+
+  if (!isGeneral && secretKey) {
+    modifiedRequest.headers.set("Authorization", `Bearer ${secretKey}`);
+    modifiedRequest.headers.set("Notion-Version", "2022-06-28");
+  }
+
+  const response = await fetch(modifiedRequest);
+  const newResponse = new Response(response.body, response);
+  newResponse.headers.set("Access-Control-Allow-Origin", request.headers.get("Origin") || "*");
+  newResponse.headers.append("Vary", "Origin");
+
+  return newResponse;
+}
+                    </pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. New Diary Modal -->
+    <div id="newDiaryModal"
+        class="fixed inset-0 bg-charcoal/20 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+        <div
+            class="bg-white-linen w-full max-w-md p-6 rounded-xl shadow-xl border border-oatmeal-dark max-h-full overflow-y-auto">
+            <h3 class="font-serif text-xl mb-4 text-charcoal">New Diary</h3>
+
+            <div class="space-y-4">
+
+                <!-- Data Source ID (Priority) -->
+                <div>
+                    <div class="flex justify-between items-end mb-1">
+                        <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal">Notion Data
+                            Source ID</label>
+                        <button type="button" onclick="App.fetchDbName()"
+                            class="text-[10px] bg-dull-purple/10 text-dull-purple px-2 py-1 rounded hover:bg-dull-purple hover:text-white transition flex items-center gap-1">
+                            <i data-lucide="sparkles" class="w-3 h-3"></i> Fetch Name
+                        </button>
+                    </div>
+                    <input type="text" id="newDiaryDataSourceId" placeholder="ID from 2025 API"
+                        class="w-full bg-oatmeal border border-oatmeal-dark rounded p-2 font-mono text-sm">
+                    <p class="text-[10px] text-earth-metal/60 mt-1">Using this is faster.</p>
+                </div>
+
+                <div class="relative flex py-1 items-center">
+                    <div class="flex-grow border-t border-oatmeal-dark"></div>
+                    <span
+                        class="flex-shrink-0 mx-2 text-[10px] text-earth-metal/40 font-bold uppercase tracking-widest">OR</span>
+                    <div class="flex-grow border-t border-oatmeal-dark"></div>
+                </div>
+
+                <!-- Database ID (Fallback) -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal mb-1">Notion
+                        Database ID (Fallback)</label>
+                    <input type="text" id="newDiaryDbId" placeholder="Standard Database ID"
+                        class="w-full bg-oatmeal border border-oatmeal-dark rounded p-2 font-mono text-sm">
+                </div>
+
+                <!-- Title -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal mb-1">Diary
+                        Title</label>
+                    <input type="text" id="newDiaryTitle"
+                        class="w-full bg-oatmeal border border-oatmeal-dark rounded p-2" placeholder="e.g. Daily Log">
+                </div>
+
+                <div>
+                    <label
+                        class="block text-xs font-bold uppercase tracking-wider text-earth-metal mb-1">Description</label>
+                    <textarea id="newDiaryDesc"
+                        class="w-full bg-oatmeal border border-oatmeal-dark rounded p-2 h-20"></textarea>
+                </div>
+            </div>
+
+            <div class="mt-6 flex justify-end gap-3">
+                <button onclick="App.closeModal('newDiaryModal')"
+                    class="px-4 py-2 rounded text-earth-metal hover:bg-oatmeal">Cancel</button>
+                <button onclick="App.createDiary()"
+                    class="px-4 py-2 rounded bg-dull-purple text-white-linen hover:bg-dull-purple-hover">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Entry Modal (New Layout) -->
+    <div id="entryModal" class="fixed inset-0 bg-white-linen z-50 hidden flex-col overflow-hidden">
+
+        <!-- Close Button -->
+        <button onclick="App.closeModal('entryModal')"
+            class="absolute top-4 left-4 z-50 bg-black/50 text-white p-2 rounded-full backdrop-blur-sm hover:bg-black/70 transition">
+            <i data-lucide="x" class="w-6 h-6"></i>
+        </button>
+
+        <!-- Top Section: Camera / Photo Preview (Only visible when taking photo) -->
+        <div id="cameraSection"
+            class="relative w-full h-[45%] md:h-[55%] bg-zinc-100 flex-shrink-0 flex items-center justify-center overflow-hidden group">
+
+            <!-- Live Video (Object Contain ensures WYSIWYG) -->
+            <video id="cameraVideo" autoplay playsinline
+                class="absolute inset-0 w-full h-full object-contain z-10"></video>
+            <!-- Upload Preview (Fallback) -->
+            <img id="uploadPreview" class="absolute inset-0 w-full h-full object-contain z-10 hidden">
+
+            <!-- Ghost Overlay -->
+            <img id="ghostOverlay"
+                class="absolute inset-0 w-full h-full object-contain z-30 opacity-30 pointer-events-none hidden transition-opacity duration-200">
+
+            <!-- Canvas (Hidden) -->
+            <canvas id="photoCanvas" class="hidden"></canvas>
+
+            <!-- Camera Controls -->
+            <div id="camControls"
+                class="absolute bottom-4 left-0 right-0 z-40 flex items-center justify-center gap-6 transition-opacity duration-200">
+                <button onclick="App.flipCamera()"
+                    class="bg-black/40 backdrop-blur-md p-3 rounded-full hover:bg-black/60 text-white transition">
+                    <i data-lucide="refresh-ccw" class="w-6 h-6"></i>
+                </button>
+
+                <label
+                    class="cursor-pointer bg-black/40 backdrop-blur-md p-3 rounded-full hover:bg-black/60 text-white transition">
+                    <i data-lucide="image" class="w-6 h-6"></i>
+                    <input type="file" id="fileInput" accept="image/*" class="hidden"
+                        onchange="App.handleFileUpload(event)">
+                </label>
+
+                <button onclick="App.capturePhoto()"
+                    class="w-16 h-16 rounded-full border-4 border-white bg-white/20 flex items-center justify-center hover:bg-white/40 transition">
+                    <div class="w-12 h-12 bg-white rounded-full"></div>
+                </button>
+
+                <div class="relative flex items-center">
+                    <button onclick="App.toggleGhost()" id="ghostToggleBtn"
+                        class="bg-black/40 backdrop-blur-md p-3 rounded-full hover:bg-black/60 text-white transition opacity-50 peer">
+                        <i data-lucide="ghost" class="w-6 h-6"></i>
+                    </button>
+                    <!-- Slider ABOVE -->
+                    <div id="ghostSliderContainer"
+                        class="hidden absolute bottom-full mb-4 left-1/2 -translate-x-1/2 bg-black/60 p-2 rounded flex-col items-center">
+                        <input type="range" min="0" max="1" step="0.1" value="0.3"
+                            class="w-24 h-1 bg-white/50 rounded-lg appearance-none cursor-pointer"
+                            oninput="document.getElementById('ghostOverlay').style.opacity = this.value">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Section: Form (Scrollable) -->
+        <div id="formSection" class="flex-1 bg-white-linen p-6 md:p-8 overflow-y-auto w-full md:max-w-2xl md:mx-auto">
+            <div class="space-y-5 pb-20">
+
+                <!-- Taken Photo Preview & Retake UI (Hidden by default) -->
+                <div id="takenPhotoUI" class="hidden flex-col gap-3 mb-4">
+                    <div class="w-full h-64 bg-oatmeal rounded-lg overflow-hidden relative shadow-sm">
+                        <!-- Object Contain here too -->
+                        <img id="smallPreview" class="w-full h-full object-contain">
+                    </div>
+                    <button onclick="App.retakePhoto()"
+                        class="self-center text-xs bg-charcoal text-white px-4 py-2 rounded-full hover:bg-black flex items-center gap-2 transition">
+                        <i data-lucide="camera" class="w-3 h-3"></i> Retake Photo
+                    </button>
+                </div>
+
+                <!-- Title -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal mb-1">Title</label>
+                    <input type="text" id="entryTitle"
+                        class="w-full bg-oatmeal border-none rounded-lg p-3 focus:ring-2 focus:ring-dull-purple/50 outline-none text-lg font-serif"
+                        placeholder="Untitled Entry">
+                </div>
+
+                <!-- Date -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal mb-1">Date</label>
+                    <input type="datetime-local" id="entryDate"
+                        class="w-full bg-oatmeal border-none rounded-lg p-3 focus:ring-2 focus:ring-dull-purple/50 outline-none text-sm text-charcoal">
+                </div>
+
+                <!-- Notes -->
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal mb-1">Notes</label>
+                    <textarea id="entryNotes"
+                        class="w-full bg-oatmeal border-none rounded-lg p-4 h-32 focus:ring-2 focus:ring-dull-purple/50 outline-none resize-none placeholder-earth-metal/30 leading-relaxed"
+                        placeholder="What did you see today?"></textarea>
+                </div>
+
+                <!-- Tags -->
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal">Tags</label>
+                        <button onclick="SyncManager.fetchTags(false)"
+                            class="text-[10px] text-dull-purple hover:underline flex items-center gap-1">
+                            <i data-lucide="refresh-ccw" class="w-3 h-3"></i> Refresh
+                        </button>
+                    </div>
+                    <div class="flex flex-wrap gap-2 mb-2" id="activeTags"></div>
+                    <div class="relative">
+                        <input type="text" id="tagInput" placeholder="Add a tag..."
+                            class="w-full bg-oatmeal border-none rounded-lg p-3 focus:ring-2 focus:ring-dull-purple/50 outline-none"
+                            onkeyup="App.handleTagInput(event)" onfocus="App.handleTagInput(event)">
+                        <div id="tagSuggestions"
+                            class="absolute top-full left-0 w-full bg-white shadow-lg rounded mt-1 z-10 hidden max-h-32 overflow-y-auto border border-oatmeal-dark">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Save Button -->
+                <div class="pt-4">
+                    <button onclick="App.saveEntry()" id="saveEntryBtn" disabled
+                        class="w-full bg-dull-purple disabled:bg-dull-purple/50 disabled:cursor-not-allowed text-white-linen px-8 py-4 rounded-xl hover:bg-dull-purple-hover transition-all shadow-md flex items-center justify-center gap-2 text-lg font-medium">
+                        <span>Save Entry</span>
+                        <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        const UTILS = {
+            id: () => Math.random().toString(36).substr(2, 9),
+            now: () => new Date().toISOString(),
+            localToUTC: (localDateTimeString) => {
+                if (!localDateTimeString) return new Date().toISOString();
+                const d = new Date(localDateTimeString);
+                return d.toISOString();
+            },
+            toLocalISO: (date) => {
+                const offset = date.getTimezoneOffset() * 60000;
+                return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+            },
+            formatDate: (iso) => new Date(iso).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+            toBase64: (file) => new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            }),
+            dataURLtoBlob: (dataurl) => {
+                var arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
+                    bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
+                while (n--) { u8arr[n] = bstr.charCodeAt(n); }
+                return new Blob([u8arr], { type: mime });
+            }
+        };
+
+        const Storage = {
+            getSettings: () => JSON.parse(localStorage.getItem('mirror_settings') || '{"workerUrl":"","authToken":"","proxyToken":""}'),
+            setSettings: (s) => localStorage.setItem('mirror_settings', JSON.stringify(s)),
+            getData: () => JSON.parse(localStorage.getItem('mirror_data') || '[]'),
+            setData: (d) => localStorage.setItem('mirror_data', JSON.stringify(d)),
+
+            saveDiary: (diary) => {
+                const data = Storage.getData();
+                data.push(diary);
+                Storage.setData(data);
+            },
+            saveEntry: (diaryId, entry) => {
+                const data = Storage.getData();
+                const diary = data.find(d => d.id === diaryId);
+                if (diary) {
+                    diary.entries.unshift(entry);
+                    const unique = [];
+                    const map = new Map();
+                    for (const item of diary.entries) {
+                        if (!map.has(item.id)) {
+                            map.set(item.id, true);
+                            unique.push(item);
+                        }
+                    }
+                    diary.entries = unique;
+                    entry.tags.forEach(t => {
+                        if (!diary.tags.includes(t)) diary.tags.push(t);
+                    });
+                    Storage.setData(data);
+                }
+            },
+            updateEntrySyncStatus: (diaryId, entryId, status, notionId = null) => {
+                const data = Storage.getData();
+                const diary = data.find(d => d.id === diaryId);
+                const entry = diary?.entries.find(e => e.id === entryId);
+                if (entry) {
+                    entry.synced = status;
+                    if (notionId) entry.notionId = notionId;
+                    Storage.setData(data);
+                }
+            },
+            updateDiaryTags: (diaryId, newTags) => {
+                const data = Storage.getData();
+                const diary = data.find(d => d.id === diaryId);
+                if (diary) {
+                    const merged = [...new Set([...diary.tags, ...newTags])];
+                    diary.tags = merged;
+                    Storage.setData(data);
+                }
+            },
+            setLastFetch: (diaryId, timeStr) => {
+                const data = Storage.getData();
+                const diary = data.find(d => d.id === diaryId);
+                if (diary) {
+                    diary.lastFetch = timeStr;
+                    Storage.setData(data);
+                }
+            }
+        };
+
+        const API = {
+            request: async (method, notionEndpoint, body = null) => {
+                const { workerUrl, authToken, proxyToken } = Storage.getSettings();
+                if (!workerUrl || !authToken) throw new Error("Missing Settings");
+
+                const cleanWorkerUrl = workerUrl.trim().replace(/\/$/, '');
+                const cleanToken = proxyToken ? proxyToken.trim() : null;
+                const cleanAuth = authToken.trim();
+                const target = `https://api.notion.com/v1${notionEndpoint}`;
+
+                const fetchUrl = new URL(cleanWorkerUrl);
+                fetchUrl.searchParams.append('url', target);
+                if (cleanToken) fetchUrl.searchParams.append('token', cleanToken);
+
+                const headers = { 'Authorization': `Bearer ${cleanAuth}`, 'Notion-Version': '2025-09-03' };
+                if (!(body instanceof FormData)) {
+                    headers['Content-Type'] = 'application/json';
+                    body = body ? JSON.stringify(body) : null;
+                }
+
+                try {
+                    const res = await fetch(fetchUrl.toString(), { method, headers, body });
+                    if (!res.ok) {
+                        const txt = await res.text();
+                        throw new Error(`API Error ${res.status}: ${txt}`);
+                    }
+                    return await res.json();
+                } catch (e) {
+                    if (e.name === 'TypeError' && e.message.includes('Failed to fetch')) {
+                        throw new Error("CORS Error: Please check your Worker allowed headers.");
+                    }
+                    throw e;
+                }
+            },
+            uploadFileContent: async (uploadUrl, fileBlob) => {
+                const { workerUrl, authToken, proxyToken } = Storage.getSettings();
+                const cleanWorkerUrl = workerUrl.trim().replace(/\/$/, '');
+                const fetchUrl = new URL(cleanWorkerUrl);
+                fetchUrl.searchParams.append('url', uploadUrl);
+                if (proxyToken) fetchUrl.searchParams.append('token', proxyToken);
+
+                const formData = new FormData();
+                formData.append("file", fileBlob, "photo.jpg");
+                const headers = { 'Authorization': `Bearer ${authToken}`, 'Notion-Version': '2025-09-03' };
+
+                const res = await fetch(fetchUrl.toString(), { method: 'POST', headers, body: formData });
+                if (!res.ok) throw new Error(`Upload Failed`);
+                return await res.json();
+            }
+        };
+
+        const SyncManager = {
+            statusEl: null,
+            init: () => {
+                SyncManager.statusEl = document.getElementById('syncStatus');
+                window.addEventListener('online', SyncManager.syncCurrentDiary);
+                if (App.state.activeDiaryId) SyncManager.syncCurrentDiary();
+            },
+            updateUI: (status) => {
+                if (!SyncManager.statusEl) return;
+                SyncManager.statusEl.classList.remove('hidden', 'flex');
+                const textSpan = SyncManager.statusEl.querySelector('span:last-child');
+                const dot = SyncManager.statusEl.querySelector('span:first-child');
+
+                if (status === 'syncing') {
+                    dot.className = "loader w-2 h-2 border-earth-metal";
+                    textSpan.innerText = "Syncing...";
+                } else if (status === 'offline') {
+                    dot.className = "w-2 h-2 rounded-full bg-red-400";
+                    textSpan.innerText = "Offline";
+                } else if (status === 'synced') {
+                    dot.className = "w-2 h-2 rounded-full bg-green-400";
+                    textSpan.innerText = "Synced";
+                    setTimeout(() => SyncManager.statusEl.classList.add('hidden'), 3000);
+                } else {
+                    dot.className = "w-2 h-2 rounded-full bg-red-600";
+                    textSpan.innerText = "Error";
+                }
+            },
+
+            fetchTags: async (silent = false) => {
+                const diaryId = App.state.activeDiaryId;
+                if (!diaryId) return;
+                const diary = Storage.getData().find(d => d.id === diaryId);
+
+                try {
+                    if (!silent) App.showToast("Fetching tags...", "info");
+                    const res = await API.request('GET', `/data_sources/${diary.notionDataSourceId}`);
+                    const properties = res.properties || {};
+
+                    if (properties["Tags"] && properties["Tags"].multi_select) {
+                        const options = properties["Tags"].multi_select.options.map(o => o.name);
+                        Storage.updateDiaryTags(diaryId, options);
+                        App.state.diaries = Storage.getData();
+                        if (!silent) App.showToast(`Updated ${options.length} tags.`, "success");
+                    } else {
+                        if (diary.originalDbId) {
+                            const dbRes = await API.request('GET', `/databases/${diary.originalDbId}`);
+                            if (dbRes.properties && dbRes.properties["Tags"]) {
+                                const options = dbRes.properties["Tags"].multi_select.options.map(o => o.name);
+                                Storage.updateDiaryTags(diaryId, options);
+                                App.state.diaries = Storage.getData();
+                                if (!silent) App.showToast(`Updated ${options.length} tags.`, "success");
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error("Tag fetch failed", e);
+                    if (!silent) App.showToast("Could not fetch tags schema.", "error");
+                }
+            },
+
+            syncCurrentDiary: async () => {
+                if (!navigator.onLine) { SyncManager.updateUI('offline'); return; }
+                const diaryId = App.state.activeDiaryId;
+                if (!diaryId) return;
+
+                let diary = Storage.getData().find(d => d.id === diaryId);
+                if (!diary || !diary.notionDataSourceId) return;
+
+                SyncManager.updateUI('syncing');
+
+                try {
+                    // 1. PUSH
+                    const unsynced = diary.entries.filter(e => !e.synced);
+                    for (const entry of unsynced) {
+                        try {
+                            const notionId = await SyncManager.pushEntryToNotion(diary.notionDataSourceId, entry);
+                            Storage.updateEntrySyncStatus(diaryId, entry.id, true, notionId);
+                            App.state.diaries = Storage.getData();
+                            App.renderDiaryView();
+                        } catch (err) {
+                            console.error("Failed to push entry", entry, err);
+                            App.showToast(`Sync failed for entry "${entry.title}".`, "error");
+                        }
+                    }
+
+                    // 2. PULL
+                    const fetchLimit = 51;
+                    let payload = {
+                        page_size: fetchLimit,
+                        sorts: [{ property: 'Date', direction: 'descending' }]
+                    };
+
+                    if (diary.lastFetch) {
+                        payload.filter = {
+                            timestamp: "last_edited_time",
+                            last_edited_time: { on_or_after: diary.lastFetch }
+                        };
+                    }
+
+                    const response = await API.request('POST', `/data_sources/${diary.notionDataSourceId}/query`, payload);
+
+                    let newCount = 0;
+                    const currentData = Storage.getData();
+                    const activeDiary = currentData.find(d => d.id === diaryId);
+
+                    response.results.forEach(page => {
+                        const localIndex = activeDiary.entries.findIndex(e => e.notionId === page.id);
+
+                        const props = page.properties;
+                        const getDate = (p) => p?.date?.start || UTILS.now();
+                        const getTags = (p) => p?.multi_select?.map(x => x.name) || [];
+                        const notesContent = props.Notes?.rich_text?.[0]?.plain_text;
+                        const titleContent = props.Name?.title?.[0]?.plain_text;
+                        const finalNotes = notesContent || "";
+                        const finalTitle = titleContent || "(No Title)";
+
+                        let photoUrl = null;
+                        if (props.Files?.files?.length > 0) {
+                            const f = props.Files.files[0];
+                            photoUrl = f.file?.url || f.external?.url;
+                        }
+
+                        const syncedEntry = {
+                            id: localIndex > -1 ? activeDiary.entries[localIndex].id : UTILS.id(),
+                            notionId: page.id,
+                            date: getDate(props.Date),
+                            title: finalTitle,
+                            notes: finalNotes,
+                            tags: getTags(props.Tags),
+                            photoDataURL: photoUrl,
+                            synced: true
+                        };
+
+                        if (localIndex > -1) {
+                            activeDiary.entries[localIndex] = syncedEntry;
+                        } else {
+                            activeDiary.entries.push(syncedEntry);
+                            newCount++;
+                        }
+                    });
+
+                    activeDiary.entries.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+                    if (activeDiary.entries.length > 51) {
+                        activeDiary.entries = activeDiary.entries.slice(0, 51);
+                    }
+
+                    Storage.setData(currentData);
+                    Storage.setLastFetch(diaryId, new Date().toISOString());
+
+                    App.state.diaries = currentData;
+                    App.renderDiaryView();
+                    App.renderSidebar();
+
+                    SyncManager.updateUI('synced');
+                    SyncManager.fetchTags(true);
+
+                } catch (e) {
+                    console.error("Sync Error", e);
+                    SyncManager.updateUI('error');
+                    if (e.message.includes("CORS")) App.showToast(e.message, 'error');
+                }
+            },
+
+            pushEntryToNotion: async (dataSourceId, entry) => {
+                let uploadedFileId = null;
+
+                if (entry.photoDataURL && entry.photoDataURL.startsWith('data:')) {
+                    try {
+                        const initRes = await API.request('POST', '/file_uploads', {
+                            "object": "file_upload", "filename": "photo.jpg", "content_type": "image/jpeg"
+                        });
+                        const blob = UTILS.dataURLtoBlob(entry.photoDataURL);
+                        await API.uploadFileContent(initRes.upload_url, blob);
+                        uploadedFileId = initRes.id;
+                    } catch (err) {
+                        App.showToast("Image upload failed, saving text.", "error");
+                    }
+                }
+
+                const titleToSend = entry.title || "Untitled Entry";
+
+                const properties = {
+                    "Name": { "title": [{ "text": { "content": titleToSend } }] },
+                    "Date": { "date": { "start": entry.date } },
+                    "Notes": { "rich_text": [{ "text": { "content": entry.notes } }] },
+                    "Tags": { "multi_select": entry.tags.map(t => ({ "name": t })) }
+                };
+
+                if (uploadedFileId) {
+                    properties["Files"] = { "files": [{ "type": "file_upload", "file_upload": { "id": uploadedFileId } }] };
+                }
+
+                const res = await API.request('POST', '/pages', {
+                    parent: { type: "data_source_id", data_source_id: dataSourceId },
+                    properties
+                });
+                return res.id;
+            }
+        };
+
+        const App = {
+            state: {
+                diaries: [],
+                activeDiaryId: null,
+                stream: null,
+                facingMode: 'environment',
+                capturedImage: null,
+                currentTags: [],
+                ghostMode: false
+            },
+
+            init: () => {
+                lucide.createIcons();
+                App.state.diaries = Storage.getData();
+                App.renderSidebar();
+
+                if (window.innerWidth < 768 && App.state.diaries.length > 0) {
+                    App.selectDiary(App.state.diaries[0].id);
+                } else {
+                    App.renderWelcomeState();
+                }
+
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('accessToken')) {
+                    const settings = Storage.getSettings();
+                    Storage.setSettings({ ...settings, authToken: urlParams.get('accessToken') });
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    App.showToast(`Connected!`, 'success');
+                    if (!settings.workerUrl) App.openModal('settingsModal');
+                    else App.renderWelcomeState();
+                }
+
+                SyncManager.init();
+            },
+
+            showToast: (message, type = 'info') => {
+                const container = document.getElementById('toastContainer');
+                const el = document.createElement('div');
+                let bg = type === 'success' ? 'bg-oatmeal border-green-500' : (type === 'error' ? 'bg-white border-red-500' : 'bg-white-linen border-dull-purple');
+                let icon = type === 'success' ? 'check-circle' : (type === 'error' ? 'alert-circle' : 'info');
+
+                el.className = `toast-enter pointer-events-auto p-4 rounded shadow-md flex gap-3 text-sm ${bg} border-l-4 transition-all`;
+                el.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5 mt-0.5"></i><div class="flex-1">${message}</div>`;
+                container.appendChild(el);
+                lucide.createIcons();
+                let timeout = type === 'error' ? 4000 : 2500;
+                setTimeout(() => { el.classList.add('toast-exit'); setTimeout(() => el.remove(), 300); }, timeout);
+            },
+
+            renderSidebar: () => {
+                const container = document.getElementById('diaryListContainer');
+                container.innerHTML = '';
+                if (App.state.diaries.length === 0) {
+                    container.innerHTML = `<div class="text-xs text-center text-earth-metal/50 mt-4">No diaries yet.</div>`;
+                    return;
+                }
+                App.state.diaries.forEach(diary => {
+                    const isActive = diary.id === App.state.activeDiaryId;
+                    const div = document.createElement('div');
+                    const count = diary.entries.length;
+                    const countDisplay = count > 50 ? "50+" : count;
+
+                    div.className = `p-3 rounded-lg cursor-pointer flex flex-col gap-1 transition-colors ${isActive ? 'bg-white-linen shadow-sm border border-oatmeal-dark' : 'hover:bg-oatmeal-dark/50'}`;
+                    div.onclick = () => App.selectDiary(diary.id);
+                    div.innerHTML = `
+                        <div class="font-medium text-charcoal truncate">${diary.title}</div>
+                        <div class="text-[10px] text-earth-metal/60">${countDisplay} entries</div>
+                    `;
+                    container.appendChild(div);
+                });
+            },
+
+            renderWelcomeState: () => {
+                const gallery = document.getElementById('entryGallery');
+                const s = Storage.getSettings();
+                const isConnected = s.workerUrl && s.authToken;
+                const hasDiaries = App.state.diaries.length > 0;
+
+                if (!isConnected) {
+                    gallery.innerHTML = `
+                        <div class="h-full flex flex-col items-center justify-center text-center gap-4">
+                            <div class="bg-dull-purple/10 p-4 rounded-full"><i data-lucide="plug" class="w-10 h-10 text-dull-purple"></i></div>
+                            <div>
+                                <h3 class="font-serif text-2xl text-charcoal mb-2">Welcome to Chronicle Photos Tracker w/ Notion</h3>
+                                <p class="text-earth-metal/60 max-w-xs mx-auto mb-6">Connect your Notion workspace to start tracking your progress.</p>
+                                <div class="p-4 text-[10px] text-earth-metal/50 leading-tight border-t border-oatmeal-dark/50 bg-oatmeal/30 mb-6">
+                                    <i data-lucide="info" class="w-3 h-3 inline mb-0.5 mr-1"></i>
+                                    This app is just showing what is in your browser cache until you connect to Notion. If your browser cache might have been cleared, your data is still safe in Notion.
+                                </div>
+                                <button onclick="App.openModal('settingsModal')" class="bg-charcoal text-white px-6 py-3 rounded-lg font-medium hover:bg-black transition">Connect to Notion</button>
+                            </div>
+                        </div>`;
+                } else if (!hasDiaries) {
+                    gallery.innerHTML = `
+                        <div class="h-full flex flex-col items-center justify-center text-center gap-4">
+                            <div class="bg-oatmeal-dark p-4 rounded-full"><i data-lucide="book-plus" class="w-10 h-10 text-earth-metal"></i></div>
+                            <div>
+                                <h3 class="font-serif text-2xl text-charcoal mb-2">You're Connected!</h3>
+                                <p class="text-earth-metal/60 max-w-xs mx-auto mb-6">Create your first diary to link a Notion Database.</p>
+                                <button onclick="App.attemptNewDiary()" class="bg-dull-purple text-white px-6 py-3 rounded-lg font-medium hover:bg-dull-purple-hover transition">Create First Diary</button>
+                            </div>
+                        </div>`;
+                } else {
+                    gallery.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-center text-earth-metal/60"><i data-lucide="book-open" class="w-12 h-12 mb-4 opacity-50"></i><p>Select a diary.</p></div>`;
+                }
+                lucide.createIcons();
+            },
+
+            renderDiaryView: () => {
+                const diary = App.state.diaries.find(d => d.id === App.state.activeDiaryId);
+                const gallery = document.getElementById('entryGallery');
+                const title = document.getElementById('activeDiaryTitle');
+
+                if (!diary) return;
+                title.innerText = diary.title;
+                gallery.innerHTML = '';
+
+                if (diary.entries.length === 0) {
+                    gallery.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-center text-earth-metal/60"><i data-lucide="camera" class="w-12 h-12 mb-4 opacity-50"></i><p>Empty.</p></div>`;
+                    lucide.createIcons();
+                    return;
+                }
+
+                const grid = document.createElement('div');
+                grid.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6";
+
+                const displayEntries = diary.entries.slice(0, 50);
+
+                displayEntries.forEach(entry => {
+                    const card = document.createElement('div');
+                    card.className = "bg-white-linen rounded-xl overflow-hidden shadow-sm border border-oatmeal-dark hover:shadow-md transition-shadow flex flex-col";
+
+                    const imgHtml = entry.photoDataURL
+                        ? `<img src="${entry.photoDataURL}" class="w-full h-48 object-contain bg-oatmeal" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNjY2MiIHN0cm9rZS13aWR0aD0iMiI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiPjwvcmVjdD48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSI+PC9jaXJjbGU+PHBvbHlsaW5lIHBvaW50cz0iMjEgMTUgMTYgMTAgNSAyMSI+PC9wb2x5bGluZT48L3N2Zz4n">`
+                        : `<div class="w-full h-48 bg-oatmeal flex items-center justify-center text-earth-metal/30"><i data-lucide="image-off"></i></div>`;
+
+                    const tagsHtml = (entry.tags || []).map(t => `<span class="text-[10px] uppercase font-bold text-dull-purple bg-dull-purple/10 px-2 py-1 rounded">${t}</span>`).join('');
+                    const dispTitle = entry.title || "Untitled";
+
+                    card.innerHTML = `
+                        ${imgHtml}
+                        <div class="p-4 flex flex-col gap-2 flex-1">
+                            <div class="flex justify-between items-start">
+                                <span class="text-xs font-mono text-earth-metal/60">${UTILS.formatDate(entry.date)}</span>
+                                <span class="text-[10px] ${entry.synced ? 'text-green-500' : 'text-amber-500'}">${entry.synced ? 'Synced' : 'Local'}</span>
+                            </div>
+                            <h4 class="font-bold text-sm text-charcoal truncate">${dispTitle}</h4>
+                            <p class="text-sm text-charcoal line-clamp-3 flex-1 whitespace-pre-wrap">${entry.notes}</p>
+                            <div class="flex flex-wrap gap-1 mt-2">${tagsHtml}</div>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                });
+                gallery.appendChild(grid);
+
+                const footerMsg = diary.entries.length > 50 ? "50+ entries available." : "End of entries.";
+                let footer = document.createElement('div');
+                footer.id = 'galleryFooter';
+                footer.className = "text-center text-xs text-earth-metal/40 py-8";
+                footer.innerText = footerMsg;
+                gallery.appendChild(footer);
+
+                lucide.createIcons();
+            },
+
+            selectDiary: (id) => {
+                App.state.activeDiaryId = id;
+                App.renderSidebar();
+                App.renderDiaryView();
+                SyncManager.syncCurrentDiary();
+            },
+
+            attemptNewDiary: () => {
+                // Clear fields first
+                document.getElementById('newDiaryTitle').value = '';
+                document.getElementById('newDiaryDataSourceId').value = '';
+                document.getElementById('newDiaryDbId').value = '';
+                document.getElementById('newDiaryDesc').value = '';
+
+                const s = Storage.getSettings();
+                if (!s.workerUrl || !s.authToken) {
+                    App.showToast("Please connect to Notion first.", "error");
+                    App.openModal('settingsModal');
+                } else {
+                    App.openModal('newDiaryModal');
+                }
+            },
+
+            fetchDbName: async () => {
+                const dsId = document.getElementById('newDiaryDataSourceId').value.trim();
+                const dbId = document.getElementById('newDiaryDbId').value.trim();
+
+                if (!dsId && !dbId) return App.showToast("Enter an ID first.", "error");
+
+                try {
+                    App.showToast("Fetching Name...", "info");
+                    let name = "";
+
+                    if (dsId) {
+                        try {
+                            const res = await API.request('GET', `/data_sources/${dsId}`);
+                            if (res.title && Array.isArray(res.title)) name = res.title[0]?.plain_text;
+                            else if (res.name) name = res.name;
+                        } catch (e) { console.log("DS fetch failed", e); }
+                    }
+
+                    if (!name && dbId) {
+                        try {
+                            const res = await API.request('GET', `/databases/${dbId}`);
+                            if (res.title && Array.isArray(res.title)) name = res.title[0]?.plain_text;
+                        } catch (e) { console.log("DB fetch failed", e); }
+                    }
+
+                    if (name) {
+                        document.getElementById('newDiaryTitle').value = name;
+                        App.showToast("Name Fetched!", "success");
+                    } else {
+                        App.showToast("Could not resolve name.", "error");
+                    }
+                } catch (e) {
+                    App.showToast(e.message, "error");
+                }
+            },
+
+            initNewEntry: async () => {
+                // Clear all form states
+                App.state.currentTags = [];
+                App.state.capturedImage = null;
+                document.getElementById('entryNotes').value = '';
+                document.getElementById('entryTitle').value = '';
+                document.getElementById('entryDate').value = UTILS.toLocalISO(new Date());
+                document.getElementById('activeTags').innerHTML = '';
+                document.getElementById('tagInput').value = '';
+                document.getElementById('saveEntryBtn').disabled = true;
+
+                // Reset photo views
+                document.getElementById('takenPhotoUI').classList.remove('flex');
+                document.getElementById('takenPhotoUI').classList.add('hidden');
+
+                // Show Camera Section
+                const camSection = document.getElementById('cameraSection');
+                camSection.classList.remove('hidden');
+
+                const diary = App.state.diaries.find(d => d.id === App.state.activeDiaryId);
+                if (!diary) return App.showToast("Create a diary first.", "error");
+
+                const ghostImg = document.getElementById('ghostOverlay');
+                const toggleBtn = document.getElementById('ghostToggleBtn');
+                const lastEntryWithPhoto = diary.entries.find(e => e.photoDataURL);
+
+                if (lastEntryWithPhoto) {
+                    ghostImg.src = lastEntryWithPhoto.photoDataURL;
+                    ghostImg.classList.remove('hidden');
+                    toggleBtn.classList.remove('hidden');
+                    App.state.ghostMode = true;
+                    document.getElementById('ghostSliderContainer').classList.remove('hidden');
+                } else {
+                    ghostImg.classList.add('hidden');
+                    toggleBtn.classList.add('hidden');
+                    App.state.ghostMode = false;
+                    document.getElementById('ghostSliderContainer').classList.add('hidden');
+                }
+                App.openModal('entryModal');
+                App.initCamera();
+                SyncManager.fetchTags(true);
+            },
+
+            initCamera: async () => {
+                const video = document.getElementById('cameraVideo');
+                try {
+                    if (App.state.stream) {
+                        App.state.stream.getTracks().forEach(t => t.stop());
+                    }
+                    App.state.stream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: App.state.facingMode },
+                        audio: false
+                    });
+                    video.srcObject = App.state.stream;
+                    video.classList.remove('hidden');
+                    document.getElementById('uploadPreview').classList.add('hidden');
+                } catch (e) {
+                    video.classList.add('hidden');
+                }
+            },
+
+            flipCamera: () => {
+                App.state.facingMode = App.state.facingMode === 'user' ? 'environment' : 'user';
+                App.initCamera();
+            },
+
+            toggleGhost: () => {
+                const ghost = document.getElementById('ghostOverlay');
+                const btn = document.getElementById('ghostToggleBtn');
+                const slider = document.getElementById('ghostSliderContainer');
+                App.state.ghostMode = !App.state.ghostMode;
+                if (App.state.ghostMode) {
+                    ghost.classList.remove('hidden');
+                    btn.classList.remove('opacity-50');
+                    slider.classList.remove('hidden');
+                } else {
+                    ghost.classList.add('hidden');
+                    btn.classList.add('opacity-50');
+                    slider.classList.add('hidden');
+                }
+            },
+
+            handleTagInput: (e) => {
+                const val = e.target.value.trim().toLowerCase();
+                const suggestions = document.getElementById('tagSuggestions');
+                const diary = App.state.diaries.find(d => d.id === App.state.activeDiaryId);
+                const allTags = diary ? diary.tags : [];
+
+                // Show all if empty, filter if not
+                const matches = val
+                    ? allTags.filter(t => t.toLowerCase().includes(val) && !App.state.currentTags.includes(t))
+                    : allTags.filter(t => !App.state.currentTags.includes(t));
+
+                if (matches.length > 0) {
+                    suggestions.classList.remove('hidden');
+                    suggestions.innerHTML = matches.map(t =>
+                        `<div class="p-2 hover:bg-oatmeal cursor-pointer text-sm" onclick="App.addTag('${t}')">${t}</div>`
+                    ).join('');
+                } else {
+                    suggestions.classList.add('hidden');
+                }
+
+                if (e.key === 'Enter' && val) {
+                    App.addTag(e.target.value.trim());
+                }
+            },
+
+            addTag: (t) => {
+                if (!App.state.currentTags.includes(t)) {
+                    App.state.currentTags.push(t);
+                    App.renderTags();
+                    document.getElementById('tagInput').value = '';
+                    document.getElementById('tagSuggestions').classList.add('hidden');
+                }
+            },
+
+            renderTags: () => {
+                const container = document.getElementById('activeTags');
+                container.innerHTML = App.state.currentTags.map(t => `
+                    <span class="bg-oatmeal border border-oatmeal-dark text-dull-purple px-2 py-1 rounded text-xs flex items-center gap-1">
+                        ${t}
+                        <button onclick="App.removeTag('${t}')" class="hover:text-red-500"><i data-lucide="x" class="w-3 h-3"></i></button>
+                    </span>
+                `).join('');
+                lucide.createIcons();
+            },
+
+            removeTag: (t) => {
+                App.state.currentTags = App.state.currentTags.filter(x => x !== t);
+                App.renderTags();
+            },
+
+            saveEntry: async () => {
+                const notes = document.getElementById('entryNotes').value;
+                const titleInput = document.getElementById('entryTitle').value;
+                const dateVal = document.getElementById('entryDate').value;
+                const date = UTILS.localToUTC(dateVal);
+
+                const title = titleInput.trim() || new Date(dateVal).toLocaleString(undefined, {
+                    weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
+                });
+
+                if (!App.state.capturedImage) return App.showToast('An image is required.', 'error');
+
+                const newEntry = {
+                    id: UTILS.id(),
+                    date: date,
+                    title: title,
+                    notes: notes,
+                    tags: App.state.currentTags,
+                    photoDataURL: App.state.capturedImage,
+                    synced: false,
+                    notionId: null
+                };
+
+                Storage.saveEntry(App.state.activeDiaryId, newEntry);
+                App.state.diaries = Storage.getData();
+
+                App.closeModal('entryModal');
+                App.renderDiaryView();
+                App.showToast("Saved locally", 'success');
+                SyncManager.syncCurrentDiary();
+            },
+
+            createDiary: async () => {
+                const title = document.getElementById('newDiaryTitle').value;
+                const dsId = document.getElementById('newDiaryDataSourceId').value.trim();
+                const dbId = document.getElementById('newDiaryDbId').value.trim();
+                const desc = document.getElementById('newDiaryDesc').value;
+                if (!title) return App.showToast('Title required', 'error');
+
+                try {
+                    let finalDS = dsId;
+                    if (!finalDS && dbId) {
+                        App.showToast("Resolving Data Source...", "info");
+                        const res = await API.request('GET', `/databases/${dbId}`);
+                        if (res.data_sources?.[0]) finalDS = res.data_sources[0].id;
+                        else throw new Error("No Data Source found in DB");
+                    }
+                    if (!finalDS) return App.showToast("ID missing", "error");
+
+                    const newDiary = { id: UTILS.id(), title, notionDataSourceId: finalDS, originalDbId: dbId, description: desc, tags: [], entries: [] };
+                    Storage.saveDiary(newDiary);
+                    App.state.diaries = Storage.getData();
+                    App.closeModal('newDiaryModal');
+                    App.selectDiary(newDiary.id);
+                    // Removed redundant "Diary Created" toast as UI updates immediately
+                } catch (e) { App.showToast(e.message, 'error'); }
+            },
+
+            copyWorkerCode: (btn) => {
+                const code = document.getElementById('workerCodeBlock').innerText;
+                const textArea = document.createElement('textarea');
+                textArea.value = code;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    const originalText = btn.innerText;
+                    btn.innerText = "Copied!";
+                    setTimeout(() => btn.innerText = originalText, 2000);
+                } catch (err) {
+                    console.error('Fallback copy failed', err);
+                }
+                document.body.removeChild(textArea);
+            },
+
+            capturePhoto: () => {
+                const canvas = document.getElementById('photoCanvas');
+                const video = document.getElementById('cameraVideo');
+                const preview = document.getElementById('uploadPreview');
+                canvas.width = video.videoWidth || 640; canvas.height = video.videoHeight || 480;
+                const ctx = canvas.getContext('2d');
+
+                if (!video.classList.contains('hidden')) ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                else ctx.drawImage(document.getElementById('uploadPreview'), 0, 0, canvas.width, canvas.height);
+
+                App.state.capturedImage = canvas.toDataURL('image/jpeg', 0.7);
+
+                // Hide Camera
+                document.getElementById('cameraSection').classList.add('hidden');
+
+                // Show Preview in Form
+                document.getElementById('smallPreview').src = App.state.capturedImage;
+                document.getElementById('takenPhotoUI').classList.remove('hidden');
+                document.getElementById('takenPhotoUI').classList.add('flex');
+
+                // Enable save
+                document.getElementById('saveEntryBtn').disabled = false;
+
+                if (App.state.stream) App.state.stream.getTracks().forEach(t => t.stop());
+            },
+            retakePhoto: () => {
+                // Show Camera
+                document.getElementById('cameraSection').classList.remove('hidden');
+
+                // Hide Preview
+                document.getElementById('takenPhotoUI').classList.add('hidden');
+                document.getElementById('takenPhotoUI').classList.remove('flex');
+
+                // Disable save and restart camera
+                document.getElementById('saveEntryBtn').disabled = true;
+                App.state.capturedImage = null;
+                App.initCamera();
+            },
+            handleFileUpload: async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const base64 = await UTILS.toBase64(file);
+                    App.state.capturedImage = base64;
+
+                    // Hide Camera
+                    document.getElementById('cameraSection').classList.add('hidden');
+
+                    // Show Preview
+                    document.getElementById('smallPreview').src = base64;
+                    document.getElementById('takenPhotoUI').classList.remove('hidden');
+                    document.getElementById('takenPhotoUI').classList.add('flex');
+
+                    document.getElementById('saveEntryBtn').disabled = false;
+                }
+            },
+            testConnection: async (btn) => {
+                const workerUrl = document.getElementById('settingWorkerUrl').value;
+                const authToken = document.getElementById('settingAuthToken').value;
+                const proxyToken = document.getElementById('settingProxyToken').value;
+                Storage.setSettings({ workerUrl, authToken, proxyToken });
+                btn.innerText = "Testing...";
+                try {
+                    const res = await API.request('GET', '/users/me');
+                    App.showToast(`Success: ${res.bot?.workspace_name || 'Connected'}`, 'success');
+                } catch (e) { App.showToast(e.message, 'error'); }
+                btn.innerText = "Test Connection";
+            },
+            saveSettings: () => {
+                const workerUrl = document.getElementById('settingWorkerUrl').value;
+                const authToken = document.getElementById('settingAuthToken').value;
+                const proxyToken = document.getElementById('settingProxyToken').value;
+                Storage.setSettings({ workerUrl, authToken, proxyToken });
+                App.closeModal('settingsModal');
+                App.showToast("Saved", "success");
+                App.renderWelcomeState(); // Refresh view state
+            },
+            openModal: (id) => document.getElementById(id).classList.remove('hidden', 'flex') || document.getElementById(id).classList.add('flex'),
+            closeModal: (id) => {
+                document.getElementById(id).classList.add('hidden');
+                document.getElementById(id).classList.remove('flex');
+                if (id === 'entryModal' && App.state.stream) App.state.stream.getTracks().forEach(t => t.stop());
+            }
+        };
+
+        window.onload = App.init;
+    </script>
+</body>
+
+</html>
