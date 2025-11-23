@@ -248,6 +248,9 @@
             </button>
             <h3 class="font-serif text-xl mb-4 text-charcoal">Settings</h3>
 
+            <!-- Connection Status Indicator -->
+            <div id="connectionStatus" class="mb-6"></div>
+
             <div class="space-y-6">
                 <div class="bg-oatmeal/50 p-4 rounded-lg border border-oatmeal-dark">
                     <div class="flex justify-between items-center mb-2">
@@ -261,12 +264,30 @@
                     <div class="flex gap-2 mb-2">
                         <button
                             onclick="window.location.href='https://notion-oauth-handler.mimansa-jaiswal.workers.dev/auth/login?from=/tools/chronice-photos-tracker.html'"
-                            class="flex-1 bg-charcoal text-white-linen py-2 rounded flex items-center justify-center gap-2 hover:bg-black transition-colors shadow-sm">
-                            <span class="text-sm font-medium">Connect Notion</span>
+                            class="flex-1 bg-charcoal text-white-linen py-2 rounded flex items-center justify-center gap-2 hover:bg-black transition-colors shadow-sm group">
+                            <i data-lucide="zap"
+                                class="w-4 h-4 text-yellow-400 group-hover:text-yellow-300 transition-colors"></i>
+                            <span class="text-sm font-medium">Connect via OAuth</span>
                         </button>
                     </div>
-                    <input type="password" id="settingAuthToken" placeholder="Or paste 'secret_...' token"
-                        class="w-full bg-white-linen border border-oatmeal-dark rounded p-2 text-xs outline-none">
+                    <div class="relative flex py-2 items-center">
+                        <div class="flex-grow border-t border-oatmeal-dark/50"></div>
+                        <span
+                            class="flex-shrink-0 mx-2 text-[10px] text-earth-metal/40 font-bold uppercase tracking-widest">OR
+                            MANUAL KEY</span>
+                        <div class="flex-grow border-t border-oatmeal-dark/50"></div>
+                    </div>
+
+                    <!-- Updated Manual Key Input with Verify Button -->
+                    <div class="flex gap-2">
+                        <input type="password" id="settingAuthToken" placeholder="Paste 'secret_...' token here"
+                            oninput="App.onSettingInput()"
+                            class="flex-1 bg-white-linen border border-oatmeal-dark rounded p-2 text-xs outline-none text-earth-metal placeholder-earth-metal/30">
+                        <button onclick="App.testManualConnection(this)"
+                            class="bg-dull-purple/10 text-dull-purple hover:bg-dull-purple hover:text-white text-xs font-medium px-3 rounded transition-colors border border-dull-purple/20">
+                            Verify
+                        </button>
+                    </div>
                 </div>
 
                 <div class="space-y-3">
@@ -280,22 +301,30 @@
                             </button>
                         </div>
                         <input type="text" id="settingWorkerUrl" placeholder="https://..."
+                            oninput="App.onSettingInput()"
                             class="w-full bg-oatmeal border border-oatmeal-dark rounded p-2 text-sm">
                     </div>
                     <div>
                         <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal mb-1">Proxy
                             Secret (Optional)</label>
                         <input type="password" id="settingProxyToken" placeholder="ALL_CORS_PROXY_MATCH_TOKEN"
+                            oninput="App.onSettingInput()"
                             class="w-full bg-oatmeal border border-oatmeal-dark rounded p-2 text-sm">
                     </div>
                 </div>
             </div>
 
-            <div class="mt-6 flex justify-between items-center gap-3">
-                <button onclick="App.testConnection(this)" class="text-xs text-dull-purple hover:underline">Test
-                    Connection</button>
-                <button onclick="App.saveSettings()"
-                    class="px-4 py-2 rounded bg-dull-purple text-white-linen hover:bg-dull-purple-hover font-medium">Save</button>
+            <div class="mt-8 border-t border-oatmeal-dark pt-4">
+                <label class="block text-xs font-bold uppercase tracking-wider text-red-800 mb-2">Danger Zone</label>
+                <button onclick="App.resetApp()"
+                    class="w-full border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 py-2 rounded text-xs font-medium flex items-center justify-center gap-2">
+                    <i data-lucide="trash" class="w-3 h-3"></i> Reset App & Clear Cache
+                </button>
+            </div>
+
+            <div class="mt-6 flex justify-end items-center gap-3">
+                <button onclick="App.saveSettings()" id="saveSettingsBtn" disabled
+                    class="px-4 py-2 rounded bg-dull-purple text-white-linen hover:bg-dull-purple-hover font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-opacity">Save</button>
             </div>
         </div>
     </div>
@@ -414,67 +443,64 @@ async function handleRequest(request, env) {
         </div>
     </div>
 
-    <!-- 3. New Diary Modal -->
+    <!-- 3. New Diary Modal (Revamped) -->
     <div id="newDiaryModal"
         class="fixed inset-0 bg-charcoal/20 backdrop-blur-sm hidden items-center justify-center z-50 p-4"
         onclick="if(event.target===this) App.closeModal('newDiaryModal')">
         <div
-            class="bg-white-linen w-full max-w-md p-6 rounded-xl shadow-xl border border-oatmeal-dark max-h-full overflow-y-auto">
-            <h3 class="font-serif text-xl mb-4 text-charcoal">New Diary</h3>
+            class="bg-white-linen w-full max-w-md p-6 rounded-xl shadow-xl border border-oatmeal-dark overflow-visible flex flex-col h-[500px]">
+            <div class="flex justify-between items-center mb-4 flex-shrink-0">
+                <h3 class="font-serif text-xl text-charcoal">New Diary</h3>
+                <button onclick="App.scanForDatabases()"
+                    class="text-xs text-dull-purple hover:underline flex items-center gap-1" id="refreshDbBtn">
+                    <i data-lucide="refresh-cw" class="w-3 h-3"></i> Refresh
+                </button>
+            </div>
 
-            <div class="space-y-4">
+            <div class="space-y-4 flex-1 overflow-y-auto pr-1">
 
-                <!-- Data Source ID (Priority) -->
-                <div>
-                    <div class="flex justify-between items-end mb-1">
-                        <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal">Notion Data
-                            Source ID</label>
-                        <button type="button" onclick="App.fetchDbName()"
-                            class="text-[10px] bg-dull-purple/10 text-dull-purple px-2 py-1 rounded hover:bg-dull-purple hover:text-white transition flex items-center gap-1">
-                            <i data-lucide="sparkles" class="w-3 h-3"></i> Fetch Name
-                        </button>
+                <!-- Searchable Dropdown -->
+                <div class="relative">
+                    <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal mb-1">Select Notion
+                        Database</label>
+
+                    <!-- Info Text Moved Here -->
+                    <div class="text-[10px] text-earth-metal/60 mb-3 leading-tight">
+                        Only showing datasources with required columns: Name (title), Date (date), Tags (multi-select),
+                        Notes (text), Files (media).
                     </div>
-                    <input type="text" id="newDiaryDataSourceId" placeholder="Datasource ID from settings"
-                        class="w-full bg-oatmeal border border-oatmeal-dark rounded p-2 font-mono text-sm">
-                    <p class="text-[10px] text-earth-metal/60 mt-1">Using this is faster.</p>
+
+                    <div class="relative">
+                        <input type="text" id="dbSearchInput" placeholder="Search Databases..."
+                            onfocus="App.toggleDbDropdown(true)" onkeyup="App.filterDbList(event)"
+                            class="w-full bg-oatmeal border border-oatmeal-dark rounded p-2 text-sm focus:ring-2 focus:ring-dull-purple/50 outline-none"
+                            autocomplete="off">
+                        <i data-lucide="chevron-down"
+                            class="absolute right-3 top-3 w-4 h-4 text-earth-metal/50 pointer-events-none"></i>
+                    </div>
+
+                    <!-- Dropdown List -->
+                    <div id="dbDropdownList"
+                        class="hidden absolute top-full left-0 w-full mt-1 bg-white shadow-xl rounded-lg border border-oatmeal-dark max-h-60 overflow-y-auto z-50">
+                        <!-- Items injected here -->
+                        <div class="p-4 text-center text-xs text-earth-metal/50">Type to search...</div>
+                    </div>
                 </div>
 
-                <div class="relative flex py-1 items-center">
-                    <div class="flex-grow border-t border-oatmeal-dark"></div>
-                    <span
-                        class="flex-shrink-0 mx-2 text-[10px] text-earth-metal/40 font-bold uppercase tracking-widest">OR</span>
-                    <div class="flex-grow border-t border-oatmeal-dark"></div>
-                </div>
-
-                <!-- Database ID (Fallback) -->
-                <div>
-                    <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal mb-1">Notion
-                        Database ID (Fallback)</label>
-                    <input type="text" id="newDiaryDbId" placeholder="Database ID - Uses first datasource"
-                        class="w-full bg-oatmeal border border-oatmeal-dark rounded p-2 font-mono text-sm">
-                </div>
-
-                <!-- Title -->
-                <div>
-                    <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal mb-1">Diary
-                        Title</label>
-                    <input type="text" id="newDiaryTitle"
-                        class="w-full bg-oatmeal border border-oatmeal-dark rounded p-2" placeholder="e.g. Daily Log">
-                </div>
-
-                <div>
-                    <label
-                        class="block text-xs font-bold uppercase tracking-wider text-earth-metal mb-1">Description</label>
-                    <textarea id="newDiaryDesc"
-                        class="w-full bg-oatmeal border border-oatmeal-dark rounded p-2 h-20"></textarea>
+                <!-- Selected DB Info -->
+                <div id="selectedDbInfo" class="hidden bg-dull-purple/5 p-3 rounded border border-dull-purple/20 mt-4">
+                    <div class="text-xs font-bold text-dull-purple uppercase tracking-wider mb-1">Selected</div>
+                    <div class="font-serif text-lg text-charcoal" id="previewDbTitle"></div>
+                    <div class="text-xs text-earth-metal/70 mt-1 line-clamp-2" id="previewDbDesc"></div>
                 </div>
             </div>
 
-            <div class="mt-6 flex justify-end gap-3">
+            <div class="mt-6 flex justify-end gap-3 flex-shrink-0 pt-4 border-t border-oatmeal-dark">
                 <button onclick="App.closeModal('newDiaryModal')"
                     class="px-4 py-2 rounded text-earth-metal hover:bg-oatmeal">Cancel</button>
                 <button onclick="App.createDiary()"
-                    class="px-4 py-2 rounded bg-dull-purple text-white-linen hover:bg-dull-purple-hover">Create</button>
+                    class="px-4 py-2 rounded bg-dull-purple text-white-linen hover:bg-dull-purple-hover">Create
+                    Diary</button>
             </div>
         </div>
     </div>
@@ -494,6 +520,30 @@ async function handleRequest(request, env) {
                 <button onclick="App.executeDelete()"
                     class="px-4 py-2 rounded bg-red-500 text-white hover:bg-red-600 text-sm font-medium">Delete
                     Everywhere</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 6. Reset Confirmation Modal (New) -->
+    <div id="resetConfirmationModal"
+        class="fixed inset-0 bg-charcoal/20 backdrop-blur-sm hidden items-center justify-center z-[80] p-4"
+        onclick="if(event.target===this) App.closeModal('resetConfirmationModal')">
+        <div class="bg-white-linen w-full max-w-sm p-6 rounded-xl shadow-xl border border-red-200">
+            <div class="flex items-center gap-3 mb-2 text-red-700">
+                <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+                <h3 class="font-serif text-lg">Reset App?</h3>
+            </div>
+            <p class="text-sm text-earth-metal/80 mb-6 leading-relaxed">
+                This will <b>disconnect Notion</b> and <b>delete all local settings & cache</b>.
+                <br><br>
+                Your data stored in Notion will stay safe, but you will need to reconnect to see it again.
+            </p>
+            <div class="flex justify-end gap-3">
+                <button onclick="App.closeModal('resetConfirmationModal')"
+                    class="px-4 py-2 rounded text-earth-metal hover:bg-oatmeal text-sm">Cancel</button>
+                <button onclick="App.executeReset()"
+                    class="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700 text-sm font-medium shadow-md hover:shadow-lg transition-all">Yes,
+                    Reset Everything</button>
             </div>
         </div>
     </div>
@@ -709,6 +759,10 @@ async function handleRequest(request, env) {
             getData: () => JSON.parse(localStorage.getItem('mirror_data') || '[]'),
             setData: (d) => localStorage.setItem('mirror_data', JSON.stringify(d)),
 
+            // New: Cache for valid Notion Databases
+            getCachedDatabases: () => JSON.parse(localStorage.getItem('notion_db_cache') || '[]'),
+            setCachedDatabases: (dbs) => localStorage.setItem('notion_db_cache', JSON.stringify(dbs)),
+
             saveDiary: (diary) => {
                 const data = Storage.getData();
                 data.push(diary);
@@ -772,8 +826,8 @@ async function handleRequest(request, env) {
         };
 
         const API = {
-            request: async (method, notionEndpoint, body = null) => {
-                const { workerUrl, authToken, proxyToken } = Storage.getSettings();
+            request: async (method, notionEndpoint, body = null, overrideSettings = null) => {
+                const { workerUrl, authToken, proxyToken } = overrideSettings || Storage.getSettings();
                 if (!workerUrl || !authToken) throw new Error("Missing Settings");
 
                 const cleanWorkerUrl = workerUrl.trim().replace(/\/$/, '');
@@ -785,7 +839,7 @@ async function handleRequest(request, env) {
                 fetchUrl.searchParams.append('url', target);
                 if (cleanToken) fetchUrl.searchParams.append('token', cleanToken);
 
-                const headers = { 'Authorization': `Bearer ${cleanAuth}`, 'Notion-Version': '2025-09-03' };
+                const headers = { 'Authorization': `Bearer ${cleanAuth}`, 'Notion-Version': '2022-06-28' };
                 if (!(body instanceof FormData)) {
                     headers['Content-Type'] = 'application/json';
                     body = body ? JSON.stringify(body) : null;
@@ -819,6 +873,28 @@ async function handleRequest(request, env) {
                 const res = await fetch(fetchUrl.toString(), { method: 'POST', headers, body: formData });
                 if (!res.ok) throw new Error(`Upload Failed`);
                 return await res.json();
+            },
+            // New: Scan for all accessible databases
+            fetchDatabases: async (settings = null) => {
+                let results = [];
+                let hasMore = true;
+                let nextCursor = undefined;
+
+                // Search for databases only
+                while (hasMore) {
+                    const payload = {
+                        filter: { value: 'database', property: 'object' },
+                        page_size: 100,
+                        start_cursor: nextCursor
+                    };
+                    const res = await API.request('POST', '/search', payload, settings);
+                    results = [...results, ...res.results];
+                    hasMore = res.has_more;
+                    nextCursor = res.next_cursor;
+                    // Safety break for extremely large accounts (limit to ~300 for performance)
+                    if (results.length > 300) hasMore = false;
+                }
+                return results;
             }
         };
 
@@ -858,7 +934,7 @@ async function handleRequest(request, env) {
 
                 try {
                     if (!silent) App.showToast("Fetching tags...", "info");
-                    const res = await API.request('GET', `/data_sources/${diary.notionDataSourceId}`);
+                    const res = await API.request('GET', `/databases/${diary.originalDbId || diary.notionDataSourceId}`);
                     const properties = res.properties || {};
 
                     if (properties["Tags"] && properties["Tags"].multi_select) {
@@ -866,16 +942,6 @@ async function handleRequest(request, env) {
                         Storage.updateDiaryTags(diaryId, options);
                         App.state.diaries = Storage.getData();
                         if (!silent) App.showToast(`Updated ${options.length} tags.`, "success");
-                    } else {
-                        if (diary.originalDbId) {
-                            const dbRes = await API.request('GET', `/databases/${diary.originalDbId}`);
-                            if (dbRes.properties && dbRes.properties["Tags"]) {
-                                const options = dbRes.properties["Tags"].multi_select.options.map(o => o.name);
-                                Storage.updateDiaryTags(diaryId, options);
-                                App.state.diaries = Storage.getData();
-                                if (!silent) App.showToast(`Updated ${options.length} tags.`, "success");
-                            }
-                        }
                     }
                 } catch (e) {
                     console.error("Tag fetch failed", e);
@@ -889,7 +955,7 @@ async function handleRequest(request, env) {
                 if (!diaryId) return;
 
                 let diary = Storage.getData().find(d => d.id === diaryId);
-                if (!diary || !diary.notionDataSourceId) return;
+                if (!diary || !diary.originalDbId) return;
 
                 SyncManager.updateUI('syncing');
 
@@ -898,7 +964,7 @@ async function handleRequest(request, env) {
                     const unsynced = diary.entries.filter(e => !e.synced);
                     for (const entry of unsynced) {
                         try {
-                            const notionId = await SyncManager.pushEntryToNotion(diary.notionDataSourceId, entry);
+                            const notionId = await SyncManager.pushEntryToNotion(diary.originalDbId, entry);
                             Storage.updateEntrySyncStatus(diaryId, entry.id, true, notionId);
                             App.state.diaries = Storage.getData();
                             App.renderDiaryView();
@@ -922,7 +988,7 @@ async function handleRequest(request, env) {
                         };
                     }
 
-                    const response = await API.request('POST', `/data_sources/${diary.notionDataSourceId}/query`, payload);
+                    const response = await API.request('POST', `/databases/${diary.originalDbId}/query`, payload);
 
                     let newCount = 0;
                     const currentData = Storage.getData();
@@ -987,7 +1053,7 @@ async function handleRequest(request, env) {
                 }
             },
 
-            pushEntryToNotion: async (dataSourceId, entry) => {
+            pushEntryToNotion: async (dbId, entry) => {
                 let uploadedFileId = null;
 
                 if (entry.photoDataURL && entry.photoDataURL.startsWith('data:')) {
@@ -1017,7 +1083,7 @@ async function handleRequest(request, env) {
                 }
 
                 const res = await API.request('POST', '/pages', {
-                    parent: { type: "data_source_id", data_source_id: dataSourceId },
+                    parent: { type: "database_id", database_id: dbId },
                     properties
                 });
                 return res.id;
@@ -1037,7 +1103,10 @@ async function handleRequest(request, env) {
                 collageMode: 1,
                 activeSegment: 0,
                 segments: [],
-                mirrorVideo: false // New mirror state
+                mirrorVideo: false,
+                // New Diary State
+                selectedDb: null,
+                cachedDbs: [] // In-memory cache for filtering
             },
 
             collageConfigs: {
@@ -1052,20 +1121,23 @@ async function handleRequest(request, env) {
                 App.state.diaries = Storage.getData();
                 App.renderSidebar();
 
+                const urlParams = new URLSearchParams(window.location.search);
+                const newAuth = urlParams.get('accessToken');
+
+                if (newAuth) {
+                    const settings = Storage.getSettings();
+                    const newSettings = { ...settings, authToken: newAuth };
+                    Storage.setSettings(newSettings);
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    App.showToast(`Connected! Scanning databases...`, 'success');
+                    // Trigger scan immediately after OAuth return
+                    if (newSettings.workerUrl) App.scanForDatabases(newSettings);
+                }
+
                 if (window.innerWidth < 768 && App.state.diaries.length > 0) {
                     App.selectDiary(App.state.diaries[0].id);
                 } else {
                     App.renderWelcomeState();
-                }
-
-                const urlParams = new URLSearchParams(window.location.search);
-                if (urlParams.get('accessToken')) {
-                    const settings = Storage.getSettings();
-                    Storage.setSettings({ ...settings, authToken: urlParams.get('accessToken') });
-                    window.history.replaceState({}, document.title, window.location.pathname);
-                    App.showToast(`Connected!`, 'success');
-                    if (!settings.workerUrl) App.openModal('settingsModal');
-                    else App.renderWelcomeState();
                 }
 
                 // Add Global Escape Key Listener
@@ -1079,11 +1151,195 @@ async function handleRequest(request, env) {
                     }
                 });
 
+                // Close dropdown if clicked outside
+                document.addEventListener('click', (e) => {
+                    const dropdown = document.getElementById('dbDropdownList');
+                    const input = document.getElementById('dbSearchInput');
+                    if (dropdown && !dropdown.classList.contains('hidden') && !dropdown.contains(e.target) && e.target !== input) {
+                        dropdown.classList.add('hidden');
+                    }
+                });
+
                 SyncManager.init();
 
                 // Start rendering loop for camera canvas
                 requestAnimationFrame(App.drawLoop);
             },
+
+            // --- New Diary & DB Scanning Logic ---
+
+            isValidChronicleDb: (props) => {
+                // Schema check: Ensure required props exist. Extra props are ignored.
+                if (!props['Name'] || props['Name'].type !== 'title') return false;
+                if (!props['Tags'] || props['Tags'].type !== 'multi_select') return false;
+                if (!props['Date'] || props['Date'].type !== 'date') return false;
+                if (!props['Notes'] || props['Notes'].type !== 'rich_text') return false;
+                if (!props['Files'] || props['Files'].type !== 'files') return false;
+                return true;
+            },
+
+            scanForDatabases: async (settings = null) => {
+                const btn = document.getElementById('refreshDbBtn');
+                const list = document.getElementById('dbDropdownList');
+
+                if (btn) {
+                    // Lucide replaces <i> with <svg>, so we target svg
+                    const icon = btn.querySelector('svg');
+                    if (icon) icon.classList.add('animate-spin');
+                }
+
+                // Reset filtered list
+                App.state.cachedDbs = [];
+
+                try {
+                    const allDbs = await API.fetchDatabases(settings);
+                    const validDbs = allDbs.filter(db => App.isValidChronicleDb(db.properties)).map(db => ({
+                        id: db.id,
+                        title: db.title?.[0]?.plain_text || "Untitled Database",
+                        description: db.description?.[0]?.plain_text || ""
+                    }));
+
+                    Storage.setCachedDatabases(validDbs);
+                    App.state.cachedDbs = validDbs; // Sync memory
+
+                    if (document.getElementById('newDiaryModal').classList.contains('flex')) {
+                        App.renderDbDropdownItems(validDbs);
+                    }
+                    if (!settings) App.showToast(`Found ${validDbs.length} compatible databases.`, "success");
+                } catch (e) {
+                    console.error(e);
+                    App.showToast("Failed to fetch databases", "error");
+                } finally {
+                    if (btn) {
+                        // Lucide replaces <i> with <svg>, so we target svg
+                        const icon = btn.querySelector('svg');
+                        if (icon) icon.classList.remove('animate-spin');
+                    }
+                }
+            },
+
+            toggleDbDropdown: (forceShow = null) => {
+                const list = document.getElementById('dbDropdownList');
+                if (forceShow === true) list.classList.remove('hidden');
+                else if (forceShow === false) list.classList.add('hidden');
+                else list.classList.toggle('hidden');
+
+                // On show, reset filter if input empty
+                if (!list.classList.contains('hidden') && document.getElementById('dbSearchInput').value === '') {
+                    App.renderDbDropdownItems(App.state.cachedDbs);
+                }
+            },
+
+            filterDbList: (e) => {
+                const term = e.target.value.toLowerCase();
+                const filtered = App.state.cachedDbs.filter(db => db.title.toLowerCase().includes(term));
+                App.renderDbDropdownItems(filtered);
+                App.toggleDbDropdown(true);
+            },
+
+            renderDbDropdownItems: (dbs) => {
+                const list = document.getElementById('dbDropdownList');
+                list.innerHTML = '';
+
+                // Filter out already used DBs
+                const usedIds = App.state.diaries.map(d => d.originalDbId);
+                const availableDbs = dbs.filter(db => !usedIds.includes(db.id));
+
+                if (availableDbs.length === 0) {
+                    list.innerHTML = `<div class="p-4 text-center text-xs text-earth-metal/50">No databases found.</div>`;
+                    return;
+                }
+
+                availableDbs.forEach(db => {
+                    const el = document.createElement('div');
+                    el.className = "p-3 border-b border-oatmeal-dark last:border-0 hover:bg-white-linen cursor-pointer transition-colors flex flex-col gap-1";
+                    el.onclick = () => App.selectDatabase(db);
+                    el.innerHTML = `
+                        <div class="flex items-center justify-between">
+                            <span class="font-bold text-sm text-charcoal">${db.title}</span>
+                        </div>
+                        ${db.description ? `<div class="text-[10px] text-earth-metal/60 truncate">${db.description}</div>` : ''}
+                    `;
+                    list.appendChild(el);
+                });
+            },
+
+            selectDatabase: (db) => {
+                App.state.selectedDb = db;
+
+                // Update UI
+                const input = document.getElementById('dbSearchInput');
+                input.value = db.title;
+
+                // Show selected info box
+                const infoBox = document.getElementById('selectedDbInfo');
+                document.getElementById('previewDbTitle').innerText = db.title;
+                document.getElementById('previewDbDesc').innerText = db.description || "No description";
+                infoBox.classList.remove('hidden');
+
+                App.toggleDbDropdown(false);
+            },
+
+            attemptNewDiary: () => {
+                App.state.selectedDb = null;
+                document.getElementById('dbSearchInput').value = '';
+                document.getElementById('selectedDbInfo').classList.add('hidden');
+
+                const s = Storage.getSettings();
+                if (!s.workerUrl || !s.authToken) {
+                    App.showToast("Please connect to Notion first.", "error");
+                    App.openModal('settingsModal');
+                } else {
+                    App.openModal('newDiaryModal');
+                    // Check cache first
+                    const cached = Storage.getCachedDatabases();
+                    App.state.cachedDbs = cached;
+                    if (cached.length > 0) {
+                        App.renderDbDropdownItems(cached);
+                    } else {
+                        App.scanForDatabases();
+                    }
+                }
+            },
+
+            createDiary: async () => {
+                if (!App.state.selectedDb) return App.showToast("Please select a database.", "error");
+
+                const db = App.state.selectedDb;
+
+                const newDiary = {
+                    id: UTILS.id(),
+                    title: db.title,
+                    originalDbId: db.id,
+                    description: db.description,
+                    tags: [],
+                    entries: []
+                };
+
+                Storage.saveDiary(newDiary);
+                App.state.diaries = Storage.getData();
+                App.closeModal('newDiaryModal');
+                App.selectDiary(newDiary.id);
+                App.showToast("Diary Created!", "success");
+            },
+
+            resetApp: () => {
+                // Trigger the custom modal instead of native confirm()
+                App.openModal('resetConfirmationModal');
+            },
+
+            executeReset: () => {
+                try {
+                    localStorage.clear();
+                    // Force reload to clear memory state
+                    window.location.href = window.location.pathname;
+                } catch (e) {
+                    console.error(e);
+                    App.showToast("Failed to clear storage automatically. Please clear browser cache.", "error");
+                }
+            },
+
+            // --- End New Logic ---
 
             showToast: (message, type = 'info') => {
                 const container = document.getElementById('toastContainer');
@@ -1237,22 +1493,6 @@ async function handleRequest(request, env) {
                 SyncManager.syncCurrentDiary();
             },
 
-            attemptNewDiary: () => {
-                // Clear fields first
-                document.getElementById('newDiaryTitle').value = '';
-                document.getElementById('newDiaryDataSourceId').value = '';
-                document.getElementById('newDiaryDbId').value = '';
-                document.getElementById('newDiaryDesc').value = '';
-
-                const s = Storage.getSettings();
-                if (!s.workerUrl || !s.authToken) {
-                    App.showToast("Please connect to Notion first.", "error");
-                    App.openModal('settingsModal');
-                } else {
-                    App.openModal('newDiaryModal');
-                }
-            },
-
             toggleMobileSidebar: () => {
                 const sidebar = document.getElementById('sidebar');
                 const overlay = document.getElementById('mobileSidebarOverlay');
@@ -1263,42 +1503,6 @@ async function handleRequest(request, env) {
                 } else {
                     sidebar.classList.add('-translate-x-full');
                     overlay.classList.add('hidden');
-                }
-            },
-
-            fetchDbName: async () => {
-                const dsId = document.getElementById('newDiaryDataSourceId').value.trim();
-                const dbId = document.getElementById('newDiaryDbId').value.trim();
-
-                if (!dsId && !dbId) return App.showToast("Enter an ID first.", "error");
-
-                try {
-                    App.showToast("Fetching Name...", "info");
-                    let name = "";
-
-                    if (dsId) {
-                        try {
-                            const res = await API.request('GET', `/data_sources/${dsId}`);
-                            if (res.title && Array.isArray(res.title)) name = res.title[0]?.plain_text;
-                            else if (res.name) name = res.name;
-                        } catch (e) { console.log("DS fetch failed", e); }
-                    }
-
-                    if (!name && dbId) {
-                        try {
-                            const res = await API.request('GET', `/databases/${dbId}`);
-                            if (res.title && Array.isArray(res.title)) name = res.title[0]?.plain_text;
-                        } catch (e) { console.log("DB fetch failed", e); }
-                    }
-
-                    if (name) {
-                        document.getElementById('newDiaryTitle').value = name;
-                        App.showToast("Name Fetched!", "success");
-                    } else {
-                        App.showToast("Could not resolve name.", "error");
-                    }
-                } catch (e) {
-                    App.showToast(e.message, "error");
                 }
             },
 
@@ -1642,8 +1846,6 @@ async function handleRequest(request, env) {
                 }
             },
 
-            // ... Real implementation below ...
-
             saveEntry: async () => {
                 const notes = document.getElementById('entryNotes').value;
                 const titleInput = document.getElementById('entryTitle').value;
@@ -1675,53 +1877,6 @@ async function handleRequest(request, env) {
                 App.renderDiaryView();
                 App.showToast("Saved locally", 'success');
                 SyncManager.syncCurrentDiary();
-            },
-
-            createDiary: async () => {
-                const title = document.getElementById('newDiaryTitle').value;
-                const dsId = document.getElementById('newDiaryDataSourceId').value.trim();
-                const dbId = document.getElementById('newDiaryDbId').value.trim();
-                const desc = document.getElementById('newDiaryDesc').value;
-
-                if (!title) return App.showToast('Title required', 'error');
-
-                // Validation: Ensure at least one ID is present
-                if (!dsId && !dbId) return App.showToast("Enter a Data Source or DB ID.", "error");
-
-                App.showToast("Verifying access...", "info");
-
-                try {
-                    let finalDS = dsId;
-                    let originalDbId = dbId;
-
-                    // 1. Resolve/Verify ID
-                    if (dsId) {
-                        // Verify direct DS access
-                        try {
-                            await API.request('GET', `/data_sources/${dsId}`);
-                        } catch (e) {
-                            throw new Error("Cannot access Data Source. Check ID or permissions.");
-                        }
-                    } else {
-                        // Resolve via DB
-                        try {
-                            const dbRes = await API.request('GET', `/databases/${dbId}`);
-                            if (!dbRes.data_sources || dbRes.data_sources.length === 0) {
-                                throw new Error("No Data Source found in this Database.");
-                            }
-                            finalDS = dbRes.data_sources[0].id;
-                        } catch (e) {
-                            throw new Error("Cannot access Database. Check ID or permissions.");
-                        }
-                    }
-
-                    const newDiary = { id: UTILS.id(), title, notionDataSourceId: finalDS, originalDbId: dbId, description: desc, tags: [], entries: [] };
-                    Storage.saveDiary(newDiary);
-                    App.state.diaries = Storage.getData();
-                    App.closeModal('newDiaryModal');
-                    App.selectDiary(newDiary.id);
-                    // Toast removed as requested
-                } catch (e) { App.showToast(e.message, 'error'); }
             },
 
             copyWorkerCode: (btn) => {
@@ -1905,17 +2060,94 @@ async function handleRequest(request, env) {
                     }
                 }
             },
-            testConnection: async (btn) => {
+            renderSettingsStatus: (settings) => {
+                const statusEl = document.getElementById('connectionStatus');
+                const s = settings || Storage.getSettings();
+
+                if (!s.authToken) {
+                    statusEl.innerHTML = `
+                        <div class="flex items-start gap-3 text-amber-700 bg-amber-50 p-3 rounded-lg border border-amber-100 text-xs">
+                            <div class="bg-white p-1 rounded-full shadow-sm mt-0.5"><i data-lucide="alert-circle" class="w-4 h-4 text-amber-600"></i></div>
+                            <div class="flex-1">
+                                <strong class="block text-sm mb-0.5">Not Connected</strong>
+                                <span class="opacity-80">Connect via OAuth or verify your manual key to start.</span>
+                            </div>
+                        </div>
+                    `;
+                } else if (s.authToken.startsWith('secret_')) {
+                    statusEl.innerHTML = `
+                        <div class="flex items-start gap-3 text-green-700 bg-green-50 p-3 rounded-lg border border-green-100 text-xs">
+                            <div class="bg-white p-1 rounded-full shadow-sm mt-0.5"><i data-lucide="key" class="w-4 h-4 text-green-600"></i></div>
+                            <div class="flex-1">
+                                <strong class="block text-sm mb-0.5">Connected via Secret Key</strong>
+                                <span class="opacity-80">Integration verified manually.</span>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    statusEl.innerHTML = `
+                        <div class="flex items-start gap-3 text-dull-purple bg-dull-purple/10 p-3 rounded-lg border border-dull-purple/20 text-xs">
+                            <div class="bg-white p-1 rounded-full shadow-sm mt-0.5"><i data-lucide="zap" class="w-4 h-4 text-dull-purple"></i></div>
+                            <div class="flex-1">
+                                <strong class="block text-sm mb-0.5">Connected via OAuth</strong>
+                                <span class="opacity-80">Access granted via standard Notion authorization.</span>
+                            </div>
+                        </div>
+                    `;
+                }
+                lucide.createIcons();
+            },
+            populateSettingsInputs: () => {
+                const s = Storage.getSettings();
+                document.getElementById('settingAuthToken').value = s.authToken || '';
+                document.getElementById('settingWorkerUrl').value = s.workerUrl || '';
+                document.getElementById('settingProxyToken').value = s.proxyToken || '';
+                document.getElementById('saveSettingsBtn').disabled = false;
+            },
+            onSettingInput: () => {
+                document.getElementById('saveSettingsBtn').disabled = true;
+                const statusEl = document.getElementById('connectionStatus');
+                statusEl.innerHTML = `
+                    <div class="flex items-start gap-3 text-charcoal bg-gray-100 p-3 rounded-lg border border-gray-200 text-xs">
+                        <div class="bg-white p-1 rounded-full shadow-sm mt-0.5"><i data-lucide="edit-3" class="w-4 h-4 text-gray-500"></i></div>
+                        <div class="flex-1">
+                            <strong class="block text-sm mb-0.5">Unsaved Changes</strong>
+                            <span class="opacity-80">Please verify your manual key to save changes.</span>
+                        </div>
+                    </div>
+                `;
+                lucide.createIcons();
+            },
+            testManualConnection: async (btn) => {
                 const workerUrl = document.getElementById('settingWorkerUrl').value;
                 const authToken = document.getElementById('settingAuthToken').value;
                 const proxyToken = document.getElementById('settingProxyToken').value;
-                Storage.setSettings({ workerUrl, authToken, proxyToken });
-                btn.innerText = "Testing...";
+
+                if (!authToken || !workerUrl) return App.showToast("Token and Worker URL required", "error");
+
+                const originalText = btn.innerText;
+                btn.innerText = "Verifying...";
+                btn.disabled = true;
+
                 try {
-                    const res = await API.request('GET', '/users/me');
-                    App.showToast(`Success: ${res.bot?.workspace_name || 'Connected'}`, 'success');
-                } catch (e) { App.showToast(e.message, 'error'); }
-                btn.innerText = "Test Connection";
+                    const tempSettings = { workerUrl, authToken, proxyToken };
+                    const res = await API.request('GET', '/users/me', null, tempSettings);
+                    App.showToast(`Verified: ${res.bot?.workspace_name || 'Connected'}`, 'success');
+                    App.renderSettingsStatus(tempSettings);
+                    document.getElementById('saveSettingsBtn').disabled = false;
+
+                    // Auto-scan DBs on verification
+                    App.scanForDatabases(tempSettings);
+                } catch (e) {
+                    App.showToast(e.message, 'error');
+                    document.getElementById('saveSettingsBtn').disabled = true;
+                } finally {
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                }
+            },
+            testConnection: async (btn) => {
+                App.testManualConnection(btn);
             },
             saveSettings: () => {
                 const workerUrl = document.getElementById('settingWorkerUrl').value;
@@ -1924,9 +2156,20 @@ async function handleRequest(request, env) {
                 Storage.setSettings({ workerUrl, authToken, proxyToken });
                 App.closeModal('settingsModal');
                 App.showToast("Saved", "success");
-                App.renderWelcomeState(); // Refresh view state
+                App.renderWelcomeState();
             },
-            openModal: (id) => document.getElementById(id).classList.remove('hidden', 'flex') || document.getElementById(id).classList.add('flex'),
+            openModal: (id) => {
+                document.getElementById(id).classList.remove('hidden', 'flex');
+                document.getElementById(id).classList.add('flex');
+                if (id === 'settingsModal') {
+                    App.populateSettingsInputs();
+                    App.renderSettingsStatus();
+                }
+                if (id === 'entryModal' && !App.state.stream) App.initCamera();
+
+                // Re-init icons for newly visible modals
+                lucide.createIcons();
+            },
             closeModal: (id) => {
                 document.getElementById(id).classList.add('hidden');
                 document.getElementById(id).classList.remove('flex');
