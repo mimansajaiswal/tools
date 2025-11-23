@@ -267,8 +267,27 @@
 
             <div class="space-y-6">
 
-                <!-- 1. Proxy Settings (First) -->
-                <div class="space-y-3">
+                <!-- Database Instructions (Before Proxy) -->
+                <div
+                    class="bg-dull-purple/5 border border-dull-purple/20 p-3 rounded text-xs text-earth-metal leading-relaxed">
+                    <p class="font-bold mb-1">Required Notion Database Format:</p>
+                    <p class="text-[11px] mb-2 opacity-80">Columns: Name (title), Tags (multi-select), Date (date),
+                        Files (media), Notes (text).</p>
+                    <p>
+                        Need a template? <a
+                            href="https://mimansajaiswal-embedded-dbs.notion.site/photo-chronicles-template?v=2b423941af7b8019977c000c05dd66cf"
+                            target="_blank"
+                            class="text-dull-purple underline hover:text-dull-purple-hover font-bold">Duplicate this
+                            one</a> and add your own tags to start.
+                    </p>
+                </div>
+
+                <!-- 1. Proxy Settings (Step 1) -->
+                <div class="space-y-3 bg-oatmeal/30 p-3 rounded border border-oatmeal-dark/50 relative">
+                    <span
+                        class="absolute -top-2.5 left-2 bg-white-linen text-[10px] font-bold px-1 text-dull-purple">STEP
+                        1: PROXY</span>
+
                     <div>
                         <div class="flex justify-between items-center mb-1">
                             <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal">API Proxy
@@ -280,20 +299,29 @@
                         </div>
                         <input type="text" id="settingWorkerUrl" placeholder="https://..."
                             oninput="App.onSettingInput()"
-                            class="w-full bg-oatmeal border border-oatmeal-dark rounded p-2 text-sm">
+                            class="w-full bg-oatmeal border border-oatmeal-dark rounded p-2 text-sm mb-2">
                     </div>
                     <div>
                         <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal mb-1">Proxy
                             Secret (Optional)</label>
                         <input type="password" id="settingProxyToken" placeholder="ALL_CORS_PROXY_MATCH_TOKEN"
                             oninput="App.onSettingInput()"
-                            class="w-full bg-oatmeal border border-oatmeal-dark rounded p-2 text-sm">
+                            class="w-full bg-oatmeal border border-oatmeal-dark rounded p-2 text-sm mb-2">
                     </div>
+                    <button onclick="App.verifyWorker()" id="verifyWorkerBtn"
+                        class="w-full bg-dull-purple/10 hover:bg-dull-purple/20 text-dull-purple border border-dull-purple/20 py-2 rounded text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2">
+                        Verify Proxy
+                    </button>
                 </div>
 
-                <!-- 2. Authentication (Second) -->
-                <div class="bg-oatmeal/50 p-4 rounded-lg border border-oatmeal-dark">
-                    <div class="flex justify-between items-center mb-2">
+                <!-- 2. Authentication (Step 2) -->
+                <div id="authSection"
+                    class="bg-oatmeal/50 p-4 rounded-lg border border-oatmeal-dark relative opacity-50 pointer-events-none transition-opacity">
+                    <span
+                        class="absolute -top-2.5 left-2 bg-white-linen text-[10px] font-bold px-1 text-earth-metal">STEP
+                        2: AUTH</span>
+
+                    <div class="flex justify-between items-center mb-2 mt-1">
                         <label
                             class="block text-xs font-bold uppercase tracking-wider text-earth-metal">Authentication</label>
                         <a href="https://developers.notion.com/docs/create-a-notion-integration#create-your-integration-in-notion"
@@ -324,23 +352,31 @@
                             class="flex-1 bg-white-linen border border-oatmeal-dark rounded p-2 text-xs outline-none text-earth-metal placeholder-earth-metal/30">
                         <button onclick="App.testManualConnection(this)"
                             class="bg-dull-purple/10 text-dull-purple hover:bg-dull-purple hover:text-white text-xs font-medium px-3 rounded transition-colors border border-dull-purple/20">
-                            Verify
+                            Verify Key
                         </button>
                     </div>
                 </div>
             </div>
 
-            <div class="mt-8 border-t border-oatmeal-dark pt-4">
-                <label class="block text-xs font-bold uppercase tracking-wider text-red-800 mb-2">Danger Zone</label>
-                <button onclick="App.resetApp()"
-                    class="w-full border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 py-2 rounded text-xs font-medium flex items-center justify-center gap-2">
-                    <i data-lucide="trash" class="w-3 h-3"></i> Reset App & Clear Cache
-                </button>
-            </div>
+            <details class="group mt-8 border-t border-oatmeal-dark pt-4">
+                <summary
+                    class="text-xs font-bold uppercase tracking-wider text-red-800 mb-2 cursor-pointer list-none flex items-center gap-2 outline-none">
+                    <span class="flex-1">Danger Zone</span>
+                    <i data-lucide="chevron-down"
+                        class="w-4 h-4 text-red-800 group-open:rotate-180 transition-transform"></i>
+                </summary>
+                <div class="pt-2">
+                    <button onclick="App.resetApp()"
+                        class="w-full border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 py-2 rounded text-xs font-medium flex items-center justify-center gap-2 transition-colors">
+                        <i data-lucide="trash" class="w-3 h-3"></i> Reset App & Clear Cache
+                    </button>
+                </div>
+            </details>
 
             <div class="mt-6 flex justify-end items-center gap-3">
                 <button onclick="App.saveSettings()" id="saveSettingsBtn" disabled
-                    class="px-4 py-2 rounded bg-dull-purple text-white-linen hover:bg-dull-purple-hover font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-opacity">Save</button>
+                    class="px-4 py-2 rounded bg-dull-purple text-white-linen hover:bg-dull-purple-hover font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-opacity">Save
+                    Settings</button>
             </div>
         </div>
     </div>
@@ -583,7 +619,7 @@ async function handleRequest(request, env) {
             <!-- The Viewfinder Canvas (Live Composite) -->
             <canvas id="viewfinder" class="w-full h-full object-contain z-10"></canvas>
 
-            <!-- Ghost Overlay (Only drawn when active) -->
+            <!-- Ghost Overlay (Restored as img) -->
             <img id="ghostOverlay"
                 class="absolute inset-0 w-full h-full object-contain z-30 pointer-events-none transition-opacity duration-200 opacity-0">
 
@@ -600,17 +636,19 @@ async function handleRequest(request, env) {
                 <!-- Main Controls Row -->
                 <div class="flex items-center justify-center gap-4 md:gap-6">
 
-                    <!-- Mirror Toggle (Front Camera Only) -->
+                    <!-- 1. Mirror Toggle (If user facing) -->
                     <button id="mirrorToggleBtn" onclick="App.toggleMirror()"
                         class="hidden bg-black/40 backdrop-blur-md p-3 rounded-full hover:bg-black/60 text-white transition">
                         <i data-lucide="flip-horizontal" class="w-6 h-6"></i>
                     </button>
 
+                    <!-- 2. Flip Camera Button -->
                     <button onclick="App.flipCamera()"
                         class="bg-black/40 backdrop-blur-md p-3 rounded-full hover:bg-black/60 text-white transition">
                         <i data-lucide="refresh-ccw" class="w-6 h-6"></i>
                     </button>
 
+                    <!-- 3. Insert Image (File Input) -->
                     <label
                         class="cursor-pointer bg-black/40 backdrop-blur-md p-3 rounded-full hover:bg-black/60 text-white transition">
                         <i data-lucide="image" class="w-6 h-6"></i>
@@ -618,13 +656,13 @@ async function handleRequest(request, env) {
                             onchange="App.handleFileUpload(event)">
                     </label>
 
-                    <!-- Capture Button -->
+                    <!-- 4. Capture Button (Center) -->
                     <button onclick="App.captureSegment()" id="captureBtn"
-                        class="w-16 h-16 rounded-full border-4 border-white bg-white/20 flex items-center justify-center hover:bg-white/40 transition active:scale-95">
-                        <div class="w-12 h-12 bg-white rounded-full"></div>
+                        class="w-16 h-16 rounded-full border-4 border-white/80 bg-charcoal/60 shadow-[0_0_12px_rgba(0,0,0,0.5)] flex items-center justify-center hover:bg-black/70 transition active:scale-95 backdrop-blur-sm">
+                        <div class="w-12 h-12 bg-white rounded-full shadow-inner"></div>
                     </button>
 
-                    <!-- Grid Mode Selector -->
+                    <!-- 5. Layout Button (Grid Mode) -->
                     <div class="relative group">
                         <button onclick="App.toggleCollageMenu()" id="gridBtn"
                             class="bg-black/40 backdrop-blur-md p-3 rounded-full hover:bg-black/60 text-white transition font-bold text-xs flex items-center justify-center w-12 h-12">
@@ -633,29 +671,47 @@ async function handleRequest(request, env) {
 
                         <!-- Vertical Popup for Grid Selection -->
                         <div id="collageMenu"
-                            class="hidden absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-black/80 backdrop-blur-md rounded-xl flex-col p-1 gap-1 transition-all shadow-lg">
+                            class="hidden absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-black/80 backdrop-blur-md rounded-xl flex-col p-1 gap-1 transition-all shadow-lg w-16 items-center">
                             <button onclick="App.setCollageMode(1)"
-                                class="collage-btn w-10 h-10 rounded-lg text-xs font-bold text-white hover:bg-white/20 flex items-center justify-center">1x</button>
+                                class="collage-btn w-12 h-8 rounded text-[10px] font-bold text-white hover:bg-white/20 flex items-center justify-center">1x</button>
                             <button onclick="App.setCollageMode(2)"
-                                class="collage-btn w-10 h-10 rounded-lg text-xs font-bold text-white hover:bg-white/20 flex items-center justify-center">2x</button>
+                                class="collage-btn w-12 h-8 rounded text-[10px] font-bold text-white hover:bg-white/20 flex items-center justify-center">2x
+                                &rarr;</button>
+                            <button onclick="App.setCollageMode(5)"
+                                class="collage-btn w-12 h-8 rounded text-[10px] font-bold text-white hover:bg-white/20 flex items-center justify-center">2x
+                                &darr;</button>
                             <button onclick="App.setCollageMode(3)"
-                                class="collage-btn w-10 h-10 rounded-lg text-xs font-bold text-white hover:bg-white/20 flex items-center justify-center">3x</button>
+                                class="collage-btn w-12 h-8 rounded text-[10px] font-bold text-white hover:bg-white/20 flex items-center justify-center">3x
+                                &rarr;</button>
+                            <button onclick="App.setCollageMode(6)"
+                                class="collage-btn w-12 h-8 rounded text-[10px] font-bold text-white hover:bg-white/20 flex items-center justify-center">3x
+                                &darr;</button>
+                            <button onclick="App.setCollageMode(7)"
+                                class="collage-btn w-12 h-8 rounded text-[10px] font-bold text-white hover:bg-white/20 flex items-center justify-center">3x
+                                1/2</button>
                             <button onclick="App.setCollageMode(4)"
-                                class="collage-btn w-10 h-10 rounded-lg text-xs font-bold text-white hover:bg-white/20 flex items-center justify-center">4x</button>
+                                class="collage-btn w-12 h-8 rounded text-[10px] font-bold text-white hover:bg-white/20 flex items-center justify-center">4x</button>
                         </div>
                     </div>
 
+                    <!-- 6. Portrait/Landscape Toggle -->
+                    <button onclick="App.toggleOrientation()" id="orientationBtn"
+                        class="bg-black/40 backdrop-blur-md p-3 rounded-full hover:bg-black/60 text-white transition">
+                        <i data-lucide="rectangle-horizontal" class="w-6 h-6"></i>
+                    </button>
+
+                    <!-- 7. Ghost Button -->
                     <div class="relative flex items-center">
                         <button onclick="App.toggleGhost()" id="ghostToggleBtn"
                             class="bg-black/40 backdrop-blur-md p-3 rounded-full hover:bg-black/60 text-white transition opacity-50 peer">
                             <i data-lucide="ghost" class="w-6 h-6"></i>
                         </button>
-                        <!-- Slider ABOVE -->
+                        <!-- Slider ABOVE - Fixed width & Position -->
                         <div id="ghostSliderContainer"
-                            class="hidden absolute bottom-full mb-4 left-1/2 -translate-x-1/2 bg-black/60 p-2 rounded flex-col items-center">
+                            class="hidden absolute bottom-full mb-4 -right-1 bg-black/60 p-2 rounded flex-col items-center">
                             <input type="range" min="0" max="1" step="0.1" value="0.3"
-                                class="w-24 h-1 bg-white/50 rounded-lg appearance-none cursor-pointer"
-                                oninput="document.getElementById('ghostOverlay').style.opacity = this.value">
+                                class="w-16 h-1 bg-white/50 rounded-lg appearance-none cursor-pointer"
+                                oninput="App.setGhostOpacity(this.value)">
                         </div>
                     </div>
                 </div>
@@ -770,7 +826,7 @@ async function handleRequest(request, env) {
         };
 
         const Storage = {
-            getSettings: () => JSON.parse(localStorage.getItem('mirror_settings') || '{"workerUrl":"","authToken":"","proxyToken":""}'),
+            getSettings: () => JSON.parse(localStorage.getItem('mirror_settings') || '{"workerUrl":"","authToken":"","proxyToken":"","orientation":"landscape","collageMode":1,"ghostOpacity":0.3}'),
             setSettings: (s) => localStorage.setItem('mirror_settings', JSON.stringify(s)),
             getData: () => JSON.parse(localStorage.getItem('mirror_data') || '[]'),
             setData: (d) => localStorage.setItem('mirror_data', JSON.stringify(d)),
@@ -865,7 +921,17 @@ async function handleRequest(request, env) {
                     const res = await fetch(fetchUrl.toString(), { method, headers, body });
                     if (!res.ok) {
                         const txt = await res.text();
-                        throw new Error(`API Error ${res.status}: ${txt}`);
+                        // Try to parse concise error message from Notion or Proxy
+                        let errorMsg = `API Error ${res.status}`;
+                        try {
+                            const json = JSON.parse(txt);
+                            if (json.message) errorMsg = json.message;
+                            else if (json.error && json.error.message) errorMsg = json.error.message;
+                        } catch (e) {
+                            // fallback to short text preview
+                            if (txt && txt.length < 100) errorMsg += `: ${txt}`;
+                        }
+                        throw new Error(errorMsg);
                     }
                     return await res.json();
                 } catch (e) {
@@ -1119,6 +1185,9 @@ async function handleRequest(request, env) {
                 capturedImage: null,
                 currentTags: [],
                 ghostMode: false,
+                ghostImageObj: null, // New: Image object for ghost
+                ghostOpacity: 0.3,   // New: Opacity value
+                orientation: 'landscape', // Default
                 // Collage State
                 collageMode: 1,
                 activeSegment: 0,
@@ -1133,14 +1202,31 @@ async function handleRequest(request, env) {
             collageConfigs: {
                 1: [{ x: 0, y: 0, w: 1, h: 1 }], // 1x
                 2: [{ x: 0, y: 0, w: 0.5, h: 1 }, { x: 0.5, y: 0, w: 0.5, h: 1 }], // 2x
-                3: [{ x: 0, y: 0, w: 1 / 3, h: 1 }, { x: 1 / 3, y: 0, w: 1 / 3, h: 1 }, { x: 2 / 3, y: 0, w: 1 / 3, h: 1 }], // 3x (Precise)
-                4: [{ x: 0, y: 0, w: 0.5, h: 0.5 }, { x: 0.5, y: 0, w: 0.5, h: 0.5 }, { x: 0, y: 0.5, w: 0.5, h: 0.5 }, { x: 0.5, y: 0.5, w: 0.5, h: 0.5 }] // 4x
+                3: [{ x: 0, y: 0, w: 0.3333, h: 1 }, { x: 0.3333, y: 0, w: 0.3333, h: 1 }, { x: 0.6666, y: 0, w: 0.3334, h: 1 }], // 3x (Precise)
+                4: [{ x: 0, y: 0, w: 0.5, h: 0.5 }, { x: 0.5, y: 0, w: 0.5, h: 0.5 }, { x: 0, y: 0.5, w: 0.5, h: 0.5 }, { x: 0.5, y: 0.5, w: 0.5, h: 0.5 }], // 4x
+                5: [{ x: 0, y: 0, w: 1, h: 0.5 }, { x: 0, y: 0.5, w: 1, h: 0.5 }], // 2x Vertical
+                6: [{ x: 0, y: 0, w: 1, h: 0.3333 }, { x: 0, y: 0.3333, w: 1, h: 0.3333 }, { x: 0, y: 0.6666, w: 1, h: 0.3334 }], // 3x Vertical
+                7: [{ x: 0.25, y: 0, w: 0.5, h: 0.5 }, { x: 0, y: 0.5, w: 0.5, h: 0.5 }, { x: 0.5, y: 0.5, w: 0.5, h: 0.5 }] // 3x Pyramid
             },
 
             init: () => {
                 lucide.createIcons();
                 App.state.diaries = Storage.getData();
                 App.renderSidebar();
+
+                // Load settings
+                const s = Storage.getSettings();
+                App.state.orientation = s.orientation || 'landscape';
+                App.state.collageMode = s.collageMode || 1;
+                App.state.ghostOpacity = s.ghostOpacity || 0.3;
+
+                // Set initial icon for orientation button
+                const oBtn = document.getElementById('orientationBtn');
+                if (oBtn) {
+                    const iconName = App.state.orientation === 'landscape' ? 'rectangle-horizontal' : 'rectangle-vertical';
+                    oBtn.innerHTML = `<i data-lucide="${iconName}" class="w-6 h-6"></i>`;
+                    lucide.createIcons();
+                }
 
                 const urlParams = new URLSearchParams(window.location.search);
                 const newAuth = urlParams.get('accessToken');
@@ -1594,9 +1680,11 @@ async function handleRequest(request, env) {
                 App.state.activeSegment = 0;
                 App.state.segments = [];
                 App.state.mirrorVideo = false; // Default mirror off
+                App.state.ghostImageObj = null; // Reset ghost image
 
-                // Default to 1x mode
-                App.setCollageMode(1);
+                // Load persisted collage mode from state (loaded in init)
+                // Do NOT reset collage mode to 1 here
+                App.setCollageMode(App.state.collageMode);
 
                 document.getElementById('entryNotes').value = '';
                 document.getElementById('entryTitle').value = '';
@@ -1613,24 +1701,38 @@ async function handleRequest(request, env) {
                 const diary = App.state.diaries.find(d => d.id === App.state.activeDiaryId);
                 if (!diary) return App.showToast("Create a diary first.", "error");
 
-                const ghostImg = document.getElementById('ghostOverlay');
                 const toggleBtn = document.getElementById('ghostToggleBtn');
                 const lastEntryWithPhoto = diary.entries.find(e => e.photoDataURL);
 
-                // Setup Ghost - Default OFF
+                const ghostImg = document.getElementById('ghostOverlay'); // Fixed Reference
+
+                // Setup Ghost - Auto Enabled if photo exists
                 if (lastEntryWithPhoto) {
+                    // Set src on the restored img tag
                     ghostImg.src = lastEntryWithPhoto.photoDataURL;
-                    // Hidden by default as requested
-                    ghostImg.classList.add('opacity-0');
+
+                    // Auto-Enable Ghost Mode as per request, BUT hide slider initially
                     toggleBtn.classList.remove('hidden');
-                    toggleBtn.classList.add('opacity-50'); // Dim state
-                    App.state.ghostMode = false;
-                    document.getElementById('ghostOverlay').style.opacity = 0.3;
+                    toggleBtn.classList.remove('opacity-50'); // Active state
+                    App.state.ghostMode = true;
+                    // Use saved opacity
+                    const savedOpacity = App.state.ghostOpacity;
+                    ghostImg.classList.remove('opacity-0');
+                    ghostImg.style.opacity = savedOpacity;
+
+                    // Update slider UI but keep container HIDDEN
+                    const sliderInput = document.querySelector('#ghostSliderContainer input');
+                    if (sliderInput) sliderInput.value = savedOpacity;
                     document.getElementById('ghostSliderContainer').classList.add('hidden');
+
+                    // Load image object for canvas drawing
+                    const img = new Image();
+                    img.onload = () => { App.state.ghostImageObj = img; };
+                    img.src = lastEntryWithPhoto.photoDataURL;
                 } else {
-                    ghostImg.classList.add('opacity-0');
                     toggleBtn.classList.add('hidden');
                     App.state.ghostMode = false;
+                    ghostImg.classList.add('opacity-0');
                     document.getElementById('ghostSliderContainer').classList.add('hidden');
                 }
 
@@ -1644,19 +1746,30 @@ async function handleRequest(request, env) {
                 App.state.activeSegment = 0;
                 App.state.segments = [];
 
-                document.querySelectorAll('.collage-btn').forEach((btn, idx) => {
-                    if (idx + 1 === mode) {
-                        btn.classList.remove('bg-white/20', 'hover:bg-white/10');
-                        btn.classList.add('bg-white', 'text-black');
-                    } else {
-                        btn.classList.add('bg-white/20', 'hover:bg-white/10');
-                        btn.classList.remove('bg-white', 'text-black');
-                    }
+                // Save to storage
+                const s = Storage.getSettings();
+                s.collageMode = mode;
+                Storage.setSettings(s);
+
+                // Reset all button styles
+                document.querySelectorAll('.collage-btn').forEach(btn => {
+                    btn.classList.add('bg-white/20', 'hover:bg-white/10');
+                    btn.classList.remove('bg-white', 'text-black');
                 });
 
-                App.updateGridOverlay(); // Handled by drawLoop now, but we might need to refresh state
-                // Force ghost update to clip correctly for new mode
-                App.updateGhostClip();
+                // Update active button based on mode-to-index mapping
+                // Order in HTML: 1, 2, 5, 3, 6, 7, 4
+                // Modes: 1=1x, 2=2xH, 5=2xV, 3=3xH, 6=3xV, 7=3xPyr, 4=4x
+                const modeToIdx = { 1: 0, 2: 1, 5: 2, 3: 3, 6: 4, 7: 5, 4: 6 };
+                const btns = document.querySelectorAll('.collage-btn');
+                const targetBtn = btns[modeToIdx[mode]];
+
+                if (targetBtn) {
+                    targetBtn.classList.remove('bg-white/20', 'hover:bg-white/10');
+                    targetBtn.classList.add('bg-white', 'text-black');
+                }
+
+                App.updateGridOverlay();
 
                 const segInd = document.getElementById('segmentIndicator');
                 if (mode > 1) {
@@ -1672,7 +1785,14 @@ async function handleRequest(request, env) {
                 document.getElementById('collageMenu').classList.remove('flex');
 
                 // Update main button text
-                document.getElementById('gridBtn').innerText = mode + "x";
+                let label = "1x";
+                if (mode === 2) label = "2x →";
+                if (mode === 3) label = "3x →";
+                if (mode === 4) label = "4x";
+                if (mode === 5) label = "2x ↓";
+                if (mode === 6) label = "3x ↓";
+                if (mode === 7) label = "3x 1/2"; // Using a short label for "1 top 2 bottom"
+                document.getElementById('gridBtn').innerText = label;
             },
 
             toggleCollageMenu: () => {
@@ -1686,29 +1806,30 @@ async function handleRequest(request, env) {
                 }
             },
 
+            toggleOrientation: () => {
+                const current = App.state.orientation;
+                const next = current === 'landscape' ? 'portrait' : 'landscape';
+                App.state.orientation = next;
+
+                // Save to settings
+                const s = Storage.getSettings();
+                s.orientation = next;
+                Storage.setSettings(s);
+
+                // Update UI Icon
+                const btn = document.getElementById('orientationBtn');
+                if (btn) {
+                    const iconName = next === 'landscape' ? 'rectangle-horizontal' : 'rectangle-vertical';
+                    btn.innerHTML = `<i data-lucide="${iconName}" class="w-6 h-6"></i>`;
+                    lucide.createIcons();
+                }
+            },
+
             updateGridOverlay: () => {
                 // No-op now as canvas handles it
             },
 
-            updateGhostClip: () => {
-                // Ghost logic
-                // We need to clip the ghost image to ONLY the active segment rect
-                if (!App.state.ghostMode) return;
-
-                const ghost = document.getElementById('ghostOverlay');
-                if (App.state.ghostMode) ghost.classList.remove('opacity-0'); // Ensure visible if on
-
-                const layout = App.collageConfigs[App.state.collageMode];
-                const slot = layout[App.state.activeSegment];
-
-                // Clip-path: inset(top right bottom left)
-                const top = slot.y * 100;
-                const left = slot.x * 100;
-                const right = 100 - ((slot.x + slot.w) * 100);
-                const bottom = 100 - ((slot.y + slot.h) * 100);
-
-                ghost.style.clipPath = `inset(${top}% ${right}% ${bottom}% ${left}%)`;
-            },
+            // updateGhostClip function removed - logic moved to drawLoop
 
             initCamera: async () => {
                 const video = document.getElementById('videoSource');
@@ -1729,6 +1850,9 @@ async function handleRequest(request, env) {
                     } else {
                         mirrorBtn.classList.add('hidden');
                         App.state.mirrorVideo = false; // Force disable mirror on back cam
+                        const btn = document.getElementById('mirrorToggleBtn');
+                        btn.classList.remove('bg-white/40'); // Reset UI to "off" state visually
+                        btn.classList.add('bg-black/40');
                     }
                 } catch (e) {
                     // console.log("Cam fail");
@@ -1741,20 +1865,76 @@ async function handleRequest(request, env) {
                 const cvs = document.getElementById('viewfinder');
                 const ctx = cvs.getContext('2d');
 
-                // Ensure internal resolution matches display
-                // Using a fixed high-res internal buffer helps quality
-                if (cvs.width !== 1280) { cvs.width = 1280; cvs.height = 960; }
+                const isPortrait = App.state.orientation === 'portrait';
+                const mode = App.state.collageMode;
 
-                const W = cvs.width;
-                const H = cvs.height;
+                // Base Frame Resolution
+                const BaseW = isPortrait ? 960 : 1280;
+                const BaseH = isPortrait ? 1280 : 960;
+
+                // Determine Final Canvas Multipliers based on Mode
+                // This expands the canvas size rather than cutting the view
+                let multW = 1;
+                let multH = 1;
+
+                if (mode === 2) {
+                    multW = 2; // 2x Horizontal -> 2x Wide
+                } else if (mode === 3) {
+                    multW = 3; // 3x Horizontal -> 3x Wide
+                } else if (mode === 4) {
+                    multW = 2; // 4x Grid -> 2x Wide, 2x Tall
+                    multH = 2;
+                } else if (mode === 5) {
+                    multH = 2; // 2x Vertical -> 1x Wide, 2x Tall
+                } else if (mode === 6) {
+                    multH = 3; // 3x Vertical
+                } else if (mode === 7) {
+                    multW = 2; // 3x Mixed -> 2 Wide, 2 Tall (Pyramid)
+                    multH = 2;
+                }
+
+                const W = BaseW * multW;
+                const H = BaseH * multH;
+
+                // Update Canvas Size if changed
+                if (cvs.width !== W || cvs.height !== H) {
+                    cvs.width = W;
+                    cvs.height = H;
+                }
 
                 // Clear with transparent to show container bg
                 ctx.clearRect(0, 0, W, H);
 
                 const layout = App.collageConfigs[App.state.collageMode];
 
+                // 1. Draw Ghost Overlay (if active) - Always draw FULL size over canvas
+                // Note: With expanded canvas, we center-crop-fill the ghost image to cover the whole new area
+                // This maintains the "previous photo context"
+                if (App.state.ghostMode && App.state.ghostImageObj) {
+                    ctx.save();
+                    ctx.globalAlpha = App.state.ghostOpacity;
+
+                    // Draw the ghost image
+                    const img = App.state.ghostImageObj;
+                    const imgW = img.width;
+                    const imgH = img.height;
+                    const srcRatio = imgW / imgH;
+                    const dstRatio = W / H;
+
+                    let gsx, gsy, gsw, gsh;
+                    if (srcRatio > dstRatio) {
+                        gsh = imgH; gsw = gsh * dstRatio; gsy = 0; gsx = (imgW - gsw) / 2;
+                    } else {
+                        gsw = imgW; gsh = gsw / dstRatio; gsx = 0; gsy = (imgH - gsh) / 2;
+                    }
+
+                    ctx.drawImage(img, gsx, gsy, gsw, gsh, 0, 0, W, H);
+                    ctx.restore();
+                }
+
+                // 2. Draw Live Video & Captured Segments
                 layout.forEach((slot, idx) => {
-                    // Destination rect
+                    // Calculate destination in the expanded canvas
                     const dx = slot.x * W;
                     const dy = slot.y * H;
                     const dw = slot.w * W;
@@ -1764,7 +1944,8 @@ async function handleRequest(request, env) {
                     if (idx === App.state.activeSegment) {
                         // DRAW LIVE VIDEO
                         if (video.readyState === 4) {
-                            // Calculate center crop from video source to dest slot aspect ratio
+                            ctx.save(); // Save state before possible mirroring
+
                             const vidW = video.videoWidth;
                             const vidH = video.videoHeight;
                             const srcRatio = vidW / vidH;
@@ -1779,15 +1960,13 @@ async function handleRequest(request, env) {
 
                             // Mirror Logic
                             if (App.state.mirrorVideo && App.state.facingMode === 'user') {
-                                ctx.save();
                                 ctx.translate(dx + dw, dy); // Translate to slot origin + width
                                 ctx.scale(-1, 1); // Flip horizontal
-                                // Draw at relative 0,0 because we translated to the slot
                                 ctx.drawImage(video, sx, sy, sw, sh, 0, 0, dw, dh);
-                                ctx.restore();
                             } else {
                                 ctx.drawImage(video, sx, sy, sw, sh, dx, dy, dw, dh);
                             }
+                            ctx.restore(); // Restore state
                         }
                     } else if (App.state.segments[idx]) {
                         // DRAW CAPTURED SEGMENT
@@ -1829,17 +2008,40 @@ async function handleRequest(request, env) {
                 const ghost = document.getElementById('ghostOverlay');
                 const btn = document.getElementById('ghostToggleBtn');
                 const slider = document.getElementById('ghostSliderContainer');
-                App.state.ghostMode = !App.state.ghostMode;
+
                 if (App.state.ghostMode) {
+                    // Ghost IS active.
+                    // If slider is hidden, just show slider.
+                    if (slider.classList.contains('hidden')) {
+                        slider.classList.remove('hidden');
+                    } else {
+                        // If slider is visible, turn OFF ghost mode.
+                        App.state.ghostMode = false;
+                        ghost.classList.add('opacity-0');
+                        btn.classList.add('opacity-50');
+                        slider.classList.add('hidden');
+                    }
+                } else {
+                    // Ghost is OFF. Turn ON.
+                    App.state.ghostMode = true;
                     ghost.classList.remove('opacity-0');
+                    ghost.style.opacity = App.state.ghostOpacity;
                     btn.classList.remove('opacity-50');
                     slider.classList.remove('hidden');
-                    App.updateGhostClip();
-                } else {
-                    ghost.classList.add('opacity-0');
-                    btn.classList.add('opacity-50');
-                    slider.classList.add('hidden');
                 }
+            },
+
+            setGhostOpacity: (val) => {
+                const newVal = parseFloat(val);
+                App.state.ghostOpacity = newVal;
+
+                const ghost = document.getElementById('ghostOverlay');
+                if (App.state.ghostMode) ghost.style.opacity = newVal;
+
+                // Save to storage
+                const s = Storage.getSettings();
+                s.ghostOpacity = newVal;
+                Storage.setSettings(s);
             },
 
             handleTagInput: (e) => {
@@ -1980,33 +2182,38 @@ async function handleRequest(request, env) {
             captureSegment: () => {
                 const video = document.getElementById('videoSource');
                 const canvas = document.createElement('canvas');
-                const W = 1280; const H = 960;
-                const layout = App.collageConfigs[App.state.collageMode];
-                const slot = layout[App.state.activeSegment];
-                const slotW = slot.w * W;
-                const slotH = slot.h * H;
-                canvas.width = slotW;
-                canvas.height = slotH;
+
+                const isPortrait = App.state.orientation === 'portrait';
+                const BaseW = isPortrait ? 960 : 1280;
+                const BaseH = isPortrait ? 1280 : 960;
+
+                // The segment canvas is always the size of one "Base" frame
+                canvas.width = BaseW;
+                canvas.height = BaseH;
+
                 const ctx = canvas.getContext('2d');
                 const vidW = video.videoWidth;
                 const vidH = video.videoHeight;
                 const srcRatio = vidW / vidH;
-                const dstRatio = slotW / slotH;
+                const dstRatio = BaseW / BaseH;
+
                 let sx, sy, sw, sh;
                 if (srcRatio > dstRatio) { sh = vidH; sw = sh * dstRatio; sy = 0; sx = (vidW - sw) / 2; }
                 else { sw = vidW; sh = sw / dstRatio; sx = 0; sy = (vidH - sh) / 2; }
+
                 if (App.state.mirrorVideo && App.state.facingMode === 'user') {
                     ctx.save();
-                    ctx.translate(slotW, 0);
+                    ctx.translate(BaseW, 0);
                     ctx.scale(-1, 1);
-                    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, slotW, slotH);
+                    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, BaseW, BaseH);
                     ctx.restore();
                 } else {
-                    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, slotW, slotH);
+                    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, BaseW, BaseH);
                 }
                 App.state.segments[App.state.activeSegment] = canvas;
 
                 // Smart flow logic
+                const layout = App.collageConfigs[App.state.collageMode];
                 const total = layout.length;
                 let allFilled = true;
                 let nextEmpty = -1;
@@ -2023,7 +2230,6 @@ async function handleRequest(request, env) {
                     App.state.activeSegment = nextEmpty;
                     document.getElementById('segCurrent').innerText = App.state.activeSegment + 1;
                     App.updateGridOverlay();
-                    App.updateGhostClip();
                 }
             },
 
@@ -2033,7 +2239,24 @@ async function handleRequest(request, env) {
 
                 if (!finalCanvas) return;
 
-                const W = 1280; const H = 960;
+                const isPortrait = App.state.orientation === 'portrait';
+                const mode = App.state.collageMode;
+                const BaseW = isPortrait ? 960 : 1280;
+                const BaseH = isPortrait ? 1280 : 960;
+
+                // Determine Multipliers
+                let multW = 1;
+                let multH = 1;
+                if (mode === 2) multW = 2;
+                else if (mode === 3) multW = 3;
+                else if (mode === 4) { multW = 2; multH = 2; }
+                else if (mode === 5) { multW = 1; multH = 2; }
+                else if (mode === 6) { multW = 1; multH = 3; }
+                else if (mode === 7) { multW = 2; multH = 2; }
+
+                const W = BaseW * multW;
+                const H = BaseH * multH;
+
                 finalCanvas.width = W; finalCanvas.height = H;
                 const ctx = finalCanvas.getContext('2d');
 
@@ -2043,7 +2266,16 @@ async function handleRequest(request, env) {
                 layout.forEach((slot, idx) => {
                     const seg = App.state.segments[idx];
                     if (seg) {
-                        ctx.drawImage(seg, 0, 0, seg.width, seg.height, slot.x * W, slot.y * H, slot.w * W, slot.h * H);
+                        // Destination in Final Canvas
+                        const dx = slot.x * W;
+                        const dy = slot.y * H;
+                        const dw = slot.w * W;
+                        const dh = slot.h * H;
+
+                        // Draw segment (which is BaseW x BaseH) into destination slot
+                        // Note: for 2x/3x, dw approx equals BaseW. For 4x, dw approx equals BaseW.
+                        // Slight floating point diffs possible, but drawImage handles scaling.
+                        ctx.drawImage(seg, 0, 0, seg.width, seg.height, dx, dy, dw, dh);
                     }
                 });
 
@@ -2081,7 +2313,6 @@ async function handleRequest(request, env) {
 
                 App.initCamera();
                 App.updateGridOverlay();
-                App.updateGhostClip();
                 document.getElementById('segCurrent').innerText = App.state.activeSegment + 1;
             },
 
@@ -2107,23 +2338,21 @@ async function handleRequest(request, env) {
                     img.onload = () => {
                         const canvas = document.createElement('canvas');
 
-                        const W = 1280; const H = 960;
-                        const layout = App.collageConfigs[App.state.collageMode];
-                        const slot = layout[App.state.activeSegment];
-                        const slotW = slot.w * W;
-                        const slotH = slot.h * H;
+                        const isPortrait = App.state.orientation === 'portrait';
+                        const BaseW = isPortrait ? 960 : 1280;
+                        const BaseH = isPortrait ? 1280 : 960;
 
-                        canvas.width = slotW;
-                        canvas.height = slotH;
+                        canvas.width = BaseW;
+                        canvas.height = BaseH;
                         const ctx = canvas.getContext('2d');
 
                         const srcRatio = img.width / img.height;
-                        const dstRatio = slotW / slotH;
+                        const dstRatio = BaseW / BaseH;
                         let sx, sy, sw, sh;
                         if (srcRatio > dstRatio) { sh = img.height; sw = sh * dstRatio; sy = 0; sx = (img.width - sw) / 2; }
                         else { sw = img.width; sh = sw / dstRatio; sx = 0; sy = (img.height - sh) / 2; }
 
-                        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, slotW, slotH);
+                        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, BaseW, BaseH);
 
                         App.state.segments[App.state.activeSegment] = canvas;
 
@@ -2136,7 +2365,6 @@ async function handleRequest(request, env) {
                             App.state.activeSegment++;
                             document.getElementById('segCurrent').innerText = App.state.activeSegment + 1;
                             App.updateGridOverlay();
-                            App.updateGhostClip();
                         }
                     }
                 }
@@ -2186,53 +2414,82 @@ async function handleRequest(request, env) {
                 document.getElementById('settingWorkerUrl').value = s.workerUrl || '';
                 document.getElementById('settingProxyToken').value = s.proxyToken || '';
 
-                // Check if we should enable save
-                // If connected via OAuth and Worker URL is present, enable save
-                const isOAuth = s.authToken && !s.authToken.startsWith('secret_');
-                const hasWorker = !!s.workerUrl;
+                // Unlock state logic
+                const hasVerifiedWorker = !!s.workerUrl;
+                const authSection = document.getElementById('authSection');
 
-                if (isOAuth && hasWorker) {
-                    document.getElementById('saveSettingsBtn').disabled = false;
-                } else if (isSecret && hasWorker) {
-                    // If manual key exists and worker exists, assume valid
-                    document.getElementById('saveSettingsBtn').disabled = false;
+                if (hasVerifiedWorker) {
+                    authSection.classList.remove('opacity-50', 'pointer-events-none');
                 } else {
-                    // Otherwise disable save until verified/changed
-                    document.getElementById('saveSettingsBtn').disabled = true;
+                    authSection.classList.add('opacity-50', 'pointer-events-none');
                 }
+
+                // Check if we should enable save
+                // Save is only enabled if AUTH is also verified (token present)
+                const isAuthVerified = !!s.authToken;
+
+                document.getElementById('saveSettingsBtn').disabled = !isAuthVerified;
             },
             onSettingInput: () => {
-                // If worker URL is typed while OAuth connected, we can allow saving?
-                // Let's keep strict: disable save on any input until verified (for manual)
-                // For Worker URL change, we ideally want verification too, but basic save is okay if Auth is solid.
-                // To simplify: any input disables save until "Verify" (for manual) or just re-check (for OAuth)
+                const workerUrl = document.getElementById('settingWorkerUrl').value;
+                // Enable verify button if text present
+                document.getElementById('verifyWorkerBtn').disabled = !workerUrl;
+            },
+            verifyWorker: async () => {
+                const btn = document.getElementById('verifyWorkerBtn');
+                const originalText = btn.innerText;
+                const workerUrl = document.getElementById('settingWorkerUrl').value.trim();
+                const proxyToken = document.getElementById('settingProxyToken').value.trim();
 
-                const s = Storage.getSettings();
-                const isOAuth = s.authToken && !s.authToken.startsWith('secret_');
+                if (!workerUrl) return App.showToast("Enter a Worker URL first", "error");
 
-                // If OAuth, we only care about Worker URL being present.
-                // If Manual, we need explicit verification.
+                btn.innerText = "Checking...";
+                btn.disabled = true;
 
-                if (isOAuth) {
-                    // If OAuth, allow saving if Worker URL is present
-                    const workerUrl = document.getElementById('settingWorkerUrl').value;
-                    document.getElementById('saveSettingsBtn').disabled = !workerUrl;
-                } else {
-                    // Manual or Disconnected: Disable save until Verify clicked
-                    document.getElementById('saveSettingsBtn').disabled = true;
+                // Test proxy by hitting Notion API directly via "General Mode"
+                // using the endpoint we ultimately care about.
+                // We expect a 401 Unauthorized from Notion (since we send no Notion token here),
+                // which proves the proxy is forwarding requests and returning responses correctly.
+                const cleanWorkerUrl = workerUrl.replace(/\/$/, '');
+                let fetchUrl;
+                try {
+                    fetchUrl = new URL(cleanWorkerUrl);
+                } catch (e) {
+                    App.showToast("Invalid Worker URL format", "error");
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                    return;
                 }
 
-                const statusEl = document.getElementById('connectionStatus');
-                statusEl.innerHTML = `
-                    <div class="flex items-start gap-3 text-charcoal bg-gray-100 p-3 rounded-lg border border-gray-200 text-xs">
-                        <div class="bg-white p-1 rounded-full shadow-sm mt-0.5"><i data-lucide="edit-3" class="w-4 h-4 text-gray-500"></i></div>
-                        <div class="flex-1">
-                            <strong class="block text-sm mb-0.5">Unsaved Changes</strong>
-                            <span class="opacity-80">Please verify settings to save changes.</span>
-                        </div>
-                    </div>
-                `;
-                lucide.createIcons();
+                fetchUrl.searchParams.append('url', 'https://api.notion.com/v1/users/me');
+                if (proxyToken) fetchUrl.searchParams.append('token', proxyToken);
+
+                try {
+                    const res = await fetch(fetchUrl.toString());
+
+                    // Notion returns 401 if we reach it but have no auth. 
+                    // This confirms the proxy works.
+                    if (res.ok || res.status === 401) {
+                        App.showToast("Proxy Verified!", "success");
+
+                        // Save proxy settings immediately
+                        const current = Storage.getSettings();
+                        Storage.setSettings({ ...current, workerUrl, proxyToken });
+
+                        // Enable Auth Section
+                        document.getElementById('authSection').classList.remove('opacity-50', 'pointer-events-none');
+                    } else {
+                        // If we get 403, it might be the Proxy Token mismatch (if the worker sends CORS on error, which it might not, but we catch network errors below)
+                        throw new Error("Proxy returned status " + res.status);
+                    }
+                } catch (e) {
+                    // console.error(e); // User requested removal
+                    // If the worker code blocks 403 without CORS, it appears as a Network Error here.
+                    App.showToast("Verification failed. Check Worker URL & Proxy Secret.", "error");
+                } finally {
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                }
             },
             saveBeforeOAuth: () => {
                 const workerUrl = document.getElementById('settingWorkerUrl').value;
@@ -2258,6 +2515,10 @@ async function handleRequest(request, env) {
                     const tempSettings = { workerUrl, authToken, proxyToken };
                     const res = await API.request('GET', '/users/me', null, tempSettings);
                     App.showToast(`Verified: ${res.bot?.workspace_name || 'Connected'}`, 'success');
+
+                    // Save fully verified settings
+                    Storage.setSettings(tempSettings);
+
                     App.renderSettingsStatus(tempSettings);
                     document.getElementById('saveSettingsBtn').disabled = false;
 
@@ -2275,20 +2536,9 @@ async function handleRequest(request, env) {
                 App.testManualConnection(btn);
             },
             saveSettings: () => {
-                const workerUrl = document.getElementById('settingWorkerUrl').value;
-                // If auth token input is empty (because hidden for OAuth), keep existing token
-                const inputToken = document.getElementById('settingAuthToken').value;
-                const currentSettings = Storage.getSettings();
-
-                let finalToken = inputToken;
-                if (!inputToken && currentSettings.authToken && !currentSettings.authToken.startsWith('secret_')) {
-                    finalToken = currentSettings.authToken;
-                }
-
-                const proxyToken = document.getElementById('settingProxyToken').value;
-                Storage.setSettings({ workerUrl, authToken: finalToken, proxyToken });
+                // Just close modal since we saved incrementally during verification steps
                 App.closeModal('settingsModal');
-                App.showToast("Saved", "success");
+                App.showToast("Settings Closed", "success");
                 App.renderWelcomeState();
             },
             openModal: (id) => {
