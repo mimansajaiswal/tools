@@ -31,6 +31,9 @@
     <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 
+    <!-- Marked.js for Markdown Parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
     <!-- Prism.js for Syntax Highlighting -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
@@ -270,11 +273,17 @@
                                 <div v-else class="w-full h-full" v-html="getShapeSvg(hs.shape)"></div>
                             </div>
 
-                            <!-- Label on hover -->
-                            <div v-if="!contextPopup.visible"
+                            <!-- Label on hover (Only for Link/Scene actions) -->
+                            <div v-if="!contextPopup.visible && hs.action !== 'popup'"
                                 class="absolute bottom-full mb-2 bg-charcoal text-linen text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity">
                                 <span v-if="hs.action === 'link'">Link: {{ hs.url }}</span>
                                 <span v-else>Go to: {{ getSceneName(hs.targetSceneId) }}</span>
+                            </div>
+
+                            <!-- Editor Hint for Popups -->
+                            <div v-if="hs.action === 'popup' && !contextPopup.visible"
+                                class="absolute bottom-full mb-2 bg-white border border-dull-purple text-dull-purple text-[10px] px-1 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity">
+                                <i class="ph ph-chat-text"></i> Popup
                             </div>
                         </div>
 
@@ -290,6 +299,9 @@
                                 <button @click="contextPopup.hotspot.action = 'link'"
                                     class="flex-1 text-[10px] py-1 rounded transition"
                                     :class="contextPopup.hotspot.action === 'link' ? 'bg-white shadow text-dull-purple font-bold' : 'text-gray-500'">Link</button>
+                                <button @click="contextPopup.hotspot.action = 'popup'"
+                                    class="flex-1 text-[10px] py-1 rounded transition"
+                                    :class="contextPopup.hotspot.action === 'popup' ? 'bg-white shadow text-dull-purple font-bold' : 'text-gray-500'">Popup</button>
                             </div>
 
                             <!-- Scene Selector -->
@@ -307,7 +319,7 @@
                             </div>
 
                             <!-- Link Input -->
-                            <div v-else>
+                            <div v-else-if="contextPopup.hotspot.action === 'link'">
                                 <p class="text-[10px] font-bold text-charcoal mb-1">URL:</p>
                                 <input ref="popupSelect" type="text" v-model="contextPopup.hotspot.url"
                                     placeholder="https://site.com or /page"
@@ -319,6 +331,18 @@
                                             class="rounded text-dull-purple w-3 h-3">
                                         <label for="popup-newtab" class="text-[10px] text-charcoal">New Tab</label>
                                     </div>
+                                    <button @click="confirmContextPopup"
+                                        class="bg-dull-purple hover:bg-dull-purple/90 text-white text-[10px] px-3 py-1 rounded transition">Done</button>
+                                </div>
+                            </div>
+
+                            <!-- Popup Editor (Direct Edit) -->
+                            <div v-else>
+                                <p class="text-[10px] font-bold text-charcoal mb-1">Content (Markdown):</p>
+                                <textarea ref="popupSelect" v-model="contextPopup.hotspot.popupContent"
+                                    placeholder="# Heading&#10;Text here..." rows="4"
+                                    class="w-full bg-linen border border-gray-200 rounded p-2 text-xs font-mono focus:outline-none focus:border-dull-purple text-charcoal resize-none mb-2"></textarea>
+                                <div class="flex justify-end">
                                     <button @click="confirmContextPopup"
                                         class="bg-dull-purple hover:bg-dull-purple/90 text-white text-[10px] px-3 py-1 rounded transition">Done</button>
                                 </div>
@@ -365,14 +389,6 @@
                                 <option value="lazy">Lazy (Below Fold) - Recommended</option>
                                 <option value="eager">Immediate (LCP) - High Priority</option>
                             </select>
-                            <p class="text-[10px] text-gray-400 mt-1">
-                                <span v-if="config.loadingStrategy === 'lazy'">
-                                    Defers loading of images and scripts until needed. Best for PageSpeed.
-                                </span>
-                                <span v-else>
-                                    Loads immediately. Use ONLY if this is the very first thing user sees.
-                                </span>
-                            </p>
                         </div>
 
                         <div class="flex items-center gap-2 pt-2">
@@ -459,12 +475,13 @@
                             <div class="flex bg-linen rounded p-1 border border-gray-200">
                                 <button @click="selectedHotspot.action = 'scene'"
                                     class="flex-1 text-xs py-1.5 rounded transition"
-                                    :class="selectedHotspot.action === 'scene' ? 'bg-white shadow text-dull-purple font-medium' : 'text-gray-500 hover:text-charcoal'">Switch
-                                    Image</button>
+                                    :class="selectedHotspot.action === 'scene' ? 'bg-white shadow text-dull-purple font-medium' : 'text-gray-500 hover:text-charcoal'">Switch</button>
                                 <button @click="selectedHotspot.action = 'link'"
                                     class="flex-1 text-xs py-1.5 rounded transition"
-                                    :class="selectedHotspot.action === 'link' ? 'bg-white shadow text-dull-purple font-medium' : 'text-gray-500 hover:text-charcoal'">Open
-                                    Link</button>
+                                    :class="selectedHotspot.action === 'link' ? 'bg-white shadow text-dull-purple font-medium' : 'text-gray-500 hover:text-charcoal'">Link</button>
+                                <button @click="selectedHotspot.action = 'popup'"
+                                    class="flex-1 text-xs py-1.5 rounded transition"
+                                    :class="selectedHotspot.action === 'popup' ? 'bg-white shadow text-dull-purple font-medium' : 'text-gray-500 hover:text-charcoal'">Popup</button>
                             </div>
                         </div>
 
@@ -481,7 +498,7 @@
                             </select>
                         </div>
 
-                        <div v-else class="space-y-3">
+                        <div v-else-if="selectedHotspot.action === 'link'" class="space-y-3">
                             <div>
                                 <label class="block text-xs font-bold text-gray-500 mb-1">URL</label>
                                 <input type="text" v-model="selectedHotspot.url" placeholder="https://site.com or /page"
@@ -491,6 +508,17 @@
                                 <input type="checkbox" id="newTab" v-model="selectedHotspot.newTab"
                                     class="rounded border-gray-300 text-dull-purple focus:ring-dull-purple">
                                 <label for="newTab" class="text-sm text-charcoal">Open in new tab</label>
+                            </div>
+                        </div>
+
+                        <div v-else-if="selectedHotspot.action === 'popup'" class="space-y-3">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 mb-1">Popup Content
+                                    (Markdown)</label>
+                                <textarea v-model="selectedHotspot.popupContent"
+                                    placeholder="# Heading&#10;Some text here..." rows="6"
+                                    class="w-full bg-linen border border-gray-200 rounded p-2 text-sm font-mono focus:outline-none focus:border-dull-purple text-charcoal resize-y"></textarea>
+                                <p class="text-[10px] text-gray-400 mt-1">Supports Markdown (headings, bold, lists)</p>
                             </div>
                         </div>
 
@@ -659,7 +687,6 @@
                 const copyBtnIcon = ref('ph-copy');
                 const imageRef = ref(null);
                 const codeBlock = ref(null);
-                // codeArea removed
                 const previewFrame = ref(null);
                 const popupSelect = ref(null);
                 const previewDevice = ref('desktop');
@@ -977,7 +1004,8 @@
                         action: 'scene', // Default action
                         targetSceneId: null,
                         url: '',
-                        newTab: true
+                        newTab: true,
+                        popupContent: '' // New for popup
                     };
 
                     activeScene.value.hotspots.push(newHotspot);
@@ -1201,6 +1229,68 @@
         0% { transform: scale(0.5); opacity: 0.6; }
         100% { transform: scale(1.5); opacity: 0; }
     }
+
+    /* POPUP STYLES */
+    .${pfx}-popup {
+        display: none;
+        position: absolute;
+        width: 260px;
+        background: white;
+        padding: 1rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.1);
+        z-index: 100;
+        cursor: auto;
+        color: #1C1917;
+        font-family: inherit;
+        text-align: left;
+    }
+
+    /* Show on Hover (Desktop) */
+    @media (hover: hover) {
+        .${pfx}-hotspot:hover .${pfx}-popup {
+            display: block;
+        }
+    }
+
+    /* Show when Active (Clicked) */
+    .${pfx}-hotspot.active .${pfx}-popup {
+        display: block;
+    }
+
+    /* Popup Typography (Markdown) */
+    .${pfx}-popup h1, .${pfx}-popup h2, .${pfx}-popup h3 {
+        font-weight: 700;
+        margin-top: 0;
+        margin-bottom: 0.5rem;
+        line-height: 1.2;
+        color: #5F328C;
+    }
+    .${pfx}-popup h1 { font-size: 1.25rem; }
+    .${pfx}-popup h2 { font-size: 1.1rem; }
+    .${pfx}-popup h3 { font-size: 1rem; }
+    .${pfx}-popup p {
+        margin: 0 0 0.5rem 0;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        color: #4b5563;
+    }
+    .${pfx}-popup ul, .${pfx}-popup ol {
+        margin: 0 0 0.5rem 0;
+        padding-left: 1.2rem;
+        font-size: 0.875rem;
+    }
+    .${pfx}-popup ul { list-style-type: disc; }
+    .${pfx}-popup ol { list-style-type: decimal; }
+    .${pfx}-popup strong { font-weight: 600; color: #1C1917; }
+    .${pfx}-popup a { color: #5F328C; text-decoration: underline; }
+    .${pfx}-popup *:last-child { margin-bottom: 0; }
+
+    /* Smart Positioning Classes */
+    .${pfx}-pop-br { top: 50%; left: 50%; margin-top: 12px; margin-left: 12px; }
+    .${pfx}-pop-bl { top: 50%; right: 50%; margin-top: 12px; margin-right: 12px; }
+    .${pfx}-pop-tr { bottom: 50%; left: 50%; margin-bottom: 12px; margin-left: 12px; }
+    .${pfx}-pop-tl { bottom: 50%; right: 50%; margin-bottom: 12px; margin-right: 12px; }
 </style>`;
 
                     // HTML
@@ -1269,7 +1359,7 @@
 
                         // Hotspots
                         scene.hotspots.forEach(hs => {
-                            if (hs.targetSceneId || hs.action === 'link') {
+                            if (hs.targetSceneId || hs.action === 'link' || hs.action === 'popup') {
                                 const shape = hs.shape || 'dot';
                                 const pulseClass = ' has-pulse';
                                 const sizeClass = shape === 'dot' ? `${pfx}-size-dot` : `${pfx}-size-icon`;
@@ -1284,8 +1374,14 @@
                                 }
 
                                 let dataAttrs = `style="left: ${hs.x}%; top: ${hs.y}%; color: ${hs.color};"`;
+                                let titleAttr = 'Click to navigate';
+
                                 if (hs.action === 'link') {
                                     dataAttrs += ` data-action="link" data-url="${hs.url || '#'}" data-new-tab="${hs.newTab}"`;
+                                    titleAttr = 'Go to Link';
+                                } else if (hs.action === 'popup') {
+                                    dataAttrs += ` data-action="popup"`;
+                                    titleAttr = 'More Info';
                                 } else {
                                     dataAttrs += ` data-action="scene" data-target="${hs.targetSceneId}"`;
                                 }
@@ -1293,8 +1389,60 @@
                                 htmlContent += `
         <div class="${pfx}-hotspot ${sizeClass}${pulseClass}" 
              ${dataAttrs}
-             title="${hs.action === 'link' ? 'Go to Link' : 'Click to navigate'}">
-             ${innerContent}
+             title="${titleAttr}">
+             ${innerContent}`;
+
+                                // Add Popup HTML if action is popup
+                                if (hs.action === 'popup' && hs.popupContent) {
+                                    // Parse Markdown to HTML
+                                    const renderedHtml = marked.parse(hs.popupContent);
+
+                                    // Link Sanitizer & Auto-Externalizer
+                                    const div = document.createElement('div');
+                                    div.innerHTML = renderedHtml;
+                                    const links = div.querySelectorAll('a');
+                                    links.forEach(a => {
+                                        let href = a.getAttribute('href');
+                                        if (href) {
+                                            const isRelative = href.startsWith('/') || href.startsWith('#');
+
+                                            if (!isRelative) {
+                                                // It is external (or protocol like mailto)
+                                                a.setAttribute('target', '_blank');
+                                                a.setAttribute('rel', 'noopener noreferrer');
+
+                                                // Check for protocol
+                                                // Regex for valid scheme: ^[a-z][a-z0-9+.-]*:
+                                                const hasProtocol = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(href);
+
+                                                // Fix protocol if missing
+                                                if (!hasProtocol) {
+                                                    a.setAttribute('href', 'https://' + href);
+                                                }
+                                            }
+                                        }
+                                    });
+                                    const sanitizedHtml = div.innerHTML;
+
+                                    // Determine Quadrant for positioning
+                                    let posClass = '';
+                                    if (hs.y < 50) {
+                                        // Top Half -> Grow Down
+                                        if (hs.x < 50) posClass = `${pfx}-pop-br`; // Top-Left Hotspot -> Bottom-Right Popup
+                                        else posClass = `${pfx}-pop-bl`; // Top-Right Hotspot -> Bottom-Left Popup
+                                    } else {
+                                        // Bottom Half -> Grow Up
+                                        if (hs.x < 50) posClass = `${pfx}-pop-tr`; // Bottom-Left Hotspot -> Top-Right Popup
+                                        else posClass = `${pfx}-pop-tl`; // Bottom-Right Hotspot -> Top-Left Popup
+                                    }
+
+                                    htmlContent += `
+             <div class="${pfx}-popup ${posClass}">
+                ${sanitizedHtml}
+             </div>`;
+                                }
+
+                                htmlContent += `
         </div>`;
                             }
                         });
@@ -1306,7 +1454,7 @@
                     htmlContent += `
 </div>`;
 
-                    // Updated JS logic for Actions (Links + Scenes)
+                    // Updated JS logic
                     let jsContent = `
     (function() {
         const container = document.getElementById('${containerId}');
@@ -1338,6 +1486,8 @@
                     s.classList.remove('active');
                 }
             });
+            // Close any open popups when switching scenes
+            closeAllPopups();
         }
 
         function navigateTo(id, isHistoryNav = false) {
@@ -1352,32 +1502,61 @@
             updateButtons();
         }
 
-        container.addEventListener('click', function(e) {
-            const hotspot = e.target.closest('.${pfx}-hotspot');
-            if (hotspot) {
-                const action = hotspot.getAttribute('data-action');
-                
-                if (action === 'link') {
-                    let url = hotspot.getAttribute('data-url');
-                    const newTab = hotspot.getAttribute('data-new-tab') === 'true';
-                    
-                    if (url) {
-                        const isAbsolute = /^(?:f|ht)tps?:\\/\\//.test(url);
-                        const isRelative = url.startsWith('/') || url.startsWith('#') || url.startsWith('mailto:') || url.startsWith('tel:');
-                        
-                        if (!isAbsolute && !isRelative) {
-                            if (url.startsWith('www.') || /\\.(com|net|org|io|co|edu|gov|uk|us|ca|de|jp|fr|au|ai|app|dev|biz|info)$/i.test(url)) {
-                                url = 'https://' + url;
-                            }
-                        }
+        function closeAllPopups() {
+            const activePopups = container.querySelectorAll('.${pfx}-hotspot.active');
+            activePopups.forEach(el => el.classList.remove('active'));
+        }
 
-                        if (newTab) window.open(url, '_blank');
-                        else window.location.href = url;
-                    }
-                } else {
-                    const targetId = hotspot.getAttribute('data-target');
-                    if (targetId) navigateTo(targetId);
+        // Global click to close popups if clicked outside
+        document.addEventListener('click', function(e) {
+            if (!container.contains(e.target)) {
+                closeAllPopups();
+            }
+        });
+
+        container.addEventListener('click', function(e) {
+            // Handle popup toggling
+            const hotspot = e.target.closest('.${pfx}-hotspot');
+            
+            // If clicked NOT on a hotspot, close all
+            if (!hotspot) {
+                closeAllPopups();
+                return;
+            }
+
+            const action = hotspot.getAttribute('data-action');
+            
+            if (action === 'popup') {
+                e.stopPropagation(); // Prevent document click from closing it immediately
+                const isActive = hotspot.classList.contains('active');
+                
+                // Close others
+                closeAllPopups();
+
+                // Toggle current if it wasn't active, otherwise it stays closed (removed above)
+                if (!isActive) {
+                    hotspot.classList.add('active');
                 }
+            } 
+            else if (action === 'link') {
+                let url = hotspot.getAttribute('data-url');
+                const newTab = hotspot.getAttribute('data-new-tab') === 'true';
+                
+                if (url) {
+                    // Strict check: Only / or # are relative. Everything else is external.
+                    const isRelative = url.startsWith('/') || url.startsWith('#');
+                    const hasProtocol = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url);
+                    
+                    if (!isRelative && !hasProtocol) {
+                        url = 'https://' + url;
+                    }
+
+                    if (newTab) window.open(url, '_blank');
+                    else window.location.href = url;
+                }
+            } else {
+                const targetId = hotspot.getAttribute('data-target');
+                if (targetId) navigateTo(targetId);
             }
         });
 
