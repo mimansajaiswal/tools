@@ -1,0 +1,1686 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Countdown Timer Builder</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Confetti Library -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link id="dynamic-fonts"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Rowdies:wght@300;400;700&family=Roboto+Mono:wght@400;700&family=Space+Grotesk:wght@300;700&family=Montserrat:wght@400;700&family=Playfair+Display:wght@400;700&family=Lato:wght@400;700&family=Open+Sans:wght@400;700&family=Bebas+Neue&family=Silkscreen&display=swap"
+        rel="stylesheet">
+
+    <style>
+        :root {
+            --color-oatmeal: #E8E6E1;
+            --color-oatmeal-dark: #D6D2C8;
+            --color-white-linen: #F9F7F5;
+            --color-earth-metal: #5A534D;
+            --color-charcoal: #363636;
+            --color-dull-purple: #8B8296;
+            --color-active: #8B8296;
+            --bg-sidebar: #ECEAE4;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--color-white-linen);
+            color: var(--color-earth-metal);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--color-dull-purple);
+            border-radius: 3px;
+        }
+
+        /* Controls */
+        .control-group {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+            border: 1px solid rgba(0, 0, 0, 0.02);
+        }
+
+        label {
+            font-size: 0.65rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #888;
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        input[type="datetime-local"],
+        select {
+            width: 100%;
+            background: var(--color-white-linen);
+            border: 1px solid var(--color-oatmeal-dark);
+            border-radius: 8px;
+            font-family: 'Inter', sans-serif;
+            color: var(--color-charcoal);
+            outline: none;
+            transition: all 0.2s;
+            height: 34px;
+            padding: 0 10px;
+            line-height: 1.2;
+            box-sizing: border-box;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        input[type="datetime-local"] {
+            font-size: 0.75rem;
+        }
+
+        select {
+            font-size: 0.7rem;
+            cursor: pointer;
+        }
+
+        input:focus,
+        select:focus {
+            border-color: var(--color-dull-purple);
+            background: white;
+        }
+
+        input[type="color"] {
+            -webkit-appearance: none;
+            border: none;
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            cursor: pointer;
+            overflow: hidden;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        input[type="color"]::-webkit-color-swatch-wrapper {
+            padding: 0;
+        }
+
+        input[type="color"]::-webkit-color-swatch {
+            border: none;
+        }
+
+        /* Template Selector */
+        .template-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .template-option {
+            aspect-ratio: 1;
+            border-radius: 10px;
+            background: white;
+            border: 2px solid transparent;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            color: var(--color-earth-metal);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
+        }
+
+        .template-option:hover {
+            transform: translateY(-2px);
+        }
+
+        .template-option.active {
+            border-color: var(--color-active);
+            background: var(--color-white-linen);
+            color: var(--color-charcoal);
+        }
+
+        .template-icon {
+            font-size: 1.5rem;
+            margin-bottom: 4px;
+        }
+
+        .template-label {
+            font-size: 0.6rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        /* Toggles */
+        .toggle-checkbox {
+            display: none;
+        }
+
+        .toggle-label {
+            width: 36px;
+            height: 20px;
+            background: var(--color-oatmeal-dark);
+            border-radius: 99px;
+            position: relative;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .toggle-label::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 16px;
+            height: 16px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.3s;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        .toggle-checkbox:checked+.toggle-label {
+            background: var(--color-dull-purple);
+        }
+
+        .toggle-checkbox:checked+.toggle-label::after {
+            transform: translateX(16px);
+        }
+
+        /* Range Slider */
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            margin: 10px 0;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 14px;
+            width: 14px;
+            border-radius: 50%;
+            background: var(--color-dull-purple);
+            cursor: pointer;
+            margin-top: -5px;
+            box-shadow: 0 0 0 2px white;
+        }
+
+        input[type="range"]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            background: var(--color-oatmeal-dark);
+            border-radius: 2px;
+        }
+
+        /* Preview Area */
+        .preview-area {
+            background-color: #F0F0F0;
+        }
+
+        #appContainer {
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            max-width: 900px;
+            min-height: 200px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+            background: white;
+            margin: auto;
+
+            container-type: inline-size;
+            container-name: preview;
+        }
+
+        /* --- TEMPLATES CSS --- */
+
+        /* Shared Flickering Fix */
+        .time-val {
+            font-variant-numeric: tabular-nums;
+            font-feature-settings: "tnum";
+            letter-spacing: -0.02em;
+            text-align: center;
+            min-width: 1.8ch;
+            display: inline-block;
+        }
+
+        /* Standard */
+        .tpl-std .timer-unit {
+            text-align: center;
+            padding: 0 1em;
+        }
+
+        .tpl-std .time-val {
+            font-size: 4em;
+            line-height: 1;
+            font-weight: 700;
+            display: block;
+            white-space: nowrap;
+        }
+
+        .tpl-std .time-label {
+            font-size: 0.75em;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            opacity: 0.7;
+            margin-top: 0.5em;
+            display: block;
+        }
+
+        /* Cards */
+        .tpl-cards {
+            gap: 0.8em;
+        }
+
+        .tpl-cards .timer-unit {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(8px);
+            border-radius: 0.8em;
+            padding: 1.2em 0.8em;
+            min-width: 5em;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        .tpl-cards .time-val {
+            font-size: 2.5em;
+            font-weight: 700;
+            line-height: 1;
+            color: var(--color-charcoal);
+            white-space: nowrap;
+        }
+
+        .tpl-cards .time-label {
+            font-size: 0.6em;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-top: 0.5em;
+            color: var(--color-earth-metal);
+            letter-spacing: 0.05em;
+        }
+
+        /* Ring */
+        .tpl-ring .timer-unit {
+            position: relative;
+            width: 6em;
+            height: 6em;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 0 0.4em;
+        }
+
+        .tpl-ring .ring-svg {
+            position: absolute;
+            inset: 0;
+            transform: rotate(-90deg);
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .tpl-ring .ring-bg {
+            fill: none;
+            stroke: currentColor;
+            opacity: 0.15;
+            stroke-width: 6;
+        }
+
+        .tpl-ring .ring-prog {
+            fill: none;
+            stroke: currentColor;
+            stroke-width: 6;
+            stroke-linecap: round;
+            stroke-dasharray: 400;
+            stroke-dashoffset: 400;
+            transition: stroke-dashoffset 1s linear;
+        }
+
+        .tpl-ring.label-inside .timer-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            z-index: 10;
+        }
+
+        .tpl-ring.label-inside .time-val {
+            font-size: 1.8em;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .tpl-ring.label-inside .time-label {
+            font-size: 0.4em;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-top: 0.2em;
+        }
+
+        .tpl-ring.label-outside {
+            align-items: center;
+            height: auto;
+            width: auto;
+            margin: 0 1em;
+        }
+
+        .tpl-ring.label-outside .ring-wrapper {
+            position: relative;
+            width: 5em;
+            height: 5em;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .tpl-ring.label-outside .ring-svg {
+            width: 5em;
+            height: 5em;
+        }
+
+        .tpl-ring.label-outside .time-val {
+            font-size: 1.8em;
+            font-weight: 700;
+            z-index: 10;
+        }
+
+        .tpl-ring.label-outside .time-label {
+            margin-top: 0.5em;
+            font-size: 0.6em;
+            font-weight: 600;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            text-align: center;
+            display: block;
+        }
+
+        /* Ticker */
+        .tpl-ticker {
+            gap: 1em;
+        }
+
+        .tpl-ticker .timer-unit {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .tpl-ticker .odometer-housing {
+            background: transparent;
+            display: flex;
+            overflow: hidden;
+            height: 1.1em;
+            line-height: 1.1em;
+        }
+
+        .tpl-ticker .odometer-digit {
+            width: 0.65em;
+            text-align: center;
+            position: relative;
+        }
+
+        .tpl-ticker .digit-strip {
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.5s cubic-bezier(0.1, 0.7, 1.0, 0.1);
+            will-change: transform;
+        }
+
+        .tpl-ticker .digit-val {
+            height: 1.1em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Roboto Mono', monospace;
+            color: inherit;
+            font-weight: 700;
+        }
+
+        .tpl-ticker .time-val {
+            font-size: 3.5em;
+            display: flex;
+            color: var(--timer-color);
+        }
+
+        .tpl-ticker .time-label {
+            font-size: 0.6em;
+            color: inherit;
+            opacity: 0.7;
+            margin-top: 0.4em;
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+        }
+
+        /* Matrix - Fixed Layout */
+        .tpl-matrix {
+            gap: 1.5em;
+        }
+
+        .tpl-matrix .timer-unit {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .tpl-matrix .time-val {
+            font-family: 'Silkscreen', monospace;
+            font-size: 3em;
+            line-height: 1;
+            color: var(--timer-color);
+            text-shadow: 0 0 5px var(--timer-color), 0 0 10px var(--timer-color);
+            display: inline-block;
+            min-width: 2ch;
+            /* Ensures stability for 1 vs 2 digits */
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .tpl-matrix .time-label {
+            font-family: 'Silkscreen', monospace;
+            font-size: 0.6em;
+            margin-top: 0.8em;
+            text-transform: uppercase;
+            opacity: 0.8;
+        }
+
+        /* Grid Logic */
+        .timer-container {
+            display: grid;
+            width: 100%;
+            justify-content: center;
+            align-content: center;
+            gap: 20px;
+        }
+
+        .grid-4-units {
+            grid-template-columns: repeat(2, auto);
+        }
+
+        @container preview (min-width: 600px) {
+            .grid-4-units {
+                grid-template-columns: repeat(4, auto);
+            }
+        }
+
+        .grid-3-units {
+            grid-template-columns: repeat(3, auto);
+        }
+
+        @container preview (max-width: 400px) {
+            .grid-3-units {
+                grid-template-columns: repeat(1, auto);
+            }
+        }
+
+        .grid-2-units {
+            grid-template-columns: repeat(2, auto);
+        }
+
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column;
+                overflow: auto;
+                height: auto;
+            }
+
+            .sidebar {
+                width: 100% !important;
+                height: auto;
+            }
+
+            .preview-area {
+                padding: 20px;
+                min-height: 50vh;
+            }
+
+            #appContainer {
+                aspect-ratio: auto;
+                min-height: 300px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- SIDEBAR -->
+    <div class="sidebar w-80 bg-white border-r border-gray-200 flex flex-col h-full overflow-y-auto shrink-0 z-20">
+        <div class="p-6">
+            <div class="mb-6">
+                <h1 class="text-xl font-bold text-gray-800 font-[Rowdies] mb-1">Timer Builder</h1>
+                <p class="text-xs text-gray-400 mb-4">Aesthetic Countdown Generator</p>
+            </div>
+
+            <!-- Template Selection -->
+            <label>Design Style</label>
+            <div class="template-grid" id="templateGrid">
+                <!-- Injected via JS -->
+            </div>
+
+            <!-- Ring Specific Settings -->
+            <div id="ringSettings" class="control-group hidden">
+                <label>Ring Options</label>
+                <div class="flex items-center justify-between">
+                    <span class="text-xs text-gray-600">Label Position</span>
+                    <select id="ringLabelPos" class="!w-32">
+                        <option value="inside">Inside Ring</option>
+                        <option value="outside">Below Ring</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Canvas Layout Settings -->
+            <div class="control-group">
+                <div class="flex items-center gap-2 mb-3 text-gray-700">
+                    <i class="ph ph-crop text-lg"></i> <span class="text-xs font-bold uppercase">Canvas Layout</span>
+                </div>
+
+                <label>Dimensions</label>
+                <select id="layoutPreset" class="mb-3">
+                    <option value="banner" selected>Wide Banner (900px)</option>
+                    <option value="medium">Medium Rectangle (700px)</option>
+                    <option value="square">Square Card (500px)</option>
+                    <option value="small">Small Rectangle (400px)</option>
+                    <option value="custom">Custom Dimensions</option>
+                </select>
+
+                <div id="customDimsWrapper" class="hidden grid-cols-2 gap-2 mb-3">
+                    <div>
+                        <span class="text-[0.6rem] text-gray-400 block mb-1">Width (px)</span>
+                        <input type="number" id="customWidth" value="800" min="200" max="2000">
+                    </div>
+                    <div>
+                        <span class="text-[0.6rem] text-gray-400 block mb-1">Height (px)</span>
+                        <input type="number" id="customHeight" value="400" min="100" max="2000">
+                    </div>
+                </div>
+
+                <div id="fluidWidthWrapper"
+                    class="hidden justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-100">
+                    <label class="!mb-0 cursor-pointer text-gray-600" for="fluidWidth">Fluid Width (100%)</label>
+                    <div class="relative">
+                        <input type="checkbox" id="fluidWidth" class="toggle-checkbox">
+                        <label for="fluidWidth" class="toggle-label !mb-0"></label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Global Settings -->
+            <div class="control-group">
+                <div class="flex items-center gap-2 mb-3 text-gray-700">
+                    <i class="ph ph-calendar-check text-lg"></i> <span
+                        class="text-xs font-bold uppercase">Schedule</span>
+                </div>
+
+                <div id="startDateWrapper">
+                    <label>Start Date</label>
+                    <div class="grid grid-cols-1 gap-2">
+                        <input type="datetime-local" id="startDate">
+                        <select id="startTimeZone" class="text-xs text-gray-500"></select>
+                    </div>
+                </div>
+
+                <div class="mt-3">
+                    <label>Target Date</label>
+                    <div class="grid grid-cols-1 gap-2">
+                        <input type="datetime-local" id="endDate">
+                        <select id="endTimeZone" class="text-xs text-gray-500"></select>
+                    </div>
+                </div>
+
+                <div class="mt-3 border-t border-gray-100 pt-3">
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="!mb-0 cursor-pointer text-xs font-normal text-gray-600" for="showConfetti">Show
+                            Confetti</label>
+                        <div class="relative">
+                            <input type="checkbox" id="showConfetti" class="toggle-checkbox" checked>
+                            <label for="showConfetti" class="toggle-label !mb-0"></label>
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <label class="!mb-0 cursor-pointer text-xs font-normal text-gray-600" for="hideOnComplete">Hide
+                            on Complete</label>
+                        <div class="relative">
+                            <input type="checkbox" id="hideOnComplete" class="toggle-checkbox">
+                            <label for="hideOnComplete" class="toggle-label !mb-0"></label>
+                        </div>
+                    </div>
+                    <div id="hideDelayWrapper" class="hidden mt-2">
+                        <span class="text-[0.6rem] text-gray-400 block mb-1">Hide Delay (Seconds)</span>
+                        <input type="number" id="hideDelay" value="0" min="0" max="60">
+                    </div>
+                </div>
+
+                <div class="mt-4 border-t border-gray-100 pt-3">
+                    <label>Visible Units (Cascading)</label>
+                    <div class="grid grid-cols-4 gap-1 mt-1">
+                        <div class="text-center">
+                            <input type="checkbox" id="showDays" class="toggle-checkbox" checked>
+                            <label for="showDays" class="toggle-label mx-auto"></label>
+                            <span class="text-[0.6rem] mt-1 text-gray-500 block">Day</span>
+                        </div>
+                        <div class="text-center">
+                            <input type="checkbox" id="showHours" class="toggle-checkbox" checked>
+                            <label for="showHours" class="toggle-label mx-auto"></label>
+                            <span class="text-[0.6rem] mt-1 text-gray-500 block">Hr</span>
+                        </div>
+                        <div class="text-center">
+                            <input type="checkbox" id="showMinutes" class="toggle-checkbox" checked>
+                            <label for="showMinutes" class="toggle-label mx-auto"></label>
+                            <span class="text-[0.6rem] mt-1 text-gray-500 block">Min</span>
+                        </div>
+                        <div class="text-center">
+                            <input type="checkbox" id="showSeconds" class="toggle-checkbox" checked>
+                            <label for="showSeconds" class="toggle-label mx-auto"></label>
+                            <span class="text-[0.6rem] mt-1 text-gray-500 block">Sec</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Typography -->
+            <div class="control-group">
+                <div class="flex items-center gap-2 mb-3 text-gray-700">
+                    <i class="ph ph-text-aa text-lg"></i> <span class="text-xs font-bold uppercase">Typography</span>
+                </div>
+
+                <div class="mb-4">
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="!mb-0">Heading</label>
+                        <input type="checkbox" id="showHeading" class="accent-gray-800" checked>
+                    </div>
+                    <input type="text" id="headingText" value="Launch Countdown" class="mb-2">
+
+                    <div class="flex gap-2 mb-2">
+                        <select id="headingFontSelect" class="flex-1">
+                            <option value="Space Grotesk" selected>Space Grotesk</option>
+                            <option value="Playfair Display">Playfair Display</option>
+                            <option value="Inter">Inter</option>
+                            <option value="Roboto">Roboto</option>
+                            <option value="Montserrat">Montserrat</option>
+                            <option value="Rowdies">Rowdies</option>
+                            <option value="custom">Custom...</option>
+                        </select>
+                        <input type="color" id="headingColor" value="#5A534D">
+                    </div>
+                    <input type="text" id="headingFontCustom" placeholder="Font Name" class="hidden mb-2">
+                    <input type="range" id="headingSize" min="1" max="5" step="0.1" value="2.5">
+                </div>
+
+                <div class="border-t border-gray-100 pt-3" id="timerFontWrapper">
+                    <label>Timer Numbers</label>
+                    <div class="flex gap-2 mb-2">
+                        <select id="timerFontSelect" class="flex-1">
+                            <option value="Space Grotesk" selected>Space Grotesk</option>
+                            <option value="Playfair Display">Playfair Display</option>
+                            <option value="Rowdies">Rowdies</option>
+                            <option value="Bebas Neue">Bebas Neue</option>
+                            <option value="Silkscreen">Silkscreen</option>
+                            <option value="Roboto Mono">Roboto Mono</option>
+                            <option value="custom">Custom...</option>
+                        </select>
+                        <input type="color" id="timerColor" value="#363636">
+                    </div>
+                    <input type="text" id="timerFontCustom" placeholder="Font Name" class="hidden mb-2">
+                    <input type="range" id="timerSize" min="0.5" max="2" step="0.1" value="1">
+                </div>
+            </div>
+
+            <!-- Background -->
+            <div class="control-group">
+                <div class="flex items-center gap-2 mb-3 text-gray-700">
+                    <i class="ph ph-image text-lg"></i> <span class="text-xs font-bold uppercase">Background</span>
+                </div>
+
+                <div class="relative mb-3 group">
+                    <input type="file" id="bgUpload" accept="image/*"
+                        class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20">
+
+                    <div id="bgPreview"
+                        class="bg-gray-50 border border-dashed border-gray-300 rounded-lg h-24 flex flex-col items-center justify-center text-center overflow-hidden relative">
+                        <div id="uploadPlaceholder" class="flex flex-col items-center">
+                            <i class="ph ph-upload-simple text-gray-400 text-xl block mb-1"></i>
+                            <span class="text-xs text-gray-500">Upload Image</span>
+                        </div>
+                        <div id="imageThumbnail" class="absolute inset-0 bg-cover bg-center hidden"></div>
+                    </div>
+
+                    <button id="clearBg"
+                        class="hidden text-xs bg-white text-red-500 px-2 py-1 rounded shadow absolute top-1 right-1 z-30"
+                        onclick="clearBg(event)">Remove</button>
+                </div>
+
+                <div id="bgControls" class="hidden">
+
+                    <!-- Persistent Optimization Status & Toggle -->
+                    <div id="optimizationControls" class="mb-3 hidden">
+                        <div
+                            class="flex justify-between items-center mb-2 bg-green-50 p-2 rounded border border-green-100 text-green-700">
+                            <span class="text-[0.65rem] font-bold flex items-center"><i
+                                    class="ph ph-check-circle mr-1"></i> <span id="optStatus">Optimized</span></span>
+                            <span id="optSavings" class="text-[0.65rem]"></span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="useOriginal"
+                                class="accent-indigo-600 w-4 h-4 !p-0 !m-0 !height-auto">
+                            <label for="useOriginal" class="!mb-0 cursor-pointer text-xs font-normal normal-case">Use
+                                Original (Uncompressed)</label>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between mb-2">
+                        <label class="!mb-0 mt-1">Fit</label>
+                        <div class="flex gap-1">
+                            <button id="btnFill" class="px-2 py-1 text-[0.6rem] bg-gray-100 rounded hover:bg-gray-200"
+                                onclick="setBgSize('cover')">Fill</button>
+                            <button id="btnFit" class="px-2 py-1 text-[0.6rem] bg-gray-100 rounded hover:bg-gray-200"
+                                onclick="setBgSize('contain')">Fit</button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 mb-3 border-t border-gray-100 pt-2">
+                        <div id="bgPosXWrapper" class="hidden">
+                            <span class="text-[0.6rem] text-gray-400">Pos X</span>
+                            <input type="range" id="bgPosX" min="0" max="100" step="1" value="50">
+                        </div>
+                        <div id="bgPosYWrapper">
+                            <span class="text-[0.6rem] text-gray-400">Pos Y</span>
+                            <input type="range" id="bgPosY" min="0" max="100" step="1" value="50">
+                        </div>
+                    </div>
+
+                    <label>Filters</label>
+                    <div class="grid grid-cols-2 gap-x-3 gap-y-2">
+                        <div><span class="text-[0.6rem] text-gray-400">Opacity</span><input type="range" id="bgOpacity"
+                                min="0" max="1" step="0.05" value="1"></div>
+                        <div><span class="text-[0.6rem] text-gray-400">Blur</span><input type="range" id="bgBlur"
+                                min="0" max="20" step="1" value="0"></div>
+                        <div><span class="text-[0.6rem] text-gray-400">Brightness</span><input type="range"
+                                id="bgBrightness" min="0" max="200" step="10" value="100"></div>
+                        <div><span class="text-[0.6rem] text-gray-400">Gray</span><input type="range" id="bgGrayscale"
+                                min="0" max="100" step="10" value="0"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="h-12"></div>
+        </div>
+    </div>
+
+    <!-- PREVIEW AREA -->
+    <div class="preview-area flex-1 relative flex justify-center items-center overflow-hidden p-6">
+
+        <button onclick="exportComponent(this)"
+            class="absolute top-4 right-4 z-50 bg-white text-gray-800 px-4 py-2 rounded-lg font-bold shadow-lg ring-1 ring-black/5 flex items-center gap-2 hover:bg-gray-50 hover:scale-105 transition-all text-sm">
+            <i class="ph ph-code text-lg"></i> Copy Component
+        </button>
+
+        <div class="absolute inset-0 z-0 opacity-10 pointer-events-none"
+            style="background-image: radial-gradient(#999 1px, transparent 1px); background-size: 20px 20px;"></div>
+
+        <div id="appContainer">
+            <div id="bgLayer" class="absolute inset-0 z-0 pointer-events-none bg-transparent transition-all"></div>
+
+            <div class="relative z-10 text-center w-full px-6 py-6 flex flex-col items-center justify-center h-full">
+                <h2 id="previewHeading" class="mb-4 font-bold leading-tight break-words max-w-3xl mx-auto">Launch
+                    Countdown</h2>
+
+                <div id="timerContainer" class="timer-container">
+                    <!-- Timer Units Rendered Here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- State ---
+        const state = {
+            template: 'std',
+            layout: { preset: 'banner', fluid: false, customW: 800, customH: 400 },
+            start: new Date(),
+            end: new Date(Date.now() + 345600000),
+            startZone: 'local',
+            endZone: 'local',
+            units: { d: true, h: true, m: true, s: true },
+            heading: { show: true, text: "Launch Countdown", font: "Space Grotesk", color: "#5A534D", size: 3.0 },
+            timer: { font: "Space Grotesk", color: "#363636", size: 1.0 },
+            ring: { labelPos: 'inside' },
+            bg: {
+                data: null,
+                original: null,
+                optimized: null,
+                useOptimized: true,
+                savings: 0,
+                isSvg: false,
+                size: 'cover', posX: 50, posY: 50, opacity: 1, blur: 0, bright: 100, gray: 0
+            },
+            prevVals: { d: "", h: "", m: "", s: "" },
+            finished: false,
+            hideOnComplete: false,
+            hideDelay: 0,
+            showConfetti: true
+        };
+
+        const templates = [
+            { id: 'std', icon: 'ph-text-t', label: 'Simple' },
+            { id: 'cards', icon: 'ph-cards', label: 'Cards' },
+            { id: 'ring', icon: 'ph-circle-notch', label: 'Ring' },
+            { id: 'ticker', icon: 'ph-arrows-down-up', label: 'Ticker' },
+            { id: 'matrix', icon: 'ph-dots-nine', label: 'Matrix' },
+        ];
+
+        const layoutPresets = {
+            banner: { width: '100%', maxWidth: '900px', aspectRatio: 'auto', minHeight: '220px' },
+            medium: { width: '100%', maxWidth: '700px', aspectRatio: '16/9', minHeight: '300px' },
+            square: { width: '100%', maxWidth: '500px', aspectRatio: '1/1', minHeight: 'auto' },
+            small: { width: '100%', maxWidth: '400px', aspectRatio: '4/3', minHeight: 'auto' }
+        };
+
+        // Major Time Zones
+        const commonZones = [
+            { value: 'local', label: 'Local System Time' },
+            { value: 'UTC', label: 'UTC' },
+            { value: 'America/New_York', label: 'New York (EST/EDT)' },
+            { value: 'America/Los_Angeles', label: 'Los Angeles (PST/PDT)' },
+            { value: 'Europe/London', label: 'London (GMT/BST)' },
+            { value: 'Europe/Paris', label: 'Paris (CET/CEST)' },
+            { value: 'Asia/Tokyo', label: 'Tokyo (JST)' },
+            { value: 'Australia/Sydney', label: 'Sydney (AEST/AEDT)' },
+            { value: 'Etc/GMT+12', label: 'Anywhere on Earth (AOE)' }
+        ];
+
+        function init() {
+            document.getElementById('startDate').value = toLocalISO(state.start);
+            document.getElementById('endDate').value = toLocalISO(state.end);
+
+            populateTimeZones();
+            renderTemplateSelector();
+            setupListeners();
+            toggleLayoutControls();
+            updateBgControlsUI();
+            updateFontControlVisibility();
+            renderTimerStructure();
+            updatePreview();
+            setInterval(tick, 1000);
+            tick();
+        }
+
+        function populateTimeZones() {
+            const startSel = document.getElementById('startTimeZone');
+            const endSel = document.getElementById('endTimeZone');
+            const opts = commonZones.map(z => `<option value="${z.value}">${z.label}</option>`).join('');
+            startSel.innerHTML = opts;
+            endSel.innerHTML = opts;
+        }
+
+        function toLocalISO(date) {
+            const offset = date.getTimezoneOffset() * 60000;
+            return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+        }
+
+        function toggleLayoutControls() {
+            const fluidWrapper = document.getElementById('fluidWidthWrapper');
+            const customWrapper = document.getElementById('customDimsWrapper');
+
+            if (state.layout.preset === 'custom') {
+                customWrapper.classList.remove('hidden');
+                customWrapper.classList.add('grid');
+            } else {
+                customWrapper.classList.add('hidden');
+                customWrapper.classList.remove('grid');
+            }
+
+            if (state.layout.preset === 'banner' || state.layout.preset === 'custom') {
+                fluidWrapper.classList.remove('hidden');
+                fluidWrapper.classList.add('flex');
+            } else {
+                fluidWrapper.classList.add('hidden');
+                fluidWrapper.classList.remove('flex');
+                state.layout.fluid = false;
+                document.getElementById('fluidWidth').checked = false;
+            }
+        }
+
+        function updateFontControlVisibility() {
+            const el = document.getElementById('timerFontWrapper');
+            if (['matrix', 'ticker'].includes(state.template)) {
+                document.getElementById('timerFontSelect').parentElement.style.display = 'none';
+                document.getElementById('timerFontCustom').style.display = 'none';
+            } else {
+                document.getElementById('timerFontSelect').parentElement.style.display = 'flex';
+            }
+        }
+
+        function setupListeners() {
+            const get = id => document.getElementById(id);
+
+            get('layoutPreset').addEventListener('change', e => {
+                state.layout.preset = e.target.value;
+                toggleLayoutControls();
+                updatePreview();
+            });
+
+            get('customWidth').addEventListener('input', e => { state.layout.customW = e.target.value; updatePreview(); });
+            get('customHeight').addEventListener('input', e => { state.layout.customH = e.target.value; updatePreview(); });
+            get('fluidWidth').addEventListener('change', e => { state.layout.fluid = e.target.checked; updatePreview(); });
+
+            get('startDate').addEventListener('change', e => { state.start = new Date(e.target.value); tick(); });
+            get('endDate').addEventListener('change', e => { state.end = new Date(e.target.value); tick(); });
+            get('startTimeZone').addEventListener('change', e => { state.startZone = e.target.value; tick(); });
+            get('endTimeZone').addEventListener('change', e => { state.endZone = e.target.value; tick(); });
+
+            get('hideOnComplete').addEventListener('change', e => {
+                state.hideOnComplete = e.target.checked;
+                document.getElementById('hideDelayWrapper').style.display = e.target.checked ? 'block' : 'none';
+                tick();
+            });
+            get('hideDelay').addEventListener('input', e => { state.hideDelay = parseInt(e.target.value) || 0; });
+            get('showConfetti').addEventListener('change', e => { state.showConfetti = e.target.checked; });
+
+            ['d', 'h', 'm', 's'].forEach((u, i) => {
+                const map = ['showDays', 'showHours', 'showMinutes', 'showSeconds'];
+                get(map[i]).addEventListener('change', e => {
+                    state.units[u] = e.target.checked;
+                    renderTimerStructure();
+                    tick();
+                });
+            });
+
+            get('ringLabelPos').addEventListener('change', e => {
+                state.ring.labelPos = e.target.value;
+                renderTimerStructure();
+                updatePreview();
+                tick();
+            });
+
+            get('showHeading').addEventListener('change', e => { state.heading.show = e.target.checked; updatePreview(); });
+            get('headingText').addEventListener('input', e => { state.heading.text = e.target.value; updatePreview(); });
+            get('headingColor').addEventListener('input', e => { state.heading.color = e.target.value; updatePreview(); });
+            get('headingSize').addEventListener('input', e => { state.heading.size = e.target.value; updatePreview(); });
+
+            get('headingFontSelect').addEventListener('change', e => {
+                const val = e.target.value;
+                if (val === 'custom') { get('headingFontCustom').classList.remove('hidden'); get('headingFontCustom').focus(); }
+                else { get('headingFontCustom').classList.add('hidden'); state.heading.font = val; loadFont(val); updatePreview(); }
+            });
+            get('headingFontCustom').addEventListener('change', e => { state.heading.font = e.target.value; loadFont(e.target.value); updatePreview(); });
+
+            get('timerColor').addEventListener('input', e => { state.timer.color = e.target.value; updatePreview(); });
+            get('timerSize').addEventListener('input', e => { state.timer.size = e.target.value; updatePreview(); });
+
+            get('timerFontSelect').addEventListener('change', e => {
+                const val = e.target.value;
+                if (val === 'custom') { get('timerFontCustom').classList.remove('hidden'); get('timerFontCustom').focus(); }
+                else { get('timerFontCustom').classList.add('hidden'); state.timer.font = val; loadFont(val); updatePreview(); }
+            });
+            get('timerFontCustom').addEventListener('change', e => { state.timer.font = e.target.value; loadFont(e.target.value); updatePreview(); });
+
+            get('bgUpload').addEventListener('change', handleImageUpload);
+            get('useOriginal').addEventListener('change', toggleOriginalImage);
+            get('bgPosX').addEventListener('input', e => { state.bg.posX = e.target.value; updatePreview(); });
+            get('bgPosY').addEventListener('input', e => { state.bg.posY = e.target.value; updatePreview(); });
+            get('bgOpacity').addEventListener('input', e => { state.bg.opacity = e.target.value; updatePreview(); });
+            get('bgBlur').addEventListener('input', e => { state.bg.blur = e.target.value; updatePreview(); });
+            get('bgBrightness').addEventListener('input', e => { state.bg.bright = e.target.value; updatePreview(); });
+            get('bgGrayscale').addEventListener('input', e => { state.bg.gray = e.target.value; updatePreview(); });
+        }
+
+        window.setBgSize = (size) => {
+            state.bg.size = size;
+            updateBgControlsUI();
+            updatePreview();
+        };
+
+        function updateBgControlsUI() {
+            const xWrap = document.getElementById('bgPosXWrapper');
+            const yWrap = document.getElementById('bgPosYWrapper');
+
+            if (state.bg.size === 'contain') {
+                xWrap.classList.remove('hidden');
+                yWrap.classList.add('hidden');
+            } else {
+                xWrap.classList.add('hidden');
+                yWrap.classList.remove('hidden');
+            }
+        }
+
+        window.clearBg = (e) => {
+            e.preventDefault();
+            state.bg.data = null;
+            state.bg.original = null;
+            state.bg.optimized = null;
+            document.getElementById('bgUpload').value = '';
+            document.getElementById('imageThumbnail').style.backgroundImage = 'none';
+            document.getElementById('imageThumbnail').classList.add('hidden');
+            document.getElementById('uploadPlaceholder').classList.remove('hidden');
+            document.getElementById('clearBg').classList.add('hidden');
+            document.getElementById('bgControls').classList.add('hidden');
+            updatePreview();
+        };
+
+        function toggleOriginalImage(e) {
+            state.bg.useOptimized = !e.target.checked;
+            if (state.bg.useOptimized && !state.bg.isSvg) {
+                state.bg.data = state.bg.optimized;
+            } else {
+                state.bg.data = state.bg.original;
+            }
+
+            if (state.bg.data) {
+                document.getElementById('imageThumbnail').style.backgroundImage = `url('${state.bg.data}')`;
+            }
+            updatePreview();
+        }
+
+        function handleImageUpload(e) {
+            const file = e.target.files[0];
+            const controls = document.getElementById('bgControls');
+            if (file) {
+                // Check if SVG
+                state.bg.isSvg = file.type === 'image/svg+xml';
+
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    const originalData = evt.target.result;
+                    state.bg.original = originalData;
+
+                    if (state.bg.isSvg) {
+                        // Skip optimization for SVG
+                        state.bg.optimized = originalData;
+                        state.bg.useOptimized = true;
+                        state.bg.savings = 0;
+                        state.bg.data = originalData;
+
+                        // UI Update for SVG
+                        document.getElementById('optimizationControls').classList.remove('hidden');
+                        document.getElementById('optStatus').innerText = 'Vector (Kept Original)';
+                        document.getElementById('optSavings').innerText = '';
+                        document.getElementById('useOriginal').parentElement.classList.add('hidden'); // No need to toggle
+                    } else {
+                        // Optimize Raster
+                        processOptimization(originalData);
+                        document.getElementById('useOriginal').parentElement.classList.remove('hidden');
+                    }
+
+                    // Initial UI update
+                    if (!state.bg.data) state.bg.data = originalData;
+
+                    const thumb = document.getElementById('imageThumbnail');
+                    thumb.style.backgroundImage = `url('${state.bg.data}')`;
+                    thumb.classList.remove('hidden');
+                    document.getElementById('uploadPlaceholder').classList.add('hidden');
+                    document.getElementById('clearBg').classList.remove('hidden');
+                    controls.classList.remove('hidden');
+                    updateBgControlsUI();
+                    updatePreview();
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function processOptimization(src) {
+            const img = new Image();
+            img.src = src;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+
+                const MAX = 800;
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > MAX) { height *= MAX / width; width = MAX; }
+                } else {
+                    if (height > MAX) { width *= MAX / height; height = MAX; }
+                }
+
+                canvas.width = Math.floor(width);
+                canvas.height = Math.floor(height);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                const webp = canvas.toDataURL('image/webp', 0.8);
+                state.bg.optimized = webp;
+
+                const origSize = state.bg.original.length;
+                const optSize = webp.length;
+                const savings = Math.round((1 - (optSize / origSize)) * 100);
+                state.bg.savings = (savings > 0) ? savings : 0;
+
+                state.bg.useOptimized = true;
+                state.bg.data = webp;
+
+                document.getElementById('optimizationControls').classList.remove('hidden');
+                document.getElementById('optStatus').innerText = 'Optimized';
+                document.getElementById('optSavings').innerText = `Saved ${state.bg.savings}%`;
+                document.getElementById('useOriginal').checked = false;
+                document.getElementById('imageThumbnail').style.backgroundImage = `url('${webp}')`;
+
+                updatePreview();
+            }
+        }
+
+        function loadFont(fontName) {
+            if (!fontName || fontName === 'custom') return;
+            const link = document.getElementById('dynamic-fonts');
+            const current = link.href;
+            if (!current.includes(fontName.replace(/ /g, '+'))) {
+                link.href = current + `&family=${fontName.replace(/ /g, '+')}:wght@300;400;700`;
+            }
+        }
+
+        function renderTemplateSelector() {
+            const grid = document.getElementById('templateGrid');
+            grid.innerHTML = templates.map(t => `
+                <div class="template-option ${state.template === t.id ? 'active' : ''}" onclick="setTemplate('${t.id}')">
+                    <i class="ph ${t.icon} template-icon"></i>
+                    <span class="template-label">${t.label}</span>
+                </div>
+            `).join('');
+
+            document.getElementById('startDateWrapper').style.display = (state.template === 'ring') ? 'block' : 'none';
+            document.getElementById('ringSettings').style.display = (state.template === 'ring') ? 'block' : 'none';
+        }
+
+        window.setTemplate = (id) => {
+            state.template = id;
+            renderTemplateSelector();
+            updateFontControlVisibility();
+            renderTimerStructure();
+            updatePreview();
+            tick();
+        };
+
+        function renderTimerStructure() {
+            const container = document.getElementById('timerContainer');
+            container.innerHTML = '';
+            const map = { d: 'Days', h: 'Hours', m: 'Minutes', s: 'Seconds' };
+
+            const activeCount = Object.values(state.units).filter(Boolean).length;
+            container.className = `timer-container tpl-${state.template} grid-${activeCount}-units`;
+
+            if (state.template === 'ring') container.classList.add(`label-${state.ring.labelPos}`);
+
+            Object.keys(map).forEach(key => {
+                if (state.units[key]) {
+                    const unitDiv = document.createElement('div');
+                    unitDiv.className = 'timer-unit';
+                    unitDiv.id = `unit-${key}`;
+
+                    if (state.template === 'ring') {
+                        if (state.ring.labelPos === 'inside') {
+                            unitDiv.innerHTML = `
+                                <svg class="ring-svg" viewBox="0 0 140 140">
+                                    <circle class="ring-bg" cx="70" cy="70" r="60"></circle>
+                                    <circle class="ring-prog" id="ring-circle-${key}" cx="70" cy="70" r="60"></circle>
+                                </svg>
+                                <div class="timer-content">
+                                    <span class="time-val tabular-nums" id="val-${key}">00</span>
+                                    <span class="time-label">${map[key]}</span>
+                                </div>
+                            `;
+                        } else {
+                            unitDiv.innerHTML = `
+                                <div class="ring-wrapper">
+                                    <svg class="ring-svg" viewBox="0 0 140 140">
+                                        <circle class="ring-bg" cx="70" cy="70" r="60"></circle>
+                                        <circle class="ring-prog" id="ring-circle-${key}" cx="70" cy="70" r="60"></circle>
+                                    </svg>
+                                    <span class="time-val tabular-nums" id="val-${key}" style="position:absolute;">00</span>
+                                </div>
+                                <span class="time-label">${map[key]}</span>
+                            `;
+                        }
+                    } else if (state.template === 'ticker') {
+                        unitDiv.innerHTML = `
+                            <div class="time-val">
+                                <div class="odometer-housing">
+                                    <!-- Digits injected dynamically -->
+                                </div>
+                            </div>
+                            <span class="time-label">${map[key]}</span>
+                        `;
+                    } else if (state.template === 'matrix') {
+                        unitDiv.innerHTML = `
+                            <span class="time-val tabular-nums" id="val-${key}">00</span>
+                            <span class="time-label">${map[key]}</span>
+                        `;
+                    } else {
+                        unitDiv.innerHTML = `
+                            <span class="time-val tabular-nums" id="val-${key}">00</span>
+                            <span class="time-label">${map[key]}</span>
+                        `;
+                    }
+                    container.appendChild(unitDiv);
+                }
+            });
+        }
+
+        function updatePreview() {
+            const h = document.getElementById('previewHeading');
+            const timer = document.getElementById('timerContainer');
+            const bgLayer = document.getElementById('bgLayer');
+            const container = document.getElementById('appContainer');
+
+            let width = '100%', maxWidth = '900px', aspect = 'auto', minH = '220px';
+
+            if (state.layout.preset === 'custom') {
+                if (state.layout.fluid) {
+                    width = '100%'; maxWidth = '100%';
+                } else {
+                    width = state.layout.customW + 'px'; maxWidth = '100%';
+                }
+                minH = state.layout.customH + 'px';
+            } else {
+                const preset = layoutPresets[state.layout.preset];
+                if (state.layout.fluid) {
+                    width = '100%'; maxWidth = '100%';
+                } else {
+                    width = preset.width; maxWidth = preset.maxWidth;
+                }
+                aspect = preset.aspectRatio;
+                minH = preset.minHeight;
+            }
+
+            container.style.width = width;
+            container.style.maxWidth = maxWidth;
+            container.style.aspectRatio = aspect;
+            container.style.minHeight = minH;
+
+            h.style.display = state.heading.show ? 'block' : 'none';
+            h.innerText = state.heading.text;
+            h.style.fontFamily = `"${state.heading.font}", sans-serif`;
+            h.style.color = state.heading.color;
+            h.style.fontSize = `${state.heading.size}rem`;
+
+            timer.style.fontFamily = `"${state.timer.font}", monospace`;
+            timer.style.color = state.timer.color;
+            timer.style.setProperty('--timer-color', state.timer.color);
+
+            const baseSize = 16;
+            timer.style.fontSize = `${baseSize * state.timer.size}px`;
+
+            if (state.bg.data) {
+                bgLayer.style.backgroundImage = `url('${state.bg.data}')`;
+                bgLayer.style.backgroundSize = state.bg.size;
+                bgLayer.style.backgroundPosition = `${state.bg.posX}% ${state.bg.posY}%`;
+                bgLayer.style.backgroundRepeat = 'no-repeat';
+                bgLayer.style.filter = `opacity(${state.bg.opacity}) blur(${state.bg.blur}px) brightness(${state.bg.bright}%) grayscale(${state.bg.gray}%)`;
+            } else {
+                bgLayer.style.backgroundImage = 'none';
+            }
+        }
+
+        // Mock tick logic for preview
+        let confettiInterval;
+
+        function tick() {
+            const now = new Date();
+            let totalSeconds = Math.floor((state.end - now) / 1000);
+            const duration = Math.floor((state.end - state.start) / 1000);
+
+            const container = document.getElementById('appContainer');
+
+            if (totalSeconds <= 0) {
+                totalSeconds = 0;
+                // Hide Logic for Preview
+                if (state.hideOnComplete) {
+                    // We simulate the delay in Preview visually by reducing opacity after a delay?
+                    // Actually, for the builder preview, it's better to keep it visible but dimmed so user knows it's "done"
+                    // BUT the request is "Hide on Complete".
+                    // Let's assume the delay happened for the preview state.
+                    if (!state.finished) {
+                        state.finished = true;
+                        // Trigger initial burst
+                        if (state.showConfetti) confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#5A534D', '#8B8296', '#C5AFA8'] });
+
+                        // Wait for hideDelay then dim
+                        setTimeout(() => {
+                            if (state.hideOnComplete) container.style.opacity = '0.2';
+                            if (confettiInterval) clearInterval(confettiInterval);
+                        }, state.hideDelay * 1000);
+                    }
+                } else {
+                    // Continuous Confetti if Not Hidden
+                    container.style.opacity = '1';
+                    if (!state.finished) {
+                        state.finished = true;
+                        if (state.showConfetti) confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#5A534D', '#8B8296', '#C5AFA8'] });
+                    }
+                    // Continuous
+                    if (state.showConfetti && Math.random() > 0.8) confetti({ particleCount: 20, spread: 40, startVelocity: 20, origin: { y: 0.7 }, disableForReducedMotion: true });
+                }
+            } else {
+                state.finished = false;
+                container.style.opacity = '1';
+                if (confettiInterval) clearInterval(confettiInterval);
+            }
+
+            let d = 0, h = 0, m = 0, s = 0;
+            if (state.units.d) { d = Math.floor(totalSeconds / 86400); totalSeconds %= 86400; }
+            if (state.units.h) { h = Math.floor(totalSeconds / 3600); totalSeconds %= 3600; }
+            if (state.units.m) { m = Math.floor(totalSeconds / 60); totalSeconds %= 60; }
+            if (state.units.s) s = totalSeconds;
+
+            const vals = { d, h, m, s };
+
+            Object.keys(vals).forEach(k => {
+                if (!state.units[k]) return;
+
+                if (state.template === 'ticker') {
+                    const valStr = vals[k].toString().padStart(2, '0');
+                    const housing = document.querySelector(`#unit-${k} .odometer-housing`);
+                    if (housing) {
+                        if (housing.children.length !== valStr.length) {
+                            housing.innerHTML = valStr.split('').map((_, i) => `
+                                <div class="odometer-digit">
+                                    <div class="digit-strip" id="strip-${k}-${i}">
+                                        ${[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<div class="digit-val">${n}</div>`).join('')}
+                                    </div>
+                                </div>
+                             `).join('');
+                        }
+                        valStr.split('').forEach((char, i) => {
+                            const strip = document.getElementById(`strip-${k}-${i}`);
+                            if (strip) strip.style.transform = `translateY(-${parseInt(char) * 1.1}em)`;
+                        });
+                    }
+                }
+                else {
+                    const el = document.getElementById(`val-${k}`);
+                    if (el) el.innerText = vals[k].toString().padStart(2, '0');
+                }
+
+                if (state.template === 'ring') {
+                    const ring = document.getElementById(`ring-circle-${k}`);
+                    if (ring) {
+                        let max = 1;
+                        if (k === 'd') max = duration / 86400;
+                        else if (k === 'h') { if (state.units.d) max = 24; else max = duration / 3600; }
+                        else if (k === 'm') { if (state.units.h) max = 60; else if (state.units.d) max = 1440; else max = duration / 60; }
+                        else if (k === 's') { if (state.units.m) max = 60; else if (state.units.h) max = 3600; else if (state.units.d) max = 86400; else max = duration; }
+
+                        if (max <= 0) max = 1;
+                        let pct = vals[k] / max;
+                        if (pct > 1) pct = 1;
+                        const circ = 377;
+                        ring.style.strokeDashoffset = circ - (pct * circ);
+                        ring.style.stroke = state.timer.color;
+                    }
+                }
+            });
+        }
+
+        // --- EXPORT ---
+        function exportComponent(btn) {
+            // Format Dates
+            const endISO = state.end.toISOString().replace('Z', '');
+            const startISO = state.start.toISOString().replace('Z', '');
+
+            const cssMap = {
+                std: `.timer-unit{text-align:center;padding:0 1.5em}.time-val{font-size:4em;line-height:1;font-weight:700;display:block;white-space:nowrap;min-width:1.8ch}.time-label{font-size:.75em;text-transform:uppercase;letter-spacing:.15em;opacity:.7;margin-top:.5em;display:block}`,
+                cards: `.timer-container{gap:0.8em}.timer-unit{background:rgba(255,255,255,0.85);backdrop-filter:blur(8px);border-radius:0.8em;padding:1.2em 0.8em;min-width:5em;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;box-shadow:0 4px 20px -2px rgba(0,0,0,0.05);border:1px solid rgba(255,255,255,0.5)}.time-val{font-size:2.5em;font-weight:700;line-height:1;white-space:nowrap;min-width:1.8ch}.time-label{font-size:.6em;font-weight:700;text-transform:uppercase;margin-top:.5em;letter-spacing:0.05em}`,
+                ticker: `.timer-container{gap:1em}.timer-unit{display:flex;flex-direction:column;align-items:center}.odometer-housing{background:transparent;display:flex;overflow:hidden;height:1.1em;line-height:1.1em}.odometer-digit{width:.65em;text-align:center;position:relative}.digit-strip{display:flex;flex-direction:column;transition:transform 0.5s cubic-bezier(0.1,0.7,1.0,0.1);will-change:transform}.digit-val{height:1.1em;display:flex;align-items:center;justify-content:center;font-family:'Roboto Mono',monospace;color:inherit;font-weight:700}.time-val{font-size:3.5em;display:flex;color:var(--timer-color)}.time-label{font-size:.6em;color:inherit;opacity:.7;margin-top:.4em;text-transform:uppercase;font-weight:700;letter-spacing:.1em}`,
+                matrix: `.tpl-matrix{gap:1.5em}.tpl-matrix .timer-unit{display:flex;flex-direction:column;align-items:center}.tpl-matrix .time-val{font-family:'Silkscreen',monospace;font-size:3em;line-height:1;color:var(--timer-color);text-shadow:0 0 5px var(--timer-color),0 0 10px var(--timer-color);display:inline-block;min-width:2ch;text-align:center;white-space:nowrap}.tpl-matrix .time-label{font-family:'Silkscreen',monospace;font-size:.6em;margin-top:.8em;text-transform:uppercase;opacity:.8}`
+            };
+
+            let ringCSS = `.timer-unit{position:relative;width:6em;height:6em;display:flex;flex-direction:column;align-items:center;justify-content:center;margin:0 0.4em}.ring-svg{position:absolute;inset:0;transform:rotate(-90deg);width:100%;height:100%;pointer-events:none}.ring-bg{fill:none;stroke:currentColor;opacity:0.15;stroke-width:6}.ring-prog{fill:none;stroke:currentColor;stroke-width:6;stroke-linecap:round;stroke-dasharray:377;stroke-dashoffset:377;transition:stroke-dashoffset 1s linear}.time-val{font-size:1.8em;font-weight:700;line-height:1}.time-label{font-size:.4em;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-top:0.2em}`;
+            if (state.ring.labelPos === 'inside') {
+                ringCSS += `.timer-content{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;z-index:10}.time-val{font-size:1.8em;font-weight:700;line-height:1}.time-label{font-size:.4em;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin-top:0.2em}`;
+            } else {
+                ringCSS = `.timer-unit{align-items:center;margin:0 1em}.ring-wrapper{position:relative;width:5em;height:5em;display:flex;justify-content:center;align-items:center}.ring-svg{position:absolute;inset:0;transform:rotate(-90deg);width:100%;height:100%;pointer-events:none}.ring-bg{fill:none;stroke:currentColor;opacity:0.15;stroke-width:6}.ring-prog{fill:none;stroke:currentColor;stroke-width:6;stroke-linecap:round;stroke-dasharray:377;stroke-dashoffset:377;transition:stroke-dashoffset 1s linear}.time-val{font-size:1.8em;font-weight:700;z-index:10;position:absolute}.time-label{margin-top:0.5em;font-size:.6em;font-weight:600;letter-spacing:.15em;text-transform:uppercase;text-align:center;display:block}`;
+            }
+            cssMap.ring = ringCSS;
+
+            const selectedCSS = cssMap[state.template];
+            const timerHTML = document.getElementById('timerContainer').innerHTML;
+            const activeCount = Object.values(state.units).filter(Boolean).length;
+            const gridCSS = `
+            .timer-container{display:grid;width:100%;justify-content:center;align-content:center;gap:20px;grid-template-columns:repeat(2,auto);}
+            @container(min-width:600px){.timer-container{grid-template-columns:repeat(${activeCount}, auto);}}
+            @container(max-width:400px){.timer-container{grid-template-columns:repeat(1,auto);}}
+            `;
+
+            let widthStyle, aspectStyle, minHeightStyle;
+            if (state.layout.preset === 'custom') {
+                if (state.layout.fluid) {
+                    widthStyle = 'width: 100%; max-width: 100%;';
+                } else {
+                    widthStyle = `width: 100%; max-width: ${state.layout.customW}px;`;
+                }
+                aspectStyle = '';
+                minHeightStyle = `min-height: ${state.layout.customH}px;`;
+            } else {
+                const preset = layoutPresets[state.layout.preset];
+                widthStyle = state.layout.fluid ? 'width: 100%; max-width: 100%;' : `width: 100%; max-width: ${preset.maxWidth};`;
+                aspectStyle = (preset.aspectRatio !== 'auto') ? `aspect-ratio: ${preset.aspectRatio};` : '';
+                minHeightStyle = `min-height: ${preset.minHeight};`;
+            }
+
+            let bgStyle = `position:relative; overflow:hidden; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px 20px; ${widthStyle} ${aspectStyle} ${minHeightStyle} border-radius:12px; container-type:inline-size;`;
+            let bgLayer = `position:absolute; inset:0; z-index:0; pointer-events:none;`;
+            if (state.bg.data) {
+                bgLayer += ` background-image:url('${state.bg.data}'); background-size:${state.bg.size}; background-position:${state.bg.posX}% ${state.bg.posY}%; background-repeat:no-repeat; filter:opacity(${state.bg.opacity}) blur(${state.bg.blur}px) brightness(${state.bg.bright}%) grayscale(${state.bg.gray}%);`;
+            } else {
+                bgStyle += ` background-color: #fff;`;
+            }
+
+            // Script Block
+            const scriptContent = `
+        (function() {
+            const endInput = "${endISO}";
+            const startInput = "${startISO}";
+            const endZone = "${state.endZone}";
+            const startZone = "${state.startZone}";
+            const units = ${JSON.stringify(state.units)};
+            const tpl = "${state.template}";
+            const color = "${state.timer.color}";
+            const hideOnComplete = ${state.hideOnComplete};
+            const hideDelay = ${state.hideDelay};
+            const showConfetti = ${state.showConfetti};
+            
+            let finished = false;
+            let confettiInterval = null;
+
+            // Zone Parsing (Simplified for portability)
+            function getTargetDate(iso, zone) {
+                if (!zone || zone === 'local') return new Date(iso);
+                try {
+                    // UTC conversion trick for specific zones without huge libs
+                    // This assumes ISO input represents wall time in target zone.
+                    const d = new Date(iso);
+                    // If offset is needed, we'd need a map. 
+                    // For 'Anywhere on Earth' (UTC-12), we can hardcode.
+                    if (zone === 'Etc/GMT+12') return new Date(d.getTime() + (12 * 60 * 60 * 1000)); 
+                    // For others, rely on browser's ability to understand standard IANA zones if provided in string
+                    // or fallback to UTC interpretation.
+                    return d; 
+                } catch(e) { return new Date(iso); }
+            }
+
+            const endDate = new Date(endInput); 
+            const startDate = new Date(startInput);
+
+            function tick() {
+                const now = new Date();
+                let totalSeconds = Math.floor((endDate - now) / 1000);
+                const duration = Math.floor((endDate - startDate) / 1000);
+
+                if (totalSeconds <= 0) {
+                    totalSeconds = 0;
+                    
+                    if (!finished) {
+                        finished = true;
+                        
+                        // Initial Burst if enabled
+                        if (showConfetti && typeof confetti === 'function') {
+                             confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#5A534D', '#8B8296', '#C5AFA8'] });
+                             
+                             // Start Continuous if not hiding immediately
+                             confettiInterval = setInterval(() => {
+                                confetti({
+                                    particleCount: 50,
+                                    spread: 60,
+                                    origin: { y: 0.6 },
+                                    colors: ['#5A534D', '#8B8296', '#C5AFA8'],
+                                    disableForReducedMotion: true
+                                });
+                            }, 2000);
+                        }
+                        
+                        // Hide Logic
+                        if (hideOnComplete) {
+                            setTimeout(() => {
+                                document.getElementById('countdown-wrapper').style.display = 'none';
+                                if(confettiInterval) clearInterval(confettiInterval);
+                            }, hideDelay * 1000);
+                        }
+                    }
+                }
+
+                let d=0, h=0, m=0, s=0;
+                if(units.d) { d = Math.floor(totalSeconds/86400); totalSeconds %= 86400; }
+                if(units.h) { h = Math.floor(totalSeconds/3600); totalSeconds %= 3600; }
+                if(units.m) { m = Math.floor(totalSeconds/60); totalSeconds %= 60; }
+                if(units.s) s = totalSeconds;
+                const vals = {d,h,m,s};
+                
+                Object.keys(vals).forEach(k => {
+                    if(!units[k]) return;
+                    
+                    if(tpl === 'ticker') {
+                        const valStr = vals[k].toString().padStart(2, '0');
+                        const housing = document.querySelector('#unit-'+k+' .odometer-housing');
+                        if(housing) {
+                             if(housing.children.length !== valStr.length) {
+                                 let html = '';
+                                 for(let i=0; i<valStr.length; i++) {
+                                    html += '<div class="odometer-digit"><div class="digit-strip" id="strip-'+k+'-'+i+'">';
+                                    for(let n=0; n<=9; n++) html += '<div class="digit-val">'+n+'</div>';
+                                    html += '</div></div>';
+                                 }
+                                 housing.innerHTML = html;
+                             }
+                             for(let i=0; i<valStr.length; i++) {
+                                 const strip = document.getElementById('strip-'+k+'-'+i);
+                                 if(strip) strip.style.transform = 'translateY(-'+(parseInt(valStr[i])*1.1)+'em)';
+                             }
+                        }
+                    }
+                    else {
+                        const el = document.getElementById('val-'+k);
+                        if(el) el.innerText = vals[k].toString().padStart(2, '0');
+                    }
+
+                    if(tpl === 'ring') {
+                        const ring = document.getElementById('ring-circle-'+k);
+                        if(ring) {
+                            let max = 1;
+                            if (k === 'd') max = duration / 86400;
+                            else if (k === 'h') { if (units.d) max = 24; else max = duration / 3600; }
+                            else if (k === 'm') { if (units.h) max = 60; else if (units.d) max = 1440; else max = duration / 60; }
+                            else if (k === 's') { if (units.m) max = 60; else if (units.h) max = 3600; else if (units.d) max = 86400; else max = duration; }
+                            
+                            if(max<=0) max=1;
+                            let pct = vals[k]/max; if(pct>1) pct=1; if(pct<0) pct=0;
+                            const circ = 377;
+                            ring.style.strokeDashoffset = circ - (pct * circ);
+                            ring.style.stroke = color;
+                        }
+                    }
+                });
+            }
+            setInterval(tick, 1000);
+            tick();
+        })();
+            `;
+
+            const output = `
+<!-- Timer Component -->
+<div id="countdown-wrapper" style="${bgStyle}">
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"><\/script>
+    <link href="https://fonts.googleapis.com/css2?family=${state.heading.font.replace(/ /g, '+')}:wght@400;700&family=${state.timer.font.replace(/ /g, '+')}:wght@300;400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Silkscreen&display=swap" rel="stylesheet">
+    <style>
+        .tabular-nums { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+        .timer-container { z-index: 10; position: relative; color: ${state.timer.color}; font-size: ${16 * state.timer.size}px; }
+        ${gridCSS}
+        ${selectedCSS}
+    </style>
+    <div style="${bgLayer}"></div>
+    <div style="position:relative; z-index:10; text-align:center; width:100%;">
+        ${state.heading.show ? `<h2 style="margin-bottom:1rem; font-family:'${state.heading.font}', sans-serif; color:${state.heading.color}; font-size:${state.heading.size}rem; font-weight:700; line-height:1.1;">${state.heading.text}</h2>` : ''}
+        <div class="timer-container" style="font-family:'${state.timer.font}', monospace;">
+            ${timerHTML}
+        </div>
+    </div>
+    <script>
+        ${scriptContent}
+    <\/script>
+</div>
+            `;
+
+            const textArea = document.createElement("textarea");
+            textArea.value = output;
+            textArea.style.top = "0";
+            textArea.style.left = "0";
+            textArea.style.position = "fixed";
+            textArea.style.opacity = "0";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+
+            const originalText = btn.innerHTML;
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    btn.innerHTML = '<i class="ph ph-check text-lg"></i> Copied!';
+                    setTimeout(() => { btn.innerHTML = originalText; }, 2000);
+                } else {
+                    btn.innerHTML = '<i class="ph ph-x text-lg"></i> Failed';
+                    setTimeout(() => { btn.innerHTML = originalText; }, 2000);
+                }
+            } catch (err) {
+                btn.innerHTML = '<i class="ph ph-x text-lg"></i> Error';
+                setTimeout(() => { btn.innerHTML = originalText; }, 2000);
+            }
+            document.body.removeChild(textArea);
+        }
+
+        init();
+    </script>
+</body>
+
+</html>
