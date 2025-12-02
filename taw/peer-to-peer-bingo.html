@@ -1050,23 +1050,6 @@
                 setPreloadedData(null);
             };
 
-            const createLobby = () => {
-                if (stats.filledCount < stats.requiredItems) {
-                    showToast(`Fill all ${stats.requiredItems} items first!`, "error");
-                    return;
-                }
-                setView('lobby');
-            };
-
-            const playSolo = () => {
-                if (stats.filledCount < stats.requiredItems) {
-                    showToast(`Fill all ${stats.requiredItems} items first!`, "error");
-                    return;
-                }
-                setIsSolo(true);
-                startGame();
-            };
-
             const generateShareLink = () => {
                 if (stats.filledCount < stats.requiredItems) {
                     showToast(`Fill all ${stats.requiredItems} items first!`, "error");
