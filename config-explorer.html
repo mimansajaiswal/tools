@@ -1,0 +1,1528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Config Component Generator</title>
+    <!-- Dependencies -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+    <script src="https://unpkg.com/json5@2/dist/index.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        :root {
+            /* Palette Definition */
+            --c-oatmeal: #E0DCD3;
+            --c-white-linen: #FDFBF7;
+            --c-charcoal: #2F3337;
+            --c-earth-metal: #5A5E5C;
+            --c-dull-purple: #7D7091;
+            --c-muted-pink: #C79E9E;
+            
+            --c-bg: var(--c-oatmeal);
+            --c-card: var(--c-white-linen);
+            --c-text: var(--c-charcoal);
+            
+            --radius: 12px;
+            --shadow: 0 4px 20px -2px rgba(47, 51, 55, 0.05);
+            --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --font-mono: "SF Mono", "Monaco", "Inconsolata", "Fira Mono", "Droid Sans Mono", "Source Code Pro", monospace;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--c-bg);
+            color: var(--c-text);
+            font-family: var(--font-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Header */
+        header {
+            padding: 0.8rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--c-card);
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+            z-index: 10;
+        }
+
+        h1 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--c-earth-metal);
+            margin: 0;
+            letter-spacing: -0.02em;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .badge {
+            background: var(--c-dull-purple);
+            color: white;
+            padding: 0.15rem 0.5rem;
+            border-radius: 99px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        /* Layout */
+        main {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            gap: 1px;
+        }
+
+        .panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--c-card);
+            min-width: 0;
+            position: relative;
+        }
+
+        .panel-header {
+            padding: 0.6rem 1rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--c-earth-metal);
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255,255,255,0.5);
+        }
+
+        .panel-tip {
+            padding: 0.35rem 1rem;
+            font-size: 0.8rem;
+            color: #7D7091;
+            background: #f6f1fa;
+            border-bottom: 1px dashed rgba(125, 112, 145, 0.3);
+        }
+
+        /* Editor */
+        .editor-container {
+            flex: 1;
+            position: relative;
+        }
+
+        textarea {
+            width: 100%;
+            height: 100%;
+            border: none;
+            padding: 1.5rem;
+            resize: none;
+            outline: none;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            background: transparent;
+            color: var(--c-charcoal);
+            line-height: 1.6;
+        }
+
+        /* Preview */
+        .preview-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 2rem;
+            background: #FAFAFA;
+        }
+
+        /* Controls */
+        .actions { display: flex; gap: 0.5rem; }
+
+        button {
+            background: white;
+            border: 1px solid #ddd;
+            padding: 0.35rem 0.7rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            color: var(--c-earth-metal);
+            font-weight: 600;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        button:hover {
+            border-color: var(--c-dull-purple);
+            color: var(--c-dull-purple);
+            background: #fffbfb;
+        }
+
+        button.primary {
+            background: var(--c-dull-purple);
+            color: white;
+            border-color: var(--c-dull-purple);
+        }
+        button.primary:hover { background: #6a5e7d; }
+
+        button.icon-btn {
+            padding: 0.4rem;
+            font-size: 1rem;
+            border: none;
+            background: transparent;
+        }
+        button.icon-btn:hover { background: rgba(0,0,0,0.05); border-color: transparent; }
+
+        /* Settings Popover */
+        .settings-menu {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            width: 300px;
+            background: var(--c-white-linen);
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            padding: 1rem;
+            z-index: 100;
+            display: none;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .settings-menu.active { display: flex; }
+
+        .setting-group { display: flex; flex-direction: column; gap: 0.5rem; }
+        .setting-label { font-size: 0.75rem; font-weight: 700; color: var(--c-earth-metal); text-transform: uppercase; }
+        
+        .toggle-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; }
+        .toggle-switch {
+            position: relative;
+            width: 36px; height: 20px;
+            background: #ddd;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 2px; left: 2px;
+            width: 16px; height: 16px;
+            background: white;
+            border-radius: 50%;
+            transition: 0.3s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        input[type="checkbox"]:checked + .toggle-switch { background: var(--c-dull-purple); }
+        input[type="checkbox"]:checked + .toggle-switch::after { transform: translateX(16px); }
+        input[type="checkbox"] { display: none; }
+
+        select.setting-select {
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            font-size: 0.8rem;
+            background: white;
+            color: var(--c-charcoal);
+            width: 120px;
+        }
+
+        input.setting-input {
+            padding: 6px 8px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            font-size: 0.8rem;
+            background: white;
+            color: var(--c-charcoal);
+            width: 100%;
+        }
+
+        .segment-row { display: flex; flex-direction: column; gap: 0.35rem; }
+        .segment-label-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: var(--c-earth-metal); }
+        .segmented {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+        }
+        .segment-btn {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: white;
+            padding: 0.45rem 0.4rem;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--c-earth-metal);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .segment-btn:hover { border-color: var(--c-dull-purple); color: var(--c-dull-purple); }
+        .segment-btn.active {
+            border-color: var(--c-dull-purple);
+            background: #f5f0fb;
+            color: var(--c-dull-purple);
+            box-shadow: inset 0 0 0 1px rgba(125,112,145,0.2);
+        }
+        .segment-hint { font-size: 0.75rem; color: #999; }
+
+        .preview-note {
+            background: #fff7e6;
+            color: #8a5a00;
+            border: 1px solid #f0d8a8;
+            border-radius: 8px;
+            padding: 0.6rem 0.9rem;
+            font-size: 0.85rem;
+            margin-bottom: 0.75rem;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(47, 51, 55, 0.4);
+            backdrop-filter: blur(2px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+        .modal-overlay.active { opacity: 1; pointer-events: auto; }
+        .modal {
+            background: var(--c-white-linen);
+            width: 700px;
+            max-width: 90%;
+            border-radius: var(--radius);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            max-height: 80vh;
+        }
+        .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        .modal-body { display: flex; flex-direction: column; max-height: calc(80vh - 140px); }
+        .code-block { background: #2b2b2b; color: #e0e0e0; padding: 1.5rem; margin: 0; overflow: auto; font-family: var(--font-mono); font-size: 0.8rem; border: none; flex: 1; min-height: 320px; }
+        .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid #eee; display: flex; justify-content: flex-end; gap: 10px; }
+
+        /* Status */
+        .status-bar { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--c-earth-metal); }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; }
+        .status-dot.valid { background: #8bc34a; }
+        .status-dot.invalid { background: var(--c-muted-pink); }
+        #statusMsg { 
+            white-space: nowrap; 
+            overflow: hidden; 
+            text-overflow: ellipsis; 
+            max-width: 300px; 
+        }
+
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="status-bar">
+        <h1><i class="fa-solid fa-sliders"></i> Config Component Generator</h1>
+        <!-- Removed BETA badge -->
+    </div>
+    
+    <div style="display:flex; align-items: center; gap: 1rem;">
+        <div class="status-bar">
+            <div id="statusDot" class="status-dot"></div>
+            <span id="statusMsg" title="Status">Ready</span>
+        </div>
+        <div style="position:relative;">
+            <button class="icon-btn" onclick="toggleSettings()">
+                <i class="fa-solid fa-gear"></i>
+            </button>
+            <div id="settingsMenu" class="settings-menu">
+                <div style="display:flex; justify-content: space-between; align-items:center;">
+                    <span style="font-weight:700; color: var(--c-earth-metal); font-size:0.85rem;">Settings</span>
+                    <button class="icon-btn" style="font-size:0.85rem;" onclick="resetSettings()" title="Reset to defaults">
+                        <i class="fa-solid fa-rotate"></i> Reset
+                    </button>
+                </div>
+                <div class="setting-group">
+                    <span class="setting-label">Parsing</span>
+                    <div class="segment-row">
+                        <div class="segment-label-row">
+                            <span>Parser</span>
+                            <span id="parserLabel" style="font-weight:700; color: var(--c-dull-purple);">Auto</span>
+                        </div>
+                        <div class="segmented" role="group" aria-label="Parser selection">
+                            <button type="button" class="segment-btn" data-parser="json5" onclick="onParserSelect('json5')">JSON5</button>
+                            <button type="button" class="segment-btn" data-parser="json" onclick="onParserSelect('json')">JSON</button>
+                            <button type="button" class="segment-btn" data-parser="yaml" onclick="onParserSelect('yaml')">YAML</button>
+                        </div>
+                        <div class="segment-hint">Auto-selects based on paste. Click to force a parser.</div>
+                    </div>
+                    <label class="toggle-row">
+                        <span>Parse Comments</span>
+                        <input type="checkbox" id="optComments" checked onchange="triggerUpdate()">
+                        <div class="toggle-switch"></div>
+                    </label>
+                    <label class="toggle-row" id="commentPosRow">
+                        <span>Comment Position</span>
+                        <select id="optCommentPos" class="setting-select" onchange="triggerUpdate()">
+                            <option value="same">Same Line</option>
+                            <option value="above">Above Key</option>
+                            <option value="below">Below Key</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <span class="setting-label">Appearance</span>
+                    <label class="toggle-row">
+                        <span>Collapse Long Strings</span>
+                        <input type="checkbox" id="optCollapse" checked onchange="triggerUpdate()">
+                        <div class="toggle-switch"></div>
+                    </label>
+                    <label class="toggle-row">
+                        <span>Wrap Text</span>
+                        <input type="checkbox" id="optWrap" onchange="triggerUpdate()">
+                        <div class="toggle-switch"></div>
+                    </label>
+                    <label class="toggle-row">
+                        <span>Fixed Width Container</span>
+                        <input type="checkbox" id="optFixed" onchange="triggerUpdate()">
+                        <div class="toggle-switch"></div>
+                    </label>
+                    <label class="toggle-row">
+                        <span>Preview Dark Mode</span>
+                        <input type="checkbox" id="optUseDark" onchange="triggerUpdate()">
+                        <div class="toggle-switch"></div>
+                    </label>
+                    <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
+                    </div>
+                    <div class="segment-hint">Preview will auto-switch light/dark; export keeps your choices.</div>
+                </div>
+
+                <div class="setting-group">
+                    <span class="setting-label">Component Settings</span>
+                    <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
+                        <div>
+                            <div class="setting-label" style="text-transform:none;">Light BG</div>
+                            <input type="text" id="optLightBg" class="setting-input" placeholder="#FDFBF7 or var(--bg-light)" onchange="triggerUpdate()">
+                        </div>
+                        <div>
+                            <div class="setting-label" style="text-transform:none;">Dark BG</div>
+                            <input type="text" id="optDarkBg" class="setting-input" placeholder="#1f1f23 or var(--bg-dark)" onchange="triggerUpdate()">
+                        </div>
+                        <div>
+                            <div class="setting-label" style="text-transform:none;">Light Text</div>
+                            <input type="text" id="optTextLight" class="setting-input" placeholder="#2F3337 or var(--text)" onchange="triggerUpdate()">
+                        </div>
+                        <div>
+                            <div class="setting-label" style="text-transform:none;">Dark Text</div>
+                            <input type="text" id="optTextDark" class="setting-input" placeholder="#E8E8E8 or var(--text-dark)" onchange="triggerUpdate()">
+                        </div>
+                        <div>
+                            <div class="setting-label" style="text-transform:none;">Light Tooltip BG</div>
+                            <input type="text" id="optTooltipBgLight" class="setting-input" placeholder="#333 or var(--tooltip-bg)" onchange="triggerUpdate()">
+                        </div>
+                        <div>
+                            <div class="setting-label" style="text-transform:none;">Dark Tooltip BG</div>
+                            <input type="text" id="optTooltipBgDark" class="setting-input" placeholder="#111 or var(--tooltip-bg-dark)" onchange="triggerUpdate()">
+                        </div>
+                        <div>
+                            <div class="setting-label" style="text-transform:none;">Light Tooltip Text</div>
+                            <input type="text" id="optTooltipTextLight" class="setting-input" placeholder="#FDFBF7 or var(--tooltip-text)" onchange="triggerUpdate()">
+                        </div>
+                        <div>
+                            <div class="setting-label" style="text-transform:none;">Dark Tooltip Text</div>
+                            <input type="text" id="optTooltipTextDark" class="setting-input" placeholder="#f5f5f5 or var(--tooltip-text-dark)" onchange="triggerUpdate()">
+                        </div>
+                        <div>
+                            <div class="setting-label" style="text-transform:none;">Light String</div>
+                            <input type="text" id="optStrLight" class="setting-input" placeholder="#C79E9E" onchange="triggerUpdate()">
+                        </div>
+                        <div>
+                            <div class="setting-label" style="text-transform:none;">Dark String</div>
+                            <input type="text" id="optStrDark" class="setting-input" placeholder="#f2b3b3" onchange="triggerUpdate()">
+                        </div>
+                        <div>
+                            <div class="setting-label" style="text-transform:none;">Light Number</div>
+                            <input type="text" id="optNumLight" class="setting-input" placeholder="#5A5E5C" onchange="triggerUpdate()">
+                        </div>
+                        <div>
+                            <div class="setting-label" style="text-transform:none;">Dark Number</div>
+                            <input type="text" id="optNumDark" class="setting-input" placeholder="#c4c7cc" onchange="triggerUpdate()">
+                        </div>
+                        <div>
+                            <div class="setting-label" style="text-transform:none;">Light Boolean</div>
+                            <input type="text" id="optBoolLight" class="setting-input" placeholder="#7D7091" onchange="triggerUpdate()">
+                        </div>
+                        <div>
+                            <div class="setting-label" style="text-transform:none;">Dark Boolean</div>
+                            <input type="text" id="optBoolDark" class="setting-input" placeholder="#c5b7e8" onchange="triggerUpdate()">
+                        </div>
+                        <div>
+                            <div class="setting-label" style="text-transform:none;">Light Null</div>
+                            <input type="text" id="optNullLight" class="setting-input" placeholder="#8a8a8a" onchange="triggerUpdate()">
+                        </div>
+                        <div>
+                            <div class="setting-label" style="text-transform:none;">Dark Null</div>
+                            <input type="text" id="optNullDark" class="setting-input" placeholder="#9aa0a6" onchange="triggerUpdate()">
+                        </div>
+                        <div>
+                            <div class="setting-label" style="text-transform:none;">Light Bracket</div>
+                            <input type="text" id="optBracketLight" class="setting-input" placeholder="#5A5E5C" onchange="triggerUpdate()">
+                        </div>
+                        <div>
+                            <div class="setting-label" style="text-transform:none;">Dark Bracket</div>
+                            <input type="text" id="optBracketDark" class="setting-input" placeholder="#c4c7cc" onchange="triggerUpdate()">
+                        </div>
+                    </div>
+                    <div class="segment-hint">Accepts raw hex/rgb/hsl, CSS variables, or Tailwind tokens. Preview uses defaults if tokens are unavailable; export keeps your values.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<main>
+    <!-- INPUT -->
+    <div class="panel">
+        <div class="panel-header">
+            <span>Input</span>
+            <div class="actions">
+                <button onclick="clearInput()"><i class="fa-solid fa-trash-can"></i> Clear</button>
+            </div>
+        </div>
+        <div class="panel-tip">
+            Tip: Comments are parsed by default so hover/click keys to see tooltips.
+        </div>
+        <div class="editor-container">
+            <textarea id="inputArea" placeholder="// Paste JSON, JSON5, or YAML...&#10;{&#10;  // Comments supported if enabled&#10;  'key': 'value',&#10;  'incomplete_list': [ " spellcheck="false"></textarea>
+        </div>
+    </div>
+
+    <!-- PREVIEW -->
+    <div class="panel">
+        <div class="panel-header">
+            <span>Explorer</span>
+            <div class="actions">
+                <button class="primary" onclick="generateComponent()">
+                    <i class="fa-solid fa-code"></i> Copy Component
+                </button>
+            </div>
+        </div>
+        <div class="preview-container" id="previewArea"></div>
+    </div>
+</main>
+
+<div class="modal-overlay" id="exportModal">
+    <div class="modal">
+        <div class="modal-header">
+            <span class="modal-title">Embeddable Component Code</span>
+            <button onclick="document.getElementById('exportModal').classList.remove('active')" style="border:none;background:transparent;"><i class="fa-solid fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <div style="padding:1rem; font-size:0.85rem; color:#666; background:#fff; border-bottom:1px solid #eee;">
+                Include this HTML block in your project. It is fully self-contained with styles and scripts.
+            </div>
+            <textarea class="code-block" id="exportCode" readonly></textarea>
+        </div>
+        <div class="modal-footer">
+            <button onclick="document.getElementById('exportModal').classList.remove('active')">Close</button>
+            <button class="primary" onclick="copyToClipboard()"><i class="fa-regular fa-copy"></i> Copy</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    /* --- State & Config --- */
+    const els = {
+        input: document.getElementById('inputArea'),
+        preview: document.getElementById('previewArea'),
+        statusDot: document.getElementById('statusDot'),
+        statusMsg: document.getElementById('statusMsg'),
+        settings: document.getElementById('settingsMenu'),
+        modal: document.getElementById('exportModal'),
+        exportCode: document.getElementById('exportCode'),
+        opts: {
+            comments: document.getElementById('optComments'),
+            commentPos: document.getElementById('optCommentPos'),
+            collapse: document.getElementById('optCollapse'),
+            wrap: document.getElementById('optWrap'),
+            fixed: document.getElementById('optFixed'),
+            useDark: document.getElementById('optUseDark'),
+            lightBg: document.getElementById('optLightBg'),
+            darkBg: document.getElementById('optDarkBg'),
+            textLight: document.getElementById('optTextLight'),
+            textDark: document.getElementById('optTextDark'),
+            tooltipBgLight: document.getElementById('optTooltipBgLight'),
+            tooltipBgDark: document.getElementById('optTooltipBgDark'),
+            tooltipTextLight: document.getElementById('optTooltipTextLight'),
+            tooltipTextDark: document.getElementById('optTooltipTextDark'),
+            strLight: document.getElementById('optStrLight'),
+            strDark: document.getElementById('optStrDark'),
+            numLight: document.getElementById('optNumLight'),
+            numDark: document.getElementById('optNumDark'),
+            boolLight: document.getElementById('optBoolLight'),
+            boolDark: document.getElementById('optBoolDark'),
+            nullLight: document.getElementById('optNullLight'),
+            nullDark: document.getElementById('optNullDark'),
+            bracketLight: document.getElementById('optBracketLight'),
+            bracketDark: document.getElementById('optBracketDark'),
+        },
+        parserButtons: Array.from(document.querySelectorAll('[data-parser]'))
+    };
+
+    const STORAGE_KEY = 'configExplorerSettings';
+    const parserModes = ['json5', 'json', 'yaml'];
+    let parserLocked = false; // true if user set slider manually
+
+    const defaultPalette = {
+        light: {
+            bg: '#FDFBF7',
+            text: '#2F3337',
+            tooltipBg: '#333333',
+            tooltipText: '#FDFBF7',
+            str: '#C79E9E',
+            num: '#5A5E5C',
+            bool: '#7D7091',
+            nil: '#8A8A8A',
+            bracket: '#5A5E5C'
+        },
+        dark: {
+            bg: '#1f1f23',
+            text: '#E8E8E8',
+            tooltipBg: '#111111',
+            tooltipText: '#f5f5f5',
+            str: '#f2b3b3',
+            num: '#c4c7cc',
+            bool: '#c5b7e8',
+            nil: '#9aa0a6',
+            bracket: '#c4c7cc'
+        }
+    };
+
+    function isLikelyResolvableColor(value) {
+        if (!value) return false;
+        const v = value.trim();
+        if (v.startsWith('var(')) return false; // unknown in preview
+        if (window.CSS && CSS.supports && CSS.supports('color', v)) return true;
+        return false;
+    }
+
+    function resolveColorInput(value, fallback) {
+        const trimmed = (value || '').trim();
+        if (!trimmed) return { raw: fallback, preview: fallback, usedFallback: false };
+        const resolvable = isLikelyResolvableColor(trimmed);
+        return {
+            raw: trimmed,
+            preview: resolvable ? trimmed : fallback,
+            usedFallback: !resolvable
+        };
+    }
+
+    function loadSettings() {
+        try {
+            const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+            if (typeof saved.parserLocked === 'boolean') parserLocked = saved.parserLocked;
+            if (typeof saved.comments === 'boolean') els.opts.comments.checked = saved.comments;
+            if (saved.commentPos) els.opts.commentPos.value = saved.commentPos;
+            if (typeof saved.collapse === 'boolean') els.opts.collapse.checked = saved.collapse;
+            if (typeof saved.wrap === 'boolean') els.opts.wrap.checked = saved.wrap;
+            if (typeof saved.fixed === 'boolean') els.opts.fixed.checked = saved.fixed;
+            if (typeof saved.useDark === 'boolean') els.opts.useDark.checked = saved.useDark;
+            if (saved.lightBg) els.opts.lightBg.value = saved.lightBg;
+            if (saved.darkBg) els.opts.darkBg.value = saved.darkBg;
+            if (saved.textLight) els.opts.textLight.value = saved.textLight;
+            if (saved.textDark) els.opts.textDark.value = saved.textDark;
+            if (saved.tooltipBgLight) els.opts.tooltipBgLight.value = saved.tooltipBgLight;
+            if (saved.tooltipBgDark) els.opts.tooltipBgDark.value = saved.tooltipBgDark;
+            if (saved.tooltipTextLight) els.opts.tooltipTextLight.value = saved.tooltipTextLight;
+            if (saved.tooltipTextDark) els.opts.tooltipTextDark.value = saved.tooltipTextDark;
+            if (saved.strLight) els.opts.strLight.value = saved.strLight;
+            if (saved.strDark) els.opts.strDark.value = saved.strDark;
+            if (saved.numLight) els.opts.numLight.value = saved.numLight;
+            if (saved.numDark) els.opts.numDark.value = saved.numDark;
+            if (saved.boolLight) els.opts.boolLight.value = saved.boolLight;
+            if (saved.boolDark) els.opts.boolDark.value = saved.boolDark;
+            if (saved.nullLight) els.opts.nullLight.value = saved.nullLight;
+            if (saved.nullDark) els.opts.nullDark.value = saved.nullDark;
+            if (saved.bracketLight) els.opts.bracketLight.value = saved.bracketLight;
+            if (saved.bracketDark) els.opts.bracketDark.value = saved.bracketDark;
+            if (saved.parserMode || typeof saved.parserIdx === 'number') {
+                const mode = saved.parserMode || parserModes[saved.parserIdx] || 'json5';
+                setParserMode(mode, parserLocked);
+            } else {
+                setParserMode('json5', false);
+            }
+        } catch (e) {
+            console.warn('Settings load failed', e);
+        }
+    }
+
+    function saveSettings() {
+        const settings = {
+            parserMode: currentParserMode(),
+            parserLocked,
+            comments: els.opts.comments.checked,
+            commentPos: els.opts.commentPos.value,
+            collapse: els.opts.collapse.checked,
+            wrap: els.opts.wrap.checked,
+            fixed: els.opts.fixed.checked,
+            useDark: els.opts.useDark.checked,
+            lightBg: els.opts.lightBg.value,
+            darkBg: els.opts.darkBg.value,
+            textLight: els.opts.textLight.value,
+            textDark: els.opts.textDark.value,
+            tooltipBgLight: els.opts.tooltipBgLight.value,
+            tooltipBgDark: els.opts.tooltipBgDark.value,
+            tooltipTextLight: els.opts.tooltipTextLight.value,
+            tooltipTextDark: els.opts.tooltipTextDark.value,
+            strLight: els.opts.strLight.value,
+            strDark: els.opts.strDark.value,
+            numLight: els.opts.numLight.value,
+            numDark: els.opts.numDark.value,
+            boolLight: els.opts.boolLight.value,
+            boolDark: els.opts.boolDark.value,
+            nullLight: els.opts.nullLight.value,
+            nullDark: els.opts.nullDark.value,
+            bracketLight: els.opts.bracketLight.value,
+            bracketDark: els.opts.bracketDark.value
+        };
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+        } catch (e) {
+            console.warn('Settings save failed', e);
+        }
+    }
+
+    function currentParserMode() {
+        const active = els.parserButtons.find(btn => btn.classList.contains('active'));
+        const mode = active ? active.dataset.parser : null;
+        return mode || 'json5';
+    }
+
+    function setParserMode(mode, lock = false) {
+        const idx = parserModes.indexOf(mode);
+        if (idx >= 0) {
+            parserLocked = lock;
+            els.parserButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.parser === mode));
+            updateParserLabel(mode, lock ? 'manual' : 'auto');
+            saveSettings();
+        }
+    }
+
+    function updateParserLabel(mode, source = 'auto') {
+        const label = document.getElementById('parserLabel');
+        const name = mode.toUpperCase();
+        label.textContent = source === 'auto' ? `${name} (auto)` : name;
+    }
+
+    loadSettings();
+    updateParserLabel(currentParserMode(), parserLocked ? 'manual' : 'auto');
+
+    function ensureColorDefaults() {
+        const d = defaultPalette;
+        const assign = (el, val) => { if (!el.value) el.value = val; };
+        assign(els.opts.lightBg, d.light.bg);
+        assign(els.opts.darkBg, d.dark.bg);
+        assign(els.opts.textLight, d.light.text);
+        assign(els.opts.textDark, d.dark.text);
+        assign(els.opts.tooltipBgLight, d.light.tooltipBg);
+        assign(els.opts.tooltipBgDark, d.dark.tooltipBg);
+        assign(els.opts.tooltipTextLight, d.light.tooltipText);
+        assign(els.opts.tooltipTextDark, d.dark.tooltipText);
+        assign(els.opts.strLight, d.light.str);
+        assign(els.opts.strDark, d.dark.str);
+        assign(els.opts.numLight, d.light.num);
+        assign(els.opts.numDark, d.dark.num);
+        assign(els.opts.boolLight, d.light.bool);
+        assign(els.opts.boolDark, d.dark.bool);
+        assign(els.opts.nullLight, d.light.nil);
+        assign(els.opts.nullDark, d.dark.nil);
+        assign(els.opts.bracketLight, d.light.bracket);
+        assign(els.opts.bracketDark, d.dark.bracket);
+    }
+
+    ensureColorDefaults();
+
+    let currentData = null;
+    let commentMap = {}; // Key -> [Comments]
+    let commentUsage = {}; // Key -> usage count
+    let missingCloses = [];
+
+    /* --- Event Listeners --- */
+    els.input.addEventListener('input', debounce(handleInput, 400));
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('#settingsMenu') && !e.target.closest('.icon-btn')) {
+            els.settings.classList.remove('active');
+        }
+        // Live Preview Interaction
+        if (e.target.classList.contains('jv-string') && e.target.classList.contains('collapsible')) {
+            e.target.classList.toggle('truncated');
+        }
+        // Mobile Tooltip Toggle logic for live preview
+        if (e.target.closest('.jv-has-comment')) {
+            const el = e.target.closest('.jv-has-comment');
+            // Toggle active state
+            const wasActive = el.classList.contains('active');
+            // Close others
+            document.querySelectorAll('.jv-has-comment.active').forEach(x => x.classList.remove('active'));
+            if (!wasActive) el.classList.add('active');
+        } else {
+             // Close all if clicking elsewhere
+            document.querySelectorAll('.jv-has-comment.active').forEach(x => x.classList.remove('active'));
+        }
+    });
+
+    function toggleSettings() { els.settings.classList.toggle('active'); }
+    function triggerUpdate() { saveSettings(); handleInput(); }
+    function onParserSelect(mode) { setParserMode(mode, true); handleInput(); }
+    function debounce(fn, wait) {
+        let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), wait); };
+    }
+    function clearInput() { els.input.value = ''; handleInput(); }
+
+    /* --- Parsing Logic --- */
+    function handleInput() {
+        const raw = els.input.value.trim();
+        missingCloses = [];
+        commentMap = {};
+        commentUsage = {};
+
+        if (!raw) {
+            currentData = null;
+            setStatus('waiting', 'Waiting for input...');
+            els.preview.innerHTML = `<div style="text-align:center;color:#999;margin-top:4rem;opacity:0.6"><i class="fa-solid fa-cube" style="font-size:2rem;margin-bottom:1rem;"></i><p>Ready to visualize</p></div>`;
+            return;
+        }
+
+        // 1. Extract Comments (State Machine)
+        if (els.opts.comments.checked) {
+            extractComments(els.input.value, els.opts.commentPos.value);
+        }
+
+        // Check if JSON5 library is actually loaded
+        if (typeof JSON5 === 'undefined') {
+            const err = "Library Error: JSON5 not loaded yet.";
+            console.error(err);
+            setStatus('invalid', err);
+            return;
+        }
+
+        // Helper to attempt autofix with a specific parser
+        const attemptAutofix = (parserName, parserFn) => {
+             console.log(`Attempting autofix for ${parserName}...`);
+             const fixed = tryFixJson(raw);
+             if (fixed.fixed) {
+                 try {
+                     currentData = parserFn(fixed.fixed);
+                     missingCloses = fixed.missing;
+                     setStatus('valid', 'Auto-patched (' + parserName + ')');
+                     renderPreview();
+                     return true;
+                 } catch (e) { 
+                     console.error(`Autofix failed for ${parserName}:`, e);
+                     return false; 
+                 }
+             }
+             return false;
+        };
+
+        // 2. Parse Logic with mode / autodetect
+        const preferredMode = parserLocked ? currentParserMode() : 'auto';
+        const tryJsonParse = (input) => JSON.parse(input);
+
+        const parseWith = (mode, input) => {
+            if (mode === 'json5') return JSON5.parse(input);
+            if (mode === 'json') return tryJsonParse(input);
+            if (mode === 'yaml') return jsyaml.load(input);
+            throw new Error('Unknown parser mode');
+        };
+
+        const runParser = (mode) => {
+            try {
+                currentData = parseWith(mode, raw);
+                updateParserLabel(mode, parserLocked ? 'manual' : 'auto');
+                setStatus('valid', `Valid ${mode.toUpperCase()}`);
+                renderPreview();
+                if (!parserLocked) setParserMode(mode, false);
+                return true;
+            } catch (e) {
+                console.error(`${mode.toUpperCase()} Parse Error:`, e);
+                // Autofix only for JSON/JSON5/YAML with fixer
+                const fixer = mode === 'yaml' ? jsyaml.load : mode === 'json5' ? JSON5.parse : tryJsonParse;
+                if (attemptAutofix(mode.toUpperCase(), fixer)) {
+                    if (!parserLocked) setParserMode(mode, false);
+                    return true;
+                }
+                return false;
+            }
+        };
+
+        if (preferredMode !== 'auto') {
+            if (!runParser(preferredMode)) {
+                setStatus('invalid', `Error parsing as ${preferredMode.toUpperCase()}. Adjust parser or input.`);
+            }
+            return;
+        }
+
+        // Auto detection order: JSON -> JSON5 -> YAML
+        if (runParser('json')) return;
+        if (runParser('json5')) return;
+        if (runParser('yaml')) return;
+
+        setStatus('invalid', 'Could not parse input. Try switching parser mode.');
+    }
+
+    function setStatus(type, msg) {
+        els.statusMsg.innerText = msg;
+        els.statusMsg.title = msg; 
+        els.statusDot.className = 'status-dot ' + type;
+    }
+
+    /* --- Comment Extraction (State Machine) --- */
+    function extractComments(text, mode) {
+        // mode: 'same', 'above', 'below'
+        const lines = text.split('\n');
+        
+        let pendingComments = []; // For 'above' mode
+        let lastKey = null;       // For 'below' mode
+
+        const pushComment = (key, value) => {
+            if (!key || !value) return;
+            if (!Array.isArray(commentMap[key])) commentMap[key] = [];
+            commentMap[key].push(value);
+        };
+
+        lines.forEach((line, i) => {
+            const trimLine = line.trim();
+            if(!trimLine) {
+                // Reset buffer on empty lines for 'above' mode to prevent drift
+                if(mode === 'above') pendingComments = []; 
+                return;
+            }
+
+            // Detect Comment
+            const commentMatch = line.match(/(\/\/|#)(.*)/);
+            let commentText = null;
+            let contentBeforeComment = trimLine;
+
+            if (commentMatch) {
+                commentText = commentMatch[2].trim();
+                contentBeforeComment = line.substring(0, commentMatch.index).trim();
+            }
+
+            // Detect Key
+            // Matches "key": or key: or 'key':
+            const keyMatch = contentBeforeComment.match(/^["']?([\w-]+)["']?\s*:/);
+            const currentKey = keyMatch ? keyMatch[1] : null;
+
+            // Logic Switch based on Mode
+            if (mode === 'same') {
+                if (currentKey && commentText) {
+                    pushComment(currentKey, commentText);
+                }
+            } 
+            else if (mode === 'above') {
+                if (commentText && !currentKey) {
+                    // Line is just a comment, buffer it
+                    pendingComments.push(commentText);
+                } else if (currentKey) {
+                    // Found a key, assign buffered comments
+                    // Also check if there is a same-line comment and append it? 
+                    // Requirement implies positional, so we prioritize the 'above' block.
+                    if (pendingComments.length > 0) {
+                        pushComment(currentKey, pendingComments.join(' '));
+                        pendingComments = []; // Consumed
+                    } else if (commentText) {
+                        // Fallback: if they selected 'above' but put it on same line, we can optionally support it
+                        // but explicit request asks for position. Let's stick to strict or fallback?
+                        // Strict 'above' usually implies strictly above.
+                    }
+                    // If this line has a comment at the end, it might be for the NEXT key? 
+                    // No, 'above' usually means "preceding this line".
+                }
+            }
+            else if (mode === 'below') {
+                if (currentKey) {
+                    lastKey = currentKey;
+                } else if (commentText && lastKey) {
+                    // This line is a comment, and we have a pending key from above
+                    // Append if multiple lines
+                    pushComment(lastKey, commentText);
+                } else {
+                    // Not a key, not a comment, reset lastKey
+                    lastKey = null;
+                }
+            }
+        });
+    }
+
+    /* --- Auto-Fixer --- */
+    function tryFixJson(str) {
+        let stack = [];
+        let inString = false;
+        let inCommentSingle = false; 
+        let inCommentMulti = false;  
+        let quoteChar = null;
+        let esc = false;
+
+        let i = 0;
+        while (i < str.length) {
+            const c = str[i];
+            const next = str[i+1] || '';
+
+            if (!inString) {
+                if (!inCommentMulti && !inCommentSingle) {
+                    if (c === '/' && next === '/') {
+                        inCommentSingle = true;
+                        i++; 
+                    } else if (c === '/' && next === '*') {
+                        inCommentMulti = true;
+                        i++; 
+                    }
+                } else if (inCommentSingle && c === '\n') {
+                    inCommentSingle = false;
+                } else if (inCommentMulti && c === '*' && next === '/') {
+                    inCommentMulti = false;
+                    i++; 
+                }
+            }
+
+            if (inCommentSingle || inCommentMulti) {
+                i++;
+                continue;
+            }
+
+            if (inString) {
+                if (c === '\\') {
+                    esc = !esc;
+                } else if (c === quoteChar && !esc) {
+                    inString = false;
+                } else {
+                    esc = false;
+                }
+            } else {
+                if (c === '"' || c === "'") {
+                    inString = true;
+                    quoteChar = c;
+                } else if (c === '{') {
+                    stack.push('}');
+                } else if (c === '[') {
+                    stack.push(']');
+                } else if (c === '}' || c === ']') {
+                    if (stack.length && stack[stack.length - 1] === c) {
+                        stack.pop();
+                    }
+                }
+            }
+            i++;
+        }
+
+        let patched = str.trimEnd();
+        if (inString) patched += quoteChar; 
+        
+        if (patched.endsWith(',')) {
+             patched = patched.slice(0, -1);
+        } else if (patched.endsWith(':')) {
+             patched += ' null';
+        }
+
+        const missing = [];
+        while(stack.length) {
+            const c = stack.pop();
+            patched += c;
+            missing.push(c);
+        }
+        return { fixed: patched === str ? null : patched, missing };
+    }
+
+    /* --- Generator Engine --- */
+    function renderPreview() {
+        const { palette, usedFallback } = buildPalette(false);
+        const html = buildComponent(currentData, [...missingCloses], palette);
+        const note = usedFallback ? `<div class="preview-note">Using default colors for preview. Copied component keeps your provided theme tokens.</div>` : '';
+        els.preview.innerHTML = note + html;
+    }
+
+    function generateComponent() {
+        if (!currentData) return;
+        const { palette } = buildPalette(true);
+        const code = buildComponent(currentData, [...missingCloses], palette);
+        els.exportCode.value = code;
+        els.modal.classList.add('active');
+    }
+
+    function copyToClipboard() {
+        const text = els.exportCode.value;
+        const fallbackCopy = () => {
+            els.exportCode.select();
+            document.execCommand('copy');
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).catch(fallbackCopy);
+        } else {
+            fallbackCopy();
+        }
+    }
+
+    /* --- The Builder --- */
+    function buildComponent(data, missingStack, palette) {
+        commentUsage = {}; // reset per render to align repeated keys
+        const p = 'jv-';
+        const config = {
+            collapse: els.opts.collapse.checked,
+            wrap: els.opts.wrap.checked,
+            fixed: els.opts.fixed.checked
+        };
+        const colors = palette;
+
+        const js = `
+<script>
+(function(){
+    document.addEventListener('click', function(e) {
+        // Toggle Strings
+        if(e.target.matches('.${p}string.collapsible')) {
+            e.target.classList.toggle('truncated');
+        }
+        
+        // Mobile/Click Tooltip Logic
+        const commentEl = e.target.closest('.${p}has-comment');
+        if (commentEl) {
+            const wasActive = commentEl.classList.contains('active');
+            // Close all others
+            document.querySelectorAll('.${p}has-comment.active').forEach(x => x.classList.remove('active'));
+            // Toggle clicked
+            if (!wasActive) commentEl.classList.add('active');
+        } else {
+            // Click outside closes all
+            document.querySelectorAll('.${p}has-comment.active').forEach(x => x.classList.remove('active'));
+        }
+    });
+})();
+<\/script>`;
+
+        const css = `
+<style>
+.${p}container {
+    font-family: monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    color: ${colors.text};
+    background-color: ${colors.bg};
+    border: 1px solid rgba(0,0,0,0.12);
+    border-radius: 8px;
+    padding: 1.5rem;
+    ${config.fixed ? 'width: 600px; max-width: 100%;' : 'width: 100%;'}
+    overflow-x: auto;
+    padding-bottom: 3rem; /* Space for bottom popovers */
+}
+
+.${p}details { padding-left: 24px; }
+
+/* Summary Layout */
+.${p}summary {
+    display: flex;
+    align-items: flex-start;
+    cursor: pointer;
+    list-style: none;
+    outline: none;
+}
+.${p}summary::-webkit-details-marker { display: none; }
+.${p}summary:hover .${p}key-base { text-decoration: underline; text-decoration-color: #ddd; }
+
+/* Arrow */
+.${p}arrow {
+    display: inline-block;
+    width: 16px;
+    font-size: 10px;
+    line-height: 18px;
+    text-align: center;
+    color: #999;
+    transition: transform 0.15s ease;
+    margin-right: 2px;
+    flex-shrink: 0;
+}
+details[open] > .${p}summary > .${p}arrow { transform: rotate(90deg); }
+
+/* Key Hierarchies */
+.${p}key-base { margin-right: 6px; color: #2F3337; position: relative; }
+.${p}key-0 { font-weight: 900; }
+.${p}key-1 { font-weight: 700; }
+.${p}key-2 { font-weight: 600; }
+.${p}key-3 { font-weight: 600; font-style: italic; }
+.${p}key-4 { font-weight: 400; font-style: italic; }
+.${p}key-rest { font-weight: 400; }
+
+/* Comment Indicators */
+.${p}has-comment {
+    border-bottom: 1px dotted #aaa;
+    cursor: help;
+    display: inline-block;
+    position: relative; /* Anchor tooltip positioning */
+}
+
+/* Tooltips */
+.${p}tooltip {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 6px;
+    background: ${colors.tooltipBg};
+    color: ${colors.tooltipText || colors.text};
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    width: max-content;
+    max-width: 250px;
+    white-space: normal;
+    z-index: 99;
+    font-weight: 400;
+    font-style: normal;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    line-height: 1.4;
+    pointer-events: none;
+}
+/* Arrow for tooltip */
+.${p}tooltip::after {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    left: 10px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: transparent transparent ${colors.tooltipBg} transparent;
+}
+
+/* Desktop Hover */
+@media (min-width: 768px) {
+    .${p}has-comment:hover .${p}tooltip { display: block; }
+}
+
+/* Mobile Active State */
+.${p}has-comment.active .${p}tooltip { display: block; }
+
+
+/* Value Types */
+.${p}val-str { color: ${colors.str}; word-break: break-all; }
+.${p}val-num { color: ${colors.num}; }
+.${p}val-bool { color: ${colors.bool}; font-weight: bold; }
+.${p}val-null { color: ${colors.nil}; font-style: italic; }
+.${p}bracket { color: ${colors.bracket}; font-weight: bold; }
+.${p}ghost { opacity: 0.3; }
+.${p}meta {
+    font-size: 0.75em;
+    color: #aaa;
+    background: #E0DCD3;
+    padding: 1px 5px;
+    border-radius: 4px;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+/* String Truncation */
+.${p}string.collapsible { cursor: pointer; position: relative; }
+.${p}string.collapsible:hover { background: rgba(0,0,0,0.03); border-radius:3px; }
+.${p}string.truncated {
+    display: inline-block;
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+}
+${config.wrap ? `.${p}val-str { white-space: pre-wrap; }` : `.${p}val-str { white-space: nowrap; }`}
+
+</style>
+        `;
+
+        const tree = genTree(data, p, true, missingStack, null, 0);
+        return `${css}\n<div class="${p}container">\n${tree}\n</div>\n${js}`;
+    }
+
+    function getKeyClass(p, depth) {
+        let suffix = 'rest';
+        if (depth === 0) suffix = '0';
+        else if (depth === 1) suffix = '1';
+        else if (depth === 2) suffix = '2';
+        else if (depth === 3) suffix = '3';
+        else if (depth === 4) suffix = '4';
+        return `${p}key-base ${p}key-${suffix}`;
+    }
+
+    function genTree(obj, p, isTrailing, missingStack, keyName, depth = 0) {
+        // Comment Logic Wrapper
+        const wrapKey = (keyStr, kName) => {
+            if (kName && commentMap[kName] && els.opts.comments.checked) {
+                const idx = commentUsage[kName] || 0;
+                const raw = Array.isArray(commentMap[kName]) ? commentMap[kName][idx] : commentMap[kName];
+                if (raw !== undefined) {
+                    commentUsage[kName] = idx + 1;
+                    const commentText = escapeHtml(raw);
+                    return `<span class="${p}has-comment">${keyStr}<span class="${p}tooltip">${commentText}</span></span>`;
+                }
+            }
+            return keyStr;
+        };
+
+        // --- Primitive Renderers ---
+        if (obj === null) return `<span class="${p}val-null">null</span>`;
+        if (typeof obj === 'undefined') return `<span class="${p}val-null">undefined</span>`;
+        if (typeof obj === 'number') return `<span class="${p}val-num">${obj}</span>`;
+        if (typeof obj === 'boolean') return `<span class="${p}val-bool">${obj}</span>`;
+        if (typeof obj === 'string') {
+            const isLong = obj.length > 50;
+            const classes = `${p}val-str ${p}string ${isLong && els.opts.collapse.checked ? 'collapsible truncated' : ''}`;
+            return `<span class="${classes}" title="${isLong ? 'Click to toggle' : ''}">"${escapeHtml(obj)}"</span>`;
+        }
+
+        // --- Complex Types (Recursive) ---
+        const isArr = Array.isArray(obj);
+        const keys = isArr ? obj : Object.keys(obj);
+        const isEmpty = keys.length === 0;
+        const openChar = isArr ? '[' : '{';
+        const closeChar = isArr ? ']' : '}';
+        
+        const getClose = () => {
+            if (isTrailing && missingStack.length > 0 && missingStack[0] === closeChar) {
+                missingStack.shift();
+                return `<span class="${p}bracket ${p}ghost">${closeChar}</span>`;
+            }
+            return `<span class="${p}bracket">${closeChar}</span>`;
+        };
+
+        if (isEmpty) {
+            return `<span class="${p}bracket">${openChar}</span><span class="${p}empty"> </span>${getClose()}`;
+        }
+
+        // Generate Children
+        let children = '';
+        keys.forEach((k, i) => {
+            const isLast = i === keys.length - 1;
+            const childIsTrailing = isTrailing && isLast;
+            const val = isArr ? k : obj[k];
+            const childKey = isArr ? null : k;
+            
+            // Recursive Call
+            const renderedVal = genTree(val, p, childIsTrailing, missingStack, childKey, depth + 1);
+            const comma = isLast ? '' : '<span class="bracket">,</span>';
+
+            if (isArr) {
+                children += `<div>${renderedVal}${comma}</div>`;
+            } else {
+                // Object Item
+                const isComplex = val !== null && typeof val === 'object' && Object.keys(val).length > 0;
+                
+                // Determine formatting class based on CURRENT depth
+                const keyClass = getKeyClass(p, depth);
+                
+                // Wrap key with comment if needed
+                const keyLabel = `<span class="${keyClass}">${escapeHtml(k)}:</span>`;
+                const finalKeyHtml = wrapKey(keyLabel, k);
+
+                if (isComplex) {
+                    const openC = Array.isArray(val) ? '[' : '{';
+                    const closeC = Array.isArray(val) ? ']' : '}';
+                    const grandKids = genKeys(val, p, childIsTrailing, missingStack, depth + 1); 
+                    const meta = `<span class="${p}meta">${Array.isArray(val)?'Array':'Object'}(${Object.keys(val).length})</span>`;
+                    
+                    children += `
+                    <details open>
+                        <summary class="${p}summary">
+                            <span class="${p}arrow">▶</span>
+                            ${finalKeyHtml}
+                            <span class="${p}bracket">${openC}</span>
+                            ${meta}
+                        </summary>
+                        <div class="${p}details">
+                            ${grandKids}
+                        </div>
+                        <div style="margin-left: 20px;">${getCloseChar(closeC, childIsTrailing, missingStack, p)}${comma}</div>
+                    </details>`;
+                } else {
+                    children += `
+                    <div style="display:flex; padding-left:18px;">
+                        ${finalKeyHtml}
+                        <div style="flex:1; margin-left:6px;">${renderedVal}${comma}</div>
+                    </div>`;
+                }
+            }
+        });
+
+        if (!keyName) {
+            return `<div><span class="${p}bracket">${openChar}</span><div class="${p}details">${children}</div><span class="${p}bracket">${closeChar}</span></div>`;
+        }
+        
+        // Array items wrapper
+        const meta = `<span class="${p}meta">${isArr?'Array':'Object'}(${keys.length})</span>`;
+        return `
+        <details open>
+            <summary class="${p}summary">
+                <span class="${p}arrow">▶</span>
+                <span class="${p}bracket">${openChar}</span>
+                ${meta}
+            </summary>
+            <div class="${p}details">${children}</div>
+            <div>${getClose()}</div>
+        </details>`;
+    }
+
+    // Helper for nested keys iteration
+    function genKeys(obj, p, isTrailing, missingStack, depth) {
+        let html = '';
+        const isArr = Array.isArray(obj);
+        const keys = isArr ? obj : Object.keys(obj);
+        
+        // Helper to wrap key with comment tooltip
+        const wrapKey = (keyStr, kName) => {
+            if (kName && commentMap[kName] && els.opts.comments.checked) {
+                const idx = commentUsage[kName] || 0;
+                const raw = Array.isArray(commentMap[kName]) ? commentMap[kName][idx] : commentMap[kName];
+                if (raw !== undefined) {
+                    commentUsage[kName] = idx + 1;
+                    const commentText = escapeHtml(raw);
+                    return `<span class="${p}has-comment">${keyStr}<span class="${p}tooltip">${commentText}</span></span>`;
+                }
+            }
+            return keyStr;
+        };
+
+        keys.forEach((k, i) => {
+            const isLast = i === keys.length - 1;
+            const childIsTrailing = isTrailing && isLast;
+            const val = isArr ? k : obj[k];
+            const comma = isLast ? '' : ',';
+            
+            // Determine formatting class based on CURRENT depth
+            const keyClass = getKeyClass(p, depth);
+
+            if (val !== null && typeof val === 'object' && Object.keys(val).length > 0) {
+                 const openC = Array.isArray(val) ? '[' : '{';
+                 const closeC = Array.isArray(val) ? ']' : '}';
+                 const meta = `<span class="${p}meta">${Array.isArray(val)?'Array':'Object'}(${Object.keys(val).length})</span>`;
+                 const grandKids = genKeys(val, p, childIsTrailing, missingStack, depth + 1);
+                 
+                 // Generate key label with comment support
+                 const keyPart = `<span class="${keyClass}">${escapeHtml(k)}:</span>`;
+                 const finalKey = wrapKey(keyPart, k);
+
+                 const label = isArr ? 
+                    `<span class="${p}bracket">${openC}</span> ${meta}` : 
+                    `${finalKey} <span class="${p}bracket">${openC}</span> ${meta}`;
+
+                 html += `
+                 <details open>
+                    <summary class="${p}summary">
+                        <span class="${p}arrow">▶</span>
+                        ${label}
+                    </summary>
+                    <div class="${p}details">${grandKids}</div>
+                    <div style="margin-left: 18px;">${getCloseChar(closeC, childIsTrailing, missingStack, p)}${comma}</div>
+                 </details>`;
+            } else {
+                const rVal = genTree(val, p, childIsTrailing, missingStack, isArr ? null : k, depth + 1); 
+                
+                // Manual primitive render for cleaner recursion
+                let valHtml = '';
+                if (val === null) valHtml = `<span class="${p}val-null">null</span>`;
+                else if (typeof val === 'undefined') valHtml = `<span class="${p}val-null">undefined</span>`;
+                else if (typeof val === 'number') valHtml = `<span class="${p}val-num">${val}</span>`;
+                else if (typeof val === 'boolean') valHtml = `<span class="${p}val-bool">${val}</span>`;
+                else {
+                    const isLong = val.length > 50;
+                    const classes = `${p}val-str ${p}string ${isLong && els.opts.collapse.checked ? 'collapsible truncated' : ''}`;
+                    valHtml = `<span class="${classes}" title="${isLong?'Toggle':''}">${isArr?'':''}"${escapeHtml(val)}"</span>`;
+                }
+
+                if (isArr) {
+                    html += `<div><span style="display:inline-block; width:18px;"></span>${valHtml}${comma}</div>`;
+                } else {
+                    const keyPart = `<span class="${keyClass}">${escapeHtml(k)}:</span>`;
+                    const finalKey = wrapKey(keyPart, k);
+                    html += `<div style="display:flex; padding-left:18px;">${finalKey}<div style="flex:1; margin-left:6px;">${valHtml}${comma}</div></div>`;
+                }
+            }
+        });
+        return html;
+    }
+
+    function getCloseChar(char, isTrailing, stack, p) {
+        if (isTrailing && stack.length > 0 && stack[0] === char) {
+            stack.shift();
+            return `<span class="${p}bracket ${p}ghost">${char}</span>`;
+        }
+        return `<span class="${p}bracket">${char}</span>`;
+    }
+
+    function escapeHtml(text) {
+        if (text === null || text === undefined) return text;
+        const str = String(text); 
+        return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+
+    function buildPalette(forExport = false) {
+        const useDark = els.opts.useDark.checked;
+        const base = useDark ? defaultPalette.dark : defaultPalette.light;
+        let usedFallback = false;
+
+        const fields = {
+            bg: resolveColorInput(useDark ? els.opts.darkBg.value : els.opts.lightBg.value, base.bg),
+            text: resolveColorInput(useDark ? els.opts.textDark.value : els.opts.textLight.value, base.text),
+            tooltipBg: resolveColorInput(useDark ? els.opts.tooltipBgDark.value : els.opts.tooltipBgLight.value, base.tooltipBg),
+            tooltipText: resolveColorInput(useDark ? els.opts.tooltipTextDark.value : els.opts.tooltipTextLight.value, base.tooltipText),
+            str: resolveColorInput(useDark ? els.opts.strDark.value : els.opts.strLight.value, base.str),
+            num: resolveColorInput(useDark ? els.opts.numDark.value : els.opts.numLight.value, base.num),
+            bool: resolveColorInput(useDark ? els.opts.boolDark.value : els.opts.boolLight.value, base.bool),
+            nil: resolveColorInput(useDark ? els.opts.nullDark.value : els.opts.nullLight.value, base.nil),
+            bracket: resolveColorInput(useDark ? els.opts.bracketDark.value : els.opts.bracketLight.value, base.bracket),
+        };
+
+        Object.values(fields).forEach(val => { if (val.usedFallback) usedFallback = true; });
+
+        const palette = {};
+        Object.entries(fields).forEach(([k, v]) => {
+            palette[k] = forExport ? v.raw : v.preview;
+        });
+
+        return { palette, usedFallback };
+    }
+
+    // Initialize view with saved preferences
+    handleInput();
+    saveSettings();
+
+    // Modal close helpers
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') els.modal.classList.remove('active');
+    });
+    els.modal.addEventListener('click', (e) => {
+        if (e.target.id === 'exportModal') els.modal.classList.remove('active');
+    });
+
+    function resetSettings() {
+        localStorage.removeItem(STORAGE_KEY);
+        parserLocked = false;
+        setParserMode('json5', false);
+        els.opts.comments.checked = true;
+        els.opts.commentPos.value = 'same';
+        els.opts.collapse.checked = true;
+        els.opts.wrap.checked = false;
+        els.opts.fixed.checked = false;
+        els.opts.useDark.checked = false;
+        Object.keys(defaultPalette.light).forEach(() => {}); // noop to avoid lint
+        Object.values(els.opts).forEach(el => { if (el && 'value' in el) el.value = ''; });
+        ensureColorDefaults();
+        saveSettings();
+        handleInput();
+    }
+
+</script>
+</body>
+</html>
