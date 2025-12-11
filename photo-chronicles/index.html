@@ -5,6 +5,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Photo Chronicles</title>
+    <meta name="theme-color" content="#917FB3">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Photo Chronicles">
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="apple-touch-icon" sizes="180x180" href="./icons/icon-180.png">
 
     <!-- Tailwind CSS (CDN) -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -812,6 +819,32 @@ async function handleRequest(request, env) {
 
     <!-- JAVASCRIPT LOGIC -->
     <script>
+        const PWA_CACHE_PREFIX = 'photo-chronicles-cache';
+
+        const registerServiceWorker = () => {
+            if (!('serviceWorker' in navigator)) return;
+            navigator.serviceWorker.register('./service-worker.js')
+                .then((registration) => {
+                    console.log('Service worker registered with scope:', registration.scope);
+                })
+                .catch((err) => console.error('Service worker registration failed:', err));
+        };
+
+        const clearPwaData = async () => {
+            try {
+                if ('caches' in window) {
+                    const keys = await caches.keys();
+                    await Promise.all(keys.filter((key) => key.startsWith(PWA_CACHE_PREFIX)).map((key) => caches.delete(key)));
+                }
+                if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    await Promise.all(registrations.map((reg) => reg.unregister()));
+                }
+            } catch (err) {
+                console.warn('PWA cleanup skipped:', err);
+            }
+        };
+
         const UTILS = {
             id: () => Math.random().toString(36).substr(2, 9),
             now: () => new Date().toISOString(),
@@ -1488,9 +1521,10 @@ async function handleRequest(request, env) {
                 App.openModal('resetConfirmationModal');
             },
 
-            executeReset: () => {
+            executeReset: async () => {
                 try {
                     localStorage.clear();
+                    await clearPwaData();
                     window.location.href = window.location.pathname;
                 } catch (e) {
                     console.error(e);
@@ -2384,7 +2418,8 @@ async function handleRequest(request, env) {
                 const proxyToken = document.getElementById('settingProxyToken').value;
                 const current = Storage.getSettings();
                 Storage.setSettings({ ...current, workerUrl, proxyToken });
-                window.location.href = 'https://notion-oauth-handler.mimansa-jaiswal.workers.dev/auth/login?from=/tools/photo-chronicles.html';
+                const returnPath = encodeURIComponent(window.location.pathname);
+                window.location.href = `https://notion-oauth-handler.mimansa-jaiswal.workers.dev/auth/login?from=${returnPath}`;
             },
             testManualConnection: async (btn) => {
                 const workerUrl = document.getElementById('settingWorkerUrl').value;
@@ -2435,7 +2470,10 @@ async function handleRequest(request, env) {
             }
         };
 
-        window.onload = App.init;
+        window.addEventListener('load', () => {
+            App.init();
+            registerServiceWorker();
+        });
     </script>
 </body>
 

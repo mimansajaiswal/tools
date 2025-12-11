@@ -1,0 +1,1983 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GhostInk Flashcards</title>
+    <meta name="theme-color" content="#917FB3">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+
+    <!-- Tailwind (CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Markdown renderer -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/sql-wasm.js"></script>
+
+    <!-- Fonts -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&amp;family=Newsreader:opsz,wght@6..72,500&amp;display=swap"
+        rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        oatmeal: '#F3F0E6',
+                        'oatmeal-dark': '#E6E2D6',
+                        'earth-metal': '#4A4A4A',
+                        charcoal: '#1F1F1F',
+                        'white-linen': '#FAF9F6',
+                        'dull-purple': '#917FB3',
+                        'muted-pink': '#D8A7B1',
+                        'muted-pink-dim': '#C696A0'
+                    },
+                    fontFamily: {
+                        display: ['"Newsreader"', 'serif'],
+                        sans: ['"Space Grotesk"', 'system-ui']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        :root {
+            --oatmeal: #F3F0E6;
+            --earth-metal: #4A4A4A;
+            --charcoal: #1F1F1F;
+            --linen: #FAF9F6;
+            --dull-purple: #917FB3;
+            --muted-pink: #D8A7B1;
+        }
+
+        body {
+            background: radial-gradient(circle at 20% 20%, rgba(145, 127, 179, 0.18), transparent 32%),
+                radial-gradient(circle at 80% 0%, rgba(216, 167, 177, 0.22), transparent 40%),
+                linear-gradient(180deg, #FAF9F6, #F3F0E6 50%, #F7F3EA);
+        }
+
+        .card {
+            border: 1px solid rgba(26, 26, 26, 0.06);
+            background: rgba(250, 249, 246, 0.9);
+            backdrop-filter: blur(12px);
+        }
+
+        .dash {
+            background: repeating-linear-gradient(-45deg,
+                    rgba(145, 127, 179, 0.08),
+                    rgba(145, 127, 179, 0.08) 12px,
+                    transparent 12px,
+                    transparent 24px);
+        }
+
+        .pill {
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.75);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        .shadow-soft {
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.08);
+        }
+
+        .cloze-blank {
+            padding: 2px 6px;
+            border-bottom: 1px dashed #917FB3;
+            color: transparent;
+            background: linear-gradient(90deg, rgba(145, 127, 179, 0.14), rgba(216, 167, 177, 0.14));
+            border-radius: 6px;
+        }
+
+        .scroll-minimal::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .scroll-minimal::-webkit-scrollbar-thumb {
+            background: rgba(73, 73, 73, 0.25);
+            border-radius: 10px;
+        }
+    </style>
+</head>
+
+<body class="text-earth-metal font-sans min-h-[100dvh]">
+    <div class="min-h-[100dvh] flex flex-col">
+        <header class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-5 sm:px-10 pt-6 pb-4">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-2xl dash flex items-center justify-center shadow-soft">
+                    <i data-lucide="sparkles" class="w-6 h-6 text-dull-purple"></i>
+                </div>
+                <div>
+                    <h1 class="font-display text-2xl text-charcoal tracking-tight">GhostInk</h1>
+                    <p class="text-sm text-earth-metal/70">Offline-first flashcards with Notion & FSRS</p>
+                </div>
+            </div>
+            <div class="flex flex-wrap gap-2 items-center justify-start sm:justify-end">
+                <div id="connectionBadge"
+                    class="px-3 py-1 rounded-full pill text-xs bg-oatmeal border border-oatmeal-dark text-earth-metal">
+                    Offline ready</div>
+                <button id="openSettings"
+                    class="px-3 py-1.5 text-sm rounded-full bg-white-linen border border-oatmeal-dark hover:border-dull-purple transition-all flex items-center gap-2">
+                    <i data-lucide="settings" class="w-4 h-4"></i>
+                    Settings
+                </button>
+                <button id="syncNowBtn"
+                    class="px-3 py-1.5 text-sm rounded-full bg-dull-purple text-white hover:bg-[#7d6aa1] transition-all flex items-center gap-2">
+                    <i data-lucide="refresh-ccw" class="w-4 h-4"></i>
+                    Sync now
+                </button>
+                <button id="exportAnkiBtn"
+                    class="px-3 py-1.5 text-sm rounded-full bg-white-linen border border-oatmeal-dark hover:border-dull-purple transition-all flex items-center gap-2">
+                    <i data-lucide="download" class="w-4 h-4"></i>
+                    Export .apkg
+                </button>
+                <label
+                    class="px-3 py-1.5 text-sm rounded-full bg-white-linen border border-oatmeal-dark hover:border-muted-pink transition-all flex items-center gap-2 cursor-pointer">
+                    <i data-lucide="upload-cloud" class="w-4 h-4"></i>
+                    Import .apkg
+                    <input id="ankiImportInput" type="file" accept=".apkg,.json" class="hidden">
+                </label>
+            </div>
+        </header>
+
+        <main class="px-5 sm:px-10 pb-10 space-y-6">
+            <div id="lockedOverlay"
+                class="card rounded-2xl p-6 shadow-soft flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
+                style="display:none;">
+                <div class="flex items-start gap-3">
+                    <i data-lucide="lock" class="w-5 h-5 mt-0.5 text-dull-purple"></i>
+                    <div class="space-y-1">
+                        <p class="font-display text-lg text-charcoal leading-tight">Connect Notion to start</p>
+                        <p class="text-sm text-earth-metal/70 leading-snug max-w-xl">Add Worker + token, sign in with
+                            Notion, and pick Decks/Cards sources.</p>
+                    </div>
+                </div>
+                <div class="flex gap-2 mt-1 md:mt-0 md:ml-6 flex-shrink-0">
+                    <button id="lockedOpenSettings"
+                        class="px-4 py-2.5 rounded-xl bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex items-center gap-2 whitespace-nowrap">
+                        <i data-lucide="settings" class="w-4 h-4"></i><span>Open settings</span>
+                    </button>
+                </div>
+            </div>
+
+            <section id="mainContent" class="space-y-6">
+                <section class="grid lg:grid-cols-3 gap-4 min-w-0">
+                    <article class="card rounded-2xl p-5 shadow-soft">
+                        <div class="flex items-center justify-between">
+                            <h2 class="font-display text-lg text-charcoal">Study filters</h2>
+                            <button id="resetFilters" class="text-xs text-dull-purple hover:underline">Reset</button>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3 mt-3 text-sm">
+                            <label class="flex items-center gap-2">
+                                <input id="filterAgain" type="checkbox" class="accent-dull-purple">
+                                <span>Again recently</span>
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input id="filterHard" type="checkbox" class="accent-dull-purple">
+                                <span>Hard/Again only</span>
+                            </label>
+                            <label class="flex items-center gap-2 col-span-2">
+                                <input id="filterAddedToday" type="checkbox" class="accent-dull-purple">
+                                <span>Added today</span>
+                            </label>
+                            <div class="col-span-2">
+                                <label class="text-xs text-earth-metal/70">Stability below</label>
+                                <input id="filterStability" type="range" min="0" max="50" step="1"
+                                    class="w-full accent-dull-purple">
+                                <div class="flex justify-between text-xs text-earth-metal/60">
+                                    <span>0</span><span id="stabilityValue">25</span><span>50</span>
+                                </div>
+                            </div>
+                            <div class="col-span-2">
+                                <label class="text-xs text-earth-metal/70">Tags (comma)</label>
+                                <input id="filterTags" type="text" placeholder="biology, spaced"
+                                    class="w-full rounded-xl border border-oatmeal-dark/60 bg-white-linen px-3 py-2 text-sm">
+                            </div>
+                            <div class="col-span-2">
+                                <label class="text-xs text-earth-metal/70">Manual pick</label>
+                                <div id="manualSelection" class="flex flex-wrap gap-2 mt-2 text-xs"></div>
+                            </div>
+                        </div>
+                    </article>
+                </section>
+
+                <section class="grid xl:grid-cols-3 gap-6 min-w-0">
+                    <div class="xl:col-span-2 space-y-6">
+                        <article class="card rounded-2xl p-5 shadow-soft">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h2 class="font-display text-lg text-charcoal">Decks</h2>
+                                    <p class="text-sm text-earth-metal/70">Rename, recolor, select algorithm, delete, or
+                                        add new.</p>
+                                </div>
+                                <button id="newDeckBtn"
+                                    class="px-3 py-2 rounded-xl bg-charcoal text-white text-sm hover:bg-earth-metal flex items-center gap-2">
+                                    <i data-lucide="plus" class="w-4 h-4"></i>
+                                    New deck
+                                </button>
+                            </div>
+                            <div id="deckGrid" class="grid md:grid-cols-2 xl:grid-cols-3 gap-3 mt-4"></div>
+                        </article>
+
+                        <article class="card rounded-2xl p-5 shadow-soft">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h2 class="font-display text-lg text-charcoal">Cards in deck</h2>
+                                    <p class="text-sm text-earth-metal/70">Markdown everywhere. Reverse mode honored.
+                                    </p>
+                                </div>
+                                <button id="newCardBtn"
+                                    class="px-3 py-2 rounded-xl bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex items-center gap-2">
+                                    <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                                    New card
+                                </button>
+                            </div>
+                            <div class="overflow-auto scroll-minimal mt-4">
+                                <table class="w-full text-xs md:text-sm">
+                                    <thead class="text-earth-metal/60">
+                                        <tr class="border-b border-oatmeal-dark/70">
+                                            <th class="py-2 text-left">Name</th>
+                                            <th class="py-2 text-left">Type</th>
+                                            <th class="py-2 text-left">Deck</th>
+                                            <th class="py-2 text-left">Due</th>
+                                            <th class="py-2 text-left">Alg</th>
+                                            <th class="py-2 text-left">Tags</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="cardTable" class="divide-y divide-oatmeal-dark/40"></tbody>
+                                </table>
+                            </div>
+                        </article>
+                    </div>
+
+                    <div class="space-y-6">
+                        <article class="card rounded-2xl p-5 shadow-soft">
+                            <div class="flex items-center justify-between">
+                                <h2 class="font-display text-lg text-charcoal">Study session</h2>
+                                <div class="flex items-center gap-2 text-xs">
+                                    <select id="revisionMode"
+                                        class="rounded-lg border border-oatmeal-dark/60 bg-white-linen px-2 py-1">
+                                        <option value="manual">Reveal</option>
+                                        <option value="ai">AI judge</option>
+                                    </select>
+                                    <button id="toggleReverse"
+                                        class="text-xs text-dull-purple hover:underline">Reverse</button>
+                                </div>
+                            </div>
+                            <div class="mt-3 p-4 rounded-xl bg-oatmeal/60 border border-oatmeal-dark/60 space-y-3">
+                                <div class="flex items-center justify-between text-xs text-earth-metal/70">
+                                    <span id="studyDeckLabel">Choose a deck</span>
+                                    <span id="algorithmLabel"
+                                        class="px-2 py-1 rounded-full bg-white-linen border border-oatmeal-dark/70 text-earth-metal">—</span>
+                                </div>
+                                <div id="cardFront" class="min-h-[120px] leading-relaxed text-charcoal"></div>
+                                <div class="space-y-2">
+                                    <button id="revealBtn"
+                                        class="px-3 py-2 w-full rounded-xl bg-charcoal text-white text-sm hover:bg-earth-metal">Reveal</button>
+                                    <div id="aiControls" class="hidden space-y-2">
+                                        <textarea id="aiAnswer" rows="3"
+                                            placeholder="Type your answer for AI to judge..."
+                                            class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2 text-sm"></textarea>
+                                        <div class="flex gap-2">
+                                            <button id="aiRecord"
+                                                class="px-3 py-2 rounded-xl bg-white-linen border border-oatmeal-dark/70 text-earth-metal text-sm flex-1">🎙️
+                                                Record</button>
+                                            <button id="aiSubmit"
+                                                class="px-3 py-2 rounded-xl bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex-1">Send
+                                                to AI</button>
+                                        </div>
+                                        <div id="aiFeedback"
+                                            class="text-sm text-earth-metal/80 bg-white-linen border border-oatmeal-dark/40 rounded-xl p-2">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="cardBack" class="min-h-[120px] leading-relaxed text-earth-metal/80 hidden">
+                                </div>
+                                <div class="grid grid-cols-4 gap-2">
+                                    <button data-rate="again"
+                                        class="rate-btn px-2 py-2 rounded-lg bg-white-linen border border-oatmeal-dark text-xs hover:border-dull-purple">Again</button>
+                                    <button data-rate="hard"
+                                        class="rate-btn px-2 py-2 rounded-lg bg-white-linen border border-oatmeal-dark text-xs hover:border-dull-purple">Hard</button>
+                                    <button data-rate="good"
+                                        class="rate-btn px-2 py-2 rounded-lg bg-dull-purple text-white text-xs hover:bg-[#7d6aa1]">Good</button>
+                                    <button data-rate="easy"
+                                        class="rate-btn px-2 py-2 rounded-lg bg-muted-pink text-white text-xs hover:bg-muted-pink-dim">Easy</button>
+                                </div>
+                                <div class="text-[11px] text-earth-metal/70 flex justify-between">
+                                    <span id="fsrsMeta">FSRS fields ready</span>
+                                    <button id="skipCard" class="text-dull-purple hover:underline">Skip</button>
+                                </div>
+                            </div>
+                        </article>
+
+                        <article class="card rounded-2xl p-5 shadow-soft">
+                            <div class="flex items-center justify-between">
+                                <h2 class="font-display text-lg text-charcoal">Card notes</h2>
+                                <button id="copyMarkdown"
+                                    class="text-xs text-dull-purple hover:underline flex items-center gap-1">
+                                    <i data-lucide="clipboard" class="w-3 h-3"></i> Copy markdown
+                                </button>
+                            </div>
+                            <textarea id="notesArea" rows="6" placeholder="Markdown notes that autosave locally..."
+                                class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2 text-sm mt-3"></textarea>
+                            <div class="mt-2 text-xs text-earth-metal/60">
+                                <span id="noteStatus">Autosaves offline. Not pushed to Notion; meant for LLM
+                                    copy.</span>
+                            </div>
+                        </article>
+
+                        <article class="card rounded-2xl p-5 shadow-soft">
+                            <div class="flex items-center gap-2">
+                                <i data-lucide="filter" class="w-4 h-4 text-dull-purple"></i>
+                                <h3 class="font-display text-lg text-charcoal">Session subsets</h3>
+                            </div>
+                            <p class="text-sm text-earth-metal/70 mt-2">Pick any subset: tags, selected cards, stability
+                                threshold, added today, suspended, leeches.</p>
+                            <div class="mt-3 space-y-2 text-sm">
+                                <label class="flex items-center gap-2">
+                                    <input id="filterSuspended" type="checkbox" class="accent-dull-purple">
+                                    <span>Hide suspended</span>
+                                </label>
+                                <label class="flex items-center gap-2">
+                                    <input id="filterLeech" type="checkbox" class="accent-dull-purple">
+                                    <span>Hide leeches</span>
+                                </label>
+                            </div>
+                        </article>
+                    </div>
+                </section>
+            </section>
+        </main>
+    </div>
+
+    <div id="toast"
+        class="fixed bottom-6 right-6 px-4 py-3 rounded-xl bg-charcoal text-white text-sm shadow-soft hidden"></div>
+
+    <div id="confirmModal" class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="card rounded-2xl p-5 w-full max-w-sm shadow-soft">
+            <p class="text-charcoal font-display text-lg mb-2">Confirm delete</p>
+            <p class="text-sm text-earth-metal/70">This removes it locally and syncs deletion to Notion.</p>
+            <div class="flex justify-end gap-2 mt-4">
+                <button id="cancelDelete"
+                    class="px-3 py-2 rounded-xl bg-white-linen border border-oatmeal-dark/70 text-earth-metal text-sm">Cancel</button>
+                <button id="confirmDelete" class="px-3 py-2 rounded-xl bg-muted-pink text-white text-sm">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings -->
+    <div id="settingsModal" class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div id="settingsCard" class="card rounded-2xl p-5 w-full max-w-3xl shadow-soft max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-display text-lg text-charcoal">Connection</h3>
+                <button id="closeSettings" class="text-earth-metal/60 hover:text-charcoal"><i data-lucide="x"
+                        class="w-5 h-5"></i></button>
+            </div>
+            <div class="grid md:grid-cols-2 gap-6 text-sm">
+                <div class="space-y-4">
+                    <div>
+                        <label class="text-xs text-earth-metal/70">Cloudflare Worker URL</label>
+                        <input id="settingWorkerUrl" type="text" placeholder="https://your-proxy.workers.dev"
+                            class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="text-xs text-earth-metal/70">Proxy token (optional)</label>
+                        <input id="settingProxyToken" type="text" placeholder="ALL_CORS_PROXY_MATCH_TOKEN"
+                            class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2">
+                    </div>
+                    <div>
+                        <label class="text-xs text-earth-metal/70">Notion token (secret alternative)</label>
+                        <input id="settingAuthToken" type="password" placeholder="secret_..."
+                            class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2">
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="verifyWorker"
+                            class="px-3 py-2 rounded-xl bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 flex-1">Verify
+                            worker</button>
+                        <button id="verifyAuth"
+                            class="px-3 py-2 rounded-xl bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 flex-1">Verify
+                            token</button>
+                    </div>
+                    <button id="oauthBtn"
+                        class="w-full px-3 py-2 rounded-xl border border-dull-purple text-dull-purple text-sm hover:bg-oatmeal flex items-center gap-2 justify-center">
+                        <i data-lucide="log-in" class="w-4 h-4"></i>Sign in with Notion
+                    </button>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-xs text-earth-metal/60">Decks source</label>
+                            <select id="deckSourceSelect"
+                                class="w-full rounded-xl border border-oatmeal-dark/60 bg-white-linen px-2 py-2 text-sm"></select>
+                        </div>
+                        <div>
+                            <label class="text-xs text-earth-metal/60">Cards source</label>
+                            <select id="cardSourceSelect"
+                                class="w-full rounded-xl border border-oatmeal-dark/60 bg-white-linen px-2 py-2 text-sm"></select>
+                        </div>
+                    </div>
+                    <div class="flex gap-2 flex-wrap">
+                        <button id="scanSources"
+                            class="px-3 py-2 rounded-xl bg-charcoal text-white text-sm hover:bg-earth-metal flex-1 min-w-[140px]">Scan
+                            sources</button>
+                        <button id="saveSettings"
+                            class="px-3 py-2 rounded-xl bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex-1 min-w-[140px]">Save</button>
+                        <button id="resetApp"
+                            class="px-3 py-2 rounded-xl bg-white-linen text-earth-metal text-sm border border-oatmeal-dark/70 hover:border-muted-pink flex-1 min-w-[140px]">Reset
+                            (clear cache)</button>
+                    </div>
+                    <div class="w-full h-2 bg-oatmeal rounded-full overflow-hidden">
+                        <div id="syncProgress" class="h-2 bg-dull-purple w-0 transition-all duration-500"></div>
+                    </div>
+                    <div class="text-xs text-earth-metal/70">
+                        <p id="snapshotStatus">Not yet synced</p>
+                    </div>
+                </div>
+                <div class="space-y-4">
+                    <div class="rounded-xl border border-oatmeal-dark/60 p-3 bg-white-linen">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="database" class="w-4 h-4 text-dull-purple"></i>
+                            <p class="font-semibold text-charcoal">Offline vault</p>
+                        </div>
+                        <div class="mt-3 grid grid-cols-2 gap-3 text-sm">
+                            <div class="rounded-xl bg-oatmeal p-3">
+                                <p class="text-earth-metal/60">Decks cached</p>
+                                <p id="deckCount" class="text-xl font-semibold text-charcoal">0</p>
+                            </div>
+                            <div class="rounded-xl bg-oatmeal p-3">
+                                <p class="text-earth-metal/60">Cards cached</p>
+                                <p id="cardCount" class="text-xl font-semibold text-charcoal">0</p>
+                            </div>
+                            <div class="rounded-xl bg-white-linen p-3">
+                                <p class="text-earth-metal/60">Pending sync</p>
+                                <p id="queueCount" class="text-xl font-semibold text-charcoal">0</p>
+                            </div>
+                            <div class="rounded-xl bg-white-linen p-3">
+                                <p class="text-earth-metal/60">Last sync</p>
+                                <p id="lastSync" class="text-xl font-semibold text-charcoal">—</p>
+                            </div>
+                        </div>
+                        <p class="mt-3 text-xs text-earth-metal/70">IndexedDB holds all decks/cards/FSRS/notes for
+                            offline-first use.</p>
+                    </div>
+                    <div class="rounded-xl border border-oatmeal-dark/60 p-3 bg-oatmeal/60">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="shield-check" class="w-4 h-4 text-dull-purple"></i>
+                            <p class="font-semibold text-charcoal">Status</p>
+                        </div>
+                        <ul class="text-xs text-earth-metal/80 mt-2 space-y-1">
+                            <li id="statusWorker">Worker: missing</li>
+                            <li id="statusAuth">Auth: missing</li>
+                            <li id="statusSources">Sources: missing</li>
+                        </ul>
+                    </div>
+                    <div class="rounded-xl border border-oatmeal-dark/60 p-3 bg-white-linen">
+                        <div class="flex items-center gap-2 mb-2">
+                            <i data-lucide="bot" class="w-4 h-4 text-dull-purple"></i>
+                            <p class="font-semibold text-charcoal">AI judge settings</p>
+                        </div>
+                        <div class="space-y-2">
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="text-xs text-earth-metal/70">Provider</label>
+                                    <select id="aiProvider"
+                                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-2 py-2 text-sm">
+                                        <option value="">Disabled</option>
+                                        <option value="openai">OpenAI</option>
+                                        <option value="anthropic">Claude</option>
+                                        <option value="gemini">Gemini</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-xs text-earth-metal/70">Model</label>
+                                    <input id="aiModel" type="text"
+                                        placeholder="gpt-4o-mini / claude-3-haiku / gemini-1.5-flash"
+                                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-2 py-2 text-sm">
+                                </div>
+                            </div>
+                            <input id="aiKey" type="password" placeholder="API key (kept locally)"
+                                class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2 text-sm">
+                            <p class="text-[11px] text-earth-metal/60">Keys stay on-device (localStorage). AI judging
+                                only runs if a key is set.</p>
+                        </div>
+                    </div>
+                    <button id="openWorkerHelp"
+                        class="w-full px-3 py-2 rounded-xl border border-oatmeal-dark text-earth-metal text-sm hover:bg-oatmeal flex items-center gap-2 justify-center">
+                        <i data-lucide="code" class="w-4 h-4"></i>Worker proxy code
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Worker helper -->
+    <div id="workerHelpModal" class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="card rounded-2xl p-5 w-full max-w-3xl shadow-soft h-[80vh] flex flex-col">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-display text-lg text-charcoal">Cloudflare Worker proxy</h3>
+                <button id="closeWorkerHelp" class="text-earth-metal/60 hover:text-charcoal"><i data-lucide="x"
+                        class="w-5 h-5"></i></button>
+            </div>
+            <div class="flex-1 overflow-y-auto space-y-3 text-sm text-earth-metal">
+                <p>Deploy this Worker to bypass CORS and forward Notion requests.</p>
+                <ol class="list-decimal pl-5 space-y-2">
+                    <li>Open <a class="text-dull-purple underline" href="https://workers.cloudflare.com/"
+                            target="_blank">Cloudflare Workers</a> and create a new Worker.</li>
+                    <li>Replace its contents with the code below, save, and deploy.</li>
+                    <li>(Optional) Add variable <code>ALL_CORS_PROXY_MATCH_TOKEN</code> to require a token.</li>
+                    <li>Paste the Worker URL into Settings.</li>
+                </ol>
+                <div class="relative">
+                    <button id="copyWorkerCode"
+                        class="absolute top-2 right-2 bg-white/80 hover:bg-white px-2 py-1 rounded text-xs shadow text-charcoal font-bold">Copy</button>
+                    <pre id="workerCodeBlock"
+                        class="bg-charcoal text-white-linen p-4 rounded text-xs font-mono overflow-x-auto">
+const NOTION_API_END_POINT = "https://api.notion.com/v1";
+
+export default {
+  async fetch(request, env) {
+    return await handleRequest(request, env);
+  }
+};
+
+function corsHeaders(request) {
+  return {
+    "Access-Control-Allow-Origin": request.headers.get("Origin") || "*",
+    "Access-Control-Allow-Methods": "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, Notion-Version",
+  };
+}
+
+function handleOptions(request) {
+  return new Response(null, { headers: corsHeaders(request) });
+}
+
+async function handleRequest(request, env) {
+  if (request.method === "OPTIONS") return handleOptions(request);
+
+  const url = new URL(request.url);
+  const requiredToken = (env.ALL_CORS_PROXY_MATCH_TOKEN || "").trim();
+  if (requiredToken) {
+    const provided = url.searchParams.get("token");
+    if (provided !== requiredToken) return new Response("Unauthorized", { status: 403 });
+    url.searchParams.delete("token");
+  }
+
+  const isGeneral = url.searchParams.has("url");
+  let targetUrl;
+  if (isGeneral) {
+    targetUrl = url.searchParams.get("url");
+    url.searchParams.delete("url");
+    try { targetUrl = new URL(targetUrl).toString(); } catch (err) { return new Response("Invalid target URL", { status: 400 }); }
+  } else {
+    const secretKey = url.searchParams.get("secret");
+    if (!secretKey) return new Response("Missing secret key parameter", { status: 400 });
+    url.searchParams.delete("secret");
+    const base = NOTION_API_END_POINT.replace(/\/$/, "");
+    const path = url.pathname.startsWith("/") ? url.pathname : "/" + url.pathname;
+    targetUrl = base + path + url.search;
+    request = new Request(targetUrl, request);
+    request.headers.set("Authorization", `Bearer ${secretKey}`);
+    request.headers.set("Notion-Version", "2022-06-28");
+  }
+
+  const proxied = new Request(targetUrl, request);
+  proxied.headers.set("Origin", new URL(targetUrl).origin);
+
+  const response = await fetch(proxied);
+  const out = new Response(response.body, response);
+  out.headers.set("Access-Control-Allow-Origin", request.headers.get("Origin") || "*");
+  out.headers.append("Vary", "Origin");
+  return out;
+}
+                    </pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Deck modal -->
+    <div id="deckModal" class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="card rounded-2xl p-5 w-full max-w-md shadow-soft">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-display text-lg text-charcoal" id="deckModalTitle">New deck</h3>
+                <button id="closeDeckModal" class="text-earth-metal/60 hover:text-charcoal"><i data-lucide="x"
+                        class="w-5 h-5"></i></button>
+            </div>
+            <div class="space-y-3 text-sm">
+                <input id="deckNameInput" type="text" placeholder="Deck name"
+                    class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs text-earth-metal/70">Color</label>
+                        <input id="deckColorInput" type="color"
+                            class="w-full h-10 rounded-xl border border-oatmeal-dark/70">
+                    </div>
+                    <div>
+                        <label class="text-xs text-earth-metal/70">Algorithm</label>
+                        <select id="deckAlgoInput"
+                            class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2">
+                            <option>FSRS</option>
+                            <option>SM-2</option>
+                            <option>Leitner</option>
+                            <option>Random</option>
+                            <option>Custom</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="text-xs text-earth-metal/70">Daily review limit</label>
+                        <input id="deckReviewLimit" type="number"
+                            class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2" value="50">
+                    </div>
+                    <div>
+                        <label class="text-xs text-earth-metal/70">New card limit</label>
+                        <input id="deckNewLimit" type="number"
+                            class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2" value="20">
+                    </div>
+                </div>
+                <label class="flex items-center gap-2 text-sm">
+                    <input id="deckReverseInput" type="checkbox" class="accent-dull-purple">
+                    <span>Reverse mode enabled</span>
+                </label>
+                <div>
+                    <label class="text-xs text-earth-metal/70">AI revision prompt (optional)</label>
+                    <textarea id="deckPromptInput" rows="3"
+                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2"
+                        placeholder="Use {{question}} and {{answer}} placeholders"></textarea>
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 mt-4">
+                <button id="deleteDeckBtn"
+                    class="px-3 py-2 rounded-xl border border-muted-pink text-muted-pink text-sm hidden">Delete
+                    deck</button>
+                <button id="saveDeckBtn"
+                    class="px-4 py-2 rounded-xl bg-dull-purple text-white text-sm hover:bg-[#7d6aa1]">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card modal -->
+    <div id="cardModal" class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="card rounded-2xl p-5 w-full max-w-2xl shadow-soft">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-display text-lg text-charcoal" id="cardModalTitle">New card</h3>
+                <button id="closeCardModal" class="text-earth-metal/60 hover:text-charcoal"><i data-lucide="x"
+                        class="w-5 h-5"></i></button>
+            </div>
+            <div class="grid md:grid-cols-2 gap-4 text-sm">
+                <div class="space-y-2">
+                    <label class="text-xs text-earth-metal/70">Deck</label>
+                    <select id="cardDeckInput"
+                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2"></select>
+                </div>
+                <div class="space-y-2">
+                    <label class="text-xs text-earth-metal/70">Card type</label>
+                    <select id="cardTypeInput"
+                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2">
+                        <option value="front-back">Front / Back</option>
+                        <option value="cloze">Cloze</option>
+                        <option value="fill-blank">Fill-in-the-blank</option>
+                        <option value="reverse-ok">Front / Back (allow reverse)</option>
+                    </select>
+                </div>
+                <div class="md:col-span-2 space-y-2">
+                    <label class="text-xs text-earth-metal/70">Name (front / cloze prompt / blanks)</label>
+                    <textarea id="cardNameInput" rows="3"
+                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2"></textarea>
+                </div>
+                <div class="md:col-span-2 space-y-2">
+                    <label class="text-xs text-earth-metal/70">Back (answer / full text)</label>
+                    <textarea id="cardBackInput" rows="4"
+                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2"></textarea>
+                </div>
+                <div class="space-y-2">
+                    <label class="text-xs text-earth-metal/70">Tags (comma)</label>
+                    <input id="cardTagsInput" type="text"
+                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2">
+                </div>
+                <div class="space-y-2">
+                    <label class="text-xs text-earth-metal/70">Suspended / Leech</label>
+                    <div class="flex gap-4">
+                        <label class="flex items-center gap-2"><input id="cardSuspendedInput" type="checkbox"
+                                class="accent-dull-purple"> Suspended</label>
+                        <label class="flex items-center gap-2"><input id="cardLeechInput" type="checkbox"
+                                class="accent-dull-purple"> Leech</label>
+                    </div>
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 mt-4">
+                <button id="deleteCardBtn"
+                    class="px-3 py-2 rounded-xl border border-muted-pink text-muted-pink text-sm hidden">Delete
+                    card</button>
+                <button id="saveCardBtn"
+                    class="px-4 py-2 rounded-xl bg-charcoal text-white text-sm hover:bg-earth-metal">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const el = (sel) => document.querySelector(sel);
+        const toast = (msg) => {
+            const t = el('#toast');
+            t.textContent = msg;
+            t.classList.remove('hidden', 'opacity-0');
+            setTimeout(() => t.classList.add('opacity-0'), 2500);
+            setTimeout(() => t.classList.add('hidden'), 3000);
+        };
+
+        const Storage = {
+            db: null,
+            settingsKey: 'ghostink_settings_v1',
+            sqlReady: null,
+            async init() {
+                return new Promise((resolve, reject) => {
+                    const req = indexedDB.open('GhostInkDB', 2);
+                    req.onupgradeneeded = (e) => {
+                        const db = e.target.result;
+                        if (!db.objectStoreNames.contains('decks')) db.createObjectStore('decks', { keyPath: 'id' });
+                        if (!db.objectStoreNames.contains('cards')) db.createObjectStore('cards', { keyPath: 'id' });
+                        if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'key' });
+                    };
+                    req.onsuccess = (e) => {
+                        this.db = e.target.result;
+                        resolve();
+                    };
+                    req.onerror = reject;
+                });
+            },
+            tx(store, mode = 'readonly') {
+                return this.db.transaction(store, mode).objectStore(store);
+            },
+            async getAll(store) {
+                return new Promise((resolve, reject) => {
+                    const req = this.tx(store).getAll();
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = reject;
+                });
+            },
+            async put(store, value) {
+                return new Promise((resolve, reject) => {
+                    const req = this.tx(store, 'readwrite').put(value);
+                    req.onsuccess = resolve;
+                    req.onerror = reject;
+                });
+            },
+            async delete(store, key) {
+                return new Promise((resolve, reject) => {
+                    const req = this.tx(store, 'readwrite').delete(key);
+                    req.onsuccess = resolve;
+                    req.onerror = reject;
+                });
+            },
+            async wipeStore(store) {
+                return new Promise((resolve, reject) => {
+                    const req = this.tx(store, 'readwrite').clear();
+                    req.onsuccess = resolve;
+                    req.onerror = reject;
+                });
+            },
+            getSettings() {
+                const raw = localStorage.getItem(this.settingsKey);
+                return raw ? JSON.parse(raw) : { workerUrl: '', proxyToken: '', authToken: '', deckSource: '', cardSource: '', aiProvider: '', aiModel: '', aiKey: '' };
+            },
+            setSettings(newSettings) {
+                localStorage.setItem(this.settingsKey, JSON.stringify(newSettings));
+            },
+            async ensureSQL() {
+                if (this.sqlReady) return this.sqlReady;
+                this.sqlReady = window.initSqlJs({ locateFile: (file) => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/${file}` });
+                return this.sqlReady;
+            }
+        };
+
+        const API = {
+            async request(method, endpoint, body = null, override = null) {
+                const { workerUrl, authToken, proxyToken } = override || Storage.getSettings();
+                if (!workerUrl || !authToken) throw new Error('Missing worker URL or Notion token');
+                const cleanWorker = workerUrl.trim().replace(/\/$/, '');
+                const fetchUrl = new URL(cleanWorker);
+                fetchUrl.searchParams.append('url', `https://api.notion.com/v1${endpoint}`);
+                if (proxyToken) fetchUrl.searchParams.append('token', proxyToken.trim());
+                const headers = { 'Authorization': `Bearer ${authToken.trim()}`, 'Notion-Version': '2022-06-28' };
+                let payload = body;
+                if (body && !(body instanceof FormData)) {
+                    headers['Content-Type'] = 'application/json';
+                    payload = JSON.stringify(body);
+                }
+                const res = await fetch(fetchUrl.toString(), { method, headers, body: payload });
+                if (!res.ok) {
+                    let txt = await res.text();
+                    try {
+                        const j = JSON.parse(txt);
+                        txt = j.message || txt;
+                    } catch (_) { }
+                    throw new Error(txt || `Request failed ${res.status}`);
+                }
+                return await res.json();
+            },
+            async listDatabases() {
+                const results = [];
+                let cursor = null;
+                let hasMore = true;
+                while (hasMore) {
+                    const res = await API.request('POST', '/search', { filter: { value: 'database', property: 'object' }, start_cursor: cursor, page_size: 50 });
+                    results.push(...res.results);
+                    hasMore = res.has_more;
+                    cursor = res.next_cursor;
+                }
+                return results;
+            },
+            async queryDatabase(dbId) {
+                const rows = [];
+                let cursor = null;
+                let hasMore = true;
+                while (hasMore) {
+                    const res = await API.request('POST', `/databases/${dbId}/query`, { start_cursor: cursor, page_size: 50 });
+                    rows.push(...res.results);
+                    hasMore = res.has_more;
+                    cursor = res.next_cursor;
+                }
+                return rows;
+            },
+            async createPage(dbId, properties) {
+                return API.request('POST', '/pages', { parent: { database_id: dbId }, properties });
+            },
+            async updatePage(pageId, properties) {
+                return API.request('PATCH', `/pages/${pageId}`, { properties });
+            },
+            async archivePage(pageId) {
+                return API.request('PATCH', `/pages/${pageId}`, { archived: true });
+            }
+        };
+
+        const SRS = {
+            fsrs(card, rating) {
+                const now = new Date();
+                const diff = card.fsrs?.difficulty ?? 4;
+                const stab = card.fsrs?.stability ?? 1;
+                const retr = card.fsrs?.retrievability ?? 0.9;
+                const delta = { again: -0.8, hard: -0.3, good: 0.4, easy: 0.8 }[rating] ?? 0;
+                const difficulty = Math.max(1, Math.min(10, diff - delta));
+                const stability = Math.max(0.5, stab + Math.max(-0.5, delta * 2));
+                const retrievability = Math.max(0.1, Math.min(0.99, retr + delta * 0.05));
+                const intervalDays = Math.max(1, Math.round(stability * (retrievability + 0.5)));
+                return {
+                    difficulty,
+                    stability,
+                    retrievability,
+                    lastRating: rating,
+                    lastReview: now.toISOString(),
+                    dueDate: new Date(now.getTime() + intervalDays * 86400000).toISOString()
+                };
+            },
+            sm2(card, rating) {
+                const now = new Date();
+                const ease = card.sm2?.easeFactor ?? 2.5;
+                const interval = card.sm2?.interval ?? 1;
+                const grade = { again: 1, hard: 3, good: 4, easy: 5 }[rating] ?? 3;
+                const newEase = Math.max(1.3, ease + (0.1 - (5 - grade) * (0.08 + (5 - grade) * 0.02)));
+                const newInterval = grade < 3 ? 1 : interval < 1 ? 1 : Math.round(interval * newEase);
+                return {
+                    easeFactor: newEase,
+                    interval: newInterval,
+                    dueDate: new Date(now.getTime() + newInterval * 86400000).toISOString(),
+                    lastRating: rating,
+                    lastReview: now.toISOString()
+                };
+            },
+            leitner(card, rating) {
+                const now = new Date();
+                const box = card.leitner?.box ?? 1;
+                const delta = { again: -1, hard: 0, good: 1, easy: 2 }[rating] ?? 0;
+                const nextBox = Math.max(1, box + delta);
+                const interval = nextBox;
+                return {
+                    box: nextBox,
+                    dueDate: new Date(now.getTime() + interval * 86400000).toISOString(),
+                    lastRating: rating,
+                    lastReview: now.toISOString()
+                };
+            },
+            random() {
+                const now = new Date();
+                return { dueDate: new Date(now.getTime() + Math.random() * 5 * 86400000).toISOString() };
+            }
+        };
+
+        const NotionMapper = {
+            deckFrom(page) {
+                const props = page.properties || {};
+                const title = props['Deck Name']?.title?.map(t => t.plain_text).join('') || 'Untitled deck';
+                return {
+                    id: page.id,
+                    notionId: page.id,
+                    name: title,
+                    color: props['Deck Color']?.rich_text?.[0]?.plain_text || '#917FB3',
+                    algorithm: props['Default SRS Algorithm']?.select?.name || 'FSRS',
+                    reviewLimit: props['Daily Review Limit']?.number || 50,
+                    newLimit: props['New Card Limit']?.number || 20,
+                    reverse: props['Reverse Mode Enabled']?.checkbox || false,
+                    createdInApp: props['Created In-App']?.checkbox || false,
+                    ankiMetadata: props['Anki Metadata']?.rich_text?.[0]?.plain_text || '',
+                    aiPrompt: props['AI Revision Prompt']?.rich_text?.map(t => t.plain_text).join('') || '',
+                    updatedInApp: false
+                };
+            },
+            deckProps(deck) {
+                return {
+                    'Deck Name': { title: [{ text: { content: deck.name } }] },
+                    'Deck Color': { rich_text: [{ text: { content: deck.color } }] },
+                    'Default SRS Algorithm': { select: { name: deck.algorithm } },
+                    'Daily Review Limit': { number: deck.reviewLimit },
+                    'New Card Limit': { number: deck.newLimit },
+                    'Reverse Mode Enabled': { checkbox: !!deck.reverse },
+                    'Created In-App': { checkbox: true },
+                    'Anki Metadata': { rich_text: deck.ankiMetadata ? [{ text: { content: deck.ankiMetadata } }] : [] },
+                    'AI Revision Prompt': { rich_text: deck.aiPrompt ? [{ text: { content: deck.aiPrompt } }] : [] }
+                };
+            },
+            cardFrom(page, decks) {
+                const p = page.properties || {};
+                const deckRel = p['Deck']?.relation?.[0]?.id || null;
+                const name = p['Name']?.title?.map(t => t.plain_text).join('') || 'Card';
+                const back = p['Back']?.rich_text?.map(t => t.plain_text).join('') || '';
+                const tags = p['Tags']?.multi_select?.map(t => t.name) || [];
+                const fsrs = {
+                    difficulty: p['Difficulty']?.number ?? 4,
+                    stability: p['Stability']?.number ?? 1,
+                    retrievability: p['Retrievability']?.number ?? 0.9,
+                    lastRating: p['Last Rating']?.select?.name || null,
+                    lastReview: p['Last Review']?.date?.start || null,
+                    dueDate: p['Due Date']?.date?.start || null
+                };
+                const sm2 = {
+                    interval: p['Interval / Box Level']?.number ?? 1,
+                    easeFactor: p['Ease Factor']?.number ?? 2.5,
+                    dueDate: p['Due Date']?.date?.start || null,
+                    lastRating: p['Last Rating']?.select?.name || null,
+                    lastReview: p['Last Review']?.date?.start || null
+                };
+                return {
+                    id: page.id,
+                    notionId: page.id,
+                    deckId: deckRel,
+                    name,
+                    back,
+                    type: p['Card Type']?.select?.name || 'front-back',
+                    tags,
+                    notes: p['Notes']?.rich_text?.map(t => t.plain_text).join('\n') || '',
+                    suspended: p['Suspended']?.checkbox || false,
+                    leech: p['Leech']?.checkbox || false,
+                    fsrs,
+                    sm2,
+                    leitner: { box: p['Interval / Box Level']?.number || 1, dueDate: p['Due Date']?.date?.start || null },
+                    syncId: p['Sync ID']?.rich_text?.[0]?.plain_text || page.id,
+                    updatedInApp: p['Updated In-App']?.checkbox || false,
+                    reviewHistory: JSON.parse(p['Review History']?.rich_text?.[0]?.plain_text || '[]'),
+                    ankiGuid: p['Anki GUID']?.rich_text?.[0]?.plain_text || '',
+                    ankiNoteType: p['Anki Note Type']?.select?.name || '',
+                    ankiFields: p['Anki Fields JSON']?.rich_text?.[0]?.plain_text || '',
+                    clozeIndexes: p['Cloze Indexes']?.rich_text?.[0]?.plain_text || '',
+                    createdAt: page.created_time
+                };
+            },
+            cardProps(card, notionDeckId = null) {
+                return {
+                    'Name': { title: [{ text: { content: card.name } }] },
+                    'Back': { rich_text: [{ text: { content: card.back } }] },
+                    'Card Type': { select: { name: card.type } },
+                    'Deck': notionDeckId ? { relation: [{ id: notionDeckId }] } : { relation: [] },
+                    'Tags': { multi_select: card.tags.map(t => ({ name: t })) },
+                    'Notes': { rich_text: card.notes ? [{ text: { content: card.notes } }] : [] },
+                    'Suspended': { checkbox: !!card.suspended },
+                    'Leech': { checkbox: !!card.leech },
+                    'Difficulty': { number: card.fsrs?.difficulty ?? 4 },
+                    'Stability': { number: card.fsrs?.stability ?? 1 },
+                    'Retrievability': { number: card.fsrs?.retrievability ?? 0.9 },
+                    'Last Rating': card.fsrs?.lastRating ? { select: { name: card.fsrs.lastRating } } : { select: null },
+                    'Last Review': { date: card.fsrs?.lastReview ? { start: card.fsrs.lastReview } : null },
+                    'Due Date': { date: card.fsrs?.dueDate ? { start: card.fsrs.dueDate } : null },
+                    'Interval / Box Level': { number: card.leitner?.box ?? card.sm2?.interval ?? 1 },
+                    'Ease Factor': { number: card.sm2?.easeFactor ?? 2.5 },
+                    'Sync ID': { rich_text: [{ text: { content: card.syncId } }] },
+                    'Updated In-App': { checkbox: true },
+                    'Review History': { rich_text: [{ text: { content: JSON.stringify(card.reviewHistory || []) } }] },
+                    'Anki GUID': card.ankiGuid ? { rich_text: [{ text: { content: card.ankiGuid } }] } : { rich_text: [] },
+                    'Anki Note Type': card.ankiNoteType ? { select: { name: card.ankiNoteType } } : { select: null },
+                    'Anki Fields JSON': card.ankiFields ? { rich_text: [{ text: { content: card.ankiFields } }] } : { rich_text: [] },
+                    'Cloze Indexes': card.clozeIndexes ? { rich_text: [{ text: { content: card.clozeIndexes } }] } : { rich_text: [] }
+                };
+            }
+        };
+
+        const App = {
+            state: {
+                decks: [],
+                cards: [],
+                queue: [],
+                selectedDeck: null,
+                selectedCard: null,
+                filters: { again: false, hard: false, addedToday: false, stability: 25, tags: [], suspended: false, leech: false, manual: [] },
+                reverse: false,
+                lastSync: null,
+                settings: Storage.getSettings(),
+                sourcesCache: [],
+                workerVerified: false,
+                authVerified: false,
+                sourcesVerified: false
+            },
+            async init() {
+                await Storage.init();
+                await this.loadFromDB();
+                this.captureOAuth();
+                this.bind();
+                this.seedIfEmpty();
+                this.renderAll();
+                window.addEventListener('online', () => this.handleOnline());
+                window.addEventListener('offline', () => this.renderConnection());
+            },
+            captureOAuth() {
+                const hashParams = new URLSearchParams(location.hash.replace('#', '?'));
+                const searchParams = new URLSearchParams(location.search);
+                const token = hashParams.get('token') || searchParams.get('token');
+                if (token) {
+                    this.state.settings.authToken = token;
+                    Storage.setSettings(this.state.settings);
+                    toast('Notion token captured');
+                    history.replaceState({}, document.title, location.pathname);
+                    this.state.authVerified = true;
+                    this.renderStatus();
+                    this.renderGate();
+                }
+            },
+            async loadFromDB() {
+                this.state.decks = await Storage.getAll('decks');
+                this.state.cards = await Storage.getAll('cards');
+                const meta = await Storage.getAll('meta');
+                const last = meta.find(m => m.key === 'lastSync');
+                if (last) this.state.lastSync = last.value;
+            },
+            async seedIfEmpty() {
+                return;
+            },
+            newDeck(name, color, algorithm) {
+                return {
+                    id: crypto.randomUUID(),
+                    notionId: null,
+                    name,
+                    color,
+                    algorithm,
+                    reviewLimit: 50,
+                    newLimit: 20,
+                    reverse: false,
+                    createdInApp: true,
+                    updatedInApp: true,
+                    aiPrompt: '',
+                    aiProvider: '',
+                    aiModel: '',
+                    aiKey: ''
+                };
+            },
+            newCard(deckId, name, back, type) {
+                const now = new Date().toISOString();
+                return {
+                    id: crypto.randomUUID(),
+                    notionId: null,
+                    deckId,
+                    name,
+                    back,
+                    type,
+                    tags: [],
+                    notes: '',
+                    suspended: false,
+                    leech: false,
+                    fsrs: { difficulty: 4, stability: 1, retrievability: 0.9, lastRating: null, lastReview: null, dueDate: now },
+                    sm2: { interval: 1, easeFactor: 2.5, dueDate: now },
+                    leitner: { box: 1, dueDate: now },
+                    syncId: crypto.randomUUID(),
+                    updatedInApp: true,
+                    reviewHistory: [],
+                    createdAt: now
+                };
+            },
+            bind() {
+                el('#syncNowBtn').onclick = () => this.syncNow();
+                el('#newDeckBtn').onclick = () => this.openDeckModal();
+                el('#closeDeckModal').onclick = () => this.closeDeckModal();
+                el('#saveDeckBtn').onclick = () => this.saveDeckFromModal();
+                el('#deleteDeckBtn').onclick = () => this.deleteDeckFromModal();
+                el('#newCardBtn').onclick = () => this.openCardModal();
+                el('#closeCardModal').onclick = () => this.closeCardModal();
+                el('#saveCardBtn').onclick = () => this.saveCardFromModal();
+                el('#deleteCardBtn').onclick = () => this.deleteCardFromModal();
+                el('#revealBtn').onclick = () => this.reveal();
+                el('#skipCard').onclick = () => this.nextCard();
+                el('#toggleReverse').onclick = () => { this.state.reverse = !this.state.reverse; this.renderStudy(); };
+                el('#notesArea').addEventListener('input', () => this.saveNotes());
+                el('#copyMarkdown').onclick = () => this.copyMarkdown();
+                document.querySelectorAll('.rate-btn').forEach(btn => btn.onclick = (e) => this.rate(e.target.dataset.rate));
+                el('#filterAgain').onchange = (e) => { this.state.filters.again = e.target.checked; this.renderCards(); };
+                el('#filterHard').onchange = (e) => { this.state.filters.hard = e.target.checked; this.renderCards(); };
+                el('#filterAddedToday').onchange = (e) => { this.state.filters.addedToday = e.target.checked; this.renderCards(); };
+                el('#filterStability').oninput = (e) => { this.state.filters.stability = Number(e.target.value); el('#stabilityValue').textContent = e.target.value; this.renderCards(); };
+                el('#filterTags').oninput = (e) => { this.state.filters.tags = e.target.value.split(',').map(t => t.trim()).filter(Boolean); this.renderCards(); };
+                el('#resetFilters').onclick = () => this.resetFilters();
+                el('#filterSuspended').onchange = (e) => { this.state.filters.suspended = e.target.checked; this.renderCards(); };
+                el('#filterLeech').onchange = (e) => { this.state.filters.leech = e.target.checked; this.renderCards(); };
+                el('#ankiImportInput').onchange = (e) => this.handleAnkiImport(e.target.files[0]);
+                el('#exportAnkiBtn').onclick = () => this.exportAnki();
+                document.addEventListener('click', (e) => {
+                    if (e.target.dataset.deckId) this.selectDeck(e.target.dataset.deckId);
+                    if (e.target.dataset.cardId) this.selectCard(e.target.dataset.cardId);
+                });
+                el('#openSettings').onclick = () => this.openSettings();
+                el('#closeSettings').onclick = () => this.closeSettings();
+                el('#saveSettings').onclick = () => this.saveSettings();
+                el('#verifyWorker').onclick = () => this.verifyWorker();
+                el('#verifyAuth').onclick = () => this.verifyAuth();
+                el('#oauthBtn').onclick = () => this.startOAuth();
+                el('#scanSources').onclick = () => this.scanSources();
+                el('#openWorkerHelp').onclick = () => this.openModal('workerHelpModal');
+                el('#closeWorkerHelp').onclick = () => this.closeModal('workerHelpModal');
+                el('#copyWorkerCode').onclick = () => this.copyWorkerCode();
+                el('#lockedOpenSettings').onclick = () => this.openSettings();
+                el('#resetApp').onclick = () => this.resetApp();
+                window.addEventListener('keydown', (e) => { if (e.key === 'Escape') { this.closeSettings(); this.closeModal('workerHelpModal'); this.closeDeckModal(); this.closeCardModal(); } });
+                el('#settingsModal').addEventListener('click', (e) => { if (e.target === el('#settingsModal')) this.closeSettings(); });
+                el('#workerHelpModal').addEventListener('click', (e) => { if (e.target === el('#workerHelpModal')) this.closeModal('workerHelpModal'); });
+                el('#revisionMode').onchange = (e) => { const on = e.target.value === 'ai'; el('#aiControls').classList.toggle('hidden', !on); };
+                el('#aiSubmit').onclick = () => this.submitToAI();
+                el('#aiRecord').onclick = () => this.recordAnswer();
+                el('#confirmDelete').onclick = () => this.performDelete();
+                el('#cancelDelete').onclick = () => this.closeModal('confirmModal');
+                el('#confirmModal').addEventListener('click', (e) => { if (e.target === el('#confirmModal')) this.closeModal('confirmModal'); });
+            },
+            renderAll() {
+                this.renderDecks();
+                this.renderCards();
+                this.renderConnection();
+                this.renderStudy();
+                this.updateCounts();
+                this.populateSourceSelects();
+                this.renderGate();
+                this.renderStatus();
+                lucide.createIcons();
+                this.loadAISettings();
+            },
+            renderGate() {
+                const ready = this.isReady();
+                el('#mainContent').style.display = ready ? 'block' : 'none';
+                el('#lockedOverlay').style.display = ready ? 'none' : 'block';
+            },
+            renderConnection() {
+                const badge = el('#connectionBadge');
+                const hasToken = !!this.state.settings.authToken;
+                if (navigator.onLine) {
+                    badge.textContent = hasToken ? 'Online · Notion ready' : 'Online · set token';
+                    badge.className = 'px-3 py-1 rounded-full pill text-xs bg-white-linen border border-oatmeal-dark text-earth-metal';
+                } else {
+                    badge.textContent = 'Offline';
+                    badge.className = 'px-3 py-1 rounded-full pill text-xs bg-oatmeal border border-oatmeal-dark text-earth-metal';
+                }
+            },
+            renderDecks() {
+                const grid = el('#deckGrid');
+                grid.innerHTML = this.state.decks.map(d => `
+                    <article class="rounded-2xl border border-oatmeal-dark/70 p-3 bg-white-linen flex flex-col gap-2 hover:-translate-y-0.5 transition cursor-pointer" data-deck-id="${d.id}">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <span class="w-3 h-3 rounded-full" style="background:${d.color}"></span>
+                                <p class="font-semibold text-charcoal">${d.name}</p>
+                            </div>
+                            <span class="text-[11px] px-2 py-1 rounded-full bg-oatmeal">${d.algorithm}</span>
+                        </div>
+                        <div class="flex items-center gap-3 text-xs text-earth-metal/70">
+                            <span>${this.cardsForDeck(d.id).filter(c => this.isDue(c)).length} due</span>
+                            <span>${this.cardsForDeck(d.id).length} cards</span>
+                        </div>
+                        <div class="flex items-center gap-2 text-[11px] text-earth-metal/60">
+                            <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                            <span>Reverse ${d.reverse ? 'on' : 'off'}</span>
+                        </div>
+                    </article>
+                `).join('');
+            },
+            renderCards() {
+                const tbody = el('#cardTable');
+                let cards = this.state.selectedDeck ? this.cardsForDeck(this.state.selectedDeck.id) : this.state.cards;
+                cards = cards.filter(c => this.passFilters(c));
+                tbody.innerHTML = cards.map(c => `
+                    <tr class="hover:bg-oatmeal/50 cursor-pointer" data-card-id="${c.id}">
+                        <td class="py-2 pr-2 text-charcoal">${c.name.slice(0, 60)}</td>
+                        <td class="py-2 pr-2 capitalize">${c.type}</td>
+                        <td class="py-2 pr-2">${this.deckName(c.deckId)}</td>
+                        <td class="py-2 pr-2 text-earth-metal/70">${c.fsrs?.dueDate ? new Date(c.fsrs.dueDate).toLocaleDateString() : '—'}</td>
+                        <td class="py-2 pr-2 text-earth-metal/70">${this.deckById(c.deckId)?.algorithm ?? 'FSRS'}</td>
+                        <td class="py-2 pr-2 text-earth-metal/70">${c.tags.join(', ')}</td>
+                    </tr>
+                `).join('');
+                this.renderManualSelection();
+                this.updateCounts();
+            },
+            renderStudy() {
+                const card = this.pickCard();
+                const deck = card ? this.deckById(card.deckId) : null;
+                el('#studyDeckLabel').textContent = deck ? deck.name : 'Choose a deck';
+                el('#algorithmLabel').textContent = deck ? deck.algorithm : '—';
+                const front = card ? this.renderCardFront(card, deck) : '<p class="text-earth-metal/70 text-sm">No card selected</p>';
+                el('#cardFront').innerHTML = front;
+                el('#cardBack').innerHTML = card ? marked.parse(card.back || '') : '';
+                el('#cardBack').classList.add('hidden');
+                if (deck && deck.reverse) el('#toggleReverse').classList.add('text-charcoal');
+                else el('#toggleReverse').classList.remove('text-charcoal');
+                this.state.selectedCard = card || null;
+                this.renderNotes();
+                this.renderFsrsMeta();
+                el('#aiAnswer').value = '';
+                el('#aiFeedback').innerHTML = '';
+            },
+            renderNotes() {
+                const notes = this.state.selectedCard?.notes ?? '';
+                el('#notesArea').value = notes;
+            },
+            renderFsrsMeta() {
+                const card = this.state.selectedCard;
+                if (!card) { el('#fsrsMeta').textContent = 'FSRS fields ready'; return; }
+                const f = card.fsrs;
+                el('#fsrsMeta').textContent = `Diff ${f?.difficulty?.toFixed(1) ?? '-'} · Stability ${f?.stability?.toFixed(1) ?? '-'} · Due ${f?.dueDate ? new Date(f.dueDate).toLocaleDateString() : '—'}`;
+            },
+            renderManualSelection() {
+                const wrap = el('#manualSelection');
+                wrap.innerHTML = this.state.filters.manual.map(id => {
+                    const c = this.cardById(id);
+                    return c ? `<span class="px-2 py-1 rounded-full bg-oatmeal text-earth-metal text-xs">${c.name.slice(0, 20)}</span>` : '';
+                }).join('');
+            },
+            openDeckModal(deck) {
+                if (!this.isReady()) { this.openSettings(); return; }
+                this.state.editingDeck = deck || null;
+                el('#deckModalTitle').textContent = deck ? 'Edit deck' : 'New deck';
+                el('#deckNameInput').value = deck?.name ?? '';
+                el('#deckColorInput').value = deck?.color ?? '#917FB3';
+                el('#deckAlgoInput').value = deck?.algorithm ?? 'FSRS';
+                el('#deckReviewLimit').value = deck?.reviewLimit ?? 50;
+                el('#deckNewLimit').value = deck?.newLimit ?? 20;
+                el('#deckReverseInput').checked = deck?.reverse ?? false;
+                el('#deckPromptInput').value = deck?.aiPrompt ?? '';
+                el('#deleteDeckBtn').classList.toggle('hidden', !deck);
+                el('#deckModal').classList.remove('hidden');
+                el('#deckModal').classList.add('flex');
+            },
+            closeDeckModal() {
+                el('#deckModal').classList.add('hidden');
+                el('#deckModal').classList.remove('flex');
+            },
+            async saveDeckFromModal() {
+                const d = this.state.editingDeck || this.newDeck('', '#917FB3', 'FSRS');
+                d.name = el('#deckNameInput').value || d.name || 'Untitled deck';
+                d.color = el('#deckColorInput').value;
+                d.algorithm = el('#deckAlgoInput').value;
+                d.reviewLimit = Number(el('#deckReviewLimit').value) || 50;
+                d.newLimit = Number(el('#deckNewLimit').value) || 20;
+                d.reverse = el('#deckReverseInput').checked;
+                d.aiPrompt = el('#deckPromptInput').value || '';
+                if (!this.state.editingDeck) this.state.decks.push(d);
+                d.updatedInApp = true;
+                await Storage.put('decks', d);
+                this.queueOp({ type: 'deck-upsert', payload: d });
+                this.closeDeckModal();
+                this.renderDecks();
+                this.renderStudy();
+                toast('Deck saved');
+            },
+            async deleteDeckFromModal() {
+                const deck = this.state.editingDeck;
+                if (!deck) return;
+                this.pendingDelete = { type: 'deck', id: deck.id, notionId: deck.notionId };
+                this.openModal('confirmModal');
+            },
+            openCardModal(card) {
+                if (!this.isReady()) { this.openSettings(); return; }
+                this.state.editingCard = card || null;
+                el('#cardModalTitle').textContent = card ? 'Edit card' : 'New card';
+                const deckSelect = el('#cardDeckInput');
+                deckSelect.innerHTML = this.state.decks.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+                deckSelect.value = card?.deckId || this.state.selectedDeck?.id || this.state.decks[0]?.id;
+                el('#cardTypeInput').value = card?.type ?? 'front-back';
+                el('#cardNameInput').value = card?.name ?? '';
+                el('#cardBackInput').value = card?.back ?? '';
+                el('#cardTagsInput').value = card?.tags?.join(', ') ?? '';
+                el('#cardSuspendedInput').checked = card?.suspended ?? false;
+                el('#cardLeechInput').checked = card?.leech ?? false;
+                el('#deleteCardBtn').classList.toggle('hidden', !card);
+                el('#cardModal').classList.remove('hidden');
+                el('#cardModal').classList.add('flex');
+            },
+            closeCardModal() {
+                el('#cardModal').classList.add('hidden');
+                el('#cardModal').classList.remove('flex');
+            },
+            async saveCardFromModal() {
+                let card = this.state.editingCard || this.newCard('', '', '', 'front-back');
+                card.deckId = el('#cardDeckInput').value;
+                card.type = el('#cardTypeInput').value;
+                card.name = el('#cardNameInput').value || 'Untitled';
+                card.back = el('#cardBackInput').value || '';
+                card.tags = el('#cardTagsInput').value.split(',').map(t => t.trim()).filter(Boolean);
+                card.suspended = el('#cardSuspendedInput').checked;
+                card.leech = el('#cardLeechInput').checked;
+                card.updatedInApp = true;
+                if (!this.state.editingCard) this.state.cards.push(card);
+                await Storage.put('cards', card);
+                this.queueOp({ type: 'card-upsert', payload: card });
+                this.closeCardModal();
+                this.renderCards();
+                toast('Card saved');
+            },
+            async deleteCardFromModal() {
+                const card = this.state.editingCard;
+                if (!card) return;
+                this.pendingDelete = { type: 'card', id: card.id, notionId: card.notionId };
+                this.openModal('confirmModal');
+            },
+            async syncNow() {
+                if (!this.isReady()) return toast('Complete settings first');
+                el('#syncProgress').style.width = '10%';
+                await this.pullFromNotion();
+                el('#syncProgress').style.width = '50%';
+                await this.pushQueue();
+                el('#syncProgress').style.width = '100%';
+                this.state.lastSync = new Date().toISOString();
+                await Storage.put('meta', { key: 'lastSync', value: this.state.lastSync });
+                el('#snapshotStatus').textContent = 'Up to date';
+                setTimeout(() => el('#syncProgress').style.width = '0%', 700);
+                toast('Synced with Notion');
+            },
+            async pullFromNotion() {
+                const { deckSource, cardSource } = this.state.settings;
+                if (!deckSource || !cardSource) return;
+                const decks = await API.queryDatabase(deckSource);
+                const cards = await API.queryDatabase(cardSource);
+                const mappedDecks = decks.map(d => NotionMapper.deckFrom(d));
+                const mappedCards = cards.map(c => NotionMapper.cardFrom(c, mappedDecks));
+                this.state.decks = mappedDecks;
+                this.state.cards = mappedCards;
+                await Storage.wipeStore('decks');
+                await Storage.wipeStore('cards');
+                for (const d of mappedDecks) await Storage.put('decks', d);
+                for (const c of mappedCards) await Storage.put('cards', c);
+                this.renderAll();
+            },
+            async pushQueue() {
+                const { deckSource, cardSource } = this.state.settings;
+                const queue = [...this.state.queue];
+                this.state.queue = [];
+                el('#queueCount').textContent = '0';
+                for (const op of queue) {
+                    if (op.type === 'deck-upsert') {
+                        const props = NotionMapper.deckProps(op.payload);
+                        if (op.payload.notionId) await API.updatePage(op.payload.notionId, props);
+                        else {
+                            const res = await API.createPage(deckSource, props);
+                            op.payload.notionId = res.id;
+                            op.payload.id = op.payload.id || res.id;
+                            await Storage.put('decks', op.payload);
+                        }
+                    }
+                    if (op.type === 'deck-delete' && op.payload.notionId) await API.archivePage(op.payload.notionId);
+                    if (op.type === 'card-upsert') {
+                        const deck = this.deckById(op.payload.deckId);
+                        const props = NotionMapper.cardProps(op.payload, deck?.notionId || deck?.id || null);
+                        if (op.payload.notionId) await API.updatePage(op.payload.notionId, props);
+                        else {
+                            const res = await API.createPage(cardSource, props);
+                            op.payload.notionId = res.id;
+                            op.payload.id = op.payload.id || res.id;
+                            await Storage.put('cards', op.payload);
+                        }
+                    }
+                    if (op.type === 'card-delete' && op.payload.notionId) await API.archivePage(op.payload.notionId);
+                }
+            },
+            queueOp(op) {
+                this.state.queue.push(op);
+                el('#queueCount').textContent = String(this.state.queue.length);
+            },
+            handleOnline() {
+                this.renderConnection();
+                if (this.state.queue.length) this.syncNow();
+            },
+            selectDeck(id) {
+                const deck = this.deckById(id);
+                this.state.selectedDeck = deck;
+                this.renderCards();
+                this.renderStudy();
+                this.openDeckModal(deck);
+            },
+            selectCard(id) {
+                const card = this.cardById(id);
+                this.state.selectedCard = card;
+                if (!this.state.filters.manual.includes(id)) this.state.filters.manual.push(id);
+                this.renderManualSelection();
+                this.renderStudy();
+                this.openCardModal(card);
+            },
+            passFilters(card) {
+                const f = this.state.filters;
+                const now = new Date();
+                if (f.again && card.fsrs?.lastRating !== 'again') return false;
+                if (f.hard && !['again', 'hard'].includes(card.fsrs?.lastRating)) return false;
+                if (f.addedToday && card.createdAt && new Date(card.createdAt).toDateString() !== now.toDateString()) return false;
+                if (card.fsrs?.stability && card.fsrs.stability > f.stability) return false;
+                if (f.tags.length && !f.tags.some(t => card.tags.includes(t))) return false;
+                if (f.suspended && card.suspended) return false;
+                if (f.leech && card.leech) return false;
+                if (f.manual.length && !f.manual.includes(card.id)) return false;
+                return true;
+            },
+            isDue(card) {
+                const due = card.fsrs?.dueDate || card.sm2?.dueDate || card.leitner?.dueDate;
+                return due ? new Date(due) <= new Date() : true;
+            },
+            pickCard() {
+                const pool = this.state.cards.filter(c => this.passFilters(c) && this.isDue(c));
+                return pool[0] || null;
+            },
+            renderCardFront(card, deck) {
+                const prompt = this.state.reverse || (deck?.reverse && card.type.includes('front')) ? card.back : card.name;
+                if (card.type === 'cloze') {
+                    return marked.parse(prompt.replace(/\{\{c\d+::(.*?)\}\}/g, '<span class="cloze-blank">$1</span>'));
+                }
+                if (card.type === 'fill-blank') {
+                    return marked.parse(prompt.replace(/_{3,}/g, '<span class="cloze-blank">blank</span>'));
+                }
+                return marked.parse(prompt);
+            },
+            reveal() {
+                el('#cardBack').classList.remove('hidden');
+                if (el('#revisionMode').value === 'ai') {
+                    el('#aiControls').classList.remove('hidden');
+                }
+            },
+            async rate(rating) {
+                const card = this.state.selectedCard;
+                if (!card) return;
+                if (el('#revisionMode').value === 'ai' && !this.state.aiKey) {
+                    toast('Add an AI key or switch to Reveal mode');
+                    return;
+                }
+                const deck = this.deckById(card.deckId);
+                const alg = deck?.algorithm || 'FSRS';
+                if (alg === 'FSRS') card.fsrs = SRS.fsrs(card, rating);
+                else if (alg === 'SM-2') card.sm2 = SRS.sm2(card, rating);
+                else if (alg === 'Leitner') card.leitner = SRS.leitner(card, rating);
+                else if (alg === 'Random') Object.assign(card, { random: SRS.random(card) });
+                card.fsrs = card.fsrs || {};
+                card.fsrs.lastRating = rating;
+                card.reviewHistory.push({ rating, at: new Date().toISOString() });
+                await Storage.put('cards', card);
+                this.queueOp({ type: 'card-upsert', payload: card });
+                this.nextCard();
+            },
+            nextCard() {
+                this.renderStudy();
+            },
+            cardsForDeck(deckId) {
+                return this.state.cards.filter(c => c.deckId === deckId);
+            },
+            deckById(id) {
+                return this.state.decks.find(d => d.id === id);
+            },
+            cardById(id) {
+                return this.state.cards.find(c => c.id === id);
+            },
+            deckName(id) {
+                return this.deckById(id)?.name ?? '—';
+            },
+            resetFilters() {
+                this.state.filters = { again: false, hard: false, addedToday: false, stability: 25, tags: [], suspended: false, leech: false, manual: [] };
+                el('#filterAgain').checked = false;
+                el('#filterHard').checked = false;
+                el('#filterAddedToday').checked = false;
+                el('#filterStability').value = 25;
+                el('#filterTags').value = '';
+                el('#filterSuspended').checked = false;
+                el('#filterLeech').checked = false;
+                el('#stabilityValue').textContent = '25';
+                this.renderCards();
+            },
+            async saveNotes() {
+                const card = this.state.selectedCard;
+                if (!card) return;
+                card.notes = el('#notesArea').value;
+                await Storage.put('cards', card);
+                this.queueOp({ type: 'card-upsert', payload: card });
+                el('#noteStatus').textContent = 'Saved offline';
+            },
+            async copyMarkdown() {
+                const card = this.state.selectedCard;
+                if (!card) return;
+                const deck = this.deckById(card.deckId);
+                const block = `### ${card.name}\n\n${card.back}\n\n**Notes:**\n${card.notes || '_No notes_'}\n\nDeck: ${deck?.name ?? ''}`;
+                await navigator.clipboard.writeText(block);
+                toast('Copied markdown for LLM');
+            },
+            async handleAnkiImport(file) {
+                if (!file) return;
+                const ext = file.name.split('.').pop().toLowerCase();
+                if (ext === 'apkg' || ext === 'zip') {
+                    await this.importApkg(file);
+                    return;
+                }
+                const text = await file.text();
+                let payload;
+                try { payload = JSON.parse(text); } catch { payload = null; }
+                if (!payload?.cards?.length) return toast('Unsupported file');
+                const deck = this.newDeck(file.name.replace('.apkg', '').replace('.json', ''), '#D8A7B1', 'FSRS');
+                this.state.decks.push(deck);
+                await Storage.put('decks', deck);
+                for (const raw of payload.cards) {
+                    const card = this.newCard(deck.id, raw.name || raw.front || 'Imported', raw.back || '', raw.type || 'front-back');
+                    card.tags = raw.tags || [];
+                    card.notes = raw.notes || '';
+                    card.ankiGuid = raw.guid || crypto.randomUUID();
+                    this.state.cards.push(card);
+                    await Storage.put('cards', card);
+                    this.queueOp({ type: 'card-upsert', payload: card });
+                }
+                this.queueOp({ type: 'deck-upsert', payload: deck });
+                this.renderAll();
+                toast('Imported Anki JSON and ready to sync to Notion');
+            },
+            async importApkg(file) {
+                try {
+                    const buf = await file.arrayBuffer();
+                    const zip = await JSZip.loadAsync(buf);
+                    const collection = await zip.file('collection.anki2').async('uint8array');
+                    const SQL = await Storage.ensureSQL();
+                    const db = new SQL.Database(collection);
+                    const colRow = db.exec("SELECT * FROM col LIMIT 1")[0];
+                    const row = colRow?.values?.[0] || [];
+                    const models = JSON.parse(row[9] || '{}');
+                    const decksJson = JSON.parse(row[10] || '{}');
+                    const decksMap = {};
+                    Object.values(decksJson).forEach(d => { decksMap[d.id] = d.name; });
+                    const notes = db.exec("SELECT id,guid,mid,mod,usn,tags,flds,sfld,csum,flags,data FROM notes")[0]?.values || [];
+                    const cards = db.exec("SELECT id,nid,did,ord,mod,usn,type,queue,due,ivl,factor,reps,lapses,left,odue,odid,flags,data FROM cards")[0]?.values || [];
+                    const deckCache = {};
+                    for (const cardRow of cards) {
+                        const [cid, nid, did, ord] = cardRow;
+                        const note = notes.find(n => n[0] === nid);
+                        if (!note) continue;
+                        const [_, guid, mid, mod, usn, tags, flds] = note;
+                        const deckId = did;
+                        const deckName = decksMap[deckId] || file.name.replace('.apkg', '');
+                        if (!deckCache[deckId]) {
+                            const deck = this.newDeck(deckName, '#D8A7B1', 'FSRS');
+                            deckCache[deckId] = deck;
+                            this.state.decks.push(deck);
+                            await Storage.put('decks', deck);
+                            this.queueOp({ type: 'deck-upsert', payload: deck });
+                        }
+                        const model = models[mid];
+                        const fields = (flds || '').split('\u001f');
+                        const front = fields[0] || 'Imported';
+                        const back = fields[1] || '';
+                        const isCloze = model?.type === 1;
+                        const type = isCloze ? 'cloze' : 'front-back';
+                        const card = this.newCard(deckCache[deckId].id, front, isCloze ? back || front : back, type);
+                        card.tags = (tags || '').trim().split(' ').filter(Boolean).map(t => t.replace(/^\s*/, '').replace(/\s*$/, ''));
+                        card.ankiGuid = guid;
+                        card.ankiNoteType = model?.name || '';
+                        card.ankiFields = JSON.stringify(fields);
+                        card.clozeIndexes = isCloze ? 'auto' : '';
+                        this.state.cards.push(card);
+                        await Storage.put('cards', card);
+                        this.queueOp({ type: 'card-upsert', payload: card });
+                    }
+                    this.renderAll();
+                    toast('Imported .apkg');
+                } catch (e) {
+                    console.error(e);
+                    toast('Import failed');
+                }
+            },
+            async exportAnki() {
+                const deck = this.state.selectedDeck || this.state.decks[0];
+                if (!deck) return toast('No deck to export');
+                const cards = this.cardsForDeck(deck.id);
+                try {
+                    const dbBytes = await this.buildApkgSql(deck, cards);
+                    const zip = new JSZip();
+                    zip.file('collection.anki2', dbBytes);
+                    zip.file('media', JSON.stringify({}));
+                    const blob = await zip.generateAsync({ type: 'blob' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${deck.name}.apkg`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    toast('Exported .apkg');
+                } catch (e) {
+                    toast('Export failed');
+                    console.error(e);
+                }
+            },
+            async buildApkgSql(deck, cards) {
+                const SQL = await Storage.ensureSQL();
+                const db = new SQL.Database();
+                db.run(`CREATE TABLE col (id integer primary key, crt integer, mod integer, scm integer, ver integer, dty integer, usn integer, ls integer, conf text, models text, decks text, dconf text, tags text);`);
+                db.run(`CREATE TABLE notes (id integer primary key, guid text, mid integer, mod integer, usn integer, tags text, flds text, sfld integer, csum integer, flags integer, data text);`);
+                db.run(`CREATE TABLE cards (id integer primary key, nid integer, did integer, ord integer, mod integer, usn integer, type integer, queue integer, due integer, ivl integer, factor integer, reps integer, lapses integer, left integer, odue integer, odid integer, flags integer, data text);`);
+                db.run(`CREATE TABLE revlog (id integer primary key, cid integer, usn integer, ease integer, ivl integer, lastIvl integer, factor integer, time integer, type integer);`);
+                db.run(`CREATE TABLE graves (id integer primary key, oid integer, type integer, usn integer);`);
+
+                const now = Math.floor(Date.now() / 1000);
+                const dayStart = Math.floor(Date.now() / 1000 / 86400);
+                const deckId = Math.abs(this.hash(deck.name));
+                const modelBasicId = deckId + 1;
+                const modelClozeId = deckId + 2;
+
+                const conf = { nextPos: 1, estTimes: true, activeDecks: [deckId], sortType: "noteFld", sortBackwards: false, newSpread: 0, dueCounts: true, curDeck: deckId, timeLim: 0 };
+                const models = {};
+                models[modelBasicId] = {
+                    id: modelBasicId,
+                    name: "Basic",
+                    type: 0,
+                    mod: now,
+                    usn: 0,
+                    sortf: 0,
+                    did: deckId,
+                    latexPre: "\\documentclass{article}\\begin{document}",
+                    latexPost: "\\end{document}",
+                    flds: [
+                        { name: "Front", ord: 0, sticky: false, rtl: false, font: "Arial", size: 20, media: [] },
+                        { name: "Back", ord: 1, sticky: false, rtl: false, font: "Arial", size: 20, media: [] }
+                    ],
+                    tmpls: [
+                        { name: "Card 1", ord: 0, qfmt: "{{Front}}", afmt: "{{FrontSide}}<hr id=answer>{{Back}}", did: null, bqfmt: "", bafmt: "" }
+                    ],
+                    css: ".card { font-family: Arial; font-size: 20px; }"
+                };
+                models[modelClozeId] = {
+                    id: modelClozeId,
+                    name: "Cloze",
+                    type: 1,
+                    mod: now,
+                    usn: 0,
+                    sortf: 0,
+                    did: deckId,
+                    flds: [
+                        { name: "Text", ord: 0, sticky: false, rtl: false, font: "Arial", size: 20, media: [] },
+                        { name: "Back Extra", ord: 1, sticky: false, rtl: false, font: "Arial", size: 20, media: [] }
+                    ],
+                    tmpls: [{ name: "Cloze", ord: 0, qfmt: "{{cloze:Text}}", afmt: "{{cloze:Text}}<br>{{Back Extra}}", did: null }],
+                    css: ".card { font-family: Arial; font-size: 20px; }"
+                };
+
+                const decks = {};
+                decks[deckId] = { id: deckId, name: deck.name, mod: now, usn: 0, desc: "", dyn: 0, extendNew: 0, extendRev: 0, conf: 1, collapsed: false, browserCollapsed: false, newToday: [dayStart, 0], revToday: [dayStart, 0], lrnToday: [dayStart, 0], timeToday: [dayStart, 0] };
+                const dconf = { 1: { id: 1, name: "Default", new: { perDay: 20 }, rev: { perDay: 200 }, lapse: { delays: [10], mult: 0 }, dyn: false, maxTaken: 60, timer: 0 } };
+                const tags = {};
+                const colRow = db.prepare("INSERT INTO col VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)");
+                colRow.run([1, dayStart, now, now, 11, 0, 0, 0, JSON.stringify(conf), JSON.stringify(models), JSON.stringify(decks), JSON.stringify(dconf), JSON.stringify(tags)]);
+
+                let nidCounter = now * 1000;
+                let cidCounter = now * 1000 + 500;
+                const noteStmt = db.prepare("INSERT INTO notes VALUES (?,?,?,?,?,?,?,?,?,?,?)");
+                const cardStmt = db.prepare("INSERT INTO cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+                cards.forEach((card, idx) => {
+                    const isCloze = card.type === 'cloze';
+                    const mid = isCloze ? modelClozeId : modelBasicId;
+                    const nid = ++nidCounter;
+                    const cid = ++cidCounter;
+                    const fields = isCloze ? [card.name, card.back] : [card.name, card.back];
+                    const flds = fields.join('\u001f');
+                    const tagStr = card.tags.length ? card.tags.map(t => t.trim()).join(' ') + ' ' : '';
+                    const sfld = fields[0];
+                    const csum = Math.abs(this.hash(flds)) >>> 0;
+                    noteStmt.run([nid, card.ankiGuid || crypto.randomUUID(), mid, now, 0, tagStr, flds, sfld, csum, 0, ""]);
+
+                    const ivl = card.fsrs?.stability ? Math.max(1, Math.round(card.fsrs.stability)) : 1;
+                    const due = dayStart + idx;
+                    const factor = 2500;
+                    cardStmt.run([cid, nid, deckId, 0, now, 0, 0, 2, due, ivl, factor, 0, 0, 0, 0, 0, 0, ""]);
+                });
+
+                return new Uint8Array(db.export());
+            },
+            hash(str) {
+                let h = 0;
+                for (let i = 0; i < str.length; i++) {
+                    h = Math.imul(31, h) + str.charCodeAt(i) | 0;
+                }
+                return h;
+            },
+            updateCounts() {
+                el('#deckCount').textContent = String(this.state.decks.length);
+                el('#cardCount').textContent = String(this.state.cards.length);
+                el('#queueCount').textContent = String(this.state.queue.length);
+                el('#lastSync').textContent = this.state.lastSync ? new Date(this.state.lastSync).toLocaleString() : '—';
+            },
+            openSettings() {
+                const s = this.state.settings;
+                el('#settingWorkerUrl').value = s.workerUrl;
+                el('#settingProxyToken').value = s.proxyToken;
+                el('#settingAuthToken').value = s.authToken.startsWith('secret_') ? s.authToken : s.authToken;
+                el('#settingsModal').classList.remove('hidden');
+                el('#settingsModal').classList.add('flex');
+            },
+            closeSettings() {
+                el('#settingsModal').classList.add('hidden');
+                el('#settingsModal').classList.remove('flex');
+            },
+            saveSettings() {
+                this.state.settings.workerUrl = el('#settingWorkerUrl').value.trim();
+                this.state.settings.proxyToken = el('#settingProxyToken').value.trim();
+                const authVal = el('#settingAuthToken').value.trim();
+                if (authVal) this.state.settings.authToken = authVal;
+                const provider = el('#aiProvider').value;
+                const model = el('#aiModel').value.trim();
+                const key = el('#aiKey').value.trim();
+                this.state.settings.aiProvider = provider;
+                this.state.settings.aiModel = model;
+                if (key) this.state.settings.aiKey = key;
+                Storage.setSettings(this.state.settings);
+                this.renderStatus();
+                this.renderGate();
+                this.closeSettings();
+                this.renderConnection();
+                toast('Settings saved');
+            },
+            async verifyWorker() {
+                const workerUrl = el('#settingWorkerUrl').value.trim();
+                const proxyToken = el('#settingProxyToken').value.trim();
+                if (!workerUrl) return toast('Add worker URL');
+                try {
+                    const url = new URL(workerUrl.replace(/\/$/, ''));
+                    url.searchParams.append('url', 'https://api.notion.com/v1/users/me');
+                    if (proxyToken) url.searchParams.append('token', proxyToken);
+                    const res = await fetch(url.toString());
+                    if (res.ok || res.status === 401) {
+                        toast('Worker reachable');
+                        this.state.workerVerified = true;
+                        this.renderStatus();
+                        this.renderGate();
+                    } else throw new Error(res.status);
+                } catch (e) {
+                    toast('Worker check failed');
+                    this.state.workerVerified = false;
+                }
+            },
+            async verifyAuth() {
+                if (!this.state.settings.workerUrl) return toast('Verify worker first');
+                try {
+                    await API.request('GET', '/users/me');
+                    toast('Notion token valid');
+                    this.state.authVerified = true;
+                    this.renderStatus();
+                    this.renderGate();
+                } catch (e) {
+                    toast(e.message);
+                    this.state.authVerified = false;
+                }
+            },
+            startOAuth() {
+                this.saveSettings();
+                window.location.href = 'https://notion-oauth-handler.mimansa-jaiswal.workers.dev/auth/login?from=/tools/ghostink-flashcards/index.html';
+            },
+            async scanSources() {
+                if (!this.state.settings.workerUrl || !this.state.settings.authToken) return toast('Add worker + auth first');
+                try {
+                    const dbs = await API.listDatabases();
+                    this.state.sourcesCache = dbs;
+                    this.populateSourceSelects();
+                    toast('Sources loaded');
+                    this.state.sourcesVerified = true;
+                    this.renderStatus();
+                    this.renderGate();
+                } catch (e) {
+                    toast(e.message);
+                }
+            },
+            populateSourceSelects() {
+                const options = this.state.sourcesCache.map(d => `<option value="${d.id}">${d.title?.[0]?.plain_text || d.id}</option>`).join('');
+                el('#deckSourceSelect').innerHTML = `<option value="">Select deck source</option>${options}`;
+                el('#cardSourceSelect').innerHTML = `<option value="">Select card source</option>${options}`;
+                if (this.state.settings.deckSource) el('#deckSourceSelect').value = this.state.settings.deckSource;
+                if (this.state.settings.cardSource) el('#cardSourceSelect').value = this.state.settings.cardSource;
+                el('#deckSourceSelect').onchange = (e) => { this.state.settings.deckSource = e.target.value; Storage.setSettings(this.state.settings); this.state.sourcesVerified = !!(this.state.settings.deckSource && this.state.settings.cardSource); this.renderStatus(); this.renderGate(); };
+                el('#cardSourceSelect').onchange = (e) => { this.state.settings.cardSource = e.target.value; Storage.setSettings(this.state.settings); this.state.sourcesVerified = !!(this.state.settings.deckSource && this.state.settings.cardSource); this.renderStatus(); this.renderGate(); };
+            },
+            openModal(id) {
+                const m = el('#' + id);
+                m.classList.remove('hidden');
+                m.classList.add('flex');
+            },
+            closeModal(id) {
+                const m = el('#' + id);
+                m.classList.add('hidden');
+                m.classList.remove('flex');
+            },
+            copyWorkerCode() {
+                const code = el('#workerCodeBlock').innerText;
+                navigator.clipboard.writeText(code);
+                toast('Worker code copied');
+            },
+            async resetApp() {
+                if (!confirm('Clear local decks/cards/settings and restart?')) return;
+                await Storage.wipeStore('decks');
+                await Storage.wipeStore('cards');
+                await Storage.wipeStore('meta');
+                localStorage.removeItem(Storage.settingsKey);
+                indexedDB.deleteDatabase('GhostInkDB');
+                location.reload();
+            },
+            renderStatus() {
+                const hasWorker = !!this.state.settings.workerUrl;
+                const hasAuth = !!this.state.settings.authToken;
+                const hasSources = !!(this.state.settings.deckSource && this.state.settings.cardSource);
+                el('#statusWorker').textContent = `Worker: ${hasWorker && this.state.workerVerified ? 'verified' : 'missing'}`;
+                el('#statusAuth').textContent = `Auth: ${hasAuth && this.state.authVerified ? 'verified' : 'missing'}`;
+                el('#statusSources').textContent = `Sources: ${hasSources && this.state.sourcesVerified ? 'verified' : 'missing'}`;
+            },
+            isReady() {
+                const hasWorker = !!this.state.settings.workerUrl;
+                const hasAuth = !!this.state.settings.authToken;
+                const hasSources = !!(this.state.settings.deckSource && this.state.settings.cardSource);
+                return hasWorker && this.state.workerVerified && hasAuth && this.state.authVerified && hasSources && this.state.sourcesVerified;
+            },
+            loadAISettings() {
+                const s = Storage.getSettings();
+                if (s.aiProvider) el('#aiProvider').value = s.aiProvider;
+                if (s.aiModel) el('#aiModel').value = s.aiModel;
+                if (s.aiKey) el('#aiKey').value = s.aiKey;
+                this.state.aiProvider = s.aiProvider || '';
+                this.state.aiModel = s.aiModel || '';
+                this.state.aiKey = s.aiKey || '';
+            },
+            async submitToAI() {
+                if (!this.state.selectedCard) return;
+                const ans = el('#aiAnswer').value.trim();
+                if (!ans) { toast('Enter or record an answer first'); return; }
+                if (!this.state.settings.aiKey) { toast('Add an AI key in Settings'); return; }
+                const deck = this.deckById(this.state.selectedCard.deckId);
+                const promptTemplate = deck?.aiPrompt || 'You are a strict flashcard grader. Question: {{question}}. Correct answer: {{answer}}. Learner answer: {{user}}. Judge correctness (short) and give brief feedback.';
+                const prompt = promptTemplate
+                    .replace('{{question}}', this.state.selectedCard.name)
+                    .replace('{{answer}}', this.state.selectedCard.back)
+                    .replace('{{user}}', ans);
+                const provider = this.state.settings.aiProvider || 'openai';
+                const model = this.state.settings.aiModel || (provider === 'anthropic' ? 'claude-3-haiku-20240307' : provider === 'gemini' ? 'gemini-1.5-flash-latest' : 'gpt-4o-mini');
+                try {
+                    el('#aiFeedback').innerHTML = 'Thinking...';
+                    const res = await this.callAI(provider, model, prompt, this.state.settings.aiKey);
+                    el('#aiFeedback').innerHTML = marked.parse(res);
+                    this.reveal();
+                } catch (e) {
+                    el('#aiFeedback').innerHTML = '';
+                    toast('AI error: ' + e.message);
+                }
+            },
+            async callAI(provider, model, prompt, key) {
+                if (provider === 'anthropic') {
+                    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+                        method: 'POST',
+                        headers: {
+                            'content-type': 'application/json',
+                            'x-api-key': key,
+                            'anthropic-version': '2023-06-01'
+                        },
+                        body: JSON.stringify({ model, max_tokens: 256, messages: [{ role: 'user', content: prompt }] })
+                    });
+                    if (!resp.ok) throw new Error('Claude returned ' + resp.status);
+                    const json = await resp.json();
+                    return json.content?.[0]?.text || 'No response';
+                }
+                if (provider === 'gemini') {
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
+                    const resp = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'content-type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                    });
+                    if (!resp.ok) throw new Error('Gemini returned ' + resp.status);
+                    const json = await resp.json();
+                    return json.candidates?.[0]?.content?.parts?.map(p => p.text).join('\n') || 'No response';
+                }
+                const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json', 'authorization': 'Bearer ' + key },
+                    body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], max_tokens: 256 })
+                });
+                if (!resp.ok) throw new Error('OpenAI returned ' + resp.status);
+                const json = await resp.json();
+                return json.choices?.[0]?.message?.content || 'No response';
+            },
+            recordAnswer() {
+                if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+                    toast('Speech recognition not supported');
+                    return;
+                }
+                const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+                const rec = new SR();
+                rec.lang = 'en-US';
+                rec.interimResults = false;
+                rec.maxAlternatives = 1;
+                el('#aiFeedback').innerHTML = 'Listening...';
+                rec.onresult = (e) => {
+                    const text = e.results[0][0].transcript;
+                    el('#aiAnswer').value = text;
+                    el('#aiFeedback').innerHTML = 'Captured. Now send.';
+                };
+                rec.onerror = () => { el('#aiFeedback').innerHTML = ''; toast('Mic error'); };
+                rec.onend = () => { if (el('#aiFeedback').innerHTML === 'Listening...') el('#aiFeedback').innerHTML = ''; };
+                rec.start();
+            },
+            async performDelete() {
+                this.closeModal('confirmModal');
+                const target = this.pendingDelete;
+                if (!target) return;
+                if (target.type === 'deck') {
+                    await Storage.delete('decks', target.id);
+                    this.state.decks = this.state.decks.filter(d => d.id !== target.id);
+                    const cards = this.cardsForDeck(target.id);
+                    for (const c of cards) await Storage.delete('cards', c.id);
+                    this.state.cards = this.state.cards.filter(c => c.deckId !== target.id);
+                    this.queueOp({ type: 'deck-delete', payload: { id: target.id, notionId: target.notionId } });
+                    this.renderAll();
+                    toast('Deck deleted');
+                }
+                if (target.type === 'card') {
+                    await Storage.delete('cards', target.id);
+                    this.state.cards = this.state.cards.filter(c => c.id !== target.id);
+                    this.queueOp({ type: 'card-delete', payload: { id: target.id, notionId: target.notionId } });
+                    this.renderCards();
+                    toast('Card deleted');
+                }
+                this.pendingDelete = null;
+            }
+        };
+
+        window.addEventListener('load', () => App.init());
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').catch(() => { });
+            });
+        }
+    </script>
+</body>
+
+</html>

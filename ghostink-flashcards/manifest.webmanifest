@@ -1,0 +1,28 @@
+{
+  "name": "GhostInk Flashcards",
+  "short_name": "GhostInk",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#F3F0E6",
+  "theme_color": "#917FB3",
+  "icons": [
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
