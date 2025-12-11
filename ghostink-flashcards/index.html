@@ -685,10 +685,8 @@ async function handleRequest(request, env) {
                     <label class="text-xs text-earth-metal/70">Card type</label>
                     <select id="cardTypeInput"
                         class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2">
-                        <option value="front-back">Front / Back</option>
-                        <option value="cloze">Cloze</option>
-                        <option value="fill-blank">Fill-in-the-blank</option>
-                        <option value="reverse-ok">Front / Back (allow reverse)</option>
+                        <option value="Front-Back">Front / Back</option>
+                        <option value="Cloze">Cloze</option>
                     </select>
                 </div>
                 <div class="md:col-span-2 space-y-2">
@@ -915,6 +913,9 @@ async function handleRequest(request, env) {
             }
         };
 
+        const normalizeRating = (name) => name ? name.toLowerCase() : null;
+        const displayRating = (name) => name ? name.charAt(0).toUpperCase() + name.slice(1).toLowerCase() : null;
+
         const NotionMapper = {
             deckFrom(page) {
                 const props = page.properties || {};
@@ -957,7 +958,7 @@ async function handleRequest(request, env) {
                     difficulty: p['Difficulty']?.number ?? 4,
                     stability: p['Stability']?.number ?? 1,
                     retrievability: p['Retrievability']?.number ?? 0.9,
-                    lastRating: p['Last Rating']?.select?.name || null,
+                    lastRating: normalizeRating(p['Last Rating']?.select?.name) || null,
                     lastReview: p['Last Review']?.date?.start || null,
                     dueDate: p['Due Date']?.date?.start || null
                 };
@@ -965,7 +966,7 @@ async function handleRequest(request, env) {
                     interval: p['Interval / Box Level']?.number ?? 1,
                     easeFactor: p['Ease Factor']?.number ?? 2.5,
                     dueDate: p['Due Date']?.date?.start || null,
-                    lastRating: p['Last Rating']?.select?.name || null,
+                    lastRating: normalizeRating(p['Last Rating']?.select?.name) || null,
                     lastReview: p['Last Review']?.date?.start || null
                 };
                 return {
@@ -974,7 +975,7 @@ async function handleRequest(request, env) {
                     deckId: deckRel,
                     name,
                     back,
-                    type: p['Card Type']?.select?.name || 'front-back',
+                    type: p['Card Type']?.select?.name || 'Front-Back',
                     tags,
                     notes: p['Notes']?.rich_text?.map(t => t.plain_text).join('\n') || '',
                     suspended: p['Suspended']?.checkbox || false,
@@ -1005,7 +1006,7 @@ async function handleRequest(request, env) {
                     'Difficulty': { number: card.fsrs?.difficulty ?? 4 },
                     'Stability': { number: card.fsrs?.stability ?? 1 },
                     'Retrievability': { number: card.fsrs?.retrievability ?? 0.9 },
-                    'Last Rating': card.fsrs?.lastRating ? { select: { name: card.fsrs.lastRating } } : { select: null },
+                    'Last Rating': card.fsrs?.lastRating ? { select: { name: displayRating(card.fsrs.lastRating) } } : { select: null },
                     'Last Review': { date: card.fsrs?.lastReview ? { start: card.fsrs.lastReview } : null },
                     'Due Date': { date: card.fsrs?.dueDate ? { start: card.fsrs.dueDate } : null },
                     'Interval / Box Level': { number: card.leitner?.box ?? card.sm2?.interval ?? 1 },
@@ -1314,7 +1315,7 @@ async function handleRequest(request, env) {
                 const deckSelect = el('#cardDeckInput');
                 deckSelect.innerHTML = this.state.decks.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
                 deckSelect.value = card?.deckId || this.state.selectedDeck?.id || this.state.decks[0]?.id;
-                el('#cardTypeInput').value = card?.type ?? 'front-back';
+                el('#cardTypeInput').value = card?.type ?? 'Front-Back';
                 el('#cardNameInput').value = card?.name ?? '';
                 el('#cardBackInput').value = card?.back ?? '';
                 el('#cardTagsInput').value = card?.tags?.join(', ') ?? '';
@@ -1329,7 +1330,7 @@ async function handleRequest(request, env) {
                 el('#cardModal').classList.remove('flex');
             },
             async saveCardFromModal() {
-                let card = this.state.editingCard || this.newCard('', '', '', 'front-back');
+                let card = this.state.editingCard || this.newCard('', '', '', 'Front-Back');
                 card.deckId = el('#cardDeckInput').value;
                 card.type = el('#cardTypeInput').value;
                 card.name = el('#cardNameInput').value || 'Untitled';
@@ -1455,12 +1456,11 @@ async function handleRequest(request, env) {
                 return pool[0] || null;
             },
             renderCardFront(card, deck) {
-                const prompt = this.state.reverse || (deck?.reverse && card.type.includes('front')) ? card.back : card.name;
-                if (card.type === 'cloze') {
+                const typeKey = (card.type || '').toLowerCase();
+                const isFrontStyle = typeKey.includes('front');
+                const prompt = this.state.reverse || (deck?.reverse && isFrontStyle) ? card.back : card.name;
+                if (typeKey === 'cloze') {
                     return marked.parse(prompt.replace(/\{\{c\d+::(.*?)\}\}/g, '<span class="cloze-blank">$1</span>'));
-                }
-                if (card.type === 'fill-blank') {
-                    return marked.parse(prompt.replace(/_{3,}/g, '<span class="cloze-blank">blank</span>'));
                 }
                 return marked.parse(prompt);
             },
@@ -1548,7 +1548,7 @@ async function handleRequest(request, env) {
                 this.state.decks.push(deck);
                 await Storage.put('decks', deck);
                 for (const raw of payload.cards) {
-                    const card = this.newCard(deck.id, raw.name || raw.front || 'Imported', raw.back || '', raw.type || 'front-back');
+                    const card = this.newCard(deck.id, raw.name || raw.front || 'Imported', raw.back || '', raw.type || 'Front-Back');
                     card.tags = raw.tags || [];
                     card.notes = raw.notes || '';
                     card.ankiGuid = raw.guid || crypto.randomUUID();
@@ -1595,7 +1595,7 @@ async function handleRequest(request, env) {
                         const front = fields[0] || 'Imported';
                         const back = fields[1] || '';
                         const isCloze = model?.type === 1;
-                        const type = isCloze ? 'cloze' : 'front-back';
+                        const type = isCloze ? 'Cloze' : 'Front-Back';
                         const card = this.newCard(deckCache[deckId].id, front, isCloze ? back || front : back, type);
                         card.tags = (tags || '').trim().split(' ').filter(Boolean).map(t => t.replace(/^\s*/, '').replace(/\s*$/, ''));
                         card.ankiGuid = guid;
@@ -1699,7 +1699,7 @@ async function handleRequest(request, env) {
                 const noteStmt = db.prepare("INSERT INTO notes VALUES (?,?,?,?,?,?,?,?,?,?,?)");
                 const cardStmt = db.prepare("INSERT INTO cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
                 cards.forEach((card, idx) => {
-                    const isCloze = card.type === 'cloze';
+                    const isCloze = (card.type || '').toLowerCase() === 'cloze';
                     const mid = isCloze ? modelClozeId : modelBasicId;
                     const nid = ++nidCounter;
                     const cid = ++cidCounter;
