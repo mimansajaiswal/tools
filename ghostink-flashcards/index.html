@@ -1162,7 +1162,7 @@ async function handleRequest(request, env) {
             },
             getSettings() {
                 const raw = localStorage.getItem(this.settingsKey);
-                return raw ? JSON.parse(raw) : { workerUrl: '', proxyToken: '', authToken: '', deckSource: '', cardSource: '', aiProvider: '', aiModel: '', aiKey: '', themeMode: 'system', fontMode: 'serif' };
+                return raw ? JSON.parse(raw) : { workerUrl: '', proxyToken: '', authToken: '', deckSource: '', cardSource: '', aiProvider: '', aiModel: '', aiKey: '', themeMode: 'system', fontMode: 'serif', workerVerified: false, authVerified: false };
             },
             setSettings(newSettings) {
                 localStorage.setItem(this.settingsKey, JSON.stringify(newSettings));
@@ -1528,8 +1528,8 @@ async function handleRequest(request, env) {
                 lastPush: null,
                 settings: Storage.getSettings(),
                 sourcesCache: [],
-                workerVerified: false,
-                authVerified: false,
+                workerVerified: Storage.getSettings().workerVerified || false,
+                authVerified: Storage.getSettings().authVerified || false,
                 sourcesVerified: false,
                 autoSyncTimer: null,
                 syncing: false
@@ -1673,6 +1673,7 @@ async function handleRequest(request, env) {
                 el('#copyWorkerCode').onclick = () => this.copyWorkerCode();
                 el('#lockedOpenSettings').onclick = () => this.openSettings();
                 el('#resetApp').onclick = () => this.resetApp();
+                this.updateSettingsButtons();
                 window.addEventListener('keydown', (e) => { if (e.key === 'Escape') { this.closeSettings(); this.closeModal('workerHelpModal'); this.closeDeckModal(); this.closeCardModal(); } });
                 el('#settingsModal').addEventListener('click', (e) => { if (e.target === el('#settingsModal')) this.closeSettings(); });
                 el('#workerHelpModal').addEventListener('click', (e) => { if (e.target === el('#workerHelpModal')) this.closeModal('workerHelpModal'); });
@@ -2340,6 +2341,8 @@ async function handleRequest(request, env) {
                 el('#settingAuthToken').value = s.authToken.startsWith('secret_') ? s.authToken : s.authToken;
                 el('#settingsModal').classList.remove('hidden');
                 el('#settingsModal').classList.add('flex');
+                this.renderStatus();
+                this.updateSettingsButtons();
             },
             closeSettings() {
                 el('#settingsModal').classList.add('hidden');
@@ -2377,6 +2380,8 @@ async function handleRequest(request, env) {
                     if (res.ok || res.status === 401) {
                         toast('Worker reachable');
                         this.state.workerVerified = true;
+                        this.state.settings.workerVerified = true;
+                        Storage.setSettings(this.state.settings);
                         this.renderStatus();
                         this.renderGate();
                         if (this.pendingAuthVerify && this.state.settings.authToken) {
@@ -2387,19 +2392,25 @@ async function handleRequest(request, env) {
                 } catch (e) {
                     toast('Worker check failed');
                     this.state.workerVerified = false;
+                    this.state.settings.workerVerified = false;
+                    Storage.setSettings(this.state.settings);
                 }
             },
             async verifyAuth() {
-                if (!this.state.workerVerified) return toast('Verify worker first');
+                if (!this.state.workerVerified) { this.updateSettingsButtons(); return toast('Verify worker first'); }
                 try {
                     await API.request('GET', '/users/me');
                     toast('Notion token valid');
                     this.state.authVerified = true;
+                    this.state.settings.authVerified = true;
+                    Storage.setSettings(this.state.settings);
                     this.renderStatus();
                     this.renderGate();
                 } catch (e) {
                     toast(e.message);
                     this.state.authVerified = false;
+                    this.state.settings.authVerified = false;
+                    Storage.setSettings(this.state.settings);
                 }
             },
             startOAuth() {
@@ -2408,7 +2419,7 @@ async function handleRequest(request, env) {
                 window.location.href = `https://notion-oauth-handler.mimansa-jaiswal.workers.dev/auth/login?from=${here}`;
             },
             async scanSources() {
-                if (!this.state.settings.workerUrl || !this.state.settings.authToken) return toast('Add worker + auth first');
+                if (!this.state.workerVerified || !this.state.authVerified) return toast('Verify worker and auth first');
                 try {
                     const dbs = await API.listDatabases();
                     this.state.sourcesCache = dbs;
@@ -2461,9 +2472,26 @@ async function handleRequest(request, env) {
                 el('#statusWorker').textContent = `Worker: ${this.state.workerVerified ? 'verified' : 'missing'}`;
                 el('#statusAuth').textContent = `Auth: ${this.state.workerVerified ? (this.state.authVerified ? 'verified' : 'blocked (verify worker)') : 'blocked (verify worker)'}`;
                 el('#statusSources').textContent = `Sources: ${hasSources && this.state.sourcesVerified ? 'verified' : 'missing'}`;
+                this.updateSettingsButtons();
+            },
+            updateSettingsButtons() {
+                const block = !(this.state.workerVerified && this.state.authVerified);
+                ['scanSources', 'saveSettings'].forEach(id => {
+                    const btn = el('#' + id);
+                    if (!btn) return;
+                    btn.disabled = block;
+                    btn.classList.toggle('opacity-60', block);
+                    btn.classList.toggle('cursor-not-allowed', block);
+                });
+                const oa = el('#oauthBtn');
+                const va = el('#verifyAuth');
+                const tokenInput = el('#settingAuthToken');
+                const blockAuth = !this.state.workerVerified;
+                if (oa) { oa.disabled = blockAuth; oa.classList.toggle('opacity-60', blockAuth); oa.classList.toggle('cursor-not-allowed', blockAuth); }
+                if (va) { va.disabled = blockAuth; va.classList.toggle('opacity-60', blockAuth); va.classList.toggle('cursor-not-allowed', blockAuth); }
+                if (tokenInput) tokenInput.disabled = blockAuth;
             },
             async autoVerifyWorker() {
-                if (this.state.workerVerified) return;
                 const url = this.state.settings.workerUrl;
                 if (!url) return;
                 try { await this.verifyWorker(); } catch (_) { /* ignore */ }
