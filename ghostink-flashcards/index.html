@@ -1719,14 +1719,33 @@ async function handleRequest(request, env) {
             },
             renderConnection() {
                 const badge = el('#connectionBadge');
+                const online = navigator.onLine;
+                const hasWorkerUrl = !!this.state.settings.workerUrl;
+                const workerOk = hasWorkerUrl && this.state.workerVerified;
                 const hasToken = !!this.state.settings.authToken;
-                if (navigator.onLine) {
-                    badge.textContent = hasToken ? 'Online · Notion ready' : 'Online · set token';
-                    badge.className = 'px-3 py-1 rounded-full pill text-xs bg-white-linen border border-oatmeal-dark text-earth-metal';
-                } else {
+                const authOk = workerOk && this.state.authVerified && hasToken;
+                const ready = online && workerOk && authOk;
+
+                if (!online) {
                     badge.textContent = 'Offline';
                     badge.className = 'px-3 py-1 rounded-full pill text-xs bg-oatmeal border border-oatmeal-dark text-earth-metal';
+                    return;
                 }
+
+                if (!hasWorkerUrl) {
+                    badge.textContent = 'Online · add worker URL';
+                } else if (!workerOk) {
+                    badge.textContent = 'Online · verify worker';
+                } else if (!hasToken) {
+                    badge.textContent = 'Online · set token';
+                } else if (!authOk) {
+                    badge.textContent = 'Online · verify token';
+                } else {
+                    badge.textContent = 'Online · Notion ready';
+                }
+                badge.className = ready
+                    ? 'px-3 py-1 rounded-full pill text-xs bg-white-linen border border-oatmeal-dark text-earth-metal'
+                    : 'px-3 py-1 rounded-full pill text-xs bg-oatmeal border border-oatmeal-dark text-earth-metal';
             },
             renderDecks() {
                 const grid = el('#deckGrid');
@@ -2388,6 +2407,9 @@ async function handleRequest(request, env) {
                     const res = await fetch(url.toString());
                     if (res.ok || res.status === 401) {
                         toast('Worker reachable');
+                        // Persist the worker details immediately so downstream calls use the latest values
+                        this.state.settings.workerUrl = workerUrl;
+                        this.state.settings.proxyToken = proxyToken;
                         this.state.workerVerified = true;
                         this.state.settings.workerVerified = true;
                         Storage.setSettings(this.state.settings);
@@ -2408,19 +2430,32 @@ async function handleRequest(request, env) {
                     this.state.workerVerified = false;
                     this.state.settings.workerVerified = false;
                     Storage.setSettings(this.state.settings);
+                    this.renderStatus();
                 }
             },
             async verifyAuth() {
                 if (!this.state.workerVerified) { this.updateSettingsButtons(); return toast('Verify worker first'); }
+                const workerUrl = (el('#settingWorkerUrl').value.trim()) || this.state.settings.workerUrl;
+                const proxyToken = (el('#settingProxyToken').value.trim()) || this.state.settings.proxyToken;
+                const authVal = (el('#settingAuthToken').value.trim()) || this.state.settings.authToken;
+                if (!workerUrl || !authVal) return toast('Add worker URL and Notion token');
                 try {
-                    await API.request('GET', '/users/me');
+                    // Verify using the freshest inputs instead of stale stored settings
+                    const override = { workerUrl, proxyToken, authToken: authVal };
+                    await API.request('GET', '/users/me', null, override);
                     toast('Notion token valid');
                     this.state.authVerified = true;
                     this.state.settings.authVerified = true;
+                    this.state.settings.workerUrl = workerUrl;
+                    this.state.settings.proxyToken = proxyToken;
+                    this.state.settings.authToken = authVal;
+                    this.state.settings.workerVerified = true;
                     Storage.setSettings(this.state.settings);
                     this.renderStatus();
                     this.renderGate();
-                    if (this.state.workerVerified && this.state.authVerified && this.state.autoScanPending) {
+                    // Always auto-scan once auth is valid (works for both OAuth and manual secret token)
+                    this.state.autoScanPending = true;
+                    if (this.state.workerVerified && this.state.authVerified) {
                         await this.scanSources();
                         this.state.autoScanPending = false;
                         this.openSettings();
@@ -2430,9 +2465,11 @@ async function handleRequest(request, env) {
                     this.state.authVerified = false;
                     this.state.settings.authVerified = false;
                     Storage.setSettings(this.state.settings);
+                    this.renderStatus();
                 }
             },
             startOAuth() {
+                if (!this.state.workerVerified) return toast('Verify worker first');
                 this.saveSettings();
                 const here = encodeURIComponent(window.location.href);
                 window.location.href = `https://notion-oauth-handler.mimansa-jaiswal.workers.dev/auth/login?from=${here}`;
@@ -2500,13 +2537,23 @@ async function handleRequest(request, env) {
                 location.reload();
             },
             renderStatus() {
-                const hasWorker = this.state.workerVerified;
-                const hasAuth = this.state.authVerified;
-                const hasSources = !!(this.state.settings.deckSource && this.state.settings.cardSource);
-                el('#statusWorker').textContent = `Worker: ${this.state.workerVerified ? 'verified' : 'missing'}`;
-                el('#statusAuth').textContent = `Auth: ${hasAuth ? 'verified' : this.state.workerVerified ? 'missing' : 'blocked (verify worker)'}`;
-                el('#statusSources').textContent = `Sources: ${hasSources && this.state.sourcesVerified ? 'verified' : 'missing'}`;
+                const hasWorkerUrl = !!this.state.settings.workerUrl;
+                const workerOk = hasWorkerUrl && this.state.workerVerified;
+                const hasToken = !!this.state.settings.authToken;
+                const authOk = workerOk && this.state.authVerified && hasToken;
+                const hasSources = !!(this.state.settings.deckSource && this.state.settings.cardSource && this.state.sourcesVerified);
+
+                // Keep flags consistent so other UI logic (buttons/locks) stay in sync with real readiness
+                this.state.workerVerified = workerOk;
+                this.state.authVerified = authOk;
+                this.state.settings.workerVerified = workerOk;
+                this.state.settings.authVerified = authOk;
+
+                el('#statusWorker').textContent = `Worker: ${workerOk ? 'verified' : 'missing'}`;
+                el('#statusAuth').textContent = `Auth: ${authOk ? 'verified' : workerOk ? 'missing' : 'blocked (verify worker)'}`;
+                el('#statusSources').textContent = `Sources: ${hasSources ? 'verified' : 'missing'}`;
                 this.updateSettingsButtons();
+                this.renderConnection();
             },
             async validateDb(dbId, type) {
                 try {
