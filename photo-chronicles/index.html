@@ -2428,8 +2428,9 @@ async function handleRequest(request, env) {
                 const proxyToken = document.getElementById('settingProxyToken').value;
                 const current = Storage.getSettings();
                 Storage.setSettings({ ...current, workerUrl, proxyToken });
-                const returnPath = encodeURIComponent(window.location.pathname);
-                window.location.href = `https://notion-oauth-handler.mimansa-jaiswal.workers.dev/auth/login?from=${returnPath}`;
+                // Send the full, canonical URL for this page so the worker can redirect back here after OAuth
+                const returnUrl = encodeURIComponent(new URL('index.html', window.location.href).toString());
+                window.location.href = `https://notion-oauth-handler.mimansa-jaiswal.workers.dev/auth/login?from=${returnUrl}`;
             },
             testManualConnection: async (btn) => {
                 const workerUrl = document.getElementById('settingWorkerUrl').value;

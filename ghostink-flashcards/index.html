@@ -2400,7 +2400,8 @@ async function handleRequest(request, env) {
             },
             startOAuth() {
                 this.saveSettings();
-                window.location.href = 'https://notion-oauth-handler.mimansa-jaiswal.workers.dev/auth/login?from=/tools/ghostink-flashcards/index.html';
+                const here = encodeURIComponent(window.location.href);
+                window.location.href = `https://notion-oauth-handler.mimansa-jaiswal.workers.dev/auth/login?from=${here}`;
             },
             async scanSources() {
                 if (!this.state.settings.workerUrl || !this.state.settings.authToken) return toast('Add worker + auth first');
