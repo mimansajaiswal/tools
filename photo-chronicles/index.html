@@ -21,7 +21,7 @@
 
     <!-- Font: DM Serif Display (Headers) & Inter (Body) -->
     <link
-        href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@300;400;500;600&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=DM+Serif+Display&family=Inter:wght@300;400;500;600&display=swap"
         rel="stylesheet">
 
     <!-- Tailwind Config for Custom Palette -->
@@ -132,6 +132,15 @@
         .grid-line {
             position: absolute;
             pointer-events: none;
+        }
+
+        /* First-visit blurb */
+        .welcome-blurb {
+            font-family: 'Caveat', 'Inter', sans-serif;
+            font-style: italic;
+            color: #917FB3;
+            font-size: 1.15rem;
+            line-height: 1.45;
         }
     </style>
 </head>
@@ -1606,6 +1615,7 @@ async function handleRequest(request, env) {
                             <div class="bg-dull-purple/10 p-4 rounded-full"><i data-lucide="plug" class="w-10 h-10 text-dull-purple"></i></div>
                             <div>
                                 <h3 class="font-serif text-2xl text-charcoal mb-2">Welcome to Photo Chronicles</h3>
+                                <p class="welcome-blurb max-w-md mx-auto mb-3">Photo Chronicles is your cozy, camera-first diary that turns daily snaps into a living timeline—auto-sorted, timestamped, and synced privately to Notion so memories stay safe and easy to revisit.</p>
                                 <p class="text-earth-metal/60 max-w-xs mx-auto mb-6">Connect your Notion workspace to start tracking.</p>
                                 <button onclick="App.openModal('settingsModal')" class="bg-charcoal text-white px-6 py-3 rounded-lg font-medium hover:bg-black transition">Connect to Notion</button>
                             </div>
