@@ -14,15 +14,20 @@
 
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Hammer.js for touch gestures -->
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
 
     <!-- Markdown renderer -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/sql-wasm.js"></script>
+    <!-- KaTeX for equations -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
 
     <!-- Fonts -->
     <link
-        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&amp;family=Newsreader:opsz,wght@6..72,500&amp;display=swap"
+        href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Sora:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap"
         rel="stylesheet">
 
     <script>
@@ -40,8 +45,8 @@
                         'muted-pink-dim': '#C696A0'
                     },
                     fontFamily: {
-                        display: ['"Newsreader"', 'serif'],
-                        sans: ['"Space Grotesk"', 'system-ui']
+                        display: ['var(--font-display, "Fraunces")', 'serif'],
+                        sans: ['var(--font-sans, "Sora")', 'system-ui', 'sans-serif']
                     }
                 }
             }
@@ -51,22 +56,56 @@
     <style>
         :root {
             --oatmeal: #F3F0E6;
+            --oatmeal-dark: #E6E2D6;
             --earth-metal: #4A4A4A;
             --charcoal: #1F1F1F;
             --linen: #FAF9F6;
             --dull-purple: #917FB3;
             --muted-pink: #D8A7B1;
+            --card-bg: rgba(250, 249, 246, 0.9);
+            --card-border: rgba(26, 26, 26, 0.06);
+            --text-main: #1F1F1F;
+            --text-sub: rgba(31, 31, 31, 0.7);
+            --surface: #faf9f6;
+            --surface-strong: #f3f0e6;
+            --border-weak: rgba(26, 26, 26, 0.06);
+            --bg: #f6f3eb;
         }
 
         body {
-            background: radial-gradient(circle at 20% 20%, rgba(145, 127, 179, 0.18), transparent 32%),
-                radial-gradient(circle at 80% 0%, rgba(216, 167, 177, 0.22), transparent 40%),
-                linear-gradient(180deg, #FAF9F6, #F3F0E6 50%, #F7F3EA);
+            background: var(--bg);
+            color: var(--text-main);
+            font-family: var(--font-sans, "Manrope"), system-ui, sans-serif;
+        }
+
+        body[data-font="mono"] {
+            --font-display: "JetBrains Mono";
+            --font-sans: "JetBrains Mono";
+            font-family: "JetBrains Mono", monospace;
+        }
+
+        body:not([data-font="mono"]) {
+            --font-display: "Fraunces";
+            --font-sans: "Sora";
+        }
+
+        body[data-theme="dark"] {
+            --oatmeal: #1f1c2b;
+            --oatmeal-dark: #252335;
+            --linen: #1b1917;
+            --card-bg: #201d1b;
+            --card-border: rgba(255, 255, 255, 0.08);
+            --text-main: #f4f1ff;
+            --text-sub: rgba(244, 241, 255, 0.7);
+            --surface: #1f1c1a;
+            --surface-strong: #1b1917;
+            --border-weak: rgba(255, 255, 255, 0.08);
+            --bg: #1b1917;
         }
 
         .card {
-            border: 1px solid rgba(26, 26, 26, 0.06);
-            background: rgba(250, 249, 246, 0.9);
+            border: 1px solid var(--card-border);
+            background: var(--card-bg);
             backdrop-filter: blur(12px);
         }
 
@@ -92,6 +131,159 @@
             box-shadow: 0 18px 40px rgba(0, 0, 0, 0.08);
         }
 
+        body[data-theme="dark"] .shadow-soft {
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+        }
+
+        /* Notion color helpers */
+        .notion-color-default {
+            color: inherit;
+        }
+
+        .notion-color-gray {
+            color: #9b9a97;
+        }
+
+        .notion-color-brown {
+            color: #64473a;
+        }
+
+        .notion-color-orange {
+            color: #d9730d;
+        }
+
+        .notion-color-yellow {
+            color: #e0a30b;
+        }
+
+        .notion-color-green {
+            color: #0f7b6c;
+        }
+
+        .notion-color-blue {
+            color: #0b6ae6;
+        }
+
+        .notion-color-purple {
+            color: #6940a5;
+        }
+
+        .notion-color-pink {
+            color: #ad1a72;
+        }
+
+        .notion-color-red {
+            color: #e03e3e;
+        }
+
+        .notion-color-gray-background {
+            background: #ebeced;
+        }
+
+        .notion-color-brown-background {
+            background: #ede4de;
+        }
+
+        .notion-color-orange-background {
+            background: #faebdd;
+        }
+
+        .notion-color-yellow-background {
+            background: #fbf3db;
+        }
+
+        .notion-color-green-background {
+            background: #ddebea;
+        }
+
+        .notion-color-blue-background {
+            background: #e7f3f8;
+        }
+
+        .notion-color-purple-background {
+            background: #f1ecf9;
+        }
+
+        .notion-color-pink-background {
+            background: #f6e0e9;
+        }
+
+        .notion-color-red-background {
+            background: #fdebec;
+        }
+
+        body[data-theme="dark"] .notion-color-gray {
+            color: #868686;
+        }
+
+        body[data-theme="dark"] .notion-color-brown {
+            color: #b0937c;
+        }
+
+        body[data-theme="dark"] .notion-color-orange {
+            color: #ffb45b;
+        }
+
+        body[data-theme="dark"] .notion-color-yellow {
+            color: #f7cd46;
+        }
+
+        body[data-theme="dark"] .notion-color-green {
+            color: #5bc0a7;
+        }
+
+        body[data-theme="dark"] .notion-color-blue {
+            color: #6ab7ff;
+        }
+
+        body[data-theme="dark"] .notion-color-purple {
+            color: #b18cff;
+        }
+
+        body[data-theme="dark"] .notion-color-pink {
+            color: #ff8fb1;
+        }
+
+        body[data-theme="dark"] .notion-color-red {
+            color: #ff7b73;
+        }
+
+        body[data-theme="dark"] .notion-color-gray-background {
+            background: #2f3134;
+        }
+
+        body[data-theme="dark"] .notion-color-brown-background {
+            background: #352922;
+        }
+
+        body[data-theme="dark"] .notion-color-orange-background {
+            background: #422a15;
+        }
+
+        body[data-theme="dark"] .notion-color-yellow-background {
+            background: #443716;
+        }
+
+        body[data-theme="dark"] .notion-color-green-background {
+            background: #183a33;
+        }
+
+        body[data-theme="dark"] .notion-color-blue-background {
+            background: #152f4d;
+        }
+
+        body[data-theme="dark"] .notion-color-purple-background {
+            background: #2b2340;
+        }
+
+        body[data-theme="dark"] .notion-color-pink-background {
+            background: #3b2431;
+        }
+
+        body[data-theme="dark"] .notion-color-red-background {
+            background: #442022;
+        }
+
         .cloze-blank {
             padding: 2px 6px;
             border-bottom: 1px dashed #917FB3;
@@ -107,6 +299,80 @@
         .scroll-minimal::-webkit-scrollbar-thumb {
             background: rgba(73, 73, 73, 0.25);
             border-radius: 10px;
+        }
+
+        /* swipe hint badges */
+        .swipe-hints {
+            pointer-events: none;
+        }
+
+        .swipe-hints span {
+            opacity: 0;
+            transition: opacity 0.15s ease, transform 0.15s ease;
+        }
+
+        .swipe-hints .hint-active {
+            opacity: 0.8;
+            transform: translateY(-2px);
+        }
+
+        /* theme utility overrides so light/dark stay consistent */
+        .bg-white-linen {
+            background-color: var(--surface) !important;
+        }
+
+        .bg-oatmeal {
+            background-color: var(--surface-strong) !important;
+        }
+
+        .bg-oatmeal\/60 {
+            background-color: color-mix(in srgb, var(--surface-strong) 70%, transparent) !important;
+        }
+
+        .bg-oatmeal/60 {
+            background-color: color-mix(in srgb, var(--surface-strong) 70%, transparent) !important;
+        }
+
+        .border-oatmeal-dark,
+        .border-oatmeal-dark\/60,
+        .border-oatmeal-dark\/70 {
+            border-color: var(--card-border) !important;
+        }
+
+        .text-earth-metal,
+        .text-earth-metal\/70,
+        .text-earth-metal\/60 {
+            color: var(--text-sub) !important;
+        }
+
+        .text-charcoal {
+            color: var(--text-main) !important;
+        }
+
+        /* compact icon toggles */
+        .pill-toggle {
+            border: 1px solid var(--card-border);
+            background: var(--surface);
+        }
+
+        .pill-toggle button {
+            color: var(--text-sub);
+        }
+
+        .pill-toggle button.active {
+            background: var(--dull-purple);
+            color: #fff;
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+        }
+
+        .font-swatch-serif {
+            font-family: 'Fraunces', serif !important;
+            letter-spacing: 0.01em;
+        }
+
+        .font-swatch-mono {
+            font-family: 'JetBrains Mono', monospace !important;
+            letter-spacing: 0.01em;
         }
     </style>
 </head>
@@ -127,45 +393,82 @@
                 <div id="connectionBadge"
                     class="px-3 py-1 rounded-full pill text-xs bg-oatmeal border border-oatmeal-dark text-earth-metal">
                     Offline ready</div>
-                <button id="openSettings"
-                    class="px-3 py-1.5 text-sm rounded-full bg-white-linen border border-oatmeal-dark hover:border-dull-purple transition-all flex items-center gap-2">
-                    <i data-lucide="settings" class="w-4 h-4"></i>
-                    Settings
-                </button>
+                <div class="flex items-center gap-2 pill-toggle rounded-full px-2 py-1">
+                    <button class="p-1 rounded-full theme-btn" data-theme="light" data-tip="Light theme"><i
+                            data-lucide="sun" class="w-4 h-4"></i></button>
+                    <button class="p-1 rounded-full theme-btn" data-theme="dark" data-tip="Dark theme"><i
+                            data-lucide="moon" class="w-4 h-4"></i></button>
+                    <button class="p-1 rounded-full theme-btn" data-theme="system" data-tip="System theme"><i
+                            data-lucide="laptop" class="w-4 h-4"></i></button>
+                </div>
+                <div class="flex items-center gap-2 pill-toggle rounded-full px-2 py-1">
+                    <button class="px-2 py-1 rounded-full font-btn text-xs" data-font="serif"
+                        data-tip="Serif font (Playfair/Manrope)">
+                        <span class="font-swatch-serif inline-block">Aa</span>
+                    </button>
+                    <button class="px-2 py-1 rounded-full font-btn text-xs" data-font="mono"
+                        data-tip="Monospace (Plex Mono)">
+                        <span class="font-swatch-mono inline-block">Aa</span>
+                    </button>
+                </div>
+                <div class="flex items-center gap-2 pill-toggle rounded-full px-2 py-1" data-tip="Anki import/export">
+                    <span class="text-[11px] text-[color:var(--text-sub)]">Anki</span>
+                    <button id="exportAnkiBtn" class="p-1 rounded-full">
+                        <i data-lucide="download" class="w-4 h-4"></i>
+                    </button>
+                    <label class="p-1 rounded-full cursor-pointer">
+                        <i data-lucide="upload-cloud" class="w-4 h-4"></i>
+                        <input aria-label="Import .apkg" id="ankiImportInput" type="file" accept=".apkg,.json"
+                            class="hidden">
+                    </label>
+                </div>
                 <button id="syncNowBtn"
-                    class="px-3 py-1.5 text-sm rounded-full bg-dull-purple text-white hover:bg-[#7d6aa1] transition-all flex items-center gap-2">
+                    class="p-2 rounded-full bg-dull-purple text-white hover:bg-[#7d6aa1] transition-all flex items-center gap-1"
+                    data-tip="Sync now">
                     <i data-lucide="refresh-ccw" class="w-4 h-4"></i>
-                    Sync now
                 </button>
-                <button id="exportAnkiBtn"
-                    class="px-3 py-1.5 text-sm rounded-full bg-white-linen border border-oatmeal-dark hover:border-dull-purple transition-all flex items-center gap-2">
-                    <i data-lucide="download" class="w-4 h-4"></i>
-                    Export .apkg
+                <button id="openSettings"
+                    class="p-2 rounded-full bg-white-linen border border-oatmeal-dark hover:border-dull-purple transition-all flex items-center gap-1"
+                    data-tip="Settings">
+                    <i data-lucide="settings" class="w-4 h-4"></i>
                 </button>
-                <label
-                    class="px-3 py-1.5 text-sm rounded-full bg-white-linen border border-oatmeal-dark hover:border-muted-pink transition-all flex items-center gap-2 cursor-pointer">
-                    <i data-lucide="upload-cloud" class="w-4 h-4"></i>
-                    Import .apkg
-                    <input id="ankiImportInput" type="file" accept=".apkg,.json" class="hidden">
-                </label>
             </div>
         </header>
 
         <main class="px-5 sm:px-10 pb-10 space-y-6">
             <div id="lockedOverlay"
-                class="card rounded-2xl p-6 shadow-soft flex flex-col gap-4 md:flex-row md:items-center md:justify-between"
-                style="display:none;">
-                <div class="flex items-start gap-3">
-                    <i data-lucide="lock" class="w-5 h-5 mt-0.5 text-dull-purple"></i>
-                    <div class="space-y-1">
-                        <p class="font-display text-lg text-charcoal leading-tight">Connect Notion to start</p>
-                        <p class="text-sm text-earth-metal/70 leading-snug max-w-xl">Add Worker + token, sign in with
-                            Notion, and pick Decks/Cards sources.</p>
+                class="rounded-2xl p-6 bg-[color:var(--surface-strong)] border border-[color:var(--card-border)] flex flex-col gap-5 max-w-3xl mx-auto mt-6 text-center hidden">
+                <div class="space-y-3">
+                    <p class="font-display text-xl text-charcoal leading-tight">Connect and start studying</p>
+                    <p class="text-sm text-earth-metal/70 leading-relaxed">
+                        Keep decks and cards in Notion, import/export Anki, and get AI judging on your answers. Set your
+                        theme, connect once, and go offline when you need.
+                    </p>
+                </div>
+                <div class="grid md:grid-cols-3 gap-3 text-sm text-left">
+                    <div
+                        class="rounded-xl bg-[color:var(--surface)] border border-[color:var(--card-border)] p-3 space-y-1">
+                        <div class="flex items-center gap-2 text-dull-purple font-semibold"><i data-lucide="link"
+                                class="w-4 h-4"></i>Connect</div>
+                        <p class="text-earth-metal/70">Add Worker URL + token, verify, then sign in with Notion or paste
+                            a secret.</p>
+                    </div>
+                    <div
+                        class="rounded-xl bg-[color:var(--surface)] border border-[color:var(--card-border)] p-3 space-y-1">
+                        <div class="flex items-center gap-2 text-dull-purple font-semibold"><i data-lucide="database"
+                                class="w-4 h-4"></i>Sources</div>
+                        <p class="text-earth-metal/70">Choose your Decks and Cards databases for sync.</p>
+                    </div>
+                    <div
+                        class="rounded-xl bg-[color:var(--surface)] border border-[color:var(--card-border)] p-3 space-y-1">
+                        <div class="flex items-center gap-2 text-dull-purple font-semibold"><i data-lucide="wand-2"
+                                class="w-4 h-4"></i>Study</div>
+                        <p class="text-earth-metal/70">Review with AI judge, spaced repetition, Anki import/export.</p>
                     </div>
                 </div>
-                <div class="flex gap-2 mt-1 md:mt-0 md:ml-6 flex-shrink-0">
+                <div class="flex justify-center">
                     <button id="lockedOpenSettings"
-                        class="px-4 py-2.5 rounded-xl bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex items-center gap-2 whitespace-nowrap">
+                        class="px-5 py-3 rounded-xl bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex items-center gap-2 whitespace-nowrap shadow-soft">
                         <i data-lucide="settings" class="w-4 h-4"></i><span>Open settings</span>
                     </button>
                 </div>
@@ -173,7 +476,7 @@
 
             <section id="mainContent" class="space-y-6">
                 <section class="grid lg:grid-cols-3 gap-4 min-w-0">
-                    <article class="card rounded-2xl p-5 shadow-soft">
+                    <article class="card rounded-2xl p-5 shadow-soft text-[color:var(--text-main)]">
                         <div class="flex items-center justify-between">
                             <h2 class="font-display text-lg text-charcoal">Study filters</h2>
                             <button id="resetFilters" class="text-xs text-dull-purple hover:underline">Reset</button>
@@ -214,7 +517,7 @@
 
                 <section class="grid xl:grid-cols-3 gap-6 min-w-0">
                     <div class="xl:col-span-2 space-y-6">
-                        <article class="card rounded-2xl p-5 shadow-soft">
+                        <article class="card rounded-2xl p-5 shadow-soft text-[color:var(--text-main)]">
                             <div class="flex items-center justify-between">
                                 <div>
                                     <h2 class="font-display text-lg text-charcoal">Decks</h2>
@@ -230,7 +533,7 @@
                             <div id="deckGrid" class="grid md:grid-cols-2 xl:grid-cols-3 gap-3 mt-4"></div>
                         </article>
 
-                        <article class="card rounded-2xl p-5 shadow-soft">
+                        <article class="card rounded-2xl p-5 shadow-soft text-[color:var(--text-main)]">
                             <div class="flex items-center justify-between">
                                 <div>
                                     <h2 class="font-display text-lg text-charcoal">Cards in deck</h2>
@@ -262,7 +565,7 @@
                     </div>
 
                     <div class="space-y-6">
-                        <article class="card rounded-2xl p-5 shadow-soft">
+                        <article class="card rounded-2xl p-5 shadow-soft text-[color:var(--text-main)]">
                             <div class="flex items-center justify-between">
                                 <h2 class="font-display text-lg text-charcoal">Study session</h2>
                                 <div class="flex items-center gap-2 text-xs">
@@ -275,23 +578,33 @@
                                         class="text-xs text-dull-purple hover:underline">Reverse</button>
                                 </div>
                             </div>
-                            <div class="mt-3 p-4 rounded-xl bg-oatmeal/60 border border-oatmeal-dark/60 space-y-3">
-                                <div class="flex items-center justify-between text-xs text-earth-metal/70">
+                            <div
+                                class="mt-3 p-4 rounded-xl bg-[color:var(--surface-strong)] border border-[color:var(--card-border)] space-y-3">
+                                <div class="flex items-center justify-between text-xs text-[color:var(--text-sub)]">
                                     <span id="studyDeckLabel">Choose a deck</span>
                                     <span id="algorithmLabel"
-                                        class="px-2 py-1 rounded-full bg-white-linen border border-oatmeal-dark/70 text-earth-metal">—</span>
+                                        class="px-2 py-1 rounded-full bg-[color:var(--surface)] border border-[color:var(--card-border)] text-[color:var(--text-main)]">—</span>
                                 </div>
-                                <div id="cardFront" class="min-h-[120px] leading-relaxed text-charcoal"></div>
+                                <div id="cardFront"
+                                    class="min-h-[120px] leading-relaxed text-[color:var(--text-main)] max-h-[45vh] overflow-y-auto pr-1 scroll-minimal">
+                                </div>
                                 <div class="space-y-2">
                                     <button id="revealBtn"
                                         class="px-3 py-2 w-full rounded-xl bg-charcoal text-white text-sm hover:bg-earth-metal">Reveal</button>
+                                    <div
+                                        class="grid grid-cols-4 gap-1 text-[11px] text-[color:var(--text-sub)] swipe-hints">
+                                        <span id="hintUp" class="text-center">↑ Easy</span>
+                                        <span id="hintLeft" class="text-center">← Hard</span>
+                                        <span id="hintRight" class="text-center">→ Good</span>
+                                        <span id="hintDown" class="text-center">↓ Again</span>
+                                    </div>
                                     <div id="aiControls" class="hidden space-y-2">
                                         <textarea id="aiAnswer" rows="3"
                                             placeholder="Type your answer for AI to judge..."
-                                            class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2 text-sm"></textarea>
+                                            class="w-full rounded-xl border border-[color:var(--card-border)] bg-[color:var(--surface)] px-3 py-2 text-sm"></textarea>
                                         <div class="flex gap-2">
                                             <button id="aiRecord"
-                                                class="px-3 py-2 rounded-xl bg-white-linen border border-oatmeal-dark/70 text-earth-metal text-sm flex-1">🎙️
+                                                class="px-3 py-2 rounded-xl bg-[color:var(--surface)] border border-[color:var(--card-border)] text-[color:var(--text-main)] text-sm flex-1">🎙️
                                                 Record</button>
                                             <button id="aiSubmit"
                                                 class="px-3 py-2 rounded-xl bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex-1">Send
@@ -302,7 +615,8 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div id="cardBack" class="min-h-[120px] leading-relaxed text-earth-metal/80 hidden">
+                                <div id="cardBack"
+                                    class="min-h-[120px] leading-relaxed text-[color:var(--text-sub)] hidden max-h-[45vh] overflow-y-auto pr-1 scroll-minimal">
                                 </div>
                                 <div class="grid grid-cols-4 gap-2">
                                     <button data-rate="again"
@@ -321,7 +635,7 @@
                             </div>
                         </article>
 
-                        <article class="card rounded-2xl p-5 shadow-soft">
+                        <article class="card rounded-2xl p-5 shadow-soft text-[color:var(--text-main)]">
                             <div class="flex items-center justify-between">
                                 <h2 class="font-display text-lg text-charcoal">Card notes</h2>
                                 <button id="copyMarkdown"
@@ -330,14 +644,19 @@
                                 </button>
                             </div>
                             <textarea id="notesArea" rows="6" placeholder="Markdown notes that autosave locally..."
-                                class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2 text-sm mt-3"></textarea>
-                            <div class="mt-2 text-xs text-earth-metal/60">
+                                class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2 text-sm mt-3 max-h-60 overflow-y-auto"></textarea>
+                            <div class="mt-2 text-xs text-earth-metal/60 flex justify-between items-center">
                                 <span id="noteStatus">Autosaves offline. Not pushed to Notion; meant for LLM
                                     copy.</span>
+                                <span class="text-earth-metal/50">Scroll supported</span>
+                            </div>
+                            <div class="mt-3 text-xs text-earth-metal/70">Preview</div>
+                            <div id="notesPreview"
+                                class="rounded-xl border border-oatmeal-dark/60 bg-white-linen px-3 py-2 text-sm max-h-60 overflow-y-auto">
                             </div>
                         </article>
 
-                        <article class="card rounded-2xl p-5 shadow-soft">
+                        <article class="card rounded-2xl p-5 shadow-soft text-[color:var(--text-main)]">
                             <div class="flex items-center gap-2">
                                 <i data-lucide="filter" class="w-4 h-4 text-dull-purple"></i>
                                 <h3 class="font-display text-lg text-charcoal">Session subsets</h3>
@@ -362,7 +681,11 @@
     </div>
 
     <div id="toast"
-        class="fixed bottom-6 right-6 px-4 py-3 rounded-xl bg-charcoal text-white text-sm shadow-soft hidden"></div>
+        class="fixed z-[110] bottom-6 right-6 px-4 py-3 rounded-xl bg-charcoal text-white text-sm shadow-soft hidden">
+    </div>
+    <div id="tooltip"
+        class="fixed z-[120] px-2.5 py-1.5 rounded-lg text-xs bg-charcoal text-white shadow-soft pointer-events-none hidden">
+    </div>
 
     <div id="confirmModal" class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4">
         <div class="card rounded-2xl p-5 w-full max-w-sm shadow-soft">
@@ -386,6 +709,17 @@
             </div>
             <div class="grid md:grid-cols-2 gap-6 text-sm">
                 <div class="space-y-4">
+                    <div class="rounded-xl border border-oatmeal-dark/60 p-3 bg-white-linen">
+                        <div class="flex items-center justify-between">
+                            <p class="font-semibold text-charcoal">Worker proxy</p>
+                            <button id="openWorkerHelp"
+                                class="px-3 py-1.5 rounded-full bg-oatmeal text-earth-metal text-xs border border-oatmeal-dark/70 flex items-center gap-2">
+                                <i data-lucide="code" class="w-4 h-4"></i> Worker code
+                            </button>
+                        </div>
+                        <p class="text-xs text-earth-metal/70 mt-1">Add Cloudflare Worker URL even if you plan to sign
+                            in with Notion.</p>
+                    </div>
                     <div>
                         <label class="text-xs text-earth-metal/70">Cloudflare Worker URL</label>
                         <input id="settingWorkerUrl" type="text" placeholder="https://your-proxy.workers.dev"
@@ -396,34 +730,30 @@
                         <input id="settingProxyToken" type="text" placeholder="ALL_CORS_PROXY_MATCH_TOKEN"
                             class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2">
                     </div>
+                    <button id="verifyWorker"
+                        class="px-3 py-2 rounded-xl bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 w-full">Verify
+                        worker</button>
                     <div>
                         <label class="text-xs text-earth-metal/70">Notion token (secret alternative)</label>
                         <input id="settingAuthToken" type="password" placeholder="secret_..."
-                            class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2">
+                            class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed">
                     </div>
-                    <div class="flex gap-2">
-                        <button id="verifyWorker"
-                            class="px-3 py-2 rounded-xl bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 flex-1">Verify
-                            worker</button>
-                        <button id="verifyAuth"
-                            class="px-3 py-2 rounded-xl bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 flex-1">Verify
-                            token</button>
-                    </div>
+                    <button id="verifyAuth"
+                        class="px-3 py-2 rounded-xl bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 w-full disabled:opacity-60 disabled:cursor-not-allowed">Verify
+                        Notion token</button>
                     <button id="oauthBtn"
-                        class="w-full px-3 py-2 rounded-xl border border-dull-purple text-dull-purple text-sm hover:bg-oatmeal flex items-center gap-2 justify-center">
+                        class="w-full px-3 py-2 rounded-xl border border-dull-purple text-dull-purple text-sm hover:bg-oatmeal flex items-center gap-2 justify-center disabled:opacity-60 disabled:cursor-not-allowed">
                         <i data-lucide="log-in" class="w-4 h-4"></i>Sign in with Notion
                     </button>
-                    <div class="grid grid-cols-2 gap-2">
-                        <div>
-                            <label class="text-xs text-earth-metal/60">Decks source</label>
-                            <select id="deckSourceSelect"
-                                class="w-full rounded-xl border border-oatmeal-dark/60 bg-white-linen px-2 py-2 text-sm"></select>
-                        </div>
-                        <div>
-                            <label class="text-xs text-earth-metal/60">Cards source</label>
-                            <select id="cardSourceSelect"
-                                class="w-full rounded-xl border border-oatmeal-dark/60 bg-white-linen px-2 py-2 text-sm"></select>
-                        </div>
+                    <div>
+                        <label class="text-xs text-earth-metal/60">Decks source</label>
+                        <select id="deckSourceSelect"
+                            class="w-full rounded-xl border border-oatmeal-dark/60 bg-white-linen px-2 py-2 text-sm"></select>
+                    </div>
+                    <div>
+                        <label class="text-xs text-earth-metal/60">Cards source</label>
+                        <select id="cardSourceSelect"
+                            class="w-full rounded-xl border border-oatmeal-dark/60 bg-white-linen px-2 py-2 text-sm"></select>
                     </div>
                     <div class="flex gap-2 flex-wrap">
                         <button id="scanSources"
@@ -431,9 +761,6 @@
                             sources</button>
                         <button id="saveSettings"
                             class="px-3 py-2 rounded-xl bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex-1 min-w-[140px]">Save</button>
-                        <button id="resetApp"
-                            class="px-3 py-2 rounded-xl bg-white-linen text-earth-metal text-sm border border-oatmeal-dark/70 hover:border-muted-pink flex-1 min-w-[140px]">Reset
-                            (clear cache)</button>
                     </div>
                     <div class="w-full h-2 bg-oatmeal rounded-full overflow-hidden">
                         <div id="syncProgress" class="h-2 bg-dull-purple w-0 transition-all duration-500"></div>
@@ -510,10 +837,9 @@
                                 only runs if a key is set.</p>
                         </div>
                     </div>
-                    <button id="openWorkerHelp"
-                        class="w-full px-3 py-2 rounded-xl border border-oatmeal-dark text-earth-metal text-sm hover:bg-oatmeal flex items-center gap-2 justify-center">
-                        <i data-lucide="code" class="w-4 h-4"></i>Worker proxy code
-                    </button>
+                    <button id="resetApp"
+                        class="px-3 py-2 rounded-xl bg-white-linen text-earth-metal text-sm border border-oatmeal-dark/70 hover:border-muted-pink w-full">Reset
+                        (clear cache)</button>
                 </div>
             </div>
         </div>
@@ -733,6 +1059,55 @@ async function handleRequest(request, env) {
             setTimeout(() => t.classList.add('opacity-0'), 2500);
             setTimeout(() => t.classList.add('hidden'), 3000);
         };
+        const Tooltip = {
+            timer: null,
+            lastShown: null,
+            el: null,
+            ensure() { this.el = this.el || document.querySelector('#tooltip'); return this.el; },
+            show(target) {
+                const tip = target.dataset.tip;
+                if (!tip) return;
+                const node = this.ensure();
+                node.textContent = tip;
+                const rect = target.getBoundingClientRect();
+                const x = rect.left + rect.width / 2;
+                const y = rect.top - 8;
+                node.style.left = `${x}px`;
+                node.style.top = `${y}px`;
+                node.style.transform = 'translate(-50%, -100%)';
+                node.classList.remove('hidden');
+                this.lastShown = target;
+            },
+            hide() {
+                const node = this.ensure();
+                node.classList.add('hidden');
+                this.lastShown = null;
+            },
+            bind() {
+                document.addEventListener('mouseover', (e) => {
+                    const t = e.target.closest('[data-tip]');
+                    if (!t) return;
+                    if (this.lastShown) { this.show(t); return; }
+                    clearTimeout(this.timer);
+                    this.timer = setTimeout(() => this.show(t), 160);
+                });
+                document.addEventListener('mouseout', (e) => {
+                    if (!e.relatedTarget || !e.relatedTarget.closest('[data-tip]')) {
+                        clearTimeout(this.timer);
+                        this.hide();
+                    }
+                });
+                document.addEventListener('focusin', (e) => {
+                    const t = e.target.closest('[data-tip]');
+                    if (t) this.show(t);
+                });
+                document.addEventListener('focusout', () => this.hide());
+            }
+        };
+
+        const SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes background tick
+        const MIN_PULL_INTERVAL_MS = 3 * 60 * 1000; // pull at most every 3 minutes
+        const MIN_PUSH_INTERVAL_MS = 60 * 1000; // push at most every minute
 
         const Storage = {
             db: null,
@@ -787,7 +1162,7 @@ async function handleRequest(request, env) {
             },
             getSettings() {
                 const raw = localStorage.getItem(this.settingsKey);
-                return raw ? JSON.parse(raw) : { workerUrl: '', proxyToken: '', authToken: '', deckSource: '', cardSource: '', aiProvider: '', aiModel: '', aiKey: '' };
+                return raw ? JSON.parse(raw) : { workerUrl: '', proxyToken: '', authToken: '', deckSource: '', cardSource: '', aiProvider: '', aiModel: '', aiKey: '', themeMode: 'system', fontMode: 'serif' };
             },
             setSettings(newSettings) {
                 localStorage.setItem(this.settingsKey, JSON.stringify(newSettings));
@@ -836,12 +1211,19 @@ async function handleRequest(request, env) {
                 }
                 return results;
             },
-            async queryDatabase(dbId) {
+            async queryDatabase(dbId, since = null) {
                 const rows = [];
                 let cursor = null;
                 let hasMore = true;
                 while (hasMore) {
-                    const res = await API.request('POST', `/databases/${dbId}/query`, { start_cursor: cursor, page_size: 50 });
+                    const body = { start_cursor: cursor, page_size: 100 }; // Notion max page size
+                    if (since) {
+                        body.filter = {
+                            timestamp: 'last_edited_time',
+                            last_edited_time: { on_or_after: since }
+                        };
+                    }
+                    const res = await API.request('POST', `/databases/${dbId}/query`, body);
                     rows.push(...res.results);
                     hasMore = res.has_more;
                     cursor = res.next_cursor;
@@ -862,19 +1244,30 @@ async function handleRequest(request, env) {
         const SRS = {
             fsrs(card, rating) {
                 const now = new Date();
-                const diff = card.fsrs?.difficulty ?? 4;
-                const stab = card.fsrs?.stability ?? 1;
-                const retr = card.fsrs?.retrievability ?? 0.9;
-                const delta = { again: -0.8, hard: -0.3, good: 0.4, easy: 0.8 }[rating] ?? 0;
-                const difficulty = Math.max(1, Math.min(10, diff - delta));
-                const stability = Math.max(0.5, stab + Math.max(-0.5, delta * 2));
-                const retrievability = Math.max(0.1, Math.min(0.99, retr + delta * 0.05));
-                const intervalDays = Math.max(1, Math.round(stability * (retrievability + 0.5)));
+                const ratingName = rating;
+                const lastD = card.fsrs?.difficulty ?? initDifficulty('good');
+                const lastS = card.fsrs?.stability ?? initStability('good');
+                const lastReview = card.fsrs?.lastReview ? new Date(card.fsrs.lastReview) : null;
+                const isNew = !lastReview;
+                let newD, newS, retr;
+                if (isNew) {
+                    newD = initDifficulty(ratingName);
+                    newS = initStability(ratingName);
+                    retr = REQUEST_RETENTION;
+                } else {
+                    const elapsed = Math.max(0.01, (now - lastReview) / 86400000);
+                    const r = forgettingCurve(elapsed, lastS);
+                    newD = nextDifficulty(lastD, ratingName);
+                    if (ratingName === 'again') newS = nextForgetStability(lastD, lastS, r);
+                    else newS = nextRecallStability(newD, lastS, r, ratingName);
+                    retr = REQUEST_RETENTION;
+                }
+                const intervalDays = nextInterval(newS);
                 return {
-                    difficulty,
-                    stability,
-                    retrievability,
-                    lastRating: rating,
+                    difficulty: newD,
+                    stability: newS,
+                    retrievability: retr,
+                    lastRating: ratingName,
                     lastReview: now.toISOString(),
                     dueDate: new Date(now.getTime() + intervalDays * 86400000).toISOString()
                 };
@@ -915,6 +1308,105 @@ async function handleRequest(request, env) {
 
         const normalizeRating = (name) => name ? name.toLowerCase() : null;
         const displayRating = (name) => name ? name.charAt(0).toUpperCase() + name.slice(1).toLowerCase() : null;
+        const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
+        const hexToRgb = (hex) => {
+            const h = hex.replace('#', '');
+            if (h.length === 3) return { r: parseInt(h[0] + h[0], 16), g: parseInt(h[1] + h[1], 16), b: parseInt(h[2] + h[2], 16) };
+            return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) };
+        };
+        const rgbToHex = ({ r, g, b }) => '#' + [r, g, b].map(x => clamp(Math.round(x), 0, 255).toString(16).padStart(2, '0')).join('');
+        const mix = (c1, c2, t) => {
+            const a = hexToRgb(c1);
+            const b = hexToRgb(c2);
+            return rgbToHex({ r: a.r + (b.r - a.r) * t, g: a.g + (b.g - a.g) * t, b: a.b + (b.b - a.b) * t });
+        };
+        const adjustedDeckColor = (color, theme) => {
+            const base = color || '#917FB3';
+            if (theme === 'dark') return mix(base, '#000000', 0.55);
+            return mix(base, '#ffffff', 0.7);
+        };
+        const detectCardType = (name = '', back = '') => {
+            const text = `${name} ${back}`.toLowerCase();
+            const hasCloze = /\{\{c\d+::.+?\}\}/i.test(text);
+            if (hasCloze) return 'Cloze';
+            return 'Front-Back';
+        };
+        // FSRS constants (v4.11 defaults)
+        const fsrsW = [0.4, 0.6, 2.4, 5.8, 4.93, 0.94, 0.86, 0.01, 1.49, 0.14, 0.94, 2.18, 0.05, 0.34, 1.26, 0.29, 2.61];
+        const DECAY = -0.5;
+        const FACTOR = Math.pow(0.9, 1 / DECAY) - 1; // derived from requestRetention 0.9
+        const REQUEST_RETENTION = 0.9;
+        const MAX_INTERVAL = 36500;
+        const ratingsMap = { again: 1, hard: 2, good: 3, easy: 4 };
+        const clamp2 = (n) => +Number.isFinite(n) ? Math.max(0, Math.round(n * 100) / 100) : 0;
+        const constrainDifficulty = (d) => Math.min(Math.max(+d.toFixed(2), 1), 10);
+        const meanReversion = (init, current) => fsrsW[7] * init + (1 - fsrsW[7]) * current;
+        const initDifficulty = (ratingName) => {
+            const r = ratingsMap[ratingName] || 3;
+            return constrainDifficulty(fsrsW[4] - fsrsW[5] * (r - 3));
+        };
+        const initStability = (ratingName) => {
+            const r = ratingsMap[ratingName] || 3;
+            return +Math.max(fsrsW[r - 1], 0.1).toFixed(2);
+        };
+        const forgettingCurve = (elapsedDays, stability) => Math.pow(1 + FACTOR * elapsedDays / stability, DECAY);
+        const nextInterval = (stability) => {
+            const raw = stability / FACTOR * (Math.pow(REQUEST_RETENTION, 1 / DECAY) - 1);
+            const rounded = Math.min(Math.max(Math.round(raw), 1), MAX_INTERVAL);
+            return rounded;
+        };
+        const nextDifficulty = (d, ratingName) => {
+            const r = ratingsMap[ratingName] || 3;
+            const next_d = d - fsrsW[6] * (r - 3);
+            return constrainDifficulty(meanReversion(fsrsW[4], next_d));
+        };
+        const nextRecallStability = (d, s, r, ratingName) => {
+            const hardPenalty = ratingName === 'hard' ? fsrsW[15] : 1;
+            const easyBonus = ratingName === 'easy' ? fsrsW[16] : 1;
+            const val = s * (1 + Math.exp(fsrsW[8]) * (11 - d) * Math.pow(s, -fsrsW[9]) * (Math.exp((1 - r) * fsrsW[10]) - 1) * hardPenalty * easyBonus);
+            return clamp2(val);
+        };
+        const nextForgetStability = (d, s, r) => {
+            const val = Math.min(
+                fsrsW[11] * Math.pow(d, -fsrsW[12]) * (Math.pow(s + 1, fsrsW[13]) - 1) * Math.exp((1 - r) * fsrsW[14]),
+                s
+            );
+            return clamp2(val);
+        };
+        const toRichTextChunks = (text) => {
+            const str = (text || '').toString();
+            if (!str) return [];
+            const MAX_CHARS = 2000;
+            const MAX_ITEMS = 100;
+            const chunks = [];
+            for (let i = 0; i < str.length && chunks.length < MAX_ITEMS; i += MAX_CHARS) {
+                chunks.push({ text: { content: str.slice(i, i + MAX_CHARS) } });
+            }
+            return chunks;
+        };
+        const richToMarkdown = (arr = []) => {
+            return (arr || []).map(rt => {
+                if (!rt) return '';
+                const a = rt.annotations || {};
+                let s = '';
+                if (rt.type === 'equation' && rt.equation?.expression) {
+                    s = `<span class="notion-equation">${rt.equation.expression}</span>`;
+                } else {
+                    const t = rt.plain_text || '';
+                    if (!t) return '';
+                    if (rt.href) s = `[${t}](${rt.href})`; else s = t;
+                    if (a.code) s = '`' + s + '`';
+                    if (a.bold) s = '**' + s + '**';
+                    if (a.italic) s = '*' + s + '*';
+                    if (a.strikethrough) s = '~~' + s + '~~';
+                    if (a.underline) s = '__' + s + '__';
+                    if (a.color && a.color !== 'default') {
+                        s = `<span class="notion-color-${a.color.replace('_', '-')}">${s}</span>`;
+                    }
+                }
+                return s;
+            }).join('');
+        };
 
         const NotionMapper = {
             deckFrom(page) {
@@ -938,7 +1430,7 @@ async function handleRequest(request, env) {
             deckProps(deck) {
                 return {
                     'Deck Name': { title: [{ text: { content: deck.name } }] },
-                    'Deck Color': { rich_text: [{ text: { content: deck.color } }] },
+                    'Deck Color': { rich_text: deck.color ? [{ text: { content: deck.color } }] : [] },
                     'Default SRS Algorithm': { select: { name: deck.algorithm } },
                     'Daily Review Limit': { number: deck.reviewLimit },
                     'New Card Limit': { number: deck.newLimit },
@@ -951,12 +1443,12 @@ async function handleRequest(request, env) {
             cardFrom(page, decks) {
                 const p = page.properties || {};
                 const deckRel = p['Deck']?.relation?.[0]?.id || null;
-                const name = p['Name']?.title?.map(t => t.plain_text).join('') || 'Card';
-                const back = p['Back']?.rich_text?.map(t => t.plain_text).join('') || '';
+                const name = richToMarkdown(p['Name']?.title) || 'Card';
+                const back = richToMarkdown(p['Back']?.rich_text) || '';
                 const tags = p['Tags']?.multi_select?.map(t => t.name) || [];
                 const fsrs = {
-                    difficulty: p['Difficulty']?.number ?? 4,
-                    stability: p['Stability']?.number ?? 1,
+                    difficulty: p['Difficulty']?.number ?? initDifficulty('good'),
+                    stability: p['Stability']?.number ?? initStability('good'),
                     retrievability: p['Retrievability']?.number ?? 0.9,
                     lastRating: normalizeRating(p['Last Rating']?.select?.name) || null,
                     lastReview: p['Last Review']?.date?.start || null,
@@ -975,15 +1467,15 @@ async function handleRequest(request, env) {
                     deckId: deckRel,
                     name,
                     back,
-                    type: p['Card Type']?.select?.name || 'Front-Back',
+                    type: p['Card Type']?.select?.name || detectCardType(name, back),
                     tags,
-                    notes: p['Notes']?.rich_text?.map(t => t.plain_text).join('\n') || '',
+                    notes: richToMarkdown(p['Notes']?.rich_text) || '',
                     suspended: p['Suspended']?.checkbox || false,
                     leech: p['Leech']?.checkbox || false,
                     fsrs,
                     sm2,
                     leitner: { box: p['Interval / Box Level']?.number || 1, dueDate: p['Due Date']?.date?.start || null },
-                    syncId: p['Sync ID']?.rich_text?.[0]?.plain_text || page.id,
+                    syncId: page.id,
                     updatedInApp: p['Updated In-App']?.checkbox || false,
                     reviewHistory: JSON.parse(p['Review History']?.rich_text?.[0]?.plain_text || '[]'),
                     ankiGuid: p['Anki GUID']?.rich_text?.[0]?.plain_text || '',
@@ -1000,7 +1492,8 @@ async function handleRequest(request, env) {
                     'Card Type': { select: { name: card.type } },
                     'Deck': notionDeckId ? { relation: [{ id: notionDeckId }] } : { relation: [] },
                     'Tags': { multi_select: card.tags.map(t => ({ name: t })) },
-                    'Notes': { rich_text: card.notes ? [{ text: { content: card.notes } }] : [] },
+                    // Only chunk Notes and Review History; other fields are expected to stay short.
+                    'Notes': { rich_text: toRichTextChunks(card.notes) },
                     'Suspended': { checkbox: !!card.suspended },
                     'Leech': { checkbox: !!card.leech },
                     'Difficulty': { number: card.fsrs?.difficulty ?? 4 },
@@ -1011,9 +1504,8 @@ async function handleRequest(request, env) {
                     'Due Date': { date: card.fsrs?.dueDate ? { start: card.fsrs.dueDate } : null },
                     'Interval / Box Level': { number: card.leitner?.box ?? card.sm2?.interval ?? 1 },
                     'Ease Factor': { number: card.sm2?.easeFactor ?? 2.5 },
-                    'Sync ID': { rich_text: [{ text: { content: card.syncId } }] },
                     'Updated In-App': { checkbox: true },
-                    'Review History': { rich_text: [{ text: { content: JSON.stringify(card.reviewHistory || []) } }] },
+                    'Review History': { rich_text: toRichTextChunks(JSON.stringify(card.reviewHistory || [])) },
                     'Anki GUID': card.ankiGuid ? { rich_text: [{ text: { content: card.ankiGuid } }] } : { rich_text: [] },
                     'Anki Note Type': card.ankiNoteType ? { select: { name: card.ankiNoteType } } : { select: null },
                     'Anki Fields JSON': card.ankiFields ? { rich_text: [{ text: { content: card.ankiFields } }] } : { rich_text: [] },
@@ -1032,11 +1524,15 @@ async function handleRequest(request, env) {
                 filters: { again: false, hard: false, addedToday: false, stability: 25, tags: [], suspended: false, leech: false, manual: [] },
                 reverse: false,
                 lastSync: null,
+                lastPull: null,
+                lastPush: null,
                 settings: Storage.getSettings(),
                 sourcesCache: [],
                 workerVerified: false,
                 authVerified: false,
-                sourcesVerified: false
+                sourcesVerified: false,
+                autoSyncTimer: null,
+                syncing: false
             },
             async init() {
                 await Storage.init();
@@ -1047,6 +1543,14 @@ async function handleRequest(request, env) {
                 this.renderAll();
                 window.addEventListener('online', () => this.handleOnline());
                 window.addEventListener('offline', () => this.renderConnection());
+                this.applyTheme();
+                this.applyFontMode();
+                if (window.matchMedia) {
+                    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+                    mq.addEventListener('change', () => this.applyTheme());
+                }
+                Tooltip.bind();
+                this.startAutoSync();
             },
             captureOAuth() {
                 const hashParams = new URLSearchParams(location.hash.replace('#', '?'));
@@ -1068,6 +1572,10 @@ async function handleRequest(request, env) {
                 const meta = await Storage.getAll('meta');
                 const last = meta.find(m => m.key === 'lastSync');
                 if (last) this.state.lastSync = last.value;
+                const lp = meta.find(m => m.key === 'lastPull');
+                if (lp) this.state.lastPull = lp.value;
+                const lpush = meta.find(m => m.key === 'lastPush');
+                if (lpush) this.state.lastPush = lpush.value;
             },
             async seedIfEmpty() {
                 return;
@@ -1114,6 +1622,16 @@ async function handleRequest(request, env) {
             },
             bind() {
                 el('#syncNowBtn').onclick = () => this.syncNow();
+                document.querySelectorAll('.theme-btn').forEach(btn => btn.onclick = () => {
+                    this.state.settings.themeMode = btn.dataset.theme;
+                    Storage.setSettings(this.state.settings);
+                    this.applyTheme();
+                });
+                document.querySelectorAll('.font-btn').forEach(btn => btn.onclick = () => {
+                    this.state.settings.fontMode = btn.dataset.font;
+                    Storage.setSettings(this.state.settings);
+                    this.applyFontMode();
+                });
                 el('#newDeckBtn').onclick = () => this.openDeckModal();
                 el('#closeDeckModal').onclick = () => this.closeDeckModal();
                 el('#saveDeckBtn').onclick = () => this.saveDeckFromModal();
@@ -1138,6 +1656,7 @@ async function handleRequest(request, env) {
                 el('#filterLeech').onchange = (e) => { this.state.filters.leech = e.target.checked; this.renderCards(); };
                 el('#ankiImportInput').onchange = (e) => this.handleAnkiImport(e.target.files[0]);
                 el('#exportAnkiBtn').onclick = () => this.exportAnki();
+                this.attachSwipe();
                 document.addEventListener('click', (e) => {
                     if (e.target.dataset.deckId) this.selectDeck(e.target.dataset.deckId);
                     if (e.target.dataset.cardId) this.selectCard(e.target.dataset.cardId);
@@ -1147,7 +1666,7 @@ async function handleRequest(request, env) {
                 el('#saveSettings').onclick = () => this.saveSettings();
                 el('#verifyWorker').onclick = () => this.verifyWorker();
                 el('#verifyAuth').onclick = () => this.verifyAuth();
-                el('#oauthBtn').onclick = () => this.startOAuth();
+                el('#oauthBtn').onclick = () => { if (this.state.workerVerified) this.startOAuth(); else toast('Verify worker first'); };
                 el('#scanSources').onclick = () => this.scanSources();
                 el('#openWorkerHelp').onclick = () => this.openModal('workerHelpModal');
                 el('#closeWorkerHelp').onclick = () => this.closeModal('workerHelpModal');
@@ -1175,11 +1694,18 @@ async function handleRequest(request, env) {
                 this.renderStatus();
                 lucide.createIcons();
                 this.loadAISettings();
+                this.updateResetState();
             },
             renderGate() {
                 const ready = this.isReady();
                 el('#mainContent').style.display = ready ? 'block' : 'none';
-                el('#lockedOverlay').style.display = ready ? 'none' : 'block';
+                el('#lockedOverlay').classList.toggle('hidden', ready);
+                const oauth = el('#oauthBtn');
+                const verifyAuthBtn = el('#verifyAuth');
+                const tokenInput = el('#settingAuthToken');
+                if (oauth) oauth.disabled = !this.state.workerVerified;
+                if (verifyAuthBtn) verifyAuthBtn.disabled = !this.state.workerVerified;
+                if (tokenInput) tokenInput.disabled = !this.state.workerVerified;
             },
             renderConnection() {
                 const badge = el('#connectionBadge');
@@ -1194,20 +1720,21 @@ async function handleRequest(request, env) {
             },
             renderDecks() {
                 const grid = el('#deckGrid');
+                const theme = document.body.getAttribute('data-theme') || 'light';
                 grid.innerHTML = this.state.decks.map(d => `
-                    <article class="rounded-2xl border border-oatmeal-dark/70 p-3 bg-white-linen flex flex-col gap-2 hover:-translate-y-0.5 transition cursor-pointer" data-deck-id="${d.id}">
+                    <article class="rounded-2xl border border-[color:var(--card-border)] p-3 bg-[color:var(--surface)] text-[color:var(--text-main)] flex flex-col gap-2 hover:-translate-y-0.5 transition cursor-pointer" data-deck-id="${d.id}">
                         <div class="flex items-center justify-between">
                             <div class="flex items-center gap-2">
-                                <span class="w-3 h-3 rounded-full" style="background:${d.color}"></span>
-                                <p class="font-semibold text-charcoal">${d.name}</p>
+                                <span class="w-3 h-3 rounded-full" style="background:${adjustedDeckColor(d.color, theme)}"></span>
+                                <p class="font-semibold text-[color:var(--text-main)]">${d.name}</p>
                             </div>
-                            <span class="text-[11px] px-2 py-1 rounded-full bg-oatmeal">${d.algorithm}</span>
+                            <span class="text-[11px] px-2 py-1 rounded-full bg-[color:var(--surface-strong)] text-[color:var(--text-main)] border border-[color:var(--card-border)]">${d.algorithm}</span>
                         </div>
-                        <div class="flex items-center gap-3 text-xs text-earth-metal/70">
+                        <div class="flex items-center gap-3 text-xs text-[color:var(--text-sub)]">
                             <span>${this.cardsForDeck(d.id).filter(c => this.isDue(c)).length} due</span>
                             <span>${this.cardsForDeck(d.id).length} cards</span>
                         </div>
-                        <div class="flex items-center gap-2 text-[11px] text-earth-metal/60">
+                        <div class="flex items-center gap-2 text-[11px] text-[color:var(--text-sub)]">
                             <i data-lucide="refresh-cw" class="w-3 h-3"></i>
                             <span>Reverse ${d.reverse ? 'on' : 'off'}</span>
                         </div>
@@ -1239,6 +1766,8 @@ async function handleRequest(request, env) {
                 const front = card ? this.renderCardFront(card, deck) : '<p class="text-earth-metal/70 text-sm">No card selected</p>';
                 el('#cardFront').innerHTML = front;
                 el('#cardBack').innerHTML = card ? marked.parse(card.back || '') : '';
+                this.renderMath(el('#cardFront'));
+                this.renderMath(el('#cardBack'));
                 el('#cardBack').classList.add('hidden');
                 if (deck && deck.reverse) el('#toggleReverse').classList.add('text-charcoal');
                 else el('#toggleReverse').classList.remove('text-charcoal');
@@ -1247,10 +1776,13 @@ async function handleRequest(request, env) {
                 this.renderFsrsMeta();
                 el('#aiAnswer').value = '';
                 el('#aiFeedback').innerHTML = '';
+                this.resetSwipeHints();
             },
             renderNotes() {
                 const notes = this.state.selectedCard?.notes ?? '';
                 el('#notesArea').value = notes;
+                el('#notesPreview').innerHTML = notes ? marked.parse(notes) : '<p class="text-earth-metal/60 text-sm">No notes yet.</p>';
+                this.renderMath(el('#notesPreview'));
             },
             renderFsrsMeta() {
                 const card = this.state.selectedCard;
@@ -1335,6 +1867,10 @@ async function handleRequest(request, env) {
                 card.type = el('#cardTypeInput').value;
                 card.name = el('#cardNameInput').value || 'Untitled';
                 card.back = el('#cardBackInput').value || '';
+                if (!this.state.editingCard) {
+                    const autoType = detectCardType(card.name, card.back);
+                    if (card.type === 'Front-Back' && autoType === 'Cloze') card.type = 'Cloze';
+                }
                 card.tags = el('#cardTagsInput').value.split(',').map(t => t.trim()).filter(Boolean);
                 card.suspended = el('#cardSuspendedInput').checked;
                 card.leech = el('#cardLeechInput').checked;
@@ -1359,8 +1895,13 @@ async function handleRequest(request, env) {
                 el('#syncProgress').style.width = '50%';
                 await this.pushQueue();
                 el('#syncProgress').style.width = '100%';
-                this.state.lastSync = new Date().toISOString();
-                await Storage.put('meta', { key: 'lastSync', value: this.state.lastSync });
+                const nowIso = new Date().toISOString();
+                this.state.lastPull = nowIso;
+                this.state.lastPush = nowIso;
+                this.state.lastSync = nowIso;
+                await Storage.put('meta', { key: 'lastPull', value: nowIso });
+                await Storage.put('meta', { key: 'lastPush', value: nowIso });
+                await Storage.put('meta', { key: 'lastSync', value: nowIso });
                 el('#snapshotStatus').textContent = 'Up to date';
                 setTimeout(() => el('#syncProgress').style.width = '0%', 700);
                 toast('Synced with Notion');
@@ -1368,16 +1909,32 @@ async function handleRequest(request, env) {
             async pullFromNotion() {
                 const { deckSource, cardSource } = this.state.settings;
                 if (!deckSource || !cardSource) return;
-                const decks = await API.queryDatabase(deckSource);
-                const cards = await API.queryDatabase(cardSource);
+                const since = this.state.lastPull;
+                const decks = await API.queryDatabase(deckSource, since);
+                const cards = await API.queryDatabase(cardSource, since);
                 const mappedDecks = decks.map(d => NotionMapper.deckFrom(d));
                 const mappedCards = cards.map(c => NotionMapper.cardFrom(c, mappedDecks));
-                this.state.decks = mappedDecks;
-                this.state.cards = mappedCards;
-                await Storage.wipeStore('decks');
-                await Storage.wipeStore('cards');
-                for (const d of mappedDecks) await Storage.put('decks', d);
-                for (const c of mappedCards) await Storage.put('cards', c);
+
+                if (!since) {
+                    await Storage.wipeStore('decks');
+                    await Storage.wipeStore('cards');
+                    this.state.decks = [];
+                    this.state.cards = [];
+                }
+
+                const upsertDeck = (deck) => {
+                    const idx = this.state.decks.findIndex(d => d.notionId === deck.notionId);
+                    if (idx >= 0) this.state.decks[idx] = { ...this.state.decks[idx], ...deck };
+                    else this.state.decks.push(deck);
+                };
+                const upsertCard = (card) => {
+                    const idx = this.state.cards.findIndex(c => c.notionId === card.notionId);
+                    if (idx >= 0) this.state.cards[idx] = { ...this.state.cards[idx], ...card };
+                    else this.state.cards.push(card);
+                };
+
+                for (const d of mappedDecks) { upsertDeck(d); await Storage.put('decks', d); }
+                for (const c of mappedCards) { upsertCard(c); await Storage.put('cards', c); }
                 this.renderAll();
             },
             async pushQueue() {
@@ -1405,6 +1962,7 @@ async function handleRequest(request, env) {
                             const res = await API.createPage(cardSource, props);
                             op.payload.notionId = res.id;
                             op.payload.id = op.payload.id || res.id;
+                            op.payload.syncId = res.id;
                             await Storage.put('cards', op.payload);
                         }
                     }
@@ -1415,9 +1973,45 @@ async function handleRequest(request, env) {
                 this.state.queue.push(op);
                 el('#queueCount').textContent = String(this.state.queue.length);
             },
+            startAutoSync() {
+                if (this.state.autoSyncTimer) clearInterval(this.state.autoSyncTimer);
+                this.state.autoSyncTimer = setInterval(() => this.autoSyncTick(), SYNC_INTERVAL_MS);
+                this.autoSyncTick(); // kick off once on load
+            },
+            async autoSyncTick() {
+                if (this.state.syncing) return;
+                if (!navigator.onLine) return;
+                if (!this.isReady()) return;
+                const now = Date.now();
+                const lastPullMs = this.state.lastPull ? new Date(this.state.lastPull).getTime() : 0;
+                const lastPushMs = this.state.lastPush ? new Date(this.state.lastPush).getTime() : 0;
+                const shouldPull = now - lastPullMs > MIN_PULL_INTERVAL_MS;
+                const shouldPush = this.state.queue.length > 0 && (now - lastPushMs > MIN_PUSH_INTERVAL_MS);
+                if (!shouldPull && !shouldPush) return;
+                this.state.syncing = true;
+                try {
+                    if (shouldPull) {
+                        await this.pullFromNotion();
+                        this.state.lastPull = new Date().toISOString();
+                        await Storage.put('meta', { key: 'lastPull', value: this.state.lastPull });
+                    }
+                    if (shouldPush) {
+                        await this.pushQueue();
+                        this.state.lastPush = new Date().toISOString();
+                        await Storage.put('meta', { key: 'lastPush', value: this.state.lastPush });
+                    }
+                    this.state.lastSync = new Date().toISOString();
+                    await Storage.put('meta', { key: 'lastSync', value: this.state.lastSync });
+                    this.renderConnection();
+                } catch (e) {
+                    console.error('Auto sync failed', e);
+                } finally {
+                    this.state.syncing = false;
+                }
+            },
             handleOnline() {
                 this.renderConnection();
-                if (this.state.queue.length) this.syncNow();
+                this.autoSyncTick();
             },
             selectDeck(id) {
                 const deck = this.deckById(id);
@@ -1524,6 +2118,7 @@ async function handleRequest(request, env) {
                 await Storage.put('cards', card);
                 this.queueOp({ type: 'card-upsert', payload: card });
                 el('#noteStatus').textContent = 'Saved offline';
+                el('#notesPreview').innerHTML = card.notes ? marked.parse(card.notes) : '<p class="text-earth-metal/60 text-sm">No notes yet.</p>';
             },
             async copyMarkdown() {
                 const card = this.state.selectedCard;
@@ -1731,6 +2326,13 @@ async function handleRequest(request, env) {
                 el('#queueCount').textContent = String(this.state.queue.length);
                 el('#lastSync').textContent = this.state.lastSync ? new Date(this.state.lastSync).toLocaleString() : '—';
             },
+            updateResetState() {
+                const btn = el('#resetApp');
+                const hasData = this.state.decks.length || this.state.cards.length || this.state.queue.length || this.state.lastSync;
+                btn.disabled = !hasData;
+                btn.classList.toggle('opacity-60', !hasData);
+                btn.classList.toggle('cursor-not-allowed', !hasData);
+            },
             openSettings() {
                 const s = this.state.settings;
                 el('#settingWorkerUrl').value = s.workerUrl;
@@ -1756,6 +2358,8 @@ async function handleRequest(request, env) {
                 if (key) this.state.settings.aiKey = key;
                 Storage.setSettings(this.state.settings);
                 this.renderStatus();
+                this.applyTheme();
+                this.applyFontMode();
                 this.renderGate();
                 this.closeSettings();
                 this.renderConnection();
@@ -1782,7 +2386,7 @@ async function handleRequest(request, env) {
                 }
             },
             async verifyAuth() {
-                if (!this.state.settings.workerUrl) return toast('Verify worker first');
+                if (!this.state.workerVerified) return toast('Verify worker first');
                 try {
                     await API.request('GET', '/users/me');
                     toast('Notion token valid');
@@ -1849,9 +2453,25 @@ async function handleRequest(request, env) {
                 const hasWorker = !!this.state.settings.workerUrl;
                 const hasAuth = !!this.state.settings.authToken;
                 const hasSources = !!(this.state.settings.deckSource && this.state.settings.cardSource);
-                el('#statusWorker').textContent = `Worker: ${hasWorker && this.state.workerVerified ? 'verified' : 'missing'}`;
-                el('#statusAuth').textContent = `Auth: ${hasAuth && this.state.authVerified ? 'verified' : 'missing'}`;
+                el('#statusWorker').textContent = `Worker: ${this.state.workerVerified ? 'verified' : 'missing'}`;
+                el('#statusAuth').textContent = `Auth: ${this.state.workerVerified ? (this.state.authVerified ? 'verified' : 'blocked (verify worker)') : 'blocked (verify worker)'}`;
                 el('#statusSources').textContent = `Sources: ${hasSources && this.state.sourcesVerified ? 'verified' : 'missing'}`;
+            },
+            applyTheme() {
+                const mode = this.state.settings.themeMode || 'system';
+                const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                const theme = mode === 'system' ? (systemPrefersDark ? 'dark' : 'light') : mode;
+                document.body.setAttribute('data-theme', theme);
+                document.querySelectorAll('.theme-btn').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.theme === mode);
+                });
+            },
+            applyFontMode() {
+                const mode = this.state.settings.fontMode || 'serif';
+                document.body.setAttribute('data-font', mode === 'mono' ? 'mono' : 'serif');
+                document.querySelectorAll('.font-btn').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.font === mode);
+                });
             },
             isReady() {
                 const hasWorker = !!this.state.settings.workerUrl;
@@ -1867,6 +2487,10 @@ async function handleRequest(request, env) {
                 this.state.aiProvider = s.aiProvider || '';
                 this.state.aiModel = s.aiModel || '';
                 this.state.aiKey = s.aiKey || '';
+                if (s.themeMode) this.state.settings.themeMode = s.themeMode;
+                if (s.fontMode) this.state.settings.fontMode = s.fontMode;
+                this.applyTheme();
+                this.applyFontMode();
             },
             async submitToAI() {
                 if (!this.state.selectedCard) return;
@@ -1925,6 +2549,50 @@ async function handleRequest(request, env) {
                 if (!resp.ok) throw new Error('OpenAI returned ' + resp.status);
                 const json = await resp.json();
                 return json.choices?.[0]?.message?.content || 'No response';
+            },
+            attachSwipe() {
+                const area = el('#cardFront');
+                if (!area || typeof Hammer === 'undefined') return;
+                area.style.touchAction = 'none';
+                const mc = new Hammer.Manager(area);
+                mc.add(new Hammer.Pan({ direction: Hammer.DIRECTION_ALL, threshold: 10 }));
+                mc.on('panmove', (e) => this.updateSwipeHints(e.deltaX, e.deltaY));
+                mc.on('panend pancancel', (e) => {
+                    const dx = e.deltaX;
+                    const dy = e.deltaY;
+                    this.resetSwipeHints();
+                    const threshold = 50;
+                    if (Math.abs(dx) < threshold && Math.abs(dy) < threshold) return;
+                    if (Math.abs(dx) > Math.abs(dy)) {
+                        if (dx > 0) this.rate('good'); else this.rate('hard');
+                    } else {
+                        if (dy < 0) this.rate('easy'); else this.rate('again');
+                    }
+                });
+            },
+            updateSwipeHints(dx, dy) {
+                const absX = Math.abs(dx), absY = Math.abs(dy);
+                this.resetSwipeHints();
+                if (absX < 15 && absY < 15) return;
+                if (absX > absY) {
+                    if (dx > 0) el('#hintRight')?.classList.add('hint-active');
+                    else el('#hintLeft')?.classList.add('hint-active');
+                } else {
+                    if (dy < 0) el('#hintUp')?.classList.add('hint-active');
+                    else el('#hintDown')?.classList.add('hint-active');
+                }
+            },
+            resetSwipeHints() {
+                ['hintUp', 'hintDown', 'hintLeft', 'hintRight'].forEach(id => el('#' + id)?.classList.remove('hint-active'));
+            },
+            renderMath(container) {
+                if (!container || typeof katex === 'undefined') return;
+                container.querySelectorAll('.notion-equation').forEach(span => {
+                    try {
+                        const expr = span.textContent || '';
+                        span.innerHTML = katex.renderToString(expr, { throwOnError: false });
+                    } catch (e) { console.error(e); }
+                });
             },
             recordAnswer() {
                 if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
