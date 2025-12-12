@@ -1204,7 +1204,9 @@ async function handleRequest(request, env) {
                 let cursor = null;
                 let hasMore = true;
                 while (hasMore) {
-                    const res = await API.request('POST', '/search', { filter: { value: 'database', property: 'object' }, start_cursor: cursor, page_size: 50 });
+                    const body = { filter: { value: 'database', property: 'object' }, page_size: 50 };
+                    if (cursor) body.start_cursor = cursor;
+                    const res = await API.request('POST', '/search', body);
                     results.push(...res.results);
                     hasMore = res.has_more;
                     cursor = res.next_cursor;
@@ -1216,7 +1218,8 @@ async function handleRequest(request, env) {
                 let cursor = null;
                 let hasMore = true;
                 while (hasMore) {
-                    const body = { start_cursor: cursor, page_size: 100 }; // Notion max page size
+                    const body = { page_size: 100 }; // Notion max page size
+                    if (cursor) body.start_cursor = cursor;
                     if (since) {
                         body.filter = {
                             timestamp: 'last_edited_time',
@@ -1229,6 +1232,9 @@ async function handleRequest(request, env) {
                     cursor = res.next_cursor;
                 }
                 return rows;
+            },
+            async getDatabase(dbId) {
+                return API.request('GET', `/databases/${dbId}`);
             },
             async createPage(dbId, properties) {
                 return API.request('POST', '/pages', { parent: { database_id: dbId }, properties });
@@ -1532,7 +1538,8 @@ async function handleRequest(request, env) {
                 authVerified: Storage.getSettings().authVerified || false,
                 sourcesVerified: false,
                 autoSyncTimer: null,
-                syncing: false
+                syncing: false,
+                autoScanPending: false
             },
             async init() {
                 await Storage.init();
@@ -1564,6 +1571,7 @@ async function handleRequest(request, env) {
                     history.replaceState({}, document.title, location.pathname);
                     this.pendingAuthVerify = true;
                     this.openSettings();
+                    this.state.autoScanPending = true;
                 }
             },
             async loadFromDB() {
@@ -1707,6 +1715,7 @@ async function handleRequest(request, env) {
                 if (oauth) oauth.disabled = !this.state.workerVerified;
                 if (verifyAuthBtn) verifyAuthBtn.disabled = !this.state.workerVerified;
                 if (tokenInput) tokenInput.disabled = !this.state.workerVerified;
+                this.updateSettingsButtons();
             },
             renderConnection() {
                 const badge = el('#connectionBadge');
@@ -2388,6 +2397,11 @@ async function handleRequest(request, env) {
                             await this.verifyAuth();
                             this.pendingAuthVerify = false;
                         }
+                        if (this.state.workerVerified && this.state.authVerified && this.state.autoScanPending) {
+                            await this.scanSources();
+                            this.state.autoScanPending = false;
+                            this.openSettings();
+                        }
                     } else throw new Error(res.status);
                 } catch (e) {
                     toast('Worker check failed');
@@ -2406,6 +2420,11 @@ async function handleRequest(request, env) {
                     Storage.setSettings(this.state.settings);
                     this.renderStatus();
                     this.renderGate();
+                    if (this.state.workerVerified && this.state.authVerified && this.state.autoScanPending) {
+                        await this.scanSources();
+                        this.state.autoScanPending = false;
+                        this.openSettings();
+                    }
                 } catch (e) {
                     toast(e.message);
                     this.state.authVerified = false;
@@ -2422,20 +2441,35 @@ async function handleRequest(request, env) {
                 if (!this.state.workerVerified || !this.state.authVerified) return toast('Verify worker and auth first');
                 try {
                     const dbs = await API.listDatabases();
-                    this.state.sourcesCache = dbs;
-                    this.populateSourceSelects();
-                    toast('Sources loaded');
-                    this.state.sourcesVerified = true;
+                    const deckOptions = [];
+                    const cardOptions = [];
+                    for (const d of dbs) {
+                        const id = d.id;
+                        const title = d.title?.[0]?.plain_text || id;
+                        if (await this.validateDb(id, 'deck')) deckOptions.push({ id, title });
+                        if (await this.validateDb(id, 'card')) cardOptions.push({ id, title });
+                    }
+                    this.state.sourcesCache = { deckOptions, cardOptions };
+                    el('#deckSourceSelect').innerHTML = `<option value="">Select deck source</option>` + deckOptions.map(o => `<option value="${o.id}">${o.title}</option>`).join('');
+                    el('#cardSourceSelect').innerHTML = `<option value="">Select card source</option>` + cardOptions.map(o => `<option value="${o.id}">${o.title}</option>`).join('');
+                    if (deckOptions.length === 1) this.state.settings.deckSource = deckOptions[0].id;
+                    if (cardOptions.length === 1) this.state.settings.cardSource = cardOptions[0].id;
+                    Storage.setSettings(this.state.settings);
+                    if (this.state.settings.deckSource) el('#deckSourceSelect').value = this.state.settings.deckSource;
+                    if (this.state.settings.cardSource) el('#cardSourceSelect').value = this.state.settings.cardSource;
+                    this.state.sourcesVerified = !!(this.state.settings.deckSource && this.state.settings.cardSource);
                     this.renderStatus();
                     this.renderGate();
+                    toast('Sources loaded');
                 } catch (e) {
                     toast(e.message);
                 }
             },
             populateSourceSelects() {
-                const options = this.state.sourcesCache.map(d => `<option value="${d.id}">${d.title?.[0]?.plain_text || d.id}</option>`).join('');
-                el('#deckSourceSelect').innerHTML = `<option value="">Select deck source</option>${options}`;
-                el('#cardSourceSelect').innerHTML = `<option value="">Select card source</option>${options}`;
+                const deckOptions = this.state.sourcesCache.deckOptions || [];
+                const cardOptions = this.state.sourcesCache.cardOptions || [];
+                el('#deckSourceSelect').innerHTML = `<option value="">Select deck source</option>` + deckOptions.map(o => `<option value="${o.id}">${o.title}</option>`).join('');
+                el('#cardSourceSelect').innerHTML = `<option value="">Select card source</option>` + cardOptions.map(o => `<option value="${o.id}">${o.title}</option>`).join('');
                 if (this.state.settings.deckSource) el('#deckSourceSelect').value = this.state.settings.deckSource;
                 if (this.state.settings.cardSource) el('#cardSourceSelect').value = this.state.settings.cardSource;
                 el('#deckSourceSelect').onchange = (e) => { this.state.settings.deckSource = e.target.value; Storage.setSettings(this.state.settings); this.state.sourcesVerified = !!(this.state.settings.deckSource && this.state.settings.cardSource); this.renderStatus(); this.renderGate(); };
@@ -2466,22 +2500,59 @@ async function handleRequest(request, env) {
                 location.reload();
             },
             renderStatus() {
-                const hasWorker = !!this.state.settings.workerUrl;
-                const hasAuth = !!this.state.settings.authToken;
+                const hasWorker = this.state.workerVerified;
+                const hasAuth = this.state.authVerified;
                 const hasSources = !!(this.state.settings.deckSource && this.state.settings.cardSource);
                 el('#statusWorker').textContent = `Worker: ${this.state.workerVerified ? 'verified' : 'missing'}`;
-                el('#statusAuth').textContent = `Auth: ${this.state.workerVerified ? (this.state.authVerified ? 'verified' : 'blocked (verify worker)') : 'blocked (verify worker)'}`;
+                el('#statusAuth').textContent = `Auth: ${hasAuth ? 'verified' : this.state.workerVerified ? 'missing' : 'blocked (verify worker)'}`;
                 el('#statusSources').textContent = `Sources: ${hasSources && this.state.sourcesVerified ? 'verified' : 'missing'}`;
                 this.updateSettingsButtons();
             },
+            async validateDb(dbId, type) {
+                try {
+                    const meta = await API.getDatabase(dbId);
+                    const props = meta?.properties || {};
+                    const has = (name, kind) => props[name]?.type === kind;
+                    if (type === 'deck') {
+                        return has('Deck Name', 'title')
+                            && has('Deck Color', 'rich_text')
+                            && has('Default SRS Algorithm', 'select')
+                            && has('Daily Review Limit', 'number')
+                            && has('New Card Limit', 'number')
+                            && has('Reverse Mode Enabled', 'checkbox')
+                            && has('Created In-App', 'checkbox');
+                    }
+                    if (type === 'card') {
+                        return has('Name', 'title')
+                            && has('Back', 'rich_text')
+                            && has('Card Type', 'select')
+                            && has('Deck', 'relation')
+                            && has('Tags', 'multi_select')
+                            && has('Suspended', 'checkbox')
+                            && has('Leech', 'checkbox')
+                            && has('Difficulty', 'number')
+                            && has('Stability', 'number')
+                            && has('Retrievability', 'number')
+                            && has('Last Rating', 'select')
+                            && has('Last Review', 'date')
+                            && has('Due Date', 'date')
+                            && has('Interval / Box Level', 'number')
+                            && has('Ease Factor', 'number')
+                            && has('Updated In-App', 'checkbox');
+                    }
+                } catch (e) {
+                    console.error('validateDb failed', e);
+                }
+                return false;
+            },
             updateSettingsButtons() {
-                const block = !(this.state.workerVerified && this.state.authVerified);
+                const blockScanSave = !(this.state.workerVerified && this.state.authVerified);
                 ['scanSources', 'saveSettings'].forEach(id => {
                     const btn = el('#' + id);
                     if (!btn) return;
-                    btn.disabled = block;
-                    btn.classList.toggle('opacity-60', block);
-                    btn.classList.toggle('cursor-not-allowed', block);
+                    btn.disabled = blockScanSave;
+                    btn.classList.toggle('opacity-60', blockScanSave);
+                    btn.classList.toggle('cursor-not-allowed', blockScanSave);
                 });
                 const oa = el('#oauthBtn');
                 const va = el('#verifyAuth');
@@ -2498,6 +2569,10 @@ async function handleRequest(request, env) {
                 if (this.pendingAuthVerify && this.state.workerVerified) {
                     await this.verifyAuth();
                     this.pendingAuthVerify = false;
+                }
+                if (this.state.workerVerified && this.state.authVerified && this.state.autoScanPending) {
+                    await this.scanSources();
+                    this.state.autoScanPending = false;
                     this.openSettings();
                 }
             },
