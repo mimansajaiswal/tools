@@ -1541,6 +1541,7 @@ async function handleRequest(request, env) {
                 this.bind();
                 this.seedIfEmpty();
                 this.renderAll();
+                await this.autoVerifyWorker();
                 window.addEventListener('online', () => this.handleOnline());
                 window.addEventListener('offline', () => this.renderConnection());
                 this.applyTheme();
@@ -1555,15 +1556,14 @@ async function handleRequest(request, env) {
             captureOAuth() {
                 const hashParams = new URLSearchParams(location.hash.replace('#', '?'));
                 const searchParams = new URLSearchParams(location.search);
-                const token = hashParams.get('token') || searchParams.get('token');
+                const token = hashParams.get('token') || searchParams.get('token') || searchParams.get('accessToken');
                 if (token) {
                     this.state.settings.authToken = token;
                     Storage.setSettings(this.state.settings);
                     toast('Notion token captured');
                     history.replaceState({}, document.title, location.pathname);
-                    this.state.authVerified = true;
-                    this.renderStatus();
-                    this.renderGate();
+                    this.pendingAuthVerify = true;
+                    this.openSettings();
                 }
             },
             async loadFromDB() {
@@ -2379,6 +2379,10 @@ async function handleRequest(request, env) {
                         this.state.workerVerified = true;
                         this.renderStatus();
                         this.renderGate();
+                        if (this.pendingAuthVerify && this.state.settings.authToken) {
+                            await this.verifyAuth();
+                            this.pendingAuthVerify = false;
+                        }
                     } else throw new Error(res.status);
                 } catch (e) {
                     toast('Worker check failed');
@@ -2457,6 +2461,17 @@ async function handleRequest(request, env) {
                 el('#statusWorker').textContent = `Worker: ${this.state.workerVerified ? 'verified' : 'missing'}`;
                 el('#statusAuth').textContent = `Auth: ${this.state.workerVerified ? (this.state.authVerified ? 'verified' : 'blocked (verify worker)') : 'blocked (verify worker)'}`;
                 el('#statusSources').textContent = `Sources: ${hasSources && this.state.sourcesVerified ? 'verified' : 'missing'}`;
+            },
+            async autoVerifyWorker() {
+                if (this.state.workerVerified) return;
+                const url = this.state.settings.workerUrl;
+                if (!url) return;
+                try { await this.verifyWorker(); } catch (_) { /* ignore */ }
+                if (this.pendingAuthVerify && this.state.workerVerified) {
+                    await this.verifyAuth();
+                    this.pendingAuthVerify = false;
+                    this.openSettings();
+                }
             },
             applyTheme() {
                 const mode = this.state.settings.themeMode || 'system';
