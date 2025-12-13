@@ -182,7 +182,7 @@
                 This app stores the last 25 images locally for fast loading. Data is safely synced to Notion.
                 <br><br>
                 <strong>Note:</strong> Images shown here are compressed thumbnails. For full quality, please check your
-                Notion database.
+                Notion data source.
             </div>
         </div>
 
@@ -285,10 +285,10 @@
 
             <div class="space-y-6">
 
-                <!-- Database Instructions (Before Proxy) -->
+                <!-- Data Source Instructions (Before Proxy) -->
                 <div
                     class="bg-dull-purple/5 border border-dull-purple/20 p-3 rounded text-xs text-earth-metal leading-relaxed">
-                    <p class="font-bold mb-1">Required Notion Database Format:</p>
+                    <p class="font-bold mb-1">Required Notion Data Source Format:</p>
                     <p class="text-[11px] mb-2 opacity-80">Columns: Name (title), Tags (multi-select), Date (date),
                         Files (media), Notes (text).</p>
                     <p>
@@ -497,7 +497,7 @@ async function handleRequest(request, env) {
 
   if (!isGeneral && secretKey) {
     modifiedRequest.headers.set("Authorization", `Bearer ${secretKey}`);
-    modifiedRequest.headers.set("Notion-Version", "2022-06-28");
+    modifiedRequest.headers.set("Notion-Version", "2025-09-03");
   }
 
   const response = await fetch(modifiedRequest);
@@ -521,7 +521,7 @@ async function handleRequest(request, env) {
             class="bg-white-linen w-full max-w-md p-6 rounded-xl shadow-xl border border-oatmeal-dark overflow-visible flex flex-col h-[500px]">
             <div class="flex justify-between items-center mb-4 flex-shrink-0">
                 <h3 class="font-serif text-xl text-charcoal">New Diary</h3>
-                <button onclick="App.scanForDatabases()"
+                <button onclick="App.scanForDataSources()"
                     class="text-xs text-dull-purple hover:underline flex items-center gap-1" id="refreshDbBtn">
                     <i data-lucide="refresh-cw" class="w-3 h-3"></i> Refresh
                 </button>
@@ -532,7 +532,7 @@ async function handleRequest(request, env) {
                 <!-- Searchable Dropdown -->
                 <div class="relative">
                     <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal mb-1">Select Notion
-                        Database</label>
+                        Data Source</label>
 
                     <!-- Info Text Moved Here -->
                     <div class="text-[10px] text-earth-metal/60 mb-3 leading-tight">
@@ -541,7 +541,7 @@ async function handleRequest(request, env) {
                     </div>
 
                     <div class="relative">
-                        <input type="text" id="dbSearchInput" placeholder="Search Databases..."
+                        <input type="text" id="dbSearchInput" placeholder="Search Data Sources..."
                             onfocus="App.toggleDbDropdown(true)" onkeyup="App.filterDbList(event)"
                             class="w-full bg-oatmeal border border-oatmeal-dark rounded p-2 text-sm focus:ring-2 focus:ring-dull-purple/50 outline-none"
                             autocomplete="off">
@@ -847,7 +847,11 @@ async function handleRequest(request, env) {
                 }
                 if ('serviceWorker' in navigator) {
                     const registrations = await navigator.serviceWorker.getRegistrations();
-                    await Promise.all(registrations.map((reg) => reg.unregister()));
+                    await Promise.all(
+                        registrations
+                            .filter((reg) => reg.scope && reg.scope.includes('/photo-chronicles/'))
+                            .map((reg) => reg.unregister())
+                    );
                 }
             } catch (err) {
                 console.warn('PWA cleanup skipped:', err);
@@ -932,14 +936,14 @@ async function handleRequest(request, env) {
         };
 
         const Storage = {
-            getSettings: () => JSON.parse(localStorage.getItem('mirror_settings') || '{"workerUrl":"","authToken":"","proxyToken":"","orientation":"landscape","collageMode":1,"ghostOpacity":0.3}'),
-            setSettings: (s) => localStorage.setItem('mirror_settings', JSON.stringify(s)),
-            getData: () => JSON.parse(localStorage.getItem('mirror_data') || '[]'),
-            setData: (d) => localStorage.setItem('mirror_data', JSON.stringify(d)),
+            getSettings: () => JSON.parse(localStorage.getItem('chronicles_settings') || '{"workerUrl":"","authToken":"","proxyToken":"","orientation":"landscape","collageMode":1,"ghostOpacity":0.3}'),
+            setSettings: (s) => localStorage.setItem('chronicles_settings', JSON.stringify(s)),
+            getData: () => JSON.parse(localStorage.getItem('chronicles_data') || '[]'),
+            setData: (d) => localStorage.setItem('chronicles_data', JSON.stringify(d)),
 
-            // New: Cache for valid Notion Databases
-            getCachedDatabases: () => JSON.parse(localStorage.getItem('notion_db_cache') || '[]'),
-            setCachedDatabases: (dbs) => localStorage.setItem('notion_db_cache', JSON.stringify(dbs)),
+            // Cache for valid Notion data sources
+            getCachedDataSources: () => JSON.parse(localStorage.getItem('chronicles_ds_cache') || '[]'),
+            setCachedDataSources: (sources) => localStorage.setItem('chronicles_ds_cache', JSON.stringify(sources)),
 
             saveDiary: (diary) => {
                 const data = Storage.getData();
@@ -1018,7 +1022,7 @@ async function handleRequest(request, env) {
                 fetchUrl.searchParams.append('url', target);
                 if (cleanToken) fetchUrl.searchParams.append('token', cleanToken);
 
-                const headers = { 'Authorization': `Bearer ${cleanAuth}`, 'Notion-Version': '2022-06-28' };
+                const headers = { 'Authorization': `Bearer ${cleanAuth}`, 'Notion-Version': '2025-09-03' };
                 if (!(body instanceof FormData)) {
                     headers['Content-Type'] = 'application/json';
                     body = body ? JSON.stringify(body) : null;
@@ -1061,13 +1065,13 @@ async function handleRequest(request, env) {
                 if (!res.ok) throw new Error(`Upload Failed`);
                 return await res.json();
             },
-            fetchDatabases: async (settings = null) => {
+            fetchDataSources: async (settings = null) => {
                 let results = [];
                 let hasMore = true;
                 let nextCursor = undefined;
                 while (hasMore) {
                     const payload = {
-                        filter: { value: 'database', property: 'object' },
+                        filter: { value: 'data_source', property: 'object' },
                         page_size: 100,
                         start_cursor: nextCursor
                     };
@@ -1117,7 +1121,7 @@ async function handleRequest(request, env) {
 
                 try {
                     if (!silent) App.showToast("Fetching tags...", "info");
-                    const res = await API.request('GET', `/databases/${diary.originalDbId || diary.notionDataSourceId}`);
+                    const res = await API.request('GET', `/data_sources/${diary.dataSourceId}`);
                     const properties = res.properties || {};
 
                     if (properties["Tags"] && properties["Tags"].multi_select) {
@@ -1138,7 +1142,7 @@ async function handleRequest(request, env) {
                 if (!diaryId) return;
 
                 let diary = Storage.getData().find(d => d.id === diaryId);
-                if (!diary || !diary.originalDbId) return;
+                if (!diary || !diary.dataSourceId) return;
 
                 SyncManager.updateUI('syncing');
                 App.state.isLoading = true;
@@ -1154,7 +1158,7 @@ async function handleRequest(request, env) {
                             // Actually, simplistic approach: if unsynced, just push what we have. 
                             // If user refreshed page, high res is gone, but local low res is better than nothing.
                             // Ideally app stays open.
-                            const notionId = await SyncManager.pushEntryToNotion(diary.originalDbId, entry);
+                            const notionId = await SyncManager.pushEntryToNotion(diary.dataSourceId, entry);
                             Storage.updateEntrySyncStatus(diaryId, entry.id, true, notionId);
                             App.state.diaries = Storage.getData();
                         } catch (err) {
@@ -1170,7 +1174,7 @@ async function handleRequest(request, env) {
                         sorts: [{ property: 'Date', direction: 'descending' }]
                     };
 
-                    const response = await API.request('POST', `/databases/${diary.originalDbId}/query`, payload);
+                    const response = await API.request('POST', `/data_sources/${diary.dataSourceId}/query`, payload);
 
                     const currentData = Storage.getData();
                     const activeDiary = currentData.find(d => d.id === diaryId);
@@ -1294,7 +1298,7 @@ async function handleRequest(request, env) {
                 }
 
                 const res = await API.request('POST', '/pages', {
-                    parent: { type: "database_id", database_id: dbId },
+                    parent: { data_source_id: dbId },
                     properties
                 });
                 return res.id;
@@ -1318,8 +1322,8 @@ async function handleRequest(request, env) {
                 activeSegment: 0,
                 segments: [],
                 mirrorVideo: false,
-                selectedDb: null,
-                cachedDbs: [],
+                selectedDataSource: null,
+                cachedDataSources: [],
                 isLoading: false
             },
 
@@ -1358,8 +1362,8 @@ async function handleRequest(request, env) {
                     const newSettings = { ...settings, authToken: newAuth };
                     Storage.setSettings(newSettings);
                     window.history.replaceState({}, document.title, window.location.pathname);
-                    App.showToast(`Connected! Scanning databases...`, 'success');
-                    if (newSettings.workerUrl) App.scanForDatabases(newSettings);
+                    App.showToast(`Connected! Scanning data sources...`, 'success');
+                    if (newSettings.workerUrl) App.scanForDataSources(newSettings);
                 }
 
                 if (window.innerWidth < 768 && App.state.diaries.length > 0) {
@@ -1397,7 +1401,7 @@ async function handleRequest(request, env) {
                 requestAnimationFrame(App.drawLoop);
             },
 
-            isValidChronicleDb: (props) => {
+            isValidChronicleSource: (props) => {
                 if (!props['Name'] || props['Name'].type !== 'title') return false;
                 if (!props['Tags'] || props['Tags'].type !== 'multi_select') return false;
                 if (!props['Date'] || props['Date'].type !== 'date') return false;
@@ -1406,29 +1410,31 @@ async function handleRequest(request, env) {
                 return true;
             },
 
-            scanForDatabases: async (settings = null) => {
+            scanForDataSources: async (settings = null) => {
                 const btn = document.getElementById('refreshDbBtn');
                 if (btn) {
                     const icon = btn.querySelector('svg');
                     if (icon) icon.classList.add('animate-spin');
                 }
-                App.state.cachedDbs = [];
+                App.state.cachedDataSources = [];
                 try {
-                    const allDbs = await API.fetchDatabases(settings);
-                    const validDbs = allDbs.filter(db => App.isValidChronicleDb(db.properties)).map(db => ({
-                        id: db.id,
-                        title: db.title?.[0]?.plain_text || "Untitled Database",
-                        description: db.description?.[0]?.plain_text || ""
-                    }));
-                    Storage.setCachedDatabases(validDbs);
-                    App.state.cachedDbs = validDbs;
+                    const allSources = await API.fetchDataSources(settings);
+                    const validSources = allSources
+                        .filter(src => App.isValidChronicleSource(src.properties))
+                        .map(src => ({
+                            id: src.id,
+                            title: src.title?.[0]?.plain_text || "Untitled Data Source",
+                            description: src.description?.[0]?.plain_text || ""
+                        }));
+                    Storage.setCachedDataSources(validSources);
+                    App.state.cachedDataSources = validSources;
                     if (document.getElementById('newDiaryModal').classList.contains('flex')) {
-                        App.renderDbDropdownItems(validDbs);
+                        App.renderDbDropdownItems(validSources);
                     }
-                    if (!settings) App.showToast(`Found ${validDbs.length} compatible databases.`, "success");
+                    if (!settings) App.showToast(`Found ${validSources.length} compatible data sources.`, "success");
                 } catch (e) {
                     console.error(e);
-                    App.showToast("Failed to fetch databases", "error");
+                    App.showToast("Failed to fetch data sources", "error");
                 } finally {
                     if (btn) {
                         const icon = btn.querySelector('svg');
@@ -1443,13 +1449,13 @@ async function handleRequest(request, env) {
                 else if (forceShow === false) list.classList.add('hidden');
                 else list.classList.toggle('hidden');
                 if (!list.classList.contains('hidden') && document.getElementById('dbSearchInput').value === '') {
-                    App.renderDbDropdownItems(App.state.cachedDbs);
+                    App.renderDbDropdownItems(App.state.cachedDataSources);
                 }
             },
 
             filterDbList: (e) => {
                 const term = e.target.value.toLowerCase();
-                const filtered = App.state.cachedDbs.filter(db => db.title.toLowerCase().includes(term));
+                const filtered = App.state.cachedDataSources.filter(db => db.title.toLowerCase().includes(term));
                 App.renderDbDropdownItems(filtered);
                 App.toggleDbDropdown(true);
             },
@@ -1457,16 +1463,16 @@ async function handleRequest(request, env) {
             renderDbDropdownItems: (dbs) => {
                 const list = document.getElementById('dbDropdownList');
                 list.innerHTML = '';
-                const usedIds = App.state.diaries.map(d => d.originalDbId);
+                const usedIds = App.state.diaries.map(d => d.dataSourceId);
                 const availableDbs = dbs.filter(db => !usedIds.includes(db.id));
                 if (availableDbs.length === 0) {
-                    list.innerHTML = `<div class="p-4 text-center text-xs text-earth-metal/50">No databases found.</div>`;
+                    list.innerHTML = `<div class="p-4 text-center text-xs text-earth-metal/50">No data sources found.</div>`;
                     return;
                 }
                 availableDbs.forEach(db => {
                     const el = document.createElement('div');
                     el.className = "p-3 border-b border-oatmeal-dark last:border-0 hover:bg-white-linen cursor-pointer transition-colors flex flex-col gap-1";
-                    el.onclick = () => App.selectDatabase(db);
+                    el.onclick = () => App.selectDataSource(db);
                     el.innerHTML = `
                         <div class="flex items-center justify-between">
                             <span class="font-bold text-sm text-charcoal">${db.title}</span>
@@ -1477,8 +1483,8 @@ async function handleRequest(request, env) {
                 });
             },
 
-            selectDatabase: (db) => {
-                App.state.selectedDb = db;
+            selectDataSource: (db) => {
+                App.state.selectedDataSource = db;
                 const input = document.getElementById('dbSearchInput');
                 input.value = db.title;
                 const infoBox = document.getElementById('selectedDbInfo');
@@ -1489,7 +1495,7 @@ async function handleRequest(request, env) {
             },
 
             attemptNewDiary: () => {
-                App.state.selectedDb = null;
+                App.state.selectedDataSource = null;
                 document.getElementById('dbSearchInput').value = '';
                 document.getElementById('selectedDbInfo').classList.add('hidden');
                 const s = Storage.getSettings();
@@ -1498,23 +1504,23 @@ async function handleRequest(request, env) {
                     App.openModal('settingsModal');
                 } else {
                     App.openModal('newDiaryModal');
-                    const cached = Storage.getCachedDatabases();
-                    App.state.cachedDbs = cached;
+                    const cached = Storage.getCachedDataSources();
+                    App.state.cachedDataSources = cached;
                     if (cached.length > 0) {
                         App.renderDbDropdownItems(cached);
                     } else {
-                        App.scanForDatabases();
+                        App.scanForDataSources();
                     }
                 }
             },
 
             createDiary: async () => {
-                if (!App.state.selectedDb) return App.showToast("Please select a database.", "error");
-                const db = App.state.selectedDb;
+                if (!App.state.selectedDataSource) return App.showToast("Please select a data source.", "error");
+                const db = App.state.selectedDataSource;
                 const newDiary = {
                     id: UTILS.id(),
                     title: db.title,
-                    originalDbId: db.id,
+                    dataSourceId: db.id,
                     description: db.description,
                     tags: [],
                     entries: []
@@ -1532,7 +1538,7 @@ async function handleRequest(request, env) {
 
             executeReset: async () => {
                 try {
-                    localStorage.clear();
+                    ['chronicles_settings', 'chronicles_data', 'chronicles_ds_cache'].forEach(k => localStorage.removeItem(k));
                     await clearPwaData();
                     window.location.href = window.location.pathname;
                 } catch (e) {
@@ -1626,7 +1632,7 @@ async function handleRequest(request, env) {
                             <div class="bg-oatmeal-dark p-4 rounded-full"><i data-lucide="book-plus" class="w-10 h-10 text-earth-metal"></i></div>
                             <div>
                                 <h3 class="font-serif text-2xl text-charcoal mb-2">You're Connected!</h3>
-                                <p class="text-earth-metal/60 max-w-xs mx-auto mb-6">Create your first diary to link a Notion Database.</p>
+                                <p class="text-earth-metal/60 max-w-xs mx-auto mb-6">Create your first diary to link a Notion data source.</p>
                                 <button onclick="App.attemptNewDiary()" class="bg-dull-purple text-white px-6 py-3 rounded-lg font-medium hover:bg-dull-purple-hover transition">Create First Diary</button>
                             </div>
                         </div>`;
@@ -2136,7 +2142,7 @@ async function handleRequest(request, env) {
                 try {
                     SyncManager.updateUI('syncing');
                     const diary = Storage.getData().find(d => d.id === App.state.activeDiaryId);
-                    const notionId = await SyncManager.pushEntryToNotion(diary.originalDbId, entryForSync);
+                    const notionId = await SyncManager.pushEntryToNotion(diary.dataSourceId, entryForSync);
                     Storage.updateEntrySyncStatus(App.state.activeDiaryId, newEntry.id, true, notionId);
                     SyncManager.updateUI('synced');
                     App.state.diaries = Storage.getData();
@@ -2447,7 +2453,7 @@ async function handleRequest(request, env) {
                     Storage.setSettings(tempSettings);
                     App.renderSettingsStatus(tempSettings);
                     document.getElementById('saveSettingsBtn').disabled = false;
-                    App.scanForDatabases(tempSettings);
+                    App.scanForDataSources(tempSettings);
                 } catch (e) {
                     App.showToast(e.message, 'error');
                     document.getElementById('saveSettingsBtn').disabled = true;
