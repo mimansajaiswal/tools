@@ -142,6 +142,34 @@
             box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
         }
 
+        /* Custom tooltip that appears below element */
+        [data-tooltip] {
+            position: relative;
+        }
+
+        [data-tooltip]::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-top: 6px;
+            padding: 4px 8px;
+            background: var(--text-main, #1b1917);
+            color: var(--bg, #faf9f6);
+            font-size: 11px;
+            white-space: nowrap;
+            border-radius: 6px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s;
+            z-index: 100;
+        }
+
+        [data-tooltip]:hover::after {
+            opacity: 1;
+        }
+
         /* Notion color helpers */
         .notion-color-default {
             color: inherit;
@@ -551,7 +579,7 @@
             }
 
             body[data-theme="dark"] .joystick-label-up {
-                color: #60a5fa;
+                color: #4ade80;
             }
 
             body[data-theme="dark"] .joystick-label-down {
@@ -563,7 +591,7 @@
             }
 
             body[data-theme="dark"] .joystick-label-right {
-                color: #4ade80;
+                color: #60a5fa;
             }
         }
 
@@ -594,10 +622,6 @@
         }
 
         .bg-oatmeal\/60 {
-            background-color: color-mix(in srgb, var(--surface-strong) 70%, transparent) !important;
-        }
-
-        .bg-oatmeal/60 {
             background-color: color-mix(in srgb, var(--surface-strong) 70%, transparent) !important;
         }
 
@@ -848,12 +872,19 @@
                                 <p class="text-xs md:text-sm text-earth-metal/70 hidden sm:block">Click to select a deck
                                     and view its cards.</p>
                             </div>
-                            <button id="newDeckBtn"
-                                class="shrink-0 p-2 md:px-3 md:py-2 rounded-xl bg-charcoal text-white text-sm hover:bg-earth-metal flex items-center gap-2"
-                                title="New deck">
-                                <i data-lucide="plus" class="w-4 h-4"></i>
-                                <span class="hidden md:inline">New deck</span>
-                            </button>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <button id="refreshDecksBtn"
+                                    class="p-2 rounded-xl border border-oatmeal-dark/60 text-earth-metal hover:bg-oatmeal flex items-center gap-2"
+                                    data-tooltip="Sync with Notion">
+                                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                                </button>
+                                <button id="newDeckBtn"
+                                    class="p-2 md:px-3 md:py-2 rounded-xl bg-charcoal text-white text-sm hover:bg-earth-metal flex items-center gap-2"
+                                    data-tooltip="New deck">
+                                    <i data-lucide="plus" class="w-4 h-4"></i>
+                                    <span class="hidden md:inline">New deck</span>
+                                </button>
+                            </div>
                         </div>
                         <!-- Deck search -->
                         <div class="mt-3">
@@ -874,13 +905,13 @@
                             <div class="flex items-center gap-1 md:gap-2 shrink-0">
                                 <button id="resetAlgorithmBtn"
                                     class="p-2 md:px-3 md:py-2 rounded-xl border border-red-300 text-red-600 text-sm hover:bg-red-50 flex items-center gap-2 hidden"
-                                    title="Reset algorithm parameters">
+                                    data-tooltip="Reset algorithm parameters">
                                     <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
                                     <span class="hidden lg:inline">Reset Algorithm</span>
                                 </button>
                                 <button id="newCardBtn"
                                     class="p-2 md:px-3 md:py-2 rounded-xl bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex items-center gap-2 hidden"
-                                    title="New card">
+                                    data-tooltip="New card">
                                     <i data-lucide="plus-circle" class="w-4 h-4"></i>
                                     <span class="hidden md:inline">New card</span>
                                 </button>
@@ -1333,7 +1364,7 @@
                         class="px-3 py-2 rounded-xl bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 w-full">Verify
                         worker</button>
                     <div>
-                        <label class="text-xs text-earth-metal/70">Notion token (secret alternative)</label>
+                        <label class="text-xs text-earth-metal/70">Notion integration secret (instead of OAuth)</label>
                         <input id="settingAuthToken" type="password" placeholder="secret_..."
                             class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed">
                     </div>
@@ -1346,20 +1377,20 @@
                     </button>
                     <div>
                         <label class="text-xs text-earth-metal/60">Decks source</label>
-                        <select id="deckSourceSelect"
-                            class="w-full rounded-xl border border-oatmeal-dark/60 bg-white-linen px-2 py-2 text-sm"></select>
+                        <select id="deckSourceSelect" disabled
+                            class="w-full rounded-xl border border-oatmeal-dark/60 bg-white-linen px-2 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"></select>
                     </div>
                     <div>
                         <label class="text-xs text-earth-metal/60">Cards source</label>
-                        <select id="cardSourceSelect"
-                            class="w-full rounded-xl border border-oatmeal-dark/60 bg-white-linen px-2 py-2 text-sm"></select>
+                        <select id="cardSourceSelect" disabled
+                            class="w-full rounded-xl border border-oatmeal-dark/60 bg-white-linen px-2 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"></select>
                     </div>
                     <div class="flex gap-2 flex-wrap">
-                        <button id="scanSources"
-                            class="px-3 py-2 rounded-xl bg-charcoal text-white text-sm hover:bg-earth-metal flex-1 min-w-[140px]">Scan
+                        <button id="scanSources" disabled
+                            class="px-3 py-2 rounded-xl bg-charcoal text-white text-sm hover:bg-earth-metal flex-1 min-w-[140px] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-charcoal">Scan
                             sources</button>
-                        <button id="saveSettings"
-                            class="px-3 py-2 rounded-xl bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex-1 min-w-[140px]">Save</button>
+                        <button id="saveSettings" disabled
+                            class="px-3 py-2 rounded-xl bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex-1 min-w-[140px] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-dull-purple">Save</button>
                     </div>
                     <div class="w-full h-2 bg-oatmeal rounded-full overflow-hidden">
                         <div id="syncProgress" class="h-2 bg-dull-purple w-0 transition-all duration-500"></div>
@@ -1641,6 +1672,8 @@ async function handleRequest(request, env) {
                 <button id="closeCardModal" aria-label="Close card modal"
                     class="text-earth-metal/60 hover:text-charcoal"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
+            <p class="text-[10px] text-earth-metal/50 mb-2">Editing Name, Back, or Notes will remove Notion text colors
+                and highlights on sync</p>
             <div class="grid md:grid-cols-2 gap-4 text-sm">
                 <div class="space-y-2">
                     <label class="text-xs text-earth-metal/70">Deck</label>
@@ -1684,6 +1717,17 @@ async function handleRequest(request, env) {
                                 class="accent-dull-purple"> Leech</label>
                     </div>
                 </div>
+            </div>
+            <!-- Review History Section (shown when editing existing card) -->
+            <div id="cardReviewHistorySection" class="mt-4 hidden">
+                <details class="group">
+                    <summary class="text-xs text-earth-metal/70 cursor-pointer select-none flex items-center gap-1">
+                        <i data-lucide="chevron-right" class="w-3 h-3 group-open:rotate-90 transition-transform"></i>
+                        Review History (<span id="cardReviewHistoryCount">0</span>)
+                    </summary>
+                    <div id="cardReviewHistoryTable"
+                        class="mt-2 max-h-40 overflow-y-auto border border-charcoal/10 rounded-lg"></div>
+                </details>
             </div>
             <div class="flex justify-end gap-2 mt-4">
                 <button id="deleteCardBtn"
@@ -2224,6 +2268,34 @@ async function handleRequest(request, env) {
             }
             return chunks;
         };
+        // Compact review history format: "g1702473000,h1702559400,a1702645800"
+        // Rating codes: a=again, h=hard, g=good, e=easy
+        // Timestamp: Unix epoch seconds
+        const compactReviewHistory = (history) => {
+            if (!history || !history.length) return '';
+            const ratingCodes = { again: 'a', hard: 'h', good: 'g', easy: 'e' };
+            return history.map(entry => {
+                const code = ratingCodes[entry.rating] || 'g';
+                const ts = Math.floor(new Date(entry.at).getTime() / 1000);
+                return `${code}${ts}`;
+            }).join(',');
+        };
+        const parseReviewHistory = (compact) => {
+            if (!compact || typeof compact !== 'string') return [];
+            // Handle legacy JSON format
+            if (compact.startsWith('[')) {
+                try { return JSON.parse(compact); } catch { return []; }
+            }
+            const ratingNames = { a: 'again', h: 'hard', g: 'good', e: 'easy' };
+            return compact.split(',').filter(Boolean).map(entry => {
+                const code = entry[0];
+                const ts = parseInt(entry.slice(1), 10);
+                return {
+                    rating: ratingNames[code] || 'good',
+                    at: new Date(ts * 1000).toISOString()
+                };
+            });
+        };
         const richToMarkdown = (arr = []) => {
             return (arr || []).map(rt => {
                 if (!rt) return '';
@@ -2454,7 +2526,7 @@ async function handleRequest(request, env) {
                     sm2,
                     syncId: page.id,
                     updatedInApp: p['Updated In-App']?.checkbox || false,
-                    reviewHistory: JSON.parse(p['Review History']?.rich_text?.[0]?.plain_text || '[]'),
+                    reviewHistory: parseReviewHistory(p['Review History']?.rich_text?.[0]?.plain_text || ''),
                     ankiGuid: p['Anki GUID']?.rich_text?.[0]?.plain_text || '',
                     ankiNoteType: p['Anki Note Type']?.select?.name || '',
                     ankiFields: p['Anki Fields JSON']?.rich_text?.[0]?.plain_text || '',
@@ -2510,7 +2582,7 @@ async function handleRequest(request, env) {
                     'Interval / Box Level': { number: card.sm2?.interval ?? 1 },
                     'Ease Factor': { number: card.sm2?.easeFactor ?? 2.5 },
                     'Updated In-App': { checkbox: true },
-                    'Review History': { rich_text: toRichTextChunks(JSON.stringify(card.reviewHistory || [])) },
+                    'Review History': { rich_text: toRichTextChunks(compactReviewHistory(card.reviewHistory || [])) },
                     'Anki GUID': card.ankiGuid ? { rich_text: [{ type: 'text', text: { content: card.ankiGuid } }] } : { rich_text: [] },
                     'Anki Note Type': card.ankiNoteType ? { select: { name: card.ankiNoteType } } : { select: null },
                     'Anki Fields JSON': card.ankiFields ? { rich_text: [{ type: 'text', text: { content: card.ankiFields } }] } : { rich_text: [] },
@@ -2922,6 +2994,7 @@ async function handleRequest(request, env) {
                     this.applyFontMode();
                 });
                 el('#newDeckBtn').onclick = () => this.openDeckModal();
+                el('#refreshDecksBtn').onclick = () => this.manualSync();
                 el('#closeDeckModal').onclick = () => this.closeDeckModal();
                 el('#saveDeckBtn').onclick = () => this.saveDeckFromModal();
                 el('#deleteDeckBtn').onclick = () => this.deleteDeckFromModal();
@@ -3007,7 +3080,7 @@ async function handleRequest(request, env) {
                     }
                     // Handle deck selection (click on deck card)
                     const deckCard = e.target.closest('[data-deck-id]');
-                    if (deckCard && !e.target.closest('.edit-card-btn') && !e.target.closest('.edit-deck-btn') && !e.target.closest('.deck-option') && !e.target.closest('.selected-deck-pill')) {
+                    if (deckCard && !e.target.closest('.edit-card-btn') && !e.target.closest('.info-card-btn') && !e.target.closest('.edit-deck-btn') && !e.target.closest('.deck-option') && !e.target.closest('.selected-deck-pill')) {
                         this.selectDeck(deckCard.dataset.deckId);
                         return;
                     }
@@ -3017,6 +3090,14 @@ async function handleRequest(request, env) {
                         e.stopPropagation();
                         const cardId = editCardBtn.dataset.cardId;
                         this.editCard(cardId);
+                        return;
+                    }
+                    // Handle info card button click (show review history popover)
+                    const infoCardBtn = e.target.closest('.info-card-btn');
+                    if (infoCardBtn) {
+                        e.stopPropagation();
+                        const cardId = infoCardBtn.dataset.cardId;
+                        this.showReviewHistoryPopover(infoCardBtn, cardId);
                         return;
                     }
                 });
@@ -3286,7 +3367,10 @@ async function handleRequest(request, env) {
                             <td class="py-2 pr-2 capitalize hidden sm:table-cell">${c.type}</td>
                             <td class="py-2 pr-2 text-earth-metal/70 text-xs whitespace-nowrap">${dueDisplay}</td>
                             <td class="py-2 pr-2 hidden md:table-cell text-xs"><div class="flex gap-1 flex-wrap">${tagPills}${c.tags.length > 2 ? '<span class="text-earth-metal/50">...</span>' : ''}</div></td>
-                            <td class="py-2 w-8">
+                            <td class="py-2 flex gap-1">
+                                <button class="info-card-btn p-1 rounded hover:bg-dull-purple/20 text-earth-metal/60 relative" data-card-id="${c.id}" title="Review history">
+                                    <i data-lucide="info" class="w-4 h-4 pointer-events-none"></i>
+                                </button>
                                 <button class="edit-card-btn p-1 rounded hover:bg-dull-purple/20 text-dull-purple" data-card-id="${c.id}" title="Edit card">
                                     <i data-lucide="edit-2" class="w-4 h-4 pointer-events-none"></i>
                                 </button>
@@ -3710,8 +3794,43 @@ async function handleRequest(request, env) {
                 el('#deleteCardBtn').classList.toggle('hidden', !card);
                 // Show/hide back section based on card type
                 this.updateCardBackVisibility();
+                // Populate review history section
+                this.renderCardModalReviewHistory(card);
                 el('#cardModal').classList.remove('hidden');
                 el('#cardModal').classList.add('flex');
+                lucide.createIcons();
+            },
+            renderCardModalReviewHistory(card) {
+                const section = el('#cardReviewHistorySection');
+                const countEl = el('#cardReviewHistoryCount');
+                const tableEl = el('#cardReviewHistoryTable');
+
+                if (!card || !card.reviewHistory || card.reviewHistory.length === 0) {
+                    section.classList.add('hidden');
+                    return;
+                }
+
+                section.classList.remove('hidden');
+                const history = card.reviewHistory;
+                countEl.textContent = history.length;
+
+                const ratingColors = { again: 'text-red-500', hard: 'text-orange-500', good: 'text-green-500', easy: 'text-blue-500' };
+                // Show all reviews (most recent first)
+                const sortedHistory = [...history].reverse();
+                tableEl.innerHTML = `
+                    <table class="w-full text-xs">
+                        <thead class="sticky top-0 bg-oatmeal dark:bg-charcoal"><tr class="text-earth-metal/50 border-b border-charcoal/10"><th class="text-left py-1.5 px-2">Rating</th><th class="text-left py-1.5 px-2">Date</th><th class="text-left py-1.5 px-2">Time</th></tr></thead>
+                        <tbody>
+                            ${sortedHistory.map(h => `
+                                <tr class="border-b border-charcoal/5 last:border-0">
+                                    <td class="py-1 px-2 capitalize ${ratingColors[h.rating] || ''}">${h.rating}</td>
+                                    <td class="py-1 px-2 text-earth-metal/70">${new Date(h.at).toLocaleDateString()}</td>
+                                    <td class="py-1 px-2 text-earth-metal/70">${new Date(h.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
             },
             updateCardBackVisibility() {
                 const isCloze = el('#cardTypeInput').value === 'Cloze';
@@ -3724,6 +3843,9 @@ async function handleRequest(request, env) {
             },
             async saveCardFromModal() {
                 let card = this.state.editingCard || this.newCard('', '', '', 'Front-Back');
+                const oldName = card.name;
+                const oldBack = card.back;
+                const oldNotes = card.notes;
                 card.deckId = el('#cardDeckInput').value;
                 card.type = el('#cardTypeInput').value;
                 card.name = el('#cardNameInput').value || 'Untitled';
@@ -3736,7 +3858,11 @@ async function handleRequest(request, env) {
                 card.tags = el('#cardTagsInput').value.split(',').map(t => t.trim()).filter(Boolean).map(name => ({ name, color: 'default' }));
                 card.suspended = el('#cardSuspendedInput').checked;
                 card.leech = el('#cardLeechInput').checked;
-                card.updatedInApp = true;
+                // Only set updatedInApp if name/back/notes changed (affects rich_text preservation)
+                // Note: Editing Name, Back, or Notes will cause text colors and highlights to be lost on sync
+                if (card.name !== oldName || card.back !== oldBack || card.notes !== oldNotes) {
+                    card.updatedInApp = true;
+                }
                 if (!this.state.editingCard) this.state.cards.push(card);
                 await Storage.put('cards', card);
                 this.queueOp({ type: 'card-upsert', payload: card });
@@ -3798,25 +3924,44 @@ async function handleRequest(request, env) {
                 const decks = await API.queryDatabase(deckSource, deckFilter);
                 const mappedDecks = decks.map(d => NotionMapper.deckFrom(d));
 
-                // Get list of non-archived deck IDs for card filtering
-                const nonArchivedDeckIds = mappedDecks.map(d => d.notionId);
+                // Identify decks that are new (not in local state) - need to fetch their cards
+                const existingDeckIds = new Set(this.state.decks.map(d => d.notionId));
+                const newDeckIds = mappedDecks.filter(d => !existingDeckIds.has(d.notionId)).map(d => d.notionId);
 
-                // For cards, we need to exclude cards from archived decks
-                // Query all cards (with timestamp if incremental), then filter client-side
-                // since Notion relation filters can't easily do "deck is in list"
+                // For card filtering, use all non-archived decks (existing + new)
+                const allNonArchivedDeckIds = new Set([...existingDeckIds, ...newDeckIds]);
+
+                // Query cards (with timestamp if incremental), then filter client-side
                 let cardFilter = null;
                 if (since) {
                     cardFilter = { timestamp: 'last_edited_time', last_edited_time: { on_or_after: since } };
                 }
                 const cards = await API.queryDatabase(cardSource, cardFilter);
-                const mappedCards = cards.map(c => NotionMapper.cardFrom(c, mappedDecks));
+                let mappedCards = cards.map(c => NotionMapper.cardFrom(c, mappedDecks));
+
+                // If we have new decks, fetch their cards separately (they may not have been edited recently)
+                if (since && newDeckIds.length > 0) {
+                    for (const deckId of newDeckIds) {
+                        const deckCards = await API.queryDatabase(cardSource, {
+                            property: 'Deck',
+                            relation: { contains: deckId }
+                        });
+                        const newCards = deckCards.map(c => NotionMapper.cardFrom(c, mappedDecks));
+                        // Add cards we don't already have
+                        for (const nc of newCards) {
+                            if (!mappedCards.find(c => c.notionId === nc.notionId)) {
+                                mappedCards.push(nc);
+                            }
+                        }
+                    }
+                }
 
                 // Filter out cards that belong to archived decks
                 const filteredCards = mappedCards.filter(c => {
                     // If card has no deck relation, include it
                     if (!c.deckId) return true;
                     // Include only if deck is in our non-archived list
-                    return nonArchivedDeckIds.includes(c.deckId);
+                    return allNonArchivedDeckIds.has(c.deckId);
                 });
 
                 if (!since) {
@@ -3824,6 +3969,16 @@ async function handleRequest(request, env) {
                     await Storage.wipeStore('cards');
                     this.state.decks = [];
                     this.state.cards = [];
+                }
+
+                // Also remove cards from decks that are no longer in our state (archived in Notion)
+                // This handles the case where a deck was archived after our last sync
+                if (since) {
+                    const archivedDeckIds = this.state.decks
+                        .filter(d => !mappedDecks.find(md => md.notionId === d.notionId))
+                        .map(d => d.notionId);
+                    // Note: We don't remove archived decks from local state automatically
+                    // User should manually archive in app if they want it removed
                 }
 
                 const upsertDeck = (deck) => {
@@ -3869,8 +4024,21 @@ async function handleRequest(request, env) {
                                 op.payload.notionId = res.id;
                                 op.payload.id = op.payload.id || res.id;
                                 op.payload.syncId = res.id;
-                                await Storage.put('cards', op.payload);
                             }
+                            // After successful push, reset updatedInApp and update _notionRichText
+                            // so subsequent pushes (e.g., SRS updates) preserve the rich_text we just sent
+                            op.payload.updatedInApp = false;
+                            op.payload._notionRichText = {
+                                name: props['Name'].title,
+                                back: props['Back'].rich_text,
+                                notes: props['Notes'].rich_text
+                            };
+                            // Update local state
+                            const cardIdx = this.state.cards.findIndex(c => c.notionId === op.payload.notionId || c.id === op.payload.id);
+                            if (cardIdx >= 0) {
+                                this.state.cards[cardIdx] = { ...this.state.cards[cardIdx], ...op.payload };
+                            }
+                            await Storage.put('cards', op.payload);
                         }
                         if (op.type === 'card-delete' && op.payload.notionId) await API.archivePage(op.payload.notionId);
                         if (op.type === 'block-append' && op.payload.pageId) {
@@ -3891,6 +4059,36 @@ async function handleRequest(request, env) {
             queueOp(op) {
                 this.state.queue.push(op);
                 el('#queueCount').textContent = String(this.state.queue.length);
+            },
+            async manualSync() {
+                if (!this.isReady()) { toast('Complete setup first'); return; }
+                if (this.state.syncing) { toast('Sync already in progress'); return; }
+
+                this.state.syncing = true;
+                const btn = el('#refreshDecksBtn');
+                const svg = btn?.querySelector('svg');
+                if (svg) svg.classList.add('animate-spin');
+
+                try {
+                    // First push any pending changes to Notion
+                    if (this.state.queue.length > 0) {
+                        await this.pushQueue();
+                    }
+                    // Do an incremental pull (pullFromNotion handles new deck card fetching)
+                    await this.pullFromNotion();
+                    this.state.lastPull = new Date().toISOString();
+                    await Storage.put('meta', { key: 'lastPull', value: this.state.lastPull });
+                    this.state.lastSync = new Date().toISOString();
+                    await Storage.put('meta', { key: 'lastSync', value: this.state.lastSync });
+                    this.renderConnection();
+                    toast('Synced with Notion');
+                } catch (e) {
+                    console.error('Manual sync failed', e);
+                    toast('Sync failed - check connection');
+                } finally {
+                    this.state.syncing = false;
+                    if (svg) svg.classList.remove('animate-spin');
+                }
             },
             startAutoSync() {
                 if (this.state.autoSyncTimer) clearInterval(this.state.autoSyncTimer);
@@ -3956,6 +4154,77 @@ async function handleRequest(request, env) {
                 if (!card) return;
                 this.state.selectedCard = card;
                 this.openCardModal(card);
+            },
+            showReviewHistoryPopover(btn, cardId) {
+                // Close any existing popover
+                const existing = document.querySelector('.review-history-popover');
+                if (existing) existing.remove();
+
+                const card = this.cardById(cardId);
+                if (!card) return;
+
+                const history = card.reviewHistory || [];
+                const ratingColors = { again: 'text-red-500', hard: 'text-orange-500', good: 'text-green-500', easy: 'text-blue-500' };
+
+                // Create popover content
+                let content;
+                if (history.length === 0) {
+                    content = '<p class="text-earth-metal/50 text-center py-2">No reviews yet</p>';
+                } else {
+                    // Show last 10 reviews (most recent first)
+                    const recentHistory = [...history].reverse().slice(0, 10);
+                    content = `
+                        <table class="w-full text-xs">
+                            <thead><tr class="text-earth-metal/50 border-b border-charcoal/10"><th class="text-left py-1">Rating</th><th class="text-left py-1">Date</th></tr></thead>
+                            <tbody>
+                                ${recentHistory.map(h => `
+                                    <tr class="border-b border-charcoal/5 last:border-0">
+                                        <td class="py-1 capitalize ${ratingColors[h.rating] || ''}">${h.rating}</td>
+                                        <td class="py-1 text-earth-metal/70">${new Date(h.at).toLocaleDateString()} ${new Date(h.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                        ${history.length > 10 ? `<p class="text-earth-metal/50 text-xs text-center mt-1">+${history.length - 10} more</p>` : ''}
+                    `;
+                }
+
+                // Create and position popover
+                const popover = document.createElement('div');
+                popover.className = 'review-history-popover absolute z-50 bg-oatmeal dark:bg-charcoal border border-charcoal/20 rounded-lg shadow-lg p-3 min-w-[200px] max-w-[280px]';
+                popover.innerHTML = `
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="font-medium text-sm text-charcoal dark:text-oatmeal">Review History</span>
+                        <button class="close-popover text-earth-metal/50 hover:text-earth-metal p-0.5"><i data-lucide="x" class="w-4 h-4"></i></button>
+                    </div>
+                    ${content}
+                `;
+
+                // Position popover near button
+                document.body.appendChild(popover);
+                const btnRect = btn.getBoundingClientRect();
+                const popRect = popover.getBoundingClientRect();
+
+                // Position to the left of button, or right if not enough space
+                let left = btnRect.left - popRect.width - 8;
+                if (left < 8) left = btnRect.right + 8;
+                let top = btnRect.top;
+                if (top + popRect.height > window.innerHeight - 8) top = window.innerHeight - popRect.height - 8;
+
+                popover.style.left = `${left}px`;
+                popover.style.top = `${top}px`;
+
+                lucide.createIcons({ nodes: [popover] });
+
+                // Close handlers
+                popover.querySelector('.close-popover').onclick = () => popover.remove();
+                const closeOnClickOutside = (e) => {
+                    if (!popover.contains(e.target) && !btn.contains(e.target)) {
+                        popover.remove();
+                        document.removeEventListener('click', closeOnClickOutside);
+                    }
+                };
+                setTimeout(() => document.addEventListener('click', closeOnClickOutside), 0);
             },
             passFilters(card) {
                 const f = this.state.filters;
@@ -4861,19 +5130,13 @@ async function handleRequest(request, env) {
             },
             renderStatus() {
                 const hasWorkerUrl = !!this.state.settings.workerUrl;
-                const workerOk = hasWorkerUrl && this.state.workerVerified;
+                const workerOk = hasWorkerUrl && (this.state.workerVerified || this.state.settings.workerVerified);
                 const hasToken = !!this.state.settings.authToken;
-                const authOk = workerOk && hasToken;
+                const authOk = workerOk && hasToken && (this.state.authVerified || this.state.settings.authVerified);
                 const hasSources = !!(this.state.settings.deckSource && this.state.settings.cardSource && this.state.sourcesVerified);
 
-                // Keep flags consistent so other UI logic (buttons/locks) stay in sync with real readiness
-                this.state.workerVerified = workerOk;
-                this.state.authVerified = authOk;
-                this.state.settings.workerVerified = workerOk;
-                this.state.settings.authVerified = authOk;
-
-                el('#statusWorker').textContent = `Worker: ${workerOk ? 'set' : 'missing'}`;
-                el('#statusAuth').textContent = `Auth: ${authOk ? 'set' : workerOk ? 'missing' : 'blocked (add worker)'}`;
+                el('#statusWorker').textContent = `Worker: ${workerOk ? 'verified' : hasWorkerUrl ? 'unverified' : 'missing'}`;
+                el('#statusAuth').textContent = `Auth: ${authOk ? 'verified' : workerOk ? (hasToken ? 'unverified' : 'missing') : 'blocked (verify worker)'}`;
                 el('#statusSources').textContent = `Sources: ${hasSources ? 'verified' : 'missing'}`;
                 this.updateSettingsButtons();
                 this.renderConnection();
@@ -4926,13 +5189,16 @@ async function handleRequest(request, env) {
                 return false;
             },
             updateSettingsButtons() {
-                const blockScanSave = !(this.state.settings.workerUrl && this.state.settings.authToken);
-                ['scanSources', 'saveSettings'].forEach(id => {
-                    const btn = el('#' + id);
-                    if (!btn) return;
-                    btn.disabled = blockScanSave;
-                    btn.classList.toggle('opacity-60', blockScanSave);
-                    btn.classList.toggle('cursor-not-allowed', blockScanSave);
+                const s = this.state.settings;
+                // Block scan/save/sources until both worker AND Notion auth are verified
+                const workerOk = s.workerVerified || this.state.workerVerified;
+                const notionOk = s.authVerified || this.state.authVerified;
+                const blockScanSave = !(workerOk && notionOk);
+
+                ['scanSources', 'saveSettings', 'deckSourceSelect', 'cardSourceSelect'].forEach(id => {
+                    const elem = el('#' + id);
+                    if (!elem) return;
+                    elem.disabled = blockScanSave;
                 });
                 const oa = el('#oauthBtn');
                 const va = el('#verifyAuth');
@@ -5334,9 +5600,15 @@ async function handleRequest(request, env) {
                 return data.text || '';
             },
             async transcribeWithGemini(audioBlob, model, key, prompt) {
-                // Convert audio to base64
+                // Convert audio to base64 using chunked approach to avoid stack overflow
                 const arrayBuffer = await audioBlob.arrayBuffer();
-                const base64Audio = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+                const bytes = new Uint8Array(arrayBuffer);
+                let binary = '';
+                const chunkSize = 8192;
+                for (let i = 0; i < bytes.length; i += chunkSize) {
+                    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+                }
+                const base64Audio = btoa(binary);
 
                 const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
 
