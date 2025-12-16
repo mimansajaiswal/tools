@@ -954,11 +954,15 @@
                         <!-- Session Active Bar (shown when session is active) -->
                         <div id="sessionActiveBar"
                             class="hidden card rounded-2xl p-4 md:p-5 shadow-soft text-[color:var(--text-main)]">
-                            <div class="flex items-center justify-between">
+                            <div class="flex items-center justify-between gap-3">
                                 <div class="flex items-center gap-2">
                                     <i data-lucide="book-open" class="w-5 h-5 text-dull-purple"></i>
                                     <span id="sessionProgressText"
                                         class="text-sm md:text-base text-charcoal font-medium">Session: 0/0</span>
+                                </div>
+                                <div id="previewBadge"
+                                    class="hidden text-[11px] px-2 py-1 rounded-lg bg-amber-100 text-amber-800 border border-amber-200">
+                                    Preview mode: no scheduling changes
                                 </div>
                                 <button id="abandonSessionBtn"
                                     class="flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-xl text-xs md:text-sm text-earth-metal/70 hover:text-muted-pink hover:bg-muted-pink/10 border border-oatmeal-dark/60 transition whitespace-nowrap">
@@ -1035,6 +1039,15 @@
                                             <option value="due">Due cards only</option>
                                             <option value="all">All cards</option>
                                         </select>
+                                    </div>
+                                    <div id="noScheduleRow" class="col-span-2 hidden">
+                                        <label class="flex items-center gap-2 text-xs md:text-sm">
+                                            <input id="noScheduleChanges" type="checkbox" class="accent-dull-purple"
+                                                checked>
+                                            <span>No scheduling changes (preview mode)</span>
+                                        </label>
+                                        <p class="text-[11px] text-earth-metal/50 mt-1">When on, ratings won’t update
+                                            due dates or algorithms.</p>
                                     </div>
                                     <label class="flex items-center gap-2">
                                         <input id="filterAgain" type="checkbox" class="accent-dull-purple">
@@ -1640,6 +1653,10 @@ async function handleRequest(request, env) {
                     </div>
                 </div>
                 <label class="flex items-center gap-2 text-sm">
+                    <input id="deckOrderedInput" type="checkbox" class="accent-dull-purple">
+                    <span>Ordered (keep original insertion order)</span>
+                </label>
+                <label class="flex items-center gap-2 text-sm">
                     <input id="deckReverseInput" type="checkbox" class="accent-dull-purple">
                     <span>Reverse mode enabled</span>
                 </label>
@@ -1647,7 +1664,15 @@ async function handleRequest(request, env) {
                     <label class="text-xs text-earth-metal/70">AI revision prompt (optional)</label>
                     <textarea id="deckPromptInput" rows="3"
                         class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2"
-                        placeholder="Use {{question}} and {{answer}} placeholders"></textarea>
+                        placeholder="Use {{question}} {{answer}} {{user}} placeholders"></textarea>
+                    <div class="flex flex-wrap gap-2 mt-2 text-[11px] text-earth-metal/60">
+                        <span
+                            class="px-2 py-1 rounded-lg bg-oatmeal-dark/50 italic text-dull-purple">{{question}}</span>
+                        <span class="px-2 py-1 rounded-lg bg-oatmeal-dark/50 italic text-dull-purple">{{answer}}</span>
+                        <span class="px-2 py-1 rounded-lg bg-oatmeal-dark/50 italic text-dull-purple">{{user}}</span>
+                        <span class="px-2 py-1 rounded-lg bg-oatmeal-dark/50 text-earth-metal/70">Variables replace
+                            question, correct answer, and learner answer.</span>
+                    </div>
                 </div>
             </div>
             <div class="flex justify-end gap-2 mt-4">
@@ -2441,6 +2466,8 @@ async function handleRequest(request, env) {
          * NotionMapper - Bidirectional mapping between app objects and Notion API format.
          * Handles conversion of decks and cards to/from Notion page properties.
          */
+        const DEFAULT_AI_PROMPT = 'You are a strict flashcard grader.\nQuestion: {{question}}\nCorrect answer: {{answer}}\nLearner answer: {{user}}\nJudge correctness (short) and give brief feedback.';
+
         const NotionMapper = {
             /**
              * Convert a Notion page to an app deck object
@@ -2454,14 +2481,15 @@ async function handleRequest(request, env) {
                     id: page.id,
                     notionId: page.id,
                     name: title,
-                    algorithm: props['Default SRS Algorithm']?.select?.name || 'FSRS',
+                    algorithm: props['Default SRS Algorithm']?.select?.name || 'SM-2',
+                    ordered: props['Ordered']?.checkbox ?? false,
                     reviewLimit: props['Daily Review Limit']?.number || 50,
                     newLimit: props['New Card Limit']?.number || 20,
                     reverse: props['Reverse Mode Enabled']?.checkbox || false,
                     createdInApp: props['Created In-App']?.checkbox || false,
                     archived: props['Archived?']?.checkbox || false,
                     ankiMetadata: props['Anki Metadata']?.rich_text?.[0]?.plain_text || '',
-                    aiPrompt: props['AI Revision Prompt']?.rich_text?.map(t => t.plain_text).join('') || '',
+                    aiPrompt: props['AI Revision Prompt']?.rich_text?.map(t => t.plain_text).join('') || DEFAULT_AI_PROMPT,
                     updatedInApp: false
                 };
             },
@@ -2474,6 +2502,7 @@ async function handleRequest(request, env) {
                 return {
                     'Deck Name': { title: markdownToNotionRichText(deck.name) },
                     'Default SRS Algorithm': { select: { name: deck.algorithm } },
+                    'Ordered': { checkbox: !!deck.ordered },
                     'Daily Review Limit': { number: deck.reviewLimit },
                     'New Card Limit': { number: deck.newLimit },
                     'Reverse Mode Enabled': { checkbox: !!deck.reverse },
@@ -2660,24 +2689,23 @@ async function handleRequest(request, env) {
 
                 if (cards.length === 0) return [];
 
-                // Get algorithm from first deck
+                // Get deck settings from first deck
                 const deck = this.deckById(deckIds[0]);
                 const limit = deck?.reviewLimit || 50;
 
-                // Shuffle for Random algorithm, otherwise sort by due date
-                if (deck?.algorithm === 'Random') {
-                    // Fisher-Yates shuffle
+                if (deck?.ordered) {
+                    // Keep original insertion order (fallback to id if createdAt missing)
+                    cards.sort((a, b) => {
+                        const aKey = a.createdAt || a.id || '';
+                        const bKey = b.createdAt || b.id || '';
+                        return aKey.localeCompare(bKey);
+                    });
+                } else {
+                    // Shuffle by default
                     for (let i = cards.length - 1; i > 0; i--) {
                         const j = Math.floor(Math.random() * (i + 1));
                         [cards[i], cards[j]] = [cards[j], cards[i]];
                     }
-                } else {
-                    // Sort by due date (earliest first)
-                    cards.sort((a, b) => {
-                        const aDate = a.fsrs?.dueDate || a.sm2?.dueDate || '9999';
-                        const bDate = b.fsrs?.dueDate || b.sm2?.dueDate || '9999';
-                        return new Date(aDate) - new Date(bDate);
-                    });
                 }
 
                 // Apply limit
@@ -2710,6 +2738,9 @@ async function handleRequest(request, env) {
                 // Check card selection mode (due only vs all)
                 const cardSelectionMode = el('#cardSelectionMode')?.value || 'due';
                 const includeNonDue = cardSelectionMode === 'all';
+                const noScheduleChanges = includeNonDue
+                    ? (el('#noScheduleChanges')?.checked ?? true)
+                    : false;
 
                 const cardQueue = this.generateCardQueue(deckIds, includeNonDue);
                 if (cardQueue.length === 0) {
@@ -2723,7 +2754,7 @@ async function handleRequest(request, env) {
                     startedAt: new Date().toISOString(),
                     startTime: Date.now(),
                     deckIds: deckIds,
-                    algorithm: deck?.algorithm || 'FSRS',
+                    algorithm: deck?.algorithm || 'SM-2',
                     settings: {
                         revisionMode: el('#revisionMode')?.value || 'manual',
                         cardSelectionMode: cardSelectionMode,
@@ -2734,7 +2765,8 @@ async function handleRequest(request, env) {
                     completed: [],
                     skipped: [],
                     studyingNonDue: includeNonDue,
-                    ratingCounts: { Again: 0, Hard: 0, Good: 0, Easy: 0 }
+                    ratingCounts: { Again: 0, Hard: 0, Good: 0, Easy: 0 },
+                    noScheduleChanges
                 };
 
                 this.saveSession();
@@ -2867,6 +2899,10 @@ async function handleRequest(request, env) {
                                 <button id="restartAllCardsBtn" class="px-4 py-2 bg-dull-purple text-white rounded-xl text-sm hover:bg-dull-purple/90 transition">
                                     Restart
                                 </button>
+                                <label class="flex items-center gap-2 text-[11px] text-earth-metal/70 mt-2">
+                                    <input id="restartNoScheduleChanges" type="checkbox" class="accent-dull-purple" checked>
+                                    <span>No scheduling changes</span>
+                                </label>
                                 <p class="text-[10px] md:text-xs text-earth-metal/50 mt-1">Restart with all cards in selected decks</p>
                             </div>
                             <button id="endSessionBtn" class="px-4 py-2 border border-oatmeal-dark/60 text-earth-metal/70 rounded-xl text-sm hover:bg-oatmeal/50 transition">
@@ -2892,6 +2928,8 @@ async function handleRequest(request, env) {
                 const session = this.state.session;
                 if (!session) return;
 
+                const previewCheckbox = el('#restartNoScheduleChanges');
+                const noScheduleChanges = previewCheckbox ? previewCheckbox.checked : true;
                 const cardQueue = this.generateCardQueue(session.deckIds, true);
                 if (cardQueue.length === 0) {
                     toast('No cards available');
@@ -2904,6 +2942,8 @@ async function handleRequest(request, env) {
                 session.completed = [];
                 session.skipped = [];
                 session.studyingNonDue = true;
+                session.noScheduleChanges = noScheduleChanges;
+                if (session.settings) session.settings.cardSelectionMode = 'all';
                 this.saveSession();
                 this.renderStudy();
                 toast(`Practicing ${cardQueue.length} cards`);
@@ -2928,7 +2968,11 @@ async function handleRequest(request, env) {
                 }
             },
             async loadFromDB() {
-                this.state.decks = await Storage.getAll('decks');
+                this.state.decks = (await Storage.getAll('decks')).map(d => ({
+                    ordered: false,
+                    aiPrompt: d.aiPrompt || DEFAULT_AI_PROMPT,
+                    ...d
+                }));
                 this.state.cards = await Storage.getAll('cards');
                 const meta = await Storage.getAll('meta');
                 const last = meta.find(m => m.key === 'lastSync');
@@ -2941,18 +2985,19 @@ async function handleRequest(request, env) {
             async seedIfEmpty() {
                 return;
             },
-            newDeck(name, algorithm) {
+            newDeck(name, algorithm = 'SM-2') {
                 return {
                     id: crypto.randomUUID(),
                     notionId: null,
                     name,
                     algorithm,
+                    ordered: false,
                     reviewLimit: 50,
                     newLimit: 20,
                     reverse: false,
                     createdInApp: true,
                     updatedInApp: true,
-                    aiPrompt: '',
+                    aiPrompt: DEFAULT_AI_PROMPT,
                     aiProvider: '',
                     aiModel: '',
                     aiKey: ''
@@ -3008,6 +3053,21 @@ async function handleRequest(request, env) {
                 el('#saveCardBtn').onclick = () => this.saveCardFromModal();
                 el('#cardTypeInput').onchange = () => this.updateCardBackVisibility();
                 el('#deleteCardBtn').onclick = () => this.deleteCardFromModal();
+                const cardSelectionMode = el('#cardSelectionMode');
+                const noScheduleRow = el('#noScheduleRow');
+                const noScheduleChk = el('#noScheduleChanges');
+                const toggleNoScheduleUI = () => {
+                    const isAll = cardSelectionMode.value === 'all';
+                    if (noScheduleRow) {
+                        noScheduleRow.classList.toggle('hidden', !isAll);
+                        if (isAll && noScheduleChk) noScheduleChk.checked = true;
+                        if (!isAll && noScheduleChk) noScheduleChk.checked = false;
+                    }
+                };
+                if (cardSelectionMode) {
+                    cardSelectionMode.onchange = toggleNoScheduleUI;
+                    toggleNoScheduleUI();
+                }
                 el('#revealBtn').onclick = () => this.reveal();
                 el('#skipCard').onclick = () => this.nextCard();
                 el('#copyCardContent').onclick = () => this.copyCardContent();
@@ -3309,6 +3369,10 @@ async function handleRequest(request, env) {
                             <i data-lucide="refresh-cw" class="w-3 h-3"></i>
                             <span>Reverse ${d.reverse ? 'on' : 'off'}</span>
                         </div>
+                        <div class="flex items-center gap-2 text-[11px] text-[color:var(--text-sub)]">
+                            <i data-lucide="list-ordered" class="w-3 h-3"></i>
+                            <span>Ordered ${d.ordered ? 'on' : 'off'}</span>
+                        </div>
                     </article>
                 `}).join('');
                 lucide.createIcons();
@@ -3403,6 +3467,8 @@ async function handleRequest(request, env) {
                         const current = session.currentIndex + 1;
                         const total = session.cardQueue.length;
                         progressText.textContent = `Study Session (${current}/${total})`;
+                        const previewBadge = el('#previewBadge');
+                        if (previewBadge) previewBadge.classList.toggle('hidden', !session.noScheduleChanges);
                     }
                     lucide.createIcons();
                 } else {
@@ -3640,11 +3706,12 @@ async function handleRequest(request, env) {
                 this.state.editingDeck = deck || null;
                 el('#deckModalTitle').textContent = deck ? 'Edit deck' : 'New deck';
                 el('#deckNameInput').value = deck?.name ?? '';
-                el('#deckAlgoInput').value = deck?.algorithm ?? 'FSRS';
+                el('#deckAlgoInput').value = deck?.algorithm ?? 'SM-2';
                 el('#deckReviewLimit').value = deck?.reviewLimit ?? 50;
                 el('#deckNewLimit').value = deck?.newLimit ?? 20;
+                el('#deckOrderedInput').checked = deck?.ordered ?? false;
                 el('#deckReverseInput').checked = deck?.reverse ?? false;
-                el('#deckPromptInput').value = deck?.aiPrompt ?? '';
+                el('#deckPromptInput').value = deck?.aiPrompt ?? DEFAULT_AI_PROMPT;
                 el('#deleteDeckBtn').classList.toggle('hidden', !deck);
                 el('#archiveDeckBtn').classList.toggle('hidden', !deck);
                 el('#deckModal').classList.remove('hidden');
@@ -3659,11 +3726,12 @@ async function handleRequest(request, env) {
                 el('#deckModal').classList.remove('flex');
             },
             async saveDeckFromModal() {
-                const d = this.state.editingDeck || this.newDeck('', 'FSRS');
+                const d = this.state.editingDeck || this.newDeck('', 'SM-2');
                 d.name = el('#deckNameInput').value || d.name || 'Untitled deck';
                 d.algorithm = el('#deckAlgoInput').value;
                 d.reviewLimit = Number(el('#deckReviewLimit').value) || 50;
                 d.newLimit = Number(el('#deckNewLimit').value) || 20;
+                d.ordered = el('#deckOrderedInput').checked;
                 d.reverse = el('#deckReverseInput').checked;
                 d.aiPrompt = el('#deckPromptInput').value || '';
                 if (!this.state.editingDeck) this.state.decks.push(d);
@@ -4354,6 +4422,18 @@ async function handleRequest(request, env) {
                     sessionIndex: this.state.session ? this.state.session.currentIndex : null,
                     ratingCounts: this.state.session?.ratingCounts ? { ...this.state.session.ratingCounts } : null
                 };
+                const previewMode = this.state.session?.noScheduleChanges && (this.state.session.settings?.cardSelectionMode === 'all' || this.state.session.studyingNonDue);
+                // Track rating in session statistics
+                if (this.state.session && this.state.session.ratingCounts) {
+                    this.state.session.ratingCounts[rating]++;
+                }
+                if (previewMode) {
+                    this.state.lastRating = null;
+                    this.setRatingEnabled(false);
+                    this.advanceSession(false);
+                    toast('Preview mode: scheduling unchanged');
+                    return;
+                }
                 const deck = this.deckById(card.deckId);
                 const alg = deck?.algorithm || 'SM-2';
                 if (alg === 'FSRS') card.fsrs = SRS.fsrs(card, rating);
@@ -4361,10 +4441,6 @@ async function handleRequest(request, env) {
                 card.fsrs = card.fsrs || {};
                 card.fsrs.lastRating = normalizeRating(rating);
                 card.reviewHistory.push({ rating, at: new Date().toISOString() });
-                // Track rating in session statistics
-                if (this.state.session && this.state.session.ratingCounts) {
-                    this.state.session.ratingCounts[rating]++;
-                }
                 await Storage.put('cards', card);
                 this.queueOp({ type: 'card-upsert', payload: card });
                 // Show undo toast
@@ -4577,7 +4653,7 @@ async function handleRequest(request, env) {
                 let payload;
                 try { payload = JSON.parse(text); } catch { payload = null; }
                 if (!payload?.cards?.length) return toast('Unsupported file');
-                const deck = this.newDeck(file.name.replace('.apkg', '').replace('.json', ''), 'FSRS');
+                const deck = this.newDeck(file.name.replace('.apkg', '').replace('.json', ''), 'SM-2');
                 this.state.decks.push(deck);
                 await Storage.put('decks', deck);
                 for (const raw of payload.cards) {
@@ -4622,7 +4698,7 @@ async function handleRequest(request, env) {
                         const deckId = did;
                         const deckName = decksMap[deckId] || file.name.replace('.apkg', '');
                         if (!deckCache[deckId]) {
-                            const deck = this.newDeck(deckName, 'FSRS');
+                            const deck = this.newDeck(deckName, 'SM-2');
                             deckCache[deckId] = deck;
                             this.state.decks.push(deck);
                             await Storage.put('decks', deck);
@@ -5150,6 +5226,7 @@ async function handleRequest(request, env) {
                         const required = [
                             ['Deck Name', 'title'],
                             ['Default SRS Algorithm', 'select'],
+                            ['Ordered', 'checkbox'],
                             ['Daily Review Limit', 'number'],
                             ['New Card Limit', 'number'],
                             ['Reverse Mode Enabled', 'checkbox'],
@@ -5310,7 +5387,7 @@ async function handleRequest(request, env) {
                 if (!ans) { toast('Enter or record an answer first'); return; }
                 if (!this.state.settings.aiKey) { toast('Add an AI key in Settings'); return; }
                 const deck = this.deckById(this.state.selectedCard.deckId);
-                const promptTemplate = deck?.aiPrompt || 'You are a strict flashcard grader. Question: {{question}}. Correct answer: {{answer}}. Learner answer: {{user}}. Judge correctness (short) and give brief feedback.';
+                const promptTemplate = deck?.aiPrompt || DEFAULT_AI_PROMPT;
                 // Swap question and answer if card is reversed
                 const isReversed = this.state.cardReversed;
                 const question = isReversed ? this.state.selectedCard.back : this.state.selectedCard.name;
