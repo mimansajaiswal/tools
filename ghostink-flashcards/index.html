@@ -1175,10 +1175,12 @@
                                             class="w-full rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] px-3 py-2 text-sm"></textarea>
                                         <div class="flex gap-2">
                                             <button id="aiRecord"
-                                                class="p-2 rounded-lg bg-[color:var(--surface)] border border-[color:var(--card-border)] text-[color:var(--text-main)] text-sm flex-1"
-                                                title="Record"><i data-lucide="mic" class="w-4 h-4 mx-auto"></i><kbd
-                                                    id="micHotkey"
-                                                    class="hidden md:inline-block text-[10px] ml-2 px-1 py-0.5 rounded bg-white/20 text-earth-metal/60"></kbd></button>
+                                                class="relative p-2 rounded-lg bg-[color:var(--surface)] border border-[color:var(--card-border)] text-[color:var(--text-main)] text-sm flex-1 pr-8"
+                                                title="Record">
+                                                <i data-lucide="mic" class="w-4 h-4 mx-auto"></i>
+                                                <kbd id="micHotkey"
+                                                    class="hidden md:inline-block absolute right-2 top-1/2 -translate-y-1/2 text-[10px] px-1 py-0.5 rounded bg-white/20 text-earth-metal/60"></kbd>
+                                            </button>
                                             <button id="aiSubmit"
                                                 class="px-3 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex-1">
                                                 Send <kbd id="aiSendHotkey"
@@ -1271,6 +1273,14 @@
                                     </button>
                                     <button id="fabCopy" class="fab-btn fab-btn-secondary hidden" title="Copy">
                                         <i data-lucide="clipboard"></i>
+                                    </button>
+                                    <button id="fabMic" class="fab-btn fab-btn-secondary hidden"
+                                        title="Record (AI mode)">
+                                        <i data-lucide="mic"></i>
+                                    </button>
+                                    <button id="fabSend" class="fab-btn fab-btn-secondary hidden"
+                                        title="Send (AI mode)">
+                                        <i data-lucide="send"></i>
                                     </button>
                                 </div>
                             </div>
@@ -2810,6 +2820,8 @@ async function handleRequest(request, env) {
                 this.state.aiLocked = locked;
                 const sendBtn = el('#aiSubmit');
                 const micBtn = el('#aiRecord');
+                const fabMic = el('#fabMic');
+                const fabSend = el('#fabSend');
                 if (sendBtn) {
                     sendBtn.disabled = locked || sendBtn.dataset.empty === '1';
                     sendBtn.classList.toggle('opacity-50', sendBtn.disabled);
@@ -2817,8 +2829,29 @@ async function handleRequest(request, env) {
                 }
                 if (micBtn) {
                     micBtn.disabled = locked;
+                    const listening = !!this.state.currentRecorder && !locked;
+                    micBtn.classList.toggle('ring', listening);
+                    micBtn.classList.toggle('ring-dull-purple', listening);
+                    micBtn.classList.toggle('ring-offset-2', listening);
+                    micBtn.classList.toggle('animate-pulse', listening);
+                    micBtn.classList.toggle('bg-dull-purple/20', listening);
                     micBtn.classList.toggle('opacity-50', micBtn.disabled);
                     micBtn.classList.toggle('cursor-not-allowed', micBtn.disabled);
+                }
+                if (fabMic) {
+                    fabMic.disabled = locked;
+                    const listening = !!this.state.currentRecorder && !locked;
+                    fabMic.classList.toggle('ring', listening);
+                    fabMic.classList.toggle('ring-dull-purple', listening);
+                    fabMic.classList.toggle('animate-pulse', listening);
+                    fabMic.classList.toggle('bg-dull-purple/20', listening);
+                    fabMic.classList.toggle('opacity-50', fabMic.disabled);
+                    fabMic.classList.toggle('cursor-not-allowed', fabMic.disabled);
+                }
+                if (fabSend) {
+                    fabSend.disabled = locked || (sendBtn && sendBtn.dataset.empty === '1');
+                    fabSend.classList.toggle('opacity-50', fabSend.disabled);
+                    fabSend.classList.toggle('cursor-not-allowed', fabSend.disabled);
                 }
             },
             generateCardQueue(deckIds, includeNonDue = false) {
@@ -3486,6 +3519,10 @@ async function handleRequest(request, env) {
                     this.setAiControlsLocked(this.state.aiLocked);
                 };
                 el('#aiRecord').onclick = () => { if (!this.state.aiLocked) this.recordAnswer(); };
+                const fabMic = el('#fabMic');
+                const fabSend = el('#fabSend');
+                if (fabMic) fabMic.onclick = () => { if (!this.state.aiLocked) this.recordAnswer(); };
+                if (fabSend) fabSend.onclick = () => { if (!this.state.aiLocked) this.submitToAI(); };
                 el('#confirmDelete').onclick = () => this.performDelete();
                 el('#cancelDelete').onclick = () => this.closeModal('confirmModal');
                 el('#confirmModal').addEventListener('click', (e) => { if (e.target === el('#confirmModal')) this.closeModal('confirmModal'); });
@@ -5978,6 +6015,10 @@ async function handleRequest(request, env) {
             async submitToAI() {
                 if (this.state.aiLocked) return;
                 if (!this.state.selectedCard) return;
+                // Stop any ongoing mic recording before sending
+                if (this.state.currentRecorder) {
+                    this.state.currentRecorder.stop();
+                }
                 const ans = el('#aiAnswer').value.trim();
                 if (!ans) { toast('Enter or record an answer first'); return; }
                 if (!navigator.onLine) {
@@ -6133,6 +6174,8 @@ async function handleRequest(request, env) {
                 const fabPreRevealActions = el('#fabPreRevealActions');
                 const fabCopy = el('#fabCopy');
                 const fabAddNote = el('#fabAddNote');
+                const fabMic = el('#fabMic');
+                const fabSend = el('#fabSend');
 
                 // Only show FAB cluster when there's an active card with reveal button visible or already revealed
                 const showFab = hasCard && inSession && (revealBtnVisible || revealed);
@@ -6145,6 +6188,8 @@ async function handleRequest(request, env) {
                 // Show copy and add note only when revealed
                 if (fabCopy) fabCopy.classList.toggle('hidden', !revealed);
                 if (fabAddNote) fabAddNote.classList.toggle('hidden', !revealed);
+                if (fabMic) fabMic.classList.toggle('hidden', !hasCard || !inSession || this.state.answerRevealed || el('#revisionMode').value !== 'ai');
+                if (fabSend) fabSend.classList.toggle('hidden', !hasCard || !inSession || this.state.answerRevealed || el('#revisionMode').value !== 'ai');
 
                 // Re-init lucide icons for the joystick
                 if (revealed) {
@@ -6214,6 +6259,7 @@ async function handleRequest(request, env) {
                         el('#aiFeedback').innerHTML = 'Captured. Now send.';
                     }
                     this.state.currentRecorder = null;
+                    this.setAiControlsLocked(this.state.aiLocked);
                 };
                 rec.start();
             },
