@@ -637,6 +637,18 @@
             color: var(--text-sub) !important;
         }
 
+        body[data-theme="dark"] .text-muted-pink {
+            color: #f2c0ca !important;
+        }
+
+        body[data-theme="dark"] .text-dull-purple {
+            color: #c9b4e6 !important;
+        }
+
+        body[data-theme="dark"] .text-amber-800 {
+            color: #ffd8a1 !important;
+        }
+
         .text-charcoal {
             color: var(--text-main) !important;
         }
@@ -961,7 +973,7 @@
                                         class="text-sm md:text-base text-charcoal font-medium">Session: 0/0</span>
                                 </div>
                                 <div id="previewBadge"
-                                    class="hidden text-[11px] px-2 py-1 rounded-lg bg-amber-100 text-amber-800 border border-amber-200">
+                                    class="hidden text-[11px] px-2 py-1 rounded-lg bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-100 dark:border-amber-600/60">
                                     Preview mode: no scheduling changes
                                 </div>
                                 <button id="abandonSessionBtn"
@@ -1153,28 +1165,28 @@
                                 <div id="studyControls">
                                     <div class="grid grid-cols-4 gap-1 md:gap-2">
                                         <button data-rate="Again" aria-label="Rate as Again (1)"
-                                            class="rate-btn relative px-1 md:px-2 py-2 rounded-lg bg-red-100 border border-red-300 text-red-700 text-[10px] md:text-xs hover:bg-red-200 flex items-center justify-center gap-1">
+                                            class="rate-btn relative px-1 md:px-2 py-2 rounded-lg bg-red-100 border border-red-300 text-red-700 text-[10px] md:text-xs hover:bg-red-200 dark:bg-red-900/30 dark:border-red-700 dark:text-red-200 dark:hover:bg-red-900/50 flex items-center justify-center gap-1">
                                             <i data-lucide="refresh-cw" class="w-3 h-3"></i>
                                             <span>Again</span>
                                             <kbd
                                                 class="hidden md:flex absolute -top-1.5 -right-1.5 w-4 h-4 items-center justify-center text-[8px] rounded bg-red-600 text-white font-medium shadow-sm">1</kbd>
                                         </button>
                                         <button data-rate="Hard" aria-label="Rate as Hard (2)"
-                                            class="rate-btn relative px-1 md:px-2 py-2 rounded-lg bg-orange-100 border border-orange-300 text-orange-700 text-[10px] md:text-xs hover:bg-orange-200 flex items-center justify-center gap-1">
+                                            class="rate-btn relative px-1 md:px-2 py-2 rounded-lg bg-orange-100 border border-orange-300 text-orange-700 text-[10px] md:text-xs hover:bg-orange-200 dark:bg-orange-900/30 dark:border-orange-700 dark:text-orange-200 dark:hover:bg-orange-900/50 flex items-center justify-center gap-1">
                                             <i data-lucide="alert-triangle" class="w-3 h-3"></i>
                                             <span>Hard</span>
                                             <kbd
                                                 class="hidden md:flex absolute -top-1.5 -right-1.5 w-4 h-4 items-center justify-center text-[8px] rounded bg-orange-500 text-white font-medium shadow-sm">2</kbd>
                                         </button>
                                         <button data-rate="Good" aria-label="Rate as Good (3)"
-                                            class="rate-btn relative px-1 md:px-2 py-2 rounded-lg bg-green-100 border border-green-300 text-green-700 text-[10px] md:text-xs hover:bg-green-200 flex items-center justify-center gap-1">
+                                            class="rate-btn relative px-1 md:px-2 py-2 rounded-lg bg-green-100 border border-green-300 text-green-700 text-[10px] md:text-xs hover:bg-green-200 dark:bg-green-900/30 dark:border-green-700 dark:text-green-200 dark:hover:bg-green-900/50 flex items-center justify-center gap-1">
                                             <i data-lucide="thumbs-up" class="w-3 h-3"></i>
                                             <span>Good</span>
                                             <kbd
                                                 class="hidden md:flex absolute -top-1.5 -right-1.5 w-4 h-4 items-center justify-center text-[8px] rounded bg-green-600 text-white font-medium shadow-sm">3</kbd>
                                         </button>
                                         <button data-rate="Easy" aria-label="Rate as Easy (4)"
-                                            class="rate-btn relative px-1 md:px-2 py-2 rounded-lg bg-blue-100 border border-blue-300 text-blue-700 text-[10px] md:text-xs hover:bg-blue-200 flex items-center justify-center gap-1">
+                                            class="rate-btn relative px-1 md:px-2 py-2 rounded-lg bg-blue-100 border border-blue-300 text-blue-700 text-[10px] md:text-xs hover:bg-blue-200 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-200 dark:hover:bg-blue-900/50 flex items-center justify-center gap-1">
                                             <i data-lucide="zap" class="w-3 h-3"></i>
                                             <span>Easy</span>
                                             <kbd
@@ -1287,10 +1299,11 @@
         class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4">
         <div class="card rounded-2xl p-5 w-full max-w-sm shadow-soft">
             <p id="confirmModalTitle" class="text-charcoal font-display text-lg mb-2">Confirm delete</p>
-            <p class="text-sm text-earth-metal/70">This removes it locally and syncs deletion to Notion.</p>
+            <p class="text-sm text-earth-metal/70 dark:text-white/70">This removes it locally and syncs deletion to
+                Notion.</p>
             <div class="flex justify-end gap-2 mt-4">
                 <button id="cancelDelete"
-                    class="px-3 py-2 rounded-xl bg-white-linen border border-oatmeal-dark/70 text-earth-metal text-sm">Cancel</button>
+                    class="px-3 py-2 rounded-xl bg-white-linen border border-oatmeal-dark/70 text-earth-metal dark:text-white text-sm dark:bg-zinc-800 dark:border-white/10 dark:hover:bg-zinc-700">Cancel</button>
                 <button id="confirmDelete" class="px-3 py-2 rounded-xl bg-muted-pink text-white text-sm">Delete</button>
             </div>
         </div>
@@ -1301,12 +1314,12 @@
         class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
         <div class="card rounded-2xl p-5 w-full max-w-md shadow-soft">
             <div class="flex items-center gap-3 mb-3">
-                <div class="p-2 rounded-full bg-red-100">
+                <div class="p-2 rounded-full bg-red-100 dark:bg-red-900/40">
                     <i data-lucide="alert-triangle" class="w-5 h-5 text-red-600"></i>
                 </div>
                 <h3 id="resetAlgorithmTitle" class="text-charcoal font-display text-lg">Reset Algorithm Parameters</h3>
             </div>
-            <div class="space-y-3 text-sm text-earth-metal/80">
+            <div class="space-y-3 text-sm text-earth-metal/80 dark:text-white/75">
                 <p>This will reset <strong>all spaced repetition data</strong> for every card in <span
                         id="resetDeckName" class="font-semibold text-charcoal">this deck</span>:</p>
                 <ul class="list-disc list-inside space-y-1 text-earth-metal/70 ml-2">
@@ -1315,9 +1328,11 @@
                     <li>Review history will be preserved</li>
                     <li>Cards will appear as new again</li>
                 </ul>
-                <div class="p-3 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-2">
+                <div
+                    class="p-3 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-900/30 dark:border-amber-600/60 flex items-start gap-2">
                     <i data-lucide="cloud-upload" class="w-4 h-4 text-amber-600 mt-0.5 shrink-0"></i>
-                    <p class="text-amber-800 text-xs">These changes will be synced to Notion. This action cannot be
+                    <p class="text-amber-800 dark:text-amber-100 text-xs">These changes will be synced to Notion. This
+                        action cannot be
                         undone.</p>
                 </div>
             </div>
@@ -1343,12 +1358,13 @@
                     class="text-earth-metal/60 hover:text-charcoal"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
             <!-- Status bar spanning full width -->
-            <div class="rounded-xl border border-oatmeal-dark/60 p-3 bg-oatmeal/60 mb-4">
+            <div
+                class="rounded-xl border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-oatmeal/60 dark:bg-white/5 mb-4">
                 <div class="flex items-center gap-2 mb-2">
-                    <i data-lucide="shield-check" class="w-4 h-4 text-dull-purple"></i>
-                    <p class="font-semibold text-charcoal text-sm">Status</p>
+                    <i data-lucide="shield-check" class="w-4 h-4 text-dull-purple dark:text-dull-purple"></i>
+                    <p class="font-semibold text-charcoal dark:text-white text-sm">Status</p>
                 </div>
-                <div class="flex flex-wrap gap-4 text-xs text-earth-metal/80">
+                <div class="flex flex-wrap gap-4 text-xs text-earth-metal/80 dark:text-white/70">
                     <span id="statusWorker">Worker: missing</span>
                     <span id="statusAuth">Auth: missing</span>
                     <span id="statusSources">Sources: missing</span>
@@ -1356,15 +1372,17 @@
             </div>
             <div class="grid md:grid-cols-2 gap-6 text-sm">
                 <div class="space-y-4">
-                    <div class="rounded-xl border border-oatmeal-dark/60 p-3 bg-white-linen">
+                    <div
+                        class="rounded-xl border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-white-linen dark:bg-white/5">
                         <div class="flex items-center justify-between">
-                            <p class="font-semibold text-charcoal">Worker proxy</p>
+                            <p class="font-semibold text-charcoal dark:text-white">Worker proxy</p>
                             <button id="openWorkerHelp"
                                 class="px-3 py-1.5 rounded-full bg-oatmeal text-earth-metal text-xs border border-oatmeal-dark/70 flex items-center gap-2">
                                 <i data-lucide="code" class="w-4 h-4"></i> Worker code
                             </button>
                         </div>
-                        <p class="text-xs text-earth-metal/70 mt-1">Add Cloudflare Worker URL even if you plan to sign
+                        <p class="text-xs text-earth-metal/70 dark:text-white/70 mt-1">Add Cloudflare Worker URL even if
+                            you plan to sign
                             in with Notion.</p>
                     </div>
                     <div>
@@ -1414,36 +1432,39 @@
                     </div>
                 </div>
                 <div class="space-y-4">
-                    <div class="rounded-xl border border-oatmeal-dark/60 p-3 bg-white-linen">
+                    <div
+                        class="rounded-xl border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-white-linen dark:bg-white/5">
                         <div class="flex items-center gap-2">
-                            <i data-lucide="database" class="w-4 h-4 text-dull-purple"></i>
-                            <p class="font-semibold text-charcoal">Offline vault</p>
+                            <i data-lucide="database" class="w-4 h-4 text-dull-purple dark:text-dull-purple"></i>
+                            <p class="font-semibold text-charcoal dark:text-white">Offline vault</p>
                         </div>
                         <div class="mt-3 grid grid-cols-2 gap-3 text-sm">
-                            <div class="rounded-xl bg-oatmeal p-3">
-                                <p class="text-earth-metal/60">Decks cached</p>
-                                <p id="deckCount" class="text-xl font-semibold text-charcoal">0</p>
+                            <div class="rounded-xl bg-oatmeal dark:bg-white/10 p-3">
+                                <p class="text-earth-metal/60 dark:text-white/60">Decks cached</p>
+                                <p id="deckCount" class="text-xl font-semibold text-charcoal dark:text-white">0</p>
                             </div>
-                            <div class="rounded-xl bg-oatmeal p-3">
-                                <p class="text-earth-metal/60">Cards cached</p>
-                                <p id="cardCount" class="text-xl font-semibold text-charcoal">0</p>
+                            <div class="rounded-xl bg-oatmeal dark:bg-white/10 p-3">
+                                <p class="text-earth-metal/60 dark:text-white/60">Cards cached</p>
+                                <p id="cardCount" class="text-xl font-semibold text-charcoal dark:text-white">0</p>
                             </div>
-                            <div class="rounded-xl bg-white-linen p-3">
-                                <p class="text-earth-metal/60">Pending sync</p>
-                                <p id="queueCount" class="text-xl font-semibold text-charcoal">0</p>
+                            <div class="rounded-xl bg-white-linen dark:bg-white/10 p-3">
+                                <p class="text-earth-metal/60 dark:text-white/60">Pending sync</p>
+                                <p id="queueCount" class="text-xl font-semibold text-charcoal dark:text-white">0</p>
                             </div>
-                            <div class="rounded-xl bg-white-linen p-3">
-                                <p class="text-earth-metal/60">Last sync</p>
-                                <p id="lastSync" class="text-xl font-semibold text-charcoal">—</p>
+                            <div class="rounded-xl bg-white-linen dark:bg-white/10 p-3">
+                                <p class="text-earth-metal/60 dark:text-white/60">Last sync</p>
+                                <p id="lastSync" class="text-xl font-semibold text-charcoal dark:text-white">—</p>
                             </div>
                         </div>
-                        <p class="mt-3 text-xs text-earth-metal/70">IndexedDB holds all decks/cards/FSRS/notes for
+                        <p class="mt-3 text-xs text-earth-metal/70 dark:text-white/70">IndexedDB holds all
+                            decks/cards/FSRS/notes for
                             offline-first use.</p>
                     </div>
-                    <div class="rounded-xl border border-oatmeal-dark/60 p-3 bg-white-linen">
+                    <div
+                        class="rounded-xl border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-white-linen dark:bg-white/5">
                         <div class="flex items-center gap-2 mb-2">
-                            <i data-lucide="bot" class="w-4 h-4 text-dull-purple"></i>
-                            <p class="font-semibold text-charcoal">AI judge settings</p>
+                            <i data-lucide="bot" class="w-4 h-4 text-dull-purple dark:text-dull-purple"></i>
+                            <p class="font-semibold text-charcoal dark:text-white">AI judge settings</p>
                         </div>
                         <div class="space-y-2">
                             <div>
@@ -1513,9 +1534,9 @@
                         </div>
                     </div>
                     <!-- Danger Zone -->
-                    <div class="mt-4 border-t border-oatmeal-dark/40 pt-4">
+                    <div class="mt-4 border-t border-oatmeal-dark/40 dark:border-white/10 pt-4">
                         <button id="toggleDangerZone"
-                            class="w-full flex items-center justify-between text-sm text-muted-pink hover:text-muted-pink/80 transition">
+                            class="w-full flex items-center justify-between text-sm text-muted-pink dark:text-muted-pink/80 hover:text-muted-pink/80 transition">
                             <span class="flex items-center gap-2">
                                 <i data-lucide="alert-triangle" class="w-4 h-4"></i>
                                 <span>Danger Zone</span>
@@ -1524,8 +1545,9 @@
                                 class="w-4 h-4 transition-transform"></i>
                         </button>
                         <div id="dangerZoneContent"
-                            class="hidden mt-3 p-3 rounded-xl bg-muted-pink/10 border border-muted-pink/30">
-                            <p class="text-xs text-earth-metal/70 mb-3">This will permanently delete all GhostInk data
+                            class="hidden mt-3 p-3 rounded-xl bg-muted-pink/10 border border-muted-pink/30 dark:bg-muted-pink/15 dark:border-muted-pink/40">
+                            <p class="text-xs text-earth-metal/70 dark:text-white/70 mb-3">This will permanently delete
+                                all GhostInk data
                                 including decks, cards, settings, and session data. Data synced to Notion will not be
                                 affected.</p>
                             <button id="resetApp"
@@ -1557,7 +1579,7 @@
                 </ol>
                 <div class="relative">
                     <button id="copyWorkerCode"
-                        class="absolute top-2 right-2 bg-white/80 hover:bg-white px-2 py-1 rounded text-xs shadow text-charcoal font-bold">Copy</button>
+                        class="absolute top-2 right-2 bg-white/80 hover:bg-white px-2 py-1 rounded text-xs shadow text-charcoal font-bold dark:bg-white/10 dark:hover:bg-white/20 dark:text-white">Copy</button>
                     <pre id="workerCodeBlock"
                         class="bg-charcoal text-white-linen p-4 rounded text-xs font-mono overflow-x-auto">
 const NOTION_API_END_POINT = "https://api.notion.com/v1";
@@ -1735,9 +1757,23 @@ async function handleRequest(request, env) {
                         class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"></textarea>
                 </div>
                 <div class="space-y-2">
-                    <label class="text-xs text-earth-metal/70">Tags (comma)</label>
-                    <input id="cardTagsInput" type="text"
-                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
+                    <label class="text-xs text-earth-metal/70">Tags</label>
+                    <div class="flex items-center gap-2">
+                        <input id="cardTagInput" type="text" placeholder="Type and hit Enter to add"
+                            class="flex-1 rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
+                        <button id="refreshTagOptionsBtn"
+                            class="px-3 py-2 rounded-xl bg-white-linen border border-oatmeal-dark/70 text-earth-metal text-sm"
+                            title="Refresh tags from Notion">Refresh</button>
+                    </div>
+                    <div id="cardTagDropdown"
+                        class="rounded-xl border border-oatmeal-dark/60 bg-[color:var(--card-bg)] p-2 space-y-2">
+                        <div class="text-[11px] text-earth-metal/60">Tap to select multiple tags</div>
+                        <div id="cardTagOptions" class="flex flex-wrap gap-1.5"></div>
+                    </div>
+                    <div>
+                        <p class="text-[11px] text-earth-metal/60 mb-1">Selected</p>
+                        <div id="cardSelectedTags" class="flex flex-wrap gap-1.5 min-h-[32px]"></div>
+                    </div>
                 </div>
                 <div class="space-y-2">
                     <label class="text-xs text-earth-metal/70">Suspended / Leech</label>
@@ -1801,7 +1837,8 @@ async function handleRequest(request, env) {
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
-            <p class="text-xs text-earth-metal/70">Write notes in Markdown format. They will be synced to Notion.</p>
+            <p class="text-xs text-earth-metal/70 dark:text-white/70">Write notes in Markdown format. They will be
+                synced to Notion.</p>
             <textarea id="notesArea" rows="12"
                 class="flex-1 w-full rounded-xl border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-dull-purple/40"
                 placeholder="Add notes for this card..."></textarea>
@@ -1827,11 +1864,12 @@ async function handleRequest(request, env) {
                 </div>
                 <h3 class="font-display text-lg text-charcoal">Reset GhostInk?</h3>
             </div>
-            <p class="text-sm text-earth-metal/70 mb-4">This will permanently delete all local data including decks,
+            <p class="text-sm text-earth-metal/70 dark:text-white/70 mb-4">This will permanently delete all local data
+                including decks,
                 cards, settings, and study session. This cannot be undone.</p>
             <div class="flex justify-end gap-2">
                 <button id="cancelReset"
-                    class="px-4 py-2 rounded-xl border border-oatmeal-dark text-earth-metal text-sm">Cancel</button>
+                    class="px-4 py-2 rounded-xl border border-oatmeal-dark text-earth-metal dark:text-white dark:border-white/10 dark:hover:bg-zinc-800 text-sm">Cancel</button>
                 <button id="confirmReset"
                     class="px-4 py-2 rounded-xl bg-muted-pink text-white text-sm hover:bg-muted-pink/90">Reset</button>
             </div>
@@ -1848,7 +1886,8 @@ async function handleRequest(request, env) {
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
-            <p class="text-xs text-earth-metal/70">This will be appended as a new paragraph on the Notion page with a
+            <p class="text-xs text-earth-metal/70 dark:text-white/70">This will be appended as a new paragraph on the
+                Notion page with a
                 timestamp.</p>
             <textarea id="blockNoteArea" rows="8"
                 class="flex-1 w-full rounded-xl border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-dull-purple/40"
@@ -2670,12 +2709,17 @@ async function handleRequest(request, env) {
                 sessionReversed: null,  // Pre-computed reverse decision from session
                 lastRating: null,  // For undo feature: { cardId, sm2, fsrs, history, rating, sessionIndex }
                 undoToastTimeout: null,
-                lastFocusedElement: null  // For modal focus management
+                lastFocusedElement: null,  // For modal focus management
+                tagOptions: [],
+                tagSelection: []
             },
             async init() {
                 showLoading('Preparing app...', 'Loading your decks and cards.');
                 await Storage.init();
                 await this.loadFromDB();
+                if (!this.state.tagOptions || this.state.tagOptions.length === 0) {
+                    this.state.tagOptions = this.buildLocalTagOptions();
+                }
                 this.loadSession();  // Load any active study session
                 this.captureOAuth();
                 this.bind();
@@ -2894,17 +2938,17 @@ async function handleRequest(request, env) {
 
                 // Build rating distribution bar with aligned numbers
                 const ratingBar = totalRatings > 0 ? `
-                    <div class="flex w-full h-2 rounded-full overflow-hidden bg-oatmeal-dark/30 mt-2">
-                        ${ratings.Again > 0 ? `<div class="bg-red-400" style="width: ${againPct}%"></div>` : ''}
-                        ${ratings.Hard > 0 ? `<div class="bg-orange-400" style="width: ${hardPct}%"></div>` : ''}
-                        ${ratings.Good > 0 ? `<div class="bg-green-400" style="width: ${goodPct}%"></div>` : ''}
-                        ${ratings.Easy > 0 ? `<div class="bg-blue-400" style="width: ${easyPct}%"></div>` : ''}
+                    <div class="flex w-full h-2 rounded-full overflow-hidden bg-oatmeal-dark/30 dark:bg-white/10 mt-2">
+                        ${ratings.Again > 0 ? `<div class="bg-red-400 dark:bg-red-700" style="width: ${againPct}%"></div>` : ''}
+                        ${ratings.Hard > 0 ? `<div class="bg-orange-400 dark:bg-orange-700" style="width: ${hardPct}%"></div>` : ''}
+                        ${ratings.Good > 0 ? `<div class="bg-green-400 dark:bg-green-700" style="width: ${goodPct}%"></div>` : ''}
+                        ${ratings.Easy > 0 ? `<div class="bg-blue-400 dark:bg-blue-700" style="width: ${easyPct}%"></div>` : ''}
                     </div>
                     <div class="flex w-full text-[10px] mt-1">
-                        ${ratings.Again > 0 ? `<span class="text-red-500 text-center" style="width: ${againPct}%">${ratings.Again}</span>` : ''}
-                        ${ratings.Hard > 0 ? `<span class="text-orange-500 text-center" style="width: ${hardPct}%">${ratings.Hard}</span>` : ''}
-                        ${ratings.Good > 0 ? `<span class="text-green-500 text-center" style="width: ${goodPct}%">${ratings.Good}</span>` : ''}
-                        ${ratings.Easy > 0 ? `<span class="text-blue-500 text-center" style="width: ${easyPct}%">${ratings.Easy}</span>` : ''}
+                        ${ratings.Again > 0 ? `<span class="text-red-500 dark:text-red-200 text-center" style="width: ${againPct}%">${ratings.Again}</span>` : ''}
+                        ${ratings.Hard > 0 ? `<span class="text-orange-500 dark:text-orange-200 text-center" style="width: ${hardPct}%">${ratings.Hard}</span>` : ''}
+                        ${ratings.Good > 0 ? `<span class="text-green-500 dark:text-green-200 text-center" style="width: ${goodPct}%">${ratings.Good}</span>` : ''}
+                        ${ratings.Easy > 0 ? `<span class="text-blue-500 dark:text-blue-200 text-center" style="width: ${easyPct}%">${ratings.Easy}</span>` : ''}
                     </div>
                 ` : '';
 
@@ -3009,6 +3053,8 @@ async function handleRequest(request, env) {
                 if (lp) this.state.lastPull = lp.value;
                 const lpush = meta.find(m => m.key === 'lastPush');
                 if (lpush) this.state.lastPush = lpush.value;
+                const tagMeta = meta.find(m => m.key === 'tagOptions');
+                if (tagMeta && Array.isArray(tagMeta.value)) this.state.tagOptions = tagMeta.value;
             },
             async seedIfEmpty() {
                 return;
@@ -3108,6 +3154,16 @@ async function handleRequest(request, env) {
                 el('#startSessionBtn').onclick = () => this.startSession();
                 el('#abandonSessionBtn').onclick = () => this.abandonSession();
                 document.querySelectorAll('.rate-btn').forEach(btn => btn.onclick = (e) => this.rate(e.currentTarget.dataset.rate));
+                const tagInput = el('#cardTagInput');
+                if (tagInput) tagInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ',' || e.key === 'Tab') {
+                        e.preventDefault();
+                        this.addTagFromInput();
+                    }
+                });
+                if (tagInput) tagInput.addEventListener('blur', () => this.addTagFromInput());
+                const refreshTagsBtn = el('#refreshTagOptionsBtn');
+                if (refreshTagsBtn) refreshTagsBtn.onclick = () => this.refreshTagOptions();
                 el('#cardSearchInput').oninput = (e) => { this.state.cardSearch = e.target.value; this.renderCards(); };
                 el('#libraryDeckSearch').oninput = (e) => { this.state.deckSearch = e.target.value; this.renderDecks(); };
                 el('#filterAgain').onchange = (e) => { this.state.filters.again = e.target.checked; this.renderCards(); this.updateActiveFiltersCount(); };
@@ -3688,6 +3744,101 @@ async function handleRequest(request, env) {
                     };
                 });
             },
+            buildLocalTagOptions() {
+                const tagMap = new Map();
+                this.state.cards.forEach(c => {
+                    (c.tags || []).forEach(t => {
+                        if (!tagMap.has(t.name)) tagMap.set(t.name, t.color || 'default');
+                    });
+                });
+                return Array.from(tagMap.entries()).map(([name, color]) => ({ name, color }));
+            },
+            collectTagOptions() {
+                const tagMap = new Map();
+                (this.state.tagOptions || []).forEach(t => { if (t?.name) tagMap.set(t.name, t.color || 'default'); });
+                this.buildLocalTagOptions().forEach(t => { if (!tagMap.has(t.name)) tagMap.set(t.name, t.color || 'default'); });
+                return Array.from(tagMap.entries())
+                    .map(([name, color]) => ({ name, color }))
+                    .sort((a, b) => a.name.localeCompare(b.name));
+            },
+            renderCardTagSelectors() {
+                const optionsEl = el('#cardTagOptions');
+                const selectedEl = el('#cardSelectedTags');
+                if (!optionsEl || !selectedEl) return;
+                const selected = this.state.tagSelection || [];
+                const options = this.collectTagOptions();
+                if (options.length === 0) {
+                    optionsEl.innerHTML = '<span class="text-earth-metal/50 text-xs">No tags yet. Add one above.</span>';
+                } else {
+                    optionsEl.innerHTML = options.map(opt => {
+                        const active = selected.includes(opt.name);
+                        const baseClass = `px-2 py-1 rounded-full text-[11px] border transition ${active ? 'bg-dull-purple text-white border-dull-purple shadow-sm' : 'bg-oatmeal text-earth-metal border-oatmeal-dark/60 hover:border-dull-purple/60'}`;
+                        return `<button type="button" class="tag-option-btn ${baseClass}" data-tag="${escapeHtml(opt.name)}">${escapeHtml(opt.name)}</button>`;
+                    }).join('');
+                    optionsEl.querySelectorAll('.tag-option-btn').forEach(btn => {
+                        btn.onclick = () => {
+                            const tag = btn.dataset.tag;
+                            const idx = selected.indexOf(tag);
+                            if (idx >= 0) selected.splice(idx, 1); else selected.push(tag);
+                            this.state.tagSelection = selected;
+                            this.renderCardTagSelectors();
+                        };
+                    });
+                }
+                selectedEl.innerHTML = selected.length
+                    ? selected.map(name => {
+                        const color = this.collectTagOptions().find(t => t.name === name)?.color || 'default';
+                        const bgClass = `notion-color-${color.replace('_', '-')}-background`;
+                        return `<span class="px-2 py-1 rounded-full text-[11px] ${bgClass} border border-oatmeal-dark/50">${escapeHtml(name)}</span>`;
+                    }).join('')
+                    : '<span class="text-earth-metal/50 text-xs">No tags selected</span>';
+            },
+            addTagFromInput() {
+                const input = el('#cardTagInput');
+                if (!input) return;
+                const raw = (input.value || '').trim();
+                if (!raw) { input.value = ''; return; }
+                const parts = raw.split(',').map(t => t.trim()).filter(Boolean);
+                let changed = false;
+                parts.forEach(name => {
+                    if (!this.state.tagSelection.includes(name)) {
+                        this.state.tagSelection.push(name);
+                        changed = true;
+                    }
+                    if (!this.state.tagOptions.some(t => t.name === name)) {
+                        this.state.tagOptions.push({ name, color: 'default' });
+                        changed = true;
+                    }
+                });
+                if (changed) Storage.setMeta('tagOptions', this.state.tagOptions).catch(() => { });
+                input.value = '';
+                this.renderCardTagSelectors();
+            },
+            async refreshTagOptions() {
+                const btn = el('#refreshTagOptionsBtn');
+                if (btn) btn.disabled = true;
+                try {
+                    if (!this.isReady()) {
+                        this.state.tagOptions = this.buildLocalTagOptions();
+                        this.renderCardTagSelectors();
+                        toast('Offline: using local tags');
+                        return;
+                    }
+                    const { cardSource } = this.state.settings;
+                    if (!cardSource) throw new Error('Missing card source');
+                    const db = await API.getDatabase(cardSource);
+                    const opts = db?.properties?.['Tags']?.multi_select?.options || [];
+                    this.state.tagOptions = opts.map(o => ({ name: o.name, color: o.color || 'default' }));
+                    await Storage.setMeta('tagOptions', this.state.tagOptions);
+                    this.renderCardTagSelectors();
+                    toast('Tags refreshed');
+                } catch (e) {
+                    console.error('Refresh tags failed', e);
+                    toast('Could not refresh tags');
+                } finally {
+                    if (btn) btn.disabled = false;
+                }
+            },
             renderStudyDeckSelection() {
                 const dropdown = el('#deckDropdown');
                 const display = el('#selectedDecksDisplay');
@@ -3940,7 +4091,9 @@ async function handleRequest(request, env) {
                 el('#cardNameInput').value = card?.name ?? '';
                 el('#cardBackInput').value = card?.back ?? '';
                 el('#cardNotesInput').value = card?.notes ?? '';
-                el('#cardTagsInput').value = card?.tags?.map(t => t.name).join(', ') ?? '';
+                // Initialize tag selection for modal
+                this.state.tagSelection = card?.tags?.map(t => t.name) || [];
+                this.renderCardTagSelectors();
                 el('#cardSuspendedInput').checked = card?.suspended ?? false;
                 el('#cardLeechInput').checked = card?.leech ?? false;
                 el('#deleteCardBtn').classList.toggle('hidden', !card);
@@ -4007,7 +4160,10 @@ async function handleRequest(request, env) {
                     const autoType = detectCardType(card.name, card.back);
                     if (card.type === 'Front-Back' && autoType === 'Cloze') card.type = 'Cloze';
                 }
-                card.tags = el('#cardTagsInput').value.split(',').map(t => t.trim()).filter(Boolean).map(name => ({ name, color: 'default' }));
+                const selectedTags = this.state.tagSelection || [];
+                const optionMap = new Map(this.collectTagOptions().map(t => [t.name, t.color || 'default']));
+                const existingColors = new Map((this.state.editingCard?.tags || []).map(t => [t.name, t.color || 'default']));
+                card.tags = selectedTags.map(name => ({ name, color: optionMap.get(name) || existingColors.get(name) || 'default' }));
                 card.suspended = el('#cardSuspendedInput').checked;
                 card.leech = el('#cardLeechInput').checked;
                 // Only set updatedInApp if name/back/notes changed (affects rich_text preservation)
@@ -4015,6 +4171,13 @@ async function handleRequest(request, env) {
                 if (card.name !== oldName || card.back !== oldBack || card.notes !== oldNotes) {
                     card.updatedInApp = true;
                 }
+                // Ensure selected tags are stored for future modal suggestions
+                selectedTags.forEach(name => {
+                    if (!this.state.tagOptions.some(t => t.name === name)) {
+                        this.state.tagOptions.push({ name, color: optionMap.get(name) || 'default' });
+                    }
+                });
+                Storage.setMeta('tagOptions', this.state.tagOptions).catch(() => { });
                 if (!this.state.editingCard) this.state.cards.push(card);
                 await Storage.put('cards', card);
                 this.queueOp({ type: 'card-upsert', payload: card });
