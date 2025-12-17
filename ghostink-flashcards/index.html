@@ -1996,6 +1996,20 @@ async function handleRequest(request, env) {
                     req.onerror = reject;
                 });
             },
+            async getMeta(key) {
+                return new Promise((resolve, reject) => {
+                    const req = this.tx('meta').get(key);
+                    req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                    req.onerror = reject;
+                });
+            },
+            async setMeta(key, value) {
+                return new Promise((resolve, reject) => {
+                    const req = this.tx('meta', 'readwrite').put({ key, value });
+                    req.onsuccess = resolve;
+                    req.onerror = reject;
+                });
+            },
             async put(store, value) {
                 return new Promise((resolve, reject) => {
                     const req = this.tx(store, 'readwrite').put(value);
@@ -2987,6 +3001,7 @@ async function handleRequest(request, env) {
                     ...d
                 }));
                 this.state.cards = await Storage.getAll('cards');
+                this.state.queue = (await Storage.getMeta('queue')) || [];
                 const meta = await Storage.getAll('meta');
                 const last = meta.find(m => m.key === 'lastSync');
                 if (last) this.state.lastSync = last.value;
@@ -4017,28 +4032,38 @@ async function handleRequest(request, env) {
                 if (!this.isReady()) return toast('Complete settings first');
                 const loadingMsg = el('#loadingMessage');
                 el('#syncProgress').style.width = '10%';
-                if (loadingMsg && !el('#loadingOverlay').classList.contains('hidden')) {
-                    loadingMsg.textContent = 'Fetching decks...';
+                try {
+                    // Push first to save local changes
+                    if (loadingMsg && !el('#loadingOverlay').classList.contains('hidden')) {
+                        loadingMsg.textContent = 'Pushing local changes...';
+                    }
+                    await this.pushQueue();
+                    el('#syncProgress').style.width = '50%';
+
+                    // Then pull to get updates
+                    if (loadingMsg && !el('#loadingOverlay').classList.contains('hidden')) {
+                        loadingMsg.textContent = 'Fetching decks...';
+                    }
+                    await this.pullFromNotion();
+                    el('#syncProgress').style.width = '100%';
+
+                    if (loadingMsg && !el('#loadingOverlay').classList.contains('hidden')) {
+                        loadingMsg.textContent = 'Preparing your library...';
+                    }
+                    const nowIso = new Date().toISOString();
+                    this.state.lastPull = nowIso;
+                    this.state.lastPush = nowIso;
+                    this.state.lastSync = nowIso;
+                    await Storage.put('meta', { key: 'lastPull', value: nowIso });
+                    await Storage.put('meta', { key: 'lastPush', value: nowIso });
+                    await Storage.put('meta', { key: 'lastSync', value: nowIso });
+                    toast('Synced with Notion');
+                } catch (e) {
+                    console.error('Sync failed', e);
+                    toast('Sync failed - check connection');
+                } finally {
+                    setTimeout(() => el('#syncProgress').style.width = '0%', 700);
                 }
-                await this.pullFromNotion();
-                el('#syncProgress').style.width = '50%';
-                if (loadingMsg && !el('#loadingOverlay').classList.contains('hidden')) {
-                    loadingMsg.textContent = 'Pushing local changes...';
-                }
-                await this.pushQueue();
-                el('#syncProgress').style.width = '100%';
-                if (loadingMsg && !el('#loadingOverlay').classList.contains('hidden')) {
-                    loadingMsg.textContent = 'Preparing your library...';
-                }
-                const nowIso = new Date().toISOString();
-                this.state.lastPull = nowIso;
-                this.state.lastPush = nowIso;
-                this.state.lastSync = nowIso;
-                await Storage.put('meta', { key: 'lastPull', value: nowIso });
-                await Storage.put('meta', { key: 'lastPush', value: nowIso });
-                await Storage.put('meta', { key: 'lastSync', value: nowIso });
-                setTimeout(() => el('#syncProgress').style.width = '0%', 700);
-                toast('Synced with Notion');
             },
             async pullFromNotion() {
                 const { deckSource, cardSource } = this.state.settings;
@@ -4192,10 +4217,12 @@ async function handleRequest(request, env) {
                     el('#queueCount').textContent = String(this.state.queue.length);
                     toast(`${failed.length} sync operation(s) failed, will retry`);
                 }
+                await Storage.setMeta('queue', this.state.queue);
             },
             queueOp(op) {
                 this.state.queue.push(op);
                 el('#queueCount').textContent = String(this.state.queue.length);
+                Storage.setMeta('queue', this.state.queue).catch(() => { });
             },
             async manualSync() {
                 if (!this.isReady()) { toast('Complete setup first'); return; }
@@ -4207,14 +4234,17 @@ async function handleRequest(request, env) {
                 if (svg) svg.classList.add('animate-spin');
 
                 try {
-                    // First push any pending changes to Notion
+                    // Always push first to save local progress
                     if (this.state.queue.length > 0) {
                         await this.pushQueue();
+                        this.state.lastPush = new Date().toISOString();
+                        await Storage.put('meta', { key: 'lastPush', value: this.state.lastPush });
                     }
-                    // Do an incremental pull (pullFromNotion handles new deck card fetching)
+                    // Then pull to get updates
                     await this.pullFromNotion();
                     this.state.lastPull = new Date().toISOString();
                     await Storage.put('meta', { key: 'lastPull', value: this.state.lastPull });
+
                     this.state.lastSync = new Date().toISOString();
                     await Storage.put('meta', { key: 'lastSync', value: this.state.lastSync });
                     this.renderConnection();
@@ -4244,15 +4274,16 @@ async function handleRequest(request, env) {
                 if (!shouldPull && !shouldPush) return;
                 this.state.syncing = true;
                 try {
-                    if (shouldPull) {
-                        await this.pullFromNotion();
-                        this.state.lastPull = new Date().toISOString();
-                        await Storage.put('meta', { key: 'lastPull', value: this.state.lastPull });
-                    }
+                    // Always push first to avoid overwriting local changes with stale Notion data
                     if (shouldPush) {
                         await this.pushQueue();
                         this.state.lastPush = new Date().toISOString();
                         await Storage.put('meta', { key: 'lastPush', value: this.state.lastPush });
+                    }
+                    if (shouldPull) {
+                        await this.pullFromNotion();
+                        this.state.lastPull = new Date().toISOString();
+                        await Storage.put('meta', { key: 'lastPull', value: this.state.lastPull });
                     }
                     this.state.lastSync = new Date().toISOString();
                     await Storage.put('meta', { key: 'lastSync', value: this.state.lastSync });

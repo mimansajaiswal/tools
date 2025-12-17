@@ -15,9 +15,10 @@ self.addEventListener('install', (event) => {
         'https://cdn.jsdelivr.net/npm/marked/marked.min.js',
         'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js',
         'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/sql-wasm.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/sql-wasm.wasm',
         'https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css',
         'https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js'
-      ]).catch(() => {})
+      ]).catch(() => { })
     )
   );
   self.skipWaiting();
@@ -57,7 +58,9 @@ self.addEventListener('fetch', (event) => {
       return cache.match(request).then((cachedResponse) => {
         const fetchPromise = fetch(request).then((networkResponse) => {
           // Check if valid response before caching
-          if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+          const cacheable = networkResponse &&
+            (networkResponse.status === 200 || networkResponse.type === 'opaque' || networkResponse.type === 'cors');
+          if (cacheable) {
             cache.put(request, networkResponse.clone());
           }
           return networkResponse;
