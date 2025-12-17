@@ -1286,6 +1286,16 @@
                 </div>
             </section>
         </main>
+        <footer id="footerAttribution"
+            class="hidden px-3 sm:px-5 md:px-10 pb-4 text-[11px] text-earth-metal/60 dark:text-white/60 text-center">
+            Built by <a class="underline text-dull-purple dark:text-dull-purple" href="https://mimansajaiswal.github.io"
+                target="_blank" rel="noopener noreferrer">Mimansa Jaiswal</a> · In the <a
+                class="underline text-dull-purple dark:text-dull-purple" href="https://github.com/mimansajaiswal/tools/"
+                target="_blank" rel="noopener noreferrer">LLM-enabled tools collection</a> · Code: <a
+                class="underline text-dull-purple dark:text-dull-purple"
+                href="https://github.com/mimansajaiswal/tools/tree/main/ghostink-flashcards" target="_blank"
+                rel="noopener noreferrer">ghostink-flashcards</a>
+        </footer>
     </div>
 
     <div id="toast" role="status" aria-live="polite"
@@ -1691,10 +1701,17 @@ async function handleRequest(request, env) {
                             value="20">
                     </div>
                 </div>
-                <label class="flex items-center gap-2 text-sm">
-                    <input id="deckOrderedInput" type="checkbox" class="accent-dull-purple">
-                    <span>Ordered (keep original insertion order)</span>
-                </label>
+                <div class="space-y-2">
+                    <label class="text-xs text-earth-metal/70">Order mode</label>
+                    <select id="deckOrderMode"
+                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
+                        <option value="none">None (shuffle)</option>
+                        <option value="created">Created time</option>
+                        <option value="property">Order property</option>
+                    </select>
+                    <p class="text-[11px] text-earth-metal/60">Created time sorts by insertion time; Order property
+                        sorts by each card’s “Order” number.</p>
+                </div>
                 <label class="flex items-center gap-2 text-sm">
                     <input id="deckReverseInput" type="checkbox" class="accent-dull-purple">
                     <span>Reverse mode enabled</span>
@@ -1787,6 +1804,11 @@ async function handleRequest(request, env) {
                     </div>
                 </div>
                 <div class="space-y-2">
+                    <label class="text-xs text-earth-metal/70">Order</label>
+                    <input id="cardOrderInput" type="number" placeholder="Optional number"
+                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
+                </div>
+                <div class="space-y-2">
                     <label class="text-xs text-earth-metal/70">Suspended / Leech</label>
                     <div class="flex gap-4">
                         <label class="flex items-center gap-2"><input id="cardSuspendedInput" type="checkbox"
@@ -1820,16 +1842,17 @@ async function handleRequest(request, env) {
     <!-- AI Settings Required Modal -->
     <div id="aiSettingsRequiredModal"
         class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
-        <div class="card rounded-2xl p-5 w-full max-w-md shadow-soft text-center space-y-4">
+        <div
+            class="card rounded-2xl p-5 w-full max-w-md shadow-soft text-center space-y-4 bg-[color:var(--card-bg)] border border-[color:var(--card-border)]">
             <div class="w-12 h-12 rounded-full bg-dull-purple/20 flex items-center justify-center mx-auto">
                 <i data-lucide="bot" class="w-6 h-6 text-dull-purple"></i>
             </div>
-            <h3 class="font-display text-lg text-charcoal">AI Settings Required</h3>
-            <p class="text-sm text-earth-metal/70">To use AI mode, you need to configure and verify your AI provider
-                settings first.</p>
-            <div class="flex gap-2 justify-center">
+            <h3 id="aiSettingsModalTitle" class="font-display text-lg text-charcoal dark:text-white">AI not available
+            </h3>
+            <p id="aiSettingsModalBody" class="text-sm text-earth-metal/70 dark:text-white/70"></p>
+            <div id="aiSettingsModalActions" class="flex gap-2 justify-center">
                 <button id="closeAiSettingsModal"
-                    class="px-4 py-2 rounded-xl border border-oatmeal-dark text-earth-metal text-sm">Cancel</button>
+                    class="px-4 py-2 rounded-xl border border-oatmeal-dark text-earth-metal dark:text-white dark:border-white/10 text-sm">Close</button>
                 <button id="openSettingsFromAiModal"
                     class="px-4 py-2 rounded-xl bg-dull-purple text-white text-sm hover:bg-[#7d6aa1]">Open
                     Settings</button>
@@ -2547,12 +2570,14 @@ async function handleRequest(request, env) {
             deckFrom(page) {
                 const props = page.properties || {};
                 const title = props['Deck Name']?.title?.map(t => t.plain_text).join('') || 'Untitled deck';
+                const rawMode = props['Order Mode']?.select?.name || 'None';
+                const orderMap = { 'None': 'none', 'Created Time': 'created', 'Order Property': 'property' };
                 return {
                     id: page.id,
                     notionId: page.id,
                     name: title,
                     algorithm: props['Default SRS Algorithm']?.select?.name || 'SM-2',
-                    ordered: props['Ordered']?.checkbox ?? false,
+                    orderMode: orderMap[rawMode.toLowerCase()] || 'none',
                     reviewLimit: props['Daily Review Limit']?.number || 50,
                     newLimit: props['New Card Limit']?.number || 20,
                     reverse: props['Reverse Mode Enabled']?.checkbox || false,
@@ -2569,10 +2594,11 @@ async function handleRequest(request, env) {
              * @returns {Object} Notion properties object for API
              */
             deckProps(deck) {
+                const orderLabels = { none: 'None', created: 'Created time', property: 'Order property' };
                 return {
                     'Deck Name': { title: markdownToNotionRichText(deck.name) },
                     'Default SRS Algorithm': { select: { name: deck.algorithm } },
-                    'Ordered': { checkbox: !!deck.ordered },
+                    'Order Mode': { select: { name: orderLabels[deck.orderMode] || orderLabels.none } },
                     'Daily Review Limit': { number: deck.reviewLimit },
                     'New Card Limit': { number: deck.newLimit },
                     'Reverse Mode Enabled': { checkbox: !!deck.reverse },
@@ -2625,6 +2651,7 @@ async function handleRequest(request, env) {
                     sm2,
                     syncId: page.id,
                     updatedInApp: p['Updated In-App']?.checkbox || false,
+                    order: typeof p['Order']?.number === 'number' ? p['Order'].number : null,
                     reviewHistory: parseReviewHistory(p['Review History']?.rich_text?.[0]?.plain_text || ''),
                     ankiGuid: p['Anki GUID']?.rich_text?.[0]?.plain_text || '',
                     ankiNoteType: p['Anki Note Type']?.select?.name || '',
@@ -2672,6 +2699,7 @@ async function handleRequest(request, env) {
                     'Notes': { rich_text: getRichText('notes', card.notes, orig.notes) },
                     'Suspended': { checkbox: !!card.suspended },
                     'Leech': { checkbox: !!card.leech },
+                    'Order': { number: typeof card.order === 'number' ? card.order : null },
                     'Difficulty': { number: card.fsrs?.difficulty ?? 4 },
                     'Stability': { number: card.fsrs?.stability ?? 1 },
                     'Retrievability': { number: card.fsrs?.retrievability ?? 0.9 },
@@ -2768,12 +2796,23 @@ async function handleRequest(request, env) {
                 const deck = this.deckById(deckIds[0]);
                 const limit = deck?.reviewLimit || 50;
 
-                if (deck?.ordered) {
-                    // Keep original insertion order (fallback to id if createdAt missing)
+                if (deck?.orderMode === 'created') {
                     cards.sort((a, b) => {
                         const aKey = a.createdAt || a.id || '';
                         const bKey = b.createdAt || b.id || '';
                         return aKey.localeCompare(bKey);
+                    });
+                } else if (deck?.orderMode === 'property') {
+                    const maxVal = Number.MAX_SAFE_INTEGER;
+                    cards.sort((a, b) => {
+                        const aOrder = typeof a.order === 'number' ? a.order : maxVal;
+                        const bOrder = typeof b.order === 'number' ? b.order : maxVal;
+                        if (aOrder === bOrder) {
+                            const aKey = a.createdAt || a.id || '';
+                            const bKey = b.createdAt || b.id || '';
+                            return aKey.localeCompare(bKey);
+                        }
+                        return aOrder - bOrder;
                     });
                 } else {
                     // Shuffle by default
@@ -3051,7 +3090,7 @@ async function handleRequest(request, env) {
             },
             async loadFromDB() {
                 this.state.decks = (await Storage.getAll('decks')).map(d => ({
-                    ordered: false,
+                    orderMode: d.orderMode || (d.ordered ? 'created' : 'none') || 'none',
                     aiPrompt: d.aiPrompt || DEFAULT_AI_PROMPT,
                     ...d
                 }));
@@ -3076,7 +3115,6 @@ async function handleRequest(request, env) {
                     notionId: null,
                     name,
                     algorithm,
-                    ordered: false,
                     reviewLimit: 50,
                     newLimit: 20,
                     reverse: false,
@@ -3085,7 +3123,8 @@ async function handleRequest(request, env) {
                     aiPrompt: DEFAULT_AI_PROMPT,
                     aiProvider: '',
                     aiModel: '',
-                    aiKey: ''
+                    aiKey: '',
+                    orderMode: 'none'
                 };
             },
             newCard(deckId, name, back, type) {
@@ -3101,6 +3140,7 @@ async function handleRequest(request, env) {
                     notes: '',
                     suspended: false,
                     leech: false,
+                    order: null,
                     fsrs: { difficulty: 4, stability: 1, retrievability: 0.9, lastRating: null, lastReview: null, dueDate: now },
                     sm2: { interval: 1, easeFactor: 2.5, dueDate: now },
                     syncId: crypto.randomUUID(),
@@ -3308,12 +3348,12 @@ async function handleRequest(request, env) {
                     if (e.target.value === 'ai') {
                         if (!navigator.onLine) {
                             e.target.value = 'manual';
-                            toast('Online connection required for AI mode');
+                            this.showAiBlockedModal('offline');
                             return;
                         }
                         if (!this.state.settings.aiVerified) {
                             e.target.value = 'manual';
-                            this.openModal('aiSettingsRequiredModal');
+                            this.showAiBlockedModal('unverified');
                             return;
                         }
                     }
@@ -3417,16 +3457,19 @@ async function handleRequest(request, env) {
                 const newCardBtn = el('#newCardBtn');
                 const resetBtn = el('#resetAlgorithmBtn');
                 const cardsContent = el('#cardsContent');
+                const footer = el('#footerAttribution');
                 if (deck) {
                     if (nameEl) nameEl.textContent = deck.name;
                     if (newCardBtn) newCardBtn.classList.remove('hidden');
                     if (resetBtn) resetBtn.classList.remove('hidden');
                     if (cardsContent) cardsContent.classList.remove('hidden');
+                    if (footer) footer.classList.remove('hidden');
                 } else {
                     if (nameEl) nameEl.textContent = 'Select a deck above';
                     if (newCardBtn) newCardBtn.classList.add('hidden');
                     if (resetBtn) resetBtn.classList.add('hidden');
                     if (cardsContent) cardsContent.classList.add('hidden');
+                    if (footer) footer.classList.add('hidden');
                 }
             },
             renderGate() {
@@ -3508,7 +3551,7 @@ async function handleRequest(request, env) {
                         </div>
                         <div class="flex items-center gap-2 text-[11px] text-[color:var(--text-sub)]">
                             <i data-lucide="list-ordered" class="w-3 h-3"></i>
-                            <span>Ordered ${d.ordered ? 'on' : 'off'}</span>
+                            <span>Order: ${(d.orderMode === 'created' && 'created time') || (d.orderMode === 'property' && 'order property') || 'none'}</span>
                         </div>
                     </article>
                 `}).join('');
@@ -3955,7 +3998,7 @@ async function handleRequest(request, env) {
                 el('#deckAlgoInput').value = deck?.algorithm ?? 'SM-2';
                 el('#deckReviewLimit').value = deck?.reviewLimit ?? 50;
                 el('#deckNewLimit').value = deck?.newLimit ?? 20;
-                el('#deckOrderedInput').checked = deck?.ordered ?? false;
+                el('#deckOrderMode').value = deck?.orderMode ?? 'none';
                 el('#deckReverseInput').checked = deck?.reverse ?? false;
                 el('#deckPromptInput').value = deck?.aiPrompt ?? DEFAULT_AI_PROMPT;
                 el('#deleteDeckBtn').classList.toggle('hidden', !deck);
@@ -3977,7 +4020,7 @@ async function handleRequest(request, env) {
                 d.algorithm = el('#deckAlgoInput').value;
                 d.reviewLimit = Number(el('#deckReviewLimit').value) || 50;
                 d.newLimit = Number(el('#deckNewLimit').value) || 20;
-                d.ordered = el('#deckOrderedInput').checked;
+                d.orderMode = el('#deckOrderMode').value || 'none';
                 d.reverse = el('#deckReverseInput').checked;
                 d.aiPrompt = el('#deckPromptInput').value || '';
                 if (!this.state.editingDeck) this.state.decks.push(d);
@@ -4105,6 +4148,7 @@ async function handleRequest(request, env) {
                 // Initialize tag selection for modal
                 this.state.tagSelection = card?.tags?.map(t => t.name) || [];
                 this.renderCardTagSelectors();
+                el('#cardOrderInput').value = (typeof card?.order === 'number') ? card.order : '';
                 el('#cardSuspendedInput').checked = card?.suspended ?? false;
                 el('#cardLeechInput').checked = card?.leech ?? false;
                 el('#deleteCardBtn').classList.toggle('hidden', !card);
@@ -4175,6 +4219,8 @@ async function handleRequest(request, env) {
                 const optionMap = new Map(this.collectTagOptions().map(t => [t.name, t.color || 'default']));
                 const existingColors = new Map((this.state.editingCard?.tags || []).map(t => [t.name, t.color || 'default']));
                 card.tags = selectedTags.map(name => ({ name, color: optionMap.get(name) || existingColors.get(name) || 'default' }));
+                const orderVal = el('#cardOrderInput').value;
+                card.order = orderVal === '' ? null : Number(orderVal);
                 card.suspended = el('#cardSuspendedInput').checked;
                 card.leech = el('#cardLeechInput').checked;
                 // Only set updatedInApp if name/back/notes changed (affects rich_text preservation)
@@ -5136,6 +5182,37 @@ async function handleRequest(request, env) {
                     this.state.lastFocusedElement = null;
                 }
             },
+            showAiBlockedModal(reason) {
+                const modal = el('#aiSettingsRequiredModal');
+                const title = el('#aiSettingsModalTitle');
+                const body = el('#aiSettingsModalBody');
+                const actions = el('#aiSettingsModalActions');
+                const closeBtn = el('#closeAiSettingsModal');
+                const openSettingsBtn = el('#openSettingsFromAiModal');
+                if (!modal || !title || !body || !actions) return;
+
+                if (reason === 'offline') {
+                    title.textContent = 'AI not available offline';
+                    body.textContent = 'Reconnect to use AI mode. We switched you back to Reveal.';
+                    if (openSettingsBtn) openSettingsBtn.classList.add('hidden');
+                    if (closeBtn) closeBtn.textContent = 'OK';
+                    closeBtn.onclick = () => {
+                        this.closeModal('aiSettingsRequiredModal');
+                        const revisionSelect = el('#revisionMode');
+                        if (revisionSelect) revisionSelect.value = 'manual';
+                        el('#aiControls')?.classList.add('hidden');
+                    };
+                } else {
+                    title.textContent = 'AI settings required';
+                    body.textContent = 'Set and verify your AI provider in Settings to enable AI mode.';
+                    if (openSettingsBtn) openSettingsBtn.classList.remove('hidden');
+                    if (closeBtn) closeBtn.textContent = 'Cancel';
+                    closeBtn.onclick = () => this.closeModal('aiSettingsRequiredModal');
+                }
+
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            },
             async saveSettings() {
                 this.state.settings.workerUrl = el('#settingWorkerUrl').value.trim();
                 this.state.settings.proxyToken = el('#settingProxyToken').value.trim();
@@ -5497,7 +5574,7 @@ async function handleRequest(request, env) {
                         const required = [
                             ['Deck Name', 'title'],
                             ['Default SRS Algorithm', 'select'],
-                            ['Ordered', 'checkbox'],
+                            ['Order Mode', 'select'],
                             ['Daily Review Limit', 'number'],
                             ['New Card Limit', 'number'],
                             ['Reverse Mode Enabled', 'checkbox'],
@@ -5517,6 +5594,7 @@ async function handleRequest(request, env) {
                             ['Tags', 'multi_select'],
                             ['Suspended', 'checkbox'],
                             ['Leech', 'checkbox'],
+                            ['Order', 'number'],
                             ['Difficulty', 'number'],
                             ['Stability', 'number'],
                             ['Retrievability', 'number'],
