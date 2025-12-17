@@ -164,6 +164,10 @@
             box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
         }
 
+        kbd {
+            font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        }
+
         /* Custom tooltip that appears below element */
         [data-tooltip] {
             position: relative;
@@ -394,7 +398,7 @@
         @media (max-width: 640px) {
             .mobile-fab-cluster {
                 position: fixed;
-                bottom: 0;
+                bottom: 12px;
                 left: 12px;
                 display: flex;
                 flex-direction: row;
@@ -1168,16 +1172,16 @@
                                         class="relative px-3 py-2.5 w-full rounded-lg bg-charcoal dark:bg-white/10 dark:border-white/10 dark:border text-white text-sm hover:bg-earth-metal dark:hover:bg-white/20">
                                         Reveal
                                         <kbd
-                                            class="hidden md:inline-block absolute right-3 top-1/2 -translate-y-1/2 text-[10px] px-1.5 py-0.5 rounded bg-white/20 font-medium">Space</kbd>
+                                            class="hidden md:inline-block absolute right-3 top-1/2 -translate-y-1/2 text-[10px] px-1.5 py-0.5 rounded bg-white/20 font-medium">␣</kbd>
                                     </button>
                                     <div id="aiControls" class="hidden space-y-2">
                                         <textarea id="aiAnswer" rows="3" placeholder="Type your answer..."
                                             class="w-full rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] px-3 py-2 text-sm"></textarea>
                                         <div class="flex gap-2">
                                             <button id="aiRecord"
-                                                class="relative p-2 rounded-lg bg-[color:var(--surface)] border border-[color:var(--card-border)] text-[color:var(--text-main)] text-sm flex-1 pr-8"
+                                                class="relative p-2 pr-2 md:pr-8 rounded-lg bg-[color:var(--surface)] border border-[color:var(--card-border)] text-[color:var(--text-main)] text-sm flex flex-1 items-center justify-center"
                                                 title="Record">
-                                                <i data-lucide="mic" class="w-4 h-4 mx-auto"></i>
+                                                <i data-lucide="mic" class="w-4 h-4"></i>
                                                 <kbd id="micHotkey"
                                                     class="hidden md:inline-block absolute right-2 top-1/2 -translate-y-1/2 text-[10px] px-1 py-0.5 rounded bg-white/20 text-earth-metal/60"></kbd>
                                             </button>
@@ -1188,7 +1192,7 @@
                                             </button>
                                         </div>
                                         <div id="aiFeedback"
-                                            class="text-sm text-earth-metal/80 dark:text-white/70 bg-[var(--surface)] dark:bg-white/5 border border-oatmeal-dark/40 dark:border-white/10 rounded-lg p-2">
+                                            class="hidden text-sm text-earth-metal/80 dark:text-white/70 bg-[var(--surface)] dark:bg-white/5 border border-oatmeal-dark/40 dark:border-white/10 rounded-lg p-2">
                                         </div>
                                     </div>
                                 </div>
@@ -1232,7 +1236,7 @@
                                             class="px-2 py-1 rounded-lg border border-oatmeal-dark/50 text-dull-purple hover:bg-dull-purple/10 shrink-0 flex items-center gap-1">
                                             <i data-lucide="square-slash" class="w-3 h-3"></i>
                                             <span>Skip</span>
-                                            <kbd
+                                            <kbd id="skipHotkey"
                                                 class="hidden md:inline text-[9px] ml-0.5 px-1 py-0.5 rounded bg-dull-purple/10 text-dull-purple font-medium">S</kbd>
                                         </button>
                                     </div>
@@ -1405,14 +1409,18 @@
     <div id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"
         class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4">
         <div id="settingsCard" class="card rounded-2xl p-5 w-full max-w-3xl shadow-soft max-h-[90vh] overflow-y-auto">
-            <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center justify-between mb-3 sticky top-0 z-10 bg-[color:var(--card-bg)] pb-2">
                 <h3 id="settingsTitle" class="font-display text-lg text-charcoal">Connection</h3>
-                <button id="closeSettings" aria-label="Close settings"
-                    class="text-earth-metal/60 hover:text-charcoal"><i data-lucide="x" class="w-5 h-5"></i></button>
+                <div class="flex items-center gap-2">
+                    <button id="saveSettings"
+                        class="px-3 py-1.5 rounded-lg bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-dull-purple">Save</button>
+                    <button id="closeSettings" aria-label="Close settings"
+                        class="text-earth-metal/60 hover:text-charcoal"><i data-lucide="x" class="w-5 h-5"></i></button>
+                </div>
             </div>
             <!-- Status bar spanning full width -->
             <div
-                class="rounded-lg border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-oatmeal/60 dark:bg-white/5 mb-4">
+                class="sticky top-[52px] z-10 rounded-lg border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-oatmeal/60 dark:bg-white/5 mb-4">
                 <div class="flex items-center gap-2 mb-2">
                     <i data-lucide="shield-check" class="w-4 h-4 text-dull-purple dark:text-dull-purple"></i>
                     <p class="font-semibold text-charcoal dark:text-white text-sm">Status</p>
@@ -1477,8 +1485,6 @@
                         <button id="scanSources" disabled
                             class="px-3 py-2 rounded-lg bg-charcoal dark:bg-white/10 dark:border-white/10 dark:border text-white text-sm hover:bg-earth-metal dark:hover:bg-white/20 flex-1 min-w-[140px] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-charcoal">Scan
                             sources</button>
-                        <button id="saveSettings" disabled
-                            class="px-3 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex-1 min-w-[140px] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-dull-purple">Save</button>
                     </div>
                     <div class="w-full h-2 bg-oatmeal rounded-full overflow-hidden">
                         <div id="syncProgress" class="h-2 bg-dull-purple w-0 transition-all duration-500"></div>
@@ -1559,7 +1565,8 @@
                                 <label class="text-xs text-earth-metal/70">Provider</label>
                                 <select id="sttProvider"
                                     class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm">
-                                    <option value="">Browser (default)</option>
+                                    <option value="">Disabled</option>
+                                    <option value="browser">Browser</option>
                                     <option value="openai">OpenAI Whisper</option>
                                     <option value="gemini">Gemini</option>
                                     <option value="groq">Groq Whisper</option>
@@ -2143,13 +2150,13 @@ async function handleRequest(request, env) {
             getSettings() {
                 const raw = localStorage.getItem(this.settingsKey);
                 if (!raw) {
-                    return { workerUrl: '', proxyToken: '', authToken: '', deckSource: '', cardSource: '', aiProvider: '', aiModel: '', aiKey: '', sttProvider: '', sttModel: '', sttKey: '', sttPrompt: '', sttVerified: false, themeMode: 'system', fontMode: 'serif', workerVerified: false, authVerified: false, sourcesVerified: false, aiVerified: false, sourcesCache: { deckOptions: [], cardOptions: [] } };
+                    return { workerUrl: '', proxyToken: '', authToken: '', deckSource: '', cardSource: '', aiProvider: '', aiModel: '', aiKey: '', sttProvider: '', sttModel: '', sttKey: '', sttPrompt: '', sttVerified: false, sttPermissionWarmed: false, themeMode: 'system', fontMode: 'serif', workerVerified: false, authVerified: false, sourcesVerified: false, aiVerified: false, sourcesCache: { deckOptions: [], cardOptions: [] } };
                 }
                 try {
                     return JSON.parse(raw);
                 } catch (e) {
                     console.error('Failed to parse settings, resetting to defaults:', e);
-                    return { workerUrl: '', proxyToken: '', authToken: '', deckSource: '', cardSource: '', aiProvider: '', aiModel: '', aiKey: '', sttProvider: '', sttModel: '', sttKey: '', sttPrompt: '', sttVerified: false, themeMode: 'system', fontMode: 'serif', workerVerified: false, authVerified: false, sourcesVerified: false, aiVerified: false, sourcesCache: { deckOptions: [], cardOptions: [] } };
+                    return { workerUrl: '', proxyToken: '', authToken: '', deckSource: '', cardSource: '', aiProvider: '', aiModel: '', aiKey: '', sttProvider: '', sttModel: '', sttKey: '', sttPrompt: '', sttVerified: false, sttPermissionWarmed: false, themeMode: 'system', fontMode: 'serif', workerVerified: false, authVerified: false, sourcesVerified: false, aiVerified: false, sourcesCache: { deckOptions: [], cardOptions: [] } };
                 }
             },
             setSettings(newSettings) {
@@ -2767,6 +2774,10 @@ async function handleRequest(request, env) {
                 autoScanPending: false,
                 answerRevealed: false,
                 aiLocked: false,
+                lockAiUntilNextCard: false,
+                activeMicButton: null,  // 'inline' | 'fab'
+                micPermissionPromise: null,
+                micStream: null,
                 cardReversed: false,
                 studyNonDue: false,
                 session: null,  // Active study session (loaded from localStorage)
@@ -2775,7 +2786,8 @@ async function handleRequest(request, env) {
                 undoToastTimeout: null,
                 lastFocusedElement: null,  // For modal focus management
                 tagOptions: [],
-                tagSelection: []
+                tagSelection: [],
+                userStoppedMic: false
             },
             async init() {
                 showLoading('Preparing app...', 'Loading your decks and cards.');
@@ -2816,43 +2828,133 @@ async function handleRequest(request, env) {
                 btn.classList.toggle('opacity-70', btn.disabled);
                 if (icon) icon.classList.toggle('animate-spin', on);
             },
+            async ensureMicPermission() {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return true;
+                if (this.state.micPermissionPromise) return this.state.micPermissionPromise;
+                this.state.micPermissionPromise = navigator.mediaDevices.getUserMedia({ audio: true })
+                    .then(stream => {
+                        // Keep a cached stream to avoid repeated prompts in local/file contexts
+                        this.state.micStream = stream;
+                        this.state.settings.sttPermissionWarmed = true;
+                        Storage.setSettings(this.state.settings);
+                        return true;
+                    })
+                    .catch(err => {
+                        this.state.micPermissionPromise = null;
+                        throw err;
+                    });
+                return this.state.micPermissionPromise;
+            },
+            warmMicStreamForAi() {
+                // Only warm when explicitly requested elsewhere; avoid auto prompts on load
+                if (this.state.micPermissionPromise) return;
+                this.ensureMicPermission().catch(() => { /* permission denied handled later */ });
+            },
+            isSttEnabled() {
+                return !!this.state.sttProvider;
+            },
+            stopMicActivity(hideFeedback = false, stopStream = false) {
+                try {
+                    if (this.state.currentRecorder && typeof this.state.currentRecorder.stop === 'function') {
+                        this.state.currentRecorder.stop();
+                    }
+                } catch (_) { }
+                try {
+                    if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+                        this.mediaRecorder.stop();
+                    }
+                } catch (_) { }
+                if (stopStream && this.state.micStream) {
+                    this.state.micStream.getTracks().forEach(t => t.stop());
+                    this.state.micStream = null;
+                    this.state.micPermissionPromise = null;
+                }
+                this.state.currentRecorder = null;
+                this.mediaRecorder = null;
+                this.state.userStoppedMic = false;
+                this.state.activeMicButton = null;
+                if (hideFeedback) {
+                    const feedback = el('#aiFeedback');
+                    if (feedback) { feedback.classList.add('hidden'); feedback.innerHTML = ''; }
+                }
+                this.setMicVisualState(false);
+                this.setAiControlsLocked(this.state.aiLocked);
+                this.updateMobileFab();
+            },
+            async getMicStream() {
+                if (this.state.micStream) {
+                    const alive = this.state.micStream.getTracks().some(t => t.readyState === 'live');
+                    if (alive) return this.state.micStream;
+                    // Drop dead stream so we can re-request without prompting
+                    this.state.micStream.getTracks().forEach(t => t.stop());
+                    this.state.micStream = null;
+                    this.state.micPermissionPromise = null;
+                }
+                await this.ensureMicPermission();
+                return this.state.micStream;
+            },
+            isMicActive() {
+                return !!this.state.currentRecorder || (this.mediaRecorder && this.mediaRecorder.state === 'recording');
+            },
+            setMicVisualState(listening) {
+                const micBtn = el('#aiRecord');
+                const fabMic = el('#fabMic');
+                const buttons = [micBtn, fabMic];
+                // Reset all
+                buttons.forEach(btn => {
+                    if (!btn) return;
+                    btn.classList.remove('ring', 'ring-dull-purple', 'ring-offset-2', 'animate-pulse', 'bg-dull-purple/20');
+                });
+                if (!listening) return;
+                const target = this.state.activeMicButton === 'fab' ? fabMic : micBtn || fabMic;
+                if (!target) return;
+                target.classList.add('ring', 'ring-dull-purple', 'ring-offset-2', 'animate-pulse', 'bg-dull-purple/20');
+            },
             setAiControlsLocked(locked) {
+                if (!locked && this.state.lockAiUntilNextCard && !this.state.answerRevealed) {
+                    locked = true;
+                }
                 this.state.aiLocked = locked;
                 const sendBtn = el('#aiSubmit');
                 const micBtn = el('#aiRecord');
                 const fabMic = el('#fabMic');
                 const fabSend = el('#fabSend');
+                const isAiMode = el('#revisionMode')?.value === 'ai';
+                const sttEnabled = this.isSttEnabled();
+                const listening = this.isMicActive();
+                const answerField = el('#aiAnswer');
+                const lockInput = isAiMode && locked;
                 if (sendBtn) {
                     sendBtn.disabled = locked || sendBtn.dataset.empty === '1';
                     sendBtn.classList.toggle('opacity-50', sendBtn.disabled);
                     sendBtn.classList.toggle('cursor-not-allowed', sendBtn.disabled);
+                    sendBtn.classList.toggle('hidden', isAiMode && locked);
                 }
                 if (micBtn) {
                     micBtn.disabled = locked;
-                    const listening = !!this.state.currentRecorder && !locked;
-                    micBtn.classList.toggle('ring', listening);
-                    micBtn.classList.toggle('ring-dull-purple', listening);
-                    micBtn.classList.toggle('ring-offset-2', listening);
-                    micBtn.classList.toggle('animate-pulse', listening);
-                    micBtn.classList.toggle('bg-dull-purple/20', listening);
                     micBtn.classList.toggle('opacity-50', micBtn.disabled);
                     micBtn.classList.toggle('cursor-not-allowed', micBtn.disabled);
+                    micBtn.classList.toggle('hidden', isAiMode && (locked || !sttEnabled));
+                }
+                if (answerField) {
+                    answerField.disabled = lockInput;
+                    answerField.readOnly = lockInput;
+                    answerField.classList.toggle('pointer-events-none', lockInput);
+                    answerField.classList.toggle('opacity-60', lockInput);
                 }
                 if (fabMic) {
                     fabMic.disabled = locked;
-                    const listening = !!this.state.currentRecorder && !locked;
-                    fabMic.classList.toggle('ring', listening);
-                    fabMic.classList.toggle('ring-dull-purple', listening);
-                    fabMic.classList.toggle('animate-pulse', listening);
-                    fabMic.classList.toggle('bg-dull-purple/20', listening);
                     fabMic.classList.toggle('opacity-50', fabMic.disabled);
                     fabMic.classList.toggle('cursor-not-allowed', fabMic.disabled);
+                    fabMic.classList.toggle('hidden', isAiMode && (locked || !sttEnabled));
                 }
                 if (fabSend) {
                     fabSend.disabled = locked || (sendBtn && sendBtn.dataset.empty === '1');
                     fabSend.classList.toggle('opacity-50', fabSend.disabled);
                     fabSend.classList.toggle('cursor-not-allowed', fabSend.disabled);
                 }
+                this.setMicVisualState(listening);
+                this.updateMobileFab();
             },
             generateCardQueue(deckIds, includeNonDue = false) {
                 let cards = this.state.cards.filter(c =>
@@ -3375,6 +3477,13 @@ async function handleRequest(request, env) {
                     const isAiMode = el('#revisionMode').value === 'ai';
                     const aiAnswer = el('#aiAnswer');
                     const hasAiText = (aiAnswer?.value || '').trim().length > 0;
+                    const skipAnywhere = e.altKey && e.shiftKey && e.key.toLowerCase() === 's';
+
+                    if (skipAnywhere) {
+                        e.preventDefault();
+                        this.nextCard();
+                        return;
+                    }
 
                     // Global send in AI mode (Cmd/Ctrl+Enter) even inside textarea
                     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
@@ -3392,7 +3501,7 @@ async function handleRequest(request, env) {
                     }
 
                     // Mic toggle via Cmd/Ctrl+E even when focused in textarea
-                    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'e' && isAiMode && !this.state.answerRevealed && !this.state.aiLocked) {
+                    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'e' && isAiMode && this.isSttEnabled() && !this.state.answerRevealed && !this.state.aiLocked) {
                         e.preventDefault();
                         if (this.state.currentRecorder) {
                             this.state.currentRecorder.stop();
@@ -3402,7 +3511,13 @@ async function handleRequest(request, env) {
                         return;
                     }
 
-                    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+                    if (e.key === 'Escape' && this.isMicActive()) {
+                        e.preventDefault();
+                        if (this.state.currentRecorder) this.state.currentRecorder.stop();
+                        if (this.mediaRecorder && this.mediaRecorder.state === 'recording') this.mediaRecorder.stop();
+                    }
+
+                    if ((e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') && e.key !== 'Escape') return;
 
                     // Space key logic
                     if (e.key === ' ' && !this.state.answerRevealed) {
@@ -3417,13 +3532,19 @@ async function handleRequest(request, env) {
                     }
 
                     // Toggle Mic with Alt/Option+M in AI mode
-                    if (e.altKey && e.key.toLowerCase() === 'm' && el('#revisionMode').value === 'ai' && !this.state.answerRevealed && !this.state.aiLocked) {
+                    if (e.altKey && e.key.toLowerCase() === 'm' && el('#revisionMode').value === 'ai' && this.isSttEnabled() && !this.state.answerRevealed && !this.state.aiLocked) {
                         e.preventDefault();
                         if (this.state.currentRecorder) {
                             this.state.currentRecorder.stop();
                         } else {
                             this.recordAnswer();
                         }
+                    }
+                    // Escape stops any active mic recording
+                    if (e.key === 'Escape' && this.isMicActive()) {
+                        e.preventDefault();
+                        if (this.state.currentRecorder) this.state.currentRecorder.stop();
+                        if (this.mediaRecorder && this.mediaRecorder.state === 'recording') this.mediaRecorder.stop();
                     }
 
                     if (this.state.answerRevealed) {
@@ -3499,6 +3620,7 @@ async function handleRequest(request, env) {
                     }
                     const on = e.target.value === 'ai';
                     el('#aiControls').classList.toggle('hidden', !on);
+                    this.updateSkipHotkeyLabel(on);
                 };
                 el('#closeAiSettingsModal').onclick = () => this.closeModal('aiSettingsRequiredModal');
                 el('#openSettingsFromAiModal').onclick = () => { this.closeModal('aiSettingsRequiredModal'); this.openSettings(); };
@@ -3518,10 +3640,20 @@ async function handleRequest(request, env) {
                     btn.dataset.empty = hasText ? '0' : '1';
                     this.setAiControlsLocked(this.state.aiLocked);
                 };
-                el('#aiRecord').onclick = () => { if (!this.state.aiLocked) this.recordAnswer(); };
+                el('#aiRecord').onclick = () => {
+                    const isAiMode = el('#revisionMode').value === 'ai';
+                    if (!isAiMode || !this.isSttEnabled() || this.state.answerRevealed || this.state.aiLocked) return;
+                    this.state.activeMicButton = 'inline';
+                    this.recordAnswer();
+                };
                 const fabMic = el('#fabMic');
                 const fabSend = el('#fabSend');
-                if (fabMic) fabMic.onclick = () => { if (!this.state.aiLocked) this.recordAnswer(); };
+                if (fabMic) fabMic.onclick = () => {
+                    const isAiMode = el('#revisionMode').value === 'ai';
+                    if (!isAiMode || !this.isSttEnabled() || this.state.answerRevealed || this.state.aiLocked) return;
+                    this.state.activeMicButton = 'fab';
+                    this.recordAnswer();
+                };
                 if (fabSend) fabSend.onclick = () => { if (!this.state.aiLocked) this.submitToAI(); };
                 el('#confirmDelete').onclick = () => this.performDelete();
                 el('#cancelDelete').onclick = () => this.closeModal('confirmModal');
@@ -3549,11 +3681,13 @@ async function handleRequest(request, env) {
                 el('#sttSettings')?.classList.toggle('hidden', !isAiVerified);
                 // Update hotkey labels based on platform
                 const sendHotkey = el('#aiSendHotkey');
-                if (sendHotkey) sendHotkey.textContent = isMac ? '⌘ ↵' : 'Ctrl ↵';
+                const ctrlSymbol = isMac ? '⌘' : '⌃';
+                const enterSymbol = '↵';
+                if (sendHotkey) sendHotkey.textContent = `${ctrlSymbol} ${enterSymbol}`;
                 const micHotkey = el('#micHotkey');
-                if (micHotkey) micHotkey.textContent = isMac ? '⌘ E' : 'Ctrl E';
+                if (micHotkey) micHotkey.textContent = `${ctrlSymbol} E`;
                 const startHotkey = el('#startSessionHotkey');
-                if (startHotkey) startHotkey.textContent = isMac ? '⌘ ↵' : 'Ctrl ↵';
+                if (startHotkey) startHotkey.textContent = `${ctrlSymbol} ${enterSymbol}`;
             },
             // Tab switching
             switchTab(tab) {
@@ -3867,9 +4001,12 @@ async function handleRequest(request, env) {
                 const studyControls = el('#studyControls');
                 if (studyControls) studyControls.classList.remove('hidden');
 
+                this.state.activeMicButton = null;
+                this.state.lockAiUntilNextCard = false;
                 const isAiMode = el('#revisionMode').value === 'ai';
                 const revealBtn = el('#revealBtn');
 
+                this.updateSkipHotkeyLabel(isAiMode);
                 this.setAiControlsLocked(false);
                 if (revealBtn) {
                     revealBtn.disabled = false;
@@ -4930,9 +5067,10 @@ async function handleRequest(request, env) {
                 this.updateMobileFab();
                 const revealBtn = el('#revealBtn');
                 if (revealBtn) {
-                    revealBtn.disabled = true;
-                    revealBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                    revealBtn.classList.add('hidden');
                 }
+                this.state.activeMicButton = null;
+                this.state.lockAiUntilNextCard = true;
             },
             async rate(rating) {
                 const card = this.state.selectedCard;
@@ -5458,6 +5596,7 @@ async function handleRequest(request, env) {
                 this.state.settings.aiModel = aiModel;
                 if (aiKey) this.state.settings.aiKey = aiKey;
                 // Save STT settings
+                const prevSttProvider = this.state.sttProvider;
                 const sttProvider = el('#sttProvider').value;
                 const sttModel = el('#sttModel').value.trim();
                 const sttKey = el('#sttKey').value.trim();
@@ -5476,6 +5615,7 @@ async function handleRequest(request, env) {
                 this.applyTheme();
                 this.applyFontMode();
                 this.renderGate();
+                this.applySttChangeEffects(!sttProvider || sttProvider !== prevSttProvider);
 
                 // Check if this is first sync (no decks/cards loaded yet)
                 const isFirstSync = this.state.decks.length === 0 && this.state.cards.length === 0;
@@ -5610,17 +5750,41 @@ async function handleRequest(request, env) {
                 const model = el('#sttModel').value.trim();
                 const key = el('#sttKey').value.trim();
                 const prompt = el('#sttPrompt').value.trim();
+                const inAiMode = el('#revisionMode').value === 'ai';
 
-                // If browser is selected, just save and return
                 if (!provider) {
                     this.state.settings.sttProvider = '';
                     this.state.settings.sttModel = '';
                     this.state.settings.sttKey = '';
                     this.state.settings.sttPrompt = prompt;
-                    this.state.settings.sttVerified = true;
+                    this.state.settings.sttVerified = false;
+                    this.state.settings.sttPermissionWarmed = false;
                     Storage.setSettings(this.state.settings);
                     this.state.sttProvider = '';
+                    this.state.sttVerified = false;
+                    this.state.sttKey = '';
+                    this.stopMicActivity(true, true);
+                    this.applySttChangeEffects(true);
+                    toast('Speech-to-text disabled');
+                    return;
+                }
+
+                if (provider === 'browser') {
+                    this.state.settings.sttProvider = 'browser';
+                    this.state.settings.sttModel = '';
+                    this.state.settings.sttKey = '';
+                    this.state.settings.sttPrompt = prompt;
+                    this.state.settings.sttVerified = true;
+                    this.state.settings.sttPermissionWarmed = true;
+                    Storage.setSettings(this.state.settings);
+                    this.state.sttProvider = 'browser';
+                    this.state.sttModel = '';
+                    this.state.sttKey = '';
+                    this.state.sttPrompt = prompt;
                     this.state.sttVerified = true;
+                    this.warmMicStreamForAi();
+                    this.applySttChangeEffects(false);
+                    if (inAiMode) el('#aiControls')?.classList.remove('hidden');
                     toast('Using browser speech recognition');
                     return;
                 }
@@ -5658,6 +5822,10 @@ async function handleRequest(request, env) {
                         this.state.sttKey = key;
                         this.state.sttPrompt = prompt;
                         this.state.sttVerified = true;
+                        this.warmMicStreamForAi();
+                        this.state.settings.sttPermissionWarmed = true;
+                        this.applySttChangeEffects(false);
+                        if (inAiMode) el('#aiControls')?.classList.remove('hidden');
                         toast('STT settings verified');
                     } else {
                         throw new Error(`API returned ${res.status}`);
@@ -5979,13 +6147,19 @@ async function handleRequest(request, env) {
                 this.state.sttKey = s.sttKey || '';
                 this.state.sttPrompt = s.sttPrompt || '';
                 this.state.sttVerified = s.sttVerified || false;
+                this.state.settings.sttPermissionWarmed = s.sttPermissionWarmed || false;
                 if (s.themeMode) this.state.settings.themeMode = s.themeMode;
                 if (s.fontMode) this.state.settings.fontMode = s.fontMode;
                 this.applyTheme();
                 this.applyFontMode();
+                this.updateSkipHotkeyLabel(el('#revisionMode')?.value === 'ai');
                 // Toggle provider field visibility based on current selection
                 this.toggleAiProviderFields();
                 this.toggleSttProviderFields();
+                // On file:// we still need to proactively ask once to enable mic; HTTPS will reuse prior grant
+                if (location.protocol === 'file:' && s.sttProvider && s.sttPermissionWarmed) {
+                    this.warmMicStreamForAi();
+                }
                 // Add change listeners for provider dropdowns
                 el('#aiProvider').onchange = () => this.toggleAiProviderFields();
                 el('#sttProvider').onchange = () => this.toggleSttProviderFields();
@@ -6005,19 +6179,51 @@ async function handleRequest(request, env) {
                 const provider = el('#sttProvider').value;
                 const fields = el('#sttProviderFields');
                 if (fields) {
-                    if (provider) {
+                    if (provider && provider !== 'browser') {
                         fields.classList.remove('hidden');
                     } else {
                         fields.classList.add('hidden');
                     }
                 }
+                // Avoid auto-triggering mic prompts on simple provider toggles; recording will request when needed
+            },
+            updateSkipHotkeyLabel(isAiMode) {
+                const skipKbd = el('#skipHotkey');
+                if (!skipKbd) return;
+                if (isAiMode) {
+                    // Use symbols for both platforms (⎇ = Alt, ⇧ = Shift)
+                    skipKbd.textContent = isMac ? '⌥ ⇧ S' : '⎇ ⇧ S';
+                } else {
+                    skipKbd.textContent = 'S';
+                }
+            },
+            applySttChangeEffects(disabled = false) {
+                if (disabled || !this.isSttEnabled()) {
+                    this.stopMicActivity(true, true);
+                } else {
+                    const feedback = el('#aiFeedback');
+                    if (feedback) feedback.classList.add('hidden');
+                    if (location.protocol === 'file:' && this.state.settings.sttPermissionWarmed) {
+                        // Prompt once on local files so mic shows up immediately
+                        this.warmMicStreamForAi();
+                    }
+                }
+                this.setAiControlsLocked(this.state.aiLocked);
+                this.updateMobileFab();
             },
             async submitToAI() {
                 if (this.state.aiLocked) return;
                 if (!this.state.selectedCard) return;
+                if (this.state.answerRevealed) {
+                    toast('Answer already reviewed. Go to the next card.');
+                    return;
+                }
                 // Stop any ongoing mic recording before sending
                 if (this.state.currentRecorder) {
                     this.state.currentRecorder.stop();
+                }
+                if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+                    this.mediaRecorder.stop();
                 }
                 const ans = el('#aiAnswer').value.trim();
                 if (!ans) { toast('Enter or record an answer first'); return; }
@@ -6039,7 +6245,10 @@ async function handleRequest(request, env) {
                 const provider = this.state.settings.aiProvider || 'openai';
                 const model = this.state.settings.aiModel || (provider === 'anthropic' ? 'claude-3-haiku-20240307' : provider === 'gemini' ? 'gemini-1.5-flash-latest' : 'gpt-4o-mini');
                 try {
+                    this.state.lockAiUntilNextCard = true;
                     this.setAiControlsLocked(true);
+                    this.updateMobileFab();
+                    el('#aiFeedback').classList.remove('hidden');
                     el('#aiFeedback').innerHTML = 'Thinking...';
                     const res = await this.callAI(provider, model, prompt, this.state.settings.aiKey);
                     el('#aiFeedback').innerHTML = marked.parse(res);
@@ -6047,7 +6256,9 @@ async function handleRequest(request, env) {
                 } catch (e) {
                     el('#aiFeedback').innerHTML = '';
                     toast('AI error: ' + e.message);
+                    this.state.lockAiUntilNextCard = false;
                     this.setAiControlsLocked(false);
+                    this.updateMobileFab();
                 }
             },
             async callAI(provider, model, prompt, key) {
@@ -6167,6 +6378,9 @@ async function handleRequest(request, env) {
                 const hasCard = !!this.state.selectedCard;
                 const inSession = !!this.state.session;
                 const revealed = this.state.answerRevealed;
+                const revisionMode = el('#revisionMode')?.value || 'manual';
+                const isAiMode = revisionMode === 'ai';
+                const sttEnabled = this.isSttEnabled();
                 // Check if the actual reveal button in the card is visible (not hidden)
                 const revealBtnVisible = el('#revealBtn') && !el('#revealBtn').classList.contains('hidden');
 
@@ -6178,7 +6392,7 @@ async function handleRequest(request, env) {
                 const fabSend = el('#fabSend');
 
                 // Only show FAB cluster when there's an active card with reveal button visible or already revealed
-                const showFab = hasCard && inSession && (revealBtnVisible || revealed);
+                const showFab = hasCard && inSession && (revealBtnVisible || revealed || isAiMode);
                 if (cluster) cluster.classList.toggle('hidden', !showFab);
 
                 // Show joystick only when answer is revealed
@@ -6188,8 +6402,10 @@ async function handleRequest(request, env) {
                 // Show copy and add note only when revealed
                 if (fabCopy) fabCopy.classList.toggle('hidden', !revealed);
                 if (fabAddNote) fabAddNote.classList.toggle('hidden', !revealed);
-                if (fabMic) fabMic.classList.toggle('hidden', !hasCard || !inSession || this.state.answerRevealed || el('#revisionMode').value !== 'ai');
-                if (fabSend) fabSend.classList.toggle('hidden', !hasCard || !inSession || this.state.answerRevealed || el('#revisionMode').value !== 'ai');
+                const hideFabMic = !hasCard || !inSession || this.state.answerRevealed || !isAiMode || this.state.aiLocked || !sttEnabled;
+                const hideFabSend = !hasCard || !inSession || this.state.answerRevealed || !isAiMode || this.state.aiLocked;
+                if (fabMic) fabMic.classList.toggle('hidden', hideFabMic);
+                if (fabSend) fabSend.classList.toggle('hidden', hideFabSend);
 
                 // Re-init lucide icons for the joystick
                 if (revealed) {
@@ -6206,11 +6422,45 @@ async function handleRequest(request, env) {
                 });
             },
             async recordAnswer() {
+                const isAiMode = el('#revisionMode')?.value === 'ai';
+                if (!isAiMode) {
+                    toast('Mic is available in AI mode only.');
+                    return;
+                }
+                if (!this.isSttEnabled()) {
+                    toast('Enable speech-to-text in Settings first.');
+                    return;
+                }
+                if (this.state.answerRevealed) {
+                    toast('Already judged. Go to the next card.');
+                    return;
+                }
+                if (this.state.currentRecorder) {
+                    this.state.userStoppedMic = true;
+                    this.state.currentRecorder.stop();
+                    return;
+                }
+                this.state.userStoppedMic = false;
+                if (!this.state.activeMicButton) this.state.activeMicButton = 'inline';
                 const provider = this.state.sttProvider;
+
+                try {
+                    await this.getMicStream();
+                } catch (_) {
+                    toast('Microphone access denied');
+                    return;
+                }
 
                 // If cloud provider is configured and verified, use it
                 if (provider && this.state.sttVerified && this.state.sttKey) {
                     await this.recordWithCloudSTT();
+                    return;
+                }
+
+                try {
+                    await this.ensureMicPermission();
+                } catch (_) {
+                    toast('Microphone access denied');
                     return;
                 }
 
@@ -6225,6 +6475,7 @@ async function handleRequest(request, env) {
                 rec.interimResults = true;
                 rec.continuous = true;
                 rec.maxAlternatives = 1;
+                el('#aiFeedback').classList.remove('hidden');
                 el('#aiFeedback').innerHTML = 'Listening...';
 
                 let finalTranscript = el('#aiAnswer').value;
@@ -6246,6 +6497,7 @@ async function handleRequest(request, env) {
 
                 // Store recorder instance to allow stopping it
                 this.state.currentRecorder = rec;
+                this.setAiControlsLocked(false);
 
                 rec.onerror = (e) => {
                     if (e.error !== 'aborted') {
@@ -6253,12 +6505,19 @@ async function handleRequest(request, env) {
                         toast('Mic error: ' + e.error);
                     }
                     this.state.currentRecorder = null;
+                    this.state.userStoppedMic = false;
+                    this.state.activeMicButton = null;
+                    this.setAiControlsLocked(this.state.aiLocked);
                 };
                 rec.onend = () => {
-                    if (el('#aiFeedback').innerHTML.includes('Listening')) {
+                    if (el('#aiFeedback').innerHTML.includes('Listening') && this.state.userStoppedMic) {
                         el('#aiFeedback').innerHTML = 'Captured. Now send.';
+                    } else if (el('#aiFeedback').innerHTML.includes('Listening')) {
+                        el('#aiFeedback').innerHTML = '';
                     }
                     this.state.currentRecorder = null;
+                    this.state.userStoppedMic = false;
+                    this.state.activeMicButton = null;
                     this.setAiControlsLocked(this.state.aiLocked);
                 };
                 rec.start();
@@ -6269,17 +6528,23 @@ async function handleRequest(request, env) {
                 const key = this.state.sttKey;
                 const prompt = this.state.sttPrompt || '';
 
+                el('#aiFeedback').classList.remove('hidden');
                 el('#aiFeedback').innerHTML = 'Recording... Click again to stop.';
-                const recordBtn = el('#aiRecord');
 
                 // If already recording, stop
                 if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+                    this.state.userStoppedMic = true;
                     this.mediaRecorder.stop();
                     return;
                 }
+                this.state.userStoppedMic = false;
+                if (!this.state.activeMicButton) this.state.activeMicButton = 'inline';
 
                 try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    const baseStream = await this.getMicStream();
+                    if (!baseStream) throw new Error('Microphone unavailable');
+                    // Use a cloned stream so we don't lose the cached permission stream
+                    const stream = new MediaStream(baseStream.getAudioTracks().map(t => t.clone ? t.clone() : t));
                     const chunks = [];
                     this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
 
@@ -6288,6 +6553,8 @@ async function handleRequest(request, env) {
                     this.mediaRecorder.onstop = async () => {
                         stream.getTracks().forEach(t => t.stop());
                         el('#aiFeedback').innerHTML = 'Transcribing...';
+                        this.state.currentRecorder = null;
+                        this.setAiControlsLocked(this.state.aiLocked);
 
                         try {
                             const audioBlob = new Blob(chunks, { type: 'audio/webm' });
@@ -6300,10 +6567,16 @@ async function handleRequest(request, env) {
                             }
 
                             el('#aiAnswer').value = transcript;
-                            el('#aiFeedback').innerHTML = 'Captured. Now send.';
+                            el('#aiFeedback').innerHTML = this.state.userStoppedMic ? 'Captured. Now send.' : '';
+                            this.mediaRecorder = null;
+                            this.state.userStoppedMic = false;
+                            this.state.activeMicButton = null;
                         } catch (e) {
                             el('#aiFeedback').innerHTML = '';
                             toast('Transcription failed: ' + e.message);
+                            this.mediaRecorder = null;
+                            this.state.userStoppedMic = false;
+                            this.state.activeMicButton = null;
                         }
                     };
 
@@ -6311,8 +6584,22 @@ async function handleRequest(request, env) {
                         stream.getTracks().forEach(t => t.stop());
                         el('#aiFeedback').innerHTML = '';
                         toast('Recording error');
+                        this.state.currentRecorder = null;
+                        this.mediaRecorder = null;
+                        this.state.userStoppedMic = false;
+                        this.state.activeMicButton = null;
+                        this.setAiControlsLocked(this.state.aiLocked);
                     };
 
+                    this.state.currentRecorder = {
+                        stop: () => {
+                            if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+                                this.state.userStoppedMic = true;
+                                this.mediaRecorder.stop();
+                            }
+                        }
+                    };
+                    this.setAiControlsLocked(false);
                     this.mediaRecorder.start();
 
                     // Auto-stop after 60 seconds
@@ -6325,6 +6612,9 @@ async function handleRequest(request, env) {
                 } catch (e) {
                     el('#aiFeedback').innerHTML = '';
                     toast('Microphone access denied');
+                    this.state.currentRecorder = null;
+                    this.mediaRecorder = null;
+                    this.setAiControlsLocked(this.state.aiLocked);
                 }
             },
             async transcribeWithWhisper(audioBlob, provider, model, key, prompt) {
