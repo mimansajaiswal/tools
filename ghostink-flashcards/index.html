@@ -38,6 +38,25 @@
         rel="stylesheet">
 
     <script>
+        (() => {
+            const raw = localStorage.getItem('ghostink_settings_v1');
+            let mode = 'system';
+            let font = 'serif';
+            try {
+                const s = raw ? JSON.parse(raw) : {};
+                mode = s.themeMode || 'system';
+                font = s.fontMode || 'serif';
+            } catch (_) { }
+            const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const theme = mode === 'system' ? (prefersDark ? 'dark' : 'light') : mode;
+            const root = document.documentElement;
+            root.setAttribute('data-theme', theme);
+            root.setAttribute('data-font', font);
+            root.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
+        })();
+    </script>
+
+    <script>
         tailwind.config = {
             theme: {
                 extend: {
@@ -96,7 +115,9 @@
             --font-sans: "Sora";
         }
 
-        body[data-theme="dark"] {
+        body[data-theme="dark"],
+        html[data-theme="dark"] body {
+            color-scheme: dark;
             --oatmeal: #1f1c2b;
             --oatmeal-dark: #252335;
             --linen: #1b1917;
@@ -649,6 +670,10 @@
             color: #ffd8a1 !important;
         }
 
+        body.preinit {
+            opacity: 0;
+        }
+
         .text-charcoal {
             color: var(--text-main) !important;
         }
@@ -732,7 +757,7 @@
     </style>
 </head>
 
-<body class="text-earth-metal font-sans min-h-[100dvh]">
+<body class="text-earth-metal font-sans min-h-[100dvh] preinit" data-theme="light" data-font="serif">
     <div class="min-h-[100dvh] flex flex-col">
         <header
             class="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-5 md:px-10 pt-4 sm:pt-6 pb-3 sm:pb-4">
@@ -2769,6 +2794,7 @@ async function handleRequest(request, env) {
                 window.addEventListener('offline', () => this.renderConnection());
                 this.applyTheme();
                 this.applyFontMode();
+                document.body.classList.remove('preinit');
                 if (window.matchMedia) {
                     const mq = window.matchMedia('(prefers-color-scheme: dark)');
                     mq.addEventListener('change', () => this.applyTheme());
@@ -5662,13 +5688,17 @@ async function handleRequest(request, env) {
                 const systemPrefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
                 const theme = mode === 'system' ? (systemPrefersDark ? 'dark' : 'light') : mode;
                 document.body.setAttribute('data-theme', theme);
+                document.documentElement.setAttribute('data-theme', theme);
+                document.documentElement.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
                 document.querySelectorAll('.theme-btn').forEach(btn => {
                     btn.classList.toggle('active', btn.dataset.theme === mode);
                 });
             },
             applyFontMode() {
                 const mode = this.state.settings.fontMode || 'serif';
-                document.body.setAttribute('data-font', mode === 'mono' ? 'mono' : 'serif');
+                const fontMode = mode === 'mono' ? 'mono' : 'serif';
+                document.body.setAttribute('data-font', fontMode);
+                document.documentElement.setAttribute('data-font', fontMode);
                 document.querySelectorAll('.font-btn').forEach(btn => {
                     btn.classList.toggle('active', btn.dataset.font === mode);
                 });
