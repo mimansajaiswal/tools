@@ -1176,9 +1176,9 @@
                                         <div class="flex gap-2">
                                             <button id="aiRecord"
                                                 class="p-2 rounded-lg bg-[color:var(--surface)] border border-[color:var(--card-border)] text-[color:var(--text-main)] text-sm flex-1"
-                                                title="Record"><i data-lucide="mic" class="w-4 h-4 mx-auto"></i><span
+                                                title="Record"><i data-lucide="mic" class="w-4 h-4 mx-auto"></i><kbd
                                                     id="micHotkey"
-                                                    class="hidden md:inline text-[10px] ml-2 text-earth-metal/60"></span></button>
+                                                    class="hidden md:inline-block text-[10px] ml-2 px-1 py-0.5 rounded bg-white/20 text-earth-metal/60"></kbd></button>
                                             <button id="aiSubmit"
                                                 class="px-3 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex-1">
                                                 Send <kbd id="aiSendHotkey"
@@ -3339,16 +3339,27 @@ async function handleRequest(request, env) {
                     }
                     if (!this.state.session || !this.state.selectedCard) return;
 
-                    // Allow Ctrl+Enter or Cmd+Enter to send from textarea
-                    if (e.target.id === 'aiAnswer' && (e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                        e.preventDefault();
-                        const btn = el('#aiSubmit');
-                        if (!btn.disabled && !this.state.aiLocked) this.submitToAI();
-                        return;
+                    const isAiMode = el('#revisionMode').value === 'ai';
+                    const aiAnswer = el('#aiAnswer');
+                    const hasAiText = (aiAnswer?.value || '').trim().length > 0;
+
+                    // Global send in AI mode (Cmd/Ctrl+Enter) even inside textarea
+                    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                        if (isAiMode && hasAiText && !this.state.aiLocked) {
+                            e.preventDefault();
+                            this.submitToAI();
+                            return;
+                        }
+                        // In non-AI mode, allow reveal via Cmd/Ctrl+Enter
+                        if (!isAiMode && !this.state.answerRevealed) {
+                            e.preventDefault();
+                            this.reveal();
+                            return;
+                        }
                     }
 
-                    // Allow Alt/Option+M to toggle mic even when focus is in textarea (same key to stop)
-                    if (e.key.toLowerCase() === 'm' && e.altKey && el('#revisionMode').value === 'ai' && !this.state.answerRevealed && !this.state.aiLocked) {
+                    // Mic toggle via Cmd/Ctrl+E even when focused in textarea
+                    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'e' && isAiMode && !this.state.answerRevealed && !this.state.aiLocked) {
                         e.preventDefault();
                         if (this.state.currentRecorder) {
                             this.state.currentRecorder.stop();
@@ -3503,7 +3514,7 @@ async function handleRequest(request, env) {
                 const sendHotkey = el('#aiSendHotkey');
                 if (sendHotkey) sendHotkey.textContent = isMac ? '⌘ ↵' : 'Ctrl ↵';
                 const micHotkey = el('#micHotkey');
-                if (micHotkey) micHotkey.textContent = isMac ? '⌥ M' : 'Alt M';
+                if (micHotkey) micHotkey.textContent = isMac ? '⌘ E' : 'Ctrl E';
                 const startHotkey = el('#startSessionHotkey');
                 if (startHotkey) startHotkey.textContent = isMac ? '⌘ ↵' : 'Ctrl ↵';
             },
