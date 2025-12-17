@@ -3477,9 +3477,9 @@ async function handleRequest(request, env) {
                     const isAiMode = el('#revisionMode').value === 'ai';
                     const aiAnswer = el('#aiAnswer');
                     const hasAiText = (aiAnswer?.value || '').trim().length > 0;
-                    const skipAnywhere = e.altKey && e.shiftKey && e.key.toLowerCase() === 's';
+                    const isSkipCombo = e.altKey && e.shiftKey && ((e.code || '').toLowerCase() === 'keys' || (e.key || '').toLowerCase() === 's');
 
-                    if (skipAnywhere) {
+                    if (isSkipCombo) {
                         e.preventDefault();
                         this.nextCard();
                         return;
@@ -4018,6 +4018,8 @@ async function handleRequest(request, env) {
                     el('#aiControls').classList.remove('hidden');
                     const submitBtn = el('#aiSubmit');
                     submitBtn.dataset.empty = '1';
+                    const feedback = el('#aiFeedback');
+                    if (feedback) { feedback.classList.add('hidden'); feedback.innerHTML = ''; }
                     this.setAiControlsLocked(false);
                     setTimeout(() => el('#aiAnswer').focus(), 50);
                 } else {
@@ -4040,6 +4042,7 @@ async function handleRequest(request, env) {
                 this.renderFsrsMeta();
                 el('#aiAnswer').value = '';
                 el('#aiFeedback').innerHTML = '';
+                el('#aiFeedback').classList.add('hidden');
                 lucide.createIcons();
             },
             renderNotes() {
