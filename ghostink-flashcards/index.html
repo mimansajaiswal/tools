@@ -1135,7 +1135,11 @@
                                                 title="Record"><i data-lucide="mic"
                                                     class="w-4 h-4 mx-auto"></i></button>
                                             <button id="aiSubmit"
-                                                class="px-3 py-2 rounded-xl bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex-1">Send</button>
+                                                class="px-3 py-2 rounded-xl bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex-1">
+                                                Send <kbd
+                                                    class="hidden md:inline-block text-[10px] px-1.5 py-0.5 rounded bg-white/20 font-medium ml-1 font-sans">⌘
+                                                    ↵</kbd>
+                                            </button>
                                         </div>
                                         <div id="aiFeedback"
                                             class="text-sm text-earth-metal/80 dark:text-white/70 bg-[var(--surface)] dark:bg-white/5 border border-oatmeal-dark/40 dark:border-white/10 rounded-xl p-2">
@@ -3118,6 +3122,7 @@ async function handleRequest(request, env) {
                 this.initMobileFab();
                 this.bindDeckSearch();
                 // Keyboard shortcuts for study
+                // Keyboard shortcuts for study
                 document.addEventListener('keydown', (e) => {
                     // Undo shortcut (Ctrl+Z or Cmd+Z) - works globally during study
                     if ((e.ctrlKey || e.metaKey) && e.key === 'z' && this.state.lastRating) {
@@ -3126,17 +3131,39 @@ async function handleRequest(request, env) {
                         return;
                     }
                     if (!this.state.session || !this.state.selectedCard) return;
+
+                    // Allow Ctrl+Enter or Cmd+Enter to send from textarea
+                    if (e.target.id === 'aiAnswer' && (e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                        e.preventDefault();
+                        const btn = el('#aiSubmit');
+                        if (!btn.disabled) this.submitToAI();
+                        return;
+                    }
+
                     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
+                    // Space key logic
                     if (e.key === ' ' && !this.state.answerRevealed) {
                         e.preventDefault();
                         if (el('#revisionMode').value === 'ai') {
                             const btn = el('#aiSubmit');
+                            // If text area has content (button enabled), Send. Otherwise do nothing.
                             if (!btn.disabled) this.submitToAI();
                         } else {
                             this.reveal();
                         }
                     }
+
+                    // Toggle Mic with M key in AI mode
+                    if (e.key.toLowerCase() === 'm' && el('#revisionMode').value === 'ai' && !this.state.answerRevealed) {
+                        e.preventDefault();
+                        if (this.state.currentRecorder) {
+                            this.state.currentRecorder.stop();
+                        } else {
+                            this.recordAnswer();
+                        }
+                    }
+
                     if (this.state.answerRevealed) {
                         const ratings = { '1': 'Again', '2': 'Hard', '3': 'Good', '4': 'Easy' };
                         if (ratings[e.key]) this.rate(ratings[e.key]);
@@ -5617,16 +5644,44 @@ async function handleRequest(request, env) {
                 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
                 const rec = new SR();
                 rec.lang = 'en-US';
-                rec.interimResults = false;
+                rec.interimResults = true;
+                rec.continuous = true;
                 rec.maxAlternatives = 1;
-                el('#aiFeedback').innerHTML = 'Listening...';
+                el('#aiFeedback').innerHTML = 'Listening... (Press M to stop)';
+
+                let finalTranscript = el('#aiAnswer').value;
+                if (finalTranscript) finalTranscript += ' ';
+
                 rec.onresult = (e) => {
-                    const text = e.results[0][0].transcript;
-                    el('#aiAnswer').value = text;
-                    el('#aiFeedback').innerHTML = 'Captured. Now send.';
+                    let interim = '';
+                    for (let i = e.resultIndex; i < e.results.length; ++i) {
+                        if (e.results[i].isFinal) {
+                            finalTranscript += e.results[i][0].transcript;
+                        } else {
+                            interim += e.results[i][0].transcript;
+                        }
+                    }
+                    el('#aiAnswer').value = finalTranscript + interim;
+                    // Trigger input event to update Send button state
+                    el('#aiAnswer').dispatchEvent(new Event('input'));
                 };
-                rec.onerror = () => { el('#aiFeedback').innerHTML = ''; toast('Mic error'); };
-                rec.onend = () => { if (el('#aiFeedback').innerHTML === 'Listening...') el('#aiFeedback').innerHTML = ''; };
+
+                // Store recorder instance to allow stopping it
+                this.state.currentRecorder = rec;
+
+                rec.onerror = (e) => {
+                    if (e.error !== 'aborted') {
+                        el('#aiFeedback').innerHTML = '';
+                        toast('Mic error: ' + e.error);
+                    }
+                    this.state.currentRecorder = null;
+                };
+                rec.onend = () => {
+                    if (el('#aiFeedback').innerHTML.includes('Listening')) {
+                        el('#aiFeedback').innerHTML = 'Captured. Now send.';
+                    }
+                    this.state.currentRecorder = null;
+                };
                 rec.start();
             },
             async recordWithCloudSTT() {
