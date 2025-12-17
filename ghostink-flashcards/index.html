@@ -2153,14 +2153,6 @@ async function handleRequest(request, env) {
                     localStorage.removeItem('ghostink_session_v1');
                 }
             },
-            setSyncButtonSpinning(on) {
-                const btn = el('#syncNowBtn');
-                if (!btn) return;
-                const icon = btn.querySelector('i');
-                btn.disabled = on || !navigator.onLine;
-                btn.classList.toggle('opacity-70', btn.disabled);
-                if (icon) icon.classList.toggle('animate-spin', on);
-            },
             async ensureSQL() {
                 if (this.sqlReady) return this.sqlReady;
                 this.sqlReady = window.initSqlJs({ locateFile: (file) => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/${file}` });
@@ -2801,6 +2793,14 @@ async function handleRequest(request, env) {
             },
             saveSession() {
                 Storage.setSession(this.state.session);
+            },
+            setSyncButtonSpinning(on) {
+                const btn = el('#syncNowBtn');
+                if (!btn) return;
+                const icon = btn.querySelector('i');
+                btn.disabled = on || !navigator.onLine || this.state.syncing;
+                btn.classList.toggle('opacity-70', btn.disabled);
+                if (icon) icon.classList.toggle('animate-spin', on);
             },
             generateCardQueue(deckIds, includeNonDue = false) {
                 let cards = this.state.cards.filter(c =>
