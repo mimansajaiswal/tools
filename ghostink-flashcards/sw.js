@@ -1,7 +1,8 @@
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open('ghostink-cache-v3').then((cache) =>
-      cache.addAll([
+    (async () => {
+      const cache = await caches.open('ghostink-cache-v4');
+      const localAssets = [
         './',
         './index.html',
         './sw.js',
@@ -9,7 +10,10 @@ self.addEventListener('install', (event) => {
         './icons/icon-512.png',
         './icons/icon-192.png',
         './icons/icon-96.png',
-        './icons/apple-touch-icon.png',
+        './icons/apple-touch-icon.png'
+      ];
+      await cache.addAll(localAssets);
+      const cdnAssets = [
         'https://cdn.tailwindcss.com',
         'https://unpkg.com/lucide@latest',
         'https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js',
@@ -19,8 +23,13 @@ self.addEventListener('install', (event) => {
         'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/sql-wasm.wasm',
         'https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css',
         'https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js'
-      ]).catch(() => { })
-    )
+      ];
+      await Promise.all(
+        cdnAssets.map((url) =>
+          cache.add(new Request(url, { mode: 'no-cors' })).catch(() => { })
+        )
+      );
+    })()
   );
   self.skipWaiting();
 });
@@ -28,7 +37,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== 'ghostink-cache-v3').map((k) => caches.delete(k)))
+      Promise.all(keys.filter((k) => k !== 'ghostink-cache-v4').map((k) => caches.delete(k)))
     )
   );
   self.clients.claim();
@@ -55,7 +64,7 @@ self.addEventListener('fetch', (event) => {
   // 2. Always fetch from network in background to update cache for next time.
   // 3. If cache is empty, wait for network.
   event.respondWith(
-    caches.open('ghostink-cache-v3').then((cache) => {
+    caches.open('ghostink-cache-v4').then((cache) => {
       return cache.match(request).then((cachedResponse) => {
         const fetchPromise = fetch(request).then((networkResponse) => {
           // Check if valid response before caching
