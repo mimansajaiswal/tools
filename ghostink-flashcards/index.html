@@ -1061,6 +1061,8 @@
                                         class="w-full px-4 py-2.5 rounded-lg bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] transition flex items-center justify-center gap-2">
                                         <i data-lucide="play" class="w-4 h-4"></i>
                                         <span>Start Study Session</span>
+                                        <kbd id="startSessionHotkey"
+                                            class="hidden md:inline-block text-[10px] px-1.5 py-0.5 rounded bg-white/20 font-medium ml-1 font-sans"></kbd>
                                     </button>
                                 </div>
                             </div>
@@ -1174,13 +1176,13 @@
                                         <div class="flex gap-2">
                                             <button id="aiRecord"
                                                 class="p-2 rounded-lg bg-[color:var(--surface)] border border-[color:var(--card-border)] text-[color:var(--text-main)] text-sm flex-1"
-                                                title="Record"><i data-lucide="mic"
-                                                    class="w-4 h-4 mx-auto"></i></button>
+                                                title="Record"><i data-lucide="mic" class="w-4 h-4 mx-auto"></i><span
+                                                    id="micHotkey"
+                                                    class="hidden md:inline text-[10px] ml-2 text-earth-metal/60"></span></button>
                                             <button id="aiSubmit"
                                                 class="px-3 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex-1">
-                                                Send <kbd
-                                                    class="hidden md:inline-block text-[10px] px-1.5 py-0.5 rounded bg-white/20 font-medium ml-1 font-sans">⌘
-                                                    ↵</kbd>
+                                                Send <kbd id="aiSendHotkey"
+                                                    class="hidden md:inline-block text-[10px] px-1.5 py-0.5 rounded bg-white/20 font-medium ml-1 font-sans"></kbd>
                                             </button>
                                         </div>
                                         <div id="aiFeedback"
@@ -1970,6 +1972,7 @@ async function handleRequest(request, env) {
         marked.setOptions({ renderer });
 
         const el = (sel) => document.querySelector(sel);
+        const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform);
         const escapeHtml = (str) => {
             if (!str) return '';
             return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -2753,6 +2756,7 @@ async function handleRequest(request, env) {
                 syncing: false,
                 autoScanPending: false,
                 answerRevealed: false,
+                aiLocked: false,
                 cardReversed: false,
                 studyNonDue: false,
                 session: null,  // Active study session (loaded from localStorage)
@@ -2801,6 +2805,21 @@ async function handleRequest(request, env) {
                 btn.disabled = on || !navigator.onLine || this.state.syncing;
                 btn.classList.toggle('opacity-70', btn.disabled);
                 if (icon) icon.classList.toggle('animate-spin', on);
+            },
+            setAiControlsLocked(locked) {
+                this.state.aiLocked = locked;
+                const sendBtn = el('#aiSubmit');
+                const micBtn = el('#aiRecord');
+                if (sendBtn) {
+                    sendBtn.disabled = locked || sendBtn.dataset.empty === '1';
+                    sendBtn.classList.toggle('opacity-50', sendBtn.disabled);
+                    sendBtn.classList.toggle('cursor-not-allowed', sendBtn.disabled);
+                }
+                if (micBtn) {
+                    micBtn.disabled = locked;
+                    micBtn.classList.toggle('opacity-50', micBtn.disabled);
+                    micBtn.classList.toggle('cursor-not-allowed', micBtn.disabled);
+                }
             },
             generateCardQueue(deckIds, includeNonDue = false) {
                 let cards = this.state.cards.filter(c =>
@@ -3304,12 +3323,18 @@ async function handleRequest(request, env) {
                 this.initMobileFab();
                 this.bindDeckSearch();
                 // Keyboard shortcuts for study
-                // Keyboard shortcuts for study
                 document.addEventListener('keydown', (e) => {
                     // Undo shortcut (Ctrl+Z or Cmd+Z) - works globally during study
                     if ((e.ctrlKey || e.metaKey) && e.key === 'z' && this.state.lastRating) {
                         e.preventDefault();
                         this.undoLastRating();
+                        return;
+                    }
+                    // Start session via Cmd/Ctrl+Enter (desktop)
+                    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !this.state.session && this.state.activeTab === 'study') {
+                        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+                        e.preventDefault();
+                        this.startSession();
                         return;
                     }
                     if (!this.state.session || !this.state.selectedCard) return;
@@ -3318,7 +3343,7 @@ async function handleRequest(request, env) {
                     if (e.target.id === 'aiAnswer' && (e.ctrlKey || e.metaKey) && e.key === 'Enter') {
                         e.preventDefault();
                         const btn = el('#aiSubmit');
-                        if (!btn.disabled) this.submitToAI();
+                        if (!btn.disabled && !this.state.aiLocked) this.submitToAI();
                         return;
                     }
 
@@ -3330,14 +3355,14 @@ async function handleRequest(request, env) {
                         if (el('#revisionMode').value === 'ai') {
                             const btn = el('#aiSubmit');
                             // If text area has content (button enabled), Send. Otherwise do nothing.
-                            if (!btn.disabled) this.submitToAI();
+                            if (!btn.disabled && !this.state.aiLocked) this.submitToAI();
                         } else {
                             this.reveal();
                         }
                     }
 
-                    // Toggle Mic with M key in AI mode
-                    if (e.key.toLowerCase() === 'm' && el('#revisionMode').value === 'ai' && !this.state.answerRevealed) {
+                    // Toggle Mic with Alt/Option+M in AI mode
+                    if (e.altKey && e.key.toLowerCase() === 'm' && el('#revisionMode').value === 'ai' && !this.state.answerRevealed && !this.state.aiLocked) {
                         e.preventDefault();
                         if (this.state.currentRecorder) {
                             this.state.currentRecorder.stop();
@@ -3435,11 +3460,10 @@ async function handleRequest(request, env) {
                 el('#aiAnswer').oninput = (e) => {
                     const btn = el('#aiSubmit');
                     const hasText = e.target.value.trim().length > 0;
-                    btn.disabled = !hasText;
-                    btn.classList.toggle('opacity-50', !hasText);
-                    btn.classList.toggle('cursor-not-allowed', !hasText);
+                    btn.dataset.empty = hasText ? '0' : '1';
+                    this.setAiControlsLocked(this.state.aiLocked);
                 };
-                el('#aiRecord').onclick = () => this.recordAnswer();
+                el('#aiRecord').onclick = () => { if (!this.state.aiLocked) this.recordAnswer(); };
                 el('#confirmDelete').onclick = () => this.performDelete();
                 el('#cancelDelete').onclick = () => this.closeModal('confirmModal');
                 el('#confirmModal').addEventListener('click', (e) => { if (e.target === el('#confirmModal')) this.closeModal('confirmModal'); });
@@ -3464,6 +3488,13 @@ async function handleRequest(request, env) {
                 // Show/hide STT settings based on whether AI is verified
                 const isAiVerified = this.state.settings?.aiVerified;
                 el('#sttSettings')?.classList.toggle('hidden', !isAiVerified);
+                // Update hotkey labels based on platform
+                const sendHotkey = el('#aiSendHotkey');
+                if (sendHotkey) sendHotkey.textContent = isMac ? '⌘ ↵' : 'Ctrl ↵';
+                const micHotkey = el('#micHotkey');
+                if (micHotkey) micHotkey.textContent = isMac ? '⌥ M' : 'Alt M';
+                const startHotkey = el('#startSessionHotkey');
+                if (startHotkey) startHotkey.textContent = isMac ? '⌘ ↵' : 'Ctrl ↵';
             },
             // Tab switching
             switchTab(tab) {
@@ -3776,12 +3807,18 @@ async function handleRequest(request, env) {
                 const isAiMode = el('#revisionMode').value === 'ai';
                 const revealBtn = el('#revealBtn');
 
+                this.setAiControlsLocked(false);
+                if (revealBtn) {
+                    revealBtn.disabled = false;
+                    revealBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
+
                 if (isAiMode) {
                     if (revealBtn) revealBtn.classList.add('hidden');
                     el('#aiControls').classList.remove('hidden');
                     const submitBtn = el('#aiSubmit');
-                    submitBtn.disabled = true;
-                    submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                    submitBtn.dataset.empty = '1';
+                    this.setAiControlsLocked(false);
                     setTimeout(() => el('#aiAnswer').focus(), 50);
                 } else {
                     if (revealBtn) revealBtn.classList.remove('hidden');
@@ -4802,6 +4839,7 @@ async function handleRequest(request, env) {
             reveal() {
                 const card = this.state.selectedCard;
                 const isCloze = card && (card.type || '').toLowerCase() === 'cloze';
+                if (this.state.answerRevealed) return;
 
                 // Only show cardBack for non-cloze cards
                 if (!isCloze) {
@@ -4827,6 +4865,11 @@ async function handleRequest(request, env) {
                 this.state.answerRevealed = true;
                 this.setRatingEnabled(true);
                 this.updateMobileFab();
+                const revealBtn = el('#revealBtn');
+                if (revealBtn) {
+                    revealBtn.disabled = true;
+                    revealBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                }
             },
             async rate(rating) {
                 const card = this.state.selectedCard;
@@ -5907,6 +5950,7 @@ async function handleRequest(request, env) {
                 }
             },
             async submitToAI() {
+                if (this.state.aiLocked) return;
                 if (!this.state.selectedCard) return;
                 const ans = el('#aiAnswer').value.trim();
                 if (!ans) { toast('Enter or record an answer first'); return; }
@@ -5928,6 +5972,7 @@ async function handleRequest(request, env) {
                 const provider = this.state.settings.aiProvider || 'openai';
                 const model = this.state.settings.aiModel || (provider === 'anthropic' ? 'claude-3-haiku-20240307' : provider === 'gemini' ? 'gemini-1.5-flash-latest' : 'gpt-4o-mini');
                 try {
+                    this.setAiControlsLocked(true);
                     el('#aiFeedback').innerHTML = 'Thinking...';
                     const res = await this.callAI(provider, model, prompt, this.state.settings.aiKey);
                     el('#aiFeedback').innerHTML = marked.parse(res);
@@ -5935,6 +5980,7 @@ async function handleRequest(request, env) {
                 } catch (e) {
                     el('#aiFeedback').innerHTML = '';
                     toast('AI error: ' + e.message);
+                    this.setAiControlsLocked(false);
                 }
             },
             async callAI(provider, model, prompt, key) {
