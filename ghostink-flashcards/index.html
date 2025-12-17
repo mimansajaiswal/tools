@@ -1021,6 +1021,8 @@
                                     <i data-lucide="square" class="w-3 h-3"></i>
                                     <span class="hidden md:inline">Stop Session</span>
                                     <span class="md:hidden">Stop</span>
+                                    <kbd id="stopSessionHotkey"
+                                        class="hidden md:inline text-[10px] ml-1 px-1.5 py-0.5 rounded bg-dull-purple/10 text-dull-purple font-medium"></kbd>
                                 </button>
                             </div>
                         </div>
@@ -1420,7 +1422,7 @@
             </div>
             <!-- Status bar spanning full width -->
             <div
-                class="sticky top-[52px] z-10 rounded-lg border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-oatmeal/60 dark:bg-white/5 mb-4">
+                class="sticky top-[52px] z-10 rounded-lg border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-[color:var(--surface-strong)] mb-4">
                 <div class="flex items-center gap-2 mb-2">
                     <i data-lucide="shield-check" class="w-4 h-4 text-dull-purple dark:text-dull-purple"></i>
                     <p class="font-semibold text-charcoal dark:text-white text-sm">Status</p>
@@ -3458,11 +3460,19 @@ async function handleRequest(request, env) {
                 this.initMobileFab();
                 this.bindDeckSearch();
                 // Keyboard shortcuts for study
+                // Use capture to ensure we can intercept combo hotkeys even when textarea is focused.
                 document.addEventListener('keydown', (e) => {
                     // Undo shortcut (Ctrl+Z or Cmd+Z) - works globally during study
                     if ((e.ctrlKey || e.metaKey) && e.key === 'z' && this.state.lastRating) {
                         e.preventDefault();
                         this.undoLastRating();
+                        return;
+                    }
+                    // Stop session via Ctrl/Cmd+. (works even when focused in textarea)
+                    if ((e.ctrlKey || e.metaKey) && e.key === '.' && this.state.session) {
+                        e.preventDefault();
+                        e.stopImmediatePropagation();
+                        this.abandonSession();
                         return;
                     }
                     // Start session via Cmd/Ctrl+Enter (desktop)
@@ -3477,10 +3487,17 @@ async function handleRequest(request, env) {
                     const isAiMode = el('#revisionMode').value === 'ai';
                     const aiAnswer = el('#aiAnswer');
                     const hasAiText = (aiAnswer?.value || '').trim().length > 0;
-                    const isSkipCombo = e.altKey && e.shiftKey && ((e.code || '').toLowerCase() === 'keys' || (e.key || '').toLowerCase() === 's');
+                    // Option/Alt+Shift+S can produce a different printable character on macOS, so prefer physical key detection.
+                    const isSkipCombo = !!(e.altKey && e.shiftKey && (
+                        (e.code === 'KeyS') ||
+                        ((e.key || '').toLowerCase() === 's') ||
+                        e.keyCode === 83 ||
+                        e.which === 83
+                    ));
 
                     if (isSkipCombo) {
                         e.preventDefault();
+                        e.stopImmediatePropagation();
                         this.nextCard();
                         return;
                     }
@@ -3552,7 +3569,7 @@ async function handleRequest(request, env) {
                         if (ratings[e.key]) this.rate(ratings[e.key]);
                     }
                     if (e.key.toLowerCase() === 's') this.nextCard();
-                });
+                }, true);
                 document.addEventListener('click', (e) => {
                     // Handle edit deck button click
                     const editDeckBtn = e.target.closest('.edit-deck-btn');
@@ -3688,6 +3705,8 @@ async function handleRequest(request, env) {
                 if (micHotkey) micHotkey.textContent = `${ctrlSymbol} E`;
                 const startHotkey = el('#startSessionHotkey');
                 if (startHotkey) startHotkey.textContent = `${ctrlSymbol} ${enterSymbol}`;
+                const stopHotkey = el('#stopSessionHotkey');
+                if (stopHotkey) stopHotkey.textContent = `${ctrlSymbol} .`;
             },
             // Tab switching
             switchTab(tab) {
@@ -5151,7 +5170,7 @@ async function handleRequest(request, env) {
                         t.classList.add('hidden');
                         t.innerHTML = '';
                     }, 300);
-                }, 2000);
+                }, 4000);
             },
             async undoLastRating() {
                 const prev = this.state.lastRating;
@@ -6165,7 +6184,46 @@ async function handleRequest(request, env) {
                 }
                 // Add change listeners for provider dropdowns
                 el('#aiProvider').onchange = () => this.toggleAiProviderFields();
-                el('#sttProvider').onchange = () => this.toggleSttProviderFields();
+                el('#sttProvider').onchange = () => {
+                    this.toggleSttProviderFields();
+                    const provider = el('#sttProvider')?.value || '';
+                    this.persistSttSettingsFromUI({ requestPermission: !!provider });
+                };
+            },
+            persistSttSettingsFromUI({ requestPermission = false } = {}) {
+                const prevProvider = this.state.sttProvider || '';
+                const provider = (el('#sttProvider')?.value || '').trim();
+                const model = (el('#sttModel')?.value || '').trim();
+                const key = (el('#sttKey')?.value || '').trim();
+                const prompt = (el('#sttPrompt')?.value || '').trim();
+
+                this.state.settings.sttProvider = provider;
+                this.state.settings.sttModel = model;
+                this.state.settings.sttPrompt = prompt;
+                if (key) this.state.settings.sttKey = key;
+                // If provider changed, require re-verify to avoid using stale creds with a new endpoint.
+                if (provider !== prevProvider) this.state.settings.sttVerified = false;
+
+                this.state.sttProvider = provider;
+                this.state.sttModel = model;
+                this.state.sttPrompt = prompt;
+                if (key) this.state.sttKey = key;
+                if (provider !== prevProvider) this.state.sttVerified = false;
+
+                Storage.setSettings(this.state.settings);
+                this.applySttChangeEffects(!provider);
+
+                if (!requestPermission || !provider) return;
+                this.ensureMicPermission()
+                    .then(() => {
+                        this.state.settings.sttPermissionWarmed = true;
+                        Storage.setSettings(this.state.settings);
+                    })
+                    .catch(() => {
+                        this.state.settings.sttPermissionWarmed = false;
+                        Storage.setSettings(this.state.settings);
+                        toast('Microphone access denied');
+                    });
             },
             toggleAiProviderFields() {
                 const provider = el('#aiProvider').value;
