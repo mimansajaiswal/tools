@@ -843,6 +843,16 @@
                         Your cards live in Notion where you can see and edit them. Reveal answers like Anki, or
                         type/speak your answer and let AI check it against the ground truth.
                     </p>
+                    <p class="text-[11px] text-earth-metal/60 dark:text-white/60">
+                        Built by <a class="underline text-dull-purple dark:text-dull-purple"
+                            href="https://mimansajaiswal.github.io" target="_blank" rel="noopener noreferrer">Mimansa
+                            Jaiswal</a> · In the <a class="underline text-dull-purple dark:text-dull-purple"
+                            href="https://github.com/mimansajaiswal/tools/" target="_blank"
+                            rel="noopener noreferrer">LLM-enabled tools collection</a> · Code: <a
+                            class="underline text-dull-purple dark:text-dull-purple"
+                            href="https://github.com/mimansajaiswal/tools/tree/main/ghostink-flashcards" target="_blank"
+                            rel="noopener noreferrer">ghostink-flashcards</a>
+                    </p>
                 </div>
                 <div class="grid md:grid-cols-3 gap-3 text-sm text-left">
                     <div
@@ -1298,13 +1308,14 @@
     <div id="confirmModal" role="dialog" aria-modal="true" aria-labelledby="confirmModalTitle"
         class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4">
         <div class="card rounded-2xl p-5 w-full max-w-sm shadow-soft">
-            <p id="confirmModalTitle" class="text-charcoal font-display text-lg mb-2">Confirm delete</p>
+            <p id="confirmModalTitle" class="text-charcoal dark:text-white font-display text-lg mb-2">Confirm delete</p>
             <p class="text-sm text-earth-metal/70 dark:text-white/70">This removes it locally and syncs deletion to
                 Notion.</p>
             <div class="flex justify-end gap-2 mt-4">
                 <button id="cancelDelete"
                     class="px-3 py-2 rounded-xl bg-white-linen border border-oatmeal-dark/70 text-earth-metal dark:text-white text-sm dark:bg-zinc-800 dark:border-white/10 dark:hover:bg-zinc-700">Cancel</button>
-                <button id="confirmDelete" class="px-3 py-2 rounded-xl bg-muted-pink text-white text-sm">Delete</button>
+                <button id="confirmDelete"
+                    class="px-3 py-2 rounded-xl bg-muted-pink text-white text-sm hover:bg-muted-pink/90">Delete</button>
             </div>
         </div>
     </div>
