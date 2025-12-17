@@ -874,12 +874,12 @@
                             </div>
                             <div class="flex items-center gap-2 shrink-0">
                                 <button id="refreshDecksBtn"
-                                    class="p-2 rounded-xl border border-oatmeal-dark/60 text-earth-metal hover:bg-oatmeal flex items-center gap-2"
+                                    class="p-2 rounded-xl border border-oatmeal-dark/60 text-earth-metal hover:bg-oatmeal dark:hover:bg-white/5 flex items-center gap-2"
                                     data-tooltip="Sync with Notion">
                                     <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                                 </button>
                                 <button id="newDeckBtn"
-                                    class="p-2 md:px-3 md:py-2 rounded-xl bg-charcoal text-white text-sm hover:bg-earth-metal flex items-center gap-2"
+                                    class="p-2 md:px-3 md:py-2 rounded-xl bg-charcoal dark:bg-white/10 dark:border-white/10 dark:border text-white text-sm hover:bg-earth-metal dark:hover:bg-white/20 flex items-center gap-2"
                                     data-tooltip="New deck">
                                     <i data-lucide="plus" class="w-4 h-4"></i>
                                     <span class="hidden md:inline">New deck</span>
@@ -889,7 +889,7 @@
                         <!-- Deck search -->
                         <div class="mt-3">
                             <input id="libraryDeckSearch" type="text" placeholder="Search decks..."
-                                class="w-full rounded-xl border border-oatmeal-dark/60 bg-white-linen px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dull-purple/40">
+                                class="w-full rounded-xl border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dull-purple/40">
                         </div>
                         <div id="deckGrid"
                             class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-3 mt-3 max-h-[400px] sm:max-h-[400px] md:max-h-[240px] lg:max-h-[240px] overflow-y-auto scroll-minimal p-1">
@@ -904,7 +904,7 @@
                                 Select a deck above</h2>
                             <div class="flex items-center gap-1 md:gap-2 shrink-0">
                                 <button id="resetAlgorithmBtn"
-                                    class="p-2 md:px-3 md:py-2 rounded-xl border border-red-300 text-red-600 text-sm hover:bg-red-50 flex items-center gap-2 hidden"
+                                    class="p-2 md:px-3 md:py-2 rounded-xl border border-red-300 text-red-600 text-sm hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20 flex items-center gap-2 hidden"
                                     data-tooltip="Reset algorithm parameters">
                                     <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
                                     <span class="hidden lg:inline">Reset Algorithm</span>
@@ -922,7 +922,7 @@
                             <!-- Card search -->
                             <div class="mb-3">
                                 <input id="cardSearchInput" type="text" placeholder="Search cards by name..."
-                                    class="w-full rounded-xl border border-oatmeal-dark/60 bg-white-linen px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dull-purple/40">
+                                    class="w-full rounded-xl border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dull-purple/40">
                             </div>
                             <div id="cardsContainer"
                                 class="max-h-[350px] md:max-h-[400px] overflow-y-auto scroll-minimal">
@@ -992,7 +992,7 @@
                                     <label class="text-xs text-earth-metal/70 block mb-2">Study from decks</label>
                                     <div class="relative">
                                         <input id="deckSearchInput" type="text" placeholder="Search decks..."
-                                            class="w-full rounded-xl border border-oatmeal-dark/60 bg-white-linen px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dull-purple/40">
+                                            class="w-full rounded-xl border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dull-purple/40">
                                         <div id="deckDropdown"
                                             class="hidden absolute left-0 right-0 z-50 w-full mt-1 max-h-48 overflow-y-auto rounded-xl border border-oatmeal-dark/60 bg-[color:var(--card-bg)] shadow-lg">
                                         </div>
@@ -1002,7 +1002,7 @@
                                 <div>
                                     <label class="text-xs text-earth-metal/70 block mb-2">Revision mode</label>
                                     <select id="revisionMode"
-                                        class="w-full rounded-xl border border-oatmeal-dark/60 bg-white-linen px-3 py-2 text-sm">
+                                        class="w-full rounded-xl border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
                                         <option value="manual">Reveal</option>
                                         <option value="ai">AI</option>
                                     </select>
@@ -1035,7 +1035,7 @@
                                     <div class="col-span-2">
                                         <label class="text-xs text-earth-metal/70 block mb-2">Practice cards</label>
                                         <select id="cardSelectionMode"
-                                            class="w-full rounded-xl border border-oatmeal-dark/60 bg-white-linen px-3 py-2 text-sm">
+                                            class="w-full rounded-xl border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
                                             <option value="due">Due cards only</option>
                                             <option value="all">All cards</option>
                                         </select>
@@ -1121,7 +1121,7 @@
                                 </div>
                                 <div class="space-y-2">
                                     <button id="revealBtn"
-                                        class="relative px-3 py-2.5 w-full rounded-xl bg-charcoal text-white text-sm hover:bg-earth-metal">
+                                        class="relative px-3 py-2.5 w-full rounded-xl bg-charcoal dark:bg-white/10 dark:border-white/10 dark:border text-white text-sm hover:bg-earth-metal dark:hover:bg-white/20">
                                         Reveal
                                         <kbd
                                             class="hidden md:inline-block absolute right-3 top-1/2 -translate-y-1/2 text-[10px] px-1.5 py-0.5 rounded bg-white/20 font-medium">Space</kbd>
@@ -1138,7 +1138,7 @@
                                                 class="px-3 py-2 rounded-xl bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex-1">Send</button>
                                         </div>
                                         <div id="aiFeedback"
-                                            class="text-sm text-earth-metal/80 bg-white-linen border border-oatmeal-dark/40 rounded-xl p-2">
+                                            class="text-sm text-earth-metal/80 dark:text-white/70 bg-[var(--surface)] dark:bg-white/5 border border-oatmeal-dark/40 dark:border-white/10 rounded-xl p-2">
                                         </div>
                                     </div>
                                 </div>
@@ -1263,10 +1263,10 @@
     </div>
 
     <div id="toast" role="status" aria-live="polite"
-        class="fixed z-[110] bottom-6 right-6 px-4 py-3 rounded-xl bg-charcoal text-white text-sm shadow-soft hidden opacity-0 transition-opacity duration-300">
+        class="fixed z-[110] bottom-6 right-6 px-4 py-3 rounded-xl bg-charcoal dark:bg-zinc-800 text-white text-sm shadow-soft hidden opacity-0 transition-opacity duration-300">
     </div>
     <div id="tooltip"
-        class="fixed z-[120] px-2.5 py-1.5 rounded-lg text-xs bg-charcoal text-white shadow-soft pointer-events-none hidden">
+        class="fixed z-[120] px-2.5 py-1.5 rounded-lg text-xs bg-charcoal dark:bg-zinc-800 text-white shadow-soft pointer-events-none hidden">
     </div>
 
     <!-- Global loading overlay -->
@@ -1366,12 +1366,12 @@
                     <div>
                         <label class="text-xs text-earth-metal/70">Cloudflare Worker URL</label>
                         <input id="settingWorkerUrl" type="text" placeholder="https://your-proxy.workers.dev"
-                            class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2">
+                            class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
                     </div>
                     <div>
                         <label class="text-xs text-earth-metal/70">Proxy token (optional)</label>
                         <input id="settingProxyToken" type="password" placeholder="ALL_CORS_PROXY_MATCH_TOKEN"
-                            class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2">
+                            class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
                     </div>
                     <button id="verifyWorker"
                         class="px-3 py-2 rounded-xl bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 w-full">Verify
@@ -1379,7 +1379,7 @@
                     <div>
                         <label class="text-xs text-earth-metal/70">Notion integration secret (instead of OAuth)</label>
                         <input id="settingAuthToken" type="password" placeholder="secret_..."
-                            class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed">
+                            class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed">
                     </div>
                     <button id="verifyAuth"
                         class="px-3 py-2 rounded-xl bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 w-full disabled:opacity-60 disabled:cursor-not-allowed">Verify
@@ -1391,16 +1391,16 @@
                     <div>
                         <label class="text-xs text-earth-metal/60">Decks source</label>
                         <select id="deckSourceSelect" disabled
-                            class="w-full rounded-xl border border-oatmeal-dark/60 bg-white-linen px-2 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"></select>
+                            class="w-full rounded-xl border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"></select>
                     </div>
                     <div>
                         <label class="text-xs text-earth-metal/60">Cards source</label>
                         <select id="cardSourceSelect" disabled
-                            class="w-full rounded-xl border border-oatmeal-dark/60 bg-white-linen px-2 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"></select>
+                            class="w-full rounded-xl border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"></select>
                     </div>
                     <div class="flex gap-2 flex-wrap">
                         <button id="scanSources" disabled
-                            class="px-3 py-2 rounded-xl bg-charcoal text-white text-sm hover:bg-earth-metal flex-1 min-w-[140px] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-charcoal">Scan
+                            class="px-3 py-2 rounded-xl bg-charcoal dark:bg-white/10 dark:border-white/10 dark:border text-white text-sm hover:bg-earth-metal dark:hover:bg-white/20 flex-1 min-w-[140px] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-charcoal">Scan
                             sources</button>
                         <button id="saveSettings" disabled
                             class="px-3 py-2 rounded-xl bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex-1 min-w-[140px] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-dull-purple">Save</button>
@@ -1445,7 +1445,7 @@
                             <div>
                                 <label class="text-xs text-earth-metal/70">Provider</label>
                                 <select id="aiProvider"
-                                    class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-2 py-2 text-sm">
+                                    class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm">
                                     <option value="">Disabled</option>
                                     <option value="openai">OpenAI</option>
                                     <option value="anthropic">Claude</option>
@@ -1457,10 +1457,10 @@
                                     <label class="text-xs text-earth-metal/70">Model</label>
                                     <input id="aiModel" type="text"
                                         placeholder="gpt-4o-mini / claude-3-haiku / gemini-1.5-flash"
-                                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-2 py-2 text-sm">
+                                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm">
                                 </div>
                                 <input id="aiKey" type="password" placeholder="API key (kept locally)"
-                                    class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2 text-sm">
+                                    class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
                                 <button id="verifyAi"
                                     class="px-3 py-2 rounded-xl bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 w-full">Verify
                                     AI settings</button>
@@ -1480,7 +1480,7 @@
                             <div>
                                 <label class="text-xs text-earth-metal/70">Provider</label>
                                 <select id="sttProvider"
-                                    class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-2 py-2 text-sm">
+                                    class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm">
                                     <option value="">Browser (default)</option>
                                     <option value="openai">OpenAI Whisper</option>
                                     <option value="gemini">Gemini</option>
@@ -1491,14 +1491,14 @@
                                 <div>
                                     <label class="text-xs text-earth-metal/70">Model</label>
                                     <input id="sttModel" type="text" placeholder="whisper-1 / gemini-2.0-flash"
-                                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-2 py-2 text-sm">
+                                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm">
                                 </div>
                                 <input id="sttKey" type="password" placeholder="API key (required for cloud providers)"
-                                    class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2 text-sm">
+                                    class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
                                 <div>
                                     <label class="text-xs text-earth-metal/70">Starter prompt (optional context)</label>
                                     <input id="sttPrompt" type="text" placeholder="e.g., Technical terms, names..."
-                                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2 text-sm mt-1">
+                                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm mt-1">
                                 </div>
                                 <button id="verifyStt"
                                     class="px-3 py-2 rounded-xl bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 w-full">Verify
@@ -1631,11 +1631,11 @@ async function handleRequest(request, env) {
             </div>
             <div class="space-y-3 text-sm">
                 <input id="deckNameInput" type="text" placeholder="Deck name"
-                    class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2">
+                    class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
                 <div>
                     <label class="text-xs text-earth-metal/70">Algorithm</label>
                     <select id="deckAlgoInput"
-                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2">
+                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
                         <option>SM-2</option>
                         <option>FSRS</option>
                     </select>
@@ -1644,12 +1644,14 @@ async function handleRequest(request, env) {
                     <div>
                         <label class="text-xs text-earth-metal/70">Daily review limit</label>
                         <input id="deckReviewLimit" type="number"
-                            class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2" value="50">
+                            class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"
+                            value="50">
                     </div>
                     <div>
                         <label class="text-xs text-earth-metal/70">New card limit</label>
                         <input id="deckNewLimit" type="number"
-                            class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2" value="20">
+                            class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"
+                            value="20">
                     </div>
                 </div>
                 <label class="flex items-center gap-2 text-sm">
@@ -1663,7 +1665,7 @@ async function handleRequest(request, env) {
                 <div>
                     <label class="text-xs text-earth-metal/70">AI revision prompt (optional)</label>
                     <textarea id="deckPromptInput" rows="3"
-                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2"
+                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"
                         placeholder="Use {{question}} {{answer}} {{user}} placeholders"></textarea>
                     <div class="flex flex-wrap gap-2 mt-2 text-[11px] text-earth-metal/60">
                         <span
@@ -1703,12 +1705,12 @@ async function handleRequest(request, env) {
                 <div class="space-y-2">
                     <label class="text-xs text-earth-metal/70">Deck</label>
                     <select id="cardDeckInput"
-                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2"></select>
+                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"></select>
                 </div>
                 <div class="space-y-2">
                     <label class="text-xs text-earth-metal/70">Card type</label>
                     <select id="cardTypeInput"
-                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2">
+                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
                         <option value="Front-Back">Front / Back</option>
                         <option value="Cloze">Cloze</option>
                     </select>
@@ -1716,22 +1718,22 @@ async function handleRequest(request, env) {
                 <div class="md:col-span-2 space-y-2">
                     <label class="text-xs text-earth-metal/70">Name</label>
                     <textarea id="cardNameInput" rows="3"
-                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2"></textarea>
+                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"></textarea>
                 </div>
                 <div id="cardBackSection" class="md:col-span-2 space-y-2">
                     <label class="text-xs text-earth-metal/70">Back</label>
                     <textarea id="cardBackInput" rows="4"
-                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2"></textarea>
+                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"></textarea>
                 </div>
                 <div class="md:col-span-2 space-y-2">
                     <label class="text-xs text-earth-metal/70">Notes (markdown)</label>
                     <textarea id="cardNotesInput" rows="3" placeholder="Add notes for this card..."
-                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2"></textarea>
+                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"></textarea>
                 </div>
                 <div class="space-y-2">
                     <label class="text-xs text-earth-metal/70">Tags (comma)</label>
                     <input id="cardTagsInput" type="text"
-                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-white-linen px-3 py-2">
+                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
                 </div>
                 <div class="space-y-2">
                     <label class="text-xs text-earth-metal/70">Suspended / Leech</label>
@@ -1759,7 +1761,7 @@ async function handleRequest(request, env) {
                     class="px-3 py-2 rounded-xl border border-muted-pink text-muted-pink text-sm hidden">Delete
                     card</button>
                 <button id="saveCardBtn"
-                    class="px-4 py-2 rounded-xl bg-charcoal text-white text-sm hover:bg-earth-metal">Save</button>
+                    class="px-4 py-2 rounded-xl bg-charcoal dark:bg-white/10 dark:border-white/10 dark:border text-white text-sm hover:bg-earth-metal dark:hover:bg-white/20">Save</button>
             </div>
         </div>
     </div>
@@ -1797,7 +1799,7 @@ async function handleRequest(request, env) {
             </div>
             <p class="text-xs text-earth-metal/70">Write notes in Markdown format. They will be synced to Notion.</p>
             <textarea id="notesArea" rows="12"
-                class="flex-1 w-full rounded-xl border border-oatmeal-dark/60 bg-white-linen px-3 py-2 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-dull-purple/40"
+                class="flex-1 w-full rounded-xl border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-dull-purple/40"
                 placeholder="Add notes for this card..."></textarea>
             <div class="flex items-center justify-between">
                 <span id="noteStatus" class="text-xs text-earth-metal/60"></span>
@@ -1845,7 +1847,7 @@ async function handleRequest(request, env) {
             <p class="text-xs text-earth-metal/70">This will be appended as a new paragraph on the Notion page with a
                 timestamp.</p>
             <textarea id="blockNoteArea" rows="8"
-                class="flex-1 w-full rounded-xl border border-oatmeal-dark/60 bg-white-linen px-3 py-2 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-dull-purple/40"
+                class="flex-1 w-full rounded-xl border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-dull-purple/40"
                 placeholder="Write in Markdown..."></textarea>
             <div class="flex items-center justify-end gap-2">
                 <button id="cancelAddBlockBtn"
@@ -2737,6 +2739,13 @@ async function handleRequest(request, env) {
 
                 // Check card selection mode (due only vs all)
                 const cardSelectionMode = el('#cardSelectionMode')?.value || 'due';
+                let revisionMode = el('#revisionMode')?.value || 'manual';
+
+                if (revisionMode === 'ai' && !navigator.onLine) {
+                    revisionMode = 'manual';
+                    toast('Offline: switched to Manual mode');
+                }
+
                 const includeNonDue = cardSelectionMode === 'all';
                 const noScheduleChanges = includeNonDue
                     ? (el('#noScheduleChanges')?.checked ?? true)
@@ -2756,7 +2765,7 @@ async function handleRequest(request, env) {
                     deckIds: deckIds,
                     algorithm: deck?.algorithm || 'SM-2',
                     settings: {
-                        revisionMode: el('#revisionMode')?.value || 'manual',
+                        revisionMode: revisionMode,
                         cardSelectionMode: cardSelectionMode,
                         filters: { ...this.state.filters }
                     },
@@ -3121,7 +3130,12 @@ async function handleRequest(request, env) {
 
                     if (e.key === ' ' && !this.state.answerRevealed) {
                         e.preventDefault();
-                        this.reveal();
+                        if (el('#revisionMode').value === 'ai') {
+                            const btn = el('#aiSubmit');
+                            if (!btn.disabled) this.submitToAI();
+                        } else {
+                            this.reveal();
+                        }
                     }
                     if (this.state.answerRevealed) {
                         const ratings = { '1': 'Again', '2': 'Hard', '3': 'Good', '4': 'Easy' };
@@ -3182,10 +3196,17 @@ async function handleRequest(request, env) {
                 el('#settingsModal').addEventListener('click', (e) => { if (e.target === el('#settingsModal')) this.closeSettings(); });
                 el('#workerHelpModal').addEventListener('click', (e) => { if (e.target === el('#workerHelpModal')) this.closeModal('workerHelpModal'); });
                 el('#revisionMode').onchange = (e) => {
-                    if (e.target.value === 'ai' && !this.state.settings.aiVerified) {
-                        e.target.value = 'manual';
-                        this.openModal('aiSettingsRequiredModal');
-                        return;
+                    if (e.target.value === 'ai') {
+                        if (!navigator.onLine) {
+                            e.target.value = 'manual';
+                            toast('Online connection required for AI mode');
+                            return;
+                        }
+                        if (!this.state.settings.aiVerified) {
+                            e.target.value = 'manual';
+                            this.openModal('aiSettingsRequiredModal');
+                            return;
+                        }
                     }
                     const on = e.target.value === 'ai';
                     el('#aiControls').classList.toggle('hidden', !on);
@@ -3202,6 +3223,13 @@ async function handleRequest(request, env) {
                 el('#verifyAi').onclick = () => this.verifyAiSettings();
                 el('#verifyStt').onclick = () => this.verifySttSettings();
                 el('#aiSubmit').onclick = () => this.submitToAI();
+                el('#aiAnswer').oninput = (e) => {
+                    const btn = el('#aiSubmit');
+                    const hasText = e.target.value.trim().length > 0;
+                    btn.disabled = !hasText;
+                    btn.classList.toggle('opacity-50', !hasText);
+                    btn.classList.toggle('cursor-not-allowed', !hasText);
+                };
                 el('#aiRecord').onclick = () => this.recordAnswer();
                 el('#confirmDelete').onclick = () => this.performDelete();
                 el('#cancelDelete').onclick = () => this.closeModal('confirmModal');
@@ -3426,7 +3454,7 @@ async function handleRequest(request, env) {
                         const dueDate = c.fsrs?.dueDate || c.sm2?.dueDate;
                         const dueDisplay = dueDate ? new Date(dueDate).toLocaleDateString() : '—';
                         return `
-                        <tr class="hover:bg-oatmeal/50" data-card-id="${c.id}">
+                        <tr class="hover:bg-oatmeal/50 dark:hover:bg-white/5" data-card-id="${c.id}">
                             <td class="py-2 pr-2 text-charcoal"><div class="truncate max-w-[150px] sm:max-w-[250px] md:max-w-[350px] lg:max-w-[450px]">${nameText}</div></td>
                             <td class="py-2 pr-2 capitalize hidden sm:table-cell">${c.type}</td>
                             <td class="py-2 pr-2 text-earth-metal/70 text-xs whitespace-nowrap">${dueDisplay}</td>
@@ -3536,8 +3564,22 @@ async function handleRequest(request, env) {
                 // Show study controls (may have been hidden by session complete)
                 const studyControls = el('#studyControls');
                 if (studyControls) studyControls.classList.remove('hidden');
+
+                const isAiMode = el('#revisionMode').value === 'ai';
                 const revealBtn = el('#revealBtn');
-                if (revealBtn) revealBtn.classList.remove('hidden');
+
+                if (isAiMode) {
+                    if (revealBtn) revealBtn.classList.add('hidden');
+                    el('#aiControls').classList.remove('hidden');
+                    const submitBtn = el('#aiSubmit');
+                    submitBtn.disabled = true;
+                    submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                    setTimeout(() => el('#aiAnswer').focus(), 50);
+                } else {
+                    if (revealBtn) revealBtn.classList.remove('hidden');
+                    el('#aiControls').classList.add('hidden');
+                }
+
                 // Hide copy button until reveal (shows answer content)
                 const copyBtn = el('#copyCardContent');
                 if (copyBtn) copyBtn.classList.add('hidden');
@@ -3887,7 +3929,7 @@ async function handleRequest(request, env) {
                 const sortedHistory = [...history].reverse();
                 tableEl.innerHTML = `
                     <table class="w-full text-xs">
-                        <thead class="sticky top-0 bg-oatmeal dark:bg-charcoal"><tr class="text-earth-metal/50 border-b border-charcoal/10"><th class="text-left py-1.5 px-2">Rating</th><th class="text-left py-1.5 px-2">Date</th><th class="text-left py-1.5 px-2">Time</th></tr></thead>
+                        <thead class="sticky top-0 bg-oatmeal dark:bg-white/5"><tr class="text-earth-metal/50 border-b border-charcoal/10"><th class="text-left py-1.5 px-2">Rating</th><th class="text-left py-1.5 px-2">Date</th><th class="text-left py-1.5 px-2">Time</th></tr></thead>
                         <tbody>
                             ${sortedHistory.map(h => `
                                 <tr class="border-b border-charcoal/5 last:border-0">
@@ -4259,7 +4301,7 @@ async function handleRequest(request, env) {
 
                 // Create and position popover
                 const popover = document.createElement('div');
-                popover.className = 'review-history-popover absolute z-50 bg-oatmeal dark:bg-charcoal border border-charcoal/20 rounded-lg shadow-lg p-3 min-w-[200px] max-w-[280px]';
+                popover.className = 'review-history-popover absolute z-50 bg-oatmeal dark:bg-zinc-800 border border-charcoal/20 dark:border-white/10 rounded-lg shadow-lg p-3 min-w-[200px] max-w-[280px]';
                 popover.innerHTML = `
                     <div class="flex justify-between items-center mb-2">
                         <span class="font-medium text-sm text-charcoal dark:text-oatmeal">Review History</span>
@@ -4391,14 +4433,11 @@ async function handleRequest(request, env) {
 
                 // Reveal cloze blanks
                 document.querySelectorAll('#cardFront .cloze-blank').forEach(span => span.classList.add('revealed'));
-                if (el('#revisionMode').value === 'ai') {
-                    el('#aiControls').classList.remove('hidden');
-                } else {
-                    // In manual mode, enable rating after reveal
-                    this.state.answerRevealed = true;
-                    this.setRatingEnabled(true);
-                    this.updateMobileFab();
-                }
+
+                // Enable rating (in both Manual and AI modes, reveal() signifies answer is now visible)
+                this.state.answerRevealed = true;
+                this.setRatingEnabled(true);
+                this.updateMobileFab();
             },
             async rate(rating) {
                 const card = this.state.selectedCard;
@@ -5325,10 +5364,12 @@ async function handleRequest(request, env) {
                 });
             },
             isReady() {
-                const hasWorker = !!this.state.settings.workerUrl;
-                const hasAuth = !!this.state.settings.authToken;
-                const hasSources = !!(this.state.settings.deckSource && this.state.settings.cardSource);
-                return hasWorker && this.state.workerVerified && hasAuth && hasSources && this.state.sourcesVerified;
+                const s = this.state.settings;
+                const hasSettings = !!(s.workerUrl && s.authToken && s.deckSource && s.cardSource);
+                // If offline, trust the stored settings (assume they were verified before)
+                if (!navigator.onLine && hasSettings) return true;
+                // If online, require full verification
+                return hasSettings && s.workerVerified && (s.authVerified || this.state.authVerified) && s.sourcesVerified;
             },
             loadAISettings() {
                 const s = Storage.getSettings();
@@ -5403,10 +5444,6 @@ async function handleRequest(request, env) {
                     const res = await this.callAI(provider, model, prompt, this.state.settings.aiKey);
                     el('#aiFeedback').innerHTML = marked.parse(res);
                     this.reveal();
-                    // Enable rating after AI judgment
-                    this.state.answerRevealed = true;
-                    this.setRatingEnabled(true);
-                    this.updateMobileFab();
                 } catch (e) {
                     el('#aiFeedback').innerHTML = '';
                     toast('AI error: ' + e.message);
