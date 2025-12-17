@@ -8,7 +8,15 @@ self.addEventListener('install', (event) => {
         './icons/icon-512.png',
         './icons/icon-192.png',
         './icons/icon-96.png',
-        './icons/apple-touch-icon.png'
+        './icons/apple-touch-icon.png',
+        'https://cdn.tailwindcss.com',
+        'https://unpkg.com/lucide@latest',
+        'https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js',
+        'https://cdn.jsdelivr.net/npm/marked/marked.min.js',
+        'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/sql-wasm.js',
+        'https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css',
+        'https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js'
       ]).catch(() => {})
     )
   );
@@ -28,9 +36,17 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
 
-  // Ignore cross-origin requests (API calls, CDNs) to ensure we always get fresh data
-  // and don't cache API errors.
-  if (!request.url.startsWith(self.location.origin)) return;
+  // Ignore cross-origin requests (API calls) EXCEPT for trusted CDNs needed for offline use
+  const isSameOrigin = request.url.startsWith(self.location.origin);
+  const isTrustedCdn = [
+    'cdn.jsdelivr.net',
+    'unpkg.com',
+    'cdnjs.cloudflare.com',
+    'fonts.googleapis.com',
+    'fonts.gstatic.com'
+  ].some(domain => request.url.includes(domain));
+
+  if (!isSameOrigin && !isTrustedCdn) return;
 
   // Stale-While-Revalidate Strategy for app files:
   // 1. Serve from cache immediately if available (Offline First).
