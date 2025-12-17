@@ -3347,6 +3347,17 @@ async function handleRequest(request, env) {
                         return;
                     }
 
+                    // Allow Alt/Option+M to toggle mic even when focus is in textarea (same key to stop)
+                    if (e.key.toLowerCase() === 'm' && e.altKey && el('#revisionMode').value === 'ai' && !this.state.answerRevealed && !this.state.aiLocked) {
+                        e.preventDefault();
+                        if (this.state.currentRecorder) {
+                            this.state.currentRecorder.stop();
+                        } else {
+                            this.recordAnswer();
+                        }
+                        return;
+                    }
+
                     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
                     // Space key logic
@@ -3716,6 +3727,10 @@ async function handleRequest(request, env) {
             renderStudy() {
                 // Update session UI controls
                 const session = this.state.session;
+                const revisionSelect = el('#revisionMode');
+                if (session?.settings?.revisionMode && revisionSelect) {
+                    revisionSelect.value = session.settings.revisionMode;
+                }
                 const activeBar = el('#sessionActiveBar');
                 const progressText = el('#sessionProgressText');
                 const studySettingsCard = el('#studySettingsCard');
@@ -6154,7 +6169,7 @@ async function handleRequest(request, env) {
                 rec.interimResults = true;
                 rec.continuous = true;
                 rec.maxAlternatives = 1;
-                el('#aiFeedback').innerHTML = 'Listening... (Press M to stop)';
+                el('#aiFeedback').innerHTML = 'Listening...';
 
                 let finalTranscript = el('#aiAnswer').value;
                 if (finalTranscript) finalTranscript += ' ';
