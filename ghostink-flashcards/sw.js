@@ -1,9 +1,10 @@
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open('ghostink-cache-v2').then((cache) =>
+    caches.open('ghostink-cache-v3').then((cache) =>
       cache.addAll([
         './',
         './index.html',
+        './sw.js',
         './manifest.webmanifest',
         './icons/icon-512.png',
         './icons/icon-192.png',
@@ -27,7 +28,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== 'ghostink-cache-v2').map((k) => caches.delete(k)))
+      Promise.all(keys.filter((k) => k !== 'ghostink-cache-v3').map((k) => caches.delete(k)))
     )
   );
   self.clients.claim();
@@ -54,7 +55,7 @@ self.addEventListener('fetch', (event) => {
   // 2. Always fetch from network in background to update cache for next time.
   // 3. If cache is empty, wait for network.
   event.respondWith(
-    caches.open('ghostink-cache-v2').then((cache) => {
+    caches.open('ghostink-cache-v3').then((cache) => {
       return cache.match(request).then((cachedResponse) => {
         const fetchPromise = fetch(request).then((networkResponse) => {
           // Check if valid response before caching

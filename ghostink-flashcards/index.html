@@ -8,6 +8,7 @@
     <meta name="theme-color" content="#917FB3">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" href="icons/icon-96.png" sizes="96x96">
 
     <!-- Preconnect hints for CDN domains -->
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -763,7 +764,7 @@
             class="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-5 md:px-10 pt-4 sm:pt-6 pb-3 sm:pb-4">
             <div class="flex items-center gap-2 sm:gap-3 min-w-0">
                 <div
-                    class="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl dash flex items-center justify-center shadow-soft shrink-0">
+                    class="w-9 h-9 sm:w-12 sm:h-12 rounded-lg sm:rounded-2xl dash flex items-center justify-center shadow-soft shrink-0">
                     <i data-lucide="sparkles" class="w-5 h-5 sm:w-6 sm:h-6 text-dull-purple"></i>
                 </div>
                 <div class="min-w-0">
@@ -872,28 +873,28 @@
                         Built by <a class="underline text-dull-purple dark:text-dull-purple"
                             href="https://mimansajaiswal.github.io" target="_blank" rel="noopener noreferrer">Mimansa
                             Jaiswal</a> · In the <a class="underline text-dull-purple dark:text-dull-purple"
-                            href="https://github.com/mimansajaiswal/tools/" target="_blank"
-                            rel="noopener noreferrer">LLM-enabled tools collection</a> · Code: <a
+                            href="https://mimansajaiswal.github.io/tools/" target="_blank"
+                            rel="noopener noreferrer">Tools Made with LLMs</a> · Code: <a
                             class="underline text-dull-purple dark:text-dull-purple"
-                            href="https://github.com/mimansajaiswal/tools/tree/main/ghostink-flashcards" target="_blank"
+                            href="https://mimansajaiswal.github.io/tools/tree/main/ghostink-flashcards" target="_blank"
                             rel="noopener noreferrer">ghostink-flashcards</a>
                     </p>
                 </div>
                 <div class="grid md:grid-cols-3 gap-3 text-sm text-left">
                     <div
-                        class="rounded-xl bg-[color:var(--surface)] border border-[color:var(--card-border)] p-3 space-y-1">
+                        class="rounded-lg bg-[color:var(--surface)] border border-[color:var(--card-border)] p-3 space-y-1">
                         <div class="flex items-center gap-2 text-dull-purple font-semibold"><i data-lucide="link"
                                 class="w-4 h-4"></i>Connect</div>
                         <p class="text-earth-metal/70">Add your worker URL and Notion token to sync.</p>
                     </div>
                     <div
-                        class="rounded-xl bg-[color:var(--surface)] border border-[color:var(--card-border)] p-3 space-y-1">
+                        class="rounded-lg bg-[color:var(--surface)] border border-[color:var(--card-border)] p-3 space-y-1">
                         <div class="flex items-center gap-2 text-dull-purple font-semibold"><i data-lucide="database"
                                 class="w-4 h-4"></i>Sources</div>
                         <p class="text-earth-metal/70">Point to your Decks and Cards databases in Notion.</p>
                     </div>
                     <div
-                        class="rounded-xl bg-[color:var(--surface)] border border-[color:var(--card-border)] p-3 space-y-1">
+                        class="rounded-lg bg-[color:var(--surface)] border border-[color:var(--card-border)] p-3 space-y-1">
                         <div class="flex items-center gap-2 text-dull-purple font-semibold"><i data-lucide="wand-2"
                                 class="w-4 h-4"></i>Study</div>
                         <p class="text-earth-metal/70">Reveal answers directly, or use AI mode to check your response.
@@ -902,7 +903,7 @@
                 </div>
                 <div class="flex justify-center">
                     <button id="lockedOpenSettings"
-                        class="px-5 py-3 rounded-xl bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex items-center gap-2 whitespace-nowrap shadow-soft">
+                        class="px-5 py-3 rounded-lg bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex items-center gap-2 whitespace-nowrap shadow-soft">
                         <i data-lucide="settings" class="w-4 h-4"></i><span>Open settings</span>
                     </button>
                 </div>
@@ -921,12 +922,12 @@
                             </div>
                             <div class="flex items-center gap-2 shrink-0">
                                 <button id="refreshDecksBtn"
-                                    class="p-2 rounded-xl border border-oatmeal-dark/60 text-earth-metal hover:bg-oatmeal dark:hover:bg-white/5 flex items-center gap-2"
+                                    class="p-2 rounded-lg border border-oatmeal-dark/60 text-earth-metal hover:bg-oatmeal dark:hover:bg-white/5 flex items-center gap-2"
                                     data-tooltip="Sync with Notion">
                                     <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                                 </button>
                                 <button id="newDeckBtn"
-                                    class="p-2 md:px-3 md:py-2 rounded-xl bg-charcoal dark:bg-white/10 dark:border-white/10 dark:border text-white text-sm hover:bg-earth-metal dark:hover:bg-white/20 flex items-center gap-2"
+                                    class="p-2 md:px-3 md:py-2 rounded-lg bg-charcoal dark:bg-white/10 dark:border-white/10 dark:border text-white text-sm hover:bg-earth-metal dark:hover:bg-white/20 flex items-center gap-2"
                                     data-tooltip="New deck">
                                     <i data-lucide="plus" class="w-4 h-4"></i>
                                     <span class="hidden md:inline">New deck</span>
@@ -936,7 +937,7 @@
                         <!-- Deck search -->
                         <div class="mt-3">
                             <input id="libraryDeckSearch" type="text" placeholder="Search decks..."
-                                class="w-full rounded-xl border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dull-purple/40">
+                                class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dull-purple/40">
                         </div>
                         <div id="deckGrid"
                             class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-3 mt-3 max-h-[400px] sm:max-h-[400px] md:max-h-[240px] lg:max-h-[240px] overflow-y-auto scroll-minimal p-1">
@@ -951,13 +952,13 @@
                                 Select a deck above</h2>
                             <div class="flex items-center gap-1 md:gap-2 shrink-0">
                                 <button id="resetAlgorithmBtn"
-                                    class="p-2 md:px-3 md:py-2 rounded-xl border border-red-300 text-red-600 text-sm hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20 flex items-center gap-2 hidden"
+                                    class="p-2 md:px-3 md:py-2 rounded-lg border border-red-300 text-red-600 text-sm hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20 flex items-center gap-2 hidden"
                                     data-tooltip="Reset algorithm parameters">
                                     <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
                                     <span class="hidden lg:inline">Reset Algorithm</span>
                                 </button>
                                 <button id="newCardBtn"
-                                    class="p-2 md:px-3 md:py-2 rounded-xl bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex items-center gap-2 hidden"
+                                    class="p-2 md:px-3 md:py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex items-center gap-2 hidden"
                                     data-tooltip="New card">
                                     <i data-lucide="plus-circle" class="w-4 h-4"></i>
                                     <span class="hidden md:inline">New card</span>
@@ -969,7 +970,7 @@
                             <!-- Card search -->
                             <div class="mb-3">
                                 <input id="cardSearchInput" type="text" placeholder="Search cards by name..."
-                                    class="w-full rounded-xl border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dull-purple/40">
+                                    class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dull-purple/40">
                             </div>
                             <div id="cardsContainer"
                                 class="max-h-[350px] md:max-h-[400px] overflow-y-auto scroll-minimal">
@@ -1012,7 +1013,7 @@
                                     Preview mode: no scheduling changes
                                 </div>
                                 <button id="abandonSessionBtn"
-                                    class="flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-xl text-xs md:text-sm text-earth-metal/70 hover:text-muted-pink hover:bg-muted-pink/10 border border-oatmeal-dark/60 transition whitespace-nowrap">
+                                    class="flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg text-xs md:text-sm text-earth-metal/70 hover:text-muted-pink hover:bg-muted-pink/10 border border-oatmeal-dark/60 transition whitespace-nowrap">
                                     <i data-lucide="square" class="w-3 h-3"></i>
                                     <span class="hidden md:inline">Stop Session</span>
                                     <span class="md:hidden">Stop</span>
@@ -1039,9 +1040,9 @@
                                     <label class="text-xs text-earth-metal/70 block mb-2">Study from decks</label>
                                     <div class="relative">
                                         <input id="deckSearchInput" type="text" placeholder="Search decks..."
-                                            class="w-full rounded-xl border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dull-purple/40">
+                                            class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dull-purple/40">
                                         <div id="deckDropdown"
-                                            class="hidden absolute left-0 right-0 z-50 w-full mt-1 max-h-48 overflow-y-auto rounded-xl border border-oatmeal-dark/60 bg-[color:var(--card-bg)] shadow-lg">
+                                            class="hidden absolute left-0 right-0 z-50 w-full mt-1 max-h-48 overflow-y-auto rounded-lg border border-oatmeal-dark/60 bg-[color:var(--card-bg)] shadow-lg">
                                         </div>
                                     </div>
                                     <div id="selectedDecksDisplay" class="flex flex-wrap gap-1.5 mt-2"></div>
@@ -1049,7 +1050,7 @@
                                 <div>
                                     <label class="text-xs text-earth-metal/70 block mb-2">Revision mode</label>
                                     <select id="revisionMode"
-                                        class="w-full rounded-xl border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
+                                        class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
                                         <option value="manual">Reveal</option>
                                         <option value="ai">AI</option>
                                     </select>
@@ -1057,7 +1058,7 @@
                                 <!-- Session controls -->
                                 <div id="sessionControls" class="pt-3">
                                     <button id="startSessionBtn"
-                                        class="w-full px-4 py-2.5 rounded-xl bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] transition flex items-center justify-center gap-2">
+                                        class="w-full px-4 py-2.5 rounded-lg bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] transition flex items-center justify-center gap-2">
                                         <i data-lucide="play" class="w-4 h-4"></i>
                                         <span>Start Study Session</span>
                                     </button>
@@ -1082,7 +1083,7 @@
                                     <div class="col-span-2">
                                         <label class="text-xs text-earth-metal/70 block mb-2">Practice cards</label>
                                         <select id="cardSelectionMode"
-                                            class="w-full rounded-xl border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
+                                            class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
                                             <option value="due">Due cards only</option>
                                             <option value="all">All cards</option>
                                         </select>
@@ -1093,7 +1094,8 @@
                                                 checked>
                                             <span>No scheduling changes (preview mode)</span>
                                         </label>
-                                        <p class="text-[11px] text-earth-metal/50 mt-1">When on, ratings won’t update
+                                        <p class="text-[11px] text-earth-metal/50 dark:text-white/60 mt-1">When on,
+                                            ratings won’t update
                                             due dates or algorithms.</p>
                                     </div>
                                     <label class="flex items-center gap-2">
@@ -1109,22 +1111,15 @@
                                         <span>Added today</span>
                                     </label>
                                     <div class="col-span-2">
-                                        <label class="text-xs text-earth-metal/70">Stability below</label>
-                                        <input id="filterStability" type="range" min="0" max="50" step="1"
-                                            class="w-full accent-dull-purple">
-                                        <div class="flex justify-between text-xs text-earth-metal/60">
-                                            <span>0</span><span id="stabilityValue">25</span><span>50</span>
-                                        </div>
-                                    </div>
-                                    <div class="col-span-2">
                                         <label class="text-xs text-earth-metal/70">Tags</label>
-                                        <div id="filterTagsContainer"
-                                            class="flex flex-wrap gap-1.5 mt-2 p-2 rounded-xl border border-oatmeal-dark/60 bg-white-linen min-h-[40px] text-xs cursor-pointer">
+                                        <div class="relative">
+                                            <input id="filterTagSearch" type="text" placeholder="Search tags"
+                                                class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
+                                            <div id="filterTagDropdown"
+                                                class="hidden absolute left-0 right-0 z-40 mt-1 max-h-44 overflow-y-auto rounded-lg border border-oatmeal-dark/60 bg-[color:var(--card-bg)] shadow-lg">
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div class="col-span-2">
-                                        <label class="text-xs text-earth-metal/70">Manual pick</label>
-                                        <div id="manualSelection" class="flex flex-wrap gap-1.5 mt-2 text-xs"></div>
+                                        <div id="filterTagSelected" class="flex flex-wrap gap-1.5 mt-2"></div>
                                     </div>
                                     <label class="flex items-center gap-2">
                                         <input id="filterSuspended" type="checkbox" class="accent-dull-purple">
@@ -1159,7 +1154,7 @@
                                 </div>
                             </div>
                             <div id="studyCardContent"
-                                class="relative mt-3 p-3 md:p-4 rounded-xl bg-[color:var(--surface-strong)] border border-[color:var(--card-border)] space-y-3">
+                                class="relative mt-3 p-3 md:p-4 rounded-lg bg-[color:var(--surface-strong)] border border-[color:var(--card-border)] space-y-3">
                                 <div class="flex items-center justify-between text-xs text-[color:var(--text-sub)]">
                                     <span id="studyDeckLabel" class="truncate">Choose a deck</span>
                                 </div>
@@ -1168,28 +1163,28 @@
                                 </div>
                                 <div class="space-y-2">
                                     <button id="revealBtn"
-                                        class="relative px-3 py-2.5 w-full rounded-xl bg-charcoal dark:bg-white/10 dark:border-white/10 dark:border text-white text-sm hover:bg-earth-metal dark:hover:bg-white/20">
+                                        class="relative px-3 py-2.5 w-full rounded-lg bg-charcoal dark:bg-white/10 dark:border-white/10 dark:border text-white text-sm hover:bg-earth-metal dark:hover:bg-white/20">
                                         Reveal
                                         <kbd
                                             class="hidden md:inline-block absolute right-3 top-1/2 -translate-y-1/2 text-[10px] px-1.5 py-0.5 rounded bg-white/20 font-medium">Space</kbd>
                                     </button>
                                     <div id="aiControls" class="hidden space-y-2">
                                         <textarea id="aiAnswer" rows="3" placeholder="Type your answer..."
-                                            class="w-full rounded-xl border border-[color:var(--card-border)] bg-[color:var(--surface)] px-3 py-2 text-sm"></textarea>
+                                            class="w-full rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] px-3 py-2 text-sm"></textarea>
                                         <div class="flex gap-2">
                                             <button id="aiRecord"
-                                                class="p-2 rounded-xl bg-[color:var(--surface)] border border-[color:var(--card-border)] text-[color:var(--text-main)] text-sm flex-1"
+                                                class="p-2 rounded-lg bg-[color:var(--surface)] border border-[color:var(--card-border)] text-[color:var(--text-main)] text-sm flex-1"
                                                 title="Record"><i data-lucide="mic"
                                                     class="w-4 h-4 mx-auto"></i></button>
                                             <button id="aiSubmit"
-                                                class="px-3 py-2 rounded-xl bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex-1">
+                                                class="px-3 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex-1">
                                                 Send <kbd
                                                     class="hidden md:inline-block text-[10px] px-1.5 py-0.5 rounded bg-white/20 font-medium ml-1 font-sans">⌘
                                                     ↵</kbd>
                                             </button>
                                         </div>
                                         <div id="aiFeedback"
-                                            class="text-sm text-earth-metal/80 dark:text-white/70 bg-[var(--surface)] dark:bg-white/5 border border-oatmeal-dark/40 dark:border-white/10 rounded-xl p-2">
+                                            class="text-sm text-earth-metal/80 dark:text-white/70 bg-[var(--surface)] dark:bg-white/5 border border-oatmeal-dark/40 dark:border-white/10 rounded-lg p-2">
                                         </div>
                                     </div>
                                 </div>
@@ -1291,7 +1286,7 @@
 
                         <!-- Notes Preview (below study card, no textarea) -->
                         <div id="notesSection"
-                            class="rounded-xl border border-[color:var(--card-border)] p-3 md:p-4 bg-[color:var(--card-bg)] hidden">
+                            class="rounded-lg border border-[color:var(--card-border)] p-3 md:p-4 bg-[color:var(--card-bg)] hidden">
                             <div class="flex items-center justify-between mb-2 md:mb-3">
                                 <span class="font-semibold text-charcoal text-sm md:text-base">Notes</span>
                                 <button id="editNotesBtn" class="p-1.5 rounded-lg hover:bg-oatmeal text-dull-purple"
@@ -1315,16 +1310,16 @@
             class="hidden px-3 sm:px-5 md:px-10 pb-4 text-[11px] text-earth-metal/60 dark:text-white/60 text-center">
             Built by <a class="underline text-dull-purple dark:text-dull-purple" href="https://mimansajaiswal.github.io"
                 target="_blank" rel="noopener noreferrer">Mimansa Jaiswal</a> · In the <a
-                class="underline text-dull-purple dark:text-dull-purple" href="https://github.com/mimansajaiswal/tools/"
-                target="_blank" rel="noopener noreferrer">LLM-enabled tools collection</a> · Code: <a
+                class="underline text-dull-purple dark:text-dull-purple" href="https://mimansajaiswal.github.io/tools/"
+                target="_blank" rel="noopener noreferrer">Tools Made with LLMs</a> · Code: <a
                 class="underline text-dull-purple dark:text-dull-purple"
-                href="https://github.com/mimansajaiswal/tools/tree/main/ghostink-flashcards" target="_blank"
+                href="https://mimansajaiswal.github.io/tools/tree/main/ghostink-flashcards" target="_blank"
                 rel="noopener noreferrer">ghostink-flashcards</a>
         </footer>
     </div>
 
     <div id="toast" role="status" aria-live="polite"
-        class="fixed z-[110] bottom-6 right-6 px-4 py-3 rounded-xl bg-charcoal dark:bg-zinc-800 text-white text-sm shadow-soft hidden opacity-0 transition-opacity duration-300">
+        class="fixed z-[110] bottom-6 right-6 px-4 py-3 rounded-lg bg-charcoal dark:bg-zinc-800 text-white text-sm shadow-soft hidden opacity-0 transition-opacity duration-300">
     </div>
     <div id="tooltip"
         class="fixed z-[120] px-2.5 py-1.5 rounded-lg text-xs bg-charcoal dark:bg-zinc-800 text-white shadow-soft pointer-events-none hidden">
@@ -1348,9 +1343,9 @@
                 Notion.</p>
             <div class="flex justify-end gap-2 mt-4">
                 <button id="cancelDelete"
-                    class="px-3 py-2 rounded-xl bg-white-linen border border-oatmeal-dark/70 text-earth-metal dark:text-white text-sm dark:bg-zinc-800 dark:border-white/10 dark:hover:bg-zinc-700">Cancel</button>
+                    class="px-3 py-2 rounded-lg bg-white-linen border border-oatmeal-dark/70 text-earth-metal dark:text-white text-sm dark:bg-zinc-800 dark:border-white/10 dark:hover:bg-zinc-700">Cancel</button>
                 <button id="confirmDelete"
-                    class="px-3 py-2 rounded-xl bg-muted-pink text-white text-sm hover:bg-muted-pink/90">Delete</button>
+                    class="px-3 py-2 rounded-lg bg-muted-pink text-white text-sm hover:bg-muted-pink/90">Delete</button>
             </div>
         </div>
     </div>
@@ -1375,7 +1370,7 @@
                     <li>Cards will appear as new again</li>
                 </ul>
                 <div
-                    class="p-3 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-900/30 dark:border-amber-600/60 flex items-start gap-2">
+                    class="p-3 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-900/30 dark:border-amber-600/60 flex items-start gap-2">
                     <i data-lucide="cloud-upload" class="w-4 h-4 text-amber-600 mt-0.5 shrink-0"></i>
                     <p class="text-amber-800 dark:text-amber-100 text-xs">These changes will be synced to Notion. This
                         action cannot be
@@ -1384,9 +1379,9 @@
             </div>
             <div class="flex justify-end gap-2 mt-5">
                 <button id="cancelResetAlgorithm"
-                    class="px-4 py-2 rounded-xl bg-white-linen border border-oatmeal-dark/70 text-earth-metal text-sm hover:bg-oatmeal">Cancel</button>
+                    class="px-4 py-2 rounded-lg bg-white-linen border border-oatmeal-dark/70 text-earth-metal text-sm hover:bg-oatmeal">Cancel</button>
                 <button id="confirmResetAlgorithm"
-                    class="px-4 py-2 rounded-xl bg-red-600 text-white text-sm hover:bg-red-700 flex items-center gap-2">
+                    class="px-4 py-2 rounded-lg bg-red-600 text-white text-sm hover:bg-red-700 flex items-center gap-2">
                     <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
                     Reset All Cards
                 </button>
@@ -1405,7 +1400,7 @@
             </div>
             <!-- Status bar spanning full width -->
             <div
-                class="rounded-xl border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-oatmeal/60 dark:bg-white/5 mb-4">
+                class="rounded-lg border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-oatmeal/60 dark:bg-white/5 mb-4">
                 <div class="flex items-center gap-2 mb-2">
                     <i data-lucide="shield-check" class="w-4 h-4 text-dull-purple dark:text-dull-purple"></i>
                     <p class="font-semibold text-charcoal dark:text-white text-sm">Status</p>
@@ -1419,7 +1414,7 @@
             <div class="grid md:grid-cols-2 gap-6 text-sm">
                 <div class="space-y-4">
                     <div
-                        class="rounded-xl border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-white-linen dark:bg-white/5">
+                        class="rounded-lg border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-white-linen dark:bg-white/5">
                         <div class="flex items-center justify-between">
                             <p class="font-semibold text-charcoal dark:text-white">Worker proxy</p>
                             <button id="openWorkerHelp"
@@ -1434,44 +1429,44 @@
                     <div>
                         <label class="text-xs text-earth-metal/70">Cloudflare Worker URL</label>
                         <input id="settingWorkerUrl" type="text" placeholder="https://your-proxy.workers.dev"
-                            class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
+                            class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
                     </div>
                     <div>
                         <label class="text-xs text-earth-metal/70">Proxy token (optional)</label>
                         <input id="settingProxyToken" type="password" placeholder="ALL_CORS_PROXY_MATCH_TOKEN"
-                            class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
+                            class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
                     </div>
                     <button id="verifyWorker"
-                        class="px-3 py-2 rounded-xl bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 w-full">Verify
+                        class="px-3 py-2 rounded-lg bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 w-full">Verify
                         worker</button>
                     <div>
                         <label class="text-xs text-earth-metal/70">Notion integration secret (instead of OAuth)</label>
                         <input id="settingAuthToken" type="password" placeholder="secret_..."
-                            class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed">
+                            class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed">
                     </div>
                     <button id="verifyAuth"
-                        class="px-3 py-2 rounded-xl bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 w-full disabled:opacity-60 disabled:cursor-not-allowed">Verify
+                        class="px-3 py-2 rounded-lg bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 w-full disabled:opacity-60 disabled:cursor-not-allowed">Verify
                         Notion token</button>
                     <button id="oauthBtn"
-                        class="w-full px-3 py-2 rounded-xl border border-dull-purple text-dull-purple text-sm hover:bg-oatmeal flex items-center gap-2 justify-center disabled:opacity-60 disabled:cursor-not-allowed">
+                        class="w-full px-3 py-2 rounded-lg border border-dull-purple text-dull-purple text-sm hover:bg-oatmeal flex items-center gap-2 justify-center disabled:opacity-60 disabled:cursor-not-allowed">
                         <i data-lucide="log-in" class="w-4 h-4"></i>Sign in with Notion
                     </button>
                     <div>
                         <label class="text-xs text-earth-metal/60">Decks source</label>
                         <select id="deckSourceSelect" disabled
-                            class="w-full rounded-xl border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"></select>
+                            class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"></select>
                     </div>
                     <div>
                         <label class="text-xs text-earth-metal/60">Cards source</label>
                         <select id="cardSourceSelect" disabled
-                            class="w-full rounded-xl border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"></select>
+                            class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"></select>
                     </div>
                     <div class="flex gap-2 flex-wrap">
                         <button id="scanSources" disabled
-                            class="px-3 py-2 rounded-xl bg-charcoal dark:bg-white/10 dark:border-white/10 dark:border text-white text-sm hover:bg-earth-metal dark:hover:bg-white/20 flex-1 min-w-[140px] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-charcoal">Scan
+                            class="px-3 py-2 rounded-lg bg-charcoal dark:bg-white/10 dark:border-white/10 dark:border text-white text-sm hover:bg-earth-metal dark:hover:bg-white/20 flex-1 min-w-[140px] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-charcoal">Scan
                             sources</button>
                         <button id="saveSettings" disabled
-                            class="px-3 py-2 rounded-xl bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex-1 min-w-[140px] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-dull-purple">Save</button>
+                            class="px-3 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex-1 min-w-[140px] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-dull-purple">Save</button>
                     </div>
                     <div class="w-full h-2 bg-oatmeal rounded-full overflow-hidden">
                         <div id="syncProgress" class="h-2 bg-dull-purple w-0 transition-all duration-500"></div>
@@ -1479,25 +1474,25 @@
                 </div>
                 <div class="space-y-4">
                     <div
-                        class="rounded-xl border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-white-linen dark:bg-white/5">
+                        class="rounded-lg border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-white-linen dark:bg-white/5">
                         <div class="flex items-center gap-2">
                             <i data-lucide="database" class="w-4 h-4 text-dull-purple dark:text-dull-purple"></i>
                             <p class="font-semibold text-charcoal dark:text-white">Offline vault</p>
                         </div>
                         <div class="mt-3 grid grid-cols-2 gap-3 text-sm">
-                            <div class="rounded-xl bg-oatmeal dark:bg-white/10 p-3">
+                            <div class="rounded-lg bg-oatmeal dark:bg-white/10 p-3">
                                 <p class="text-earth-metal/60 dark:text-white/60">Decks cached</p>
                                 <p id="deckCount" class="text-xl font-semibold text-charcoal dark:text-white">0</p>
                             </div>
-                            <div class="rounded-xl bg-oatmeal dark:bg-white/10 p-3">
+                            <div class="rounded-lg bg-oatmeal dark:bg-white/10 p-3">
                                 <p class="text-earth-metal/60 dark:text-white/60">Cards cached</p>
                                 <p id="cardCount" class="text-xl font-semibold text-charcoal dark:text-white">0</p>
                             </div>
-                            <div class="rounded-xl bg-white-linen dark:bg-white/10 p-3">
+                            <div class="rounded-lg bg-white-linen dark:bg-white/10 p-3">
                                 <p class="text-earth-metal/60 dark:text-white/60">Pending sync</p>
                                 <p id="queueCount" class="text-xl font-semibold text-charcoal dark:text-white">0</p>
                             </div>
-                            <div class="rounded-xl bg-white-linen dark:bg-white/10 p-3">
+                            <div class="rounded-lg bg-white-linen dark:bg-white/10 p-3">
                                 <p class="text-earth-metal/60 dark:text-white/60">Last sync</p>
                                 <p id="lastSync" class="text-xl font-semibold text-charcoal dark:text-white">—</p>
                             </div>
@@ -1507,7 +1502,7 @@
                             offline-first use.</p>
                     </div>
                     <div
-                        class="rounded-xl border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-white-linen dark:bg-white/5">
+                        class="rounded-lg border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-white-linen dark:bg-white/5">
                         <div class="flex items-center gap-2 mb-2">
                             <i data-lucide="bot" class="w-4 h-4 text-dull-purple dark:text-dull-purple"></i>
                             <p class="font-semibold text-charcoal dark:text-white">AI judge settings</p>
@@ -1516,7 +1511,7 @@
                             <div>
                                 <label class="text-xs text-earth-metal/70">Provider</label>
                                 <select id="aiProvider"
-                                    class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm">
+                                    class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm">
                                     <option value="">Disabled</option>
                                     <option value="openai">OpenAI</option>
                                     <option value="anthropic">Claude</option>
@@ -1528,12 +1523,12 @@
                                     <label class="text-xs text-earth-metal/70">Model</label>
                                     <input id="aiModel" type="text"
                                         placeholder="gpt-4o-mini / claude-3-haiku / gemini-1.5-flash"
-                                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm">
+                                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm">
                                 </div>
                                 <input id="aiKey" type="password" placeholder="API key (kept locally)"
-                                    class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
-                                <button id="verifyAi"
-                                    class="px-3 py-2 rounded-xl bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 w-full">Verify
+                                    class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
+                                <button id="verifyAi" data-tip="Requires internet"
+                                    class="px-3 py-2 rounded-lg bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 w-full">Verify
                                     AI settings</button>
                                 <p class="text-[11px] text-earth-metal/60">Keys stay on-device (localStorage). AI
                                     judging
@@ -1542,7 +1537,7 @@
                         </div>
                     </div>
                     <!-- Speech-to-Text Settings (only shown when AI mode is enabled) -->
-                    <div id="sttSettings" class="rounded-xl border border-oatmeal-dark/60 p-3 bg-white-linen hidden">
+                    <div id="sttSettings" class="rounded-lg border border-oatmeal-dark/60 p-3 bg-white-linen hidden">
                         <div class="flex items-center gap-2 mb-2">
                             <i data-lucide="mic" class="w-4 h-4 text-dull-purple"></i>
                             <p class="font-semibold text-charcoal">Speech-to-text</p>
@@ -1551,7 +1546,7 @@
                             <div>
                                 <label class="text-xs text-earth-metal/70">Provider</label>
                                 <select id="sttProvider"
-                                    class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm">
+                                    class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm">
                                     <option value="">Browser (default)</option>
                                     <option value="openai">OpenAI Whisper</option>
                                     <option value="gemini">Gemini</option>
@@ -1562,17 +1557,17 @@
                                 <div>
                                     <label class="text-xs text-earth-metal/70">Model</label>
                                     <input id="sttModel" type="text" placeholder="whisper-1 / gemini-2.0-flash"
-                                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm">
+                                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm">
                                 </div>
                                 <input id="sttKey" type="password" placeholder="API key (required for cloud providers)"
-                                    class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
+                                    class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
                                 <div>
                                     <label class="text-xs text-earth-metal/70">Starter prompt (optional context)</label>
                                     <input id="sttPrompt" type="text" placeholder="e.g., Technical terms, names..."
-                                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm mt-1">
+                                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm mt-1">
                                 </div>
-                                <button id="verifyStt"
-                                    class="px-3 py-2 rounded-xl bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 w-full">Verify
+                                <button id="verifyStt" data-tip="Requires internet"
+                                    class="px-3 py-2 rounded-lg bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 w-full">Verify
                                     STT settings</button>
                             </div>
                             <p class="text-[11px] text-earth-metal/60">Browser uses free built-in speech recognition.
@@ -1591,13 +1586,13 @@
                                 class="w-4 h-4 transition-transform"></i>
                         </button>
                         <div id="dangerZoneContent"
-                            class="hidden mt-3 p-3 rounded-xl bg-muted-pink/10 border border-muted-pink/30 dark:bg-muted-pink/15 dark:border-muted-pink/40">
+                            class="hidden mt-3 p-3 rounded-lg bg-muted-pink/10 border border-muted-pink/30 dark:bg-muted-pink/15 dark:border-muted-pink/40">
                             <p class="text-xs text-earth-metal/70 dark:text-white/70 mb-3">This will permanently delete
                                 all GhostInk data
                                 including decks, cards, settings, and session data. Data synced to Notion will not be
                                 affected.</p>
                             <button id="resetApp"
-                                class="px-3 py-2 rounded-xl bg-muted-pink text-white text-sm hover:bg-muted-pink/90 w-full">Reset
+                                class="px-3 py-2 rounded-lg bg-muted-pink text-white text-sm hover:bg-muted-pink/90 w-full">Reset
                                 GhostInk</button>
                         </div>
                     </div>
@@ -1703,11 +1698,11 @@ async function handleRequest(request, env) {
             </div>
             <div class="space-y-3 text-sm">
                 <input id="deckNameInput" type="text" placeholder="Deck name"
-                    class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
+                    class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
                 <div>
                     <label class="text-xs text-earth-metal/70">Algorithm</label>
                     <select id="deckAlgoInput"
-                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
+                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
                         <option>SM-2</option>
                         <option>FSRS</option>
                     </select>
@@ -1716,23 +1711,23 @@ async function handleRequest(request, env) {
                     <div>
                         <label class="text-xs text-earth-metal/70">Daily review limit</label>
                         <input id="deckReviewLimit" type="number"
-                            class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"
+                            class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"
                             value="50">
                     </div>
                     <div>
                         <label class="text-xs text-earth-metal/70">New card limit</label>
                         <input id="deckNewLimit" type="number"
-                            class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"
+                            class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"
                             value="20">
                     </div>
                 </div>
                 <div class="space-y-2">
                     <label class="text-xs text-earth-metal/70">Order mode</label>
                     <select id="deckOrderMode"
-                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
+                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
                         <option value="none">None (shuffle)</option>
-                        <option value="created">Created time</option>
-                        <option value="property">Order property</option>
+                        <option value="created">Created Time</option>
+                        <option value="property">Order Property</option>
                     </select>
                     <p class="text-[11px] text-earth-metal/60">Created time sorts by insertion time; Order property
                         sorts by each card’s “Order” number.</p>
@@ -1744,27 +1739,31 @@ async function handleRequest(request, env) {
                 <div>
                     <label class="text-xs text-earth-metal/70">AI revision prompt (optional)</label>
                     <textarea id="deckPromptInput" rows="3"
-                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"
+                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"
                         placeholder="Use {{question}} {{answer}} {{user}} placeholders"></textarea>
-                    <div class="flex flex-wrap gap-2 mt-2 text-[11px] text-earth-metal/60">
+                    <div class="flex flex-wrap gap-2 mt-2 text-[11px] text-earth-metal/60 dark:text-white/70">
                         <span
-                            class="px-2 py-1 rounded-lg bg-oatmeal-dark/50 italic text-dull-purple">{{question}}</span>
-                        <span class="px-2 py-1 rounded-lg bg-oatmeal-dark/50 italic text-dull-purple">{{answer}}</span>
-                        <span class="px-2 py-1 rounded-lg bg-oatmeal-dark/50 italic text-dull-purple">{{user}}</span>
-                        <span class="px-2 py-1 rounded-lg bg-oatmeal-dark/50 text-earth-metal/70">Variables replace
+                            class="px-2 py-1 rounded-lg bg-oatmeal-dark/50 dark:bg-white/10 italic text-dull-purple dark:text-dull-purple">{{question}}</span>
+                        <span
+                            class="px-2 py-1 rounded-lg bg-oatmeal-dark/50 dark:bg-white/10 italic text-dull-purple dark:text-dull-purple">{{answer}}</span>
+                        <span
+                            class="px-2 py-1 rounded-lg bg-oatmeal-dark/50 dark:bg-white/10 italic text-dull-purple dark:text-dull-purple">{{user}}</span>
+                        <span
+                            class="px-2 py-1 rounded-lg bg-oatmeal-dark/50 dark:bg-white/10 text-earth-metal/70 dark:text-white/70">Variables
+                            replace
                             question, correct answer, and learner answer.</span>
                     </div>
                 </div>
             </div>
             <div class="flex justify-end gap-2 mt-4">
                 <button id="archiveDeckBtn"
-                    class="px-3 py-2 rounded-xl border border-earth-metal/40 text-earth-metal text-sm hidden">Archive
+                    class="px-3 py-2 rounded-lg border border-earth-metal/40 text-earth-metal text-sm hidden">Archive
                     deck</button>
                 <button id="deleteDeckBtn"
-                    class="px-3 py-2 rounded-xl border border-muted-pink text-muted-pink text-sm hidden">Delete
+                    class="px-3 py-2 rounded-lg border border-muted-pink text-muted-pink text-sm hidden">Delete
                     deck</button>
                 <button id="saveDeckBtn"
-                    class="px-4 py-2 rounded-xl bg-dull-purple text-white text-sm hover:bg-[#7d6aa1]">Save</button>
+                    class="px-4 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-[#7d6aa1]">Save</button>
             </div>
         </div>
     </div>
@@ -1778,18 +1777,19 @@ async function handleRequest(request, env) {
                 <button id="closeCardModal" aria-label="Close card modal"
                     class="text-earth-metal/60 hover:text-charcoal"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
-            <p class="text-[10px] text-earth-metal/50 mb-2">Editing Name, Back, or Notes will remove Notion text colors
+            <p class="text-[10px] text-earth-metal/50 dark:text-white/60 mb-2">Editing Name, Back, or Notes will remove
+                Notion text colors
                 and highlights on sync</p>
             <div class="grid md:grid-cols-2 gap-4 text-sm">
                 <div class="space-y-2">
                     <label class="text-xs text-earth-metal/70">Deck</label>
                     <select id="cardDeckInput"
-                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"></select>
+                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"></select>
                 </div>
                 <div class="space-y-2">
                     <label class="text-xs text-earth-metal/70">Card type</label>
                     <select id="cardTypeInput"
-                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
+                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
                         <option value="Front-Back">Front / Back</option>
                         <option value="Cloze">Cloze</option>
                     </select>
@@ -1797,45 +1797,43 @@ async function handleRequest(request, env) {
                 <div class="md:col-span-2 space-y-2">
                     <label class="text-xs text-earth-metal/70">Name</label>
                     <textarea id="cardNameInput" rows="3"
-                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"></textarea>
+                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"></textarea>
                 </div>
                 <div id="cardBackSection" class="md:col-span-2 space-y-2">
                     <label class="text-xs text-earth-metal/70">Back</label>
                     <textarea id="cardBackInput" rows="4"
-                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"></textarea>
+                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"></textarea>
                 </div>
                 <div class="md:col-span-2 space-y-2">
                     <label class="text-xs text-earth-metal/70">Notes (markdown)</label>
                     <textarea id="cardNotesInput" rows="3" placeholder="Add notes for this card..."
-                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"></textarea>
+                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"></textarea>
                 </div>
                 <div class="space-y-2">
-                    <label class="text-xs text-earth-metal/70">Tags</label>
-                    <div class="flex items-center gap-2">
-                        <input id="cardTagInput" type="text" placeholder="Type and hit Enter to add"
-                            class="flex-1 rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
-                        <button id="refreshTagOptionsBtn"
-                            class="px-3 py-2 rounded-xl bg-white-linen border border-oatmeal-dark/70 text-earth-metal text-sm"
-                            title="Refresh tags from Notion">Refresh</button>
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs text-earth-metal/70">Tags</label>
+                        <button id="refreshTagOptionsBtn" class="p-1 rounded-lg hover:bg-oatmeal text-dull-purple"
+                            title="Refresh tags from Notion">
+                            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                        </button>
                     </div>
-                    <div id="cardTagDropdown"
-                        class="rounded-xl border border-oatmeal-dark/60 bg-[color:var(--card-bg)] p-2 space-y-2">
-                        <div class="text-[11px] text-earth-metal/60">Tap to select multiple tags</div>
-                        <div id="cardTagOptions" class="flex flex-wrap gap-1.5"></div>
+                    <div class="relative">
+                        <input id="cardTagSearch" type="text" placeholder="Search or add tag"
+                            class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
+                        <div id="cardTagDropdown"
+                            class="hidden absolute left-0 right-0 z-40 mt-1 max-h-44 overflow-y-auto rounded-lg border border-oatmeal-dark/60 bg-[color:var(--card-bg)] shadow-lg">
+                        </div>
                     </div>
-                    <div>
-                        <p class="text-[11px] text-earth-metal/60 mb-1">Selected</p>
-                        <div id="cardSelectedTags" class="flex flex-wrap gap-1.5 min-h-[32px]"></div>
-                    </div>
+                    <div id="cardTagSelected" class="flex flex-wrap gap-1.5 mt-1"></div>
                 </div>
                 <div class="space-y-2">
                     <label class="text-xs text-earth-metal/70">Order</label>
                     <input id="cardOrderInput" type="number" placeholder="Optional number"
-                        class="w-full rounded-xl border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
+                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
                 </div>
                 <div class="space-y-2">
                     <label class="text-xs text-earth-metal/70">Suspended / Leech</label>
-                    <div class="flex gap-4">
+                    <div class="grid grid-cols-2 gap-2">
                         <label class="flex items-center gap-2"><input id="cardSuspendedInput" type="checkbox"
                                 class="accent-dull-purple"> Suspended</label>
                         <label class="flex items-center gap-2"><input id="cardLeechInput" type="checkbox"
@@ -1856,10 +1854,10 @@ async function handleRequest(request, env) {
             </div>
             <div class="flex justify-end gap-2 mt-4">
                 <button id="deleteCardBtn"
-                    class="px-3 py-2 rounded-xl border border-muted-pink text-muted-pink text-sm hidden">Delete
+                    class="px-3 py-2 rounded-lg border border-muted-pink text-muted-pink text-sm hidden">Delete
                     card</button>
                 <button id="saveCardBtn"
-                    class="px-4 py-2 rounded-xl bg-charcoal dark:bg-white/10 dark:border-white/10 dark:border text-white text-sm hover:bg-earth-metal dark:hover:bg-white/20">Save</button>
+                    class="px-4 py-2 rounded-lg bg-charcoal dark:bg-white/10 dark:border-white/10 dark:border text-white text-sm hover:bg-earth-metal dark:hover:bg-white/20">Save</button>
             </div>
         </div>
     </div>
@@ -1877,9 +1875,9 @@ async function handleRequest(request, env) {
             <p id="aiSettingsModalBody" class="text-sm text-earth-metal/70 dark:text-white/70"></p>
             <div id="aiSettingsModalActions" class="flex gap-2 justify-center">
                 <button id="closeAiSettingsModal"
-                    class="px-4 py-2 rounded-xl border border-oatmeal-dark text-earth-metal dark:text-white dark:border-white/10 text-sm">Close</button>
+                    class="px-4 py-2 rounded-lg border border-oatmeal-dark text-earth-metal dark:text-white dark:border-white/10 text-sm">Close</button>
                 <button id="openSettingsFromAiModal"
-                    class="px-4 py-2 rounded-xl bg-dull-purple text-white text-sm hover:bg-[#7d6aa1]">Open
+                    class="px-4 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-[#7d6aa1]">Open
                     Settings</button>
             </div>
         </div>
@@ -1899,15 +1897,15 @@ async function handleRequest(request, env) {
             <p class="text-xs text-earth-metal/70 dark:text-white/70">Write notes in Markdown format. They will be
                 synced to Notion.</p>
             <textarea id="notesArea" rows="12"
-                class="flex-1 w-full rounded-xl border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-dull-purple/40"
+                class="flex-1 w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-dull-purple/40"
                 placeholder="Add notes for this card..."></textarea>
             <div class="flex items-center justify-between">
                 <span id="noteStatus" class="text-xs text-earth-metal/60"></span>
                 <div class="flex gap-2">
                     <button id="cancelNotesBtn"
-                        class="px-4 py-2 rounded-xl border border-oatmeal-dark text-earth-metal text-sm">Cancel</button>
+                        class="px-4 py-2 rounded-lg border border-oatmeal-dark text-earth-metal text-sm">Cancel</button>
                     <button id="saveNotesBtn"
-                        class="px-4 py-2 rounded-xl bg-dull-purple text-white text-sm hover:bg-[#7d6aa1]">Save</button>
+                        class="px-4 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-[#7d6aa1]">Save</button>
                 </div>
             </div>
         </div>
@@ -1928,9 +1926,9 @@ async function handleRequest(request, env) {
                 cards, settings, and study session. This cannot be undone.</p>
             <div class="flex justify-end gap-2">
                 <button id="cancelReset"
-                    class="px-4 py-2 rounded-xl border border-oatmeal-dark text-earth-metal dark:text-white dark:border-white/10 dark:hover:bg-zinc-800 text-sm">Cancel</button>
+                    class="px-4 py-2 rounded-lg border border-oatmeal-dark text-earth-metal dark:text-white dark:border-white/10 dark:hover:bg-zinc-800 text-sm">Cancel</button>
                 <button id="confirmReset"
-                    class="px-4 py-2 rounded-xl bg-muted-pink text-white text-sm hover:bg-muted-pink/90">Reset</button>
+                    class="px-4 py-2 rounded-lg bg-muted-pink text-white text-sm hover:bg-muted-pink/90">Reset</button>
             </div>
         </div>
     </div>
@@ -1949,13 +1947,13 @@ async function handleRequest(request, env) {
                 Notion page with a
                 timestamp.</p>
             <textarea id="blockNoteArea" rows="8"
-                class="flex-1 w-full rounded-xl border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-dull-purple/40"
+                class="flex-1 w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-dull-purple/40"
                 placeholder="Write in Markdown..."></textarea>
             <div class="flex items-center justify-end gap-2">
                 <button id="cancelAddBlockBtn"
-                    class="px-4 py-2 rounded-xl border border-oatmeal-dark text-earth-metal text-sm">Cancel</button>
+                    class="px-4 py-2 rounded-lg border border-oatmeal-dark text-earth-metal text-sm">Cancel</button>
                 <button id="saveAddBlockBtn"
-                    class="px-4 py-2 rounded-xl bg-dull-purple text-white text-sm hover:bg-[#7d6aa1]">Add to
+                    class="px-4 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-[#7d6aa1]">Add to
                     Page</button>
             </div>
         </div>
@@ -2155,6 +2153,14 @@ async function handleRequest(request, env) {
                     localStorage.removeItem('ghostink_session_v1');
                 }
             },
+            setSyncButtonSpinning(on) {
+                const btn = el('#syncNowBtn');
+                if (!btn) return;
+                const icon = btn.querySelector('i');
+                btn.disabled = on || !navigator.onLine;
+                btn.classList.toggle('opacity-70', btn.disabled);
+                if (icon) icon.classList.toggle('animate-spin', on);
+            },
             async ensureSQL() {
                 if (this.sqlReady) return this.sqlReady;
                 this.sqlReady = window.initSqlJs({ locateFile: (file) => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/${file}` });
@@ -2331,18 +2337,6 @@ async function handleRequest(request, env) {
 
         const normalizeRating = (name) => name ? name.toLowerCase() : null;
         const displayRating = (name) => name ? name.charAt(0).toUpperCase() + name.slice(1).toLowerCase() : null;
-        const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
-        const hexToRgb = (hex) => {
-            const h = hex.replace('#', '');
-            if (h.length === 3) return { r: parseInt(h[0] + h[0], 16), g: parseInt(h[1] + h[1], 16), b: parseInt(h[2] + h[2], 16) };
-            return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) };
-        };
-        const rgbToHex = ({ r, g, b }) => '#' + [r, g, b].map(x => clamp(Math.round(x), 0, 255).toString(16).padStart(2, '0')).join('');
-        const mix = (c1, c2, t) => {
-            const a = hexToRgb(c1);
-            const b = hexToRgb(c2);
-            return rgbToHex({ r: a.r + (b.r - a.r) * t, g: a.g + (b.g - a.g) * t, b: a.b + (b.b - a.b) * t });
-        };
         const detectCardType = (name = '', back = '') => {
             const text = `${name} ${back}`.toLowerCase();
             const hasCloze = /\{\{c\d+::.+?\}\}/i.test(text);
@@ -2596,12 +2590,12 @@ async function handleRequest(request, env) {
                 const props = page.properties || {};
                 const title = props['Deck Name']?.title?.map(t => t.plain_text).join('') || 'Untitled deck';
                 const rawMode = props['Order Mode']?.select?.name || 'None';
-                const orderMap = { 'None': 'none', 'Created Time': 'created', 'Order Property': 'property' };
+                const orderMap = { 'none': 'none', 'created time': 'created', 'order property': 'property' };
                 return {
                     id: page.id,
                     notionId: page.id,
                     name: title,
-                    algorithm: props['Default SRS Algorithm']?.select?.name || 'SM-2',
+                    algorithm: props['SRS Algorithm']?.select?.name || 'SM-2',
                     orderMode: orderMap[rawMode.toLowerCase()] || 'none',
                     reviewLimit: props['Daily Review Limit']?.number || 50,
                     newLimit: props['New Card Limit']?.number || 20,
@@ -2619,10 +2613,10 @@ async function handleRequest(request, env) {
              * @returns {Object} Notion properties object for API
              */
             deckProps(deck) {
-                const orderLabels = { none: 'None', created: 'Created time', property: 'Order property' };
+                const orderLabels = { none: 'None', created: 'Created Time', property: 'Order Property' };
                 return {
                     'Deck Name': { title: markdownToNotionRichText(deck.name) },
-                    'Default SRS Algorithm': { select: { name: deck.algorithm } },
+                    'SRS Algorithm': { select: { name: deck.algorithm } },
                     'Order Mode': { select: { name: orderLabels[deck.orderMode] || orderLabels.none } },
                     'Daily Review Limit': { number: deck.reviewLimit },
                     'New Card Limit': { number: deck.newLimit },
@@ -2750,7 +2744,7 @@ async function handleRequest(request, env) {
                 queue: [],
                 selectedDeck: null,
                 selectedCard: null,
-                filters: { again: false, hard: false, addedToday: false, stability: 25, tags: [], suspended: false, leech: false, manual: [], studyDecks: [] },
+                filters: { again: false, hard: false, addedToday: false, tags: [], suspended: false, leech: false, studyDecks: [] },
                 cardSearch: '',
                 deckSearch: '',
                 reverse: false,
@@ -2759,7 +2753,7 @@ async function handleRequest(request, env) {
                 lastPush: null,
                 activeTab: 'study',
                 settings: Storage.getSettings(),
-                sourcesCache: [],
+                sourcesCache: { deckOptions: [], cardOptions: [] },
                 workerVerified: Storage.getSettings().workerVerified || false,
                 authVerified: Storage.getSettings().authVerified || false,
                 sourcesVerified: Storage.getSettings().sourcesVerified || false,
@@ -2794,7 +2788,6 @@ async function handleRequest(request, env) {
                 window.addEventListener('offline', () => this.renderConnection());
                 this.applyTheme();
                 this.applyFontMode();
-                document.body.classList.remove('preinit');
                 if (window.matchMedia) {
                     const mq = window.matchMedia('(prefers-color-scheme: dark)');
                     mq.addEventListener('change', () => this.applyTheme());
@@ -3035,7 +3028,7 @@ async function handleRequest(request, env) {
                         <p class="text-earth-metal/60 text-xs md:text-sm">
                             ${completedCount} card${completedCount !== 1 ? 's' : ''} reviewed${skippedCount > 0 ? `, ${skippedCount} skipped` : ''}
                         </p>
-                        <p class="text-earth-metal/50 text-[10px] md:text-xs mb-3">
+                        <p class="text-earth-metal/50 dark:text-white/60 text-[10px] md:text-xs mb-3">
                             ${durationMins > 0 ? `${durationMins} min` : '<1 min'} · ${cardsPerMin} cards/min
                         </p>
                         <div class="max-w-[200px] mx-auto mb-4">
@@ -3043,16 +3036,16 @@ async function handleRequest(request, env) {
                         </div>
                         <div class="flex flex-col gap-3 items-center">
                             <div class="flex flex-col items-center">
-                                <button id="restartAllCardsBtn" class="px-4 py-2 bg-dull-purple text-white rounded-xl text-sm hover:bg-dull-purple/90 transition">
+                                <button id="restartAllCardsBtn" class="px-4 py-2 bg-dull-purple text-white rounded-lg text-sm hover:bg-dull-purple/90 transition">
                                     Restart
                                 </button>
                                 <label class="flex items-center gap-2 text-[11px] text-earth-metal/70 mt-2">
                                     <input id="restartNoScheduleChanges" type="checkbox" class="accent-dull-purple" checked>
                                     <span>No scheduling changes</span>
                                 </label>
-                                <p class="text-[10px] md:text-xs text-earth-metal/50 mt-1">Restart with all cards in selected decks</p>
+                                <p class="text-[10px] md:text-xs text-earth-metal/50 dark:text-white/60 mt-1">Restart with all cards in selected decks</p>
                             </div>
-                            <button id="endSessionBtn" class="px-4 py-2 border border-oatmeal-dark/60 text-earth-metal/70 rounded-xl text-sm hover:bg-oatmeal/50 transition">
+                            <button id="endSessionBtn" class="px-4 py-2 border border-oatmeal-dark/60 text-earth-metal/70 rounded-lg text-sm hover:bg-oatmeal/50 transition">
                                 End Session
                             </button>
                         </div>
@@ -3231,14 +3224,35 @@ async function handleRequest(request, env) {
                 el('#startSessionBtn').onclick = () => this.startSession();
                 el('#abandonSessionBtn').onclick = () => this.abandonSession();
                 document.querySelectorAll('.rate-btn').forEach(btn => btn.onclick = (e) => this.rate(e.currentTarget.dataset.rate));
-                const tagInput = el('#cardTagInput');
-                if (tagInput) tagInput.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter' || e.key === ',' || e.key === 'Tab') {
-                        e.preventDefault();
-                        this.addTagFromInput();
-                    }
-                });
-                if (tagInput) tagInput.addEventListener('blur', () => this.addTagFromInput());
+                const tagInput = el('#cardTagSearch');
+                const tagDropdown = el('#cardTagDropdown');
+                if (tagInput) {
+                    tagInput.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            this.addTagByName(tagInput.value.trim(), { toSelection: true });
+                            tagInput.value = '';
+                            this.renderCardTagSelectors();
+                        }
+                    });
+                    tagInput.addEventListener('input', () => {
+                        if (tagDropdown) tagDropdown.classList.remove('hidden');
+                        this.renderCardTagSelectors();
+                    });
+                    tagInput.addEventListener('focus', () => {
+                        if (tagDropdown) tagDropdown.classList.remove('hidden');
+                        this.renderCardTagSelectors();
+                    });
+                    tagInput.addEventListener('blur', () => {
+                        setTimeout(() => {
+                            if (tagDropdown && !tagDropdown.matches(':hover')) tagDropdown.classList.add('hidden');
+                        }, 150);
+                    });
+                }
+                if (tagDropdown) {
+                    tagDropdown.onmouseenter = () => tagDropdown.classList.remove('hidden');
+                    tagDropdown.onmouseleave = () => tagDropdown.classList.add('hidden');
+                }
                 const refreshTagsBtn = el('#refreshTagOptionsBtn');
                 if (refreshTagsBtn) refreshTagsBtn.onclick = () => this.refreshTagOptions();
                 el('#cardSearchInput').oninput = (e) => { this.state.cardSearch = e.target.value; this.renderCards(); };
@@ -3246,11 +3260,31 @@ async function handleRequest(request, env) {
                 el('#filterAgain').onchange = (e) => { this.state.filters.again = e.target.checked; this.renderCards(); this.updateActiveFiltersCount(); };
                 el('#filterHard').onchange = (e) => { this.state.filters.hard = e.target.checked; this.renderCards(); this.updateActiveFiltersCount(); };
                 el('#filterAddedToday').onchange = (e) => { this.state.filters.addedToday = e.target.checked; this.renderCards(); this.updateActiveFiltersCount(); };
-                el('#filterStability').oninput = (e) => { this.state.filters.stability = Number(e.target.value); el('#stabilityValue').textContent = e.target.value; this.renderCards(); this.updateActiveFiltersCount(); };
                 // Tag filter handled via renderTagFilter()
                 el('#resetFilters').onclick = () => this.resetFilters();
                 const resetMobile = el('#resetFiltersMobile');
                 if (resetMobile) resetMobile.onclick = () => this.resetFilters();
+                const filterTagInput = el('#filterTagSearch');
+                const filterTagDropdown = el('#filterTagDropdown');
+                if (filterTagInput) {
+                    filterTagInput.addEventListener('input', () => {
+                        if (filterTagDropdown) filterTagDropdown.classList.remove('hidden');
+                        this.renderTagFilter();
+                    });
+                    filterTagInput.addEventListener('focus', () => {
+                        if (filterTagDropdown) filterTagDropdown.classList.remove('hidden');
+                        this.renderTagFilter();
+                    });
+                    filterTagInput.addEventListener('blur', () => {
+                        setTimeout(() => {
+                            if (filterTagDropdown && !filterTagDropdown.matches(':hover')) filterTagDropdown.classList.add('hidden');
+                        }, 150);
+                    });
+                }
+                if (filterTagDropdown) {
+                    filterTagDropdown.onmouseenter = () => filterTagDropdown.classList.remove('hidden');
+                    filterTagDropdown.onmouseleave = () => filterTagDropdown.classList.add('hidden');
+                }
                 el('#filterSuspended').onchange = (e) => { this.state.filters.suspended = e.target.checked; this.renderCards(); this.updateActiveFiltersCount(); };
                 el('#filterLeech').onchange = (e) => { this.state.filters.leech = e.target.checked; this.renderCards(); this.updateActiveFiltersCount(); };
                 // Toggle filters panel
@@ -3464,11 +3498,9 @@ async function handleRequest(request, env) {
                 if (f.again) count++;
                 if (f.hard) count++;
                 if (f.addedToday) count++;
-                if (f.stability < 25) count++;
                 if (f.tags && f.tags.length > 0) count++;
                 if (f.suspended) count++;
                 if (f.leech) count++;
-                if (f.manual && f.manual.length > 0) count++;
                 if (f.studyDecks && f.studyDecks.length > 0) count++;
                 // Show reset button if any filters are active
                 const resetBtn = el('#resetFilters');
@@ -3577,7 +3609,7 @@ async function handleRequest(request, env) {
                         </div>
                         <div class="flex items-center gap-2 text-[11px] text-[color:var(--text-sub)]">
                             <i data-lucide="list-ordered" class="w-3 h-3"></i>
-                            <span>Order: ${(d.orderMode === 'created' && 'created time') || (d.orderMode === 'property' && 'order property') || 'none'}</span>
+                            <span>Order: ${(d.orderMode === 'created' && 'Created Time') || (d.orderMode === 'property' && 'Order Property') || 'None'}</span>
                         </div>
                     </article>
                 `}).join('');
@@ -3596,7 +3628,6 @@ async function handleRequest(request, env) {
                         noCardsMsg.textContent = 'Select a deck above to view its cards';
                         noCardsMsg.classList.remove('hidden');
                     }
-                    this.renderManualSelection();
                     this.updateCounts();
                     return;
                 }
@@ -3636,7 +3667,7 @@ async function handleRequest(request, env) {
                             <td class="py-2 pr-2 text-charcoal"><div class="truncate max-w-[150px] sm:max-w-[250px] md:max-w-[350px] lg:max-w-[450px]">${nameText}</div></td>
                             <td class="py-2 pr-2 capitalize hidden sm:table-cell">${c.type}</td>
                             <td class="py-2 pr-2 text-earth-metal/70 text-xs whitespace-nowrap">${dueDisplay}</td>
-                            <td class="py-2 pr-2 hidden md:table-cell text-xs"><div class="flex gap-1 flex-wrap">${tagPills}${c.tags.length > 2 ? '<span class="text-earth-metal/50">...</span>' : ''}</div></td>
+                            <td class="py-2 pr-2 hidden md:table-cell text-xs"><div class="flex gap-1 flex-wrap">${tagPills}${c.tags.length > 2 ? '<span class="text-earth-metal/50 dark:text-white/60">...</span>' : ''}</div></td>
                             <td class="py-2 flex gap-1">
                                 <button class="info-card-btn p-1 rounded hover:bg-dull-purple/20 text-earth-metal/60 relative" data-card-id="${c.id}" title="Review history">
                                     <i data-lucide="info" class="w-4 h-4 pointer-events-none"></i>
@@ -3649,7 +3680,6 @@ async function handleRequest(request, env) {
                     }).join('');
                     lucide.createIcons();
                 }
-                this.renderManualSelection();
                 this.updateCounts();
             },
             renderStudy() {
@@ -3705,7 +3735,7 @@ async function handleRequest(request, env) {
                         <div class="text-center py-4">
                             <p class="text-earth-metal/70 text-sm mb-3">No cards are due for review right now.</p>
                             <p class="text-earth-metal/60 text-xs mb-4">${nonDueCards.length} card${nonDueCards.length === 1 ? '' : 's'} available for extra practice.</p>
-                            <button id="studyNonDueBtn" class="px-4 py-2 bg-dull-purple text-white rounded-xl text-sm hover:bg-dull-purple/90 transition">
+                            <button id="studyNonDueBtn" class="px-4 py-2 bg-dull-purple text-white rounded-lg text-sm hover:bg-dull-purple/90 transition">
                                 Practice non-due cards
                             </button>
                         </div>
@@ -3783,41 +3813,57 @@ async function handleRequest(request, env) {
             renderFsrsMeta() {
                 // Stats display removed - internal calculation only
             },
-            renderManualSelection() {
-                const wrap = el('#manualSelection');
-                wrap.innerHTML = this.state.filters.manual.map(id => {
-                    const c = this.cardById(id);
-                    return c ? `<span class="px-2 py-1 rounded-full bg-oatmeal text-earth-metal text-xs">${c.name.slice(0, 20)}</span>` : '';
-                }).join('');
-            },
             renderTagFilter() {
-                const container = el('#filterTagsContainer');
-                if (!container) return;
-                // Collect unique tags from all cards
+                const input = el('#filterTagSearch');
+                const dropdown = el('#filterTagDropdown');
+                const selectedWrap = el('#filterTagSelected');
+                if (!input || !dropdown || !selectedWrap) return;
+
                 const tagMap = new Map();
                 this.state.cards.forEach(c => {
                     (c.tags || []).forEach(t => {
                         if (!tagMap.has(t.name)) tagMap.set(t.name, t.color || 'default');
                     });
                 });
-                const allTags = Array.from(tagMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-                const selectedTags = this.state.filters.tags || [];
-                if (allTags.length === 0) {
-                    container.innerHTML = '<span class="text-earth-metal/50 text-xs">No tags available</span>';
-                    return;
-                }
-                container.innerHTML = allTags.map(([name, color]) => {
-                    const isSelected = selectedTags.includes(name);
-                    const bgClass = `notion-color-${color.replace('_', '-')}-background`;
-                    return `<button class="tag-filter-btn px-2 py-1 rounded-full text-[11px] transition-all ${isSelected ? bgClass + ' ring-2 ring-dull-purple ring-offset-1' : bgClass + ' opacity-60 hover:opacity-100'}" data-tag="${escapeHtml(name)}">${escapeHtml(name)}</button>`;
-                }).join('');
-                // Attach click handlers
-                container.querySelectorAll('.tag-filter-btn').forEach(btn => {
+                const allTags = Array.from(tagMap.keys()).sort((a, b) => a.localeCompare(b));
+                const selected = new Set(this.state.filters.tags || []);
+                const query = (input.value || '').toLowerCase();
+                const options = allTags.filter(name => name.toLowerCase().includes(query));
+
+                dropdown.innerHTML = options.length
+                    ? options.map(name => {
+                        const isSelected = selected.has(name);
+                        return `<button class="tag-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 ${isSelected ? 'bg-dull-purple/10 border-lime-200' : 'hover:bg-oatmeal/60'}" data-tag="${escapeHtml(name)}">
+                            <span class="flex-1">${escapeHtml(name)}</span>
+                            ${isSelected ? '<span class="text-[11px] text-dull-purple">Selected</span>' : ''}
+                        </button>`;
+                    }).join('')
+                    : `<div class="px-3 py-2 text-sm text-earth-metal/60 dark:text-white/60">No tags found</div>`;
+
+                dropdown.querySelectorAll('.tag-option').forEach(btn => {
                     btn.onclick = () => {
                         const tag = btn.dataset.tag;
-                        const idx = this.state.filters.tags.indexOf(tag);
-                        if (idx >= 0) this.state.filters.tags.splice(idx, 1);
-                        else this.state.filters.tags.push(tag);
+                        if (selected.has(tag)) selected.delete(tag); else selected.add(tag);
+                        this.state.filters.tags = Array.from(selected);
+                        this.renderTagFilter();
+                        this.renderCards();
+                        this.updateActiveFiltersCount();
+                    };
+                });
+
+                selectedWrap.innerHTML = selected.size
+                    ? Array.from(selected).map(tag => `
+                        <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-oatmeal text-earth-metal text-xs border border-oatmeal-dark/60">
+                            ${escapeHtml(tag)}
+                            <button class="remove-tag text-earth-metal/70" data-tag="${escapeHtml(tag)}">&times;</button>
+                        </span>
+                    `).join('')
+                    : '<span class="text-earth-metal/50 dark:text-white/60 text-xs">All tags included</span>';
+
+                selectedWrap.querySelectorAll('.remove-tag').forEach(btn => {
+                    btn.onclick = () => {
+                        const tag = btn.dataset.tag;
+                        this.state.filters.tags = this.state.filters.tags.filter(t => t !== tag);
                         this.renderTagFilter();
                         this.renderCards();
                         this.updateActiveFiltersCount();
@@ -3842,57 +3888,73 @@ async function handleRequest(request, env) {
                     .sort((a, b) => a.name.localeCompare(b.name));
             },
             renderCardTagSelectors() {
-                const optionsEl = el('#cardTagOptions');
-                const selectedEl = el('#cardSelectedTags');
-                if (!optionsEl || !selectedEl) return;
-                const selected = this.state.tagSelection || [];
-                const options = this.collectTagOptions();
-                if (options.length === 0) {
-                    optionsEl.innerHTML = '<span class="text-earth-metal/50 text-xs">No tags yet. Add one above.</span>';
-                } else {
-                    optionsEl.innerHTML = options.map(opt => {
-                        const active = selected.includes(opt.name);
-                        const baseClass = `px-2 py-1 rounded-full text-[11px] border transition ${active ? 'bg-dull-purple text-white border-dull-purple shadow-sm' : 'bg-oatmeal text-earth-metal border-oatmeal-dark/60 hover:border-dull-purple/60'}`;
-                        return `<button type="button" class="tag-option-btn ${baseClass}" data-tag="${escapeHtml(opt.name)}">${escapeHtml(opt.name)}</button>`;
-                    }).join('');
-                    optionsEl.querySelectorAll('.tag-option-btn').forEach(btn => {
-                        btn.onclick = () => {
-                            const tag = btn.dataset.tag;
-                            const idx = selected.indexOf(tag);
-                            if (idx >= 0) selected.splice(idx, 1); else selected.push(tag);
-                            this.state.tagSelection = selected;
-                            this.renderCardTagSelectors();
-                        };
-                    });
-                }
-                selectedEl.innerHTML = selected.length
-                    ? selected.map(name => {
-                        const color = this.collectTagOptions().find(t => t.name === name)?.color || 'default';
-                        const bgClass = `notion-color-${color.replace('_', '-')}-background`;
-                        return `<span class="px-2 py-1 rounded-full text-[11px] ${bgClass} border border-oatmeal-dark/50">${escapeHtml(name)}</span>`;
-                    }).join('')
-                    : '<span class="text-earth-metal/50 text-xs">No tags selected</span>';
-            },
-            addTagFromInput() {
-                const input = el('#cardTagInput');
-                if (!input) return;
-                const raw = (input.value || '').trim();
-                if (!raw) { input.value = ''; return; }
-                const parts = raw.split(',').map(t => t.trim()).filter(Boolean);
-                let changed = false;
-                parts.forEach(name => {
-                    if (!this.state.tagSelection.includes(name)) {
-                        this.state.tagSelection.push(name);
-                        changed = true;
-                    }
-                    if (!this.state.tagOptions.some(t => t.name === name)) {
-                        this.state.tagOptions.push({ name, color: 'default' });
-                        changed = true;
-                    }
+                const input = el('#cardTagSearch');
+                const dropdown = el('#cardTagDropdown');
+                const selectedWrap = el('#cardTagSelected');
+                if (!input || !dropdown || !selectedWrap) return;
+
+                const selected = new Set(this.state.tagSelection || []);
+                const allOptions = this.collectTagOptions();
+                const query = (input.value || '').toLowerCase();
+                const options = allOptions.filter(opt => opt.name.toLowerCase().includes(query));
+                const canAdd = query && !allOptions.some(opt => opt.name.toLowerCase() === query);
+
+                dropdown.innerHTML = `
+                    ${canAdd ? `<button class="tag-add-option w-full text-left px-3 py-2 text-sm text-dull-purple hover:bg-dull-purple/10" data-add="${escapeHtml(input.value.trim())}">+ Add "${escapeHtml(input.value.trim())}"</button>` : ''}
+                    ${options.map(opt => {
+                    const active = selected.has(opt.name);
+                    return `<button class="tag-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 ${active ? 'bg-dull-purple/10 border-lime-200' : 'hover:bg-oatmeal/60'}" data-tag="${escapeHtml(opt.name)}">
+                            <span class="flex-1">${escapeHtml(opt.name)}</span>
+                            ${active ? '<span class="text-[11px] text-dull-purple">Selected</span>' : ''}
+                        </button>`;
+                }).join('')}
+                `;
+
+                dropdown.querySelectorAll('.tag-option').forEach(btn => {
+                    btn.onclick = () => {
+                        const tag = btn.dataset.tag;
+                        if (selected.has(tag)) selected.delete(tag); else selected.add(tag);
+                        this.state.tagSelection = Array.from(selected);
+                        this.renderCardTagSelectors();
+                    };
                 });
-                if (changed) Storage.setMeta('tagOptions', this.state.tagOptions).catch(() => { });
-                input.value = '';
+                dropdown.querySelectorAll('.tag-add-option').forEach(btn => {
+                    btn.onclick = () => {
+                        const name = btn.dataset.add;
+                        this.addTagByName(name, { toSelection: true });
+                        if (input) input.value = '';
+                    };
+                });
+
+                selectedWrap.innerHTML = selected.size
+                    ? Array.from(selected).map(tag => `
+                        <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-oatmeal text-earth-metal text-xs border border-oatmeal-dark/60">
+                            ${escapeHtml(tag)}
+                            <button class="remove-tag text-earth-metal/70" data-tag="${escapeHtml(tag)}">&times;</button>
+                        </span>
+                    `).join('')
+                    : '<span class="text-earth-metal/50 dark:text-white/60 text-xs">No tags selected</span>';
+
+                selectedWrap.querySelectorAll('.remove-tag').forEach(btn => {
+                    btn.onclick = () => {
+                        const tag = btn.dataset.tag;
+                        this.state.tagSelection = this.state.tagSelection.filter(t => t !== tag);
+                        this.renderCardTagSelectors();
+                    };
+                });
+            },
+            addTagByName(name, { toSelection = false } = {}) {
+                if (!name) return;
+                const exists = this.state.tagOptions.some(t => t.name.toLowerCase() === name.toLowerCase());
+                if (!exists) {
+                    this.state.tagOptions.push({ name, color: 'default' });
+                    Storage.setMeta('tagOptions', this.state.tagOptions).catch(() => { });
+                }
+                if (toSelection && !this.state.tagSelection.includes(name)) {
+                    this.state.tagSelection.push(name);
+                }
                 this.renderCardTagSelectors();
+                this.renderTagFilter();
             },
             async refreshTagOptions() {
                 const btn = el('#refreshTagOptionsBtn');
@@ -3911,6 +3973,7 @@ async function handleRequest(request, env) {
                     this.state.tagOptions = opts.map(o => ({ name: o.name, color: o.color || 'default' }));
                     await Storage.setMeta('tagOptions', this.state.tagOptions);
                     this.renderCardTagSelectors();
+                    this.renderTagFilter();
                     toast('Tags refreshed');
                 } catch (e) {
                     console.error('Refresh tags failed', e);
@@ -3942,7 +4005,7 @@ async function handleRequest(request, env) {
                     </div>`;
                 }).join('');
                 if (filtered.length === 0) {
-                    dropdown.innerHTML = '<div class="px-3 py-2 text-sm text-earth-metal/60 italic">No decks found</div>';
+                    dropdown.innerHTML = '<div class="px-3 py-2 text-sm text-earth-metal/60 dark:text-white/60 italic">No decks found</div>';
                 }
 
                 // Render selected deck pills
@@ -4173,6 +4236,8 @@ async function handleRequest(request, env) {
                 el('#cardNotesInput').value = card?.notes ?? '';
                 // Initialize tag selection for modal
                 this.state.tagSelection = card?.tags?.map(t => t.name) || [];
+                const tagSearch = el('#cardTagSearch');
+                if (tagSearch) tagSearch.value = '';
                 this.renderCardTagSelectors();
                 el('#cardOrderInput').value = (typeof card?.order === 'number') ? card.order : '';
                 el('#cardSuspendedInput').checked = card?.suspended ?? false;
@@ -4205,7 +4270,7 @@ async function handleRequest(request, env) {
                 const sortedHistory = [...history].reverse();
                 tableEl.innerHTML = `
                     <table class="w-full text-xs">
-                        <thead class="sticky top-0 bg-oatmeal dark:bg-white/5"><tr class="text-earth-metal/50 border-b border-charcoal/10"><th class="text-left py-1.5 px-2">Rating</th><th class="text-left py-1.5 px-2">Date</th><th class="text-left py-1.5 px-2">Time</th></tr></thead>
+                        <thead class="sticky top-0 bg-oatmeal dark:bg-white/5"><tr class="text-earth-metal/50 dark:text-white/60 border-b border-charcoal/10"><th class="text-left py-1.5 px-2">Rating</th><th class="text-left py-1.5 px-2">Date</th><th class="text-left py-1.5 px-2">Time</th></tr></thead>
                         <tbody>
                             ${sortedHistory.map(h => `
                                 <tr class="border-b border-charcoal/5 last:border-0">
@@ -4275,7 +4340,12 @@ async function handleRequest(request, env) {
                 this.openModal('confirmModal');
             },
             async syncNow() {
+                if (!navigator.onLine) {
+                    toast('Offline: sync will resume when you reconnect');
+                    return;
+                }
                 if (!this.isReady()) return toast('Complete settings first');
+                this.setSyncButtonSpinning(true);
                 const loadingMsg = el('#loadingMessage');
                 el('#syncProgress').style.width = '10%';
                 try {
@@ -4308,6 +4378,7 @@ async function handleRequest(request, env) {
                     console.error('Sync failed', e);
                     toast('Sync failed - check connection');
                 } finally {
+                    this.setSyncButtonSpinning(false);
                     setTimeout(() => el('#syncProgress').style.width = '0%', 700);
                 }
             },
@@ -4469,8 +4540,21 @@ async function handleRequest(request, env) {
                 this.state.queue.push(op);
                 el('#queueCount').textContent = String(this.state.queue.length);
                 Storage.setMeta('queue', this.state.queue).catch(() => { });
+                this.updateSyncButtonState();
+            },
+            updateSyncButtonState() {
+                const btn = el('#syncNowBtn');
+                if (!btn) return;
+                const pendingOffline = this.state.queue.length > 0 && !navigator.onLine;
+                const offline = !navigator.onLine;
+                btn.disabled = pendingOffline || this.state.syncing || offline;
+                btn.classList.toggle('opacity-70', btn.disabled);
             },
             async manualSync() {
+                if (!navigator.onLine) {
+                    toast('Offline: sync will run when you are online');
+                    return;
+                }
                 if (!this.isReady()) { toast('Complete setup first'); return; }
                 if (this.state.syncing) { toast('Sync already in progress'); return; }
 
@@ -4507,10 +4591,14 @@ async function handleRequest(request, env) {
                 if (this.state.autoSyncTimer) clearInterval(this.state.autoSyncTimer);
                 this.state.autoSyncTimer = setInterval(() => this.autoSyncTick(), SYNC_INTERVAL_MS);
                 this.autoSyncTick(); // kick off once on load
+                this.updateSyncButtonState();
             },
             async autoSyncTick() {
                 if (this.state.syncing) return;
-                if (!navigator.onLine) return;
+                if (!navigator.onLine) {
+                    this.updateSyncButtonState();
+                    return;
+                }
                 if (!this.isReady()) return;
                 const now = Date.now();
                 const lastPullMs = this.state.lastPull ? new Date(this.state.lastPull).getTime() : 0;
@@ -4538,6 +4626,7 @@ async function handleRequest(request, env) {
                     console.error('Auto sync failed', e);
                 } finally {
                     this.state.syncing = false;
+                    this.updateSyncButtonState();
                 }
             },
             handleOnline() {
@@ -4558,8 +4647,6 @@ async function handleRequest(request, env) {
             selectCard(id) {
                 const card = this.cardById(id);
                 this.state.selectedCard = card;
-                if (!this.state.filters.manual.includes(id)) this.state.filters.manual.push(id);
-                this.renderManualSelection();
                 this.renderStudy();
                 this.openCardModal(card);
             },
@@ -4583,13 +4670,13 @@ async function handleRequest(request, env) {
                 // Create popover content
                 let content;
                 if (history.length === 0) {
-                    content = '<p class="text-earth-metal/50 text-center py-2">No reviews yet</p>';
+                    content = '<p class="text-earth-metal/50 dark:text-white/60 text-center py-2">No reviews yet</p>';
                 } else {
                     // Show last 10 reviews (most recent first)
                     const recentHistory = [...history].reverse().slice(0, 10);
                     content = `
                         <table class="w-full text-xs">
-                            <thead><tr class="text-earth-metal/50 border-b border-charcoal/10"><th class="text-left py-1">Rating</th><th class="text-left py-1">Date</th></tr></thead>
+                            <thead><tr class="text-earth-metal/50 dark:text-white/60 border-b border-charcoal/10"><th class="text-left py-1">Rating</th><th class="text-left py-1">Date</th></tr></thead>
                             <tbody>
                                 ${recentHistory.map(h => `
                                     <tr class="border-b border-charcoal/5 last:border-0">
@@ -4599,7 +4686,7 @@ async function handleRequest(request, env) {
                                 `).join('')}
                             </tbody>
                         </table>
-                        ${history.length > 10 ? `<p class="text-earth-metal/50 text-xs text-center mt-1">+${history.length - 10} more</p>` : ''}
+                        ${history.length > 10 ? `<p class="text-earth-metal/50 dark:text-white/60 text-xs text-center mt-1">+${history.length - 10} more</p>` : ''}
                     `;
                 }
 
@@ -4609,7 +4696,7 @@ async function handleRequest(request, env) {
                 popover.innerHTML = `
                     <div class="flex justify-between items-center mb-2">
                         <span class="font-medium text-sm text-charcoal dark:text-oatmeal">Review History</span>
-                        <button class="close-popover text-earth-metal/50 hover:text-earth-metal p-0.5"><i data-lucide="x" class="w-4 h-4"></i></button>
+                        <button class="close-popover text-earth-metal/50 dark:text-white/60 hover:text-earth-metal dark:hover:text-white p-0.5"><i data-lucide="x" class="w-4 h-4"></i></button>
                     </div>
                     ${content}
                 `;
@@ -4646,11 +4733,9 @@ async function handleRequest(request, env) {
                 if (f.again && card.fsrs?.lastRating !== 'again') return false;
                 if (f.hard && !['again', 'hard'].includes(card.fsrs?.lastRating)) return false;
                 if (f.addedToday && card.createdAt && new Date(card.createdAt).toDateString() !== now.toDateString()) return false;
-                if (card.fsrs?.stability && card.fsrs.stability > f.stability) return false;
                 if (f.tags.length && !f.tags.some(t => card.tags.some(ct => ct.name === t))) return false;
                 if (f.suspended && card.suspended) return false;
                 if (f.leech && card.leech) return false;
-                if (f.manual.length && !f.manual.includes(card.id)) return false;
                 return true;
             },
             isDue(card) {
@@ -4900,14 +4985,12 @@ async function handleRequest(request, env) {
                 return `${deckIds.length} decks`;
             },
             resetFilters() {
-                this.state.filters = { again: false, hard: false, addedToday: false, stability: 25, tags: [], suspended: false, leech: false, manual: [], studyDecks: [] };
+                this.state.filters = { again: false, hard: false, addedToday: false, tags: [], suspended: false, leech: false, studyDecks: [] };
                 el('#filterAgain').checked = false;
                 el('#filterHard').checked = false;
                 el('#filterAddedToday').checked = false;
-                el('#filterStability').value = 25;
                 el('#filterSuspended').checked = false;
                 el('#filterLeech').checked = false;
-                el('#stabilityValue').textContent = '25';
                 this.renderStudyDeckSelection();
                 this.renderTagFilter();
                 this.renderStudy();
@@ -5240,13 +5323,26 @@ async function handleRequest(request, env) {
                 modal.classList.add('flex');
             },
             async saveSettings() {
+                const prevWorkerUrl = this.state.settings.workerUrl;
+                const prevProxyToken = this.state.settings.proxyToken;
                 this.state.settings.workerUrl = el('#settingWorkerUrl').value.trim();
                 this.state.settings.proxyToken = el('#settingProxyToken').value.trim();
+                if (this.state.settings.workerUrl !== prevWorkerUrl || this.state.settings.proxyToken !== prevProxyToken) {
+                    this.state.workerVerified = false;
+                    this.state.settings.workerVerified = false;
+                }
                 const authVal = el('#settingAuthToken').value.trim();
+                const prevAuth = this.state.settings.authToken;
                 if (authVal) {
                     this.state.settings.authToken = authVal;
-                    this.state.authVerified = true;
-                    this.state.settings.authVerified = true;
+                    if (authVal !== prevAuth) {
+                        this.state.authVerified = false;
+                        this.state.settings.authVerified = false;
+                    }
+                } else {
+                    this.state.settings.authToken = '';
+                    this.state.authVerified = false;
+                    this.state.settings.authVerified = false;
                 }
                 // Save AI settings
                 const aiProvider = el('#aiProvider').value;
@@ -5300,6 +5396,10 @@ async function handleRequest(request, env) {
                 }
             },
             async verifyWorker() {
+                if (!navigator.onLine) {
+                    toast('Offline: connect to verify worker');
+                    return;
+                }
                 const workerUrl = el('#settingWorkerUrl').value.trim();
                 const proxyToken = el('#settingProxyToken').value.trim();
                 if (!workerUrl) return toast('Add worker URL');
@@ -5327,6 +5427,10 @@ async function handleRequest(request, env) {
                 }
             },
             async verifyAuth() {
+                if (!navigator.onLine) {
+                    toast('Offline: connect to verify Notion token');
+                    return;
+                }
                 if (!this.state.settings.workerUrl) { this.updateSettingsButtons(); return toast('Add worker URL first'); }
                 const workerUrl = (el('#settingWorkerUrl').value.trim()) || this.state.settings.workerUrl;
                 const proxyToken = (el('#settingProxyToken').value.trim()) || this.state.settings.proxyToken;
@@ -5344,6 +5448,10 @@ async function handleRequest(request, env) {
                 await this.scanSources();
             },
             async verifyAiSettings() {
+                if (!navigator.onLine) {
+                    toast('Offline: connect to verify AI settings');
+                    return;
+                }
                 const provider = el('#aiProvider').value;
                 const model = el('#aiModel').value.trim();
                 const key = el('#aiKey').value.trim();
@@ -5388,6 +5496,10 @@ async function handleRequest(request, env) {
                 }
             },
             async verifySttSettings() {
+                if (!navigator.onLine) {
+                    toast('Offline: connect to verify speech settings');
+                    return;
+                }
                 const provider = el('#sttProvider').value;
                 const model = el('#sttModel').value.trim();
                 const key = el('#sttKey').value.trim();
@@ -5466,6 +5578,10 @@ async function handleRequest(request, env) {
                 window.location.href = `https://notion-oauth-handler.mimansa-jaiswal.workers.dev/auth/login?from=${here}`;
             },
             async scanSources() {
+                if (!navigator.onLine) {
+                    toast('Offline: cannot scan databases');
+                    return;
+                }
                 if (!this.state.settings.workerUrl || !this.state.settings.authToken) return toast('Add worker URL and token first');
                 try {
                     showLoading('Scanning databases...', 'Finding valid deck and card sources.');
@@ -5599,7 +5715,7 @@ async function handleRequest(request, env) {
                     if (type === 'deck') {
                         const required = [
                             ['Deck Name', 'title'],
-                            ['Default SRS Algorithm', 'select'],
+                            ['SRS Algorithm', 'select'],
                             ['Order Mode', 'select'],
                             ['Daily Review Limit', 'number'],
                             ['New Card Limit', 'number'],
@@ -5646,6 +5762,7 @@ async function handleRequest(request, env) {
                 const workerOk = s.workerVerified || this.state.workerVerified;
                 const notionOk = s.authVerified || this.state.authVerified;
                 const blockScanSave = !(workerOk && notionOk);
+                const online = navigator.onLine;
 
                 ['scanSources', 'saveSettings', 'deckSourceSelect', 'cardSourceSelect'].forEach(id => {
                     const elem = el('#' + id);
@@ -5659,6 +5776,15 @@ async function handleRequest(request, env) {
                 if (oa) { oa.disabled = blockAuth; oa.classList.toggle('opacity-60', blockAuth); oa.classList.toggle('cursor-not-allowed', blockAuth); }
                 if (va) { va.disabled = blockAuth; va.classList.toggle('opacity-60', blockAuth); va.classList.toggle('cursor-not-allowed', blockAuth); }
                 if (tokenInput) tokenInput.disabled = blockAuth;
+
+                // Disable AI/STT verification buttons when offline
+                ['verifyAi', 'verifyStt'].forEach(id => {
+                    const btn = el('#' + id);
+                    if (!btn) return;
+                    btn.disabled = !online;
+                    btn.classList.toggle('opacity-60', !online);
+                    btn.classList.toggle('cursor-not-allowed', !online);
+                });
             },
             async autoVerifyWorker() {
                 const s = this.state.settings;
@@ -5766,6 +5892,10 @@ async function handleRequest(request, env) {
                 if (!this.state.selectedCard) return;
                 const ans = el('#aiAnswer').value.trim();
                 if (!ans) { toast('Enter or record an answer first'); return; }
+                if (!navigator.onLine) {
+                    toast('Offline: AI mode needs internet');
+                    return;
+                }
                 if (!this.state.settings.aiKey) { toast('Add an AI key in Settings'); return; }
                 const deck = this.deckById(this.state.selectedCard.deckId);
                 const promptTemplate = deck?.aiPrompt || DEFAULT_AI_PROMPT;
@@ -6140,7 +6270,16 @@ async function handleRequest(request, env) {
             }
         };
 
-        window.addEventListener('load', () => App.init());
+        window.addEventListener('load', async () => {
+            try {
+                await App.init();
+            } catch (e) {
+                console.error('Failed to initialize GhostInk', e);
+                toast('Startup failed – see console for details');
+            } finally {
+                document.body.classList.remove('preinit');
+            }
+        });
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js').catch(() => { });
