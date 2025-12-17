@@ -1,7 +1,10 @@
+const CACHE_NAME = 'ghostink-cache-v4';
+const CACHE_PREFIX = 'ghostink-cache-';
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     (async () => {
-      const cache = await caches.open('ghostink-cache-v4');
+      const cache = await caches.open(CACHE_NAME);
       const localAssets = [
         './',
         './index.html',
@@ -25,9 +28,7 @@ self.addEventListener('install', (event) => {
         'https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js'
       ];
       await Promise.all(
-        cdnAssets.map((url) =>
-          cache.add(new Request(url, { mode: 'no-cors' })).catch(() => { })
-        )
+        cdnAssets.map((url) => cache.add(new Request(url, { mode: 'no-cors' })).catch(() => { }))
       );
     })()
   );
@@ -37,7 +38,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== 'ghostink-cache-v4').map((k) => caches.delete(k)))
+      Promise.all(keys.filter((k) => k !== CACHE_NAME && k.startsWith(CACHE_PREFIX)).map((k) => caches.delete(k)))
     )
   );
   self.clients.claim();
@@ -64,7 +65,7 @@ self.addEventListener('fetch', (event) => {
   // 2. Always fetch from network in background to update cache for next time.
   // 3. If cache is empty, wait for network.
   event.respondWith(
-    caches.open('ghostink-cache-v4').then((cache) => {
+    caches.open(CACHE_NAME).then((cache) => {
       return cache.match(request).then((cachedResponse) => {
         const fetchPromise = fetch(request).then((networkResponse) => {
           // Check if valid response before caching
