@@ -22,9 +22,6 @@
 
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Hammer.js for touch gestures -->
-    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
-
     <!-- Markdown renderer -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
@@ -230,32 +227,34 @@
             font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
         }
 
-        /* Custom tooltip that appears below element */
-        [data-tooltip] {
-            position: relative;
-        }
+        /* Custom tooltip that appears below element (desktop only) */
+        @media (min-width: 641px) {
+            [data-tooltip] {
+                position: relative;
+            }
 
-        [data-tooltip]::after {
-            content: attr(data-tooltip);
-            position: absolute;
-            top: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            margin-top: 6px;
-            padding: 4px 8px;
-            background: var(--text-main, #1b1917);
-            color: var(--bg, #faf9f6);
-            font-size: 11px;
-            white-space: nowrap;
-            border-radius: 6px;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.15s;
-            z-index: 100;
-        }
+            [data-tooltip]::after {
+                content: attr(data-tooltip);
+                position: absolute;
+                top: 100%;
+                left: 50%;
+                transform: translateX(-50%);
+                margin-top: 6px;
+                padding: 4px 8px;
+                background: var(--text-main, #1b1917);
+                color: var(--bg, #faf9f6);
+                font-size: 11px;
+                white-space: nowrap;
+                border-radius: 6px;
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.15s;
+                z-index: 100;
+            }
 
-        [data-tooltip]:hover::after {
-            opacity: 1;
+            [data-tooltip]:hover::after {
+                opacity: 1;
+            }
         }
 
         /* Notion color helpers */
@@ -2596,6 +2595,7 @@ async function handleRequest(request, env) {
             el: null,
             ensure() { this.el = this.el || document.querySelector('#tooltip'); return this.el; },
             show(target) {
+                if (window.innerWidth <= 640) return; // Don't show tooltips on small screens
                 const tip = target.dataset.tip;
                 if (!tip) return;
                 const node = this.ensure();
@@ -2603,7 +2603,7 @@ async function handleRequest(request, env) {
                 const rect = target.getBoundingClientRect();
                 const pad = 10;
                 const x = Math.min(window.innerWidth - pad, Math.max(pad, rect.left + rect.width / 2));
-                const preferBelow = rect.top < 64; // near top edge: show below to avoid clipping
+                const preferBelow = rect.top < 100; // near top edge: show below to avoid clipping
                 const y = preferBelow ? (rect.bottom + 8) : (rect.top - 8);
                 node.style.left = `${x}px`;
                 node.style.top = `${y}px`;
@@ -2638,9 +2638,10 @@ async function handleRequest(request, env) {
             }
         };
 
+        const sleep = ms => new Promise(res => setTimeout(res, ms));
         const SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes background tick
         const MIN_PULL_INTERVAL_MS = 3 * 60 * 1000; // pull at most every 3 minutes
-        const MIN_PUSH_INTERVAL_MS = 60 * 1000; // push at most every minute
+        const MIN_PUSH_INTERVAL_MS = 30 * 1000; // push at most every 30 seconds
 
         const Storage = {
             db: null,
@@ -3737,7 +3738,9 @@ async function handleRequest(request, env) {
                 tagSelection: [],
                 userStoppedMic: false,
                 activeAudioStream: null,
-                fabSetupMode: false
+                fabSetupMode: false,
+                joystickActive: false,
+                joystickHandlers: null
             },
             isAiModeSelected() {
                 return el('#revisionMode')?.value === 'ai';
@@ -4121,6 +4124,7 @@ async function handleRequest(request, env) {
                 this.saveSession();
                 this.renderStudy();
                 toast('Session stopped');
+                if (this.state.queue.length > 0) this.requestAutoSyncSoon(200, 'session-end');
             },
             getSessionCard() {
                 const session = this.state.session;
@@ -5929,6 +5933,9 @@ async function handleRequest(request, env) {
                     setTimeout(() => el('#syncProgress').style.width = '0%', 700);
                     this.state.syncing = false;
                     this.updateSyncButtonState();
+                    if (this.state.queue.length > 0) {
+                        this.requestAutoSyncSoon(MIN_PUSH_INTERVAL_MS + 100);
+                    }
                 }
             },
             async pullFromNotion() {
@@ -6107,7 +6114,9 @@ async function handleRequest(request, env) {
                 this.state.queue = [];
                 el('#queueCount').textContent = '0';
                 const failed = [];
-                for (const op of queue) {
+                for (let i = 0; i < queue.length; i++) {
+                    const op = queue[i];
+                    if (i > 0) await sleep(350); // Pace requests to ~3 per second
                     try {
                         if (op.type === 'deck-upsert') {
                             const props = NotionMapper.deckProps(op.payload);
@@ -6193,7 +6202,8 @@ async function handleRequest(request, env) {
                 await Storage.setMeta('queue', this.state.queue);
                 this.renderConnection();
             },
-            queueOp(op) {
+            queueOp(op, reason = 'generic') {
+                op.reason = reason;
                 this.state.queue.push(op);
                 el('#queueCount').textContent = String(this.state.queue.length);
                 Storage.setMeta('queue', this.state.queue).catch(() => { });
@@ -6201,7 +6211,8 @@ async function handleRequest(request, env) {
                 Storage.setMeta('queueLastChangedAt', this.state.queueLastChangedAt).catch(() => { });
                 this.updateSyncButtonState();
                 this.renderConnection();
-                this.requestAutoSyncSoon(1500);
+                const delay = (reason === 'rating') ? (5 * 60 * 1000) : 1500;
+                this.requestAutoSyncSoon(delay, reason);
             },
             updateSyncButtonState() {
                 const btn = el('#syncNowBtn');
@@ -6246,6 +6257,9 @@ async function handleRequest(request, env) {
                 } finally {
                     this.state.syncing = false;
                     if (svg) svg.classList.remove('animate-spin');
+                    if (this.state.queue.length > 0) {
+                        this.requestAutoSyncSoon(MIN_PUSH_INTERVAL_MS + 100);
+                    }
                 }
             },
             startAutoSync() {
@@ -6254,9 +6268,15 @@ async function handleRequest(request, env) {
                 this.autoSyncTick(); // kick off once on load
                 this.updateSyncButtonState();
             },
-            requestAutoSyncSoon(delayMs = 1500) {
-                if (this.state.autoSyncSoonTimer) return;
-                if (this.state.syncing) return;
+            requestAutoSyncSoon(delayMs = 1500, reason = 'generic') {
+                if (this.state.autoSyncSoonTimer) {
+                    if (reason !== 'rating') {
+                        clearTimeout(this.state.autoSyncSoonTimer);
+                        this.state.autoSyncSoonTimer = null;
+                    } else {
+                        return;
+                    }
+                }
                 if (!navigator.onLine) return;
                 if (!this.isReady()) return;
                 const ms = Math.max(200, Number(delayMs) || 0);
@@ -6275,7 +6295,8 @@ async function handleRequest(request, env) {
                 const now = Date.now();
                 const lastPullMs = this.state.lastPull ? new Date(this.state.lastPull).getTime() : 0;
                 const lastPushMs = this.state.lastPush ? new Date(this.state.lastPush).getTime() : 0;
-                const wantsPull = now - lastPullMs > MIN_PULL_INTERVAL_MS;
+                // Don't pull during a study session; keep focus on local flow.
+                const wantsPull = !this.state.session && (now - lastPullMs > MIN_PULL_INTERVAL_MS);
                 // Never pull while there are pending local mutations; a pull can overwrite local edits or
                 // break deck/card references before the queue finishes pushing.
                 const wantsPush = this.state.queue.length > 0;
@@ -6314,6 +6335,10 @@ async function handleRequest(request, env) {
                 } finally {
                     this.state.syncing = false;
                     this.updateSyncButtonState();
+                    // If more work was added to the queue during sync, schedule another tick.
+                    if (this.state.queue.length > 0) {
+                        this.requestAutoSyncSoon(MIN_PUSH_INTERVAL_MS + 100);
+                    }
                 }
             },
             handleOnline() {
@@ -6364,12 +6389,12 @@ async function handleRequest(request, env) {
                     const recentHistory = [...history].reverse().slice(0, 10);
                     content = `
                         <table class="w-full text-xs">
-                            <thead><tr class="text-earth-metal/50 dark:text-white/60 border-b border-charcoal/10"><th class="text-left py-1">Rating</th><th class="text-left py-1">Date</th></tr></thead>
+                            <thead><tr class="text-earth-metal/50 dark:text-white/60 border-b border-charcoal/10 dark:border-white/10"><th class="text-left py-1">Rating</th><th class="text-left py-1">Date</th></tr></thead>
                             <tbody>
                                 ${recentHistory.map(h => `
-                                    <tr class="border-b border-charcoal/5 last:border-0">
+                                    <tr class="border-b border-charcoal/5 dark:border-white/5 last:border-0">
                                         <td class="py-1 capitalize ${ratingColors[h.rating] || ''}">${h.rating}</td>
-                                        <td class="py-1 text-earth-metal/70">${new Date(h.at).toLocaleDateString()} ${new Date(h.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                                        <td class="py-1 text-earth-metal/70 dark:text-white/70">${new Date(h.at).toLocaleDateString()} ${new Date(h.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
                                     </tr>
                                 `).join('')}
                             </tbody>
@@ -6380,10 +6405,10 @@ async function handleRequest(request, env) {
 
                 // Create and position popover
                 const popover = document.createElement('div');
-                popover.className = 'review-history-popover absolute z-50 bg-oatmeal dark:bg-zinc-800 border border-charcoal/20 dark:border-white/10 rounded-lg shadow-lg p-3 min-w-[200px] max-w-[280px]';
+                popover.className = 'review-history-popover fixed z-50 bg-oatmeal dark:bg-zinc-800 border border-charcoal/20 dark:border-white/10 rounded-lg shadow-lg p-3 min-w-[200px] max-w-[280px]';
                 popover.innerHTML = `
                     <div class="flex justify-between items-center mb-2">
-                        <span class="font-medium text-sm text-charcoal dark:text-oatmeal">Review History</span>
+                        <span class="font-medium text-sm text-charcoal dark:text-white">Review History</span>
                         <button class="close-popover text-earth-metal/50 dark:text-white/60 hover:text-earth-metal dark:hover:text-white p-0.5"><i data-lucide="x" class="w-4 h-4"></i></button>
                     </div>
                     ${content}
@@ -6396,7 +6421,7 @@ async function handleRequest(request, env) {
 
                 // Position to the left of button, or right if not enough space
                 let left = btnRect.left - popRect.width - 8;
-                if (left < 8) left = btnRect.right + 8;
+                if (left < 8) left = Math.min(window.innerWidth - popRect.width - 8, btnRect.right + 8);
                 let top = btnRect.top;
                 if (top + popRect.height > window.innerHeight - 8) top = window.innerHeight - popRect.height - 8;
 
@@ -6595,7 +6620,7 @@ async function handleRequest(request, env) {
                 }
                 card.reviewHistory.push({ rating: ratingKey, at: new Date().toISOString() });
                 await Storage.put('cards', card);
-                this.queueOp({ type: 'card-upsert', payload: card });
+                this.queueOp({ type: 'card-upsert', payload: card }, 'rating');
                 // Show undo toast
                 this.showUndoToast(previousState);
                 // If session is active, advance the session; otherwise just render next card
@@ -8062,62 +8087,103 @@ async function handleRequest(request, env) {
                 // Listen for window resize to show/hide FAB cluster
                 window.addEventListener('resize', () => this.updateMobileFab());
             },
-            initJoystick() {
-                const joystick = el('#joystick');
-                if (!joystick || typeof Hammer === 'undefined') return;
+                        initJoystick() {
+                            const isSmallDevice = window.matchMedia('(max-width: 640px)').matches;
+                            const inSession = !!this.state.session;
+                            const fabEnabled = this.state.settings.fabEnabled !== false;
+                            const shouldBeActive = isSmallDevice && inSession && fabEnabled;
+            
+                            if (!shouldBeActive) {
+                                if (this.state.joystickActive) {
+                                    this.cleanupJoystick();
+                                }
+                                return;
+                            }
+            
+                            if (this.state.joystickActive) return;
+            
+                            const joystick = el('#joystick');
+                            if (!joystick) return;
+            
+                            const THRESHOLD = 15;
+                            let startX = 0;
+                            let startY = 0;
+                            let currentDirection = null;
+            
+                            const getDirection = (dx, dy) => {
+                                const absX = Math.abs(dx);
+                                const absY = Math.abs(dy);
+                                if (absX < THRESHOLD && absY < THRESHOLD) return null;
+                                if (absX > absY) {
+                                    return dx > 0 ? 'right' : 'left';
+                                } else {
+                                    return dy > 0 ? 'down' : 'up';
+                                }
+                            };
+            
+                            const updateJoystick = (direction) => {
+                                joystick.classList.remove('up', 'down', 'left', 'right');
+                                joystick.querySelectorAll('.joystick-label').forEach(l => l.classList.remove('active'));
+                                if (direction) {
+                                    joystick.classList.add(direction);
+                                    joystick.querySelector(`.joystick-label-${direction}`)?.classList.add('active');
+                                }
+                            };
+            
+                            const onPointerDown = (e) => {
+                                startX = e.clientX;
+                                startY = e.clientY;
+                                joystick.setPointerCapture(e.pointerId);
+                            };
+            
+                            const onPointerMove = (e) => {
+                                if (!startX && !startY) return;
+                                const dx = e.clientX - startX;
+                                const dy = e.clientY - startY;
+                                currentDirection = getDirection(dx, dy);
+                                updateJoystick(currentDirection);
+                            };
+            
+                            const onPointerUp = (e) => {
+                                if (currentDirection) {
+                                    const ratings = { up: 'Good', down: 'Again', left: 'Hard', right: 'Easy' };
+                                    this.rate(ratings[currentDirection]);
+                                }
+                                startX = 0;
+                                startY = 0;
+                                currentDirection = null;
+                                updateJoystick(null);
+                            };
+            
+                            joystick.addEventListener('pointerdown', onPointerDown);
+                            joystick.addEventListener('pointermove', onPointerMove);
+                            joystick.addEventListener('pointerup', onPointerUp);
+                            joystick.addEventListener('pointercancel', onPointerUp);
+            
+                            this.state.joystickActive = true;
+                            this.state.joystickHandlers = { onPointerDown, onPointerMove, onPointerUp };
+                        },
+                        cleanupJoystick() {
+                            const joystick = el('#joystick');
+                            if (joystick && this.state.joystickHandlers) {
+                                const { onPointerDown, onPointerMove, onPointerUp } = this.state.joystickHandlers;
+                                joystick.removeEventListener('pointerdown', onPointerDown);
+                                joystick.removeEventListener('pointermove', onPointerMove);
+                                joystick.removeEventListener('pointerup', onPointerUp);
+                                joystick.removeEventListener('pointercancel', onPointerUp);
+                                joystick.classList.remove('up', 'down', 'left', 'right');
+                                joystick.querySelectorAll('.joystick-label').forEach(l => l.classList.remove('active'));
+                            }
+                            this.state.joystickActive = false;
+                            this.state.joystickHandlers = null;
+                        },
 
-                const THRESHOLD = 15;
-                let currentDirection = null;
-
-                const mc = new Hammer.Manager(joystick, { touchAction: 'none' });
-                mc.add(new Hammer.Pan({ direction: Hammer.DIRECTION_ALL, threshold: 5 }));
-
-                const getDirection = (dx, dy) => {
-                    const absX = Math.abs(dx);
-                    const absY = Math.abs(dy);
-                    if (absX < THRESHOLD && absY < THRESHOLD) return null;
-                    if (absX > absY) {
-                        return dx > 0 ? 'right' : 'left';
-                    } else {
-                        return dy > 0 ? 'down' : 'up';
-                    }
-                };
-
-                const updateJoystick = (direction) => {
-                    // Remove all direction classes
-                    joystick.classList.remove('up', 'down', 'left', 'right');
-                    // Remove active from all labels
-                    joystick.querySelectorAll('.joystick-label').forEach(l => l.classList.remove('active'));
-
-                    if (direction) {
-                        joystick.classList.add(direction);
-                        joystick.querySelector(`.joystick-label-${direction}`)?.classList.add('active');
-                    }
-                };
-
-                mc.on('panmove', (e) => {
-                    currentDirection = getDirection(e.deltaX, e.deltaY);
-                    updateJoystick(currentDirection);
-                });
-
-                mc.on('panend', (e) => {
-                    if (currentDirection) {
-                        // Clockwise from bottom: Again (down) → Hard (left) → Good (up) → Easy (right)
-                        const ratings = { up: 'Good', down: 'Again', left: 'Hard', right: 'Easy' };
-                        this.rate(ratings[currentDirection]);
-                    }
-                    currentDirection = null;
-                    updateJoystick(null);
-                });
-
-                mc.on('pancancel', () => {
-                    currentDirection = null;
-                    updateJoystick(null);
-                });
-            },
             updateMobileFab() {
                 const isSmallDevice = window.matchMedia('(max-width: 640px)').matches;
                 const cluster = el('#mobileFabCluster');
+
+                // Try to init joystick if needed
+                this.initJoystick();
 
                 // Hide FAB on large screens
                 if (!isSmallDevice) {

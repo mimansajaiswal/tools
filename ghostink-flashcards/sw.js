@@ -22,7 +22,6 @@ self.addEventListener('install', (event) => {
       const cdnNoCorsAssets = [
         'https://cdn.tailwindcss.com',
         'https://unpkg.com/lucide@latest',
-        'https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js',
         'https://cdn.jsdelivr.net/npm/marked/marked.min.js',
         'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js',
         'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/sql-wasm.js',
