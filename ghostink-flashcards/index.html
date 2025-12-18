@@ -198,30 +198,7 @@
             background: #000;
         }
 
-        /* FAB Setup mode */
-        body.fab-setup-mode .mobile-fab-cluster {
-            pointer-events: auto;
-            border: 2px dashed var(--dull-purple);
-            background: rgba(145, 127, 179, 0.1);
-            padding: 10px;
-            border-radius: 20px;
-            cursor: move;
-        }
-
-        body.fab-setup-mode .mobile-fab-cluster::after {
-            content: "Drag to reposition FAB";
-            position: absolute;
-            bottom: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-            background: var(--dull-purple);
-            color: white;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 10px;
-            white-space: nowrap;
-            margin-bottom: 8px;
-        }
+        /* Mobile FAB position is configured via a settings picker (no drag-to-reposition mode). */
 
         .dash {
             background: repeating-linear-gradient(-45deg,
@@ -967,11 +944,6 @@
                 <div id="connectionBadge"
                     class="px-2 py-1 rounded-full pill text-[10px] sm:text-xs bg-oatmeal border border-oatmeal-dark text-earth-metal hidden md:block">
                     Offline ready</div>
-                <div id="headerSyncStatus"
-                    class="hidden md:flex items-center gap-1.5 px-2 py-1 rounded-full bg-dull-purple/10 border border-dull-purple/20">
-                    <span class="font-mono text-[9px] font-medium text-dull-purple uppercase tracking-wider"><span
-                            id="headerSyncCount">0</span> items in q2sync to notion</span>
-                </div>
                 <!-- Desktop-only options -->
                 <div class="hidden sm:flex items-center gap-0.5 sm:gap-1 pill-toggle rounded-full px-1 sm:px-2 py-1">
                     <button class="p-1 rounded-full theme-btn" data-theme="light" data-tip="Light theme"
@@ -1765,18 +1737,61 @@
                 </div>
                 <div class="space-y-4">
                     <div
-                        class="rounded-lg border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-white-linen dark:bg-white/5">
+                        class="sm:hidden rounded-lg border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-white-linen dark:bg-white/5">
                         <div class="flex items-center justify-between gap-2 mb-2">
                             <div class="flex items-center gap-2">
                                 <i data-lucide="smartphone" class="w-4 h-4 text-dull-purple dark:text-dull-purple"></i>
                                 <p class="font-semibold text-charcoal dark:text-white">Mobile layout</p>
                             </div>
-                            <button id="setupFabPos"
-                                class="text-[10px] px-2 py-1 rounded bg-oatmeal dark:bg-white/10 border border-oatmeal-dark/60">Reposition
-                                FAB</button>
                         </div>
-                        <p class="text-[11px] text-earth-metal/60 dark:text-white/60">Customize the position of the
-                            joystick/action buttons on mobile screens.</p>
+                        <p class="text-[11px] text-earth-metal/60 dark:text-white/60">Choose where the study
+                            joystick/action cluster should appear on mobile screens.</p>
+                        <div class="mt-3 space-y-2">
+                            <label class="flex items-center gap-2 text-xs text-earth-metal/70 dark:text-white/70">
+                                <input id="fabEnabledToggle" type="checkbox" class="accent-dull-purple" checked>
+                                <span>Enable mobile FAB controls</span>
+                            </label>
+                            <div id="fabPosControls" class="space-y-2">
+                                <label class="text-xs text-earth-metal/70 dark:text-white/70">FAB position
+                                    (grid)</label>
+                                <div class="flex items-center gap-2">
+                                    <select id="fabPosCellSelect"
+                                        class="flex-1 rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm">
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
+                                        <option value="3">3</option>
+                                        <option value="4">4</option>
+                                        <option value="5">5</option>
+                                        <option value="6">6</option>
+                                        <option value="7">7</option>
+                                        <option value="8">8</option>
+                                        <option value="9">9</option>
+                                        <option value="10">10</option>
+                                        <option value="11">11</option>
+                                        <option value="12">12</option>
+                                        <option value="13">13</option>
+                                        <option value="14">14</option>
+                                        <option value="15">15</option>
+                                        <option value="16">16</option>
+                                        <option value="17">17</option>
+                                        <option value="18">18</option>
+                                        <option value="19">19</option>
+                                        <option value="20">20</option>
+                                        <option value="21">21</option>
+                                        <option value="22">22</option>
+                                        <option value="23">23</option>
+                                        <option value="24">24</option>
+                                    </select>
+                                    <span
+                                        class="text-[10px] text-earth-metal/60 dark:text-white/60 whitespace-nowrap">6×4</span>
+                                </div>
+                                <pre id="fabGridAscii"
+                                    class="font-mono text-[8px] leading-[1.05] text-earth-metal/60 dark:text-white/60 bg-oatmeal/60 dark:bg-white/10 border border-oatmeal-dark/40 dark:border-white/10 rounded-lg p-2 overflow-hidden whitespace-pre"></pre>
+                                <p class="text-[10px] text-earth-metal/60 dark:text-white/60">Pick a number from the 6×4
+                                    grid
+                                    (1 = top-left, 24 = bottom-right). Applies on screens ≤ 640px wide.</p>
+                            </div>
+                        </div>
                     </div>
                     <div
                         class="rounded-lg border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-white-linen dark:bg-white/5">
@@ -2586,11 +2601,13 @@ async function handleRequest(request, env) {
                 const node = this.ensure();
                 node.textContent = tip;
                 const rect = target.getBoundingClientRect();
-                const x = rect.left + rect.width / 2;
-                const y = rect.top - 8;
+                const pad = 10;
+                const x = Math.min(window.innerWidth - pad, Math.max(pad, rect.left + rect.width / 2));
+                const preferBelow = rect.top < 64; // near top edge: show below to avoid clipping
+                const y = preferBelow ? (rect.bottom + 8) : (rect.top - 8);
                 node.style.left = `${x}px`;
                 node.style.top = `${y}px`;
-                node.style.transform = 'translate(-50%, -100%)';
+                node.style.transform = preferBelow ? 'translate(-50%, 0)' : 'translate(-50%, -100%)';
                 node.classList.remove('hidden');
                 this.lastShown = target;
             },
@@ -2700,13 +2717,13 @@ async function handleRequest(request, env) {
             getSettings() {
                 const raw = localStorage.getItem(this.settingsKey);
                 if (!raw) {
-                    return { workerUrl: '', proxyToken: '', authToken: '', deckSource: '', cardSource: '', aiProvider: '', aiModel: '', aiKey: '', sttProvider: '', sttModel: '', sttKey: '', sttPrompt: '', sttVerified: false, sttPermissionWarmed: false, themeMode: 'system', fontMode: 'serif', workerVerified: false, authVerified: false, sourcesVerified: false, aiVerified: false, sourcesCache: { deckOptions: [], cardOptions: [] } };
+                    return { workerUrl: '', proxyToken: '', authToken: '', deckSource: '', cardSource: '', aiProvider: '', aiModel: '', aiKey: '', sttProvider: '', sttModel: '', sttKey: '', sttPrompt: '', sttVerified: false, sttPermissionWarmed: false, themeMode: 'system', fontMode: 'serif', fabEnabled: true, workerVerified: false, authVerified: false, sourcesVerified: false, aiVerified: false, sourcesCache: { deckOptions: [], cardOptions: [] } };
                 }
                 try {
                     return JSON.parse(raw);
                 } catch (e) {
                     console.error('Failed to parse settings, resetting to defaults:', e);
-                    return { workerUrl: '', proxyToken: '', authToken: '', deckSource: '', cardSource: '', aiProvider: '', aiModel: '', aiKey: '', sttProvider: '', sttModel: '', sttKey: '', sttPrompt: '', sttVerified: false, sttPermissionWarmed: false, themeMode: 'system', fontMode: 'serif', workerVerified: false, authVerified: false, sourcesVerified: false, aiVerified: false, sourcesCache: { deckOptions: [], cardOptions: [] } };
+                    return { workerUrl: '', proxyToken: '', authToken: '', deckSource: '', cardSource: '', aiProvider: '', aiModel: '', aiKey: '', sttProvider: '', sttModel: '', sttKey: '', sttPrompt: '', sttVerified: false, sttPermissionWarmed: false, themeMode: 'system', fontMode: 'serif', fabEnabled: true, workerVerified: false, authVerified: false, sourcesVerified: false, aiVerified: false, sourcesCache: { deckOptions: [], cardOptions: [] } };
                 }
             },
             setSettings(newSettings) {
@@ -3090,116 +3107,267 @@ async function handleRequest(request, env) {
             }).join('');
         };
 
-        // Convert markdown to Notion rich_text array with annotations.
-        // Supports nesting for the formats we generate in richToMarkdown() (bold/italic/underline/code/strike/links/colors).
+        // Convert markdown to Notion rich_text using Marked (markdown→HTML) + DOM parsing (HTML→runs).
+        // This avoids regex-recursive parsing (which can cause stack overflows on pathological content).
+        // Supported:
+        // - bold/italic/strikethrough/code/links
+        // - underline (from our exporter: __text__ → <u>text</u>)
+        // - Notion colors: <span class="notion-color-...">...</span>
+        // - Notion equations: <span class="notion-equation">...</span>
         const markdownToNotionRichText = (markdown) => {
-            if (!markdown) return [];
-            const str = markdown.toString();
-            if (!str) return [];
+            const raw = (markdown ?? '').toString();
+            if (!raw) return [];
 
-            const mergeAnnotations = (a, b) => {
-                const out = { ...(a || {}) };
-                for (const [k, v] of Object.entries(b || {})) {
+            const MAX_INPUT_CHARS = 50000;
+            const MAX_ITEMS = 100;
+            const MAX_CHARS_PER_ITEM = 2000;
+
+            const safePlain = (input) => {
+                const s = (input || '').toString();
+                if (!s) return [];
+                const cleaned = s.replace(/<[^>]+>/g, '');
+                const out = [];
+                for (let i = 0; i < cleaned.length && out.length < MAX_ITEMS; i += MAX_CHARS_PER_ITEM) {
+                    out.push({ type: 'text', text: { content: cleaned.slice(i, i + MAX_CHARS_PER_ITEM) } });
+                }
+                return out;
+            };
+
+            if (raw.length > MAX_INPUT_CHARS) return safePlain(raw);
+
+            // Treat __text__ as underline (we generate underline using __...__ in richToMarkdown()).
+            // This is intentionally different from Markdown strong; we always generate bold with **...**.
+            const pre = raw.replace(/__([\s\S]+?)__/g, '<u>$1</u>');
+
+            let html;
+            try {
+                html = marked.parse(pre, {
+                    gfm: true,
+                    breaks: true,
+                    headerIds: false,
+                    mangle: false
+                });
+            } catch (e) {
+                console.error('marked.parse failed; falling back to plain text:', e);
+                return safePlain(pre);
+            }
+
+            let doc;
+            try {
+                const parser = new DOMParser();
+                doc = parser.parseFromString(`<div id="__rtroot__">${html}</div>`, 'text/html');
+            } catch (e) {
+                console.error('DOMParser failed; falling back to plain text:', e);
+                return safePlain(pre);
+            }
+
+            const root = doc.getElementById('__rtroot__');
+            if (!root) return safePlain(pre);
+
+            const runs = [];
+
+            const sanitizeLinkUrl = (url) => {
+                const s = (url ?? '').toString().trim();
+                if (!s) return null;
+                // Notion text.link.url must be an absolute URL (or mailto/tel).
+                // Drop relative/hash/javascript links to avoid Notion 400s ("Invalid URL for link.").
+                if (s.startsWith('#')) return null;
+                if (s.toLowerCase().startsWith('javascript:')) return null;
+                const candidate = s.startsWith('//') ? `https:${s}` : s;
+                try {
+                    const u = new URL(candidate);
+                    const proto = (u.protocol || '').toLowerCase();
+                    // Only keep HTTPS links for Notion properties (everything else is dropped).
+                    if (proto !== 'https:') return null;
+                    return u.toString();
+                } catch (_) {
+                    return null;
+                }
+            };
+
+            const normalizeColor = (cls) => {
+                // notion-color-gray-background -> gray_background
+                const c = (cls || '').replace(/^notion-color-/, '').trim();
+                if (!c) return null;
+                return c.replace(/-/g, '_');
+            };
+
+            const pushText = (text, annotations, link) => {
+                if (!text) return;
+                const content = text.toString();
+                if (!content) return;
+                const item = { type: 'text', text: { content } };
+                const cleanLink = sanitizeLinkUrl(link);
+                if (cleanLink) item.text.link = { url: cleanLink };
+                if (annotations && Object.keys(annotations).length) item.annotations = annotations;
+                runs.push(item);
+            };
+
+            const pushNewline = (annotations, link) => {
+                // Avoid piling up newlines (keeps Notion props cleaner)
+                const last = runs[runs.length - 1];
+                if (last?.type === 'text' && last.text?.content?.endsWith('\n')) return;
+                pushText('\n', annotations, link);
+            };
+
+            const mergeAnn = (base, extra) => {
+                const out = { ...(base || {}) };
+                for (const [k, v] of Object.entries(extra || {})) {
                     if (v !== undefined) out[k] = v;
                 }
                 return out;
             };
 
-            // Combined regex to find all patterns including equations and Notion colors.
-            // Order: equations, colors, bold+italic, bold, underline, italic (_), italic (*), code, strikethrough, links
-            const tokenRegex = /(<span class="notion-equation">(.+?)<\/span>)|(<span class="notion-color-([a-z-]+)">(.+?)<\/span>)|(\\*\\*\\*(.+?)\\*\\*\\*)|(\\*\\*(.+?)\\*\\*)|(__(.+?)__)|(_(.+?)_)|(\\*(.+?)\\*)|(`(.+?)`)|(\\~\\~(.+?)\\~\\~)|(\\[(.+?)\\]\\((.+?)\\))/g;
+            const walk = (node, state) => {
+                if (!node) return;
+                const curAnn = state?.annotations || null;
+                const curLink = state?.link || null;
 
-            const parseInline = (input, inherited = null) => {
-                const text = (input || '').toString();
-                if (!text) return [];
-                const out = [];
-                let lastIndex = 0;
-                tokenRegex.lastIndex = 0;
-                let match;
+                if (runs.length >= 2000) return; // soft safety cap before chunking
 
-                const pushText = (content, ann, link = null) => {
-                    if (!content) return;
-                    const item = { type: 'text', text: { content: content.toString() } };
-                    const merged = mergeAnnotations(inherited, ann);
-                    if (Object.keys(merged).length) item.annotations = merged;
-                    if (link) item.text.link = { url: link };
-                    out.push(item);
-                };
+                if (node.nodeType === Node.TEXT_NODE) {
+                    const val = node.nodeValue || '';
+                    // Marked inserts formatting whitespace/newlines between block elements.
+                    // We generate our own newlines for blocks, so ignore whitespace-only nodes to avoid double newlines.
+                    if (!val || /^\s+$/.test(val)) return;
+                    pushText(val, curAnn, curLink);
+                    return;
+                }
+                if (node.nodeType !== Node.ELEMENT_NODE) return;
 
-                while ((match = tokenRegex.exec(text)) !== null) {
-                    if (match.index > lastIndex) {
-                        pushText(text.slice(lastIndex, match.index), null);
+                const el = node;
+                const tag = (el.tagName || '').toUpperCase();
+
+                // Ignore unsafe or irrelevant elements entirely
+                if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT') return;
+
+                // Notion equation span
+                if (tag === 'SPAN' && el.classList && el.classList.contains('notion-equation')) {
+                    const expr = (el.textContent || '').trim();
+                    if (expr) runs.push({ type: 'equation', equation: { expression: expr } });
+                    return;
+                }
+
+                // Notion color span
+                if (tag === 'SPAN' && el.classList) {
+                    const colorClass = [...el.classList].find(c => c.startsWith('notion-color-'));
+                    if (colorClass) {
+                        const color = normalizeColor(colorClass);
+                        const nextState = { ...state, annotations: mergeAnn(curAnn, { color }) };
+                        for (const child of Array.from(el.childNodes)) walk(child, nextState);
+                        return;
                     }
-
-                    if (match[1]) {
-                        out.push({ type: 'equation', equation: { expression: match[2] } });
-                    } else if (match[3]) {
-                        const colorClass = match[4].replace(/-/g, '_');
-                        out.push(...parseInline(match[5], mergeAnnotations(inherited, { color: colorClass })));
-                    } else if (match[6]) {
-                        out.push(...parseInline(match[7], mergeAnnotations(inherited, { bold: true, italic: true })));
-                    } else if (match[8]) {
-                        out.push(...parseInline(match[9], mergeAnnotations(inherited, { bold: true })));
-                    } else if (match[10]) {
-                        out.push(...parseInline(match[11], mergeAnnotations(inherited, { underline: true })));
-                    } else if (match[12]) {
-                        // Italic via underscores: _text_
-                        out.push(...parseInline(match[13], mergeAnnotations(inherited, { italic: true })));
-                    } else if (match[14]) {
-                        // Italic via asterisks: *text*
-                        out.push(...parseInline(match[15], mergeAnnotations(inherited, { italic: true })));
-                    } else if (match[16]) {
-                        // Code doesn't recurse (treat inner as literal)
-                        pushText(match[17], mergeAnnotations(inherited, { code: true }));
-                    } else if (match[18]) {
-                        out.push(...parseInline(match[19], mergeAnnotations(inherited, { strikethrough: true })));
-                    } else if (match[20]) {
-                        const linkText = match[21];
-                        const linkUrl = match[22];
-                        const parts = parseInline(linkText, inherited);
-                        for (const p of parts) {
-                            if (p.type === 'text') p.text.link = { url: linkUrl };
-                        }
-                        out.push(...parts);
-                    }
-
-                    lastIndex = match.index + match[0].length;
                 }
 
-                if (lastIndex < text.length) {
-                    pushText(text.slice(lastIndex), null);
+                // Annotation tags
+                if (tag === 'STRONG' || tag === 'B') {
+                    const nextState = { ...state, annotations: mergeAnn(curAnn, { bold: true }) };
+                    for (const child of Array.from(el.childNodes)) walk(child, nextState);
+                    return;
                 }
-                if (out.length === 0) {
-                    pushText(text, null);
+                if (tag === 'EM' || tag === 'I') {
+                    const nextState = { ...state, annotations: mergeAnn(curAnn, { italic: true }) };
+                    for (const child of Array.from(el.childNodes)) walk(child, nextState);
+                    return;
                 }
-                return out;
+                if (tag === 'U') {
+                    const nextState = { ...state, annotations: mergeAnn(curAnn, { underline: true }) };
+                    for (const child of Array.from(el.childNodes)) walk(child, nextState);
+                    return;
+                }
+                if (tag === 'DEL' || tag === 'S') {
+                    const nextState = { ...state, annotations: mergeAnn(curAnn, { strikethrough: true }) };
+                    for (const child of Array.from(el.childNodes)) walk(child, nextState);
+                    return;
+                }
+                if (tag === 'CODE') {
+                    // Treat code as a single literal chunk (no nested parsing)
+                    pushText(el.textContent || '', mergeAnn(curAnn, { code: true }), curLink);
+                    return;
+                }
+                if (tag === 'A') {
+                    const href = sanitizeLinkUrl(el.getAttribute('href') || curLink);
+                    const nextState = { ...state, link: href || null };
+                    for (const child of Array.from(el.childNodes)) walk(child, nextState);
+                    return;
+                }
+                if (tag === 'BR') {
+                    pushNewline(curAnn, curLink);
+                    return;
+                }
+
+                // Block-ish elements: preserve line breaks
+                const blockTags = new Set(['P', 'DIV', 'LI', 'UL', 'OL', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE']);
+                const isBlock = blockTags.has(tag);
+
+                for (const child of Array.from(el.childNodes)) walk(child, state);
+                if (isBlock) pushNewline(curAnn, curLink);
             };
 
-            const result = parseInline(str);
+            for (const child of Array.from(root.childNodes)) walk(child, { annotations: null, link: null });
 
-            // Chunk large content (Notion 2000 char limit per rich_text item)
-            const chunked = [];
-            for (const item of result) {
-                const content = item.text?.content || item.equation?.expression || '';
-                if (content.length <= 2000) {
-                    chunked.push(item);
-                } else if (item.type === 'equation') {
-                    chunked.push(item);
-                } else {
-                    for (let i = 0; i < content.length && chunked.length < 100; i += 2000) {
-                        chunked.push({
-                            type: 'text',
-                            text: {
-                                content: content.slice(i, i + 2000),
-                                link: item.text?.link
-                            },
-                            annotations: item.annotations
-                        });
+            // Merge adjacent text runs with identical formatting.
+            const merged = [];
+            const sameAnn = (a, b) => JSON.stringify(a || {}) === JSON.stringify(b || {});
+            for (const item of runs) {
+                if (!item) continue;
+                if (merged.length === 0) { merged.push(item); continue; }
+                const prev = merged[merged.length - 1];
+                if (item.type === 'text' && prev.type === 'text') {
+                    const a1 = prev.annotations || null;
+                    const a2 = item.annotations || null;
+                    const l1 = prev.text?.link?.url || null;
+                    const l2 = item.text?.link?.url || null;
+                    if (l1 === l2 && sameAnn(a1, a2)) {
+                        prev.text.content = (prev.text.content || '') + (item.text.content || '');
+                        continue;
                     }
+                }
+                merged.push(item);
+            }
+
+            // Chunk text items to Notion limits.
+            const out = [];
+            for (const item of merged) {
+                if (out.length >= MAX_ITEMS) break;
+                if (item.type === 'equation') {
+                    out.push(item);
+                    continue;
+                }
+                const content = item.text?.content || '';
+                if (!content) continue;
+                if (content.length <= MAX_CHARS_PER_ITEM) {
+                    out.push(item);
+                    continue;
+                }
+                for (let i = 0; i < content.length && out.length < MAX_ITEMS; i += MAX_CHARS_PER_ITEM) {
+                    out.push({
+                        type: 'text',
+                        text: {
+                            content: content.slice(i, i + MAX_CHARS_PER_ITEM),
+                            link: item.text?.link
+                        },
+                        annotations: item.annotations
+                    });
                 }
             }
 
-            return chunked.slice(0, 100);
+            // Trim trailing whitespace/newlines (avoid Notion properties ending with blank lines).
+            while (out.length && out[out.length - 1].type === 'text') {
+                const last = out[out.length - 1];
+                const content = (last.text?.content || '');
+                const trimmedRight = content.replace(/\s+$/g, '');
+                if (trimmedRight.length === 0) {
+                    out.pop();
+                    continue;
+                }
+                if (trimmedRight !== content) {
+                    last.text.content = trimmedRight;
+                }
+                break;
+            }
+
+            return out.slice(0, MAX_ITEMS);
         };
 
         /**
@@ -3530,6 +3698,8 @@ async function handleRequest(request, env) {
                 decks: [],
                 cards: [],
                 queue: [],
+                lastQueueError: null,
+                queueLastChangedAt: null,
                 selectedDeck: null,
                 selectedCard: null,
                 filters: { again: false, hard: false, addedToday: false, tags: [], suspended: false, leech: false, studyDecks: [] },
@@ -3548,6 +3718,7 @@ async function handleRequest(request, env) {
                 authVerified: Storage.getSettings().authVerified || false,
                 sourcesVerified: Storage.getSettings().sourcesVerified || false,
                 autoSyncTimer: null,
+                autoSyncSoonTimer: null,
                 syncing: false,
                 autoScanPending: false,
                 answerRevealed: false,
@@ -4149,6 +4320,8 @@ async function handleRequest(request, env) {
                 }));
                 this.state.cards = await Storage.getAll('cards');
                 this.state.queue = (await Storage.getMeta('queue')) || [];
+                this.state.lastQueueError = (await Storage.getMeta('lastQueueError')) || null;
+                this.state.queueLastChangedAt = (await Storage.getMeta('queueLastChangedAt')) || null;
                 const meta = await Storage.getAll('meta');
                 const last = meta.find(m => m.key === 'lastSync');
                 if (last) this.state.lastSync = last.value;
@@ -4487,7 +4660,8 @@ async function handleRequest(request, env) {
                     toast('Sources choice saved. Syncing...');
                     this.syncNow();
                 };
-                el('#setupFabPos').onclick = () => this.toggleFabSetup();
+                // Mobile FAB position picker (grid-based)
+                this.bindFabPositionPicker();
                 el('#openWorkerHelp').onclick = () => this.openModal('workerHelpModal');
                 el('#closeWorkerHelp').onclick = () => this.closeModal('workerHelpModal');
                 el('#copyWorkerCode').onclick = () => this.copyWorkerCode();
@@ -4679,6 +4853,9 @@ async function handleRequest(request, env) {
                 const ready = online && workerOk && authOk;
 
                 const q2count = (this.state.queue || []).length;
+                const pendingSpan = q2count > 0
+                    ? ` <span class="ml-1 font-mono text-[10px] sm:text-[11px] text-dull-purple/80 dark:text-dull-purple/90">(${q2count})</span>`
+                    : '';
                 const q2ind = el('#q2syncIndicator');
                 const q2val = el('#q2syncCount');
                 if (q2ind && q2val) {
@@ -4686,31 +4863,36 @@ async function handleRequest(request, env) {
                     q2ind.classList.toggle('hidden', q2count === 0);
                 }
 
-                // Update header sync status
-                const headerSyncStatus = el('#headerSyncStatus');
-                const headerSyncCount = el('#headerSyncCount');
-                if (headerSyncStatus && headerSyncCount) {
-                    headerSyncCount.textContent = String(q2count);
-                    headerSyncStatus.classList.toggle('hidden', q2count === 0);
+                // Tooltip/diagnostics for stuck queues (best-effort).
+                const ageMs = this.state.queueLastChangedAt ? (Date.now() - new Date(this.state.queueLastChangedAt).getTime()) : 0;
+                const staleMinutes = ageMs > 0 ? Math.floor(ageMs / 60000) : 0;
+                const errorMsg = this.state.lastQueueError?.message || '';
+                const errorAt = this.state.lastQueueError?.at ? new Date(this.state.lastQueueError.at).toLocaleString() : '';
+                badge.title = '';
+                if (q2count > 0) {
+                    const parts = [];
+                    if (staleMinutes >= 2) parts.push(`Queue unchanged for ~${staleMinutes} min`);
+                    if (errorMsg) parts.push(`Last sync error${errorAt ? ` (${errorAt})` : ''}: ${errorMsg}`);
+                    if (parts.length) badge.title = parts.join('\n');
                 }
 
                 if (!online) {
-                    badge.innerHTML = q2count > 0 ? `Offline <span class="font-mono opacity-60 ml-1">(${q2count} pending)</span>` : 'Offline ready';
+                    badge.innerHTML = `Offline${pendingSpan}`;
                     badge.className = 'px-3 py-1 rounded-full pill text-xs bg-oatmeal border border-oatmeal-dark text-earth-metal';
                     this.updateSyncButtonState();
                     return;
                 }
 
                 if (!hasWorkerUrl) {
-                    badge.innerHTML = 'Online · add worker URL';
+                    badge.innerHTML = `Online · add worker URL${pendingSpan}`;
                 } else if (!workerOk) {
-                    badge.innerHTML = 'Online · verify worker';
+                    badge.innerHTML = `Online · verify worker${pendingSpan}`;
                 } else if (!hasToken) {
-                    badge.innerHTML = 'Online · set token';
+                    badge.innerHTML = `Online · set token${pendingSpan}`;
                 } else if (!authOk) {
-                    badge.innerHTML = 'Online · verify token';
+                    badge.innerHTML = `Online · verify token${pendingSpan}`;
                 } else {
-                    badge.innerHTML = q2count > 0 ? `Online <span class="font-mono opacity-60 ml-1">(${q2count} pending)</span>` : 'Online · Notion ready';
+                    badge.innerHTML = q2count > 0 ? `Online${pendingSpan}` : 'Online · Notion ready';
                 }
                 badge.className = ready
                     ? 'px-3 py-1 rounded-full pill text-xs bg-white-linen border border-oatmeal-dark text-earth-metal'
@@ -5921,6 +6103,7 @@ async function handleRequest(request, env) {
                         return dp !== 0 ? dp : a.idx - b.idx; // stable within the same type
                     })
                     .map(x => x.op);
+                const hadQueue = queue.length > 0;
                 this.state.queue = [];
                 el('#queueCount').textContent = '0';
                 const failed = [];
@@ -5978,6 +6161,13 @@ async function handleRequest(request, env) {
                         }
                     } catch (e) {
                         console.error(`Queue op failed: ${op.type}`, e);
+                        // Store last error so the header badge can explain why the queue may look "stuck".
+                        this.state.lastQueueError = {
+                            at: new Date().toISOString(),
+                            type: op.type,
+                            message: e?.message || String(e)
+                        };
+                        Storage.setMeta('lastQueueError', this.state.lastQueueError).catch(() => { });
                         op.retryCount = (op.retryCount || 0) + 1;
                         if (op.retryCount <= 5) {
                             failed.push(op);
@@ -5991,6 +6181,14 @@ async function handleRequest(request, env) {
                     this.state.queue = [...this.state.queue, ...failed];
                     el('#queueCount').textContent = String(this.state.queue.length);
                     toast(`${failed.length} sync operation(s) failed, will retry`);
+                    this.state.queueLastChangedAt = new Date().toISOString();
+                    Storage.setMeta('queueLastChangedAt', this.state.queueLastChangedAt).catch(() => { });
+                } else if (hadQueue) {
+                    // Queue fully drained: clear the last error to avoid stale "stuck" tooltips.
+                    this.state.lastQueueError = null;
+                    Storage.setMeta('lastQueueError', null).catch(() => { });
+                    this.state.queueLastChangedAt = new Date().toISOString();
+                    Storage.setMeta('queueLastChangedAt', this.state.queueLastChangedAt).catch(() => { });
                 }
                 await Storage.setMeta('queue', this.state.queue);
                 this.renderConnection();
@@ -5999,8 +6197,11 @@ async function handleRequest(request, env) {
                 this.state.queue.push(op);
                 el('#queueCount').textContent = String(this.state.queue.length);
                 Storage.setMeta('queue', this.state.queue).catch(() => { });
+                this.state.queueLastChangedAt = new Date().toISOString();
+                Storage.setMeta('queueLastChangedAt', this.state.queueLastChangedAt).catch(() => { });
                 this.updateSyncButtonState();
                 this.renderConnection();
+                this.requestAutoSyncSoon(1500);
             },
             updateSyncButtonState() {
                 const btn = el('#syncNowBtn');
@@ -6053,6 +6254,17 @@ async function handleRequest(request, env) {
                 this.autoSyncTick(); // kick off once on load
                 this.updateSyncButtonState();
             },
+            requestAutoSyncSoon(delayMs = 1500) {
+                if (this.state.autoSyncSoonTimer) return;
+                if (this.state.syncing) return;
+                if (!navigator.onLine) return;
+                if (!this.isReady()) return;
+                const ms = Math.max(200, Number(delayMs) || 0);
+                this.state.autoSyncSoonTimer = setTimeout(() => {
+                    this.state.autoSyncSoonTimer = null;
+                    this.autoSyncTick();
+                }, ms);
+            },
             async autoSyncTick() {
                 if (this.state.syncing) return;
                 if (!navigator.onLine) {
@@ -6069,8 +6281,12 @@ async function handleRequest(request, env) {
                 const wantsPush = this.state.queue.length > 0;
                 const canPushNow = wantsPush && (this.state.lastPush == null || (now - lastPushMs > MIN_PUSH_INTERVAL_MS));
                 if (!wantsPull && !wantsPush) return;
-                // If we have pending work but are within the push cooldown, do nothing (and avoid updating lastSync).
-                if (wantsPush && !canPushNow) return;
+                // If we have pending work but are within the push cooldown, schedule another tick close to the allowed time.
+                if (wantsPush && !canPushNow) {
+                    const remaining = MIN_PUSH_INTERVAL_MS - (now - lastPushMs);
+                    this.requestAutoSyncSoon(remaining + 100);
+                    return;
+                }
                 this.state.syncing = true;
                 try {
                     let didWork = false;
@@ -6102,7 +6318,7 @@ async function handleRequest(request, env) {
             },
             handleOnline() {
                 this.renderConnection();
-                this.autoSyncTick();
+                this.requestAutoSyncSoon(250);
             },
             selectDeck(id) {
                 const deck = this.deckById(id);
@@ -7477,67 +7693,122 @@ async function handleRequest(request, env) {
             applyFabPosition() {
                 const fab = el('#mobileFabCluster');
                 if (!fab) return;
+                if (this.state.settings.fabEnabled === false) {
+                    fab.style.left = '';
+                    fab.style.bottom = '';
+                    fab.style.top = '';
+                    fab.style.right = '';
+                    fab.style.transform = '';
+                    return;
+                }
                 const pos = this.state.settings.fabPos;
-                if (pos) {
-                    fab.style.bottom = (pos.bottom || 12) + 'px';
-                    fab.style.left = (pos.left || 12) + 'px';
+                // Legacy format: { bottom: px, left: px } anchored to bottom-left of the cluster.
+                if (pos && typeof pos === 'object' && pos.mode !== 'grid' && (pos.bottom != null || pos.left != null)) {
+                    fab.style.transform = 'none';
+                    fab.style.bottom = (pos.bottom ?? 12) + 'px';
+                    fab.style.left = (pos.left ?? 12) + 'px';
                     fab.style.top = 'auto';
                     fab.style.right = 'auto';
+                    return;
                 }
+
+                // Grid format: { mode:'grid', rows, cols, cell } anchored to the *center* of the cluster.
+                const grid = pos && typeof pos === 'object' && pos.mode === 'grid' ? pos : null;
+                const rows = Math.max(2, Math.min(10, Number(grid?.rows) || 6));
+                const cols = Math.max(2, Math.min(10, Number(grid?.cols) || 4));
+                const cellMax = rows * cols;
+                const cell = Math.max(1, Math.min(cellMax, Number(grid?.cell) || 21)); // default near bottom-left
+                const colIdx = (cell - 1) % cols;
+                const rowIdx = Math.floor((cell - 1) / cols);
+
+                const vw = window.innerWidth || document.documentElement.clientWidth || 360;
+                const vh = window.innerHeight || document.documentElement.clientHeight || 640;
+                const centerX = ((colIdx + 0.5) / cols) * vw;
+                const centerY = ((rowIdx + 0.5) / rows) * vh;
+
+                // Clamp a bit away from edges so the cluster stays usable.
+                const pad = 48;
+                const clampedX = Math.min(vw - pad, Math.max(pad, centerX));
+                const clampedY = Math.min(vh - pad, Math.max(pad, centerY));
+
+                fab.style.transform = 'translate(-50%, 50%)';
+                fab.style.left = clampedX + 'px';
+                fab.style.bottom = (vh - clampedY) + 'px';
+                fab.style.top = 'auto';
+                fab.style.right = 'auto';
             },
-            toggleFabSetup() {
-                const active = document.body.classList.toggle('fab-setup-mode');
-                const fab = el('#mobileFabCluster');
-                if (!fab) return;
-                if (active) {
-                    fab.classList.remove('hidden'); // Ensure visible during setup
-                    // Show all buttons inside fab for positioning
-                    fab.querySelectorAll('.fab-btn, .joystick-container, .joystick-side-actions, #joystickContainer').forEach(el => el.classList.remove('hidden'));
-                    el('#fabPreRevealActions')?.classList.remove('hidden');
+            bindFabPositionPicker() {
+                const select = el('#fabPosCellSelect');
+                const ascii = el('#fabGridAscii');
+                const enabledToggle = el('#fabEnabledToggle');
+                const posControls = el('#fabPosControls');
+                if (!select) return;
 
-                    this.closeSettings();
-                    toast('Drag the FAB cluster to your preferred position, then click Save');
-                    const btn = document.createElement('button');
-                    btn.id = 'tempFabSave';
-                    btn.className = 'fixed top-4 left-4 z-[100] px-4 py-2 bg-dull-purple text-white rounded-lg shadow-lg font-semibold';
-                    btn.textContent = 'Save FAB Position';
-                    btn.onclick = () => {
-                        const rect = fab.getBoundingClientRect();
-                        this.state.settings.fabPos = {
-                            bottom: window.innerHeight - rect.bottom,
-                            left: rect.left
-                        };
-                        Storage.setSettings(this.state.settings);
-                        document.body.classList.remove('fab-setup-mode');
-                        btn.remove();
-                        toast('FAB position saved');
-                        fab.onmousedown = fab.ontouchstart = null;
-                        window.onmousemove = window.ontouchmove = null;
-                        window.onmouseup = window.ontouchend = null;
-                        if (this.state.activeTab !== 'study' || !this.state.session) {
-                            fab.classList.add('hidden');
+                const rows = 6;
+                const cols = 4;
+                const total = rows * cols;
+
+                const getSavedCell = () => {
+                    const pos = this.state.settings.fabPos;
+                    if (pos && typeof pos === 'object' && pos.mode === 'grid') {
+                        const c = Number(pos.cell);
+                        if (Number.isFinite(c) && c >= 1 && c <= total) return c;
+                    }
+                    return 21; // near bottom-left by default
+                };
+
+                const renderAscii = (activeCell) => {
+                    if (!ascii) return;
+                    const pad2 = (n) => String(n).padStart(2, '0');
+                    let out = '';
+                    let cell = 1;
+                    for (let r = 0; r < rows; r++) {
+                        const row = [];
+                        for (let c = 0; c < cols; c++) {
+                            const label = pad2(cell);
+                            if (cell === activeCell) {
+                                row.push(`<span class="text-dull-purple font-semibold">${label}</span>`);
+                            } else {
+                                row.push(label);
+                            }
+                            cell++;
                         }
-                    };
-                    document.body.appendChild(btn);
+                        out += row.join(' ') + (r < rows - 1 ? '\n' : '');
+                    }
+                    ascii.innerHTML = out;
+                };
 
-                    let isDragging = false;
-                    let startX, startY;
-                    fab.onmousedown = fab.ontouchstart = (e) => {
-                        isDragging = true;
-                        const pos = e.touches ? e.touches[0] : e;
-                        startX = pos.clientX - fab.offsetLeft;
-                        startY = pos.clientY - fab.offsetTop;
-                        e.preventDefault();
-                    };
-                    window.onmousemove = window.ontouchmove = (e) => {
-                        if (!isDragging) return;
-                        const pos = e.touches ? e.touches[0] : e;
-                        fab.style.left = (pos.clientX - startX) + 'px';
-                        fab.style.top = (pos.clientY - startY) + 'px';
-                        fab.style.bottom = 'auto';
-                        fab.style.right = 'auto';
-                    };
-                    window.onmouseup = window.ontouchend = () => { isDragging = false; };
+                const applyCell = (cell) => {
+                    const n = Math.max(1, Math.min(total, Number(cell) || 1));
+                    this.state.settings.fabPos = { mode: 'grid', rows, cols, cell: n };
+                    Storage.setSettings(this.state.settings);
+                    this.applyFabPosition();
+                    renderAscii(n);
+                    toast('Mobile FAB position saved');
+                };
+
+                const initial = getSavedCell();
+                select.value = String(initial);
+                renderAscii(initial);
+                select.onchange = () => applyCell(select.value);
+
+                const applyEnabled = (enabled) => {
+                    const on = !!enabled;
+                    this.state.settings.fabEnabled = on;
+                    Storage.setSettings(this.state.settings);
+                    if (posControls) posControls.classList.toggle('hidden', !on);
+                    this.applyFabPosition();
+                    this.updateMobileFab();
+                };
+
+                if (enabledToggle) {
+                    const savedEnabled = this.state.settings.fabEnabled;
+                    enabledToggle.checked = savedEnabled !== false;
+                    if (posControls) posControls.classList.toggle('hidden', enabledToggle.checked === false);
+                    enabledToggle.onchange = () => applyEnabled(enabledToggle.checked);
+                } else {
+                    // No toggle in DOM; ensure controls are visible if present.
+                    if (posControls) posControls.classList.remove('hidden');
                 }
             },
             applyFontMode() {
@@ -7850,6 +8121,11 @@ async function handleRequest(request, env) {
 
                 // Hide FAB on large screens
                 if (!isSmallDevice) {
+                    if (cluster) cluster.classList.add('hidden');
+                    return;
+                }
+                // Hard-disable FAB entirely if user turned it off.
+                if (this.state.settings.fabEnabled === false) {
                     if (cluster) cluster.classList.add('hidden');
                     return;
                 }
