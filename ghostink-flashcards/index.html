@@ -29,10 +29,10 @@
     <!-- KaTeX for equations -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/mcstudios/glightbox/dist/js/glightbox.min.js"></script>
 
-    <!-- GLightbox -->
+    <!-- GLightbox (CSS before JS) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/glightbox/dist/css/glightbox.min.css" />
+    <script src="https://cdn.jsdelivr.net/gh/mcstudios/glightbox/dist/js/glightbox.min.js"></script>
 
     <!-- Fonts -->
     <link
@@ -518,28 +518,6 @@
             padding: 0;
         }
 
-        /* Media embeds inside markdown content */
-        .media-embed {
-            margin: 0.75rem 0;
-            padding: 0.6rem;
-            border: 1px solid var(--card-border);
-            border-radius: 14px;
-            background: color-mix(in srgb, var(--surface) 70%, transparent);
-        }
-
-        .media-embed img,
-        .media-embed video {
-            display: block;
-            width: 100%;
-            max-width: 100%;
-            border-radius: 12px;
-        }
-
-        .media-embed video {
-            max-height: 420px;
-            background: #000;
-        }
-
         .media-embed-frame {
             position: relative;
             width: 100%;
@@ -979,7 +957,7 @@
                     <i data-lucide="more-horizontal" class="w-4 h-4"></i>
                 </button>
                 <button id="syncNowBtn"
-                    class="p-1.5 sm:p-2 rounded-full bg-dull-purple text-white hover:bg-dull-purple-hover transition-all transition-all"
+                    class="p-1.5 sm:p-2 rounded-full bg-dull-purple text-white hover:bg-dull-purple-hover transition-all"
                     data-tip="Sync now" title="Sync" aria-label="Sync with Notion">
                     <i data-lucide="refresh-ccw" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
                 </button>
@@ -8087,96 +8065,96 @@ async function handleRequest(request, env) {
                 // Listen for window resize to show/hide FAB cluster
                 window.addEventListener('resize', () => this.updateMobileFab());
             },
-                        initJoystick() {
-                            const isSmallDevice = window.matchMedia('(max-width: 640px)').matches;
-                            const inSession = !!this.state.session;
-                            const fabEnabled = this.state.settings.fabEnabled !== false;
-                            const shouldBeActive = isSmallDevice && inSession && fabEnabled;
-            
-                            if (!shouldBeActive) {
-                                if (this.state.joystickActive) {
-                                    this.cleanupJoystick();
-                                }
-                                return;
-                            }
-            
-                            if (this.state.joystickActive) return;
-            
-                            const joystick = el('#joystick');
-                            if (!joystick) return;
-            
-                            const THRESHOLD = 15;
-                            let startX = 0;
-                            let startY = 0;
-                            let currentDirection = null;
-            
-                            const getDirection = (dx, dy) => {
-                                const absX = Math.abs(dx);
-                                const absY = Math.abs(dy);
-                                if (absX < THRESHOLD && absY < THRESHOLD) return null;
-                                if (absX > absY) {
-                                    return dx > 0 ? 'right' : 'left';
-                                } else {
-                                    return dy > 0 ? 'down' : 'up';
-                                }
-                            };
-            
-                            const updateJoystick = (direction) => {
-                                joystick.classList.remove('up', 'down', 'left', 'right');
-                                joystick.querySelectorAll('.joystick-label').forEach(l => l.classList.remove('active'));
-                                if (direction) {
-                                    joystick.classList.add(direction);
-                                    joystick.querySelector(`.joystick-label-${direction}`)?.classList.add('active');
-                                }
-                            };
-            
-                            const onPointerDown = (e) => {
-                                startX = e.clientX;
-                                startY = e.clientY;
-                                joystick.setPointerCapture(e.pointerId);
-                            };
-            
-                            const onPointerMove = (e) => {
-                                if (!startX && !startY) return;
-                                const dx = e.clientX - startX;
-                                const dy = e.clientY - startY;
-                                currentDirection = getDirection(dx, dy);
-                                updateJoystick(currentDirection);
-                            };
-            
-                            const onPointerUp = (e) => {
-                                if (currentDirection) {
-                                    const ratings = { up: 'Good', down: 'Again', left: 'Hard', right: 'Easy' };
-                                    this.rate(ratings[currentDirection]);
-                                }
-                                startX = 0;
-                                startY = 0;
-                                currentDirection = null;
-                                updateJoystick(null);
-                            };
-            
-                            joystick.addEventListener('pointerdown', onPointerDown);
-                            joystick.addEventListener('pointermove', onPointerMove);
-                            joystick.addEventListener('pointerup', onPointerUp);
-                            joystick.addEventListener('pointercancel', onPointerUp);
-            
-                            this.state.joystickActive = true;
-                            this.state.joystickHandlers = { onPointerDown, onPointerMove, onPointerUp };
-                        },
-                        cleanupJoystick() {
-                            const joystick = el('#joystick');
-                            if (joystick && this.state.joystickHandlers) {
-                                const { onPointerDown, onPointerMove, onPointerUp } = this.state.joystickHandlers;
-                                joystick.removeEventListener('pointerdown', onPointerDown);
-                                joystick.removeEventListener('pointermove', onPointerMove);
-                                joystick.removeEventListener('pointerup', onPointerUp);
-                                joystick.removeEventListener('pointercancel', onPointerUp);
-                                joystick.classList.remove('up', 'down', 'left', 'right');
-                                joystick.querySelectorAll('.joystick-label').forEach(l => l.classList.remove('active'));
-                            }
-                            this.state.joystickActive = false;
-                            this.state.joystickHandlers = null;
-                        },
+            initJoystick() {
+                const isSmallDevice = window.matchMedia('(max-width: 640px)').matches;
+                const inSession = !!this.state.session;
+                const fabEnabled = this.state.settings.fabEnabled !== false;
+                const shouldBeActive = isSmallDevice && inSession && fabEnabled;
+
+                if (!shouldBeActive) {
+                    if (this.state.joystickActive) {
+                        this.cleanupJoystick();
+                    }
+                    return;
+                }
+
+                if (this.state.joystickActive) return;
+
+                const joystick = el('#joystick');
+                if (!joystick) return;
+
+                const THRESHOLD = 15;
+                let startX = 0;
+                let startY = 0;
+                let currentDirection = null;
+
+                const getDirection = (dx, dy) => {
+                    const absX = Math.abs(dx);
+                    const absY = Math.abs(dy);
+                    if (absX < THRESHOLD && absY < THRESHOLD) return null;
+                    if (absX > absY) {
+                        return dx > 0 ? 'right' : 'left';
+                    } else {
+                        return dy > 0 ? 'down' : 'up';
+                    }
+                };
+
+                const updateJoystick = (direction) => {
+                    joystick.classList.remove('up', 'down', 'left', 'right');
+                    joystick.querySelectorAll('.joystick-label').forEach(l => l.classList.remove('active'));
+                    if (direction) {
+                        joystick.classList.add(direction);
+                        joystick.querySelector(`.joystick-label-${direction}`)?.classList.add('active');
+                    }
+                };
+
+                const onPointerDown = (e) => {
+                    startX = e.clientX;
+                    startY = e.clientY;
+                    joystick.setPointerCapture(e.pointerId);
+                };
+
+                const onPointerMove = (e) => {
+                    if (!startX && !startY) return;
+                    const dx = e.clientX - startX;
+                    const dy = e.clientY - startY;
+                    currentDirection = getDirection(dx, dy);
+                    updateJoystick(currentDirection);
+                };
+
+                const onPointerUp = (e) => {
+                    if (currentDirection) {
+                        const ratings = { up: 'Good', down: 'Again', left: 'Hard', right: 'Easy' };
+                        this.rate(ratings[currentDirection]);
+                    }
+                    startX = 0;
+                    startY = 0;
+                    currentDirection = null;
+                    updateJoystick(null);
+                };
+
+                joystick.addEventListener('pointerdown', onPointerDown);
+                joystick.addEventListener('pointermove', onPointerMove);
+                joystick.addEventListener('pointerup', onPointerUp);
+                joystick.addEventListener('pointercancel', onPointerUp);
+
+                this.state.joystickActive = true;
+                this.state.joystickHandlers = { onPointerDown, onPointerMove, onPointerUp };
+            },
+            cleanupJoystick() {
+                const joystick = el('#joystick');
+                if (joystick && this.state.joystickHandlers) {
+                    const { onPointerDown, onPointerMove, onPointerUp } = this.state.joystickHandlers;
+                    joystick.removeEventListener('pointerdown', onPointerDown);
+                    joystick.removeEventListener('pointermove', onPointerMove);
+                    joystick.removeEventListener('pointerup', onPointerUp);
+                    joystick.removeEventListener('pointercancel', onPointerUp);
+                    joystick.classList.remove('up', 'down', 'left', 'right');
+                    joystick.querySelectorAll('.joystick-label').forEach(l => l.classList.remove('active'));
+                }
+                this.state.joystickActive = false;
+                this.state.joystickHandlers = null;
+            },
 
             updateMobileFab() {
                 const isSmallDevice = window.matchMedia('(max-width: 640px)').matches;
