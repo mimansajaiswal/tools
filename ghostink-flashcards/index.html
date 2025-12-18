@@ -175,9 +175,27 @@
             backdrop-filter: blur(12px);
         }
 
+        .media-embed {
+            margin: 0.75rem 0;
+            padding: 0.6rem;
+            border: 1px solid var(--card-border);
+            border-radius: 14px;
+            background: color-mix(in srgb, var(--surface) 70%, transparent);
+            position: relative;
+        }
+
         .media-embed img,
         .media-embed video {
+            display: block;
+            width: 100%;
+            max-width: 100%;
+            border-radius: 12px;
             cursor: zoom-in;
+        }
+
+        .media-embed video {
+            max-height: 420px;
+            background: #000;
         }
 
         /* FAB Setup mode */
@@ -949,6 +967,11 @@
                 <div id="connectionBadge"
                     class="px-2 py-1 rounded-full pill text-[10px] sm:text-xs bg-oatmeal border border-oatmeal-dark text-earth-metal hidden md:block">
                     Offline ready</div>
+                <div id="headerSyncStatus"
+                    class="hidden md:flex items-center gap-1.5 px-2 py-1 rounded-full bg-dull-purple/10 border border-dull-purple/20">
+                    <span class="font-mono text-[9px] font-medium text-dull-purple uppercase tracking-wider"><span
+                            id="headerSyncCount">0</span> items in q2sync to notion</span>
+                </div>
                 <!-- Desktop-only options -->
                 <div class="hidden sm:flex items-center gap-0.5 sm:gap-1 pill-toggle rounded-full px-1 sm:px-2 py-1">
                     <button class="p-1 rounded-full theme-btn" data-theme="light" data-tip="Light theme"
@@ -2799,9 +2822,12 @@ async function handleRequest(request, env) {
              */
             getDueDate(intervalDays) {
                 const date = new Date();
-                // Add days (at least 1 if interval is small but positive)
-                date.setDate(date.getDate() + Math.max(1, Math.round(intervalDays)));
-                // Set to 4:00 AM
+                // If interval is 0, set to 4:00 AM today (due immediately)
+                // If interval > 0, add days and set to 4:00 AM
+                const daysToAdd = Math.round(intervalDays);
+                if (daysToAdd > 0) {
+                    date.setDate(date.getDate() + daysToAdd);
+                }
                 date.setHours(4, 0, 0, 0);
                 return date.toISOString();
             },
@@ -2877,7 +2903,7 @@ async function handleRequest(request, env) {
                 if (grade < 3) {
                     // Failed recall - reset to beginning
                     newReps = 0;
-                    newInterval = 1;
+                    newInterval = 0;
                 } else {
                     // Successful recall
                     newReps = repetitions + 1;
@@ -2963,7 +2989,7 @@ async function handleRequest(request, env) {
         const nextInterval = (w, stability, desiredRetention = DEFAULT_DESIRED_RETENTION) => {
             const rr = clampRetention(desiredRetention);
             const newInterval = stability / getFactor(w) * (Math.pow(rr, 1 / getDecay(w)) - 1);
-            return Math.min(Math.max(Math.round(newInterval), 1), MAX_INTERVAL);
+            return Math.min(Math.max(Math.round(newInterval), 0), MAX_INTERVAL);
         };
         /** Update difficulty after a review (applies mean reversion) */
         const nextDifficulty = (w, d, ratingName) => {
@@ -3744,26 +3770,34 @@ async function handleRequest(request, env) {
                 this.updateMobileFab();
             },
             generateCardQueue(deckIds, includeNonDue = false) {
-                let cards = this.state.cards.filter(c =>
-                    deckIds.includes(c.deckId) &&
+                const selectedDeckIds = (deckIds || []).filter(id => !!this.deckById(id));
+                if (selectedDeckIds.length === 0) return [];
+
+                const candidateCards = this.state.cards.filter(c =>
+                    selectedDeckIds.includes(c.deckId) &&
                     this.passFilters(c) &&
                     (includeNonDue || this.isDue(c))
                 );
 
-                if (cards.length === 0) return [];
+                if (candidateCards.length === 0) return [];
 
-                // Get deck settings from first deck
-                const deck = this.deckById(deckIds[0]);
-                const reviewLimit = deck?.reviewLimit || 50;
-                const newLimit = Math.max(0, deck?.newLimit ?? 20);
                 const isNewCard = (card) => {
                     const lastReview = card.fsrs?.lastReview || card.sm2?.lastReview || null;
                     const hasHistory = Array.isArray(card.reviewHistory) && card.reviewHistory.length > 0;
                     const reps = card.sm2?.repetitions ?? 0;
                     return !lastReview && !hasHistory && reps === 0;
                 };
-                const applyOrder = (arr) => {
-                    if (deck?.orderMode === 'created') {
+
+                const shuffleInPlace = (arr) => {
+                    for (let i = arr.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [arr[i], arr[j]] = [arr[j], arr[i]];
+                    }
+                };
+
+                const applyOrderForDeck = (arr, deck) => {
+                    const mode = deck?.orderMode || 'none';
+                    if (mode === 'created') {
                         arr.sort((a, b) => {
                             const aKey = a.createdAt || a.id || '';
                             const bKey = b.createdAt || b.id || '';
@@ -3771,7 +3805,7 @@ async function handleRequest(request, env) {
                         });
                         return;
                     }
-                    if (deck?.orderMode === 'property') {
+                    if (mode === 'property') {
                         const maxVal = Number.MAX_SAFE_INTEGER;
                         arr.sort((a, b) => {
                             const aOrder = typeof a.order === 'number' ? a.order : maxVal;
@@ -3785,37 +3819,74 @@ async function handleRequest(request, env) {
                         });
                         return;
                     }
-                    // Shuffle by default
-                    for (let i = arr.length - 1; i > 0; i--) {
-                        const j = Math.floor(Math.random() * (i + 1));
-                        [arr[i], arr[j]] = [arr[j], arr[i]];
-                    }
+                    // Default: shuffle within that deck (so mixed sessions can still interleave).
+                    shuffleInPlace(arr);
                 };
 
-                // If practicing all cards (includeNonDue), keep legacy behavior: single cap (reviewLimit).
-                // If due-only, enforce separate review vs new limits.
-                if (includeNonDue) {
-                    applyOrder(cards);
-                    cards = cards.slice(0, reviewLimit);
-                } else {
-                    const newCards = cards.filter(isNewCard);
-                    const reviewCards = cards.filter(c => !isNewCard(c));
-                    applyOrder(reviewCards);
-                    applyOrder(newCards);
-                    cards = [...reviewCards.slice(0, reviewLimit), ...newCards.slice(0, newLimit)];
+                // Interleave multiple per-deck sequences while preserving the relative order within each deck.
+                // This gives "mixed sessions" where deck-specific ordering is respected but decks are blended.
+                const interleavePreservingOrder = (deckToArr) => {
+                    const ids = Object.keys(deckToArr || {}).filter(id => Array.isArray(deckToArr[id]) && deckToArr[id].length > 0);
+                    if (ids.length === 0) return [];
+                    const remaining = new Map(ids.map(id => [id, deckToArr[id].slice()]));
+                    const out = [];
+                    while (true) {
+                        const choices = ids.filter(id => (remaining.get(id) || []).length > 0);
+                        if (choices.length === 0) break;
+                        let total = 0;
+                        for (const id of choices) total += remaining.get(id).length;
+                        let r = Math.random() * total;
+                        let chosen = choices[0];
+                        for (const id of choices) {
+                            r -= remaining.get(id).length;
+                            if (r <= 0) { chosen = id; break; }
+                        }
+                        out.push(remaining.get(chosen).shift());
+                    }
+                    return out;
+                };
+
+                const reviewBuckets = {};
+                const newBuckets = {};
+                const allBuckets = {};
+
+                for (const deckId of selectedDeckIds) {
+                    const deck = this.deckById(deckId);
+                    const deckCards = candidateCards.filter(c => c.deckId === deckId);
+                    if (deckCards.length === 0) continue;
+
+                    if (includeNonDue) {
+                        // Practice mode: cap per deck using reviewLimit, preserve deck-specific ordering.
+                        const limit = Math.max(0, deck?.reviewLimit ?? 50);
+                        const arr = deckCards.slice();
+                        applyOrderForDeck(arr, deck);
+                        allBuckets[deckId] = arr.slice(0, limit);
+                    } else {
+                        // Due-only: cap per deck with separate review vs new limits.
+                        const reviewLimit = Math.max(0, deck?.reviewLimit ?? 50);
+                        const newLimit = Math.max(0, deck?.newLimit ?? 20);
+                        const newCards = deckCards.filter(isNewCard);
+                        const reviewCards = deckCards.filter(c => !isNewCard(c));
+                        applyOrderForDeck(reviewCards, deck);
+                        applyOrderForDeck(newCards, deck);
+                        reviewBuckets[deckId] = reviewCards.slice(0, reviewLimit);
+                        newBuckets[deckId] = newCards.slice(0, newLimit);
+                    }
                 }
 
-                // Pre-compute reverse decisions
-                return cards.map(card => {
+                const chosen = includeNonDue
+                    ? interleavePreservingOrder(allBuckets)
+                    : [...interleavePreservingOrder(reviewBuckets), ...interleavePreservingOrder(newBuckets)];
+
+                // Pre-compute reverse decisions PER-CARD based on its own deck's settings.
+                return chosen.map(card => {
+                    const deck = this.deckById(card.deckId);
                     const typeKey = (card.type || '').toLowerCase();
                     const isCloze = typeKey === 'cloze';
                     const isFrontStyle = typeKey.includes('front');
-                    // Never reverse cloze cards
-                    const shouldReverse = !isCloze && deck?.reverse && isFrontStyle && Math.random() < 0.5;
-                    return {
-                        cardId: card.id,
-                        reversed: shouldReverse
-                    };
+                    // Never reverse cloze cards. Reverse only if the source deck enables it.
+                    const shouldReverse = !isCloze && !!deck?.reverse && isFrontStyle && Math.random() < 0.5;
+                    return { cardId: card.id, reversed: shouldReverse };
                 });
             },
             startSession() {
@@ -4615,6 +4686,14 @@ async function handleRequest(request, env) {
                     q2ind.classList.toggle('hidden', q2count === 0);
                 }
 
+                // Update header sync status
+                const headerSyncStatus = el('#headerSyncStatus');
+                const headerSyncCount = el('#headerSyncCount');
+                if (headerSyncStatus && headerSyncCount) {
+                    headerSyncCount.textContent = String(q2count);
+                    headerSyncStatus.classList.toggle('hidden', q2count === 0);
+                }
+
                 if (!online) {
                     badge.innerHTML = q2count > 0 ? `Offline <span class="font-mono opacity-60 ml-1">(${q2count} pending)</span>` : 'Offline ready';
                     badge.className = 'px-3 py-1 rounded-full pill text-xs bg-oatmeal border border-oatmeal-dark text-earth-metal';
@@ -4700,6 +4779,16 @@ async function handleRequest(request, env) {
 
                 let cards = this.cardsForDeck(this.state.selectedDeck.id);
                 cards = cards.filter(c => this.passFilters(c));
+
+                // Sort by due date (overdue/upcoming first, new cards at end)
+                cards.sort((a, b) => {
+                    const dueA = (a.fsrs?.dueDate || a.sm2?.dueDate);
+                    const dueB = (b.fsrs?.dueDate || b.sm2?.dueDate);
+                    if (!dueA && !dueB) return 0;
+                    if (!dueA) return 1;
+                    if (!dueB) return -1;
+                    return new Date(dueA) - new Date(dueB);
+                });
 
                 // Apply card name search filter
                 const searchQuery = (this.state.cardSearch || '').toLowerCase().trim();
@@ -5436,6 +5525,7 @@ async function handleRequest(request, env) {
                 let resetCount = 0;
                 const total = cards.length;
                 const CHUNK_SIZE = 20;
+                const weights = deck.fsrsWeights || fsrsW;
 
                 for (let i = 0; i < total; i += CHUNK_SIZE) {
                     const chunk = cards.slice(i, i + CHUNK_SIZE);
@@ -5459,8 +5549,8 @@ async function handleRequest(request, env) {
                         };
                         // Reset FSRS parameters with proper initial values
                         card.fsrs = {
-                            stability: initStability(fsrsW, 'good'),
-                            difficulty: initDifficulty(fsrsW, 'good'),
+                            stability: initStability(weights, 'good'),
+                            difficulty: initDifficulty(weights, 'good'),
                             dueDate: null,
                             lastReview: null,
                             lastRating: null,
@@ -5844,6 +5934,13 @@ async function handleRequest(request, env) {
                                 op.payload.notionId = res.id;
                                 op.payload.id = op.payload.id || res.id;
                                 await Storage.put('decks', op.payload);
+                                // If the queue was rehydrated from storage, op.payload may not be the same object
+                                // instance as the deck in memory. Ensure we update in-memory state so subsequent
+                                // card upserts in this same run can resolve `deck.notionId`.
+                                const deckIdx = this.state.decks.findIndex(d => d.id === op.payload.id);
+                                if (deckIdx >= 0) {
+                                    this.state.decks[deckIdx] = { ...this.state.decks[deckIdx], ...op.payload };
+                                }
                             }
                         }
                         if (op.type === 'deck-delete' && op.payload.notionId) await API.archivePage(op.payload.notionId);
@@ -5966,25 +6063,36 @@ async function handleRequest(request, env) {
                 const now = Date.now();
                 const lastPullMs = this.state.lastPull ? new Date(this.state.lastPull).getTime() : 0;
                 const lastPushMs = this.state.lastPush ? new Date(this.state.lastPush).getTime() : 0;
-                const shouldPull = now - lastPullMs > MIN_PULL_INTERVAL_MS;
-                const shouldPush = this.state.queue.length > 0 && (now - lastPushMs > MIN_PUSH_INTERVAL_MS);
-                if (!shouldPull && !shouldPush) return;
+                const wantsPull = now - lastPullMs > MIN_PULL_INTERVAL_MS;
+                // Never pull while there are pending local mutations; a pull can overwrite local edits or
+                // break deck/card references before the queue finishes pushing.
+                const wantsPush = this.state.queue.length > 0;
+                const canPushNow = wantsPush && (this.state.lastPush == null || (now - lastPushMs > MIN_PUSH_INTERVAL_MS));
+                if (!wantsPull && !wantsPush) return;
+                // If we have pending work but are within the push cooldown, do nothing (and avoid updating lastSync).
+                if (wantsPush && !canPushNow) return;
                 this.state.syncing = true;
                 try {
+                    let didWork = false;
                     // Always push first to avoid overwriting local changes with stale Notion data
-                    if (shouldPush) {
+                    if (canPushNow) {
                         await this.pushQueue();
                         this.state.lastPush = new Date().toISOString();
                         await Storage.put('meta', { key: 'lastPush', value: this.state.lastPush });
+                        didWork = true;
                     }
-                    if (shouldPull) {
+                    // Only pull when the queue is empty after any push attempt.
+                    if (wantsPull && this.state.queue.length === 0) {
                         await this.pullFromNotion();
                         this.state.lastPull = new Date().toISOString();
                         await Storage.put('meta', { key: 'lastPull', value: this.state.lastPull });
+                        didWork = true;
                     }
-                    this.state.lastSync = new Date().toISOString();
-                    await Storage.put('meta', { key: 'lastSync', value: this.state.lastSync });
-                    this.renderConnection();
+                    if (didWork) {
+                        this.state.lastSync = new Date().toISOString();
+                        await Storage.put('meta', { key: 'lastSync', value: this.state.lastSync });
+                        this.renderConnection();
+                    }
                 } catch (e) {
                     console.error('Auto sync failed', e);
                 } finally {
@@ -6136,6 +6244,16 @@ async function handleRequest(request, env) {
                     pool = pool.filter(c => f.studyDecks.includes(c.deckId));
                 }
                 if (pool.length === 0) return null;
+
+                // Sort by due date (most overdue first, new cards at the end)
+                pool.sort((a, b) => {
+                    const dueA = (a.fsrs?.dueDate || a.sm2?.dueDate);
+                    const dueB = (b.fsrs?.dueDate || b.sm2?.dueDate);
+                    if (!dueA && !dueB) return 0;
+                    if (!dueA) return 1;
+                    if (!dueB) return -1;
+                    return new Date(dueA) - new Date(dueB);
+                });
 
                 return pool[0] || null;
             },
@@ -6819,8 +6937,8 @@ async function handleRequest(request, env) {
                 const aiKey = el('#aiKey').value.trim();
                 this.state.settings.aiProvider = aiProvider;
                 this.state.settings.aiModel = aiModel;
-                if (aiKey) this.state.settings.aiKey = aiKey;
-                const aiKeyChanged = !!(aiKey && aiKey !== prevAiKey);
+                this.state.settings.aiKey = aiKey;
+                const aiKeyChanged = !!(aiKey !== prevAiKey);
                 const aiChanged = (aiProvider || '') !== prevAiProvider || (aiModel || '') !== prevAiModel || aiKeyChanged;
                 if (!aiProvider || aiChanged) {
                     this.state.settings.aiVerified = false;
@@ -6836,9 +6954,9 @@ async function handleRequest(request, env) {
                 const sttPrompt = el('#sttPrompt').value.trim();
                 this.state.settings.sttProvider = sttProvider;
                 this.state.settings.sttModel = sttModel;
-                if (sttKey) this.state.settings.sttKey = sttKey;
+                this.state.settings.sttKey = sttKey;
                 this.state.settings.sttPrompt = sttPrompt;
-                const sttKeyChanged = !!(sttKey && sttKey !== prevSttKey);
+                const sttKeyChanged = !!(sttKey !== prevSttKey);
                 const sttChanged = (sttProvider || '') !== (prevSttProvider || '') || (sttModel || '') !== prevSttModel || sttKeyChanged;
                 if (!sttProvider) {
                     this.state.settings.sttVerified = false;
@@ -7104,8 +7222,8 @@ async function handleRequest(request, env) {
                     for (const d of dbs) {
                         const id = d.id;
                         const title = d.title?.[0]?.plain_text || id;
-                        if (await this.validateDb(id, 'deck')) deckOptions.push({ id, title });
-                        if (await this.validateDb(id, 'card')) cardOptions.push({ id, title });
+                        if (await this.validateDb(d, 'deck')) deckOptions.push({ id, title });
+                        if (await this.validateDb(d, 'card')) cardOptions.push({ id, title });
                     }
                     this.state.sourcesCache = { deckOptions, cardOptions };
                     this.state.settings.sourcesCache = { deckOptions, cardOptions };
@@ -7241,9 +7359,9 @@ async function handleRequest(request, env) {
                 this.updateSettingsButtons();
                 this.renderConnection();
             },
-            async validateDb(dbId, type) {
+            async validateDb(dbOrId, type) {
                 try {
-                    const meta = await API.getDatabase(dbId);
+                    const meta = typeof dbOrId === 'string' ? await API.getDatabase(dbOrId) : dbOrId;
                     const props = meta?.properties || {};
                     const has = (name, kind) => props[name]?.type === kind;
                     if (type === 'deck') {
@@ -7918,7 +8036,12 @@ async function handleRequest(request, env) {
                                 transcript = await this.transcribeWithGemini(audioBlob, model, key, prompt);
                             }
 
-                            el('#aiAnswer').value = transcript;
+                            if (transcript) {
+                                const current = el('#aiAnswer').value.trim();
+                                el('#aiAnswer').value = current ? `${current} ${transcript}` : transcript;
+                                // Trigger input event to update Send button state
+                                el('#aiAnswer').dispatchEvent(new Event('input'));
+                            }
                             el('#aiFeedback').innerHTML = this.state.userStoppedMic ? 'Captured. Now send.' : '';
                             this.mediaRecorder = null;
                             this.state.userStoppedMic = false;
