@@ -75,8 +75,14 @@ self.addEventListener('fetch', (event) => {
             cache.put(request, networkResponse.clone());
           }
           return networkResponse;
-        }).catch(() => {
-          // Network failed; doing nothing (cache already served or will handle fallback)
+        }).catch(async () => {
+          // Network failed. If there's no cachedResponse, return an offline fallback Response.
+          if (cachedResponse) return cachedResponse;
+          // For navigations/documents, fall back to cached shell so the app can boot offline.
+          if (request.mode === 'navigate' || request.destination === 'document') {
+            return (await cache.match('./index.html')) || (await cache.match('./')) || Response.error();
+          }
+          return new Response('', { status: 503, statusText: 'Offline' });
         });
 
         // Return cached response immediately if found, else wait for network

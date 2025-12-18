@@ -1992,6 +1992,10 @@ async function handleRequest(request, env) {
 
         const el = (sel) => document.querySelector(sel);
         const isMac = /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+        const encodeDataAttr = (value) => encodeURIComponent((value ?? '').toString());
+        const decodeDataAttr = (value) => {
+            try { return decodeURIComponent((value ?? '').toString()); } catch { return (value ?? '').toString(); }
+        };
         const escapeHtml = (str) => {
             if (!str) return '';
             return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -2706,7 +2710,12 @@ async function handleRequest(request, env) {
              * @param {string|null} notionDeckId - Notion page ID for deck relation
              * @returns {Object} Notion properties object for API
              */
-            cardProps(card, notionDeckId = null) {
+            cardProps(card, deck = null) {
+                const notionDeckId = deck?.notionId || deck?.id || null;
+                const deckAlgorithm = deck?.algorithm || 'SM-2';
+                const dueDate = (deckAlgorithm === 'FSRS' ? card.fsrs?.dueDate : card.sm2?.dueDate) || card.fsrs?.dueDate || card.sm2?.dueDate || null;
+                const lastReview = (deckAlgorithm === 'FSRS' ? card.fsrs?.lastReview : card.sm2?.lastReview) || card.fsrs?.lastReview || card.sm2?.lastReview || null;
+                const lastRating = (deckAlgorithm === 'FSRS' ? card.fsrs?.lastRating : card.sm2?.lastRating) || card.fsrs?.lastRating || card.sm2?.lastRating || null;
                 // Helper to get rich_text: use original if content unchanged, else convert markdown
                 const getRichText = (field, content, originalRichText) => {
                     // If we have original rich_text and content hasn't been edited in app
@@ -2736,12 +2745,12 @@ async function handleRequest(request, env) {
                     'Difficulty': { number: card.fsrs?.difficulty ?? 4 },
                     'Stability': { number: card.fsrs?.stability ?? 1 },
                     'Retrievability': { number: card.fsrs?.retrievability ?? 0.9 },
-                    'Last Rating': card.fsrs?.lastRating ? { select: { name: displayRating(card.fsrs.lastRating) } } : { select: null },
-                    'Last Review': { date: card.fsrs?.lastReview ? { start: card.fsrs.lastReview } : null },
-                    'Due Date': { date: card.fsrs?.dueDate ? { start: card.fsrs.dueDate } : null },
+                    'Last Rating': lastRating ? { select: { name: displayRating(lastRating) } } : { select: null },
+                    'Last Review': { date: lastReview ? { start: lastReview } : null },
+                    'Due Date': { date: dueDate ? { start: dueDate } : null },
                     'Interval / Box Level': { number: card.sm2?.interval ?? 1 },
                     'Ease Factor': { number: card.sm2?.easeFactor ?? 2.5 },
-                    'Updated In-App': { checkbox: true },
+                    'Updated In-App': { checkbox: false },
                     'Review History': { rich_text: toRichTextChunks(compactReviewHistory(card.reviewHistory || [])) },
                     'Anki GUID': card.ankiGuid ? { rich_text: [{ type: 'text', text: { content: card.ankiGuid } }] } : { rich_text: [] },
                     'Anki Note Type': card.ankiNoteType ? { select: { name: card.ankiNoteType } } : { select: null },
@@ -2788,7 +2797,8 @@ async function handleRequest(request, env) {
                 lastFocusedElement: null,  // For modal focus management
                 tagOptions: [],
                 tagSelection: [],
-                userStoppedMic: false
+                userStoppedMic: false,
+                activeAudioStream: null
             },
             async init() {
                 showLoading('Preparing app...', 'Loading your decks and cards.');
@@ -2841,10 +2851,6 @@ async function handleRequest(request, env) {
                         Storage.setSettings(this.state.settings);
                         return true;
                     })
-                    .catch(err => {
-                        this.state.micPermissionPromise = null;
-                        throw err;
-                    })
                     .finally(() => {
                         this.state.micPermissionPromise = null;
                     });
@@ -2859,9 +2865,22 @@ async function handleRequest(request, env) {
                 return !!this.state.sttProvider;
             },
             stopMicActivity(hideFeedback = false) {
+                const hadActive = this.isMicActive() || !!this.state.activeAudioStream;
+                try {
+                    if (this.state.activeAudioStream) {
+                        this.state.activeAudioStream.getTracks().forEach(t => t.stop());
+                        this.state.activeAudioStream = null;
+                    }
+                } catch (_) { this.state.activeAudioStream = null; }
                 try {
                     if (this.state.currentRecorder && typeof this.state.currentRecorder.stop === 'function') {
-                        this.state.currentRecorder.stop();
+                        // SpeechRecognition can keep the system mic indicator on until it fully ends;
+                        // abort() is the most reliable way to release immediately.
+                        if (typeof this.state.currentRecorder.abort === 'function') {
+                            try { this.state.currentRecorder.abort(); } catch (_) { }
+                        } else {
+                            this.state.currentRecorder.stop();
+                        }
                     }
                 } catch (_) { }
                 try {
@@ -2871,7 +2890,9 @@ async function handleRequest(request, env) {
                 } catch (_) { }
                 this.state.currentRecorder = null;
                 this.mediaRecorder = null;
-                this.state.userStoppedMic = false;
+                // Preserve `userStoppedMic` while async onend/onstop handlers run (cloud STT uses it).
+                // If nothing was active, clear it to avoid stale UI state.
+                if (!hadActive) this.state.userStoppedMic = false;
                 this.state.activeMicButton = null;
                 if (hideFeedback) {
                     const feedback = el('#aiFeedback');
@@ -2888,6 +2909,25 @@ async function handleRequest(request, env) {
             },
             isMicActive() {
                 return !!this.state.currentRecorder || (this.mediaRecorder && this.mediaRecorder.state === 'recording');
+            },
+            toggleMicRecording() {
+                const isAiMode = el('#revisionMode')?.value === 'ai';
+                if (!isAiMode || !this.isSttEnabled() || this.state.answerRevealed || this.state.aiLocked) return;
+
+                if (this.isMicActive()) {
+                    const feedback = el('#aiFeedback');
+                    if (feedback) {
+                        const txt = (feedback.textContent || '').toLowerCase();
+                        if (txt.includes('listening') || txt.includes('recording')) {
+                            feedback.classList.remove('hidden');
+                            feedback.innerHTML = 'Captured. Now send.';
+                        }
+                    }
+                    this.stopMicActivity(false);
+                    return;
+                }
+
+                this.recordAnswer();
             },
             setMicVisualState(listening) {
                 const micBtn = el('#aiRecord');
@@ -3511,11 +3551,7 @@ async function handleRequest(request, env) {
                     // Mic toggle via Cmd/Ctrl+E even when focused in textarea
                     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'e' && isAiMode && this.isSttEnabled() && !this.state.answerRevealed && !this.state.aiLocked) {
                         e.preventDefault();
-                        if (this.state.currentRecorder) {
-                            this.state.currentRecorder.stop();
-                        } else {
-                            this.recordAnswer();
-                        }
+                        this.toggleMicRecording();
                         return;
                     }
 
@@ -3541,11 +3577,7 @@ async function handleRequest(request, env) {
                     // Toggle Mic with Alt/Option+M in AI mode
                     if (e.altKey && e.key.toLowerCase() === 'm' && el('#revisionMode').value === 'ai' && this.isSttEnabled() && !this.state.answerRevealed && !this.state.aiLocked) {
                         e.preventDefault();
-                        if (this.state.currentRecorder) {
-                            this.state.currentRecorder.stop();
-                        } else {
-                            this.recordAnswer();
-                        }
+                        this.toggleMicRecording();
                     }
                     if (this.state.answerRevealed) {
                         const ratings = { '1': 'Again', '2': 'Hard', '3': 'Good', '4': 'Easy' };
@@ -3644,7 +3676,7 @@ async function handleRequest(request, env) {
                     const isAiMode = el('#revisionMode').value === 'ai';
                     if (!isAiMode || !this.isSttEnabled() || this.state.answerRevealed || this.state.aiLocked) return;
                     this.state.activeMicButton = 'inline';
-                    this.recordAnswer();
+                    this.toggleMicRecording();
                 };
                 const fabMic = el('#fabMic');
                 const fabSend = el('#fabSend');
@@ -3652,7 +3684,7 @@ async function handleRequest(request, env) {
                     const isAiMode = el('#revisionMode').value === 'ai';
                     if (!isAiMode || !this.isSttEnabled() || this.state.answerRevealed || this.state.aiLocked) return;
                     this.state.activeMicButton = 'fab';
-                    this.recordAnswer();
+                    this.toggleMicRecording();
                 };
                 if (fabSend) fabSend.onclick = () => { if (!this.state.aiLocked) this.submitToAI(); };
                 el('#confirmDelete').onclick = () => this.performDelete();
@@ -3909,6 +3941,10 @@ async function handleRequest(request, env) {
                 this.updateCounts();
             },
             renderStudy() {
+                // Ensure we never keep the mic open across cards/screens.
+                if (this.isMicActive() || this.state.activeAudioStream) {
+                    this.stopMicActivity(true);
+                }
                 // Update session UI controls
                 const session = this.state.session;
                 const revisionSelect = el('#revisionMode');
@@ -4075,7 +4111,7 @@ async function handleRequest(request, env) {
                 dropdown.innerHTML = options.length
                     ? options.map(name => {
                         const isSelected = selected.has(name);
-                        return `<button class="tag-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 ${isSelected ? 'bg-dull-purple/10 border-lime-200' : 'hover:bg-oatmeal/60'}" data-tag="${escapeHtml(name)}">
+                        return `<button class="tag-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 ${isSelected ? 'bg-dull-purple/10 border-lime-200' : 'hover:bg-oatmeal/60'}" data-tag="${encodeDataAttr(name)}">
                             <span class="flex-1">${escapeHtml(name)}</span>
                             ${isSelected ? '<span class="text-[11px] text-dull-purple">Selected</span>' : ''}
                         </button>`;
@@ -4084,7 +4120,7 @@ async function handleRequest(request, env) {
 
                 dropdown.querySelectorAll('.tag-option').forEach(btn => {
                     btn.onclick = () => {
-                        const tag = btn.dataset.tag;
+                        const tag = decodeDataAttr(btn.dataset.tag);
                         if (selected.has(tag)) selected.delete(tag); else selected.add(tag);
                         this.state.filters.tags = Array.from(selected);
                         this.renderTagFilter();
@@ -4097,14 +4133,14 @@ async function handleRequest(request, env) {
                     ? Array.from(selected).map(tag => `
                         <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-oatmeal text-earth-metal text-xs border border-oatmeal-dark/60">
                             ${escapeHtml(tag)}
-                            <button class="remove-tag text-earth-metal/70" data-tag="${escapeHtml(tag)}">&times;</button>
+                            <button class="remove-tag text-earth-metal/70" data-tag="${encodeDataAttr(tag)}">&times;</button>
                         </span>
                     `).join('')
                     : '<span class="text-earth-metal/50 dark:text-white/60 text-xs">All tags included</span>';
 
                 selectedWrap.querySelectorAll('.remove-tag').forEach(btn => {
                     btn.onclick = () => {
-                        const tag = btn.dataset.tag;
+                        const tag = decodeDataAttr(btn.dataset.tag);
                         this.state.filters.tags = this.state.filters.tags.filter(t => t !== tag);
                         this.renderTagFilter();
                         this.renderCards();
@@ -4142,10 +4178,10 @@ async function handleRequest(request, env) {
                 const canAdd = query && !allOptions.some(opt => opt.name.toLowerCase() === query);
 
                 dropdown.innerHTML = `
-                    ${canAdd ? `<button class="tag-add-option w-full text-left px-3 py-2 text-sm text-dull-purple hover:bg-dull-purple/10" data-add="${escapeHtml(input.value.trim())}">+ Add "${escapeHtml(input.value.trim())}"</button>` : ''}
+                    ${canAdd ? `<button class="tag-add-option w-full text-left px-3 py-2 text-sm text-dull-purple hover:bg-dull-purple/10" data-add="${encodeDataAttr(input.value.trim())}">+ Add "${escapeHtml(input.value.trim())}"</button>` : ''}
                     ${options.map(opt => {
                     const active = selected.has(opt.name);
-                    return `<button class="tag-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 ${active ? 'bg-dull-purple/10 border-lime-200' : 'hover:bg-oatmeal/60'}" data-tag="${escapeHtml(opt.name)}">
+                    return `<button class="tag-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 ${active ? 'bg-dull-purple/10 border-lime-200' : 'hover:bg-oatmeal/60'}" data-tag="${encodeDataAttr(opt.name)}">
                             <span class="flex-1">${escapeHtml(opt.name)}</span>
                             ${active ? '<span class="text-[11px] text-dull-purple">Selected</span>' : ''}
                         </button>`;
@@ -4154,7 +4190,7 @@ async function handleRequest(request, env) {
 
                 dropdown.querySelectorAll('.tag-option').forEach(btn => {
                     btn.onclick = () => {
-                        const tag = btn.dataset.tag;
+                        const tag = decodeDataAttr(btn.dataset.tag);
                         if (selected.has(tag)) selected.delete(tag); else selected.add(tag);
                         this.state.tagSelection = Array.from(selected);
                         this.renderCardTagSelectors();
@@ -4162,7 +4198,7 @@ async function handleRequest(request, env) {
                 });
                 dropdown.querySelectorAll('.tag-add-option').forEach(btn => {
                     btn.onclick = () => {
-                        const name = btn.dataset.add;
+                        const name = decodeDataAttr(btn.dataset.add);
                         this.addTagByName(name, { toSelection: true });
                         if (input) input.value = '';
                     };
@@ -4172,14 +4208,14 @@ async function handleRequest(request, env) {
                     ? Array.from(selected).map(tag => `
                         <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-oatmeal text-earth-metal text-xs border border-oatmeal-dark/60">
                             ${escapeHtml(tag)}
-                            <button class="remove-tag text-earth-metal/70" data-tag="${escapeHtml(tag)}">&times;</button>
+                            <button class="remove-tag text-earth-metal/70" data-tag="${encodeDataAttr(tag)}">&times;</button>
                         </span>
                     `).join('')
                     : '<span class="text-earth-metal/50 dark:text-white/60 text-xs">No tags selected</span>';
 
                 selectedWrap.querySelectorAll('.remove-tag').forEach(btn => {
                     btn.onclick = () => {
-                        const tag = btn.dataset.tag;
+                        const tag = decodeDataAttr(btn.dataset.tag);
                         this.state.tagSelection = this.state.tagSelection.filter(t => t !== tag);
                         this.renderCardTagSelectors();
                     };
@@ -4738,7 +4774,7 @@ async function handleRequest(request, env) {
                         if (op.type === 'deck-delete' && op.payload.notionId) await API.archivePage(op.payload.notionId);
                         if (op.type === 'card-upsert') {
                             const deck = this.deckById(op.payload.deckId);
-                            const props = NotionMapper.cardProps(op.payload, deck?.notionId || deck?.id || null);
+                            const props = NotionMapper.cardProps(op.payload, deck);
                             if (op.payload.notionId) await API.updatePage(op.payload.notionId, props);
                             else {
                                 const res = await API.createPage(cardSource, props);
@@ -4972,8 +5008,11 @@ async function handleRequest(request, env) {
             passFilters(card) {
                 const f = this.state.filters;
                 const now = new Date();
-                if (f.again && card.fsrs?.lastRating !== 'again') return false;
-                if (f.hard && !['again', 'hard'].includes(card.fsrs?.lastRating)) return false;
+                const deck = this.deckById(card.deckId);
+                const alg = deck?.algorithm || 'SM-2';
+                const lastRating = (alg === 'FSRS' ? card.fsrs?.lastRating : card.sm2?.lastRating) || card.fsrs?.lastRating || card.sm2?.lastRating;
+                if (f.again && lastRating !== 'again') return false;
+                if (f.hard && !['again', 'hard'].includes(lastRating)) return false;
                 if (f.addedToday && card.createdAt && new Date(card.createdAt).toDateString() !== now.toDateString()) return false;
                 if (f.tags.length && !f.tags.some(t => card.tags.some(ct => ct.name === t))) return false;
                 if (f.suspended && card.suspended) return false;
@@ -4981,7 +5020,11 @@ async function handleRequest(request, env) {
                 return true;
             },
             isDue(card) {
-                const due = card.fsrs?.dueDate || card.sm2?.dueDate;
+                const deck = this.deckById(card.deckId);
+                const alg = deck?.algorithm || 'SM-2';
+                const duePrimary = alg === 'FSRS' ? card.fsrs?.dueDate : card.sm2?.dueDate;
+                const dueFallback = alg === 'FSRS' ? card.sm2?.dueDate : card.fsrs?.dueDate;
+                const due = duePrimary || dueFallback;
                 return due ? new Date(due) <= new Date() : true;
             },
             pickCard() {
@@ -5085,24 +5128,26 @@ async function handleRequest(request, env) {
                     toast(mode === 'ai' ? 'Judge the answer first' : 'Reveal the answer first');
                     return;
                 }
-                if (el('#revisionMode').value === 'ai' && !this.state.aiKey) {
+                if (el('#revisionMode').value === 'ai' && !this.state.settings.aiKey) {
                     toast('Add an AI key or switch to Reveal mode');
                     return;
                 }
+                const ratingKey = normalizeRating(rating);
+                const ratingLabel = displayRating(ratingKey) || 'Good';
                 // Save previous state for undo
                 const previousState = {
                     cardId: card.id,
                     sm2: JSON.parse(JSON.stringify(card.sm2 || {})),
                     fsrs: JSON.parse(JSON.stringify(card.fsrs || {})),
                     history: [...card.reviewHistory],
-                    rating: rating,
+                    rating: ratingLabel,
                     sessionIndex: this.state.session ? this.state.session.currentIndex : null,
                     ratingCounts: this.state.session?.ratingCounts ? { ...this.state.session.ratingCounts } : null
                 };
                 const previewMode = this.state.session?.noScheduleChanges && (this.state.session.settings?.cardSelectionMode === 'all' || this.state.session.studyingNonDue);
                 // Track rating in session statistics
                 if (this.state.session && this.state.session.ratingCounts) {
-                    this.state.session.ratingCounts[rating]++;
+                    this.state.session.ratingCounts[ratingLabel] = (this.state.session.ratingCounts[ratingLabel] || 0) + 1;
                 }
                 if (previewMode) {
                     this.state.lastRating = null;
@@ -5113,11 +5158,15 @@ async function handleRequest(request, env) {
                 }
                 const deck = this.deckById(card.deckId);
                 const alg = deck?.algorithm || 'SM-2';
-                if (alg === 'FSRS') card.fsrs = SRS.fsrs(card, rating);
-                else card.sm2 = SRS.sm2(card, rating);  // SM-2 is default
+                if (alg === 'FSRS') card.fsrs = SRS.fsrs(card, ratingKey);
+                else card.sm2 = SRS.sm2(card, ratingKey);  // SM-2 is default
                 card.fsrs = card.fsrs || {};
-                card.fsrs.lastRating = normalizeRating(rating);
-                card.reviewHistory.push({ rating, at: new Date().toISOString() });
+                if (alg === 'FSRS') card.fsrs.lastRating = ratingKey;
+                else {
+                    card.sm2 = card.sm2 || {};
+                    card.sm2.lastRating = ratingKey;
+                }
+                card.reviewHistory.push({ rating: ratingKey, at: new Date().toISOString() });
                 await Storage.put('cards', card);
                 this.queueOp({ type: 'card-upsert', payload: card });
                 // Show undo toast
@@ -5600,6 +5649,9 @@ async function handleRequest(request, env) {
                 this.state.settings.aiProvider = aiProvider;
                 this.state.settings.aiModel = aiModel;
                 if (aiKey) this.state.settings.aiKey = aiKey;
+                this.state.aiProvider = aiProvider;
+                this.state.aiModel = aiModel;
+                if (aiKey) this.state.aiKey = aiKey;
                 // Save STT settings
                 const prevSttProvider = this.state.sttProvider;
                 const sttProvider = el('#sttProvider').value;
@@ -5780,14 +5832,12 @@ async function handleRequest(request, env) {
                     this.state.settings.sttKey = '';
                     this.state.settings.sttPrompt = prompt;
                     this.state.settings.sttVerified = true;
-                    this.state.settings.sttPermissionWarmed = true;
                     Storage.setSettings(this.state.settings);
                     this.state.sttProvider = 'browser';
                     this.state.sttModel = '';
                     this.state.sttKey = '';
                     this.state.sttPrompt = prompt;
                     this.state.sttVerified = true;
-                    this.warmMicStreamForAi();
                     this.applySttChangeEffects(false);
                     if (inAiMode) el('#aiControls')?.classList.remove('hidden');
                     toast('Using browser speech recognition');
@@ -5827,8 +5877,6 @@ async function handleRequest(request, env) {
                         this.state.sttKey = key;
                         this.state.sttPrompt = prompt;
                         this.state.sttVerified = true;
-                        this.warmMicStreamForAi();
-                        this.state.settings.sttPermissionWarmed = true;
                         this.applySttChangeEffects(false);
                         if (inAiMode) el('#aiControls')?.classList.remove('hidden');
                         toast('STT settings verified');
@@ -6184,16 +6232,37 @@ async function handleRequest(request, env) {
                 this.state.settings.sttModel = model;
                 this.state.settings.sttPrompt = prompt;
                 if (key) this.state.settings.sttKey = key;
-                // If provider changed, require re-verify to avoid using stale creds with a new endpoint.
-                if (provider !== prevProvider) this.state.settings.sttVerified = false;
-                if (!provider) this.state.settings.sttPermissionWarmed = false;
+                // Browser STT doesn't require verification. Disabled clears verification.
+                if (!provider) {
+                    this.state.settings.sttVerified = false;
+                    this.state.settings.sttPermissionWarmed = false;
+                    this.state.settings.sttModel = '';
+                    this.state.settings.sttKey = '';
+                } else if (provider === 'browser') {
+                    this.state.settings.sttVerified = true;
+                    this.state.settings.sttModel = '';
+                    this.state.settings.sttKey = '';
+                } else if (provider !== prevProvider) {
+                    // If provider changed, require re-verify to avoid using stale creds with a new endpoint.
+                    this.state.settings.sttVerified = false;
+                }
 
                 this.state.sttProvider = provider;
                 this.state.sttModel = model;
                 this.state.sttPrompt = prompt;
                 if (key) this.state.sttKey = key;
-                if (provider !== prevProvider) this.state.sttVerified = false;
-                if (!provider) this.state.settings.sttPermissionWarmed = false;
+                if (!provider) {
+                    this.state.sttVerified = false;
+                    this.state.sttModel = '';
+                    this.state.sttKey = '';
+                    this.stopMicActivity(true);
+                } else if (provider === 'browser') {
+                    this.state.sttVerified = true;
+                    this.state.sttModel = '';
+                    this.state.sttKey = '';
+                } else if (provider !== prevProvider) {
+                    this.state.sttVerified = false;
+                }
 
                 Storage.setSettings(this.state.settings);
                 this.applySttChangeEffects(!provider);
@@ -6271,12 +6340,7 @@ async function handleRequest(request, env) {
                     return;
                 }
                 // Stop any ongoing mic recording before sending
-                if (this.state.currentRecorder) {
-                    this.state.currentRecorder.stop();
-                }
-                if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
-                    this.mediaRecorder.stop();
-                }
+                if (this.isMicActive()) this.stopMicActivity(true);
                 const ans = el('#aiAnswer').value.trim();
                 if (!ans) { toast('Enter or record an answer first'); return; }
                 if (!navigator.onLine) {
@@ -6487,11 +6551,6 @@ async function handleRequest(request, env) {
                     toast('Already judged. Go to the next card.');
                     return;
                 }
-                if (this.state.currentRecorder) {
-                    this.state.userStoppedMic = true;
-                    this.state.currentRecorder.stop();
-                    return;
-                }
                 this.state.userStoppedMic = false;
                 if (!this.state.activeMicButton) this.state.activeMicButton = 'inline';
                 const provider = this.state.sttProvider;
@@ -6590,6 +6649,7 @@ async function handleRequest(request, env) {
                 try {
                     const stream = await this.getMicStream();
                     if (!stream) throw new Error('Microphone unavailable');
+                    this.state.activeAudioStream = stream;
                     const chunks = [];
                     this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
 
@@ -6598,6 +6658,7 @@ async function handleRequest(request, env) {
                     this.mediaRecorder.onstop = async () => {
                         // Stop the mic as soon as recording ends so the browser doesn't show "mic in use".
                         try { stream.getTracks().forEach(t => t.stop()); } catch (_) { }
+                        if (this.state.activeAudioStream === stream) this.state.activeAudioStream = null;
                         el('#aiFeedback').innerHTML = 'Transcribing...';
                         this.state.currentRecorder = null;
                         this.setAiControlsLocked(this.state.aiLocked);
@@ -6628,6 +6689,7 @@ async function handleRequest(request, env) {
 
                     this.mediaRecorder.onerror = () => {
                         try { stream.getTracks().forEach(t => t.stop()); } catch (_) { }
+                        if (this.state.activeAudioStream === stream) this.state.activeAudioStream = null;
                         el('#aiFeedback').innerHTML = '';
                         toast('Recording error');
                         this.state.currentRecorder = null;
@@ -6647,11 +6709,12 @@ async function handleRequest(request, env) {
                     };
                     this.setAiControlsLocked(false);
                     this.mediaRecorder.start();
+                    const activeRecorder = this.mediaRecorder;
 
                     // Auto-stop after 60 seconds
                     setTimeout(() => {
-                        if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
-                            this.mediaRecorder.stop();
+                        if (this.mediaRecorder === activeRecorder && activeRecorder && activeRecorder.state === 'recording') {
+                            activeRecorder.stop();
                         }
                     }, 60000);
 
