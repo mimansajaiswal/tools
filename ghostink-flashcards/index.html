@@ -387,15 +387,137 @@
         /* Link styling in card content and notes */
         #cardFront a,
         #cardBack a,
-        #notesPreview a {
+        #notesPreview a,
+        #aiFeedback a,
+        #blockNotePreview a {
             color: var(--dull-purple);
             text-decoration: underline;
         }
 
         #cardFront a:hover,
         #cardBack a:hover,
-        #notesPreview a:hover {
+        #notesPreview a:hover,
+        #aiFeedback a:hover,
+        #blockNotePreview a:hover {
             opacity: 0.8;
+        }
+
+        /* Minimal markdown typography (works without Tailwind Typography plugin) */
+        .md-content :is(p, ul, ol, pre, blockquote, table) {
+            margin: 0.65rem 0;
+        }
+
+        .md-content :is(h1, h2, h3) {
+            margin: 0.9rem 0 0.5rem;
+            font-family: var(--font-display, "Fraunces"), serif;
+            color: var(--text-main);
+            line-height: 1.15;
+        }
+
+        .md-content h1 {
+            font-size: 1.25rem;
+        }
+
+        .md-content h2 {
+            font-size: 1.1rem;
+        }
+
+        .md-content h3 {
+            font-size: 1rem;
+        }
+
+        .md-content ul {
+            padding-left: 1.2rem;
+            list-style: disc;
+        }
+
+        .md-content ol {
+            padding-left: 1.2rem;
+            list-style: decimal;
+        }
+
+        .md-content li {
+            margin: 0.25rem 0;
+        }
+
+        .md-content blockquote {
+            padding: 0.5rem 0.75rem;
+            border-left: 3px solid color-mix(in srgb, var(--dull-purple) 55%, transparent);
+            background: color-mix(in srgb, var(--surface-strong) 65%, transparent);
+            border-radius: 12px;
+            color: var(--text-sub);
+        }
+
+        .md-content :is(code, kbd) {
+            background: color-mix(in srgb, var(--surface-strong) 78%, transparent);
+            border: 1px solid var(--card-border);
+            padding: 0.08rem 0.35rem;
+            border-radius: 8px;
+            font-size: 0.92em;
+        }
+
+        .md-content pre {
+            padding: 0.75rem;
+            border-radius: 14px;
+            overflow: auto;
+            background: color-mix(in srgb, var(--surface-strong) 88%, transparent);
+            border: 1px solid var(--card-border);
+        }
+
+        .md-content pre code {
+            background: transparent;
+            border: 0;
+            padding: 0;
+        }
+
+        /* Media embeds inside markdown content */
+        .media-embed {
+            margin: 0.75rem 0;
+            padding: 0.6rem;
+            border: 1px solid var(--card-border);
+            border-radius: 14px;
+            background: color-mix(in srgb, var(--surface) 70%, transparent);
+        }
+
+        .media-embed img,
+        .media-embed video {
+            display: block;
+            width: 100%;
+            max-width: 100%;
+            border-radius: 12px;
+        }
+
+        .media-embed video {
+            max-height: 420px;
+            background: #000;
+        }
+
+        .media-embed-frame {
+            position: relative;
+            width: 100%;
+            padding-top: 56.25%;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #000;
+        }
+
+        .media-embed-frame iframe {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            border: 0;
+        }
+
+        .media-embed figcaption {
+            margin-top: 0.4rem;
+            font-size: 11px;
+            color: var(--text-sub);
+            word-break: break-word;
+        }
+
+        .media-embed figcaption a {
+            color: var(--dull-purple);
         }
 
         .scroll-minimal::-webkit-scrollbar {
@@ -1159,7 +1281,7 @@
                                     <span id="studyDeckLabel" class="truncate">Choose a deck</span>
                                 </div>
                                 <div id="cardFront"
-                                    class="min-h-[100px] md:min-h-[120px] leading-relaxed text-[color:var(--text-main)] max-h-[40vh] md:max-h-[45vh] overflow-y-auto pr-1 scroll-minimal text-sm md:text-base">
+                                    class="md-content min-h-[100px] md:min-h-[120px] leading-relaxed text-[color:var(--text-main)] max-h-[40vh] md:max-h-[45vh] overflow-y-auto pr-1 scroll-minimal text-sm md:text-base">
                                 </div>
                                 <div class="space-y-2">
                                     <button id="revealBtn"
@@ -1186,12 +1308,12 @@
                                             </button>
                                         </div>
                                         <div id="aiFeedback"
-                                            class="hidden text-sm text-earth-metal/80 dark:text-white/70 bg-[var(--surface)] dark:bg-white/5 border border-oatmeal-dark/40 dark:border-white/10 rounded-lg p-2">
+                                            class="md-content hidden text-sm text-earth-metal/80 dark:text-white/70 bg-[var(--surface)] dark:bg-white/5 border border-oatmeal-dark/40 dark:border-white/10 rounded-lg p-2">
                                         </div>
                                     </div>
                                 </div>
                                 <div id="cardBack"
-                                    class="leading-relaxed text-[color:var(--text-sub)] hidden max-h-[40vh] md:max-h-[45vh] overflow-y-auto pr-1 scroll-minimal text-sm md:text-base">
+                                    class="md-content leading-relaxed text-[color:var(--text-sub)] hidden max-h-[40vh] md:max-h-[45vh] overflow-y-auto pr-1 scroll-minimal text-sm md:text-base">
                                 </div>
                                 <!-- Study controls (hidden when session complete) -->
                                 <div id="studyControls">
@@ -1305,7 +1427,7 @@
                                 </button>
                             </div>
                             <div id="notesPreview"
-                                class="prose prose-sm max-h-60 md:max-h-80 overflow-y-auto text-xs md:text-sm text-[color:var(--text-main)] scroll-minimal">
+                                class="md-content prose prose-sm max-h-60 md:max-h-80 overflow-y-auto text-xs md:text-sm text-[color:var(--text-main)] scroll-minimal">
                                 <p class="text-earth-metal/60 text-xs md:text-sm">No notes for this card</p>
                             </div>
                         </div>
@@ -1998,6 +2120,17 @@ async function handleRequest(request, env) {
             <textarea id="blockNoteArea" rows="8"
                 class="flex-1 w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-dull-purple/40"
                 placeholder="Write in Markdown..."></textarea>
+            <div
+                class="rounded-lg border border-[color:var(--card-border)] p-3 bg-[color:var(--surface)] dark:bg-white/5">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-semibold text-charcoal dark:text-white">Preview</span>
+                    <span class="text-[11px] text-earth-metal/60 dark:text-white/60">Timestamp added on save</span>
+                </div>
+                <div id="blockNotePreview"
+                    class="md-content text-xs text-[color:var(--text-main)] max-h-40 overflow-y-auto scroll-minimal">
+                    <p class="text-earth-metal/50 dark:text-white/60">Type a note to preview media embeds.</p>
+                </div>
+            </div>
             <div class="flex items-center justify-end gap-2">
                 <button id="cancelAddBlockBtn"
                     class="px-4 py-2 rounded-lg border border-oatmeal-dark text-earth-metal text-sm">Cancel</button>
@@ -2027,6 +2160,182 @@ async function handleRequest(request, env) {
         const escapeHtml = (str) => {
             if (!str) return '';
             return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        };
+
+        const MEDIA_IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'svg']);
+        const MEDIA_VIDEO_EXTS = new Set(['mp4', 'webm', 'ogg', 'mov', 'm4v']);
+        const safeUrl = (raw) => {
+            try {
+                const u = new URL(raw);
+                if (!['http:', 'https:'].includes(u.protocol)) return null;
+                return u;
+            } catch (_) {
+                return null;
+            }
+        };
+        const stripUrlPunctuation = (s) => {
+            // Common trailing punctuation when URLs appear at end of sentences.
+            return (s || '').replace(/[)\].,!?:;]+$/g, '');
+        };
+        const getMediaInfo = (rawUrl) => {
+            const cleaned = stripUrlPunctuation(rawUrl);
+            const u = safeUrl(cleaned);
+            if (!u) return null;
+            const host = u.hostname.toLowerCase();
+            const path = u.pathname || '';
+            const ext = (path.split('.').pop() || '').toLowerCase();
+
+            if (MEDIA_IMAGE_EXTS.has(ext)) return { kind: 'image', src: u.toString() };
+            if (MEDIA_VIDEO_EXTS.has(ext)) return { kind: 'video', src: u.toString(), ext };
+
+            // YouTube
+            if (host === 'youtu.be') {
+                const id = path.replace(/^\/+/, '').split('/')[0];
+                if (id) return { kind: 'youtube', src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` };
+            }
+            if (host.includes('youtube.com')) {
+                if (path.startsWith('/watch')) {
+                    const id = u.searchParams.get('v');
+                    if (id) return { kind: 'youtube', src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` };
+                }
+                if (path.startsWith('/shorts/')) {
+                    const id = path.split('/').filter(Boolean)[1];
+                    if (id) return { kind: 'youtube', src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` };
+                }
+                if (path.startsWith('/embed/')) {
+                    const id = path.split('/').filter(Boolean)[1];
+                    if (id) return { kind: 'youtube', src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` };
+                }
+            }
+
+            // Vimeo
+            if (host === 'vimeo.com') {
+                const id = path.replace(/^\/+/, '').split('/')[0];
+                if (id && /^\d+$/.test(id)) return { kind: 'vimeo', src: `https://player.vimeo.com/video/${encodeURIComponent(id)}` };
+            }
+
+            return null;
+        };
+
+        const createMediaFigure = (doc, { kind, src }, label, originalUrl) => {
+            const fig = doc.createElement('figure');
+            fig.className = 'media-embed';
+            if (kind === 'image') {
+                const img = doc.createElement('img');
+                img.src = src;
+                img.alt = (label || 'Image').slice(0, 200);
+                img.loading = 'lazy';
+                img.decoding = 'async';
+                img.referrerPolicy = 'no-referrer';
+                fig.appendChild(img);
+            } else if (kind === 'video') {
+                const video = doc.createElement('video');
+                video.src = src;
+                video.controls = true;
+                video.playsInline = true;
+                video.preload = 'metadata';
+                fig.appendChild(video);
+            } else if (kind === 'youtube' || kind === 'vimeo') {
+                const wrap = doc.createElement('div');
+                wrap.className = 'media-embed-frame';
+                const iframe = doc.createElement('iframe');
+                iframe.src = src;
+                iframe.loading = 'lazy';
+                iframe.referrerPolicy = 'no-referrer';
+                iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+                iframe.allowFullscreen = true;
+                wrap.appendChild(iframe);
+                fig.appendChild(wrap);
+            }
+
+            const cap = doc.createElement('figcaption');
+            const a = doc.createElement('a');
+            a.href = originalUrl || src;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.textContent = label || originalUrl || src;
+            cap.appendChild(a);
+            fig.appendChild(cap);
+            return fig;
+        };
+
+        const applyMediaEmbeds = (container) => {
+            if (!container) return;
+            const doc = container.ownerDocument || document;
+
+            // Upgrade raw <img>/<video>/<iframe> styling when users paste HTML.
+            container.querySelectorAll('img').forEach(img => {
+                img.loading = img.loading || 'lazy';
+                img.decoding = img.decoding || 'async';
+                img.referrerPolicy = img.referrerPolicy || 'no-referrer';
+                if (!img.closest('figure.media-embed')) {
+                    const fig = doc.createElement('figure');
+                    fig.className = 'media-embed';
+                    img.replaceWith(fig);
+                    fig.appendChild(img);
+                }
+            });
+            container.querySelectorAll('video').forEach(v => {
+                v.controls = true;
+                v.playsInline = true;
+                v.preload = v.preload || 'metadata';
+                if (!v.closest('figure.media-embed')) {
+                    const fig = doc.createElement('figure');
+                    fig.className = 'media-embed';
+                    v.replaceWith(fig);
+                    fig.appendChild(v);
+                }
+            });
+
+            // Replace media links with embeds.
+            container.querySelectorAll('a[href]').forEach(a => {
+                const href = a.getAttribute('href') || '';
+                const info = getMediaInfo(href);
+                if (!info) return;
+                // Don't nest embeds.
+                if (a.closest('figure.media-embed')) return;
+                const label = (a.textContent || '').trim();
+                const fig = createMediaFigure(doc, info, label || href, href);
+                a.replaceWith(fig);
+            });
+
+            // Embed bare media URLs (not wrapped in markdown links).
+            const urlRegex = /https?:\/\/[^\s<>"']+/g;
+            const walker = doc.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+                acceptNode(node) {
+                    const parent = node.parentElement;
+                    if (!parent) return NodeFilter.FILTER_REJECT;
+                    const tag = parent.tagName;
+                    if (['A', 'CODE', 'PRE', 'SCRIPT', 'STYLE', 'TEXTAREA'].includes(tag)) return NodeFilter.FILTER_REJECT;
+                    if (!node.nodeValue || !node.nodeValue.includes('http')) return NodeFilter.FILTER_REJECT;
+                    return NodeFilter.FILTER_ACCEPT;
+                }
+            });
+            const toProcess = [];
+            while (walker.nextNode()) toProcess.push(walker.currentNode);
+            for (const textNode of toProcess) {
+                const text = textNode.nodeValue || '';
+                urlRegex.lastIndex = 0;
+                let match;
+                let lastIdx = 0;
+                let changed = false;
+                const frag = doc.createDocumentFragment();
+                while ((match = urlRegex.exec(text)) !== null) {
+                    const raw = match[0];
+                    const info = getMediaInfo(raw);
+                    if (!info) continue;
+                    const start = match.index;
+                    const end = match.index + raw.length;
+                    if (start > lastIdx) frag.appendChild(doc.createTextNode(text.slice(lastIdx, start)));
+                    const cleaned = stripUrlPunctuation(raw);
+                    frag.appendChild(createMediaFigure(doc, info, cleaned, cleaned));
+                    lastIdx = end;
+                    changed = true;
+                }
+                if (!changed) continue;
+                if (lastIdx < text.length) frag.appendChild(doc.createTextNode(text.slice(lastIdx)));
+                textNode.replaceWith(frag);
+            }
         };
         let toastTimer = null;
         const toast = (msg) => {
@@ -2592,94 +2901,92 @@ async function handleRequest(request, env) {
             }).join('');
         };
 
-        // Convert markdown to Notion rich_text array with annotations
+        // Convert markdown to Notion rich_text array with annotations.
+        // Supports nesting for the formats we generate in richToMarkdown() (bold/italic/underline/code/strike/links/colors).
         const markdownToNotionRichText = (markdown) => {
             if (!markdown) return [];
             const str = markdown.toString();
             if (!str) return [];
 
-            const result = [];
+            const mergeAnnotations = (a, b) => {
+                const out = { ...(a || {}) };
+                for (const [k, v] of Object.entries(b || {})) {
+                    if (v !== undefined) out[k] = v;
+                }
+                return out;
+            };
 
-            // Combined regex to find all patterns including equations and Notion colors
-            // Order: equations, colors, bold, italic, code, strikethrough, links
-            const tokenRegex = /(<span class="notion-equation">(.+?)<\/span>)|(<span class="notion-color-([a-z-]+)">(.+?)<\/span>)|(\*\*(.+?)\*\*)|(\*(.+?)\*)|(`(.+?)`)|(\~\~(.+?)\~\~)|(\[(.+?)\]\((.+?)\))/g;
+            // Combined regex to find all patterns including equations and Notion colors.
+            // Order: equations, colors, bold+italic, bold, underline, italic (_), italic (*), code, strikethrough, links
+            const tokenRegex = /(<span class="notion-equation">(.+?)<\/span>)|(<span class="notion-color-([a-z-]+)">(.+?)<\/span>)|(\\*\\*\\*(.+?)\\*\\*\\*)|(\\*\\*(.+?)\\*\\*)|(__(.+?)__)|(_(.+?)_)|(\\*(.+?)\\*)|(`(.+?)`)|(\\~\\~(.+?)\\~\\~)|(\\[(.+?)\\]\\((.+?)\\))/g;
 
-            let lastIndex = 0;
-            let match;
+            const parseInline = (input, inherited = null) => {
+                const text = (input || '').toString();
+                if (!text) return [];
+                const out = [];
+                let lastIndex = 0;
+                tokenRegex.lastIndex = 0;
+                let match;
 
-            while ((match = tokenRegex.exec(str)) !== null) {
-                // Add plain text before this match
-                if (match.index > lastIndex) {
-                    const plainText = str.slice(lastIndex, match.index);
-                    if (plainText) {
-                        result.push({ type: 'text', text: { content: plainText } });
+                const pushText = (content, ann, link = null) => {
+                    if (!content) return;
+                    const item = { type: 'text', text: { content: content.toString() } };
+                    const merged = mergeAnnotations(inherited, ann);
+                    if (Object.keys(merged).length) item.annotations = merged;
+                    if (link) item.text.link = { url: link };
+                    out.push(item);
+                };
+
+                while ((match = tokenRegex.exec(text)) !== null) {
+                    if (match.index > lastIndex) {
+                        pushText(text.slice(lastIndex, match.index), null);
                     }
+
+                    if (match[1]) {
+                        out.push({ type: 'equation', equation: { expression: match[2] } });
+                    } else if (match[3]) {
+                        const colorClass = match[4].replace(/-/g, '_');
+                        out.push(...parseInline(match[5], mergeAnnotations(inherited, { color: colorClass })));
+                    } else if (match[6]) {
+                        out.push(...parseInline(match[7], mergeAnnotations(inherited, { bold: true, italic: true })));
+                    } else if (match[8]) {
+                        out.push(...parseInline(match[9], mergeAnnotations(inherited, { bold: true })));
+                    } else if (match[10]) {
+                        out.push(...parseInline(match[11], mergeAnnotations(inherited, { underline: true })));
+                    } else if (match[12]) {
+                        // Italic via underscores: _text_
+                        out.push(...parseInline(match[13], mergeAnnotations(inherited, { italic: true })));
+                    } else if (match[14]) {
+                        // Italic via asterisks: *text*
+                        out.push(...parseInline(match[15], mergeAnnotations(inherited, { italic: true })));
+                    } else if (match[16]) {
+                        // Code doesn't recurse (treat inner as literal)
+                        pushText(match[17], mergeAnnotations(inherited, { code: true }));
+                    } else if (match[18]) {
+                        out.push(...parseInline(match[19], mergeAnnotations(inherited, { strikethrough: true })));
+                    } else if (match[20]) {
+                        const linkText = match[21];
+                        const linkUrl = match[22];
+                        const parts = parseInline(linkText, inherited);
+                        for (const p of parts) {
+                            if (p.type === 'text') p.text.link = { url: linkUrl };
+                        }
+                        out.push(...parts);
+                    }
+
+                    lastIndex = match.index + match[0].length;
                 }
 
-                // Determine which pattern matched
-                if (match[1]) {
-                    // Equation: <span class="notion-equation">expr</span>
-                    result.push({
-                        type: 'equation',
-                        equation: { expression: match[2] }
-                    });
-                } else if (match[3]) {
-                    // Notion color: <span class="notion-color-*">text</span>
-                    // Convert color class back to Notion color name (e.g., "purple-background" -> "purple_background")
-                    const colorClass = match[4].replace(/-/g, '_');
-                    result.push({
-                        type: 'text',
-                        text: { content: match[5] },
-                        annotations: { color: colorClass }
-                    });
-                } else if (match[6]) {
-                    // Bold: **text**
-                    result.push({
-                        type: 'text',
-                        text: { content: match[7] },
-                        annotations: { bold: true }
-                    });
-                } else if (match[8]) {
-                    // Italic: *text*
-                    result.push({
-                        type: 'text',
-                        text: { content: match[9] },
-                        annotations: { italic: true }
-                    });
-                } else if (match[10]) {
-                    // Code: `text`
-                    result.push({
-                        type: 'text',
-                        text: { content: match[11] },
-                        annotations: { code: true }
-                    });
-                } else if (match[12]) {
-                    // Strikethrough: ~~text~~
-                    result.push({
-                        type: 'text',
-                        text: { content: match[13] },
-                        annotations: { strikethrough: true }
-                    });
-                } else if (match[14]) {
-                    // Link: [text](url)
-                    result.push({
-                        type: 'text',
-                        text: { content: match[15], link: { url: match[16] } }
-                    });
+                if (lastIndex < text.length) {
+                    pushText(text.slice(lastIndex), null);
                 }
+                if (out.length === 0) {
+                    pushText(text, null);
+                }
+                return out;
+            };
 
-                lastIndex = match.index + match[0].length;
-            }
-
-            // Add remaining plain text after last match
-            if (lastIndex < str.length) {
-                result.push({ type: 'text', text: { content: str.slice(lastIndex) } });
-            }
-
-            // If no matches found, return as single plain text chunk
-            if (result.length === 0) {
-                result.push({ type: 'text', text: { content: str } });
-            }
+            const result = parseInline(str);
 
             // Chunk large content (Notion 2000 char limit per rich_text item)
             const chunked = [];
@@ -2688,10 +2995,8 @@ async function handleRequest(request, env) {
                 if (content.length <= 2000) {
                     chunked.push(item);
                 } else if (item.type === 'equation') {
-                    // Can't chunk equations, just add as-is
                     chunked.push(item);
                 } else {
-                    // Split large content into chunks, preserving annotations and type
                     for (let i = 0; i < content.length && chunked.length < 100; i += 2000) {
                         chunked.push({
                             type: 'text',
@@ -2705,7 +3010,6 @@ async function handleRequest(request, env) {
                 }
             }
 
-            // Notion limits to 100 rich_text items
             return chunked.slice(0, 100);
         };
 
@@ -2958,7 +3262,9 @@ async function handleRequest(request, env) {
              * @returns {Object} Notion properties object for API
              */
             cardProps(card, deck = null) {
-                const notionDeckId = deck?.notionId || deck?.id || null;
+                // Only use a real Notion page ID for relations.
+                // Local deck IDs (randomUUID) must not be sent to Notion.
+                const notionDeckId = deck?.notionId || null;
                 const deckAlgorithm = deck?.algorithm || 'SM-2';
                 const dueDate = (deckAlgorithm === 'FSRS' ? card.fsrs?.dueDate : card.sm2?.dueDate) || card.fsrs?.dueDate || card.sm2?.dueDate || null;
                 const lastReview = (deckAlgorithm === 'FSRS' ? card.fsrs?.lastReview : card.sm2?.lastReview) || card.fsrs?.lastReview || card.sm2?.lastReview || null;
@@ -2979,11 +3285,10 @@ async function handleRequest(request, env) {
                 };
 
                 const orig = card._notionRichText || {};
-                return {
+                const props = {
                     'Name': { title: getRichText('name', card.name, orig.name) },
                     'Back': { rich_text: getRichText('back', card.back, orig.back) },
                     'Card Type': { select: { name: card.type } },
-                    'Deck': notionDeckId ? { relation: [{ id: notionDeckId }] } : { relation: [] },
                     'Tags': { multi_select: card.tags.map(t => ({ name: t.name })) },
                     'Notes': { rich_text: getRichText('notes', card.notes, orig.notes) },
                     'Suspended': { checkbox: !!card.suspended },
@@ -3004,6 +3309,13 @@ async function handleRequest(request, env) {
                     'Anki Fields JSON': card.ankiFields ? { rich_text: [{ type: 'text', text: { content: card.ankiFields } }] } : { rich_text: [] },
                     'Cloze Indexes': card.clozeIndexes ? { rich_text: [{ type: 'text', text: { content: card.clozeIndexes } }] } : { rich_text: [] }
                 };
+                // Only include Deck if we can safely set it:
+                // - If we have a Notion deck page ID, set relation to that.
+                // - If the card has no deck, explicitly clear it.
+                // - If the card has a deckId but we can't resolve it (missing deck), omit to avoid wiping in Notion.
+                if (notionDeckId) props['Deck'] = { relation: [{ id: notionDeckId }] };
+                else if (!card.deckId) props['Deck'] = { relation: [] };
+                return props;
             }
         };
 
@@ -3260,36 +3572,56 @@ async function handleRequest(request, env) {
 
                 // Get deck settings from first deck
                 const deck = this.deckById(deckIds[0]);
-                const limit = deck?.reviewLimit || 50;
-
-                if (deck?.orderMode === 'created') {
-                    cards.sort((a, b) => {
-                        const aKey = a.createdAt || a.id || '';
-                        const bKey = b.createdAt || b.id || '';
-                        return aKey.localeCompare(bKey);
-                    });
-                } else if (deck?.orderMode === 'property') {
-                    const maxVal = Number.MAX_SAFE_INTEGER;
-                    cards.sort((a, b) => {
-                        const aOrder = typeof a.order === 'number' ? a.order : maxVal;
-                        const bOrder = typeof b.order === 'number' ? b.order : maxVal;
-                        if (aOrder === bOrder) {
+                const reviewLimit = deck?.reviewLimit || 50;
+                const newLimit = Math.max(0, deck?.newLimit ?? 20);
+                const isNewCard = (card) => {
+                    const lastReview = card.fsrs?.lastReview || card.sm2?.lastReview || null;
+                    const hasHistory = Array.isArray(card.reviewHistory) && card.reviewHistory.length > 0;
+                    const reps = card.sm2?.repetitions ?? 0;
+                    return !lastReview && !hasHistory && reps === 0;
+                };
+                const applyOrder = (arr) => {
+                    if (deck?.orderMode === 'created') {
+                        arr.sort((a, b) => {
                             const aKey = a.createdAt || a.id || '';
                             const bKey = b.createdAt || b.id || '';
                             return aKey.localeCompare(bKey);
-                        }
-                        return aOrder - bOrder;
-                    });
-                } else {
-                    // Shuffle by default
-                    for (let i = cards.length - 1; i > 0; i--) {
-                        const j = Math.floor(Math.random() * (i + 1));
-                        [cards[i], cards[j]] = [cards[j], cards[i]];
+                        });
+                        return;
                     }
-                }
+                    if (deck?.orderMode === 'property') {
+                        const maxVal = Number.MAX_SAFE_INTEGER;
+                        arr.sort((a, b) => {
+                            const aOrder = typeof a.order === 'number' ? a.order : maxVal;
+                            const bOrder = typeof b.order === 'number' ? b.order : maxVal;
+                            if (aOrder === bOrder) {
+                                const aKey = a.createdAt || a.id || '';
+                                const bKey = b.createdAt || b.id || '';
+                                return aKey.localeCompare(bKey);
+                            }
+                            return aOrder - bOrder;
+                        });
+                        return;
+                    }
+                    // Shuffle by default
+                    for (let i = arr.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [arr[i], arr[j]] = [arr[j], arr[i]];
+                    }
+                };
 
-                // Apply limit
-                cards = cards.slice(0, limit);
+                // If practicing all cards (includeNonDue), keep legacy behavior: single cap (reviewLimit).
+                // If due-only, enforce separate review vs new limits.
+                if (includeNonDue) {
+                    applyOrder(cards);
+                    cards = cards.slice(0, reviewLimit);
+                } else {
+                    const newCards = cards.filter(isNewCard);
+                    const reviewCards = cards.filter(c => !isNewCard(c));
+                    applyOrder(reviewCards);
+                    applyOrder(newCards);
+                    cards = [...reviewCards.slice(0, reviewLimit), ...newCards.slice(0, newLimit)];
+                }
 
                 // Pre-compute reverse decisions
                 return cards.map(card => {
@@ -3673,6 +4005,7 @@ async function handleRequest(request, env) {
                 el('#closeAddBlockModal').onclick = () => this.closeModal('addBlockModal');
                 el('#cancelAddBlockBtn').onclick = () => this.closeModal('addBlockModal');
                 el('#saveAddBlockBtn').onclick = () => this.saveBlockNote();
+                el('#blockNoteArea')?.addEventListener('input', () => this.renderBlockNotePreview());
                 el('#addBlockModal').addEventListener('click', (e) => { if (e.target === el('#addBlockModal')) this.closeModal('addBlockModal'); });
                 // Session control buttons
                 el('#startSessionBtn').onclick = () => this.startSession();
@@ -4084,6 +4417,7 @@ async function handleRequest(request, env) {
                 if (!online) {
                     badge.textContent = 'Offline';
                     badge.className = 'px-3 py-1 rounded-full pill text-xs bg-oatmeal border border-oatmeal-dark text-earth-metal';
+                    this.updateSyncButtonState();
                     return;
                 }
 
@@ -4101,6 +4435,7 @@ async function handleRequest(request, env) {
                 badge.className = ready
                     ? 'px-3 py-1 rounded-full pill text-xs bg-white-linen border border-oatmeal-dark text-earth-metal'
                     : 'px-3 py-1 rounded-full pill text-xs bg-oatmeal border border-oatmeal-dark text-earth-metal';
+                this.updateSyncButtonState();
             },
             renderDecks() {
                 const grid = el('#deckGrid');
@@ -4322,9 +4657,11 @@ async function handleRequest(request, env) {
                 el('#cardFront').innerHTML = '';
                 const front = card ? this.renderCardFront(card, deck) : '<p class="text-earth-metal/70 text-sm">No card selected</p>';
                 el('#cardFront').innerHTML = front;
+                applyMediaEmbeds(el('#cardFront'));
                 // Show opposite side based on whether card was reversed
                 const backContent = card ? (this.state.cardReversed ? card.name : card.back) : '';
                 el('#cardBack').innerHTML = card ? marked.parse(backContent || '') : '';
+                applyMediaEmbeds(el('#cardBack'));
                 this.renderMath(el('#cardFront'));
                 this.renderMath(el('#cardBack'));
                 // Ensure cloze blanks are NOT revealed on new card (must be after renderMath)
@@ -4382,6 +4719,7 @@ async function handleRequest(request, env) {
             renderNotes() {
                 const notes = this.state.selectedCard?.notes ?? '';
                 el('#notesPreview').innerHTML = notes ? marked.parse(notes) : '<p class="text-earth-metal/60 text-sm">No notes for this card</p>';
+                applyMediaEmbeds(el('#notesPreview'));
                 this.renderMath(el('#notesPreview'));
             },
             renderFsrsMeta() {
@@ -5078,6 +5416,9 @@ async function handleRequest(request, env) {
                     return;
                 }
                 if (!this.isReady()) return toast('Complete settings first');
+                if (this.state.syncing) { toast('Sync already in progress'); return; }
+                this.state.syncing = true;
+                this.updateSyncButtonState();
                 this.setSyncButtonSpinning(true);
                 const loadingMsg = el('#loadingMessage');
                 el('#syncProgress').style.width = '10%';
@@ -5113,6 +5454,8 @@ async function handleRequest(request, env) {
                 } finally {
                     this.setSyncButtonSpinning(false);
                     setTimeout(() => el('#syncProgress').style.width = '0%', 700);
+                    this.state.syncing = false;
+                    this.updateSyncButtonState();
                 }
             },
             async pullFromNotion() {
@@ -5120,28 +5463,48 @@ async function handleRequest(request, env) {
                 if (!deckSource || !cardSource) return;
                 const since = this.state.lastPull;
 
-                // Build deck filter: exclude archived decks
+                // Deck visibility:
+                // - Custom deck property "Archived?" means "hide deck + cards from app".
+                // - Notion page-level `archived: true` means deleted in Notion (remove locally).
+                // For incremental pulls, we must fetch both archived/unarchived to detect newly hidden decks.
                 let deckFilter = { property: 'Archived?', checkbox: { equals: false } };
                 if (since) {
-                    // Combine with timestamp filter for incremental sync
-                    deckFilter = {
-                        and: [
-                            { timestamp: 'last_edited_time', last_edited_time: { on_or_after: since } },
-                            { property: 'Archived?', checkbox: { equals: false } }
-                        ]
-                    };
+                    deckFilter = { timestamp: 'last_edited_time', last_edited_time: { on_or_after: since } };
                 }
 
                 // Query non-archived decks first
                 const decks = await API.queryDatabase(deckSource, deckFilter);
-                const mappedDecks = decks.map(d => NotionMapper.deckFrom(d));
+                const deckPages = decks || [];
+                const isHiddenDeck = (p) => !!p?.properties?.['Archived?']?.checkbox;
+                // Notion page-level deletion sets `archived: true`. Remove those locally.
+                const deletedDeckNotionIds = new Set(deckPages.filter(p => p?.archived).map(p => p.id));
+                // Custom "Archived?" decks should not exist locally at all.
+                const hiddenDeckNotionIds = new Set(deckPages.filter(p => !p?.archived && isHiddenDeck(p)).map(p => p.id));
+                // Optional safety: fetch all hidden decks to ensure we never show them even if they were archived
+                // before `since` (e.g., after upgrading from older versions).
+                if (since) {
+                    try {
+                        const hiddenAll = await API.queryDatabase(deckSource, { property: 'Archived?', checkbox: { equals: true } });
+                        for (const p of (hiddenAll || [])) {
+                            if (p?.id) hiddenDeckNotionIds.add(p.id);
+                        }
+                    } catch (_) { /* best-effort */ }
+                }
+
+                const mappedDecks = deckPages
+                    .filter(p => !p?.archived && !isHiddenDeck(p))
+                    .map(d => NotionMapper.deckFrom(d));
 
                 // Identify decks that are new (not in local state) - need to fetch their cards
-                const existingDeckIds = new Set(this.state.decks.map(d => d.notionId));
-                const newDeckIds = mappedDecks.filter(d => !existingDeckIds.has(d.notionId)).map(d => d.notionId);
+                const existingActiveDeckNotionIds = new Set(
+                    this.state.decks.filter(d => d.notionId && !d.archived).map(d => d.notionId)
+                );
+                const newDeckIds = mappedDecks.filter(d => !existingActiveDeckNotionIds.has(d.notionId)).map(d => d.notionId);
 
-                // For card filtering, use all non-archived decks (existing + new)
-                const allNonArchivedDeckIds = new Set([...existingDeckIds, ...newDeckIds]);
+                // Active deck ids for card filtering (local active + newly pulled active), excluding hidden/deleted.
+                const activeDeckNotionIds = new Set([...existingActiveDeckNotionIds, ...mappedDecks.map(d => d.notionId)]);
+                for (const id of hiddenDeckNotionIds) activeDeckNotionIds.delete(id);
+                for (const id of deletedDeckNotionIds) activeDeckNotionIds.delete(id);
 
                 // Query cards (with timestamp if incremental), then filter client-side
                 let cardFilter = null;
@@ -5149,7 +5512,8 @@ async function handleRequest(request, env) {
                     cardFilter = { timestamp: 'last_edited_time', last_edited_time: { on_or_after: since } };
                 }
                 const cards = await API.queryDatabase(cardSource, cardFilter);
-                let mappedCards = cards.map(c => NotionMapper.cardFrom(c, mappedDecks));
+                const deletedCardNotionIds = new Set((cards || []).filter(p => p?.archived).map(p => p.id));
+                let mappedCards = (cards || []).filter(p => !p?.archived).map(c => NotionMapper.cardFrom(c, mappedDecks));
 
                 // If we have new decks, fetch their cards separately (they may not have been edited recently)
                 if (since && newDeckIds.length > 0) {
@@ -5158,7 +5522,7 @@ async function handleRequest(request, env) {
                             property: 'Deck',
                             relation: { contains: deckId }
                         });
-                        const newCards = deckCards.map(c => NotionMapper.cardFrom(c, mappedDecks));
+                        const newCards = (deckCards || []).filter(p => !p?.archived).map(c => NotionMapper.cardFrom(c, mappedDecks));
                         // Add cards we don't already have
                         for (const nc of newCards) {
                             if (!mappedCards.find(c => c.notionId === nc.notionId)) {
@@ -5168,12 +5532,12 @@ async function handleRequest(request, env) {
                     }
                 }
 
-                // Filter out cards that belong to archived decks
+                // Filter out cards that belong to hidden/deleted decks
                 const filteredCards = mappedCards.filter(c => {
                     // If card has no deck relation, include it
                     if (!c.deckId) return true;
                     // Include only if deck is in our non-archived list
-                    return allNonArchivedDeckIds.has(c.deckId);
+                    return activeDeckNotionIds.has(c.deckId);
                 });
 
                 if (!since) {
@@ -5183,14 +5547,61 @@ async function handleRequest(request, env) {
                     this.state.cards = [];
                 }
 
-                // Also remove cards from decks that are no longer in our state (archived in Notion)
-                // This handles the case where a deck was archived after our last sync
+                // Apply deletions (Notion page-level archive/delete) on incremental pulls.
+                // Deck deletions also remove their cards locally.
                 if (since) {
-                    const archivedDeckIds = this.state.decks
-                        .filter(d => !mappedDecks.find(md => md.notionId === d.notionId))
-                        .map(d => d.notionId);
-                    // Note: We don't remove archived decks from local state automatically
-                    // User should manually archive in app if they want it removed
+                    if (deletedCardNotionIds.size > 0) {
+                        for (const nid of deletedCardNotionIds) {
+                            const local = this.state.cards.find(c => c.notionId === nid);
+                            if (!local) continue;
+                            await Storage.delete('cards', local.id);
+                        }
+                        this.state.cards = this.state.cards.filter(c => !deletedCardNotionIds.has(c.notionId));
+                    }
+                    if (hiddenDeckNotionIds.size > 0) {
+                        const toHideDecks = this.state.decks.filter(d => d.notionId && hiddenDeckNotionIds.has(d.notionId));
+                        // Remove from local DB/state entirely.
+                        for (const d of toHideDecks) {
+                            await Storage.delete('decks', d.id);
+                        }
+                        const hideDeckKeys = new Set([
+                            ...toHideDecks.map(d => d.id),
+                            ...toHideDecks.map(d => d.notionId).filter(Boolean),
+                            ...hiddenDeckNotionIds
+                        ]);
+                        const cardsToHide = this.state.cards.filter(c => hideDeckKeys.has(c.deckId));
+                        for (const c of cardsToHide) {
+                            await Storage.delete('cards', c.id);
+                        }
+                        this.state.cards = this.state.cards.filter(c => !hideDeckKeys.has(c.deckId));
+                        this.state.decks = this.state.decks.filter(d => !(d.notionId && hiddenDeckNotionIds.has(d.notionId)));
+                        // Remove hidden decks from selection/filter state
+                        if (this.state.filters?.studyDecks?.length) {
+                            const hiddenIds = new Set(toHideDecks.map(d => d.id));
+                            this.state.filters.studyDecks = this.state.filters.studyDecks.filter(id => !hiddenIds.has(id));
+                        }
+                        if (this.state.selectedDeck && this.state.selectedDeck.notionId && hiddenDeckNotionIds.has(this.state.selectedDeck.notionId)) {
+                            this.state.selectedDeck = null;
+                        }
+                    }
+                    if (deletedDeckNotionIds.size > 0) {
+                        const toDeleteDecks = this.state.decks.filter(d => deletedDeckNotionIds.has(d.notionId));
+                        for (const d of toDeleteDecks) {
+                            await Storage.delete('decks', d.id);
+                        }
+                        const deletedDeckKeys = new Set([
+                            ...toDeleteDecks.map(d => d.id),
+                            ...toDeleteDecks.map(d => d.notionId).filter(Boolean),
+                            ...deletedDeckNotionIds
+                        ]);
+                        // Remove cards in deleted decks (by either local id or Notion id).
+                        const cardsToDelete = this.state.cards.filter(c => deletedDeckKeys.has(c.deckId));
+                        for (const c of cardsToDelete) {
+                            await Storage.delete('cards', c.id);
+                        }
+                        this.state.decks = this.state.decks.filter(d => !deletedDeckNotionIds.has(d.notionId));
+                        this.state.cards = this.state.cards.filter(c => !deletedDeckKeys.has(c.deckId));
+                    }
                 }
 
                 const upsertDeck = (deck) => {
@@ -5210,7 +5621,15 @@ async function handleRequest(request, env) {
             },
             async pushQueue() {
                 const { deckSource, cardSource } = this.state.settings;
-                const queue = [...this.state.queue];
+                // Process deck operations before card operations to satisfy Notion relation dependencies.
+                const queue = [...this.state.queue]
+                    .map((op, idx) => ({ op, idx }))
+                    .sort((a, b) => {
+                        const prio = (t) => ({ 'deck-upsert': 1, 'deck-delete': 2, 'card-upsert': 3, 'card-delete': 4, 'block-append': 5 }[t] || 99);
+                        const dp = prio(a.op.type) - prio(b.op.type);
+                        return dp !== 0 ? dp : a.idx - b.idx; // stable within the same type
+                    })
+                    .map(x => x.op);
                 this.state.queue = [];
                 el('#queueCount').textContent = '0';
                 const failed = [];
@@ -5229,6 +5648,9 @@ async function handleRequest(request, env) {
                         if (op.type === 'deck-delete' && op.payload.notionId) await API.archivePage(op.payload.notionId);
                         if (op.type === 'card-upsert') {
                             const deck = this.deckById(op.payload.deckId);
+                            if (!op.payload.notionId && op.payload.deckId && (!deck || !deck.notionId)) {
+                                throw new Error('Deck not yet synced');
+                            }
                             const props = NotionMapper.cardProps(op.payload, deck);
                             if (op.payload.notionId) await API.updatePage(op.payload.notionId, props);
                             else {
@@ -5611,7 +6033,8 @@ async function handleRequest(request, env) {
                     sessionIndex: this.state.session ? this.state.session.currentIndex : null,
                     ratingCounts: this.state.session?.ratingCounts ? { ...this.state.session.ratingCounts } : null
                 };
-                const previewMode = this.state.session?.noScheduleChanges && (this.state.session.settings?.cardSelectionMode === 'all' || this.state.session.studyingNonDue);
+                // Preview mode: never modify scheduling (independent of due/all selection).
+                const previewMode = !!this.state.session?.noScheduleChanges;
                 // Track rating in session statistics
                 if (this.state.session && this.state.session.ratingCounts) {
                     this.state.session.ratingCounts[ratingLabel] = (this.state.session.ratingCounts[ratingLabel] || 0) + 1;
@@ -5778,6 +6201,7 @@ async function handleRequest(request, env) {
                 this.queueOp({ type: 'card-upsert', payload: card });
                 el('#noteStatus').textContent = 'Saved';
                 el('#notesPreview').innerHTML = card.notes ? marked.parse(card.notes) : '<p class="text-earth-metal/60 text-sm">No notes yet.</p>';
+                applyMediaEmbeds(el('#notesPreview'));
                 this.renderMath(el('#notesPreview'));
                 this.closeModal('notesModal');
                 toast('Notes saved');
@@ -5787,7 +6211,21 @@ async function handleRequest(request, env) {
                 if (!card) return toast('No card selected');
                 if (!card.notionId) return toast('Card not synced to Notion yet');
                 el('#blockNoteArea').value = '';
+                this.renderBlockNotePreview();
                 this.openModal('addBlockModal');
+            },
+            renderBlockNotePreview() {
+                const area = el('#blockNoteArea');
+                const preview = el('#blockNotePreview');
+                if (!area || !preview) return;
+                const md = (area.value || '').trim();
+                if (!md) {
+                    preview.innerHTML = '<p class="text-earth-metal/50 dark:text-white/60">Type a note to preview media embeds.</p>';
+                    return;
+                }
+                preview.innerHTML = marked.parse(md);
+                applyMediaEmbeds(preview);
+                this.renderMath(preview);
             },
             async saveBlockNote() {
                 const card = this.state.selectedCard;
@@ -5862,14 +6300,16 @@ async function handleRequest(request, env) {
                 }
 
                 let importedCount = 0;
+                const existingGuids = new Set(this.state.cards.map(c => c.ankiGuid).filter(Boolean));
                 for (const raw of payload.cards) {
                     const guid = raw.guid || raw.id || null;
-                    if (guid && this.state.cards.some(c => c.ankiGuid === guid)) continue;
+                    if (guid && existingGuids.has(guid)) continue;
 
                     const card = this.newCard(deck.id, raw.name || raw.front || 'Imported', raw.back || '', raw.type || 'Front-Back');
                     card.tags = (raw.tags || []).map(t => typeof t === 'string' ? { name: t, color: 'default' } : t);
                     card.notes = raw.notes || '';
                     card.ankiGuid = guid || crypto.randomUUID();
+                    existingGuids.add(card.ankiGuid);
                     this.state.cards.push(card);
                     await Storage.put('cards', card);
                     this.queueOp({ type: 'card-upsert', payload: card });
@@ -5900,16 +6340,18 @@ async function handleRequest(request, env) {
                     const cards = db.exec("SELECT id,nid,did,ord,mod,usn,type,queue,due,ivl,factor,reps,lapses,left,odue,odid,flags,data FROM cards")[0]?.values || [];
 
                     const deckCache = {};
+                    const notesById = new Map(notes.map(n => [n[0], n]));
+                    const existingGuids = new Set(this.state.cards.map(c => c.ankiGuid).filter(Boolean));
                     let importedCount = 0;
 
                     for (const cardRow of cards) {
                         const [cid, nid, did, ord] = cardRow;
-                        const note = notes.find(n => n[0] === nid);
+                        const note = notesById.get(nid);
                         if (!note) continue;
                         const [_, guid, mid, mod, usn, tags, flds] = note;
 
                         // Check if card with this GUID already exists
-                        if (guid && this.state.cards.some(c => c.ankiGuid === guid)) continue;
+                        if (guid && existingGuids.has(guid)) continue;
 
                         const deckId = did;
                         // Use existing deck if available, or create/cache new one
@@ -5934,6 +6376,7 @@ async function handleRequest(request, env) {
                         const card = this.newCard(deckCache[deckId].id, front, isCloze ? back || front : back, type);
                         card.tags = (tags || '').trim().split(' ').filter(Boolean).map(t => ({ name: t.replace(/^\s*/, '').replace(/\s*$/, ''), color: 'default' }));
                         card.ankiGuid = guid;
+                        if (guid) existingGuids.add(guid);
                         card.ankiNoteType = model?.name || '';
                         card.ankiFields = JSON.stringify(fields);
                         card.clozeIndexes = isCloze ? 'auto' : '';
@@ -5962,7 +6405,13 @@ async function handleRequest(request, env) {
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `${deck.name}.apkg`;
+                    const safeName = (deck.name || 'deck')
+                        .toString()
+                        .replace(/[\\/:*?"<>|]+/g, '-')
+                        .replace(/\s+/g, ' ')
+                        .trim()
+                        .slice(0, 120) || 'deck';
+                    a.download = `${safeName}.apkg`;
                     a.click();
                     URL.revokeObjectURL(url);
                     toast('Exported .apkg');
@@ -5980,8 +6429,9 @@ async function handleRequest(request, env) {
                 db.run(`CREATE TABLE revlog (id integer primary key, cid integer, usn integer, ease integer, ivl integer, lastIvl integer, factor integer, time integer, type integer);`);
                 db.run(`CREATE TABLE graves (id integer primary key, oid integer, type integer, usn integer);`);
 
-                const now = Math.floor(Date.now() / 1000);
-                const dayStart = Math.floor(Date.now() / 1000 / 86400);
+                const nowMs = Date.now();
+                const now = Math.floor(nowMs / 1000);
+                const dayStart = Math.floor(now / 86400);
                 const deckId = Math.abs(this.hash(deck.name));
                 const modelBasicId = deckId + 1;
                 const modelClozeId = deckId + 2;
@@ -6028,10 +6478,10 @@ async function handleRequest(request, env) {
                 const dconf = { 1: { id: 1, name: "Default", new: { perDay: 20 }, rev: { perDay: 200 }, lapse: { delays: [10], mult: 0 }, dyn: false, maxTaken: 60, timer: 0 } };
                 const tags = {};
                 const colRow = db.prepare("INSERT INTO col VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)");
-                colRow.run([1, dayStart, now, now, 11, 0, 0, 0, JSON.stringify(conf), JSON.stringify(models), JSON.stringify(decks), JSON.stringify(dconf), JSON.stringify(tags)]);
+                colRow.run([nowMs, dayStart, now, now, 11, 0, 0, 0, JSON.stringify(conf), JSON.stringify(models), JSON.stringify(decks), JSON.stringify(dconf), JSON.stringify(tags)]);
 
-                let nidCounter = now * 1000;
-                let cidCounter = now * 1000 + 500;
+                let nidCounter = nowMs;
+                let cidCounter = nowMs + 500;
                 const noteStmt = db.prepare("INSERT INTO notes VALUES (?,?,?,?,?,?,?,?,?,?,?)");
                 const cardStmt = db.prepare("INSERT INTO cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
 
@@ -6138,6 +6588,9 @@ async function handleRequest(request, env) {
             async saveSettings() {
                 const prevWorkerUrl = this.state.settings.workerUrl;
                 const prevProxyToken = this.state.settings.proxyToken;
+                const prevAiProvider = this.state.settings.aiProvider || '';
+                const prevAiModel = this.state.settings.aiModel || '';
+                const prevAiKey = this.state.settings.aiKey || '';
                 this.state.settings.workerUrl = el('#settingWorkerUrl').value.trim();
                 this.state.settings.proxyToken = el('#settingProxyToken').value.trim();
                 if (this.state.settings.workerUrl !== prevWorkerUrl || this.state.settings.proxyToken !== prevProxyToken) {
@@ -6164,9 +6617,16 @@ async function handleRequest(request, env) {
                 this.state.settings.aiProvider = aiProvider;
                 this.state.settings.aiModel = aiModel;
                 if (aiKey) this.state.settings.aiKey = aiKey;
+                const aiKeyChanged = !!(aiKey && aiKey !== prevAiKey);
+                const aiChanged = (aiProvider || '') !== prevAiProvider || (aiModel || '') !== prevAiModel || aiKeyChanged;
+                if (!aiProvider || aiChanged) {
+                    this.state.settings.aiVerified = false;
+                }
 
                 // Save STT settings
                 const prevSttProvider = this.state.settings.sttProvider;
+                const prevSttModel = this.state.settings.sttModel || '';
+                const prevSttKey = this.state.settings.sttKey || '';
                 const sttProvider = el('#sttProvider').value;
                 const sttModel = el('#sttModel').value.trim();
                 const sttKey = el('#sttKey').value.trim();
@@ -6175,13 +6635,31 @@ async function handleRequest(request, env) {
                 this.state.settings.sttModel = sttModel;
                 if (sttKey) this.state.settings.sttKey = sttKey;
                 this.state.settings.sttPrompt = sttPrompt;
+                const sttKeyChanged = !!(sttKey && sttKey !== prevSttKey);
+                const sttChanged = (sttProvider || '') !== (prevSttProvider || '') || (sttModel || '') !== prevSttModel || sttKeyChanged;
+                if (!sttProvider) {
+                    this.state.settings.sttVerified = false;
+                } else if (sttProvider === 'browser') {
+                    this.state.settings.sttVerified = true;
+                } else if (sttChanged) {
+                    this.state.settings.sttVerified = false;
+                }
 
                 Storage.setSettings(this.state.settings);
                 this.renderStatus();
                 this.applyTheme();
                 this.applyFontMode();
                 this.renderGate();
-                this.applySttChangeEffects(!sttProvider || sttProvider !== prevSttProvider);
+                this.applySttChangeEffects(!sttProvider || sttChanged);
+                // If AI became unverified, force the UI out of AI mode to avoid a broken study flow.
+                if (!this.state.settings.aiVerified) {
+                    const revisionSelect = el('#revisionMode');
+                    if (revisionSelect && revisionSelect.value === 'ai') revisionSelect.value = 'manual';
+                    el('#aiControls')?.classList.add('hidden');
+                    el('#sttSettings')?.classList.add('hidden');
+                    this.updateSkipHotkeyLabel(false);
+                    this.updateMobileFab();
+                }
 
                 // Check if this is first sync (no decks/cards loaded yet)
                 const isFirstSync = this.state.decks.length === 0 && this.state.cards.length === 0;
@@ -6831,6 +7309,10 @@ async function handleRequest(request, env) {
                     toast('Offline: AI mode needs internet');
                     return;
                 }
+                if (!this.state.settings.aiVerified) {
+                    toast('Verify AI settings in Settings first');
+                    return;
+                }
                 if (!this.state.settings.aiKey) { toast('Add an AI key in Settings'); return; }
                 const deck = this.deckById(this.state.selectedCard.deckId);
                 const promptTemplate = deck?.aiPrompt || DEFAULT_AI_PROMPT;
@@ -6838,10 +7320,14 @@ async function handleRequest(request, env) {
                 const isReversed = this.state.cardReversed;
                 const question = isReversed ? this.state.selectedCard.back : this.state.selectedCard.name;
                 const answer = isReversed ? this.state.selectedCard.name : this.state.selectedCard.back;
-                const prompt = promptTemplate
-                    .replace('{{question}}', question)
-                    .replace('{{answer}}', answer)
-                    .replace('{{user}}', ans);
+                const applyTemplate = (tpl, vars) => {
+                    let out = String(tpl || '');
+                    for (const [key, value] of Object.entries(vars)) {
+                        out = out.split(`{{${key}}}`).join(String(value ?? ''));
+                    }
+                    return out;
+                };
+                const prompt = applyTemplate(promptTemplate, { question, answer, user: ans });
                 const provider = this.state.settings.aiProvider || 'openai';
                 const model = this.state.settings.aiModel || (provider === 'anthropic' ? 'claude-3-haiku-20240307' : provider === 'gemini' ? 'gemini-1.5-flash-latest' : 'gpt-4o-mini');
                 try {
@@ -6852,6 +7338,8 @@ async function handleRequest(request, env) {
                     el('#aiFeedback').innerHTML = 'Thinking...';
                     const res = await this.callAI(provider, model, prompt, this.state.settings.aiKey);
                     el('#aiFeedback').innerHTML = marked.parse(res);
+                    applyMediaEmbeds(el('#aiFeedback'));
+                    this.renderMath(el('#aiFeedback'));
                     this.reveal();
                 } catch (e) {
                     el('#aiFeedback').innerHTML = '';
@@ -7037,16 +7525,16 @@ async function handleRequest(request, env) {
                 }
                 this.state.userStoppedMic = false;
                 if (!this.state.activeMicButton) this.state.activeMicButton = 'inline';
-                const provider = this.state.sttProvider;
+                const provider = this.state.settings.sttProvider;
                 const isCloudProvider = provider && provider !== 'browser';
 
                 // If cloud provider is configured and verified, use it
                 if (isCloudProvider) {
-                    if (!this.state.sttKey) {
+                    if (!this.state.settings.sttKey) {
                         toast('Add and verify your STT API key in Settings.');
                         return;
                     }
-                    if (!this.state.sttVerified) {
+                    if (!this.state.settings.sttVerified) {
                         toast('Verify STT settings in Settings first.');
                         return;
                     }
@@ -7113,10 +7601,10 @@ async function handleRequest(request, env) {
                 rec.start();
             },
             async recordWithCloudSTT() {
-                const provider = this.state.sttProvider;
-                const model = this.state.sttModel || this.getDefaultSttModel(provider);
-                const key = this.state.sttKey;
-                const prompt = this.state.sttPrompt || '';
+                const provider = this.state.settings.sttProvider;
+                const model = this.state.settings.sttModel || this.getDefaultSttModel(provider);
+                const key = this.state.settings.sttKey;
+                const prompt = this.state.settings.sttPrompt || '';
 
                 el('#aiFeedback').classList.remove('hidden');
                 el('#aiFeedback').innerHTML = 'Recording... Click again to stop.';
