@@ -2779,7 +2779,6 @@ async function handleRequest(request, env) {
                 lockAiUntilNextCard: false,
                 activeMicButton: null,  // 'inline' | 'fab'
                 micPermissionPromise: null,
-                micStream: null,
                 cardReversed: false,
                 studyNonDue: false,
                 session: null,  // Active study session (loaded from localStorage)
@@ -2835,8 +2834,9 @@ async function handleRequest(request, env) {
                 if (this.state.micPermissionPromise) return this.state.micPermissionPromise;
                 this.state.micPermissionPromise = navigator.mediaDevices.getUserMedia({ audio: true })
                     .then(stream => {
-                        // Keep a cached stream to avoid repeated prompts in local/file contexts
-                        this.state.micStream = stream;
+                        // Immediately stop the tracks: we only want the permission grant, not an always-on mic.
+                        // Keeping a live stream makes the browser show "microphone in use" even when not recording.
+                        try { stream.getTracks().forEach(t => t.stop()); } catch (_) { }
                         this.state.settings.sttPermissionWarmed = true;
                         Storage.setSettings(this.state.settings);
                         return true;
@@ -2844,6 +2844,9 @@ async function handleRequest(request, env) {
                     .catch(err => {
                         this.state.micPermissionPromise = null;
                         throw err;
+                    })
+                    .finally(() => {
+                        this.state.micPermissionPromise = null;
                     });
                 return this.state.micPermissionPromise;
             },
@@ -2855,7 +2858,7 @@ async function handleRequest(request, env) {
             isSttEnabled() {
                 return !!this.state.sttProvider;
             },
-            stopMicActivity(hideFeedback = false, stopStream = false) {
+            stopMicActivity(hideFeedback = false) {
                 try {
                     if (this.state.currentRecorder && typeof this.state.currentRecorder.stop === 'function') {
                         this.state.currentRecorder.stop();
@@ -2866,11 +2869,6 @@ async function handleRequest(request, env) {
                         this.mediaRecorder.stop();
                     }
                 } catch (_) { }
-                if (stopStream && this.state.micStream) {
-                    this.state.micStream.getTracks().forEach(t => t.stop());
-                    this.state.micStream = null;
-                    this.state.micPermissionPromise = null;
-                }
                 this.state.currentRecorder = null;
                 this.mediaRecorder = null;
                 this.state.userStoppedMic = false;
@@ -2884,16 +2882,9 @@ async function handleRequest(request, env) {
                 this.updateMobileFab();
             },
             async getMicStream() {
-                if (this.state.micStream) {
-                    const alive = this.state.micStream.getTracks().some(t => t.readyState === 'live');
-                    if (alive) return this.state.micStream;
-                    // Drop dead stream so we can re-request without prompting
-                    this.state.micStream.getTracks().forEach(t => t.stop());
-                    this.state.micStream = null;
-                    this.state.micPermissionPromise = null;
-                }
-                await this.ensureMicPermission();
-                return this.state.micStream;
+                // Request a fresh stream for actual recording; do not keep the mic open between actions.
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('Microphone unsupported');
+                return navigator.mediaDevices.getUserMedia({ audio: true });
             },
             isMicActive() {
                 return !!this.state.currentRecorder || (this.mediaRecorder && this.mediaRecorder.state === 'recording');
@@ -3530,8 +3521,7 @@ async function handleRequest(request, env) {
 
                     if (e.key === 'Escape' && this.isMicActive()) {
                         e.preventDefault();
-                        if (this.state.currentRecorder) this.state.currentRecorder.stop();
-                        if (this.mediaRecorder && this.mediaRecorder.state === 'recording') this.mediaRecorder.stop();
+                        this.stopMicActivity(false);
                     }
 
                     if ((e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') && e.key !== 'Escape') return;
@@ -3557,13 +3547,6 @@ async function handleRequest(request, env) {
                             this.recordAnswer();
                         }
                     }
-                    // Escape stops any active mic recording
-                    if (e.key === 'Escape' && this.isMicActive()) {
-                        e.preventDefault();
-                        if (this.state.currentRecorder) this.state.currentRecorder.stop();
-                        if (this.mediaRecorder && this.mediaRecorder.state === 'recording') this.mediaRecorder.stop();
-                    }
-
                     if (this.state.answerRevealed) {
                         const ratings = { '1': 'Again', '2': 'Hard', '3': 'Good', '4': 'Easy' };
                         if (ratings[e.key]) this.rate(ratings[e.key]);
@@ -5785,7 +5768,7 @@ async function handleRequest(request, env) {
                     this.state.sttProvider = '';
                     this.state.sttVerified = false;
                     this.state.sttKey = '';
-                    this.stopMicActivity(true, true);
+                    this.stopMicActivity(true);
                     this.applySttChangeEffects(true);
                     toast('Speech-to-text disabled');
                     return;
@@ -6203,17 +6186,25 @@ async function handleRequest(request, env) {
                 if (key) this.state.settings.sttKey = key;
                 // If provider changed, require re-verify to avoid using stale creds with a new endpoint.
                 if (provider !== prevProvider) this.state.settings.sttVerified = false;
+                if (!provider) this.state.settings.sttPermissionWarmed = false;
 
                 this.state.sttProvider = provider;
                 this.state.sttModel = model;
                 this.state.sttPrompt = prompt;
                 if (key) this.state.sttKey = key;
                 if (provider !== prevProvider) this.state.sttVerified = false;
+                if (!provider) this.state.settings.sttPermissionWarmed = false;
 
                 Storage.setSettings(this.state.settings);
                 this.applySttChangeEffects(!provider);
 
-                if (!requestPermission || !provider) return;
+                if (prevProvider && provider && provider !== prevProvider) {
+                    toast(provider === 'browser' ? 'Using browser speech recognition' : 'STT provider changed — verify STT settings');
+                }
+
+                // Only request mic permission when transitioning from disabled -> enabled.
+                const shouldRequest = !!(requestPermission && !prevProvider && provider);
+                if (!shouldRequest) return;
                 this.ensureMicPermission()
                     .then(() => {
                         this.state.settings.sttPermissionWarmed = true;
@@ -6260,7 +6251,7 @@ async function handleRequest(request, env) {
             },
             applySttChangeEffects(disabled = false) {
                 if (disabled || !this.isSttEnabled()) {
-                    this.stopMicActivity(true, true);
+                    this.stopMicActivity(true);
                 } else {
                     const feedback = el('#aiFeedback');
                     if (feedback) feedback.classList.add('hidden');
@@ -6504,24 +6495,19 @@ async function handleRequest(request, env) {
                 this.state.userStoppedMic = false;
                 if (!this.state.activeMicButton) this.state.activeMicButton = 'inline';
                 const provider = this.state.sttProvider;
-
-                try {
-                    await this.getMicStream();
-                } catch (_) {
-                    toast('Microphone access denied');
-                    return;
-                }
+                const isCloudProvider = provider && provider !== 'browser';
 
                 // If cloud provider is configured and verified, use it
-                if (provider && this.state.sttVerified && this.state.sttKey) {
+                if (isCloudProvider) {
+                    if (!this.state.sttKey) {
+                        toast('Add and verify your STT API key in Settings.');
+                        return;
+                    }
+                    if (!this.state.sttVerified) {
+                        toast('Verify STT settings in Settings first.');
+                        return;
+                    }
                     await this.recordWithCloudSTT();
-                    return;
-                }
-
-                try {
-                    await this.ensureMicPermission();
-                } catch (_) {
-                    toast('Microphone access denied');
                     return;
                 }
 
@@ -6602,17 +6588,16 @@ async function handleRequest(request, env) {
                 if (!this.state.activeMicButton) this.state.activeMicButton = 'inline';
 
                 try {
-                    const baseStream = await this.getMicStream();
-                    if (!baseStream) throw new Error('Microphone unavailable');
-                    // Use a cloned stream so we don't lose the cached permission stream
-                    const stream = new MediaStream(baseStream.getAudioTracks().map(t => t.clone ? t.clone() : t));
+                    const stream = await this.getMicStream();
+                    if (!stream) throw new Error('Microphone unavailable');
                     const chunks = [];
                     this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
 
                     this.mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
 
                     this.mediaRecorder.onstop = async () => {
-                        stream.getTracks().forEach(t => t.stop());
+                        // Stop the mic as soon as recording ends so the browser doesn't show "mic in use".
+                        try { stream.getTracks().forEach(t => t.stop()); } catch (_) { }
                         el('#aiFeedback').innerHTML = 'Transcribing...';
                         this.state.currentRecorder = null;
                         this.setAiControlsLocked(this.state.aiLocked);
@@ -6642,7 +6627,7 @@ async function handleRequest(request, env) {
                     };
 
                     this.mediaRecorder.onerror = () => {
-                        stream.getTracks().forEach(t => t.stop());
+                        try { stream.getTracks().forEach(t => t.stop()); } catch (_) { }
                         el('#aiFeedback').innerHTML = '';
                         toast('Recording error');
                         this.state.currentRecorder = null;
