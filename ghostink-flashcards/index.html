@@ -32,6 +32,10 @@
     <!-- KaTeX for equations -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/mcstudios/glightbox/dist/js/glightbox.min.js"></script>
+
+    <!-- GLightbox -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/glightbox/dist/css/glightbox.min.css" />
 
     <!-- Fonts -->
     <link
@@ -63,14 +67,22 @@
             theme: {
                 extend: {
                     colors: {
-                        oatmeal: 'var(--surface-strong)',
-                        'oatmeal-dark': '#E6E2D6',
+                        oatmeal: {
+                            DEFAULT: 'rgb(var(--oatmeal-rgb) / <alpha-value>)',
+                            dark: 'rgb(var(--oatmeal-dark-rgb) / <alpha-value>)',
+                            hover: 'rgb(var(--oatmeal-hover-rgb) / <alpha-value>)'
+                        },
                         'earth-metal': 'rgb(var(--earth-metal-rgb) / <alpha-value>)',
                         charcoal: 'rgb(var(--charcoal-rgb) / <alpha-value>)',
-                        'white-linen': 'var(--surface)',
-                        'dull-purple': 'rgb(var(--dull-purple-rgb) / <alpha-value>)',
-                        'muted-pink': 'rgb(var(--muted-pink-rgb) / <alpha-value>)',
-                        'muted-pink-dim': 'rgb(var(--muted-pink-dim-rgb) / <alpha-value>)'
+                        'white-linen': 'rgb(var(--linen-rgb) / <alpha-value>)',
+                        'dull-purple': {
+                            DEFAULT: 'rgb(var(--dull-purple-rgb) / <alpha-value>)',
+                            hover: 'rgb(var(--dull-purple-hover-rgb) / <alpha-value>)'
+                        },
+                        'muted-pink': {
+                            DEFAULT: 'rgb(var(--muted-pink-rgb) / <alpha-value>)',
+                            hover: 'rgb(var(--muted-pink-hover-rgb) / <alpha-value>)'
+                        }
                     },
                     fontFamily: {
                         display: ['var(--font-display, "Fraunces")', 'serif'],
@@ -83,26 +95,34 @@
 
     <style>
         :root {
-            --oatmeal: #F3F0E6;
-            --oatmeal-dark: #E6E2D6;
-            --earth-metal: #4A4A4A;
-            --charcoal: #1F1F1F;
-            --linen: #FAF9F6;
-            --dull-purple: #917FB3;
-            --muted-pink: #D8A7B1;
-            --card-bg: rgba(250, 249, 246, 0.9);
-            --card-border: rgba(26, 26, 26, 0.06);
-            --text-main: #1F1F1F;
-            --text-sub: rgba(31, 31, 31, 0.7);
-            --surface: #faf9f6;
-            --surface-strong: #f3f0e6;
-            --border-weak: rgba(26, 26, 26, 0.06);
-            --bg: #f6f3eb;
+            /* Light Theme Components */
+            --oatmeal-rgb: 243 240 230;
+            --oatmeal-dark-rgb: 230 226 214;
+            --oatmeal-hover-rgb: 235 232 222;
             --earth-metal-rgb: 74 74 74;
             --charcoal-rgb: 31 31 31;
+            --linen-rgb: 250 249 246;
             --dull-purple-rgb: 145 127 179;
+            --dull-purple-hover-rgb: 130 113 161;
             --muted-pink-rgb: 216 167 177;
-            --muted-pink-dim-rgb: 198 150 160;
+            --muted-pink-hover-rgb: 201 150 160;
+
+            --oatmeal: rgb(var(--oatmeal-rgb));
+            --oatmeal-dark: rgb(var(--oatmeal-dark-rgb));
+            --earth-metal: rgb(var(--earth-metal-rgb));
+            --charcoal: rgb(var(--charcoal-rgb));
+            --linen: rgb(var(--linen-rgb));
+            --dull-purple: rgb(var(--dull-purple-rgb));
+            --muted-pink: rgb(var(--muted-pink-rgb));
+
+            --card-bg: rgba(var(--linen-rgb), 0.9);
+            --card-border: rgba(var(--charcoal-rgb), 0.06);
+            --text-main: var(--charcoal);
+            --text-sub: rgba(var(--charcoal-rgb), 0.7);
+            --surface: var(--linen);
+            --surface-strong: var(--oatmeal);
+            --border-weak: var(--card-border);
+            --bg: #f6f3eb;
         }
 
         body {
@@ -127,9 +147,18 @@
         body[data-theme="dark"],
         html[data-theme="dark"] body {
             color-scheme: dark;
-            --oatmeal: #1f1c2b;
-            --oatmeal-dark: #252335;
-            --linen: #1b1917;
+            /* Dark Theme Components */
+            --oatmeal-rgb: 31 28 43;
+            --oatmeal-dark-rgb: 37 35 53;
+            --oatmeal-hover-rgb: 42 39 61;
+            --earth-metal-rgb: 244 241 255;
+            --charcoal-rgb: 244 241 255;
+            --linen-rgb: 27 25 23;
+            --dull-purple-rgb: 120 100 160;
+            --dull-purple-hover-rgb: 138 114 181;
+            --muted-pink-rgb: 209 138 152;
+            --muted-pink-hover-rgb: 224 155 171;
+
             --card-bg: #201d1b;
             --card-border: rgba(255, 255, 255, 0.08);
             --text-main: #f4f1ff;
@@ -138,17 +167,42 @@
             --surface-strong: #1b1917;
             --border-weak: rgba(255, 255, 255, 0.08);
             --bg: #1b1917;
-            --earth-metal-rgb: 244 241 255;
-            --charcoal-rgb: 244 241 255;
-            --dull-purple-rgb: 201 180 230;
-            --muted-pink-rgb: 242 192 202;
-            --muted-pink-dim-rgb: 231 169 181;
         }
 
         .card {
             border: 1px solid var(--card-border);
             background: var(--card-bg);
             backdrop-filter: blur(12px);
+        }
+
+        .media-embed img,
+        .media-embed video {
+            cursor: zoom-in;
+        }
+
+        /* FAB Setup mode */
+        body.fab-setup-mode .mobile-fab-cluster {
+            pointer-events: auto;
+            border: 2px dashed var(--dull-purple);
+            background: rgba(145, 127, 179, 0.1);
+            padding: 10px;
+            border-radius: 20px;
+            cursor: move;
+        }
+
+        body.fab-setup-mode .mobile-fab-cluster::after {
+            content: "Drag to reposition FAB";
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--dull-purple);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            white-space: nowrap;
+            margin-bottom: 8px;
         }
 
         .dash {
@@ -360,8 +414,8 @@
 
         .cloze-blank {
             padding: 2px 6px;
-            border-bottom: 1px dashed #917FB3;
-            background: linear-gradient(90deg, rgba(145, 127, 179, 0.14), rgba(216, 167, 177, 0.14));
+            border-bottom: 1px dashed var(--dull-purple);
+            background: linear-gradient(90deg, rgb(var(--dull-purple-rgb) / 0.14), rgba(216, 167, 177, 0.14));
             border-radius: 6px;
         }
 
@@ -370,7 +424,7 @@
         }
 
         .cloze-blank .cloze-placeholder {
-            color: #917FB3;
+            color: var(--dull-purple);
             font-style: italic;
         }
 
@@ -804,7 +858,7 @@
         }
 
         .pill-toggle button.active {
-            background: var(--dull-purple);
+            background: rgb(var(--dull-purple-rgb));
             color: #fff;
             box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
         }
@@ -835,7 +889,7 @@
         }
 
         .tab-btn.active {
-            background: var(--dull-purple);
+            background: rgb(var(--dull-purple-rgb));
             color: white;
         }
 
@@ -931,7 +985,7 @@
                     <i data-lucide="more-horizontal" class="w-4 h-4"></i>
                 </button>
                 <button id="syncNowBtn"
-                    class="p-1.5 sm:p-2 rounded-full bg-dull-purple text-white hover:bg-[#7d6aa1] transition-all"
+                    class="p-1.5 sm:p-2 rounded-full bg-dull-purple text-white hover:bg-dull-purple-hover transition-all transition-all"
                     data-tip="Sync now" title="Sync" aria-label="Sync with Notion">
                     <i data-lucide="refresh-ccw" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
                 </button>
@@ -1021,7 +1075,7 @@
                 </div>
                 <div class="flex justify-center">
                     <button id="lockedOpenSettings"
-                        class="px-5 py-3 rounded-lg bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex items-center gap-2 whitespace-nowrap shadow-soft">
+                        class="px-5 py-3 rounded-lg bg-dull-purple text-white text-sm hover:bg-dull-purple-hover transition-all flex items-center gap-2 whitespace-nowrap shadow-soft">
                         <i data-lucide="settings" class="w-4 h-4"></i><span>Open settings</span>
                     </button>
                 </div>
@@ -1076,7 +1130,7 @@
                                     <span class="hidden lg:inline">Reset Algorithm</span>
                                 </button>
                                 <button id="newCardBtn"
-                                    class="p-2 md:px-3 md:py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex items-center gap-2 hidden"
+                                    class="p-2 md:px-3 md:py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-dull-purple-hover transition-all flex items-center gap-2 hidden"
                                     data-tooltip="New card">
                                     <i data-lucide="plus-circle" class="w-4 h-4"></i>
                                     <span class="hidden md:inline">New card</span>
@@ -1178,7 +1232,7 @@
                                 <!-- Session controls -->
                                 <div id="sessionControls" class="pt-3">
                                     <button id="startSessionBtn"
-                                        class="w-full px-4 py-2.5 rounded-lg bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] transition flex items-center justify-center gap-2">
+                                        class="w-full px-4 py-2.5 rounded-lg bg-dull-purple text-white text-sm hover:bg-dull-purple-hover transition-all transition flex items-center justify-center gap-2">
                                         <i data-lucide="play" class="w-4 h-4"></i>
                                         <span>Start Study Session</span>
                                         <kbd id="startSessionHotkey"
@@ -1302,7 +1356,7 @@
                                                     class="hidden md:inline-block absolute right-2 top-1/2 -translate-y-1/2 text-[10px] px-1 py-0.5 rounded bg-white/20 text-earth-metal/60"></kbd>
                                             </button>
                                             <button id="aiSubmit"
-                                                class="px-3 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] flex-1">
+                                                class="px-3 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-dull-purple-hover transition-all flex-1">
                                                 Send <kbd id="aiSendHotkey"
                                                     class="hidden md:inline-block text-[10px] px-1.5 py-0.5 rounded bg-white/20 font-medium ml-1 font-sans"></kbd>
                                             </button>
@@ -1483,7 +1537,7 @@
                 <button id="cancelDelete"
                     class="px-3 py-2 rounded-lg bg-white-linen border border-oatmeal-dark/70 text-earth-metal dark:text-white text-sm dark:bg-zinc-800 dark:border-white/10 dark:hover:bg-zinc-700">Cancel</button>
                 <button id="confirmDelete"
-                    class="px-3 py-2 rounded-lg bg-muted-pink text-white text-sm hover:bg-muted-pink/90">Delete</button>
+                    class="px-3 py-2 rounded-lg bg-muted-pink text-white text-sm hover:bg-muted-pink-hover transition-all">Delete</button>
             </div>
         </div>
     </div>
@@ -1541,29 +1595,90 @@
     <div id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"
         class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4">
         <div id="settingsCard" class="card rounded-2xl p-5 w-full max-w-3xl shadow-soft max-h-[90vh] overflow-y-auto">
-            <div class="flex items-center justify-between mb-3 sticky top-0 z-10 bg-[color:var(--card-bg)] pb-2">
-                <h3 id="settingsTitle" class="font-display text-lg text-charcoal">Connection</h3>
-                <div class="flex items-center gap-2">
-                    <button id="saveSettings"
-                        class="px-3 py-1.5 rounded-lg bg-dull-purple text-white text-sm hover:bg-[#7d6aa1] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-dull-purple">Save</button>
-                    <button id="closeSettings" aria-label="Close settings"
-                        class="text-earth-metal/60 hover:text-charcoal"><i data-lucide="x" class="w-5 h-5"></i></button>
+            <div class="sticky top-[-20px] pt-[20px] -mt-[20px] z-20 bg-[color:var(--surface)] pb-2 space-y-3">
+                <div class="flex items-center justify-between">
+                    <h3 id="settingsTitle" class="font-display text-lg text-charcoal">Settings</h3>
+                    <div class="flex items-center gap-2">
+                        <button id="saveSettings"
+                            class="px-3 py-1.5 rounded-lg bg-dull-purple text-white text-sm hover:bg-dull-purple-hover transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-dull-purple">Save</button>
+                        <button id="closeSettings" aria-label="Close settings"
+                            class="text-earth-metal/60 hover:text-charcoal"><i data-lucide="x"
+                                class="w-5 h-5"></i></button>
+                    </div>
+                </div>
+                <!-- Combined Sticky Header: Status + Vault -->
+                <div class="space-y-3">
+                    <!-- Status bar -->
+                    <div
+                        class="rounded-lg border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-[color:var(--surface-strong)]">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center gap-2">
+                                <i data-lucide="shield-check"
+                                    class="w-4 h-4 text-dull-purple dark:text-dull-purple"></i>
+                                <p class="font-semibold text-charcoal dark:text-white text-sm">Status</p>
+                            </div>
+                            <div id="q2syncIndicator"
+                                class="hidden items-center gap-1.5 px-2 py-0.5 rounded bg-dull-purple/10 border border-dull-purple/20">
+                                <span class="relative flex h-1.5 w-1.5">
+                                    <span
+                                        class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[color:var(--dull-purple)] opacity-75"></span>
+                                    <span
+                                        class="relative inline-flex rounded-full h-1.5 w-1.5 bg-[color:var(--dull-purple)]"></span>
+                                </span>
+                                <span class="font-mono text-[10px] font-medium text-dull-purple"><span
+                                        id="q2syncCount">0</span> items in q2sync</span>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap gap-4 text-xs text-earth-metal/80 dark:text-white/70">
+                            <span id="statusWorker">Worker: missing</span>
+                            <span id="statusAuth">Auth: missing</span>
+                            <span id="statusSources">Sources: missing</span>
+                        </div>
+                    </div>
+                    <!-- Offline vault (shown only when setup) -->
+                    <div id="vaultStatusSection" class="hidden">
+                        <div
+                            class="rounded-lg border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-white-linen dark:bg-white/5">
+                            <div class="flex items-center gap-2">
+                                <i data-lucide="database" class="w-4 h-4 text-dull-purple dark:text-dull-purple"></i>
+                                <p class="font-semibold text-charcoal dark:text-white text-sm">Offline vault</p>
+                            </div>
+                            <div class="mt-3 grid grid-cols-2 gap-3 text-sm">
+                                <div class="rounded-lg bg-oatmeal dark:bg-white/10 p-3">
+                                    <p
+                                        class="text-earth-metal/60 dark:text-white/60 text-[10px] uppercase tracking-wider font-semibold">
+                                        Decks cached</p>
+                                    <p id="deckCount" class="text-xl font-semibold text-charcoal dark:text-white">0</p>
+                                </div>
+                                <div class="rounded-lg bg-oatmeal dark:bg-white/10 p-3">
+                                    <p
+                                        class="text-earth-metal/60 dark:text-white/60 text-[10px] uppercase tracking-wider font-semibold">
+                                        Cards cached</p>
+                                    <p id="cardCount" class="text-xl font-semibold text-charcoal dark:text-white">0</p>
+                                </div>
+                                <div
+                                    class="rounded-lg bg-white-linen dark:bg-white/10 p-3 border border-oatmeal-dark/40">
+                                    <p
+                                        class="text-earth-metal/60 dark:text-white/60 text-[10px] uppercase tracking-wider font-semibold">
+                                        Pending sync</p>
+                                    <p id="queueCount" class="text-xl font-semibold text-charcoal dark:text-white">0</p>
+                                </div>
+                                <div
+                                    class="rounded-lg bg-white-linen dark:bg-white/10 p-3 border border-oatmeal-dark/40">
+                                    <p
+                                        class="text-earth-metal/60 dark:text-white/60 text-[10px] uppercase tracking-wider font-semibold">
+                                        Last sync</p>
+                                    <p id="lastSync"
+                                        class="text-sm font-semibold text-charcoal dark:text-white truncate mt-1">—</p>
+                                </div>
+                            </div>
+                            <p class="mt-3 text-[10px] text-earth-metal/60 dark:text-white/60">IndexedDB holds all
+                                decks/cards/FSRS/notes for offline-first use.</p>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <!-- Status bar spanning full width -->
-            <div
-                class="sticky top-[52px] z-10 rounded-lg border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-[color:var(--surface-strong)] mb-4">
-                <div class="flex items-center gap-2 mb-2">
-                    <i data-lucide="shield-check" class="w-4 h-4 text-dull-purple dark:text-dull-purple"></i>
-                    <p class="font-semibold text-charcoal dark:text-white text-sm">Status</p>
-                </div>
-                <div class="flex flex-wrap gap-4 text-xs text-earth-metal/80 dark:text-white/70">
-                    <span id="statusWorker">Worker: missing</span>
-                    <span id="statusAuth">Auth: missing</span>
-                    <span id="statusSources">Sources: missing</span>
-                </div>
-            </div>
-            <div class="grid md:grid-cols-2 gap-6 text-sm">
+            <div class="grid md:grid-cols-2 gap-6 text-sm mt-4">
                 <div class="space-y-4">
                     <div
                         class="rounded-lg border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-white-linen dark:bg-white/5">
@@ -1613,10 +1728,13 @@
                         <select id="cardSourceSelect" disabled
                             class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"></select>
                     </div>
-                    <div class="flex gap-2 flex-wrap">
+                    <div class="flex flex-col sm:flex-row gap-2">
                         <button id="scanSources" disabled
                             class="px-3 py-2 rounded-lg bg-charcoal dark:bg-white/10 dark:border-white/10 dark:border text-white text-sm hover:bg-earth-metal dark:hover:bg-white/20 flex-1 min-w-[140px] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-charcoal">Scan
                             sources</button>
+                        <button id="saveSourcesChoice" disabled
+                            class="px-3 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-dull-purple-hover transition-all flex-1 min-w-[140px] disabled:opacity-60 disabled:cursor-not-allowed">Save
+                            sources choice</button>
                     </div>
                     <div class="w-full h-2 bg-oatmeal rounded-full overflow-hidden">
                         <div id="syncProgress" class="h-2 bg-dull-purple w-0 transition-all duration-500"></div>
@@ -1625,31 +1743,17 @@
                 <div class="space-y-4">
                     <div
                         class="rounded-lg border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-white-linen dark:bg-white/5">
-                        <div class="flex items-center gap-2">
-                            <i data-lucide="database" class="w-4 h-4 text-dull-purple dark:text-dull-purple"></i>
-                            <p class="font-semibold text-charcoal dark:text-white">Offline vault</p>
+                        <div class="flex items-center justify-between gap-2 mb-2">
+                            <div class="flex items-center gap-2">
+                                <i data-lucide="smartphone" class="w-4 h-4 text-dull-purple dark:text-dull-purple"></i>
+                                <p class="font-semibold text-charcoal dark:text-white">Mobile layout</p>
+                            </div>
+                            <button id="setupFabPos"
+                                class="text-[10px] px-2 py-1 rounded bg-oatmeal dark:bg-white/10 border border-oatmeal-dark/60">Reposition
+                                FAB</button>
                         </div>
-                        <div class="mt-3 grid grid-cols-2 gap-3 text-sm">
-                            <div class="rounded-lg bg-oatmeal dark:bg-white/10 p-3">
-                                <p class="text-earth-metal/60 dark:text-white/60">Decks cached</p>
-                                <p id="deckCount" class="text-xl font-semibold text-charcoal dark:text-white">0</p>
-                            </div>
-                            <div class="rounded-lg bg-oatmeal dark:bg-white/10 p-3">
-                                <p class="text-earth-metal/60 dark:text-white/60">Cards cached</p>
-                                <p id="cardCount" class="text-xl font-semibold text-charcoal dark:text-white">0</p>
-                            </div>
-                            <div class="rounded-lg bg-white-linen dark:bg-white/10 p-3">
-                                <p class="text-earth-metal/60 dark:text-white/60">Pending sync</p>
-                                <p id="queueCount" class="text-xl font-semibold text-charcoal dark:text-white">0</p>
-                            </div>
-                            <div class="rounded-lg bg-white-linen dark:bg-white/10 p-3">
-                                <p class="text-earth-metal/60 dark:text-white/60">Last sync</p>
-                                <p id="lastSync" class="text-xl font-semibold text-charcoal dark:text-white">—</p>
-                            </div>
-                        </div>
-                        <p class="mt-3 text-xs text-earth-metal/70 dark:text-white/70">IndexedDB holds all
-                            decks/cards/FSRS/notes for
-                            offline-first use.</p>
+                        <p class="text-[11px] text-earth-metal/60 dark:text-white/60">Customize the position of the
+                            joystick/action buttons on mobile screens.</p>
                     </div>
                     <div
                         class="rounded-lg border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-white-linen dark:bg-white/5">
@@ -1725,27 +1829,26 @@
                                 Cloud providers offer better accuracy.</p>
                         </div>
                     </div>
-                    <!-- Danger Zone -->
-                    <div class="mt-4 border-t border-oatmeal-dark/40 dark:border-white/10 pt-4">
-                        <button id="toggleDangerZone"
-                            class="w-full flex items-center justify-between text-sm text-muted-pink dark:text-muted-pink/80 hover:text-muted-pink/80 transition">
-                            <span class="flex items-center gap-2">
-                                <i data-lucide="alert-triangle" class="w-4 h-4"></i>
-                                <span>Danger Zone</span>
-                            </span>
-                            <i data-lucide="chevron-down" id="dangerZoneChevron"
-                                class="w-4 h-4 transition-transform"></i>
-                        </button>
-                        <div id="dangerZoneContent"
-                            class="hidden mt-3 p-3 rounded-lg bg-muted-pink/10 border border-muted-pink/30 dark:bg-muted-pink/15 dark:border-muted-pink/40">
-                            <p class="text-xs text-earth-metal/70 dark:text-white/70 mb-3">This will permanently delete
-                                all GhostInk data
-                                including decks, cards, settings, and session data. Data synced to Notion will not be
-                                affected.</p>
-                            <button id="resetApp"
-                                class="px-3 py-2 rounded-lg bg-muted-pink text-white text-sm hover:bg-muted-pink/90 w-full">Reset
-                                GhostInk</button>
-                        </div>
+                </div>
+                <!-- Danger Zone spanning both columns -->
+                <div class="md:col-span-2 mt-4 border-t border-oatmeal-dark/40 dark:border-white/10 pt-4">
+                    <button id="toggleDangerZone"
+                        class="w-full flex items-center justify-between text-sm text-muted-pink dark:text-muted-pink/80 hover:text-muted-pink/80 transition">
+                        <span class="flex items-center gap-2">
+                            <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+                            <span>Danger Zone</span>
+                        </span>
+                        <i data-lucide="chevron-down" id="dangerZoneChevron" class="w-4 h-4 transition-transform"></i>
+                    </button>
+                    <div id="dangerZoneContent"
+                        class="hidden mt-3 p-3 rounded-lg bg-muted-pink/10 border border-muted-pink/30 dark:bg-muted-pink/15 dark:border-muted-pink/40">
+                        <p class="text-xs text-earth-metal/70 dark:text-white/70 mb-3">This will permanently delete
+                            all GhostInk data
+                            including decks, cards, settings, and session data. Data synced to Notion will not be
+                            affected.</p>
+                        <button id="resetApp"
+                            class="px-3 py-2 rounded-lg bg-muted-pink text-white text-sm hover:bg-muted-pink-hover transition-all w-full">Reset
+                            GhostInk</button>
                     </div>
                 </div>
             </div>
@@ -1934,7 +2037,7 @@ async function handleRequest(request, env) {
                     class="px-3 py-2 rounded-lg border border-earth-metal/40 text-earth-metal text-sm hidden">Archive
                     deck</button>
                 <button id="saveDeckBtn"
-                    class="px-4 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-[#7d6aa1]">Save</button>
+                    class="px-4 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-dull-purple-hover transition-all">Save</button>
             </div>
         </div>
     </div>
@@ -2048,7 +2151,7 @@ async function handleRequest(request, env) {
                 <button id="closeAiSettingsModal"
                     class="px-4 py-2 rounded-lg border border-oatmeal-dark text-earth-metal dark:text-white dark:border-white/10 text-sm">Close</button>
                 <button id="openSettingsFromAiModal"
-                    class="px-4 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-[#7d6aa1]">Open
+                    class="px-4 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-dull-purple-hover transition-all">Open
                     Settings</button>
             </div>
         </div>
@@ -2076,7 +2179,7 @@ async function handleRequest(request, env) {
                     <button id="cancelNotesBtn"
                         class="px-4 py-2 rounded-lg border border-oatmeal-dark text-earth-metal text-sm">Cancel</button>
                     <button id="saveNotesBtn"
-                        class="px-4 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-[#7d6aa1]">Save</button>
+                        class="px-4 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-dull-purple-hover transition-all">Save</button>
                 </div>
             </div>
         </div>
@@ -2099,7 +2202,7 @@ async function handleRequest(request, env) {
                 <button id="cancelReset"
                     class="px-4 py-2 rounded-lg border border-oatmeal-dark text-earth-metal dark:text-white dark:border-white/10 dark:hover:bg-zinc-800 text-sm">Cancel</button>
                 <button id="confirmReset"
-                    class="px-4 py-2 rounded-lg bg-muted-pink text-white text-sm hover:bg-muted-pink/90">Reset</button>
+                    class="px-4 py-2 rounded-lg bg-muted-pink text-white text-sm hover:bg-muted-pink-hover transition-all">Reset</button>
             </div>
         </div>
     </div>
@@ -2135,7 +2238,8 @@ async function handleRequest(request, env) {
                 <button id="cancelAddBlockBtn"
                     class="px-4 py-2 rounded-lg border border-oatmeal-dark text-earth-metal text-sm">Cancel</button>
                 <button id="saveAddBlockBtn"
-                    class="px-4 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-[#7d6aa1]">Add to
+                    class="px-4 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-dull-purple-hover transition-all">Add
+                    to
                     Page</button>
             </div>
         </div>
@@ -2191,35 +2295,51 @@ async function handleRequest(request, env) {
             // YouTube
             if (host === 'youtu.be') {
                 const id = path.replace(/^\/+/, '').split('/')[0];
-                if (id) return { kind: 'youtube', src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` };
+                if (id) return { kind: 'youtube', src: `https://www.youtube.com/embed/${encodeURIComponent(id)}?enablejsapi=1` };
             }
             if (host.includes('youtube.com')) {
                 if (path.startsWith('/watch')) {
                     const id = u.searchParams.get('v');
-                    if (id) return { kind: 'youtube', src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` };
+                    if (id) return { kind: 'youtube', src: `https://www.youtube.com/embed/${encodeURIComponent(id)}?enablejsapi=1` };
                 }
                 if (path.startsWith('/shorts/')) {
                     const id = path.split('/').filter(Boolean)[1];
-                    if (id) return { kind: 'youtube', src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` };
+                    if (id) return { kind: 'youtube', src: `https://www.youtube.com/embed/${encodeURIComponent(id)}?enablejsapi=1` };
                 }
                 if (path.startsWith('/embed/')) {
                     const id = path.split('/').filter(Boolean)[1];
-                    if (id) return { kind: 'youtube', src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` };
+                    if (id) return { kind: 'youtube', src: `https://www.youtube.com/embed/${encodeURIComponent(id)}?enablejsapi=1` };
                 }
             }
 
             // Vimeo
             if (host === 'vimeo.com') {
                 const id = path.replace(/^\/+/, '').split('/')[0];
-                if (id && /^\d+$/.test(id)) return { kind: 'vimeo', src: `https://player.vimeo.com/video/${encodeURIComponent(id)}` };
+                if (id && /^\d+$/.test(id)) return { kind: 'vimeo', src: `https://player.vimeo.com/video/${encodeURIComponent(id)}?dnt=1&title=0&byline=0&portrait=0` };
             }
 
             return null;
         };
 
+        // Initialize GLightbox
+        const lightbox = GLightbox({
+            selector: '.glightbox',
+            touchNavigation: true,
+            loop: true,
+            autoplayVideos: true,
+            zoomable: true,
+            draggable: true
+        });
+
         const createMediaFigure = (doc, { kind, src }, label, originalUrl) => {
             const fig = doc.createElement('figure');
             fig.className = 'media-embed';
+
+            const a = doc.createElement('a');
+            a.href = src;
+            a.className = 'glightbox';
+            a.setAttribute('data-description', label || '');
+
             if (kind === 'image') {
                 const img = doc.createElement('img');
                 img.src = src;
@@ -2227,14 +2347,20 @@ async function handleRequest(request, env) {
                 img.loading = 'lazy';
                 img.decoding = 'async';
                 img.referrerPolicy = 'no-referrer';
-                fig.appendChild(img);
+                img.onerror = () => {
+                    img.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%23917FB3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"%3E%3Crect width="18" height="18" x="3" y="3" rx="2" ry="2"/%3E%3Ccircle cx="9" cy="9" r="2"/%3E%3Cpath d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/%3E%3C/svg%3E';
+                    img.className += ' opacity-40 p-8 bg-oatmeal';
+                };
+                a.appendChild(img);
+                fig.appendChild(a);
             } else if (kind === 'video') {
                 const video = doc.createElement('video');
                 video.src = src;
                 video.controls = true;
                 video.playsInline = true;
                 video.preload = 'metadata';
-                fig.appendChild(video);
+                a.appendChild(video);
+                fig.appendChild(a);
             } else if (kind === 'youtube' || kind === 'vimeo') {
                 const wrap = doc.createElement('div');
                 wrap.className = 'media-embed-frame';
@@ -2245,16 +2371,35 @@ async function handleRequest(request, env) {
                 iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
                 iframe.allowFullscreen = true;
                 wrap.appendChild(iframe);
+
+                // Add an expand overlay for video frames
+                const expandBtn = doc.createElement('button');
+                expandBtn.className = 'absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70';
+                expandBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 3 6 6-3 3-6-6 3-3Z"/><path d="M9 21 3 15l3-3 6 6-3 3Z"/><path d="M21 3v21H0V3h21ZM3 7v14h14V7H3Z"/></svg>';
+                expandBtn.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const lbLink = doc.createElement('a');
+                    lbLink.href = src;
+                    lbLink.className = 'glightbox hidden';
+                    doc.body.appendChild(lbLink);
+                    const instance = GLightbox({ elements: [{ href: src, type: 'video', source: kind }] });
+                    instance.open();
+                };
+
+                wrap.classList.add('group');
+                wrap.appendChild(expandBtn);
                 fig.appendChild(wrap);
             }
 
             const cap = doc.createElement('figcaption');
-            const a = doc.createElement('a');
-            a.href = originalUrl || src;
-            a.target = '_blank';
-            a.rel = 'noopener noreferrer';
-            a.textContent = label || originalUrl || src;
-            cap.appendChild(a);
+            const sourceLink = doc.createElement('a');
+            sourceLink.href = originalUrl || src;
+            sourceLink.target = '_blank';
+            sourceLink.rel = 'noopener noreferrer';
+            sourceLink.className = 'flex items-center gap-1.5 opacity-80 hover:opacity-100 transition';
+            sourceLink.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg> Source`;
+            cap.appendChild(sourceLink);
             fig.appendChild(cap);
             return fig;
         };
@@ -2274,6 +2419,13 @@ async function handleRequest(request, env) {
                     img.replaceWith(fig);
                     fig.appendChild(img);
                 }
+                if (!img.parentElement.classList.contains('glightbox')) {
+                    const a = doc.createElement('a');
+                    a.href = img.src;
+                    a.className = 'glightbox';
+                    img.replaceWith(a);
+                    a.appendChild(img);
+                }
             });
             container.querySelectorAll('video').forEach(v => {
                 v.controls = true;
@@ -2285,6 +2437,13 @@ async function handleRequest(request, env) {
                     v.replaceWith(fig);
                     fig.appendChild(v);
                 }
+                if (!v.parentElement.classList.contains('glightbox')) {
+                    const a = doc.createElement('a');
+                    a.href = v.src;
+                    a.className = 'glightbox';
+                    v.replaceWith(a);
+                    a.appendChild(v);
+                }
             });
 
             // Replace media links with embeds.
@@ -2294,6 +2453,8 @@ async function handleRequest(request, env) {
                 if (!info) return;
                 // Don't nest embeds.
                 if (a.closest('figure.media-embed')) return;
+                // Don't process glightbox links
+                if (a.classList.contains('glightbox')) return;
                 const label = (a.textContent || '').trim();
                 const fig = createMediaFigure(doc, info, label || href, href);
                 a.replaceWith(fig);
@@ -2336,6 +2497,8 @@ async function handleRequest(request, env) {
                 if (lastIdx < text.length) frag.appendChild(doc.createTextNode(text.slice(lastIdx)));
                 textNode.replaceWith(frag);
             }
+            // Refresh GLightbox to pick up new elements
+            lightbox.reload();
         };
         let toastTimer = null;
         const toast = (msg) => {
@@ -3030,37 +3193,54 @@ async function handleRequest(request, env) {
                     const dr = obj.desired_retention ?? obj.desiredRetention ?? obj.request_retention ?? obj.requestRetention;
                     if (dr !== undefined) out.desiredRetention = clampRetention(dr);
                     const w = obj.weights ?? obj.w ?? obj.params;
-                    if (Array.isArray(w) && w.length === 21 && w.every(n => Number.isFinite(Number(n)))) {
-                        out.weights = w.map(n => Number(n));
+                    if (Array.isArray(w)) {
+                        if (w.length === 21) {
+                            out.weights = w.map(n => Number(n));
+                        } else if (w.length > 0) {
+                            // Recovery: pad with defaults
+                            const recovered = w.map(n => Number.isFinite(Number(n)) ? Number(n) : 0);
+                            while (recovered.length < 21) {
+                                recovered.push(fsrsW[recovered.length]);
+                            }
+                            out.weights = recovered.slice(0, 21);
+                        }
                     }
-                    return out;
-                } catch (_) {
-                    // Fall through to numeric parsing
-                }
+                    if (out.weights) return out;
+                } catch (_) { }
             }
 
             // Numeric format: either "0.9, w1, w2, ... w21" or just "w1, ... w21"
             const nums = text.split(/[\s,]+/).map(s => parseFloat(s.trim())).filter(n => Number.isFinite(n));
+
+            if (nums.length === 0) return out;
+
             if (nums.length === 1 && nums[0] > 0 && nums[0] < 1) {
                 out.desiredRetention = clampRetention(nums[0]);
                 return out;
             }
-            if (nums.length === 22 && nums[0] > 0 && nums[0] < 1) {
+
+            // Check if first number looks like retention
+            let startIdx = 0;
+            if (nums[0] > 0 && nums[0] < 1 && nums.length > 1) {
                 out.desiredRetention = clampRetention(nums[0]);
-                out.weights = nums.slice(1);
-                return out;
+                startIdx = 1;
             }
-            if (nums.length === 21) {
-                out.weights = nums;
-                return out;
+
+            // Extract weights and recover if needed
+            const rawWeights = nums.slice(startIdx);
+            const recovered = [...rawWeights];
+            while (recovered.length < 21) {
+                recovered.push(fsrsW[recovered.length]);
             }
+            out.weights = recovered.slice(0, 21);
+
             return out;
         };
         const serializeFsrsParamsText = (deck) => {
             if (!deck || deck.algorithm !== 'FSRS') return '';
             const desiredRetention = clampRetention(deck.fsrsDesiredRetention ?? DEFAULT_DESIRED_RETENTION);
-            const obj = { desired_retention: desiredRetention };
-            if (Array.isArray(deck.fsrsWeights) && deck.fsrsWeights.length === 21) obj.weights = deck.fsrsWeights;
+            const weights = (Array.isArray(deck.fsrsWeights) && deck.fsrsWeights.length === 21) ? deck.fsrsWeights : fsrsW;
+            const obj = { desired_retention: desiredRetention, weights: weights };
             return JSON.stringify(obj);
         };
         const simulateFsrsReviewAt = (state, { at, rating }, w) => {
@@ -3359,7 +3539,8 @@ async function handleRequest(request, env) {
                 tagOptions: [],
                 tagSelection: [],
                 userStoppedMic: false,
-                activeAudioStream: null
+                activeAudioStream: null,
+                fabSetupMode: false
             },
             isAiModeSelected() {
                 return el('#revisionMode')?.value === 'ai';
@@ -3374,6 +3555,7 @@ async function handleRequest(request, env) {
             async init() {
                 this.applyTheme();
                 this.applyFontMode();
+                this.applyFabPosition();
 
                 showLoading('Preparing app...', 'Loading your decks and cards.');
                 await Storage.init();
@@ -4224,6 +4406,17 @@ async function handleRequest(request, env) {
                 el('#verifyAuth').onclick = () => this.verifyAuth();
                 el('#oauthBtn').onclick = () => { if (this.state.settings.workerUrl) this.startOAuth(); else toast('Add worker URL first'); };
                 el('#scanSources').onclick = () => this.scanSources();
+                el('#saveSourcesChoice').onclick = () => {
+                    this.state.settings.deckSource = el('#deckSourceSelect').value;
+                    this.state.settings.cardSource = el('#cardSourceSelect').value;
+                    this.state.sourcesVerified = !!(this.state.settings.deckSource && this.state.settings.cardSource);
+                    this.state.settings.sourcesVerified = this.state.sourcesVerified;
+                    Storage.setSettings(this.state.settings);
+                    this.renderStatus();
+                    toast('Sources choice saved. Syncing...');
+                    this.syncNow();
+                };
+                el('#setupFabPos').onclick = () => this.toggleFabSetup();
                 el('#openWorkerHelp').onclick = () => this.openModal('workerHelpModal');
                 el('#closeWorkerHelp').onclick = () => this.closeModal('workerHelpModal');
                 el('#copyWorkerCode').onclick = () => this.copyWorkerCode();
@@ -4414,23 +4607,31 @@ async function handleRequest(request, env) {
                 const authOk = workerOk && hasToken;
                 const ready = online && workerOk && authOk;
 
+                const q2count = (this.state.queue || []).length;
+                const q2ind = el('#q2syncIndicator');
+                const q2val = el('#q2syncCount');
+                if (q2ind && q2val) {
+                    q2val.textContent = String(q2count);
+                    q2ind.classList.toggle('hidden', q2count === 0);
+                }
+
                 if (!online) {
-                    badge.textContent = 'Offline';
+                    badge.innerHTML = q2count > 0 ? `Offline <span class="font-mono opacity-60 ml-1">(${q2count} pending)</span>` : 'Offline ready';
                     badge.className = 'px-3 py-1 rounded-full pill text-xs bg-oatmeal border border-oatmeal-dark text-earth-metal';
                     this.updateSyncButtonState();
                     return;
                 }
 
                 if (!hasWorkerUrl) {
-                    badge.textContent = 'Online · add worker URL';
+                    badge.innerHTML = 'Online · add worker URL';
                 } else if (!workerOk) {
-                    badge.textContent = 'Online · verify worker';
+                    badge.innerHTML = 'Online · verify worker';
                 } else if (!hasToken) {
-                    badge.textContent = 'Online · set token';
+                    badge.innerHTML = 'Online · set token';
                 } else if (!authOk) {
-                    badge.textContent = 'Online · verify token';
+                    badge.innerHTML = 'Online · verify token';
                 } else {
-                    badge.textContent = 'Online · Notion ready';
+                    badge.innerHTML = q2count > 0 ? `Online <span class="font-mono opacity-60 ml-1">(${q2count} pending)</span>` : 'Online · Notion ready';
                 }
                 badge.className = ready
                     ? 'px-3 py-1 rounded-full pill text-xs bg-white-linen border border-oatmeal-dark text-earth-metal'
@@ -5010,7 +5211,7 @@ async function handleRequest(request, env) {
                 const retentionInput = el('#deckFsrsDesiredRetention');
                 const optimizeBtn = el('#optimizeFsrsBtn');
                 if (paramsInput) {
-                    paramsInput.value = (deck?.fsrsWeights || []).join(', ');
+                    paramsInput.value = (deck?.fsrsWeights || fsrsW).join(', ');
                 }
                 if (retentionInput) {
                     retentionInput.value = (deck?.fsrsDesiredRetention ?? DEFAULT_DESIRED_RETENTION).toFixed(2);
@@ -5133,20 +5334,20 @@ async function handleRequest(request, env) {
                 // Save FSRS params if present
                 if (d.algorithm === 'FSRS') {
                     const rawRetention = el('#deckFsrsDesiredRetention')?.value?.trim() || '';
-                    d.fsrsDesiredRetention = rawRetention ? clampRetention(parseFloat(rawRetention)) : DEFAULT_DESIRED_RETENTION;
+                    const rawParams = el('#deckFsrsParams')?.value?.trim() || '';
 
-                    const rawParams = el('#deckFsrsParams').value.trim();
-                    if (rawParams) {
-                        const weights = rawParams.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
-                        if (weights.length === 21) {
-                            d.fsrsWeights = weights;
-                        } else {
-                            toast('Invalid FSRS weights: must be 21 numbers');
-                            return; // Stop save
-                        }
+                    // Use parseFsrsParamsText to handle recovery and various formats
+                    const parsed = parseFsrsParamsText(rawParams || rawRetention);
+
+                    // If the user explicitly provided a retention value in the numeric field, prioritize it
+                    if (rawRetention) {
+                        d.fsrsDesiredRetention = clampRetention(parseFloat(rawRetention)) || DEFAULT_DESIRED_RETENTION;
                     } else {
-                        d.fsrsWeights = null; // Reset to defaults
+                        d.fsrsDesiredRetention = parsed.desiredRetention;
                     }
+
+                    // Always ensure we have 21 weights if it's FSRS
+                    d.fsrsWeights = parsed.weights || [...fsrsW];
                 } else {
                     d.fsrsWeights = null;
                     d.fsrsDesiredRetention = DEFAULT_DESIRED_RETENTION;
@@ -5695,12 +5896,14 @@ async function handleRequest(request, env) {
                     toast(`${failed.length} sync operation(s) failed, will retry`);
                 }
                 await Storage.setMeta('queue', this.state.queue);
+                this.renderConnection();
             },
             queueOp(op) {
                 this.state.queue.push(op);
                 el('#queueCount').textContent = String(this.state.queue.length);
                 Storage.setMeta('queue', this.state.queue).catch(() => { });
                 this.updateSyncButtonState();
+                this.renderConnection();
             },
             updateSyncButtonState() {
                 const btn = el('#syncNowBtn');
@@ -7031,6 +7234,10 @@ async function handleRequest(request, env) {
                 el('#statusWorker').textContent = `Worker: ${workerOk ? 'verified' : hasWorkerUrl ? 'unverified' : 'missing'}`;
                 el('#statusAuth').textContent = `Auth: ${authOk ? 'verified' : workerOk ? (hasToken ? 'unverified' : 'missing') : 'blocked (verify worker)'}`;
                 el('#statusSources').textContent = `Sources: ${hasSources ? 'verified' : 'missing'}`;
+
+                const vaultSection = el('#vaultStatusSection');
+                if (vaultSection) vaultSection.classList.toggle('hidden', !hasSources);
+
                 this.updateSettingsButtons();
                 this.renderConnection();
             },
@@ -7093,7 +7300,7 @@ async function handleRequest(request, env) {
                 const blockScanSave = !(workerOk && notionOk);
                 const online = navigator.onLine;
 
-                ['scanSources', 'saveSettings', 'deckSourceSelect', 'cardSourceSelect'].forEach(id => {
+                ['scanSources', 'saveSourcesChoice', 'saveSettings', 'deckSourceSelect', 'cardSourceSelect'].forEach(id => {
                     const elem = el('#' + id);
                     if (!elem) return;
                     elem.disabled = blockScanSave;
@@ -7148,6 +7355,72 @@ async function handleRequest(request, env) {
                 document.querySelectorAll('.theme-btn').forEach(btn => {
                     btn.classList.toggle('active', btn.dataset.theme === mode);
                 });
+            },
+            applyFabPosition() {
+                const fab = el('#mobileFabCluster');
+                if (!fab) return;
+                const pos = this.state.settings.fabPos;
+                if (pos) {
+                    fab.style.bottom = (pos.bottom || 12) + 'px';
+                    fab.style.left = (pos.left || 12) + 'px';
+                    fab.style.top = 'auto';
+                    fab.style.right = 'auto';
+                }
+            },
+            toggleFabSetup() {
+                const active = document.body.classList.toggle('fab-setup-mode');
+                const fab = el('#mobileFabCluster');
+                if (!fab) return;
+                if (active) {
+                    fab.classList.remove('hidden'); // Ensure visible during setup
+                    // Show all buttons inside fab for positioning
+                    fab.querySelectorAll('.fab-btn, .joystick-container, .joystick-side-actions, #joystickContainer').forEach(el => el.classList.remove('hidden'));
+                    el('#fabPreRevealActions')?.classList.remove('hidden');
+
+                    this.closeSettings();
+                    toast('Drag the FAB cluster to your preferred position, then click Save');
+                    const btn = document.createElement('button');
+                    btn.id = 'tempFabSave';
+                    btn.className = 'fixed top-4 left-4 z-[100] px-4 py-2 bg-dull-purple text-white rounded-lg shadow-lg font-semibold';
+                    btn.textContent = 'Save FAB Position';
+                    btn.onclick = () => {
+                        const rect = fab.getBoundingClientRect();
+                        this.state.settings.fabPos = {
+                            bottom: window.innerHeight - rect.bottom,
+                            left: rect.left
+                        };
+                        Storage.setSettings(this.state.settings);
+                        document.body.classList.remove('fab-setup-mode');
+                        btn.remove();
+                        toast('FAB position saved');
+                        fab.onmousedown = fab.ontouchstart = null;
+                        window.onmousemove = window.ontouchmove = null;
+                        window.onmouseup = window.ontouchend = null;
+                        if (this.state.activeTab !== 'study' || !this.state.session) {
+                            fab.classList.add('hidden');
+                        }
+                    };
+                    document.body.appendChild(btn);
+
+                    let isDragging = false;
+                    let startX, startY;
+                    fab.onmousedown = fab.ontouchstart = (e) => {
+                        isDragging = true;
+                        const pos = e.touches ? e.touches[0] : e;
+                        startX = pos.clientX - fab.offsetLeft;
+                        startY = pos.clientY - fab.offsetTop;
+                        e.preventDefault();
+                    };
+                    window.onmousemove = window.ontouchmove = (e) => {
+                        if (!isDragging) return;
+                        const pos = e.touches ? e.touches[0] : e;
+                        fab.style.left = (pos.clientX - startX) + 'px';
+                        fab.style.top = (pos.clientY - startY) + 'px';
+                        fab.style.bottom = 'auto';
+                        fab.style.right = 'auto';
+                    };
+                    window.onmouseup = window.ontouchend = () => { isDragging = false; };
+                }
             },
             applyFontMode() {
                 const mode = this.state.settings.fontMode || 'serif';
@@ -7650,6 +7923,7 @@ async function handleRequest(request, env) {
                             this.mediaRecorder = null;
                             this.state.userStoppedMic = false;
                             this.state.activeMicButton = null;
+                            this.setAiControlsLocked(false);
                         } catch (e) {
                             el('#aiFeedback').innerHTML = '';
                             toast('Transcription failed: ' + e.message);

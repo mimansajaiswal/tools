@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ghostink-cache-v6';
+const CACHE_NAME = 'ghostink-cache-v7';
 const CACHE_PREFIX = 'ghostink-cache-';
 
 self.addEventListener('install', (event) => {
