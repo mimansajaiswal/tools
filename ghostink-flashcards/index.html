@@ -63,11 +63,11 @@
             theme: {
                 extend: {
                     colors: {
-                        oatmeal: '#F3F0E6',
+                        oatmeal: 'var(--surface-strong)',
                         'oatmeal-dark': '#E6E2D6',
                         'earth-metal': 'rgb(var(--earth-metal-rgb) / <alpha-value>)',
                         charcoal: 'rgb(var(--charcoal-rgb) / <alpha-value>)',
-                        'white-linen': '#FAF9F6',
+                        'white-linen': 'var(--surface)',
                         'dull-purple': 'rgb(var(--dull-purple-rgb) / <alpha-value>)',
                         'muted-pink': 'rgb(var(--muted-pink-rgb) / <alpha-value>)',
                         'muted-pink-dim': 'rgb(var(--muted-pink-dim-rgb) / <alpha-value>)'
@@ -649,15 +649,6 @@
 
         .card-transitioning {
             opacity: 0;
-        }
-
-        /* theme utility overrides so light/dark stay consistent */
-        .bg-white-linen {
-            background-color: var(--surface) !important;
-        }
-
-        .bg-oatmeal {
-            background-color: var(--surface-strong) !important;
         }
 
         .bg-oatmeal\/60 {
@@ -1351,6 +1342,12 @@
             <div class="h-12 w-12 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
             <p id="loadingMessage" class="text-sm font-medium">Loading...</p>
             <p class="text-xs text-white/80" id="loadingSubtext">Preparing your decks and cards.</p>
+            <div id="loadingProgressWrap" class="w-full max-w-xs hidden">
+                <div class="w-full h-2 bg-white/20 rounded-full overflow-hidden">
+                    <div id="loadingProgressBar" class="h-2 bg-dull-purple w-0 transition-all duration-300"></div>
+                </div>
+                <p id="loadingProgressText" class="text-[11px] text-white/80 mt-1">0%</p>
+            </div>
         </div>
     </div>
 
@@ -1786,13 +1783,33 @@ async function handleRequest(request, env) {
                             question, correct answer, and learner answer.</span>
                     </div>
                 </div>
+                <div id="fsrsParamsField" class="hidden">
+                    <div class="grid grid-cols-2 gap-3 items-end">
+                        <div>
+                            <label class="text-xs text-earth-metal/70">FSRS desired retention</label>
+                            <input id="deckFsrsDesiredRetention" type="number" step="0.01" min="0.01" max="0.99"
+                                class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-xs font-mono"
+                                placeholder="0.90">
+                        </div>
+                    </div>
+                    <label class="text-xs text-earth-metal/70 mt-2 block">FSRS v6 weights (21 numbers)</label>
+                    <textarea id="deckFsrsParams" rows="2"
+                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-xs font-mono"
+                        placeholder="0.212, 1.2931, ..."></textarea>
+                    <div class="flex items-center justify-between gap-2 mt-2">
+                        <button id="optimizeFsrsBtn"
+                            class="px-3 py-2 rounded-lg border border-earth-metal/40 text-earth-metal text-xs hover:bg-oatmeal/50 dark:hover:bg-white/10">
+                            Optimize FSRS weights
+                        </button>
+                        <span class="text-[10px] text-earth-metal/60">Uses this deck’s review history</span>
+                    </div>
+                    <p class="text-[10px] text-earth-metal/60 mt-1">Leave retention empty to use 0.90. Leave weights
+                        empty to use defaults. These also sync via the Notion “FSRS Params” property (rich_text).</p>
+                </div>
             </div>
             <div class="flex justify-end gap-2 mt-4">
                 <button id="archiveDeckBtn"
                     class="px-3 py-2 rounded-lg border border-earth-metal/40 text-earth-metal text-sm hidden">Archive
-                    deck</button>
-                <button id="deleteDeckBtn"
-                    class="px-3 py-2 rounded-lg border border-muted-pink text-muted-pink text-sm hidden">Delete
                     deck</button>
                 <button id="saveDeckBtn"
                     class="px-4 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-[#7d6aa1]">Save</button>
@@ -2011,31 +2028,52 @@ async function handleRequest(request, env) {
             if (!str) return '';
             return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         };
+        let toastTimer = null;
         const toast = (msg) => {
             const t = el('#toast');
             t.textContent = msg;
             t.classList.remove('hidden', 'opacity-0');
-            setTimeout(() => t.classList.add('opacity-0'), 2500);
-            setTimeout(() => t.classList.add('hidden'), 3000);
+            if (toastTimer) clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                t.classList.add('opacity-0');
+                setTimeout(() => t.classList.add('hidden'), 500);
+            }, 3000);
         };
         const toastLong = (msg) => {
             const t = el('#toast');
             t.textContent = msg;
             t.classList.remove('hidden', 'opacity-0');
+            if (toastTimer) clearTimeout(toastTimer);
         };
         const toastHide = () => {
             const t = el('#toast');
             t.classList.add('opacity-0');
+            if (toastTimer) clearTimeout(toastTimer);
             setTimeout(() => t.classList.add('hidden'), 500);
         };
         const showLoading = (msg = 'Loading...', subtext = '') => {
             const ov = el('#loadingOverlay');
             const lm = el('#loadingMessage');
             const ls = el('#loadingSubtext');
+            const pw = el('#loadingProgressWrap');
+            const pb = el('#loadingProgressBar');
+            const pt = el('#loadingProgressText');
             if (lm) lm.textContent = msg;
             if (ls) ls.textContent = subtext;
+            if (pw) pw.classList.add('hidden');
+            if (pb) pb.style.width = '0%';
+            if (pt) pt.textContent = '0%';
             ov.classList.remove('hidden');
             ov.classList.add('flex');
+        };
+        const setLoadingProgress = (percent, label = null) => {
+            const pw = el('#loadingProgressWrap');
+            const pb = el('#loadingProgressBar');
+            const pt = el('#loadingProgressText');
+            if (pw) pw.classList.remove('hidden');
+            const p = Math.min(100, Math.max(0, Number(percent) || 0));
+            if (pb) pb.style.width = `${p}%`;
+            if (pt) pt.textContent = label != null ? String(label) : `${Math.round(p)}%`;
         };
         const hideLoading = () => {
             const ov = el('#loadingOverlay');
@@ -2224,7 +2262,9 @@ async function handleRequest(request, env) {
                         const j = JSON.parse(txt);
                         txt = j.message || txt;
                     } catch (_) { }
-                    throw new Error(txt || `Request failed ${res.status}`);
+                    const error = new Error(txt || `Request failed ${res.status}`);
+                    error.status = res.status;
+                    throw error;
                 }
                 return await res.json();
             },
@@ -2282,6 +2322,19 @@ async function handleRequest(request, env) {
          */
         const SRS = {
             /**
+             * Calculate due date set to 4:00 AM of the target day.
+             * Prevents schedule creep by aligning reviews to start-of-day.
+             */
+            getDueDate(intervalDays) {
+                const date = new Date();
+                // Add days (at least 1 if interval is small but positive)
+                date.setDate(date.getDate() + Math.max(1, Math.round(intervalDays)));
+                // Set to 4:00 AM
+                date.setHours(4, 0, 0, 0);
+                return date.toISOString();
+            },
+
+            /**
              * FSRS (Free Spaced Repetition Scheduler) v4 algorithm.
              * Calculates new difficulty, stability, and next review date based on user rating.
              * @param {Object} card - The card being reviewed
@@ -2289,34 +2342,42 @@ async function handleRequest(request, env) {
              * @param {string} rating - User rating: 'again', 'hard', 'good', or 'easy'
              * @returns {Object} Updated FSRS state with new difficulty, stability, retrievability, dueDate
              */
-            fsrs(card, rating) {
+            fsrs(card, rating, customWeights = null, desiredRetention = DEFAULT_DESIRED_RETENTION) {
                 const now = new Date();
+                const w = customWeights && customWeights.length === 21 ? customWeights : fsrsW;
                 const ratingName = rating;
-                const lastD = card.fsrs?.difficulty ?? initDifficulty('good');
-                const lastS = card.fsrs?.stability ?? initStability('good');
+                const lastD = card.fsrs?.difficulty ?? initDifficulty(w, 'good');
+                const lastS = card.fsrs?.stability ?? initStability(w, 'good');
                 const lastReview = card.fsrs?.lastReview ? new Date(card.fsrs.lastReview) : null;
                 const isNew = !lastReview;
                 let newD, newS, retr;
                 if (isNew) {
-                    newD = initDifficulty(ratingName);
-                    newS = initStability(ratingName);
+                    newD = initDifficulty(w, ratingName);
+                    newS = initStability(w, ratingName);
                     retr = 1;
                 } else {
                     const elapsed = Math.max(0.01, (now - lastReview) / 86400000);
-                    const r = forgettingCurve(elapsed, lastS);
-                    newD = nextDifficulty(lastD, ratingName);
-                    if (ratingName === 'again') newS = nextForgetStability(lastD, lastS, r);
-                    else newS = nextRecallStability(newD, lastS, r, ratingName);
+                    const r = forgettingCurve(w, elapsed, lastS);
+                    newD = nextDifficulty(w, lastD, ratingName);
+
+                    if (ratingName === 'again') {
+                        newS = nextForgetStability(w, lastD, lastS, r);
+                    } else if (elapsed < 1) {
+                        // Use Short-term stability formula for same-day reviews (if not 'again')
+                        newS = nextShortTermStability(w, lastS, ratingName);
+                    } else {
+                        newS = nextRecallStability(w, lastD, lastS, r, ratingName);
+                    }
                     retr = Math.max(0, Math.min(1, +r.toFixed(4)));
                 }
-                const intervalDays = nextInterval(newS);
+                const intervalDays = nextInterval(w, newS, desiredRetention);
                 return {
                     difficulty: newD,
                     stability: newS,
                     retrievability: retr,
                     lastRating: ratingName,
                     lastReview: now.toISOString(),
-                    dueDate: new Date(now.getTime() + intervalDays * 86400000).toISOString()
+                    dueDate: SRS.getDueDate(intervalDays)
                 };
             },
             /**
@@ -2363,7 +2424,7 @@ async function handleRequest(request, env) {
                     easeFactor: newEase,
                     interval: newInterval,
                     repetitions: newReps,
-                    dueDate: new Date(now.getTime() + newInterval * 86400000).toISOString(),
+                    dueDate: SRS.getDueDate(newInterval),
                     lastRating: rating,
                     lastReview: now.toISOString()
                 };
@@ -2378,55 +2439,91 @@ async function handleRequest(request, env) {
             if (hasCloze) return 'Cloze';
             return 'Front-Back';
         };
-        // FSRS constants (v4.11 defaults)
-        // fsrsW: weight parameters optimized for memory retention modeling
-        const fsrsW = [0.4, 0.6, 2.4, 5.8, 4.93, 0.94, 0.86, 0.01, 1.49, 0.14, 0.94, 2.18, 0.05, 0.34, 1.26, 0.29, 2.61];
-        const DECAY = -0.5;
-        const FACTOR = Math.pow(0.9, 1 / DECAY) - 1; // derived from requestRetention 0.9
-        const REQUEST_RETENTION = 0.9; // target probability of recall
-        const MAX_INTERVAL = 36500; // ~100 years maximum interval
+        // FSRS v6 constants
+        // fsrsW: weight parameters (21 values) - Global Defaults
+        const fsrsW = [0.212, 1.2931, 2.3065, 8.2956, 6.4133, 0.8334, 3.0194, 0.001, 1.8722, 0.1666, 0.796, 1.4835, 0.0614, 0.2629, 1.6483, 0.6014, 1.8729, 0.5425, 0.0912, 0.0658, 0.1542];
+        const DEFAULT_DESIRED_RETENTION = 0.9;
+        const MAX_INTERVAL = 36500;
         const ratingsMap = { again: 1, hard: 2, good: 3, easy: 4 };
         const clamp2 = (n) => +Number.isFinite(n) ? Math.max(0, Math.round(n * 100) / 100) : 0;
         const constrainDifficulty = (d) => Math.min(Math.max(+d.toFixed(2), 1), 10);
-        const meanReversion = (init, current) => fsrsW[7] * init + (1 - fsrsW[7]) * current;
+        const clampRetention = (r) => {
+            const n = Number(r);
+            if (!Number.isFinite(n)) return DEFAULT_DESIRED_RETENTION;
+            return Math.min(0.99, Math.max(0.01, n));
+        };
+        const constrainWeights = (w) => {
+            const out = (Array.isArray(w) ? w : []).slice(0, 21);
+            while (out.length < 21) out.push(fsrsW[out.length]);
+            for (let i = 0; i < out.length; i++) {
+                const n = Number(out[i]);
+                out[i] = Number.isFinite(n) ? n : fsrsW[i];
+            }
+            // A few guardrails to keep formulas well-behaved
+            for (let i = 0; i <= 3; i++) out[i] = Math.max(0.01, out[i]); // initial stabilities
+            out[4] = Math.min(10, Math.max(1, out[4])); // baseline difficulty
+            out[7] = Math.min(1, Math.max(0, out[7])); // mean reversion weight
+            out[20] = Math.min(1, Math.max(0.01, out[20])); // decay (used as -w[20])
+            return out;
+        };
+
+        // FSRS v6 helpers (Pure functions accepting weights 'w')
+        const getDecay = (w) => -w[20];
+        const getFactor = (w) => Math.pow(0.9, 1 / getDecay(w)) - 1;
+        const meanReversion = (w, init, current) => w[7] * init + (1 - w[7]) * current;
 
         /** Calculate initial difficulty for a new card based on first rating */
-        const initDifficulty = (ratingName) => {
+        const initDifficulty = (w, ratingName) => {
             const r = ratingsMap[ratingName] || 3;
-            return constrainDifficulty(fsrsW[4] - fsrsW[5] * (r - 3));
+            // D0 = w4 - (G-3) * w5
+            return constrainDifficulty(w[4] - (r - 3) * w[5]);
         };
         /** Calculate initial stability for a new card based on first rating */
-        const initStability = (ratingName) => {
+        const initStability = (w, ratingName) => {
             const r = ratingsMap[ratingName] || 3;
-            return +Math.max(fsrsW[r - 1], 0.1).toFixed(2);
+            // S0 = w[G-1]
+            return +Math.max(w[r - 1], 0.1).toFixed(2);
         };
-        /** Calculate probability of recall using the forgetting curve formula */
-        const forgettingCurve = (elapsedDays, stability) => Math.pow(1 + FACTOR * elapsedDays / stability, DECAY);
+        /** Calculate probability of recall using the power forgetting curve (v6) */
+        const forgettingCurve = (w, elapsedDays, stability) => Math.pow(1 + getFactor(w) * elapsedDays / stability, getDecay(w));
+
         /** Calculate next review interval in days based on stability */
-        const nextInterval = (stability) => {
-            const raw = stability / FACTOR * (Math.pow(REQUEST_RETENTION, 1 / DECAY) - 1);
-            const rounded = Math.min(Math.max(Math.round(raw), 1), MAX_INTERVAL);
-            return rounded;
+        const nextInterval = (w, stability, desiredRetention = DEFAULT_DESIRED_RETENTION) => {
+            const rr = clampRetention(desiredRetention);
+            const newInterval = stability / getFactor(w) * (Math.pow(rr, 1 / getDecay(w)) - 1);
+            return Math.min(Math.max(Math.round(newInterval), 1), MAX_INTERVAL);
         };
         /** Update difficulty after a review (applies mean reversion) */
-        const nextDifficulty = (d, ratingName) => {
+        const nextDifficulty = (w, d, ratingName) => {
             const r = ratingsMap[ratingName] || 3;
-            const next_d = d - fsrsW[6] * (r - 3);
-            return constrainDifficulty(meanReversion(fsrsW[4], next_d));
+            // next_D = D - w6 * (G - 3)
+            const next_d = d - w[6] * (r - 3);
+            // Mean reversion: w7 * w4 + (1 - w7) * next_D
+            return constrainDifficulty(meanReversion(w, w[4], next_d));
         };
         /** Calculate new stability after successful recall */
-        const nextRecallStability = (d, s, r, ratingName) => {
-            const hardPenalty = ratingName === 'hard' ? fsrsW[15] : 1;
-            const easyBonus = ratingName === 'easy' ? fsrsW[16] : 1;
-            const val = s * (1 + Math.exp(fsrsW[8]) * (11 - d) * Math.pow(s, -fsrsW[9]) * (Math.exp((1 - r) * fsrsW[10]) - 1) * hardPenalty * easyBonus);
+        const nextRecallStability = (w, d, s, r, ratingName) => {
+            const hardPenalty = ratingName === 'hard' ? w[15] : 1;
+            const easyBonus = ratingName === 'easy' ? w[16] : 1;
+            // S_recall = S * (1 + exp(w8) * (11 - D) * S^(-w9) * (exp((1 - R) * w10) - 1) * hardPenalty * easyBonus)
+            const val = s * (1 + Math.exp(w[8]) * (11 - d) * Math.pow(s, -w[9]) * (Math.exp((1 - r) * w[10]) - 1) * hardPenalty * easyBonus);
             return clamp2(val);
         };
         /** Calculate new stability after forgetting (rated 'again') */
-        const nextForgetStability = (d, s, r) => {
+        const nextForgetStability = (w, d, s, r) => {
+            // S_forget = w11 * D^(-w12) * ((S + 1)^w13 - 1) * exp((1 - R) * w14)
+            // Capped at S (stability cannot increase on failure)
             const val = Math.min(
-                fsrsW[11] * Math.pow(d, -fsrsW[12]) * (Math.pow(s + 1, fsrsW[13]) - 1) * Math.exp((1 - r) * fsrsW[14]),
+                w[11] * Math.pow(d, -w[12]) * (Math.pow(s + 1, w[13]) - 1) * Math.exp((1 - r) * w[14]),
                 s
             );
+            return clamp2(val);
+        };
+        /** Calculate new stability for same-day review (Short-term) */
+        const nextShortTermStability = (w, s, ratingName) => {
+            const r = ratingsMap[ratingName] || 3;
+            // S_new = S * exp(w17 * (G - 3 + w18)) * S^(-w19)
+            const val = s * Math.exp(w[17] * (r - 3 + w[18])) * Math.pow(s, -w[19]);
             return clamp2(val);
         };
         const toRichTextChunks = (text) => {
@@ -2617,6 +2714,126 @@ async function handleRequest(request, env) {
          * Handles conversion of decks and cards to/from Notion page properties.
          */
         const DEFAULT_AI_PROMPT = 'You are a strict flashcard grader.\nQuestion: {{question}}\nCorrect answer: {{answer}}\nLearner answer: {{user}}\nJudge correctness (short) and give brief feedback.';
+        const parseFsrsParamsText = (raw) => {
+            const text = (raw || '').toString().trim();
+            const out = { desiredRetention: DEFAULT_DESIRED_RETENTION, weights: null };
+            if (!text) return out;
+
+            // JSON format (recommended): {"desired_retention":0.9,"weights":[...]}
+            if (text.startsWith('{')) {
+                try {
+                    const obj = JSON.parse(text);
+                    const dr = obj.desired_retention ?? obj.desiredRetention ?? obj.request_retention ?? obj.requestRetention;
+                    if (dr !== undefined) out.desiredRetention = clampRetention(dr);
+                    const w = obj.weights ?? obj.w ?? obj.params;
+                    if (Array.isArray(w) && w.length === 21 && w.every(n => Number.isFinite(Number(n)))) {
+                        out.weights = w.map(n => Number(n));
+                    }
+                    return out;
+                } catch (_) {
+                    // Fall through to numeric parsing
+                }
+            }
+
+            // Numeric format: either "0.9, w1, w2, ... w21" or just "w1, ... w21"
+            const nums = text.split(/[\s,]+/).map(s => parseFloat(s.trim())).filter(n => Number.isFinite(n));
+            if (nums.length === 1 && nums[0] > 0 && nums[0] < 1) {
+                out.desiredRetention = clampRetention(nums[0]);
+                return out;
+            }
+            if (nums.length === 22 && nums[0] > 0 && nums[0] < 1) {
+                out.desiredRetention = clampRetention(nums[0]);
+                out.weights = nums.slice(1);
+                return out;
+            }
+            if (nums.length === 21) {
+                out.weights = nums;
+                return out;
+            }
+            return out;
+        };
+        const serializeFsrsParamsText = (deck) => {
+            if (!deck || deck.algorithm !== 'FSRS') return '';
+            const desiredRetention = clampRetention(deck.fsrsDesiredRetention ?? DEFAULT_DESIRED_RETENTION);
+            const obj = { desired_retention: desiredRetention };
+            if (Array.isArray(deck.fsrsWeights) && deck.fsrsWeights.length === 21) obj.weights = deck.fsrsWeights;
+            return JSON.stringify(obj);
+        };
+        const simulateFsrsReviewAt = (state, { at, rating }, w) => {
+            const now = new Date(at);
+            if (!Number.isFinite(now.getTime())) return null;
+            const ratingName = normalizeRating(rating);
+            const lastReview = state.lastReview ? new Date(state.lastReview) : null;
+            const isNew = !lastReview;
+
+            let newD, newS, retr;
+            if (isNew) {
+                // Learning/init step: we don't score loss here; just set initial state.
+                newD = initDifficulty(w, ratingName || 'good');
+                newS = initStability(w, ratingName || 'good');
+                retr = 1;
+            } else {
+                const elapsed = Math.max(0.01, (now - lastReview) / 86400000);
+                const r = forgettingCurve(w, elapsed, state.stability);
+                newD = nextDifficulty(w, state.difficulty, ratingName);
+                if (ratingName === 'again') {
+                    newS = nextForgetStability(w, state.difficulty, state.stability, r);
+                } else if (elapsed < 1) {
+                    newS = nextShortTermStability(w, state.stability, ratingName);
+                } else {
+                    newS = nextRecallStability(w, state.difficulty, state.stability, r, ratingName);
+                }
+                retr = Math.max(0, Math.min(1, +r.toFixed(6)));
+            }
+            return {
+                nextState: {
+                    difficulty: newD,
+                    stability: newS,
+                    lastReview: now.toISOString()
+                },
+                retrievability: retr,
+                isNew
+            };
+        };
+        const buildFsrsTrainingSet = (cards, { maxCards = 400 } = {}) => {
+            const candidates = (cards || []).filter(c => Array.isArray(c.reviewHistory) && c.reviewHistory.length >= 2);
+            if (candidates.length === 0) return [];
+            const chosen = candidates.length <= maxCards ? candidates : [...candidates].sort(() => Math.random() - 0.5).slice(0, maxCards);
+            return chosen.map(c => ({
+                id: c.id,
+                history: [...c.reviewHistory]
+                    .filter(e => e && e.at && e.rating)
+                    .sort((a, b) => new Date(a.at) - new Date(b.at))
+            })).filter(x => x.history.length >= 2);
+        };
+        const fsrsLogLoss = (trainingSet, weights) => {
+            const w = constrainWeights(weights);
+            const eps = 1e-6;
+            let n = 0;
+            let loss = 0;
+            for (const item of trainingSet) {
+                const state = {
+                    difficulty: initDifficulty(w, 'good'),
+                    stability: initStability(w, 'good'),
+                    lastReview: null
+                };
+                for (const step of item.history) {
+                    const sim = simulateFsrsReviewAt(state, step, w);
+                    if (!sim) continue;
+                    if (!sim.isNew) {
+                        const y = normalizeRating(step.rating) === 'again' ? 0 : 1;
+                        const p = Math.min(1 - eps, Math.max(eps, sim.retrievability));
+                        loss += -(y * Math.log(p) + (1 - y) * Math.log(1 - p));
+                        n++;
+                    }
+                    state.difficulty = sim.nextState.difficulty;
+                    state.stability = sim.nextState.stability;
+                    state.lastReview = sim.nextState.lastReview;
+                }
+            }
+            if (n === 0) return Number.POSITIVE_INFINITY;
+            return loss / n;
+        };
 
         const NotionMapper = {
             /**
@@ -2629,6 +2846,8 @@ async function handleRequest(request, env) {
                 const title = props['Deck Name']?.title?.map(t => t.plain_text).join('') || 'Untitled deck';
                 const rawMode = props['Order Mode']?.select?.name || 'None';
                 const orderMap = { 'none': 'none', 'created time': 'created', 'order property': 'property' };
+                const fsrsParamsRaw = props['FSRS Params']?.rich_text?.map(t => t.plain_text).join('') || '';
+                const fsrsParams = parseFsrsParamsText(fsrsParamsRaw);
                 return {
                     id: page.id,
                     notionId: page.id,
@@ -2642,6 +2861,9 @@ async function handleRequest(request, env) {
                     archived: props['Archived?']?.checkbox || false,
                     ankiMetadata: props['Anki Metadata']?.rich_text?.[0]?.plain_text || '',
                     aiPrompt: props['AI Revision Prompt']?.rich_text?.map(t => t.plain_text).join('') || DEFAULT_AI_PROMPT,
+                    fsrsDesiredRetention: fsrsParams.desiredRetention,
+                    fsrsWeights: fsrsParams.weights,
+                    fsrsParamsRaw,
                     updatedInApp: false
                 };
             },
@@ -2660,8 +2882,10 @@ async function handleRequest(request, env) {
                     'New Card Limit': { number: deck.newLimit },
                     'Reverse Mode Enabled': { checkbox: !!deck.reverse },
                     'Created In-App': { checkbox: true },
+                    'Archived?': { checkbox: !!deck.archived },
                     'Anki Metadata': { rich_text: deck.ankiMetadata ? [{ text: { content: deck.ankiMetadata } }] : [] },
-                    'AI Revision Prompt': { rich_text: markdownToNotionRichText(deck.aiPrompt) }
+                    'AI Revision Prompt': { rich_text: markdownToNotionRichText(deck.aiPrompt) },
+                    'FSRS Params': { rich_text: toRichTextChunks(serializeFsrsParamsText(deck)) }
                 };
             },
             /**
@@ -2678,8 +2902,8 @@ async function handleRequest(request, env) {
                 const tags = p['Tags']?.multi_select?.map(t => ({ name: t.name, color: t.color || 'default' })) || [];
                 const lastReview = p['Last Review']?.date?.start || null;
                 const fsrs = {
-                    difficulty: p['Difficulty']?.number ?? initDifficulty('good'),
-                    stability: p['Stability']?.number ?? initStability('good'),
+                    difficulty: p['Difficulty']?.number ?? initDifficulty(fsrsW, 'good'),
+                    stability: p['Stability']?.number ?? initStability(fsrsW, 'good'),
                     retrievability: p['Retrievability']?.number ?? 0.9,
                     lastRating: normalizeRating(p['Last Rating']?.select?.name) || null,
                     lastReview,
@@ -2898,7 +3122,7 @@ async function handleRequest(request, env) {
                 this.ensureMicPermission().catch(() => { /* permission denied handled later */ });
             },
             isSttEnabled() {
-                return !!this.state.sttProvider;
+                return !!this.state.settings.sttProvider;
             },
             stopMicActivity(hideFeedback = false) {
                 const hadActive = this.isMicActive() || !!this.state.activeAudioStream;
@@ -3332,9 +3556,11 @@ async function handleRequest(request, env) {
             },
             async loadFromDB() {
                 this.state.decks = (await Storage.getAll('decks')).map(d => ({
+                    ...d,
                     orderMode: d.orderMode || (d.ordered ? 'created' : 'none') || 'none',
                     aiPrompt: d.aiPrompt || DEFAULT_AI_PROMPT,
-                    ...d
+                    fsrsDesiredRetention: clampRetention(d.fsrsDesiredRetention ?? DEFAULT_DESIRED_RETENTION),
+                    fsrsWeights: Array.isArray(d.fsrsWeights) && d.fsrsWeights.length === 21 ? d.fsrsWeights : (d.fsrsWeights || null)
                 }));
                 this.state.cards = await Storage.getAll('cards');
                 this.state.queue = (await Storage.getMeta('queue')) || [];
@@ -3366,7 +3592,9 @@ async function handleRequest(request, env) {
                     aiProvider: '',
                     aiModel: '',
                     aiKey: '',
-                    orderMode: 'none'
+                    orderMode: 'none',
+                    fsrsDesiredRetention: DEFAULT_DESIRED_RETENTION,
+                    fsrsWeights: null
                 };
             },
             newCard(deckId, name, back, type) {
@@ -3409,8 +3637,11 @@ async function handleRequest(request, env) {
                 el('#refreshDecksBtn').onclick = () => this.manualSync();
                 el('#closeDeckModal').onclick = () => this.closeDeckModal();
                 el('#saveDeckBtn').onclick = () => this.saveDeckFromModal();
-                el('#deleteDeckBtn').onclick = () => this.deleteDeckFromModal();
                 el('#archiveDeckBtn').onclick = () => this.archiveDeckFromModal();
+                el('#deckAlgoInput').onchange = (e) => {
+                    const isFsrs = e.target.value === 'FSRS';
+                    el('#fsrsParamsField')?.classList.toggle('hidden', !isFsrs);
+                };
                 el('#newCardBtn').onclick = () => this.openCardModal();
                 el('#resetAlgorithmBtn').onclick = () => this.openResetAlgorithmModal();
                 el('#cancelResetAlgorithm').onclick = () => this.closeModal('resetAlgorithmModal');
@@ -4427,16 +4658,121 @@ async function handleRequest(request, env) {
                 this.state.editingDeck = deck || null;
                 el('#deckModalTitle').textContent = deck ? 'Edit deck' : 'New deck';
                 el('#deckNameInput').value = deck?.name ?? '';
-                el('#deckAlgoInput').value = deck?.algorithm ?? 'SM-2';
+                const algo = deck?.algorithm ?? 'SM-2';
+                el('#deckAlgoInput').value = algo;
                 el('#deckReviewLimit').value = deck?.reviewLimit ?? 50;
                 el('#deckNewLimit').value = deck?.newLimit ?? 20;
                 el('#deckOrderMode').value = deck?.orderMode ?? 'none';
                 el('#deckReverseInput').checked = deck?.reverse ?? false;
                 el('#deckPromptInput').value = deck?.aiPrompt ?? DEFAULT_AI_PROMPT;
-                el('#deleteDeckBtn').classList.toggle('hidden', !deck);
+
+                // Populate FSRS params
+                const paramsField = el('#fsrsParamsField');
+                const paramsInput = el('#deckFsrsParams');
+                const retentionInput = el('#deckFsrsDesiredRetention');
+                const optimizeBtn = el('#optimizeFsrsBtn');
+                if (paramsInput) {
+                    paramsInput.value = (deck?.fsrsWeights || []).join(', ');
+                }
+                if (retentionInput) {
+                    retentionInput.value = (deck?.fsrsDesiredRetention ?? DEFAULT_DESIRED_RETENTION).toFixed(2);
+                }
+                if (optimizeBtn) {
+                    optimizeBtn.onclick = async () => {
+                        const current = this.state.editingDeck;
+                        if (!current || current.algorithm !== 'FSRS') return toast('Switch to FSRS first');
+                        if (!current.id) return toast('Save the deck first');
+                        await this.optimizeFsrsWeightsForDeck(current);
+                    };
+                }
+                if (paramsField) {
+                    paramsField.classList.toggle('hidden', algo !== 'FSRS');
+                }
+
                 el('#archiveDeckBtn').classList.toggle('hidden', !deck);
                 el('#deckModal').classList.remove('hidden');
                 el('#deckModal').classList.add('flex');
+            },
+            async optimizeFsrsWeightsForDeck(deck) {
+                const cards = this.cardsForDeck(deck.id);
+                const trainingSet = buildFsrsTrainingSet(cards);
+                const totalEvents = trainingSet.reduce((acc, x) => acc + x.history.length, 0);
+                if (trainingSet.length < 10 || totalEvents < 50) {
+                    toast('Not enough review history to optimize (need ~50+ reviews)');
+                    return;
+                }
+                if (!confirm(`Optimize FSRS weights for "${deck.name}"?\n\nThis uses your review history for this deck and can take ~10–60 seconds.`)) {
+                    return;
+                }
+
+                const optimizeBtn = el('#optimizeFsrsBtn');
+                if (optimizeBtn) optimizeBtn.disabled = true;
+                try {
+                    const start = constrainWeights(Array.isArray(deck.fsrsWeights) && deck.fsrsWeights.length === 21 ? deck.fsrsWeights : fsrsW);
+                    showLoading('Optimizing FSRS weights...', `Using ${trainingSet.length} cards (~${totalEvents} reviews)`);
+                    setLoadingProgress(0, `0% • iter 0/220`);
+                    await new Promise(r => setTimeout(r, 0));
+
+                    const alpha = 0.602;
+                    const gamma = 0.101;
+                    const a0 = 0.12;
+                    const c0 = 0.06;
+                    const iters = 220;
+
+                    let w = start.slice();
+                    let bestW = w.slice();
+                    let bestLoss = fsrsLogLoss(trainingSet, bestW);
+
+                    for (let k = 0; k < iters; k++) {
+                        const ak = a0 / Math.pow(k + 1, alpha);
+                        const ck = c0 / Math.pow(k + 1, gamma);
+                        const delta = new Array(21);
+                        const scale = new Array(21);
+                        for (let i = 0; i < 21; i++) {
+                            delta[i] = Math.random() < 0.5 ? -1 : 1;
+                            scale[i] = Math.abs(w[i]) + 1;
+                        }
+                        const wPlus = w.map((v, i) => v + ck * delta[i] * scale[i]);
+                        const wMinus = w.map((v, i) => v - ck * delta[i] * scale[i]);
+                        const lossPlus = fsrsLogLoss(trainingSet, wPlus);
+                        const lossMinus = fsrsLogLoss(trainingSet, wMinus);
+                        if (!Number.isFinite(lossPlus) || !Number.isFinite(lossMinus)) {
+                            // If we wandered into invalid space, reset toward best.
+                            w = bestW.slice();
+                            continue;
+                        }
+                        const gHat = new Array(21);
+                        for (let i = 0; i < 21; i++) {
+                            const denom = 2 * ck * delta[i] * scale[i];
+                            gHat[i] = (lossPlus - lossMinus) / denom;
+                        }
+
+                        // Gradient step
+                        w = constrainWeights(w.map((v, i) => v - ak * gHat[i]));
+                        const curLoss = fsrsLogLoss(trainingSet, w);
+                        if (curLoss < bestLoss) {
+                            bestLoss = curLoss;
+                            bestW = w.slice();
+                        }
+
+                        if (k % 10 === 0) {
+                            showLoading('Optimizing FSRS weights...', `Iter ${k + 1}/${iters} • best logloss ${bestLoss.toFixed(4)}`);
+                            setLoadingProgress(((k + 1) / iters) * 100, `${Math.round(((k + 1) / iters) * 100)}% • iter ${k + 1}/${iters}`);
+                            await new Promise(r => setTimeout(r, 0));
+                        }
+                    }
+                    setLoadingProgress(100, `100% • iter ${iters}/${iters}`);
+
+                    const rounded = bestW.map(n => +n.toFixed(4));
+                    // Update modal fields (user still presses Save to persist/sync).
+                    deck.fsrsWeights = rounded;
+                    const paramsInput = el('#deckFsrsParams');
+                    if (paramsInput) paramsInput.value = rounded.join(', ');
+                    toast(`Optimized FSRS weights loaded (best logloss ${bestLoss.toFixed(4)}). Press Save to apply.`);
+                } finally {
+                    hideLoading();
+                    if (optimizeBtn) optimizeBtn.disabled = false;
+                }
             },
             editDeck(deckId) {
                 const deck = this.state.decks.find(d => d.id === deckId);
@@ -4455,6 +4791,29 @@ async function handleRequest(request, env) {
                 d.orderMode = el('#deckOrderMode').value || 'none';
                 d.reverse = el('#deckReverseInput').checked;
                 d.aiPrompt = el('#deckPromptInput').value || '';
+
+                // Save FSRS params if present
+                if (d.algorithm === 'FSRS') {
+                    const rawRetention = el('#deckFsrsDesiredRetention')?.value?.trim() || '';
+                    d.fsrsDesiredRetention = rawRetention ? clampRetention(parseFloat(rawRetention)) : DEFAULT_DESIRED_RETENTION;
+
+                    const rawParams = el('#deckFsrsParams').value.trim();
+                    if (rawParams) {
+                        const weights = rawParams.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+                        if (weights.length === 21) {
+                            d.fsrsWeights = weights;
+                        } else {
+                            toast('Invalid FSRS weights: must be 21 numbers');
+                            return; // Stop save
+                        }
+                    } else {
+                        d.fsrsWeights = null; // Reset to defaults
+                    }
+                } else {
+                    d.fsrsWeights = null;
+                    d.fsrsDesiredRetention = DEFAULT_DESIRED_RETENTION;
+                }
+
                 if (!this.state.editingDeck) this.state.decks.push(d);
                 d.updatedInApp = true;
                 await Storage.put('decks', d);
@@ -4463,12 +4822,6 @@ async function handleRequest(request, env) {
                 this.renderDecks();
                 this.renderStudy();
                 toast('Deck saved');
-            },
-            async deleteDeckFromModal() {
-                const deck = this.state.editingDeck;
-                if (!deck) return;
-                this.pendingDelete = { type: 'deck', id: deck.id, notionId: deck.notionId };
-                this.openModal('confirmModal');
             },
             async archiveDeckFromModal() {
                 const deck = this.state.editingDeck;
@@ -4479,7 +4832,15 @@ async function handleRequest(request, env) {
                 if (this.state.filters.studyDecks) {
                     this.state.filters.studyDecks = this.state.filters.studyDecks.filter(id => id !== deck.id);
                 }
-                // Remove deck and its cards from local storage (but keep in Notion)
+
+                // Mark as archived
+                deck.archived = true;
+
+                // Remove deck and its cards from local storage view (deletion logic remains for UX)
+                // But we queue the upsert with archived=true FIRST so it syncs correctly
+                await Storage.put('decks', deck);
+                this.queueOp({ type: 'deck-upsert', payload: deck });
+
                 const cards = this.cardsForDeck(deck.id);
                 for (const card of cards) {
                     const idx = this.state.cards.findIndex(c => c.id === card.id);
@@ -4489,14 +4850,7 @@ async function handleRequest(request, env) {
                 const deckIdx = this.state.decks.findIndex(d => d.id === deck.id);
                 if (deckIdx >= 0) this.state.decks.splice(deckIdx, 1);
                 await Storage.delete('decks', deck.id);
-                // Update Notion to set Archived? to true
-                if (deck.notionId) {
-                    try {
-                        await API.updatePage(deck.notionId, { 'Archived?': { checkbox: true } });
-                    } catch (e) {
-                        console.error('Failed to archive deck in Notion:', e);
-                    }
-                }
+
                 // Clear selection if this was the selected deck
                 if (wasSelected) {
                     this.state.selectedDeck = null;
@@ -4566,8 +4920,8 @@ async function handleRequest(request, env) {
                         };
                         // Reset FSRS parameters with proper initial values
                         card.fsrs = {
-                            stability: initStability('good'),
-                            difficulty: initDifficulty('good'),
+                            stability: initStability(fsrsW, 'good'),
+                            difficulty: initDifficulty(fsrsW, 'good'),
                             dueDate: null,
                             lastReview: null,
                             lastRating: null,
@@ -4904,12 +5258,17 @@ async function handleRequest(request, env) {
                         }
                     } catch (e) {
                         console.error(`Queue op failed: ${op.type}`, e);
-                        failed.push(op);
+                        op.retryCount = (op.retryCount || 0) + 1;
+                        if (op.retryCount <= 5) {
+                            failed.push(op);
+                        } else {
+                            toast(`Sync dropped item after 5 attempts: ${e.message}`);
+                        }
                     }
                 }
-                // Re-queue failed operations for retry
+                // Re-queue failed operations at the back of the queue
                 if (failed.length > 0) {
-                    this.state.queue = [...failed, ...this.state.queue];
+                    this.state.queue = [...this.state.queue, ...failed];
                     el('#queueCount').textContent = String(this.state.queue.length);
                     toast(`${failed.length} sync operation(s) failed, will retry`);
                 }
@@ -5266,7 +5625,7 @@ async function handleRequest(request, env) {
                 }
                 const deck = this.deckById(card.deckId);
                 const alg = deck?.algorithm || 'SM-2';
-                if (alg === 'FSRS') card.fsrs = SRS.fsrs(card, ratingKey);
+                if (alg === 'FSRS') card.fsrs = SRS.fsrs(card, ratingKey, deck?.fsrsWeights, deck?.fsrsDesiredRetention);
                 else card.sm2 = SRS.sm2(card, ratingKey);  // SM-2 is default
                 card.fsrs = card.fsrs || {};
                 if (alg === 'FSRS') card.fsrs.lastRating = ratingKey;
@@ -5492,21 +5851,32 @@ async function handleRequest(request, env) {
                 let payload;
                 try { payload = JSON.parse(text); } catch { payload = null; }
                 if (!payload?.cards?.length) return toast('Unsupported file');
-                const deck = this.newDeck(file.name.replace('.apkg', '').replace('.json', ''), 'SM-2');
-                this.state.decks.push(deck);
-                await Storage.put('decks', deck);
+
+                const deckName = file.name.replace('.apkg', '').replace('.json', '');
+                let deck = this.state.decks.find(d => d.name === deckName);
+                if (!deck) {
+                    deck = this.newDeck(deckName, 'SM-2');
+                    this.state.decks.push(deck);
+                    await Storage.put('decks', deck);
+                    this.queueOp({ type: 'deck-upsert', payload: deck });
+                }
+
+                let importedCount = 0;
                 for (const raw of payload.cards) {
+                    const guid = raw.guid || raw.id || null;
+                    if (guid && this.state.cards.some(c => c.ankiGuid === guid)) continue;
+
                     const card = this.newCard(deck.id, raw.name || raw.front || 'Imported', raw.back || '', raw.type || 'Front-Back');
                     card.tags = (raw.tags || []).map(t => typeof t === 'string' ? { name: t, color: 'default' } : t);
                     card.notes = raw.notes || '';
-                    card.ankiGuid = raw.guid || crypto.randomUUID();
+                    card.ankiGuid = guid || crypto.randomUUID();
                     this.state.cards.push(card);
                     await Storage.put('cards', card);
                     this.queueOp({ type: 'card-upsert', payload: card });
+                    importedCount++;
                 }
-                this.queueOp({ type: 'deck-upsert', payload: deck });
                 this.renderAll();
-                toast('Imported Anki JSON and ready to sync to Notion');
+                toast(`Imported ${importedCount} cards from JSON`);
             },
             async importApkg(file) {
                 try {
@@ -5528,21 +5898,33 @@ async function handleRequest(request, env) {
                     Object.values(decksJson).forEach(d => { decksMap[d.id] = d.name; });
                     const notes = db.exec("SELECT id,guid,mid,mod,usn,tags,flds,sfld,csum,flags,data FROM notes")[0]?.values || [];
                     const cards = db.exec("SELECT id,nid,did,ord,mod,usn,type,queue,due,ivl,factor,reps,lapses,left,odue,odid,flags,data FROM cards")[0]?.values || [];
+
                     const deckCache = {};
+                    let importedCount = 0;
+
                     for (const cardRow of cards) {
                         const [cid, nid, did, ord] = cardRow;
                         const note = notes.find(n => n[0] === nid);
                         if (!note) continue;
                         const [_, guid, mid, mod, usn, tags, flds] = note;
+
+                        // Check if card with this GUID already exists
+                        if (guid && this.state.cards.some(c => c.ankiGuid === guid)) continue;
+
                         const deckId = did;
-                        const deckName = decksMap[deckId] || file.name.replace('.apkg', '');
+                        // Use existing deck if available, or create/cache new one
                         if (!deckCache[deckId]) {
-                            const deck = this.newDeck(deckName, 'SM-2');
+                            const deckName = decksMap[deckId] || file.name.replace('.apkg', '');
+                            let deck = this.state.decks.find(d => d.name === deckName);
+                            if (!deck) {
+                                deck = this.newDeck(deckName, 'SM-2');
+                                this.state.decks.push(deck);
+                                await Storage.put('decks', deck);
+                                this.queueOp({ type: 'deck-upsert', payload: deck });
+                            }
                             deckCache[deckId] = deck;
-                            this.state.decks.push(deck);
-                            await Storage.put('decks', deck);
-                            this.queueOp({ type: 'deck-upsert', payload: deck });
                         }
+
                         const model = models[mid];
                         const fields = (flds || '').split('\u001f');
                         const front = fields[0] || 'Imported';
@@ -5558,9 +5940,10 @@ async function handleRequest(request, env) {
                         this.state.cards.push(card);
                         await Storage.put('cards', card);
                         this.queueOp({ type: 'card-upsert', payload: card });
+                        importedCount++;
                     }
                     this.renderAll();
-                    toast('Imported .apkg');
+                    toast(`Imported ${importedCount} cards from .apkg`);
                 } catch (e) {
                     console.error(e);
                     toast('Import failed');
@@ -5687,7 +6070,7 @@ async function handleRequest(request, env) {
                 });
 
                 return new Uint8Array(db.export());
-            },,
+            },
             hash(str) {
                 let h = 0;
                 for (let i = 0; i < str.length; i++) {
@@ -5781,11 +6164,9 @@ async function handleRequest(request, env) {
                 this.state.settings.aiProvider = aiProvider;
                 this.state.settings.aiModel = aiModel;
                 if (aiKey) this.state.settings.aiKey = aiKey;
-                this.state.aiProvider = aiProvider;
-                this.state.aiModel = aiModel;
-                if (aiKey) this.state.aiKey = aiKey;
+
                 // Save STT settings
-                const prevSttProvider = this.state.sttProvider;
+                const prevSttProvider = this.state.settings.sttProvider;
                 const sttProvider = el('#sttProvider').value;
                 const sttModel = el('#sttModel').value.trim();
                 const sttKey = el('#sttKey').value.trim();
@@ -5794,11 +6175,7 @@ async function handleRequest(request, env) {
                 this.state.settings.sttModel = sttModel;
                 if (sttKey) this.state.settings.sttKey = sttKey;
                 this.state.settings.sttPrompt = sttPrompt;
-                // Update state for STT
-                this.state.sttProvider = sttProvider;
-                this.state.sttModel = sttModel;
-                if (sttKey) this.state.sttKey = sttKey;
-                this.state.sttPrompt = sttPrompt;
+
                 Storage.setSettings(this.state.settings);
                 this.renderStatus();
                 this.applyTheme();
@@ -6004,11 +6381,6 @@ async function handleRequest(request, env) {
                         this.state.settings.sttPrompt = prompt;
                         this.state.settings.sttVerified = true;
                         Storage.setSettings(this.state.settings);
-                        this.state.sttProvider = provider;
-                        this.state.sttModel = model || this.getDefaultSttModel(provider);
-                        this.state.sttKey = key;
-                        this.state.sttPrompt = prompt;
-                        this.state.sttVerified = true;
                         this.applySttChangeEffects(false);
                         if (inAiMode) el('#aiControls')?.classList.remove('hidden');
                         toast('STT settings verified');
@@ -6202,6 +6574,8 @@ async function handleRequest(request, env) {
                         ];
                         const missing = required.filter(([n, k]) => !has(n, k));
                         if (missing.length) return false;
+                        // FSRS configuration storage
+                        if (!has('FSRS Params', 'rich_text')) return false;
                         return true;
                     }
                     if (type === 'card') {
@@ -6319,19 +6693,14 @@ async function handleRequest(request, env) {
                 if (s.aiProvider) el('#aiProvider').value = s.aiProvider;
                 if (s.aiModel) el('#aiModel').value = s.aiModel;
                 if (s.aiKey) el('#aiKey').value = s.aiKey;
-                this.state.aiProvider = s.aiProvider || '';
-                this.state.aiModel = s.aiModel || '';
-                this.state.aiKey = s.aiKey || '';
+
                 // Load STT settings
                 if (s.sttProvider) el('#sttProvider').value = s.sttProvider;
                 if (s.sttModel) el('#sttModel').value = s.sttModel;
                 if (s.sttKey) el('#sttKey').value = s.sttKey;
                 if (s.sttPrompt) el('#sttPrompt').value = s.sttPrompt;
-                this.state.sttProvider = s.sttProvider || '';
-                this.state.sttModel = s.sttModel || '';
-                this.state.sttKey = s.sttKey || '';
-                this.state.sttPrompt = s.sttPrompt || '';
-                this.state.sttVerified = s.sttVerified || false;
+
+                this.state.settings.sttVerified = s.sttVerified || false;
                 this.state.settings.sttPermissionWarmed = s.sttPermissionWarmed || false;
                 if (s.themeMode) this.state.settings.themeMode = s.themeMode;
                 if (s.fontMode) this.state.settings.fontMode = s.fontMode;
@@ -6354,7 +6723,7 @@ async function handleRequest(request, env) {
                 };
             },
             persistSttSettingsFromUI({ requestPermission = false } = {}) {
-                const prevProvider = this.state.sttProvider || '';
+                const prevProvider = this.state.settings.sttProvider || '';
                 const provider = (el('#sttProvider')?.value || '').trim();
                 const model = (el('#sttModel')?.value || '').trim();
                 const key = (el('#sttKey')?.value || '').trim();
@@ -6377,23 +6746,6 @@ async function handleRequest(request, env) {
                 } else if (provider !== prevProvider) {
                     // If provider changed, require re-verify to avoid using stale creds with a new endpoint.
                     this.state.settings.sttVerified = false;
-                }
-
-                this.state.sttProvider = provider;
-                this.state.sttModel = model;
-                this.state.sttPrompt = prompt;
-                if (key) this.state.sttKey = key;
-                if (!provider) {
-                    this.state.sttVerified = false;
-                    this.state.sttModel = '';
-                    this.state.sttKey = '';
-                    this.stopMicActivity(true);
-                } else if (provider === 'browser') {
-                    this.state.sttVerified = true;
-                    this.state.sttModel = '';
-                    this.state.sttKey = '';
-                } else if (provider !== prevProvider) {
-                    this.state.sttVerified = false;
                 }
 
                 Storage.setSettings(this.state.settings);
@@ -6879,15 +7231,13 @@ async function handleRequest(request, env) {
                 return data.text || '';
             },
             async transcribeWithGemini(audioBlob, model, key, prompt) {
-                // Convert audio to base64 using chunked approach to avoid stack overflow
-                const arrayBuffer = await audioBlob.arrayBuffer();
-                const bytes = new Uint8Array(arrayBuffer);
-                let binary = '';
-                const chunkSize = 8192;
-                for (let i = 0; i < bytes.length; i += chunkSize) {
-                    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
-                }
-                const base64Audio = btoa(binary);
+                // Use FileReader for efficient non-blocking Base64 conversion
+                const base64Audio = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(audioBlob);
+                });
 
                 const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
 
@@ -6916,21 +7266,6 @@ async function handleRequest(request, env) {
                 this.closeModal('confirmModal');
                 const target = this.pendingDelete;
                 if (!target) return;
-                if (target.type === 'deck') {
-                    // Queue deletion for all cards in this deck to avoid orphans
-                    const cardsToDelete = this.cardsForDeck(target.id);
-                    for (const c of cardsToDelete) {
-                        this.queueOp({ type: 'card-delete', payload: { id: c.id, notionId: c.notionId } });
-                    }
-
-                    await Storage.delete('decks', target.id);
-                    this.state.decks = this.state.decks.filter(d => d.id !== target.id);
-                    for (const c of cardsToDelete) await Storage.delete('cards', c.id);
-                    this.state.cards = this.state.cards.filter(c => c.deckId !== target.id);
-                    this.queueOp({ type: 'deck-delete', payload: { id: target.id, notionId: target.notionId } });
-                    this.renderAll();
-                    toast('Deck deleted');
-                }
                 if (target.type === 'card') {
                     await Storage.delete('cards', target.id);
                     this.state.cards = this.state.cards.filter(c => c.id !== target.id);
