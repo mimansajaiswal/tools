@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ghostink-cache-v4';
+const CACHE_NAME = 'ghostink-cache-v6';
 const CACHE_PREFIX = 'ghostink-cache-';
 
 self.addEventListener('install', (event) => {
@@ -16,20 +16,31 @@ self.addEventListener('install', (event) => {
         './icons/apple-touch-icon.png'
       ];
       await cache.addAll(localAssets);
-      const cdnAssets = [
+
+      // Best-effort pre-cache of third-party assets so the app can boot offline
+      // after the first successful online load.
+      const cdnNoCorsAssets = [
         'https://cdn.tailwindcss.com',
         'https://unpkg.com/lucide@latest',
         'https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js',
         'https://cdn.jsdelivr.net/npm/marked/marked.min.js',
         'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js',
         'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/sql-wasm.js',
-        'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/sql-wasm.wasm',
         'https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css',
-        'https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js'
+        'https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js',
+        'https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Sora:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap'
       ];
-      await Promise.all(
-        cdnAssets.map((url) => cache.add(new Request(url, { mode: 'no-cors' })).catch(() => { }))
-      );
+      const cdnCorsAssets = [
+        // WASM must be fetched with CORS to be readable by JS (sql.js uses fetch/arrayBuffer).
+        'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/sql-wasm.wasm'
+      ];
+
+      await Promise.all([
+        ...cdnNoCorsAssets.map((url) =>
+          cache.add(new Request(url, { mode: 'no-cors' })).catch(() => { })
+        ),
+        ...cdnCorsAssets.map((url) => cache.add(new Request(url, { mode: 'cors' })).catch(() => { }))
+      ]);
     })()
   );
   self.skipWaiting();
@@ -84,6 +95,9 @@ self.addEventListener('fetch', (event) => {
           }
           return new Response('', { status: 503, statusText: 'Offline' });
         });
+
+        // Keep the SW alive long enough to update the cache in the background.
+        event.waitUntil(fetchPromise.catch(() => { }));
 
         // Return cached response immediately if found, else wait for network
         return cachedResponse || fetchPromise;

@@ -59,17 +59,18 @@
 
     <script>
         tailwind.config = {
+            darkMode: ['class', '[data-theme="dark"]'],
             theme: {
                 extend: {
                     colors: {
                         oatmeal: '#F3F0E6',
                         'oatmeal-dark': '#E6E2D6',
-                        'earth-metal': '#4A4A4A',
-                        charcoal: '#1F1F1F',
+                        'earth-metal': 'rgb(var(--earth-metal-rgb) / <alpha-value>)',
+                        charcoal: 'rgb(var(--charcoal-rgb) / <alpha-value>)',
                         'white-linen': '#FAF9F6',
-                        'dull-purple': '#917FB3',
-                        'muted-pink': '#D8A7B1',
-                        'muted-pink-dim': '#C696A0'
+                        'dull-purple': 'rgb(var(--dull-purple-rgb) / <alpha-value>)',
+                        'muted-pink': 'rgb(var(--muted-pink-rgb) / <alpha-value>)',
+                        'muted-pink-dim': 'rgb(var(--muted-pink-dim-rgb) / <alpha-value>)'
                     },
                     fontFamily: {
                         display: ['var(--font-display, "Fraunces")', 'serif'],
@@ -97,6 +98,11 @@
             --surface-strong: #f3f0e6;
             --border-weak: rgba(26, 26, 26, 0.06);
             --bg: #f6f3eb;
+            --earth-metal-rgb: 74 74 74;
+            --charcoal-rgb: 31 31 31;
+            --dull-purple-rgb: 145 127 179;
+            --muted-pink-rgb: 216 167 177;
+            --muted-pink-dim-rgb: 198 150 160;
         }
 
         body {
@@ -105,12 +111,14 @@
             font-family: var(--font-sans, "Manrope"), system-ui, sans-serif;
         }
 
+        html[data-font="mono"] body,
         body[data-font="mono"] {
             --font-display: "JetBrains Mono";
             --font-sans: "JetBrains Mono";
             font-family: "JetBrains Mono", monospace;
         }
 
+        html:not([data-font="mono"]) body,
         body:not([data-font="mono"]) {
             --font-display: "Fraunces";
             --font-sans: "Sora";
@@ -130,6 +138,11 @@
             --surface-strong: #1b1917;
             --border-weak: rgba(255, 255, 255, 0.08);
             --bg: #1b1917;
+            --earth-metal-rgb: 244 241 255;
+            --charcoal-rgb: 244 241 255;
+            --dull-purple-rgb: 201 180 230;
+            --muted-pink-rgb: 242 192 202;
+            --muted-pink-dim-rgb: 231 169 181;
         }
 
         .card {
@@ -147,7 +160,7 @@
         }
 
         .pill {
-            border: 1px solid rgba(0, 0, 0, 0.05);
+            border: 1px solid var(--card-border);
         }
 
         .glass {
@@ -160,7 +173,7 @@
             box-shadow: 0 18px 40px rgba(0, 0, 0, 0.08);
         }
 
-        body[data-theme="dark"] .shadow-soft {
+        html[data-theme="dark"] .shadow-soft {
             box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
         }
 
@@ -273,75 +286,75 @@
             background: #fdebec;
         }
 
-        body[data-theme="dark"] .notion-color-gray {
+        html[data-theme="dark"] .notion-color-gray {
             color: #868686;
         }
 
-        body[data-theme="dark"] .notion-color-brown {
+        html[data-theme="dark"] .notion-color-brown {
             color: #b0937c;
         }
 
-        body[data-theme="dark"] .notion-color-orange {
+        html[data-theme="dark"] .notion-color-orange {
             color: #ffb45b;
         }
 
-        body[data-theme="dark"] .notion-color-yellow {
+        html[data-theme="dark"] .notion-color-yellow {
             color: #f7cd46;
         }
 
-        body[data-theme="dark"] .notion-color-green {
+        html[data-theme="dark"] .notion-color-green {
             color: #5bc0a7;
         }
 
-        body[data-theme="dark"] .notion-color-blue {
+        html[data-theme="dark"] .notion-color-blue {
             color: #6ab7ff;
         }
 
-        body[data-theme="dark"] .notion-color-purple {
+        html[data-theme="dark"] .notion-color-purple {
             color: #b18cff;
         }
 
-        body[data-theme="dark"] .notion-color-pink {
+        html[data-theme="dark"] .notion-color-pink {
             color: #ff8fb1;
         }
 
-        body[data-theme="dark"] .notion-color-red {
+        html[data-theme="dark"] .notion-color-red {
             color: #ff7b73;
         }
 
-        body[data-theme="dark"] .notion-color-gray-background {
+        html[data-theme="dark"] .notion-color-gray-background {
             background: #2f3134;
         }
 
-        body[data-theme="dark"] .notion-color-brown-background {
+        html[data-theme="dark"] .notion-color-brown-background {
             background: #352922;
         }
 
-        body[data-theme="dark"] .notion-color-orange-background {
+        html[data-theme="dark"] .notion-color-orange-background {
             background: #422a15;
         }
 
-        body[data-theme="dark"] .notion-color-yellow-background {
+        html[data-theme="dark"] .notion-color-yellow-background {
             background: #443716;
         }
 
-        body[data-theme="dark"] .notion-color-green-background {
+        html[data-theme="dark"] .notion-color-green-background {
             background: #183a33;
         }
 
-        body[data-theme="dark"] .notion-color-blue-background {
+        html[data-theme="dark"] .notion-color-blue-background {
             background: #152f4d;
         }
 
-        body[data-theme="dark"] .notion-color-purple-background {
+        html[data-theme="dark"] .notion-color-purple-background {
             background: #2b2340;
         }
 
-        body[data-theme="dark"] .notion-color-pink-background {
+        html[data-theme="dark"] .notion-color-pink-background {
             background: #3b2431;
         }
 
-        body[data-theme="dark"] .notion-color-red-background {
+        html[data-theme="dark"] .notion-color-red-background {
             background: #442022;
         }
 
@@ -604,19 +617,19 @@
                 transform: translate(-50%, -50%) translateX(18px);
             }
 
-            body[data-theme="dark"] .joystick-label-up {
+            html[data-theme="dark"] .joystick-label-up {
                 color: #4ade80;
             }
 
-            body[data-theme="dark"] .joystick-label-down {
+            html[data-theme="dark"] .joystick-label-down {
                 color: #f87171;
             }
 
-            body[data-theme="dark"] .joystick-label-left {
+            html[data-theme="dark"] .joystick-label-left {
                 color: #fb923c;
             }
 
-            body[data-theme="dark"] .joystick-label-right {
+            html[data-theme="dark"] .joystick-label-right {
                 color: #60a5fa;
             }
         }
@@ -657,21 +670,7 @@
             border-color: var(--card-border) !important;
         }
 
-        .text-earth-metal,
-        .text-earth-metal\/70,
-        .text-earth-metal\/60 {
-            color: var(--text-sub) !important;
-        }
-
-        body[data-theme="dark"] .text-muted-pink {
-            color: #f2c0ca !important;
-        }
-
-        body[data-theme="dark"] .text-dull-purple {
-            color: #c9b4e6 !important;
-        }
-
-        body[data-theme="dark"] .text-amber-800 {
+        html[data-theme="dark"] .text-amber-800 {
             color: #ffd8a1 !important;
         }
 
@@ -679,9 +678,7 @@
             opacity: 0;
         }
 
-        .text-charcoal {
-            color: var(--text-main) !important;
-        }
+        /* Keep Tailwind's `text-*` colors in sync with theme via CSS variables. */
 
         /* compact icon toggles */
         .pill-toggle {
@@ -748,6 +745,10 @@
             padding-right: 2rem;
             position: relative;
             z-index: 1;
+        }
+
+        html[data-theme="dark"] select {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23f4f1ff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
         }
 
         /* Mobile select touch optimization */
@@ -1690,7 +1691,7 @@ async function handleRequest(request, env) {
     targetUrl = base + path + url.search;
     request = new Request(targetUrl, request);
     request.headers.set("Authorization", `Bearer ${secretKey}`);
-    request.headers.set("Notion-Version", "2025-09-03");
+	    request.headers.set("Notion-Version", "2025-09-03");
   }
 
   const proxied = new Request(targetUrl, request);
@@ -2170,7 +2171,13 @@ async function handleRequest(request, env) {
             },
             getSession() {
                 const raw = localStorage.getItem('ghostink_session_v1');
-                return raw ? JSON.parse(raw) : null;
+                if (!raw) return null;
+                try {
+                    return JSON.parse(raw);
+                } catch (_) {
+                    localStorage.removeItem('ghostink_session_v1');
+                    return null;
+                }
             },
             setSession(session) {
                 if (session) {
@@ -2283,14 +2290,14 @@ async function handleRequest(request, env) {
                 if (isNew) {
                     newD = initDifficulty(ratingName);
                     newS = initStability(ratingName);
-                    retr = REQUEST_RETENTION;
+                    retr = 1;
                 } else {
                     const elapsed = Math.max(0.01, (now - lastReview) / 86400000);
                     const r = forgettingCurve(elapsed, lastS);
                     newD = nextDifficulty(lastD, ratingName);
                     if (ratingName === 'again') newS = nextForgetStability(lastD, lastS, r);
                     else newS = nextRecallStability(newD, lastS, r, ratingName);
-                    retr = REQUEST_RETENTION;
+                    retr = Math.max(0, Math.min(1, +r.toFixed(4)));
                 }
                 const intervalDays = nextInterval(newS);
                 return {
@@ -2321,16 +2328,16 @@ async function handleRequest(request, env) {
 
                 let newEase, newInterval, newReps;
 
+                // Update ease factor on every review (including failures), then clamp.
+                newEase = Math.max(1.3, ease + (0.1 - (5 - grade) * (0.08 + (5 - grade) * 0.02)));
+
                 if (grade < 3) {
                     // Failed recall - reset to beginning
                     newReps = 0;
                     newInterval = 1;
-                    newEase = ease; // EF unchanged on failure per original SM-2
                 } else {
                     // Successful recall
                     newReps = repetitions + 1;
-                    // Update ease factor: EF' = EF + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02))
-                    newEase = Math.max(1.3, ease + (0.1 - (5 - grade) * (0.08 + (5 - grade) * 0.02)));
 
                     // Calculate interval based on repetition count
                     if (newReps === 1) {
@@ -2431,9 +2438,11 @@ async function handleRequest(request, env) {
             const ratingCodes = { again: 'a', hard: 'h', good: 'g', easy: 'e' };
             return history.map(entry => {
                 const code = ratingCodes[entry.rating] || 'g';
-                const ts = Math.floor(new Date(entry.at).getTime() / 1000);
+                const ms = new Date(entry.at).getTime();
+                if (!Number.isFinite(ms)) return null;
+                const ts = Math.floor(ms / 1000);
                 return `${code}${ts}`;
-            }).join(',');
+            }).filter(Boolean).join(',');
         };
         const parseReviewHistory = (compact) => {
             if (!compact || typeof compact !== 'string') return [];
@@ -2445,11 +2454,12 @@ async function handleRequest(request, env) {
             return compact.split(',').filter(Boolean).map(entry => {
                 const code = entry[0];
                 const ts = parseInt(entry.slice(1), 10);
+                if (!Number.isFinite(ts)) return null;
                 return {
                     rating: ratingNames[code] || 'good',
                     at: new Date(ts * 1000).toISOString()
                 };
-            });
+            }).filter(Boolean);
         };
         const richToMarkdown = (arr = []) => {
             return (arr || []).map(rt => {
@@ -2656,22 +2666,25 @@ async function handleRequest(request, env) {
                 const name = richToMarkdown(p['Name']?.title) || 'Card';
                 const back = richToMarkdown(p['Back']?.rich_text) || '';
                 const tags = p['Tags']?.multi_select?.map(t => ({ name: t.name, color: t.color || 'default' })) || [];
+                const lastReview = p['Last Review']?.date?.start || null;
                 const fsrs = {
                     difficulty: p['Difficulty']?.number ?? initDifficulty('good'),
                     stability: p['Stability']?.number ?? initStability('good'),
                     retrievability: p['Retrievability']?.number ?? 0.9,
                     lastRating: normalizeRating(p['Last Rating']?.select?.name) || null,
-                    lastReview: p['Last Review']?.date?.start || null,
+                    lastReview,
                     dueDate: p['Due Date']?.date?.start || null
                 };
+                const intervalVal = p['Interval / Box Level']?.number ?? 1;
                 const sm2 = {
-                    interval: p['Interval / Box Level']?.number ?? 1,
+                    interval: intervalVal,
                     easeFactor: p['Ease Factor']?.number ?? 2.5,
-                    // Infer repetitions from interval: 1 day = 1 rep, 6 days = 2 reps, else 3+
-                    repetitions: (p['Interval / Box Level']?.number ?? 1) <= 1 ? 1 : (p['Interval / Box Level']?.number === 6 ? 2 : 3),
+                    // If there's no lastReview, treat as new card (0 reps) to avoid jumping straight to the 6-day step.
+                    // Otherwise, infer repetitions from interval: 1 day = 1 rep, 6 days = 2 reps, else 3+.
+                    repetitions: !lastReview ? 0 : (intervalVal <= 1 ? 1 : (intervalVal === 6 ? 2 : 3)),
                     dueDate: p['Due Date']?.date?.start || null,
                     lastRating: normalizeRating(p['Last Rating']?.select?.name) || null,
-                    lastReview: p['Last Review']?.date?.start || null
+                    lastReview
                 };
                 return {
                     id: page.id,
@@ -2800,7 +2813,20 @@ async function handleRequest(request, env) {
                 userStoppedMic: false,
                 activeAudioStream: null
             },
+            isAiModeSelected() {
+                return el('#revisionMode')?.value === 'ai';
+            },
+            isAiModeUsable() {
+                if (!this.isAiModeSelected()) return false;
+                if (!navigator.onLine) return false;
+                if (!this.state.settings.aiVerified) return false;
+                if (!this.state.settings.aiKey) return false;
+                return true;
+            },
             async init() {
+                this.applyTheme();
+                this.applyFontMode();
+
                 showLoading('Preparing app...', 'Loading your decks and cards.');
                 await Storage.init();
                 await this.loadFromDB();
@@ -2815,8 +2841,6 @@ async function handleRequest(request, env) {
                 await this.autoVerifyWorker();
                 window.addEventListener('online', () => this.handleOnline());
                 window.addEventListener('offline', () => this.renderConnection());
-                this.applyTheme();
-                this.applyFontMode();
                 if (window.matchMedia) {
                     const mq = window.matchMedia('(prefers-color-scheme: dark)');
                     mq.addEventListener('change', () => this.applyTheme());
@@ -2911,7 +2935,7 @@ async function handleRequest(request, env) {
                 return !!this.state.currentRecorder || (this.mediaRecorder && this.mediaRecorder.state === 'recording');
             },
             toggleMicRecording() {
-                const isAiMode = el('#revisionMode')?.value === 'ai';
+                const isAiMode = this.isAiModeUsable();
                 if (!isAiMode || !this.isSttEnabled() || this.state.answerRevealed || this.state.aiLocked) return;
 
                 if (this.isMicActive()) {
@@ -2952,7 +2976,7 @@ async function handleRequest(request, env) {
                 const micBtn = el('#aiRecord');
                 const fabMic = el('#fabMic');
                 const fabSend = el('#fabSend');
-                const isAiMode = el('#revisionMode')?.value === 'ai';
+                const isAiMode = this.isAiModeUsable();
                 const sttEnabled = this.isSttEnabled();
                 const listening = this.isMicActive();
                 const answerField = el('#aiAnswer');
@@ -3515,7 +3539,7 @@ async function handleRequest(request, env) {
                     }
                     if (!this.state.session || !this.state.selectedCard) return;
 
-                    const isAiMode = el('#revisionMode').value === 'ai';
+                    const isAiMode = this.isAiModeUsable();
                     const aiAnswer = el('#aiAnswer');
                     const hasAiText = (aiAnswer?.value || '').trim().length > 0;
                     // Option/Alt+Shift+S can produce a different printable character on macOS, so prefer physical key detection.
@@ -3541,7 +3565,7 @@ async function handleRequest(request, env) {
                             return;
                         }
                         // In non-AI mode, allow reveal via Cmd/Ctrl+Enter
-                        if (!isAiMode && !this.state.answerRevealed) {
+                        if (!this.isAiModeSelected() && !this.state.answerRevealed) {
                             e.preventDefault();
                             this.reveal();
                             return;
@@ -3565,7 +3589,7 @@ async function handleRequest(request, env) {
                     // Space key logic
                     if (e.key === ' ' && !this.state.answerRevealed) {
                         e.preventDefault();
-                        if (el('#revisionMode').value === 'ai') {
+                        if (this.isAiModeUsable()) {
                             const btn = el('#aiSubmit');
                             // If text area has content (button enabled), Send. Otherwise do nothing.
                             if (!btn.disabled && !this.state.aiLocked) this.submitToAI();
@@ -3575,7 +3599,7 @@ async function handleRequest(request, env) {
                     }
 
                     // Toggle Mic with Alt/Option+M in AI mode
-                    if (e.altKey && e.key.toLowerCase() === 'm' && el('#revisionMode').value === 'ai' && this.isSttEnabled() && !this.state.answerRevealed && !this.state.aiLocked) {
+                    if (e.altKey && e.key.toLowerCase() === 'm' && this.isAiModeUsable() && this.isSttEnabled() && !this.state.answerRevealed && !this.state.aiLocked) {
                         e.preventDefault();
                         this.toggleMicRecording();
                     }
@@ -3649,10 +3673,17 @@ async function handleRequest(request, env) {
                             this.showAiBlockedModal('unverified');
                             return;
                         }
+                        if (!this.state.settings.aiKey) {
+                            e.target.value = 'manual';
+                            this.showAiBlockedModal('unverified');
+                            return;
+                        }
                     }
-                    const on = e.target.value === 'ai';
+                    const on = this.isAiModeUsable();
                     el('#aiControls').classList.toggle('hidden', !on);
                     this.updateSkipHotkeyLabel(on);
+                    this.updateMobileFab();
+                    this.renderStudy();
                 };
                 el('#closeAiSettingsModal').onclick = () => this.closeModal('aiSettingsRequiredModal');
                 el('#openSettingsFromAiModal').onclick = () => { this.closeModal('aiSettingsRequiredModal'); this.openSettings(); };
@@ -3673,16 +3704,14 @@ async function handleRequest(request, env) {
                     this.setAiControlsLocked(this.state.aiLocked);
                 };
                 el('#aiRecord').onclick = () => {
-                    const isAiMode = el('#revisionMode').value === 'ai';
-                    if (!isAiMode || !this.isSttEnabled() || this.state.answerRevealed || this.state.aiLocked) return;
+                    if (!this.isAiModeUsable() || !this.isSttEnabled() || this.state.answerRevealed || this.state.aiLocked) return;
                     this.state.activeMicButton = 'inline';
                     this.toggleMicRecording();
                 };
                 const fabMic = el('#fabMic');
                 const fabSend = el('#fabSend');
                 if (fabMic) fabMic.onclick = () => {
-                    const isAiMode = el('#revisionMode').value === 'ai';
-                    if (!isAiMode || !this.isSttEnabled() || this.state.answerRevealed || this.state.aiLocked) return;
+                    if (!this.isAiModeUsable() || !this.isSttEnabled() || this.state.answerRevealed || this.state.aiLocked) return;
                     this.state.activeMicButton = 'fab';
                     this.toggleMicRecording();
                 };
@@ -4041,7 +4070,7 @@ async function handleRequest(request, env) {
 
                 this.state.activeMicButton = null;
                 this.state.lockAiUntilNextCard = false;
-                const isAiMode = el('#revisionMode').value === 'ai';
+                const isAiMode = this.isAiModeUsable();
                 const revealBtn = el('#revealBtn');
 
                 this.updateSkipHotkeyLabel(isAiMode);
@@ -5066,8 +5095,14 @@ async function handleRequest(request, env) {
                 }
                 // Store reverse state for reveal
                 this.state.cardReversed = shouldReverse;
-                const prompt = shouldReverse ? card.back : card.name;
+                let prompt = shouldReverse ? card.back : card.name;
                 if (isCloze) {
+                    // Cloze content may be stored in either Name or Back; prefer the field that contains cloze markup.
+                    const hasClozeInName = /\{\{c\d+::.+?\}\}/i.test(card.name || '');
+                    const hasClozeInBack = /\{\{c\d+::.+?\}\}/i.test(card.back || '');
+                    if (!hasClozeInName && hasClozeInBack) {
+                        prompt = card.back;
+                    }
                     // Create cloze blanks with hidden answer and visible placeholder
                     const processed = prompt.replace(/\{\{c\d+::(.*?)\}\}/g, (match, answer) => {
                         return `<span class="cloze-blank"><span class="cloze-placeholder">[...]</span><span class="cloze-answer">${answer}</span></span>`;
@@ -5128,7 +5163,7 @@ async function handleRequest(request, env) {
                     toast(mode === 'ai' ? 'Judge the answer first' : 'Reveal the answer first');
                     return;
                 }
-                if (el('#revisionMode').value === 'ai' && !this.state.settings.aiKey) {
+                if (this.isAiModeSelected() && navigator.onLine && !this.state.settings.aiKey) {
                     toast('Add an AI key or switch to Reveal mode');
                     return;
                 }
@@ -5228,6 +5263,8 @@ async function handleRequest(request, env) {
                 card.reviewHistory = prev.history;
                 // Save restored card
                 await Storage.put('cards', card);
+                // Ensure undo is propagated to Notion on next sync.
+                this.queueOp({ type: 'card-upsert', payload: card });
                 // Also update in memory
                 const cardIndex = this.state.cards.findIndex(c => c.id === card.id);
                 if (cardIndex !== -1) {
@@ -5363,8 +5400,12 @@ async function handleRequest(request, env) {
                     content += `**Notes:**\n${card.notes}\n\n`;
                 }
                 content += `Deck: ${deck?.name ?? '—'}`;
-                await navigator.clipboard.writeText(content);
-                toast('Copied to clipboard');
+                try {
+                    await navigator.clipboard.writeText(content);
+                    toast('Copied to clipboard');
+                } catch (_) {
+                    toast('Copy failed');
+                }
             },
             async handleAnkiImport(file) {
                 if (!file) return;
@@ -5477,7 +5518,7 @@ async function handleRequest(request, env) {
                 const SQL = await Storage.ensureSQL();
                 const db = new SQL.Database();
                 db.run(`CREATE TABLE col (id integer primary key, crt integer, mod integer, scm integer, ver integer, dty integer, usn integer, ls integer, conf text, models text, decks text, dconf text, tags text);`);
-                db.run(`CREATE TABLE notes (id integer primary key, guid text, mid integer, mod integer, usn integer, tags text, flds text, sfld integer, csum integer, flags integer, data text);`);
+                db.run(`CREATE TABLE notes (id integer primary key, guid text, mid integer, mod integer, usn integer, tags text, flds text, sfld text, csum integer, flags integer, data text);`);
                 db.run(`CREATE TABLE cards (id integer primary key, nid integer, did integer, ord integer, mod integer, usn integer, type integer, queue integer, due integer, ivl integer, factor integer, reps integer, lapses integer, left integer, odue integer, odid integer, flags integer, data text);`);
                 db.run(`CREATE TABLE revlog (id integer primary key, cid integer, usn integer, ease integer, ivl integer, lastIvl integer, factor integer, time integer, type integer);`);
                 db.run(`CREATE TABLE graves (id integer primary key, oid integer, type integer, usn integer);`);
@@ -5536,11 +5577,12 @@ async function handleRequest(request, env) {
                 let cidCounter = now * 1000 + 500;
                 const noteStmt = db.prepare("INSERT INTO notes VALUES (?,?,?,?,?,?,?,?,?,?,?)");
                 const cardStmt = db.prepare("INSERT INTO cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
+                
                 cards.forEach((card, idx) => {
                     const isCloze = (card.type || '').toLowerCase() === 'cloze';
                     const mid = isCloze ? modelClozeId : modelBasicId;
                     const nid = ++nidCounter;
-                    const cid = ++cidCounter;
+                    
                     const fields = isCloze ? [card.name, card.back] : [card.name, card.back];
                     const flds = fields.join('\u001f');
                     const tagStr = card.tags.length ? card.tags.map(t => t.name.trim()).join(' ') + ' ' : '';
@@ -5548,14 +5590,30 @@ async function handleRequest(request, env) {
                     const csum = Math.abs(this.hash(flds)) >>> 0;
                     noteStmt.run([nid, card.ankiGuid || crypto.randomUUID(), mid, now, 0, tagStr, flds, sfld, csum, 0, ""]);
 
-                    const ivl = card.fsrs?.stability ? Math.max(1, Math.round(card.fsrs.stability)) : 1;
-                    const due = dayStart + idx;
-                    const factor = 2500;
-                    cardStmt.run([cid, nid, deckId, 0, now, 0, 0, 2, due, ivl, factor, 0, 0, 0, 0, 0, 0, ""]);
+                    let ordinals = [0];
+                    if (isCloze) {
+                        const matches = [...card.name.matchAll(/{{\s*c(\d+)::/g)];
+                        if (matches.length > 0) {
+                            const indices = new Set(matches.map(m => parseInt(m[1], 10) - 1));
+                            ordinals = Array.from(indices).sort((a, b) => a - b);
+                        }
+                    }
+
+                    ordinals.forEach((ord) => {
+                        const cid = ++cidCounter;
+                        // Export as new cards: type=0, queue=0, due=integer order
+                        const type = 0; 
+                        const queue = 0;
+                        const due = idx + 1; // Or some global counter, but idx is fine for new cards order
+                        const ivl = 0;
+                        const factor = 0;
+                        
+                        cardStmt.run([cid, nid, deckId, ord, now, 0, type, queue, due, ivl, factor, 0, 0, 0, 0, 0, 0, ""]);
+                    });
                 });
 
                 return new Uint8Array(db.export());
-            },
+            },,
             hash(str) {
                 let h = 0;
                 for (let i = 0; i < str.length; i++) {
@@ -5978,10 +6036,10 @@ async function handleRequest(request, env) {
                     this.state.lastFocusedElement = null;
                 }
             },
-            copyWorkerCode() {
+            async copyWorkerCode() {
                 const code = el('#workerCodeBlock').innerText;
                 try {
-                    navigator.clipboard.writeText(code);
+                    await navigator.clipboard.writeText(code);
                     toast('Worker code copied');
                 } catch (e) {
                     console.error('Clipboard write failed:', e);
@@ -6805,14 +6863,13 @@ async function handleRequest(request, env) {
             }
         };
 
-        window.addEventListener('load', async () => {
+        document.addEventListener('DOMContentLoaded', async () => {
+            document.body.classList.remove('preinit');
             try {
                 await App.init();
             } catch (e) {
                 console.error('Failed to initialize GhostInk', e);
                 toast('Startup failed – see console for details');
-            } finally {
-                document.body.classList.remove('preinit');
             }
         });
         if ('serviceWorker' in navigator) {
