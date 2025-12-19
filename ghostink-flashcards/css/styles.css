@@ -843,6 +843,7 @@ body.offline-mode::after {
     0% {
         background-position: 200% 0;
     }
+
     100% {
         background-position: -200% 0;
     }
@@ -854,9 +855,12 @@ body.offline-mode::after {
 }
 
 @keyframes offline-badge-fade {
-    0%, 60% {
+
+    0%,
+    60% {
         opacity: 0.9;
     }
+
     100% {
         opacity: 0.5;
     }

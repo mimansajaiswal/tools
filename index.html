@@ -213,8 +213,8 @@
     <main class="max-w-4xl mx-auto w-full flex-grow">
 
         <div class="mb-8">
-            <h1 class="text-4xl font-bold mb-4 text-textColor">Web Tools</h1>
-            <p class="mb-6 text-lg text-textColor opacity-90">
+            <h1 class="text-2xl font-bold mb-4 text-textColor">Web Tools</h1>
+            <p class="mb-6 text-base text-textColor opacity-90">
                 Miscellaneous HTML+JavaScript tools built mostly with the help of LLMs.
                 Hosted directly on GitHub Pages.
             </p>
@@ -338,17 +338,17 @@
 
                 // Section Meta
                 const details = sectionDetails[sectionTitle] || {};
-                const description = details.description 
-                    ? `<p class="mb-4 text-textColor/70 text-sm max-w-prose border-l-2 border-accent/20 pl-3 italic">${details.description}</p>` 
+                const description = details.description
+                    ? `<p class="mb-4 text-textColor/70 text-sm max-w-prose border-l-2 border-accent/20 pl-3 italic">${details.description}</p>`
                     : '';
-                
-                const iconHtml = details.icon 
-                    ? `<i data-lucide="${details.icon}" class="text-accent w-6 h-6 stroke-[2.5]"></i>` 
+
+                const iconHtml = details.icon
+                    ? `<i data-lucide="${details.icon}" class="text-accent w-6 h-6 stroke-[2.5]"></i>`
                     : '';
 
                 // Header
                 const headerHtml = `
-                    <h2 class="text-2xl font-bold mb-3 text-textColor flex items-center gap-3 tracking-tight">
+                    <h2 class="text-lg font-bold mb-3 text-textColor flex items-center gap-3 tracking-tight">
                         ${iconHtml}
                         <span>${sectionTitle}</span>
                     </h2>
@@ -359,7 +359,7 @@
                 const listItems = tools.map(tool => {
                     // Badge Logic
                     const badgeHtml = tool.made_by
-                        ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-accent/10 text-accent border border-accent/20 uppercase tracking-widest">${tool.made_by}</span>`
+                        ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-accent/10 text-accent border border-accent/20 uppercase tracking-widest">${tool.made_by}</span>`
                         : '';
 
                     return `
@@ -367,7 +367,7 @@
                         <div class="group pl-4 border-l-2 border-transparent hover:border-accent transition-all duration-300">
                             <div class="flex flex-col gap-1">
                                 <div class="flex items-baseline flex-wrap gap-x-3 gap-y-1">
-                                    <a href="${tool.url}" target="_blank" rel="noopener" class="tool-link font-bold text-lg hover:text-accent decoration-2 underline-offset-4">${tool.name}</a> 
+                                    <a href="${tool.url}" target="_blank" rel="noopener" class="tool-link font-bold text-base hover:text-accent decoration-2 underline-offset-4">${tool.name}</a> 
                                     ${badgeHtml}
                                 </div>
                                 <p class="text-sm text-textColor/80 leading-relaxed max-w-2xl font-light">${tool.desc}</p>
