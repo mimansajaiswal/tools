@@ -288,7 +288,7 @@
 
             // --- Notion As DB Apps ---
             { section: "Synced to Notion", name: "Photo Chronicles", url: "./photo-chronicles/", desc: "Track progress using photos with data saved to notion", made_by: "Gemini 3" },
-            { section: "Synced to Notion", name: "Ghostink Flashcards", url: "./ghostink-flashcards/", desc: "Review app that has AI feedback and syncs to notion", made_by: "Gemini 3 + Codex 5.1 + Claude {O/S}4.5" },
+            { section: "Synced to Notion", name: "GhostInk Flashcards", url: "./ghostink-flashcards/", desc: "Review app that has AI feedback and syncs to notion", made_by: "Gemini 3 + Codex 5.1 + Claude {O/S}4.5" },
 
             // --- Starter Gudies ---
             { section: "Starter Gudies", name: "Learn Nano Banana Pro", url: "https://ai.studio/apps/drive/1JHoslwvQof7K3GrsmM6kQ95h6dBIejx_?fullscreenApplet=true", desc: "How to prompt nano banana pro", made_by: "Gemini 3 + GPT 5.1 Codex" },
@@ -359,7 +359,7 @@
                 const listItems = tools.map(tool => {
                     // Badge Logic
                     const badgeHtml = tool.made_by
-                        ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-xxs font-bold bg-accent/10 text-accent border border-accent/20 uppercase tracking-widest">${tool.made_by}</span>`
+                        ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-[0.6rem] font-bold bg-accent/10 text-accent border border-accent/20 uppercase tracking-widest">${tool.made_by}</span>`
                         : '';
 
                     return `
