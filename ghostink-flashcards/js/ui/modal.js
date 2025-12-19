@@ -7,8 +7,9 @@ import { el } from '../config.js';
 
 /**
  * Track the last focused element for returning focus after modal closes
+ * Issue 7 Fix: Use a stack to handle nested modals properly
  */
-let lastFocusedElement = null;
+const focusStack = [];
 
 /**
  * Open a modal by ID
@@ -18,7 +19,7 @@ export const openModal = (id) => {
     const m = el('#' + id);
     if (!m) return;
     // Store the element that triggered the modal
-    lastFocusedElement = document.activeElement;
+    if (document.activeElement) focusStack.push(document.activeElement);
     m.classList.remove('hidden');
     m.classList.add('flex');
     // Focus the first focusable element in the modal
@@ -38,9 +39,9 @@ export const closeModal = (id) => {
     m.classList.add('hidden');
     m.classList.remove('flex');
     // Return focus to the element that triggered the modal
-    if (lastFocusedElement) {
-        lastFocusedElement.focus();
-        lastFocusedElement = null;
+    const prev = focusStack.pop();
+    if (prev) {
+        prev.focus();
     }
 };
 
@@ -48,14 +49,14 @@ export const closeModal = (id) => {
  * Get the last focused element (for App state compatibility)
  * @returns {Element|null}
  */
-export const getLastFocusedElement = () => lastFocusedElement;
+export const getLastFocusedElement = () => focusStack.length > 0 ? focusStack[focusStack.length - 1] : null;
 
 /**
  * Set the last focused element (for App state compatibility)
  * @param {Element|null} element
  */
 export const setLastFocusedElement = (element) => {
-    lastFocusedElement = element;
+    if (element) focusStack.push(element);
 };
 
 /**

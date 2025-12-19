@@ -549,7 +549,7 @@ export const Storage = {
                 console.error('LocalStorage quota exceeded for session. Try clearing some browser data.');
                 const minimalSession = {
                     deckIds: session.deckIds,
-                    currentIndex: session.currentIndex,
+                    currentIndex: 0, // Reset index since we sliced the queue
                     cardQueue: session.cardQueue.slice(session.currentIndex, session.currentIndex + 50),
                     completed: session.completed || [],
                     skipped: session.skipped || [],

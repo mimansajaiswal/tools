@@ -132,9 +132,7 @@ export const markdownToNotionRichText = (markdown) => {
     try {
         html = marked.parse(pre, {
             gfm: true,
-            breaks: true,
-            headerIds: false,
-            mangle: false
+            breaks: true
         });
     } catch (e) {
         console.error('marked.parse failed; falling back to plain text:', e);
@@ -523,8 +521,8 @@ export const NotionMapper = {
             interval: intervalVal,
             easeFactor: p['Ease Factor']?.number ?? 2.5,
             // If there's no lastReview, treat as new card (0 reps) to avoid jumping straight to the 6-day step.
-            // Otherwise, infer repetitions from interval: 1 day = 1 rep, 6 days = 2 reps, else 3+.
-            repetitions: !lastReview ? 0 : (intervalVal <= 1 ? 1 : (intervalVal === 6 ? 2 : 3)),
+            // Otherwise, infer repetitions from interval: 0 days = 0 reps (failed), 1 day = 1 rep, 6 days = 2 reps, else 3+.
+            repetitions: !lastReview ? 0 : (intervalVal === 0 ? 0 : (intervalVal <= 1 ? 1 : (intervalVal === 6 ? 2 : 3))),
             dueDate: p['Due Date']?.date?.start || null,
             lastRating: normalizeRating(p['Last Rating']?.select?.name) || null,
             lastReview

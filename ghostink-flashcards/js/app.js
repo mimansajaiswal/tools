@@ -656,14 +656,23 @@ export const App = {
             },
             getSessionCard() {
                 const session = this.state.session;
-                if (!session || session.currentIndex >= session.cardQueue.length) {
-                    return null;
+                // Issue 1 Fix: Automatically skip deleted/archived cards to prevent session stall
+                while (session && session.currentIndex < session.cardQueue.length) {
+                    const queueItem = session.cardQueue[session.currentIndex];
+                    const card = this.cardById(queueItem.cardId);
+                    if (card) {
+                        return {
+                            card: card,
+                            reversed: queueItem.reversed
+                        };
+                    }
+                    // Card deleted or not found; skip it and persist progress
+                    console.warn(`Skipping deleted card in session: ${queueItem.cardId}`);
+                    session.skipped.push(queueItem.cardId);
+                    session.currentIndex++;
+                    this.saveSessionDebounced();
                 }
-                const queueItem = session.cardQueue[session.currentIndex];
-                return {
-                    card: this.cardById(queueItem.cardId),
-                    reversed: queueItem.reversed
-                };
+                return null;
             },
             advanceSession(wasSkipped = false) {
                 const session = this.state.session;

@@ -223,11 +223,15 @@ export const createMediaFigure = (doc, { kind, src }, label, originalUrl) => {
             e.preventDefault();
             e.stopPropagation();
             const instance = GLightbox({ elements: [{ href: src, type: 'video', source: kind }] });
+            tempLightboxInstances.push(instance);
             // Auto-destroy on close to prevent memory leaks
             instance.on('close', () => {
                 setTimeout(() => {
                     try {
                         instance.destroy();
+                        // Remove from tracking array after manual close
+                        const idx = tempLightboxInstances.indexOf(instance);
+                        if (idx > -1) tempLightboxInstances.splice(idx, 1);
                     } catch (err) {
                         // Ignore destroy errors
                     }

@@ -117,7 +117,7 @@ export const constrainWeights = (w) => {
     for (let i = 0; i <= 3; i++) out[i] = Math.max(0.01, out[i]); // initial stabilities
     out[4] = Math.min(10, Math.max(1, out[4])); // baseline difficulty
     out[7] = Math.min(1, Math.max(0, out[7])); // mean reversion weight
-    out[20] = Math.min(1, Math.max(0.01, out[20])); // decay (used as -w[20])
+    out[20] = Math.min(0.8, Math.max(0.1, out[20])); // decay (used as -w[20])
     return out;
 };
 

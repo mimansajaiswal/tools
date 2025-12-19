@@ -62,18 +62,20 @@ self.addEventListener('install', (event) => {
       // Using pinned versions to ensure consistent behavior and avoid cache invalidation issues
       const cdnNoCorsAssets = [
         'https://cdn.tailwindcss.com?plugins=forms',
-        'https://unpkg.com/lucide@0.294.0',
-        'https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js',
+        'https://unpkg.com/lucide@0.562.0',
+        'https://cdn.jsdelivr.net/npm/marked@17.0.1/marked.min.js',
         'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js',
-        'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/sql-wasm.js',
-        'https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css',
-        'https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.13.0/sql-wasm.js',
+        'https://cdn.jsdelivr.net/npm/katex@0.16.27/dist/katex.min.css',
+        'https://cdn.jsdelivr.net/npm/katex@0.16.27/dist/katex.min.js',
+        'https://cdn.jsdelivr.net/npm/glightbox@3.3.1/dist/css/glightbox.min.css',
+        'https://cdn.jsdelivr.net/npm/glightbox@3.3.1/dist/js/glightbox.min.js',
         'https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Sora:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap'
       ];
 
       // WASM must be fetched with CORS to be readable by JS (sql.js uses fetch/arrayBuffer).
       const cdnCorsAssets = [
-        'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/sql-wasm.wasm'
+        'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.13.0/sql-wasm.wasm'
       ];
 
       // Fix: Improved CDN caching with error handling and timeout
@@ -155,6 +157,52 @@ async function trimCache(cacheName, maxEntries) {
   }
 }
 
+// Fix 5: IDB helper for cache metadata (timestamps for opaque responses)
+const DB_NAME = 'GhostInkSW';
+const META_STORE = 'cache-meta';
+
+const openMetaDB = () => {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(META_STORE)) {
+        db.createObjectStore(META_STORE);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+};
+
+const setCacheMetadata = async (url, timestamp) => {
+  try {
+    const db = await openMetaDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(META_STORE, 'readwrite');
+      const req = tx.objectStore(META_STORE).put(timestamp, url);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch (e) {
+    console.warn('SW: Failed to set cache metadata:', e);
+  }
+};
+
+const getCacheMetadata = async (url) => {
+  try {
+    const db = await openMetaDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(META_STORE, 'readonly');
+      const req = tx.objectStore(META_STORE).get(url);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    });
+  } catch (e) {
+    return null;
+  }
+};
+
 // Fix: Clean expired cache entries
 async function cleanExpiredCacheEntries() {
   const cache = await caches.open(CACHE_NAME);
@@ -166,14 +214,20 @@ async function cleanExpiredCacheEntries() {
       const response = await cache.match(request);
       if (!response) continue;
 
+      let cacheTime = null;
+
       // Check if response has a date header we can use
       const dateHeader = response.headers.get('date');
       if (dateHeader) {
-        const cacheTime = new Date(dateHeader).getTime();
-        if (now - cacheTime > CACHE_EXPIRATION_MS) {
-          await cache.delete(request);
-          console.log(`SW: Expired cache entry: ${request.url}`);
-        }
+        cacheTime = new Date(dateHeader).getTime();
+      } else {
+        // Fallback to IDB metadata for opaque responses
+        cacheTime = await getCacheMetadata(request.url);
+      }
+
+      if (cacheTime && (now - cacheTime > CACHE_EXPIRATION_MS)) {
+        await cache.delete(request);
+        console.log(`SW: Expired cache entry: ${request.url}`);
       }
     } catch (e) {
       // Ignore errors for individual entries
@@ -230,6 +284,9 @@ self.addEventListener('fetch', (event) => {
             // Clone response before caching
             const responseToCache = networkResponse.clone();
             cache.put(request, responseToCache).then(() => {
+              // Fix 5: Store metadata for opaque response expiration
+              setCacheMetadata(request.url, Date.now());
+
               // Fix: Periodically trim cache to prevent unbounded growth
               const category = getCacheCategory(request.url);
               if (category === CACHE_CATEGORIES.CDN) {

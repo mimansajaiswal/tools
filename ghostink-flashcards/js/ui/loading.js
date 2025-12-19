@@ -23,9 +23,14 @@ export const showLoading = (msg = 'Loading...', subtext = '', onCancel = null) =
     const cancelBtn = el('#loadingCancelBtn');
     if (lm) lm.textContent = msg;
     if (ls) ls.textContent = subtext;
-    if (pw) pw.classList.add('hidden');
-    if (pb) pb.style.width = '0%';
-    if (pt) pt.textContent = '0%';
+
+    // Fix 4: Don't reset progress if overlay is already visible (updating message)
+    const isVisible = ov && !ov.classList.contains('hidden');
+    if (!isVisible) {
+        if (pw) pw.classList.add('hidden');
+        if (pb) pb.style.width = '0%';
+        if (pt) pt.textContent = '0%';
+    }
 
     // Handle cancel button
     currentCancelCallback = onCancel;
