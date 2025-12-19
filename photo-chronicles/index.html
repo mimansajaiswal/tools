@@ -17,7 +17,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
 
     <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/lucide@0.561.0/dist/umd/lucide.min.js"></script>
 
     <!-- Font: DM Serif Display (Headers) & Inter (Body) -->
     <link
@@ -2325,13 +2325,23 @@ async function handleRequest(request, env) {
                         App.state.segments[App.state.activeSegment] = canvas;
                         const layout = App.collageConfigs[App.state.collageMode];
                         const total = layout.length;
-                        const filledCount = App.state.segments.filter(s => s).length;
-                        if (filledCount === total) {
+                        let allFilled = true;
+                        let nextEmpty = -1;
+                        for (let i = 0; i < total; i++) {
+                            if (!App.state.segments[i]) {
+                                allFilled = false;
+                                if (nextEmpty === -1) nextEmpty = i;
+                            }
+                        }
+
+                        if (allFilled) {
                             App.finalizeCollage();
                         } else {
-                            App.state.activeSegment++;
-                            document.getElementById('segCurrent').innerText = App.state.activeSegment + 1;
-                            App.updateGridOverlay();
+                            if (nextEmpty !== -1) {
+                                App.state.activeSegment = nextEmpty;
+                                document.getElementById('segCurrent').innerText = App.state.activeSegment + 1;
+                                App.updateGridOverlay();
+                            }
                         }
                     }
                 }

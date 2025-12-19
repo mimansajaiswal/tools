@@ -1,14 +1,13 @@
-const CACHE_NAME = 'photo-chronicles-cache-v1';
+const CACHE_NAME = 'photo-chronicles-cache-v3';
 const OFFLINE_ASSETS = [
   './',
   './index.html',
   './manifest.webmanifest',
-  './service-worker.js',
   './icons/icon-180.png',
   './icons/icon-192.png',
   './icons/icon-512.png',
   'https://cdn.tailwindcss.com',
-  'https://unpkg.com/lucide@latest',
+  'https://unpkg.com/lucide@0.561.0/dist/umd/lucide.min.js',
   'https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@300;400;500;600&display=swap'
 ];
 
