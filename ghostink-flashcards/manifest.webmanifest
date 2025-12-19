@@ -1,28 +1,53 @@
 {
   "name": "GhostInk Flashcards",
   "short_name": "GhostInk",
-  "start_url": "index.html",
+  "description": "Spaced repetition flashcard app with Notion integration",
+  "start_url": "./index.html",
+  "scope": "./",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "background_color": "#F3F0E6",
   "theme_color": "#917FB3",
+  "categories": ["education", "productivity"],
+  "lang": "en",
   "icons": [
     {
-      "src": "icons/icon-512.png",
+      "src": "./icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icons/icon-192.png",
+      "src": "./icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icons/icon-96.png",
+      "src": "./icons/icon-96.png",
       "sizes": "96x96",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "./icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Start Study Session",
+      "short_name": "Study",
+      "description": "Start reviewing your flashcards",
+      "url": "./index.html?action=study",
+      "icons": [
+        {
+          "src": "./icons/icon-96.png",
+          "sizes": "96x96"
+        }
+      ]
     }
   ]
 }

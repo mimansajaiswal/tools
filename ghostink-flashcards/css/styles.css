@@ -1,0 +1,863 @@
+:root {
+    /* Light Theme Components */
+    --oatmeal-rgb: 243 240 230;
+    --oatmeal-dark-rgb: 230 226 214;
+    --oatmeal-hover-rgb: 235 232 222;
+    --earth-metal-rgb: 74 74 74;
+    --charcoal-rgb: 31 31 31;
+    --linen-rgb: 250 249 246;
+    --dull-purple-rgb: 145 127 179;
+    --dull-purple-hover-rgb: 130 113 161;
+    --muted-pink-rgb: 216 167 177;
+    --muted-pink-hover-rgb: 201 150 160;
+
+    --oatmeal: rgb(var(--oatmeal-rgb));
+    --oatmeal-dark: rgb(var(--oatmeal-dark-rgb));
+    --earth-metal: rgb(var(--earth-metal-rgb));
+    --charcoal: rgb(var(--charcoal-rgb));
+    --linen: rgb(var(--linen-rgb));
+    --dull-purple: rgb(var(--dull-purple-rgb));
+    --muted-pink: rgb(var(--muted-pink-rgb));
+
+    --card-bg: rgba(var(--linen-rgb), 0.9);
+    --card-border: rgba(var(--charcoal-rgb), 0.06);
+    --text-main: var(--charcoal);
+    --text-sub: rgba(var(--charcoal-rgb), 0.7);
+    --surface: var(--linen);
+    --surface-strong: var(--oatmeal);
+    --border-weak: var(--card-border);
+    --bg: #f6f3eb;
+}
+
+body {
+    background: var(--bg);
+    color: var(--text-main);
+    font-family: var(--font-sans, "Manrope"), system-ui, sans-serif;
+}
+
+html[data-font="mono"] body,
+body[data-font="mono"] {
+    --font-display: "JetBrains Mono";
+    --font-sans: "JetBrains Mono";
+    font-family: "JetBrains Mono", monospace;
+}
+
+html:not([data-font="mono"]) body,
+body:not([data-font="mono"]) {
+    --font-display: "Fraunces";
+    --font-sans: "Sora";
+}
+
+body[data-theme="dark"],
+html[data-theme="dark"] body {
+    color-scheme: dark;
+    /* Dark Theme Components */
+    --oatmeal-rgb: 31 28 43;
+    --oatmeal-dark-rgb: 37 35 53;
+    --oatmeal-hover-rgb: 42 39 61;
+    --earth-metal-rgb: 244 241 255;
+    --charcoal-rgb: 244 241 255;
+    --linen-rgb: 27 25 23;
+    --dull-purple-rgb: 120 100 160;
+    --dull-purple-hover-rgb: 138 114 181;
+    --muted-pink-rgb: 209 138 152;
+    --muted-pink-hover-rgb: 224 155 171;
+
+    --card-bg: #201d1b;
+    --card-border: rgba(255, 255, 255, 0.08);
+    --text-main: #f4f1ff;
+    --text-sub: rgba(244, 241, 255, 0.7);
+    --surface: #1f1c1a;
+    --surface-strong: #1b1917;
+    --border-weak: rgba(255, 255, 255, 0.08);
+    --bg: #1b1917;
+}
+
+.card {
+    border: 1px solid var(--card-border);
+    background: var(--card-bg);
+    backdrop-filter: blur(12px);
+}
+
+.media-embed {
+    margin: 0.75rem 0;
+    padding: 0.6rem;
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--surface) 70%, transparent);
+    position: relative;
+}
+
+.media-embed img,
+.media-embed video {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    border-radius: 12px;
+    cursor: zoom-in;
+}
+
+.media-embed video {
+    max-height: 420px;
+    background: #000;
+}
+
+/* Mobile FAB position is configured via a settings picker (no drag-to-reposition mode). */
+
+.dash {
+    background: repeating-linear-gradient(-45deg,
+            rgba(145, 127, 179, 0.08),
+            rgba(145, 127, 179, 0.08) 12px,
+            transparent 12px,
+            transparent 24px);
+}
+
+.pill {
+    border: 1px solid var(--card-border);
+}
+
+.glass {
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.shadow-soft {
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.08);
+}
+
+html[data-theme="dark"] .shadow-soft {
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+}
+
+kbd {
+    font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+/* Custom tooltip that appears below element (desktop only) */
+@media (min-width: 641px) {
+    [data-tooltip] {
+        position: relative;
+    }
+
+    [data-tooltip]::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        margin-top: 6px;
+        padding: 4px 8px;
+        background: var(--text-main, #1b1917);
+        color: var(--bg, #faf9f6);
+        font-size: 11px;
+        white-space: nowrap;
+        border-radius: 6px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.15s;
+        z-index: 100;
+    }
+
+    [data-tooltip]:hover::after {
+        opacity: 1;
+    }
+}
+
+/* Notion color helpers */
+.notion-color-default {
+    color: inherit;
+}
+
+.notion-color-gray {
+    color: #9b9a97;
+}
+
+.notion-color-brown {
+    color: #64473a;
+}
+
+.notion-color-orange {
+    color: #d9730d;
+}
+
+.notion-color-yellow {
+    color: #e0a30b;
+}
+
+.notion-color-green {
+    color: #0f7b6c;
+}
+
+.notion-color-blue {
+    color: #0b6ae6;
+}
+
+.notion-color-purple {
+    color: #6940a5;
+}
+
+.notion-color-pink {
+    color: #ad1a72;
+}
+
+.notion-color-red {
+    color: #e03e3e;
+}
+
+.notion-color-gray-background {
+    background: #ebeced;
+}
+
+.notion-color-brown-background {
+    background: #ede4de;
+}
+
+.notion-color-orange-background {
+    background: #faebdd;
+}
+
+.notion-color-yellow-background {
+    background: #fbf3db;
+}
+
+.notion-color-green-background {
+    background: #ddebea;
+}
+
+.notion-color-blue-background {
+    background: #e7f3f8;
+}
+
+.notion-color-purple-background {
+    background: #f1ecf9;
+}
+
+.notion-color-pink-background {
+    background: #f6e0e9;
+}
+
+.notion-color-red-background {
+    background: #fdebec;
+}
+
+html[data-theme="dark"] .notion-color-gray {
+    color: #868686;
+}
+
+html[data-theme="dark"] .notion-color-brown {
+    color: #b0937c;
+}
+
+html[data-theme="dark"] .notion-color-orange {
+    color: #ffb45b;
+}
+
+html[data-theme="dark"] .notion-color-yellow {
+    color: #f7cd46;
+}
+
+html[data-theme="dark"] .notion-color-green {
+    color: #5bc0a7;
+}
+
+html[data-theme="dark"] .notion-color-blue {
+    color: #6ab7ff;
+}
+
+html[data-theme="dark"] .notion-color-purple {
+    color: #b18cff;
+}
+
+html[data-theme="dark"] .notion-color-pink {
+    color: #ff8fb1;
+}
+
+html[data-theme="dark"] .notion-color-red {
+    color: #ff7b73;
+}
+
+html[data-theme="dark"] .notion-color-gray-background {
+    background: #2f3134;
+}
+
+html[data-theme="dark"] .notion-color-brown-background {
+    background: #352922;
+}
+
+html[data-theme="dark"] .notion-color-orange-background {
+    background: #422a15;
+}
+
+html[data-theme="dark"] .notion-color-yellow-background {
+    background: #443716;
+}
+
+html[data-theme="dark"] .notion-color-green-background {
+    background: #183a33;
+}
+
+html[data-theme="dark"] .notion-color-blue-background {
+    background: #152f4d;
+}
+
+html[data-theme="dark"] .notion-color-purple-background {
+    background: #2b2340;
+}
+
+html[data-theme="dark"] .notion-color-pink-background {
+    background: #3b2431;
+}
+
+html[data-theme="dark"] .notion-color-red-background {
+    background: #442022;
+}
+
+.cloze-blank {
+    padding: 2px 6px;
+    border-bottom: 1px dashed var(--dull-purple);
+    background: linear-gradient(90deg, rgb(var(--dull-purple-rgb) / 0.14), rgba(216, 167, 177, 0.14));
+    border-radius: 6px;
+}
+
+.cloze-blank .cloze-answer {
+    display: none;
+}
+
+.cloze-blank .cloze-placeholder {
+    color: var(--dull-purple);
+    font-style: italic;
+}
+
+.cloze-blank.revealed .cloze-answer {
+    display: inline;
+    color: var(--dull-purple);
+    font-weight: 600;
+}
+
+.cloze-blank.revealed .cloze-placeholder {
+    display: none;
+}
+
+/* Link styling in card content and notes */
+#cardFront a,
+#cardBack a,
+#notesPreview a,
+#aiFeedback a,
+#blockNotePreview a {
+    color: var(--dull-purple);
+    text-decoration: underline;
+}
+
+#cardFront a:hover,
+#cardBack a:hover,
+#notesPreview a:hover,
+#aiFeedback a:hover,
+#blockNotePreview a:hover {
+    opacity: 0.8;
+}
+
+/* Minimal markdown typography (works without Tailwind Typography plugin) */
+.md-content :is(p, ul, ol, pre, blockquote, table) {
+    margin: 0.65rem 0;
+}
+
+.md-content :is(h1, h2, h3) {
+    margin: 0.9rem 0 0.5rem;
+    font-family: var(--font-display, "Fraunces"), serif;
+    color: var(--text-main);
+    line-height: 1.15;
+}
+
+.md-content h1 {
+    font-size: 1.25rem;
+}
+
+.md-content h2 {
+    font-size: 1.1rem;
+}
+
+.md-content h3 {
+    font-size: 1rem;
+}
+
+.md-content ul {
+    padding-left: 1.2rem;
+    list-style: disc;
+}
+
+.md-content ol {
+    padding-left: 1.2rem;
+    list-style: decimal;
+}
+
+.md-content li {
+    margin: 0.25rem 0;
+}
+
+.md-content blockquote {
+    padding: 0.5rem 0.75rem;
+    border-left: 3px solid color-mix(in srgb, var(--dull-purple) 55%, transparent);
+    background: color-mix(in srgb, var(--surface-strong) 65%, transparent);
+    border-radius: 12px;
+    color: var(--text-sub);
+}
+
+.md-content :is(code, kbd) {
+    background: color-mix(in srgb, var(--surface-strong) 78%, transparent);
+    border: 1px solid var(--card-border);
+    padding: 0.08rem 0.35rem;
+    border-radius: 8px;
+    font-size: 0.92em;
+}
+
+.md-content pre {
+    padding: 0.75rem;
+    border-radius: 14px;
+    overflow: auto;
+    background: color-mix(in srgb, var(--surface-strong) 88%, transparent);
+    border: 1px solid var(--card-border);
+}
+
+.md-content pre code {
+    background: transparent;
+    border: 0;
+    padding: 0;
+}
+
+/* Media embed frame and caption styles (base styles defined earlier) */
+.media-embed-frame {
+    position: relative;
+    width: 100%;
+    padding-top: 56.25%;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #000;
+}
+
+.media-embed-frame iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+}
+
+.media-embed figcaption {
+    margin-top: 0.4rem;
+    font-size: 11px;
+    color: var(--text-sub);
+    word-break: break-word;
+}
+
+.media-embed figcaption a {
+    color: var(--dull-purple);
+}
+
+.scroll-minimal::-webkit-scrollbar {
+    width: 8px;
+}
+
+.scroll-minimal::-webkit-scrollbar-thumb {
+    background: rgba(73, 73, 73, 0.25);
+    border-radius: 10px;
+}
+
+/* Mobile FAB cluster - Joystick and action bar */
+@media (max-width: 640px) {
+    .mobile-fab-cluster {
+        position: fixed;
+        bottom: 12px;
+        left: 12px;
+        display: flex;
+        flex-direction: row;
+        align-items: flex-end;
+        gap: 8px;
+        padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+        pointer-events: none;
+        z-index: 50;
+    }
+
+    .mobile-fab-cluster>* {
+        pointer-events: auto;
+    }
+
+    /* Joystick wrapper with action buttons on right */
+    .joystick-wrapper {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 6px;
+    }
+
+    /* Side action buttons (next to joystick) */
+    .joystick-side-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .fab-btn {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+    }
+
+    .fab-btn:active {
+        transform: scale(0.92);
+    }
+
+    .fab-btn-secondary {
+        background: var(--surface-strong);
+        border: 1px solid var(--card-border);
+        color: var(--text-sub);
+    }
+
+    .fab-btn-secondary svg {
+        width: 16px;
+        height: 16px;
+    }
+
+    .fab-btn-primary {
+        background: #494949;
+        color: white;
+        width: 40px;
+        height: 40px;
+    }
+
+    .fab-btn-primary svg {
+        width: 18px;
+        height: 18px;
+    }
+
+    .fab-btn.hidden {
+        display: none;
+    }
+
+    /* Joystick - circular arcade style */
+    .joystick-container {
+        position: relative;
+        width: 96px;
+        height: 96px;
+    }
+
+    .joystick {
+        background: linear-gradient(var(--surface-strong), var(--surface));
+        box-shadow: inset 0 0 3px rgba(0, 0, 0, .5),
+            inset 1px 2px 5px rgba(255, 255, 255, .15),
+            inset 2px 3px 12px rgba(0, 0, 0, .4),
+            0 3px 10px rgba(0, 0, 0, 0.2);
+        border-radius: 50%;
+        border: 1px solid var(--card-border);
+        display: inline-block;
+        height: 96px;
+        position: relative;
+        width: 96px;
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+    }
+
+    /* Direction labels with filled icons */
+    .joystick-label {
+        position: absolute;
+        font-size: 6px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        opacity: 0.5;
+        transition: all 0.12s ease;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0px;
+        pointer-events: none;
+    }
+
+    .joystick-label svg {
+        width: 12px;
+        height: 12px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2.5;
+    }
+
+    .joystick-label.active {
+        opacity: 1;
+    }
+
+    .joystick-label-up {
+        top: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        color: #16a34a;
+    }
+
+    .joystick-label-down {
+        bottom: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        color: #dc2626;
+    }
+
+    .joystick-label-left {
+        left: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #ea580c;
+    }
+
+    .joystick-label-right {
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #2563eb;
+    }
+
+    /* The knob (ball) */
+    .joystick-knob {
+        position: absolute;
+        width: 28px;
+        height: 28px;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+        background: radial-gradient(ellipse at 11px 9px, rgba(255, 255, 255, 0.9) 5%, #888 10%, #666 100%);
+        box-shadow: inset 2px 2px 10px rgba(255, 255, 255, .4),
+            inset -2px -3px 10px rgba(0, 0, 0, .3),
+            0 3px 8px rgba(0, 0, 0, 0.4);
+        transition: transform 0.08s ease-out, background 0.25s ease-in-out;
+        z-index: 2;
+    }
+
+    /* Color variants based on direction */
+    /* Clockwise from bottom: Again (down/red) → Hard (left/orange) → Good (up/green) → Easy (right/blue) */
+    .joystick.up .joystick-knob {
+        background: radial-gradient(ellipse at 11px 9px, rgba(255, 255, 255, 0.9) 5%, #4ade80 10%, #16a34a 100%);
+    }
+
+    .joystick.down .joystick-knob {
+        background: radial-gradient(ellipse at 11px 9px, rgba(255, 255, 255, 0.9) 5%, #f87171 10%, #dc2626 100%);
+    }
+
+    .joystick.left .joystick-knob {
+        background: radial-gradient(ellipse at 11px 9px, rgba(255, 255, 255, 0.9) 5%, #fb923c 10%, #ea580c 100%);
+    }
+
+    .joystick.right .joystick-knob {
+        background: radial-gradient(ellipse at 11px 9px, rgba(255, 255, 255, 0.9) 5%, #60a5fa 10%, #2563eb 100%);
+    }
+
+    /* Knob position based on direction */
+    .joystick.up .joystick-knob {
+        transform: translate(-50%, -50%) translateY(-18px);
+    }
+
+    .joystick.down .joystick-knob {
+        transform: translate(-50%, -50%) translateY(18px);
+    }
+
+    .joystick.left .joystick-knob {
+        transform: translate(-50%, -50%) translateX(-18px);
+    }
+
+    .joystick.right .joystick-knob {
+        transform: translate(-50%, -50%) translateX(18px);
+    }
+
+    html[data-theme="dark"] .joystick-label-up {
+        color: #4ade80;
+    }
+
+    html[data-theme="dark"] .joystick-label-down {
+        color: #f87171;
+    }
+
+    html[data-theme="dark"] .joystick-label-left {
+        color: #fb923c;
+    }
+
+    html[data-theme="dark"] .joystick-label-right {
+        color: #60a5fa;
+    }
+}
+
+/* Hide mobile FAB on larger screens */
+@media (min-width: 641px) {
+    .mobile-fab-cluster {
+        display: none !important;
+    }
+}
+
+/* Card transition animation */
+#cardFront,
+#cardBack {
+    transition: opacity 0.15s ease;
+}
+
+.card-transitioning {
+    opacity: 0;
+}
+
+.bg-oatmeal\/60 {
+    background-color: color-mix(in srgb, var(--surface-strong) 70%, transparent) !important;
+}
+
+.border-oatmeal-dark,
+.border-oatmeal-dark\/60,
+.border-oatmeal-dark\/70 {
+    border-color: var(--card-border) !important;
+}
+
+html[data-theme="dark"] .text-amber-800 {
+    color: #ffd8a1 !important;
+}
+
+body.preinit {
+    opacity: 0;
+}
+
+/* Keep Tailwind's `text-*` colors in sync with theme via CSS variables. */
+
+/* compact icon toggles */
+.pill-toggle {
+    border: 1px solid var(--card-border);
+    background: var(--surface);
+}
+
+.pill-toggle button {
+    color: var(--text-sub);
+}
+
+.pill-toggle button.active {
+    background: rgb(var(--dull-purple-rgb));
+    color: #fff;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+.font-swatch-serif {
+    font-family: 'Fraunces', serif !important;
+    letter-spacing: 0.01em;
+}
+
+.font-swatch-mono {
+    font-family: 'JetBrains Mono', monospace !important;
+    letter-spacing: 0.01em;
+}
+
+/* Tab navigation */
+.tab-btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-radius: 0.75rem;
+    transition: all 0.2s ease;
+    color: var(--text-sub);
+    background: transparent;
+}
+
+.tab-btn:hover {
+    background: var(--surface-strong);
+}
+
+.tab-btn.active {
+    background: rgb(var(--dull-purple-rgb));
+    color: white;
+}
+
+.tab-content {
+    display: block;
+}
+
+.tab-content.hidden {
+    display: none;
+}
+
+/* Fix select dropdown positioning on mobile */
+select {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%234A4A4A' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    padding-right: 2rem;
+    position: relative;
+    z-index: 1;
+}
+
+html[data-theme="dark"] select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23f4f1ff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+/* Mobile select touch optimization */
+@media (max-width: 640px) {
+    select {
+        font-size: 16px;
+        /* Prevents iOS zoom on focus */
+        min-height: 44px;
+        /* Better touch target */
+    }
+}
+
+/* Issue 2 Fix: Offline mode indicator */
+body.offline-mode::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--dull-purple), var(--muted-pink), var(--dull-purple));
+    background-size: 200% 100%;
+    animation: offline-stripe 2s linear infinite;
+    z-index: 9999;
+}
+
+body.offline-mode::after {
+    content: 'Offline';
+    position: fixed;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 4px 12px;
+    background: var(--dull-purple);
+    color: white;
+    font-size: 11px;
+    font-weight: 500;
+    border-radius: 12px;
+    z-index: 9999;
+    opacity: 0.9;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+@keyframes offline-stripe {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* Reduce visual clutter by fading the offline badge after a few seconds */
+body.offline-mode::after {
+    animation: offline-badge-fade 5s ease-in-out forwards;
+}
+
+@keyframes offline-badge-fade {
+    0%, 60% {
+        opacity: 0.9;
+    }
+    100% {
+        opacity: 0.5;
+    }
+}

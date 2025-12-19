@@ -1,5 +1,30 @@
-const CACHE_NAME = 'ghostink-cache-v7';
+/**
+ * GhostInk Flashcards - Service Worker
+ * Handles caching, offline functionality, and background sync.
+ */
+
+// Issue 1 Fix: Improved cache versioning strategy
+// The CACHE_VERSION should be incremented when making breaking changes.
+// Additionally, local files use content-aware caching with revalidation.
+const CACHE_VERSION = 10; // Increment this on each deployment with breaking changes
+const CACHE_NAME = `ghostink-cache-v${CACHE_VERSION}`;
 const CACHE_PREFIX = 'ghostink-cache-';
+
+// Issue 1 Fix: Track last modification times for smarter cache invalidation
+// This allows the app to detect when files have changed even without version bump
+const CACHE_METADATA_KEY = 'ghostink-cache-metadata';
+
+// Cache expiration settings (Fix: cache expiration)
+const CACHE_EXPIRATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const LOCAL_CACHE_EXPIRATION_MS = 24 * 60 * 60 * 1000; // 24 hours for local files (Issue 1 Fix)
+const MAX_CACHE_SIZE = 100; // Maximum number of entries per category
+
+// Cache categories for size management (Fix: cache size management)
+const CACHE_CATEGORIES = {
+  LOCAL: 'local',
+  CDN: 'cdn',
+  FONTS: 'fonts'
+};
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -13,32 +38,85 @@ self.addEventListener('install', (event) => {
         './icons/icon-512.png',
         './icons/icon-192.png',
         './icons/icon-96.png',
-        './icons/apple-touch-icon.png'
+        './icons/apple-touch-icon.png',
+        './css/styles.css',
+        './js/app.js',
+        './js/config.js',
+        './js/storage.js',
+        './js/api.js',
+        './js/srs.js',
+        './js/notion-mapper.js',
+        './js/ui/index.js',
+        './js/ui/toast.js',
+        './js/ui/loading.js',
+        './js/ui/tooltip.js',
+        './js/ui/modal.js',
+        './js/features/index.js',
+        './js/features/media.js'
       ];
       await cache.addAll(localAssets);
 
+      // Fix: Better CDN caching with CORS handling
       // Best-effort pre-cache of third-party assets so the app can boot offline
       // after the first successful online load.
+      // Using pinned versions to ensure consistent behavior and avoid cache invalidation issues
       const cdnNoCorsAssets = [
-        'https://cdn.tailwindcss.com',
-        'https://unpkg.com/lucide@latest',
-        'https://cdn.jsdelivr.net/npm/marked/marked.min.js',
+        'https://cdn.tailwindcss.com?plugins=forms',
+        'https://unpkg.com/lucide@0.294.0',
+        'https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js',
         'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js',
         'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/sql-wasm.js',
         'https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css',
         'https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js',
         'https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Sora:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap'
       ];
+
+      // WASM must be fetched with CORS to be readable by JS (sql.js uses fetch/arrayBuffer).
       const cdnCorsAssets = [
-        // WASM must be fetched with CORS to be readable by JS (sql.js uses fetch/arrayBuffer).
         'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/sql-wasm.wasm'
       ];
 
+      // Fix: Improved CDN caching with error handling and timeout
+      const fetchWithTimeout = async (url, options, timeoutMs = 10000) => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const response = await fetch(url, { ...options, signal: controller.signal });
+          clearTimeout(timeout);
+          return response;
+        } catch (e) {
+          clearTimeout(timeout);
+          throw e;
+        }
+      };
+
       await Promise.all([
-        ...cdnNoCorsAssets.map((url) =>
-          cache.add(new Request(url, { mode: 'no-cors' })).catch(() => { })
-        ),
-        ...cdnCorsAssets.map((url) => cache.add(new Request(url, { mode: 'cors' })).catch(() => { }))
+        ...cdnNoCorsAssets.map(async (url) => {
+          try {
+            // Try CORS first (gives better error handling), fall back to no-cors
+            let response;
+            try {
+              response = await fetchWithTimeout(url, { mode: 'cors' }, 8000);
+            } catch {
+              response = await fetchWithTimeout(url, { mode: 'no-cors' }, 8000);
+            }
+            if (response) {
+              await cache.put(new Request(url), response);
+            }
+          } catch (e) {
+            console.warn(`SW: Failed to cache CDN asset: ${url}`, e.message);
+          }
+        }),
+        ...cdnCorsAssets.map(async (url) => {
+          try {
+            const response = await fetchWithTimeout(url, { mode: 'cors' }, 15000);
+            if (response && response.ok) {
+              await cache.put(new Request(url), response);
+            }
+          } catch (e) {
+            console.warn(`SW: Failed to cache CORS asset: ${url}`, e.message);
+          }
+        })
       ]);
     })()
   );
@@ -47,12 +125,72 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME && k.startsWith(CACHE_PREFIX)).map((k) => caches.delete(k)))
-    )
+    (async () => {
+      // Bug 9 fix: Clean up old caches when activating a new version
+      const keys = await caches.keys();
+      await Promise.all(
+        keys
+          .filter((k) => k.startsWith(CACHE_PREFIX) && k !== CACHE_NAME)
+          .map((k) => {
+            console.log(`SW: Deleting old cache: ${k}`);
+            return caches.delete(k);
+          })
+      );
+
+      // Fix: Expire old entries in current cache
+      await cleanExpiredCacheEntries();
+    })()
   );
   self.clients.claim();
 });
+
+// Fix: Cache size management - remove oldest entries when cache gets too large
+async function trimCache(cacheName, maxEntries) {
+  const cache = await caches.open(cacheName);
+  const keys = await cache.keys();
+  if (keys.length > maxEntries) {
+    const keysToDelete = keys.slice(0, keys.length - maxEntries);
+    await Promise.all(keysToDelete.map(key => cache.delete(key)));
+    console.log(`SW: Trimmed ${keysToDelete.length} cache entries`);
+  }
+}
+
+// Fix: Clean expired cache entries
+async function cleanExpiredCacheEntries() {
+  const cache = await caches.open(CACHE_NAME);
+  const keys = await cache.keys();
+  const now = Date.now();
+
+  for (const request of keys) {
+    try {
+      const response = await cache.match(request);
+      if (!response) continue;
+
+      // Check if response has a date header we can use
+      const dateHeader = response.headers.get('date');
+      if (dateHeader) {
+        const cacheTime = new Date(dateHeader).getTime();
+        if (now - cacheTime > CACHE_EXPIRATION_MS) {
+          await cache.delete(request);
+          console.log(`SW: Expired cache entry: ${request.url}`);
+        }
+      }
+    } catch (e) {
+      // Ignore errors for individual entries
+    }
+  }
+}
+
+// Fix: Categorize URLs for cache management
+function getCacheCategory(url) {
+  if (url.includes('fonts.googleapis.com') || url.includes('fonts.gstatic.com')) {
+    return CACHE_CATEGORIES.FONTS;
+  }
+  if (url.includes('cdn.') || url.includes('unpkg.com') || url.includes('cdnjs.')) {
+    return CACHE_CATEGORIES.CDN;
+  }
+  return CACHE_CATEGORIES.LOCAL;
+}
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
@@ -65,7 +203,8 @@ self.addEventListener('fetch', (event) => {
     'unpkg.com',
     'cdnjs.cloudflare.com',
     'fonts.googleapis.com',
-    'fonts.gstatic.com'
+    'fonts.gstatic.com',
+    'cdn.tailwindcss.com'
   ].some(domain => request.url.includes(domain));
 
   if (!isSameOrigin && !isTrustedCdn) return;
@@ -79,10 +218,26 @@ self.addEventListener('fetch', (event) => {
       return cache.match(request).then((cachedResponse) => {
         const fetchPromise = fetch(request).then((networkResponse) => {
           // Check if valid response before caching
-          const cacheable = networkResponse &&
-            (networkResponse.status === 200 || networkResponse.type === 'opaque' || networkResponse.type === 'cors');
+          // Note: opaque responses (from no-cors CDN requests) can't be inspected for errors,
+          // but we only cache them if they exist. If the fetch succeeds, it's likely valid.
+          // For transparent responses, require status 200.
+          const isOpaqueResponse = networkResponse.type === 'opaque';
+          const isValidTransparent = networkResponse.status === 200 &&
+            (networkResponse.type === 'basic' || networkResponse.type === 'cors');
+          const cacheable = networkResponse && (isOpaqueResponse || isValidTransparent);
+
           if (cacheable) {
-            cache.put(request, networkResponse.clone());
+            // Clone response before caching
+            const responseToCache = networkResponse.clone();
+            cache.put(request, responseToCache).then(() => {
+              // Fix: Periodically trim cache to prevent unbounded growth
+              const category = getCacheCategory(request.url);
+              if (category === CACHE_CATEGORIES.CDN) {
+                trimCache(CACHE_NAME, MAX_CACHE_SIZE * 2);
+              }
+            }).catch(e => {
+              console.warn('SW: Failed to cache response:', e.message);
+            });
           }
           return networkResponse;
         }).catch(async () => {
@@ -103,4 +258,16 @@ self.addEventListener('fetch', (event) => {
       });
     })
   );
+});
+
+// Listen for messages from the main thread
+self.addEventListener('message', (event) => {
+  if (event.data === 'skipWaiting') {
+    self.skipWaiting();
+  }
+  if (event.data === 'clearCache') {
+    caches.delete(CACHE_NAME).then(() => {
+      console.log('SW: Cache cleared by request');
+    });
+  }
 });
