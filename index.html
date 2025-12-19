@@ -10,11 +10,14 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        href="https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,300..900;1,300..900&family=Spline+Sans+Mono:wght@300..700&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,300..900;1,300..900&family=Kode+Mono:wght@400..700&family=Spline+Sans+Mono:wght@300..700&display=swap"
         rel="stylesheet">
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
 
     <!-- Configuration to match your Theme JSON -->
     <script>
@@ -25,6 +28,7 @@
                     fontFamily: {
                         sans: ['Figtree', 'sans-serif'],
                         mono: ['Spline Sans Mono', 'monospace'],
+                        kode: ['"Kode Mono"', 'monospace'],
                     },
                     colors: {
                         bgColor: 'rgb(var(--bg-color) / <alpha-value>)',
@@ -112,12 +116,12 @@
     </style>
 </head>
 
-<body class="flex flex-col min-h-screen px-4 sm:px-8 py-4 font-sans">
+<body class="flex flex-col min-h-screen px-4 sm:px-8 py-4 font-kode">
 
     <!-- HEADER -->
     <div class="max-w-6xl mx-auto w-full">
         <header id="main-header"
-            class="group relative mb-12 flex w-full items-center justify-between sm:ps-[4.5rem] pt-4">
+            class="font-sans group relative mb-12 flex w-full items-center justify-between sm:ps-[4.5rem] pt-4">
             <div class="flex sm:flex-col">
                 <a href="https://mimansajaiswal.github.io/"
                     class="inline-flex items-center grayscale hover:filter-none sm:relative sm:inline-block"
@@ -132,7 +136,7 @@
                     <span class="text-xl font-bold sm:text-2xl text-textColor">Mimansa Jaiswal</span>
                 </a>
                 <nav id="navigation-menu"
-                    class="md bg-bgColor/90 text-accent absolute -inset-x-4 top-14 hidden flex-col items-end rounded-md py-2 text-base shadow-sm backdrop-blur-sm group-[.menu-open]:z-50 group-[.menu-open]:flex sm:static sm:z-auto sm:-ms-4 sm:mt-1 sm:flex sm:flex-row sm:items-center sm:rounded-none sm:py-0 sm:text-sm sm:shadow-none sm:backdrop-blur-none lg:text-base print:hidden"
+                    class="text-accent absolute -inset-x-4 top-14 hidden flex-col items-end rounded-md py-2 text-base shadow-sm backdrop-blur-md group-[.menu-open]:z-50 group-[.menu-open]:flex sm:static sm:z-auto sm:-ms-4 sm:mt-1 sm:flex sm:flex-row sm:items-center sm:rounded-none sm:py-0 sm:text-sm sm:shadow-none sm:backdrop-blur-none lg:text-base print:hidden"
                     aria-label="Main menu">
                     <a href="https://mimansajaiswal.github.io/"
                         class="sm:hover:decoration-accent-2/40 w-full px-4 py-4 text-right underline-offset-4 sm:w-auto sm:py-0 sm:text-left sm:hover:underline sm:hover:decoration-wavy">
@@ -274,12 +278,7 @@
             { section: "Dev Utilities", name: "Code Presenter", url: "./code-presenter.html", desc: "Code slides with magic move", made_by: "Gemini 3" },
 
             // --- Research Tools ---
-            { section: "🔬 Research Tools", name: "PDF Annotation Extractor", url: "./pdf-annotation-extractor.html", desc: "Extract annotated (incl handwritten) pdf content into markdown", made_by: "Gemini 3 + GPT 5.1 Codex" },
-
-            // --- Daily Life ---
-            { section: "🛠️ Daily Life", name: "Raindrop Note Saver", url: "./raindrop-note-saver.html", desc: "Save notes to Raindrop", made_by: "Gemini 3" },
-            { section: "🛠️ Daily Life", name: "Photo Chronicles", url: "./photo-chronicles/", desc: "Track progress using photos with data saved to notion", made_by: "Gemini 3" },
-            { section: "🛠️ Daily Life", name: "Weight Trajectory", url: "./weight-progress.html", desc: "Graph weight progress easily", made_by: "Gemini 3" },
+            { section: "Research Tools", name: "PDF Annotation Extractor", url: "./pdf-annotation-extractor.html", desc: "Extract annotated (incl handwritten) pdf content into markdown", made_by: "Gemini 3 + GPT 5.1 Codex" },
 
             // --- Design ---
             { section: "Design", name: "Quote Image Generator", url: "./quote-to-image.html", desc: "Convert Quotes to Image", made_by: "Gemini 3 + GPT 5.1 Codex" },
@@ -287,15 +286,33 @@
             { section: "Design", name: "Interactive Image Creator", url: "./interactive-image-creator.html", desc: "Generate image group components with clickable markers", made_by: "Gemini 3 + GPT 5.1 Codex" },
             { section: "Design", name: "Countdown Timer Builder", url: "./countdown-timer-builder.html", desc: "Create aesthetic countdown timers", made_by: "Gemini 3" },
 
+            // --- Notion As DB Apps ---
+            { section: "Synced to Notion", name: "Photo Chronicles", url: "./photo-chronicles/", desc: "Track progress using photos with data saved to notion", made_by: "Gemini 3" },
+            { section: "Synced to Notion", name: "Ghostink Flashcards", url: "./ghostink-flashcards/", desc: "Review app that has AI feedback and syncs to notion", made_by: "Gemini 3 + Codex 5.1 + Claude {O/S}4.5" },
 
             // --- Starter Gudies ---
             { section: "Starter Gudies", name: "Learn Nano Banana Pro", url: "https://ai.studio/apps/drive/1JHoslwvQof7K3GrsmM6kQ95h6dBIejx_?fullscreenApplet=true", desc: "How to prompt nano banana pro", made_by: "Gemini 3 + GPT 5.1 Codex" },
 
+            // --- Daily Life ---
+            { section: "Daily Life", name: "Raindrop Note Saver", url: "./raindrop-note-saver.html", desc: "Save notes to Raindrop", made_by: "Gemini 3" },
+            { section: "Daily Life", name: "Weight Trajectory", url: "./weight-progress.html", desc: "Graph weight progress easily", made_by: "Gemini 3" },
+
             // --- TAW Tools ---
-            { section: "📺 The Attention Window", name: "Picker Wheel", url: "./taw/picker-wheel.html", desc: "Rou-lit review picker wheel", made_by: "Gemini 3" },
-            { section: "📺 The Attention Window", name: "Peer to Peer Bingo", url: "./taw/peer-to-peer-bingo.html", desc: "Play standard/lockout bingo on your own options", made_by: "Gemini 3" },
+            { section: "The Attention Window", name: "Picker Wheel", url: "./taw/picker-wheel.html", desc: "Rou-lit review picker wheel", made_by: "Gemini 3" },
+            { section: "The Attention Window", name: "Peer to Peer Bingo", url: "./taw/peer-to-peer-bingo.html", desc: "Play standard/lockout bingo on your own options", made_by: "Gemini 3" },
 
         ];
+
+        // --- SECTION DETAILS ---
+        const sectionDetails = {
+            "Dev Utilities": { description: "Helpers for code/data manipulation and presentation.", icon: "terminal-square" },
+            "Research Tools": { description: "Utilities for academic research and reviews", icon: "flask-conical" },
+            "Design": { description: "Tools for creating visual assets that can aid in HTML layouts and presentations.", icon: "palette" },
+            "Synced to Notion": { description: "Applications that sync data directly to your Notion databases.", icon: "database-zap" },
+            "Starter Gudies": { description: "Guides to help my mom get started with various AI models", icon: "book-open-check" },
+            "The Attention Window": { description: "Tools designed for The Attention Window Twitch channel (upcoming)", icon: "projector" },
+            "Daily Life": { description: "Utilities to help organize and track your daily activities.", icon: "coffee" },
+        };
 
         // --- RENDER LOGIC ---
         function renderTools() {
@@ -319,39 +336,60 @@
                 const sectionEl = document.createElement('section');
                 sectionEl.className = "mb-10 break-inside-avoid";
 
-                // Generic Header Generation (No hardcoded TAW checks)
+                // Section Meta
+                const details = sectionDetails[sectionTitle] || {};
+                const description = details.description 
+                    ? `<p class="mb-4 text-textColor/70 text-sm max-w-prose border-l-2 border-accent/20 pl-3 italic">${details.description}</p>` 
+                    : '';
+                
+                const iconHtml = details.icon 
+                    ? `<i data-lucide="${details.icon}" class="text-accent w-6 h-6 stroke-[2.5]"></i>` 
+                    : '';
+
+                // Header
                 const headerHtml = `
-                    <h2 class="text-2xl font-bold mb-4 border-b-2 border-accent-2/20 pb-2 text-textColor flex items-center gap-2">
-                        ${sectionTitle}
+                    <h2 class="text-2xl font-bold mb-3 text-textColor flex items-center gap-3 tracking-tight">
+                        ${iconHtml}
+                        <span>${sectionTitle}</span>
                     </h2>
+                    ${description}
                 `;
 
                 // List Logic
                 const listItems = tools.map(tool => {
                     // Badge Logic
                     const badgeHtml = tool.made_by
-                        ? `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-accent/10 text-accent border border-accent/20 uppercase tracking-wider transform translate-y-[-1px]">${tool.made_by}</span>`
+                        ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-accent/10 text-accent border border-accent/20 uppercase tracking-widest">${tool.made_by}</span>`
                         : '';
 
                     return `
-                    <li class="tool-item mb-2">
-                        <div class="inline-flex flex-wrap items-baseline gap-x-2">
-                            <a href="${tool.url}" target="_blank" rel="noopener" class="tool-link font-medium text-lg">${tool.name}</a> 
-                            ${badgeHtml}
-                            <span class="text-sm opacity-70">- ${tool.desc}</span>
+                    <li class="tool-item mb-6 break-inside-avoid">
+                        <div class="group pl-4 border-l-2 border-transparent hover:border-accent transition-all duration-300">
+                            <div class="flex flex-col gap-1">
+                                <div class="flex items-baseline flex-wrap gap-x-3 gap-y-1">
+                                    <a href="${tool.url}" target="_blank" rel="noopener" class="tool-link font-bold text-lg hover:text-accent decoration-2 underline-offset-4">${tool.name}</a> 
+                                    ${badgeHtml}
+                                </div>
+                                <p class="text-sm text-textColor/80 leading-relaxed max-w-2xl font-light">${tool.desc}</p>
+                            </div>
                         </div>
                     </li>
                 `}).join('');
 
                 sectionEl.innerHTML = `
                     ${headerHtml}
-                    <ul class="pl-2 text-textColor/90">
+                    <ul class="text-textColor/90 mt-4">
                         ${listItems}
                     </ul>
                 `;
 
                 container.appendChild(sectionEl);
             });
+
+            // Initialize Lucide icons
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
         }
 
         // Initial Render
