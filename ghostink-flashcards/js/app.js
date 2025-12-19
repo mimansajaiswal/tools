@@ -93,7 +93,7 @@ renderer.link = (href, title, text) => {
     const html = originalLinkRenderer(href, title, text);
     return html.replace('<a ', '<a target="_blank" rel="noopener noreferrer" ');
 };
-marked.setOptions({ renderer });
+marked.use({ renderer });
 
 // Phase 5: Safe markdown parse wrapper - returns raw markdown on failure
 const safeMarkdownParse = (md) => {

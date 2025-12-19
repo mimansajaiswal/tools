@@ -62,10 +62,10 @@ self.addEventListener('install', (event) => {
       // Using pinned versions to ensure consistent behavior and avoid cache invalidation issues
       const cdnNoCorsAssets = [
         'https://cdn.tailwindcss.com?plugins=forms',
-        'https://unpkg.com/lucide@0.562.0',
-        'https://cdn.jsdelivr.net/npm/marked@17.0.1/marked.min.js',
+        'https://unpkg.com/lucide@0.562.0/dist/umd/lucide.min.js',
+        'https://cdn.jsdelivr.net/npm/marked@17.0.1/lib/marked.umd.min.js',
         'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js',
-        'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.13.0/sql-wasm.js',
+        'https://unpkg.com/sql.js@1.13.0/dist/sql-wasm.js',
         'https://cdn.jsdelivr.net/npm/katex@0.16.27/dist/katex.min.css',
         'https://cdn.jsdelivr.net/npm/katex@0.16.27/dist/katex.min.js',
         'https://cdn.jsdelivr.net/npm/glightbox@3.3.1/dist/css/glightbox.min.css',
@@ -75,7 +75,7 @@ self.addEventListener('install', (event) => {
 
       // WASM must be fetched with CORS to be readable by JS (sql.js uses fetch/arrayBuffer).
       const cdnCorsAssets = [
-        'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.13.0/sql-wasm.wasm'
+        'https://unpkg.com/sql.js@1.13.0/dist/sql-wasm.wasm'
       ];
 
       // Fix: Improved CDN caching with error handling and timeout

@@ -22,11 +22,11 @@
     <script src="https://cdn.tailwindcss.com"></script>
 
     <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@0.562.0"></script>
-    <!-- Markdown renderer -->
-    <script src="https://cdn.jsdelivr.net/npm/marked@17.0.1/marked.min.js"></script>
+    <script src="https://unpkg.com/lucide@0.562.0/dist/umd/lucide.min.js"></script>
+    <!-- Marked (Markdown) -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@17.0.1/lib/marked.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.13.0/sql-wasm.js"></script>
+    <script src="https://unpkg.com/sql.js@1.13.0/dist/sql-wasm.js"></script>
     <!-- KaTeX for equations -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.27/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.27/dist/katex.min.js"></script>
@@ -201,13 +201,15 @@
                 class="rounded-2xl p-6 bg-[color:var(--surface-strong)] border border-[color:var(--card-border)] flex flex-col gap-5 max-w-3xl mx-auto mt-6 text-center hidden">
 
                 <!-- What is GhostInk Feature Card -->
-                <div class="rounded-lg bg-[color:var(--surface)] border border-[color:var(--card-border)] p-4 text-left">
+                <div
+                    class="rounded-lg bg-[color:var(--surface)] border border-[color:var(--card-border)] p-4 text-left">
                     <div class="flex items-center gap-2 text-dull-purple font-semibold mb-3">
                         <i data-lucide="info" class="w-4 h-4"></i>
                         <span class="text-sm">Features</span>
                     </div>
                     <div class="max-h-44 overflow-y-auto scroll-minimal pr-1">
-                        <div class="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-xs text-earth-metal/70 dark:text-white/60">
+                        <div
+                            class="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-xs text-earth-metal/70 dark:text-white/60">
                             <div class="flex items-center gap-2">
                                 <i data-lucide="eye" class="w-3.5 h-3.5 text-dull-purple shrink-0"></i>
                                 <span>Reveal mode</span>
@@ -355,7 +357,8 @@
                         <div id="cardsContent" class="hidden mt-3 md:mt-4">
                             <!-- Card search -->
                             <div class="mb-3">
-                                <input id="cardSearchInput" type="text" placeholder="Search cards by name..." maxlength="200"
+                                <input id="cardSearchInput" type="text" placeholder="Search cards by name..."
+                                    maxlength="200"
                                     class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dull-purple/40">
                             </div>
                             <div id="cardsContainer"
@@ -427,7 +430,8 @@
                                 <div>
                                     <label class="text-xs text-earth-metal/70 block mb-2">Study from decks</label>
                                     <div class="relative">
-                                        <input id="deckSearchInput" type="text" placeholder="Search decks..." maxlength="100"
+                                        <input id="deckSearchInput" type="text" placeholder="Search decks..."
+                                            maxlength="100"
                                             class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dull-purple/40">
                                         <div id="deckDropdown"
                                             class="hidden absolute left-0 right-0 z-50 w-full mt-1 max-h-48 overflow-y-auto rounded-lg border border-oatmeal-dark/60 bg-[color:var(--card-bg)] shadow-lg">
@@ -503,7 +507,8 @@
                                     <div class="col-span-2">
                                         <label class="text-xs text-earth-metal/70">Tags</label>
                                         <div class="relative">
-                                            <input id="filterTagSearch" type="text" placeholder="Search tags" maxlength="100"
+                                            <input id="filterTagSearch" type="text" placeholder="Search tags"
+                                                maxlength="100"
                                                 class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
                                             <div id="filterTagDropdown"
                                                 class="hidden absolute left-0 right-0 z-40 mt-1 max-h-44 overflow-y-auto rounded-lg border border-oatmeal-dark/60 bg-[color:var(--card-bg)] shadow-lg">
@@ -738,7 +743,8 @@
                 </div>
                 <p id="loadingProgressText" class="text-[11px] text-white/80 mt-1">0%</p>
             </div>
-            <button id="loadingCancelBtn" class="hidden mt-2 px-4 py-2 text-xs bg-white/10 hover:bg-white/20 rounded-lg transition-colors">
+            <button id="loadingCancelBtn"
+                class="hidden mt-2 px-4 py-2 text-xs bg-white/10 hover:bg-white/20 rounded-lg transition-colors">
                 Cancel
             </button>
         </div>
@@ -996,11 +1002,13 @@
                                         <option value="15">15</option>
                                     </select>
                                     <span
-                                        class="text-[10px] text-earth-metal/60 dark:text-white/60 whitespace-nowrap">3×5 + border</span>
+                                        class="text-[10px] text-earth-metal/60 dark:text-white/60 whitespace-nowrap">3×5
+                                        + border</span>
                                 </div>
                                 <pre id="fabGridAscii"
                                     class="font-mono text-[8px] leading-[1.05] text-earth-metal/60 dark:text-white/60 bg-oatmeal/60 dark:bg-white/10 border border-oatmeal-dark/40 dark:border-white/10 rounded-lg p-2 overflow-hidden whitespace-pre"></pre>
-                                <p class="text-[10px] text-earth-metal/60 dark:text-white/60">Pick a number from the grid
+                                <p class="text-[10px] text-earth-metal/60 dark:text-white/60">Pick a number from the
+                                    grid
                                     (1 = top-left, 15 = bottom-right). Applies on screens ≤ 640px wide.</p>
                             </div>
                         </div>
@@ -1257,7 +1265,8 @@ async function handleRequest(request, env) {
                         <span
                             class="px-2 py-1 rounded-lg bg-oatmeal-dark/50 dark:bg-white/10 italic text-dull-purple dark:text-dull-purple">{{user}}</span>
                     </div>
-                    <p class="mt-2 text-[11px] text-earth-metal/70 dark:text-white/70">Variables replace question, correct answer, and learner answer.</p>
+                    <p class="mt-2 text-[11px] text-earth-metal/70 dark:text-white/70">Variables replace question,
+                        correct answer, and learner answer.</p>
                 </div>
                 <div id="fsrsParamsField" class="hidden">
                     <div class="grid grid-cols-2 gap-3 items-end">
