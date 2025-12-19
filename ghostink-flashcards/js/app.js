@@ -4056,6 +4056,7 @@ export const App = {
                 Storage.setSettings(this.state.settings);
                 this.renderStatus();
                 this.renderGate();
+                el('#workerSettingsDetails')?.removeAttribute('open');
             } else throw new Error(res.status);
         } catch (e) {
             toast('Worker check failed');
@@ -4460,6 +4461,7 @@ export const App = {
         // If already verified from storage, just re-render gate
         if (s.workerUrl && this.state.workerVerified && s.authToken && this.state.sourcesVerified) {
             this.renderGate();
+            el('#workerSettingsDetails')?.removeAttribute('open');
             return;
         }
         // Otherwise, silently verify worker using stored settings (not input fields)
@@ -4473,6 +4475,7 @@ export const App = {
                 this.state.workerVerified = true;
                 this.state.settings.workerVerified = true;
                 Storage.setSettings(this.state.settings);
+                el('#workerSettingsDetails')?.removeAttribute('open');
             }
         } catch (_) { /* silent fail - user can manually verify */ }
         this.renderGate();

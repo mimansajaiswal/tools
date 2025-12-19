@@ -224,8 +224,8 @@
             <div class="flex items-center gap-3 overflow-hidden">
                 <!-- Mobile Diary Switcher Trigger -->
                 <button id="mobileDiaryToggleBtn" onclick="App.toggleMobileDiaryMenu(event)"
-                    class="md:hidden p-1 rounded hover:bg-white/50 -ml-1 text-earth-metal">
-                    <i data-lucide="library" class="w-5 h-5"></i>
+                    class="md:hidden bg-white border border-oatmeal-dark shadow-sm w-9 h-9 rounded-lg text-earth-metal hover:bg-white-linen transition-colors flex items-center justify-center mr-1">
+                    <i data-lucide="library" class="w-4 h-4"></i>
                 </button>
 
                 <h2 id="activeDiaryTitle" class="font-serif text-xl md:text-2xl text-charcoal truncate">Select a Diary
@@ -239,7 +239,7 @@
 
             <div class="flex items-center gap-2">
                 <button onclick="SyncManager.syncCurrentDiary()" title="Refresh Sync"
-                    class="p-2 hover:bg-white-linen rounded-full text-earth-metal transition-colors">
+                    class="bg-white border border-oatmeal-dark shadow-sm w-9 h-9 rounded-lg text-earth-metal hover:bg-white-linen transition-colors flex items-center justify-center">
                     <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                 </button>
                 <!-- Desktop Add Button -->

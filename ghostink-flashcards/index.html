@@ -271,22 +271,24 @@
                 <div class="grid md:grid-cols-3 gap-3 text-sm text-left">
                     <div
                         class="rounded-lg bg-[color:var(--surface)] border border-[color:var(--card-border)] p-3 space-y-1">
-                        <div class="flex items-center gap-2 text-dull-purple font-semibold"><i data-lucide="link"
-                                class="w-4 h-4"></i>Connect</div>
-                        <p class="text-earth-metal/70">Add your worker URL and Notion token to sync.</p>
+                        <div class="flex items-center gap-2 text-dull-purple font-semibold"><i data-lucide="copy"
+                                class="w-4 h-4"></i>1. Template</div>
+                        <p class="text-earth-metal/70">Duplicate this <a
+                                href="https://mimansajaiswal-embedded-dbs.notion.site/ghostink-template" target="_blank"
+                                rel="noopener noreferrer" class="underline text-dull-purple">Notion template</a>. Custom
+                            DBs must match property names/options exactly (case-sensitive).</p>
                     </div>
                     <div
                         class="rounded-lg bg-[color:var(--surface)] border border-[color:var(--card-border)] p-3 space-y-1">
-                        <div class="flex items-center gap-2 text-dull-purple font-semibold"><i data-lucide="database"
-                                class="w-4 h-4"></i>Sources</div>
-                        <p class="text-earth-metal/70">Point to your Decks and Cards databases in Notion.</p>
+                        <div class="flex items-center gap-2 text-dull-purple font-semibold"><i data-lucide="link"
+                                class="w-4 h-4"></i>2. Connect</div>
+                        <p class="text-earth-metal/70">Add worker URL, Notion token, and select your new databases.</p>
                     </div>
                     <div
                         class="rounded-lg bg-[color:var(--surface)] border border-[color:var(--card-border)] p-3 space-y-1">
                         <div class="flex items-center gap-2 text-dull-purple font-semibold"><i data-lucide="wand-2"
-                                class="w-4 h-4"></i>Study</div>
-                        <p class="text-earth-metal/70">Reveal answers directly, or use AI mode to check your response.
-                        </p>
+                                class="w-4 h-4"></i>3. Study</div>
+                        <p class="text-earth-metal/70">Sync and start reviewing flashcards.</p>
                     </div>
                 </div>
                 <div class="flex justify-center">
@@ -903,65 +905,98 @@
             </div>
             <div class="grid md:grid-cols-2 gap-6 text-sm mt-4">
                 <div class="space-y-4">
-                    <div
-                        class="rounded-lg border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-white-linen dark:bg-white/5">
-                        <div class="flex items-center justify-between">
-                            <p class="font-semibold text-charcoal dark:text-white">Worker proxy</p>
-                            <button id="openWorkerHelp"
-                                class="px-3 py-1.5 rounded-full bg-oatmeal text-earth-metal text-xs border border-oatmeal-dark/70 flex items-center gap-2">
-                                <i data-lucide="code" class="w-4 h-4"></i> Worker code
-                            </button>
+                    <!-- Worker Proxy Accordion -->
+                    <details id="workerSettingsDetails" class="group" open>
+                        <summary
+                            class="flex items-center gap-2 font-display text-base text-charcoal dark:text-white cursor-pointer select-none py-1 mb-2 hover:text-dull-purple transition-colors list-none outline-none">
+                            <i data-lucide="chevron-right"
+                                class="w-4 h-4 transition-transform group-open:rotate-90"></i>
+                            <span>Worker Proxy</span>
+                        </summary>
+                        <div class="space-y-4 pl-2 border-l-2 border-oatmeal-dark/10 dark:border-white/5 ml-1.5">
+                            <div
+                                class="rounded-lg border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-white-linen dark:bg-white/5">
+                                <div class="flex items-center justify-between">
+                                    <p class="font-semibold text-charcoal dark:text-white text-sm">Configuration</p>
+                                    <button id="openWorkerHelp"
+                                        class="px-3 py-1.5 rounded-full bg-oatmeal text-earth-metal text-xs border border-oatmeal-dark/70 flex items-center gap-2">
+                                        <i data-lucide="code" class="w-4 h-4"></i> Worker code
+                                    </button>
+                                </div>
+                                <p class="text-xs text-earth-metal/70 dark:text-white/70 mt-1">Add Cloudflare Worker URL
+                                    even if you plan to sign in with Notion.</p>
+                            </div>
+                            <div>
+                                <label class="text-xs text-earth-metal/70">Cloudflare Worker URL</label>
+                                <input id="settingWorkerUrl" type="text" placeholder="https://your-proxy.workers.dev"
+                                    class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
+                            </div>
+                            <div>
+                                <label class="text-xs text-earth-metal/70">Proxy token (optional)</label>
+                                <input id="settingProxyToken" type="password" placeholder="ALL_CORS_PROXY_MATCH_TOKEN"
+                                    class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
+                            </div>
+                            <button id="verifyWorker"
+                                class="px-3 py-2 rounded-lg bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 w-full">Verify
+                                worker</button>
                         </div>
-                        <p class="text-xs text-earth-metal/70 dark:text-white/70 mt-1">Add Cloudflare Worker URL even if
-                            you plan to sign
-                            in with Notion.</p>
-                    </div>
-                    <div>
-                        <label class="text-xs text-earth-metal/70">Cloudflare Worker URL</label>
-                        <input id="settingWorkerUrl" type="text" placeholder="https://your-proxy.workers.dev"
-                            class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
-                    </div>
-                    <div>
-                        <label class="text-xs text-earth-metal/70">Proxy token (optional)</label>
-                        <input id="settingProxyToken" type="password" placeholder="ALL_CORS_PROXY_MATCH_TOKEN"
-                            class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
-                    </div>
-                    <button id="verifyWorker"
-                        class="px-3 py-2 rounded-lg bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 w-full">Verify
-                        worker</button>
-                    <div>
-                        <label class="text-xs text-earth-metal/70">Notion integration secret (instead of OAuth)</label>
-                        <input id="settingAuthToken" type="password" placeholder="secret_..."
-                            class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed">
-                    </div>
-                    <button id="verifyAuth"
-                        class="px-3 py-2 rounded-lg bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 w-full disabled:opacity-60 disabled:cursor-not-allowed">Verify
-                        Notion token</button>
-                    <button id="oauthBtn"
-                        class="w-full px-3 py-2 rounded-lg border border-dull-purple text-dull-purple text-sm hover:bg-oatmeal flex items-center gap-2 justify-center disabled:opacity-60 disabled:cursor-not-allowed">
-                        <i data-lucide="log-in" class="w-4 h-4"></i>Sign in with Notion
-                    </button>
-                    <div>
-                        <label class="text-xs text-earth-metal/60">Decks source</label>
-                        <select id="deckSourceSelect" disabled
-                            class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"></select>
-                    </div>
-                    <div>
-                        <label class="text-xs text-earth-metal/60">Cards source</label>
-                        <select id="cardSourceSelect" disabled
-                            class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"></select>
-                    </div>
-                    <div class="flex flex-col sm:flex-row gap-2">
-                        <button id="scanSources" disabled
-                            class="px-3 py-2 rounded-lg bg-charcoal dark:bg-white/10 dark:border-white/10 dark:border text-white text-sm hover:bg-earth-metal dark:hover:bg-white/20 flex-1 min-w-[140px] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-charcoal">Scan
-                            sources</button>
-                        <button id="saveSourcesChoice" disabled
-                            class="px-3 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-dull-purple-hover transition-all flex-1 min-w-[140px] disabled:opacity-60 disabled:cursor-not-allowed">Save
-                            sources choice</button>
-                    </div>
-                    <div class="w-full h-2 bg-oatmeal rounded-full overflow-hidden">
-                        <div id="syncProgress" class="h-2 bg-dull-purple w-0 transition-all duration-500"></div>
-                    </div>
+                    </details>
+
+                    <!-- Notion Integration Accordion -->
+                    <details id="notionSettingsDetails" class="group" open>
+                        <summary
+                            class="flex items-center gap-2 font-display text-base text-charcoal dark:text-white cursor-pointer select-none py-1 mb-2 hover:text-dull-purple transition-colors list-none outline-none">
+                            <i data-lucide="chevron-right"
+                                class="w-4 h-4 transition-transform group-open:rotate-90"></i>
+                            <span>Notion Integration</span>
+                        </summary>
+                        <div class="space-y-4 pl-2 border-l-2 border-oatmeal-dark/10 dark:border-white/5 ml-1.5">
+                            <div class="text-sm text-earth-metal/70 dark:text-white/70 mb-2">
+                                Please duplicate this <a
+                                    href="https://mimansajaiswal-embedded-dbs.notion.site/ghostink-template"
+                                    target="_blank" rel="noopener noreferrer"
+                                    class="text-dull-purple hover:underline font-medium inline-flex items-center gap-0.5 align-baseline">Template</a><br>
+                                <div class="text-xs text-earth-metal/40 dark:text-white/40 mb-2">
+                                    If using custom, ensure all property names and options match exactly
+                                    (case-sensitive); extra properties are allowed.
+                                </div>
+                            </div>
+                            <div>
+                                <label class="text-xs text-earth-metal/70">Notion integration secret (instead of
+                                    OAuth)</label>
+                                <input id="settingAuthToken" type="password" placeholder="secret_..."
+                                    class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed">
+                            </div>
+                            <button id="verifyAuth"
+                                class="px-3 py-2 rounded-lg bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 w-full disabled:opacity-60 disabled:cursor-not-allowed">Verify
+                                Notion token</button>
+                            <button id="oauthBtn"
+                                class="w-full px-3 py-2 rounded-lg border border-dull-purple text-dull-purple text-sm hover:bg-oatmeal flex items-center gap-2 justify-center disabled:opacity-60 disabled:cursor-not-allowed">
+                                <i data-lucide="log-in" class="w-4 h-4"></i>Sign in with Notion
+                            </button>
+                            <div>
+                                <label class="text-xs text-earth-metal/60">Decks source</label>
+                                <select id="deckSourceSelect" disabled
+                                    class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"></select>
+                            </div>
+                            <div>
+                                <label class="text-xs text-earth-metal/60">Cards source</label>
+                                <select id="cardSourceSelect" disabled
+                                    class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"></select>
+                            </div>
+                            <div class="flex gap-2">
+                                <button id="scanSources" disabled
+                                    class="w-1/3 px-3 py-2 rounded-lg bg-charcoal dark:bg-white/10 dark:border-white/10 dark:border text-white text-sm hover:bg-earth-metal dark:hover:bg-white/20 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-charcoal">Scan</button>
+                                <button id="saveSourcesChoice" disabled
+                                    class="w-2/3 px-3 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-dull-purple-hover transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                                    <i data-lucide="save" class="w-4 h-4"></i> Save selection
+                                </button>
+                            </div>
+                            <div class="w-full h-2 bg-oatmeal dark:bg-white/10 rounded-full overflow-hidden">
+                                <div id="syncProgress" class="h-2 bg-dull-purple w-0 transition-all duration-500"></div>
+                            </div>
+                        </div>
+                    </details>
                 </div>
                 <div class="space-y-4">
                     <div
