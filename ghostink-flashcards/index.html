@@ -360,7 +360,7 @@
                             <div id="cardsContainer"
                                 class="max-h-[350px] md:max-h-[400px] overflow-y-auto scroll-minimal">
                                 <table class="w-full text-xs md:text-sm">
-                                    <thead class="text-earth-metal/60 sticky top-0 bg-[color:var(--card-bg)]">
+                                    <thead class="text-earth-metal/60 sticky top-0 bg-[color:var(--card-bg)] z-10">
                                         <tr class="border-b border-oatmeal-dark/70">
                                             <th class="py-2 text-left">Name</th>
                                             <th class="py-2 text-left hidden sm:table-cell">Type</th>
@@ -993,24 +993,14 @@
                                         <option value="13">13</option>
                                         <option value="14">14</option>
                                         <option value="15">15</option>
-                                        <option value="16">16</option>
-                                        <option value="17">17</option>
-                                        <option value="18">18</option>
-                                        <option value="19">19</option>
-                                        <option value="20">20</option>
-                                        <option value="21">21</option>
-                                        <option value="22">22</option>
-                                        <option value="23">23</option>
-                                        <option value="24">24</option>
                                     </select>
                                     <span
-                                        class="text-[10px] text-earth-metal/60 dark:text-white/60 whitespace-nowrap">6×4</span>
+                                        class="text-[10px] text-earth-metal/60 dark:text-white/60 whitespace-nowrap">3×5 + border</span>
                                 </div>
                                 <pre id="fabGridAscii"
                                     class="font-mono text-[8px] leading-[1.05] text-earth-metal/60 dark:text-white/60 bg-oatmeal/60 dark:bg-white/10 border border-oatmeal-dark/40 dark:border-white/10 rounded-lg p-2 overflow-hidden whitespace-pre"></pre>
-                                <p class="text-[10px] text-earth-metal/60 dark:text-white/60">Pick a number from the 6×4
-                                    grid
-                                    (1 = top-left, 24 = bottom-right). Applies on screens ≤ 640px wide.</p>
+                                <p class="text-[10px] text-earth-metal/60 dark:text-white/60">Pick a number from the grid
+                                    (1 = top-left, 15 = bottom-right). Applies on screens ≤ 640px wide.</p>
                             </div>
                         </div>
                     </div>
@@ -1207,7 +1197,7 @@ async function handleRequest(request, env) {
     <!-- Deck modal -->
     <div id="deckModal" role="dialog" aria-modal="true" aria-labelledby="deckModalTitle"
         class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4">
-        <div class="card rounded-2xl p-5 w-full max-w-md shadow-soft">
+        <div class="card rounded-2xl p-5 w-full max-w-md shadow-soft max-h-[90vh] overflow-y-auto">
             <div class="flex items-center justify-between mb-3">
                 <h3 class="font-display text-lg text-charcoal" id="deckModalTitle">New deck</h3>
                 <button id="closeDeckModal" aria-label="Close deck modal"
@@ -1265,11 +1255,8 @@ async function handleRequest(request, env) {
                             class="px-2 py-1 rounded-lg bg-oatmeal-dark/50 dark:bg-white/10 italic text-dull-purple dark:text-dull-purple">{{answer}}</span>
                         <span
                             class="px-2 py-1 rounded-lg bg-oatmeal-dark/50 dark:bg-white/10 italic text-dull-purple dark:text-dull-purple">{{user}}</span>
-                        <span
-                            class="px-2 py-1 rounded-lg bg-oatmeal-dark/50 dark:bg-white/10 text-earth-metal/70 dark:text-white/70">Variables
-                            replace
-                            question, correct answer, and learner answer.</span>
                     </div>
+                    <p class="mt-2 text-[11px] text-earth-metal/70 dark:text-white/70">Variables replace question, correct answer, and learner answer.</p>
                 </div>
                 <div id="fsrsParamsField" class="hidden">
                     <div class="grid grid-cols-2 gap-3 items-end">

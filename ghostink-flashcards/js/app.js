@@ -4504,19 +4504,37 @@ async importApkg(file) {
 
                 // Grid format: { mode:'grid', rows, cols, cell } anchored to the *center* of the cluster.
                 const grid = pos && typeof pos === 'object' && pos.mode === 'grid' ? pos : null;
-                const rows = Math.max(2, Math.min(10, Number(grid?.rows) || 6));
-                const cols = Math.max(2, Math.min(10, Number(grid?.cols) || 4));
-                const cellMax = rows * cols;
-                const cell = Math.max(1, Math.min(cellMax, Number(grid?.cell) || 21)); // default near bottom-left
-                const colIdx = (cell - 1) % cols;
-                const rowIdx = Math.floor((cell - 1) / cols);
+                // Custom 3x5 grid logic with 12% fixed borders on all sides
+                // Active area: 76% width (12% left + 76% content + 12% right)
+                // Active area: 76% height (12% top + 76% content + 12% bottom)
+
+                const cellMax = 15;
+                const cell = Math.max(1, Math.min(cellMax, Number(grid?.cell) || 15)); // default bottom-right (15)
+
+                const logicalCol = (cell - 1) % 3; // 0, 1, 2
+                const logicalRow = Math.floor((cell - 1) / 3); // 0, 1, 2, 3, 4
 
                 const vw = window.innerWidth || document.documentElement.clientWidth || 360;
                 const vh = window.innerHeight || document.documentElement.clientHeight || 640;
-                const centerX = ((colIdx + 0.5) / cols) * vw;
-                const centerY = ((rowIdx + 0.5) / rows) * vh;
 
-                // Clamp a bit away from edges so the cluster stays usable.
+                // Border offset
+                const borderX = 0.12;
+                const borderY = 0.12;
+                const activeW = 0.76;
+                const activeH = 0.76;
+
+                // Center X % = border + (col * (activeW / 3)) + half_col
+                const colW = activeW / 3;
+                const cxPct = borderX + (logicalCol * colW) + (colW / 2);
+
+                // Center Y % = border + (row * (activeH / 5)) + half_row
+                const rowH = activeH / 5;
+                const cyPct = borderY + (logicalRow * rowH) + (rowH / 2);
+
+                const centerX = cxPct * vw;
+                const centerY = cyPct * vh;
+
+                // Clamp to ensure it doesn't go off screen even with safe area adjustments
                 const pad = 48;
                 const clampedX = Math.min(vw - pad, Math.max(pad, centerX));
                 const clampedY = Math.min(vh - pad, Math.max(pad, centerY));
@@ -4534,8 +4552,8 @@ async importApkg(file) {
                 const posControls = el('#fabPosControls');
                 if (!select) return;
 
-                const rows = 6;
-                const cols = 4;
+                const rows = 5;
+                const cols = 3;
                 const total = rows * cols;
 
                 const getSavedCell = () => {
@@ -4544,27 +4562,35 @@ async importApkg(file) {
                         const c = Number(pos.cell);
                         if (Number.isFinite(c) && c >= 1 && c <= total) return c;
                     }
-                    return 21; // near bottom-left by default
+                    return 15; // near bottom-left by default
                 };
 
                 const renderAscii = (activeCell) => {
                     if (!ascii) return;
                     const pad2 = (n) => String(n).padStart(2, '0');
-                    let out = '';
+                    let out = ' ┌──────────────┐ \n';
+                    out +=    ' │ ┌──────────┐ │ \n';
                     let cell = 1;
                     for (let r = 0; r < rows; r++) {
-                        const row = [];
+                        let rowStr = ' │ │';
+                        const rowArr = [];
                         for (let c = 0; c < cols; c++) {
                             const label = pad2(cell);
                             if (cell === activeCell) {
-                                row.push(`<span class="text-dull-purple font-semibold">${label}</span>`);
+                                rowArr.push(`<span class="text-dull-purple font-semibold">${label}</span>`);
                             } else {
-                                row.push(label);
+                                rowArr.push(label);
                             }
                             cell++;
                         }
-                        out += row.join(' ') + (r < rows - 1 ? '\n' : '');
+                        rowStr += rowArr.join('  ') + '│ │ ';
+                        out += rowStr + '\n';
+                        if (r < rows - 1) {
+                            out += ' │ │          │ │ \n';
+                        }
                     }
+                    out += ' │ └──────────┘ │ \n';
+                    out += ' └──────────────┘ ';
                     ascii.innerHTML = out;
                 };
 
