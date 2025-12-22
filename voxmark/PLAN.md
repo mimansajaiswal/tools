@@ -9,7 +9,7 @@ This plan captures the complete scope and requirements for the VoxMark voice-pow
 
 ## UI + Visual Direction
 - Palette: oatmeal, earth-metal, charcoal, white-linen, dull purple, muted pink.
-- Typography: expressive serif for brand + clean sans for UI (Fraunces + Plus Jakarta Sans).
+- Typography: expressive serif for brand + clean sans for UI (Playfair Display + Manrope).
 - Subtle motion: page load fade, panel slide, mic pulse, list reveals.
 - Use iconography (Phosphor) across controls for clarity and polish.
 - Responsive layout: collapsible sidebar on mobile, floating mic, touch-friendly targets.

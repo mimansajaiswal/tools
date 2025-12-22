@@ -2,7 +2,8 @@ function addPdfCard(pdf) {
   const card = document.createElement("div");
   card.className = "pdf-card";
   card.dataset.id = pdf.id;
-  const textStatus = pdf.hasTextLayer ? "Text" : "Scanned";
+  const textStatus =
+    pdf.hasTextLayer === null ? "Checking" : pdf.hasTextLayer ? "Text" : "Scanned";
   card.innerHTML = `
     <strong><i class="ph ph-file-pdf"></i><span class="pdf-name">${pdf.name}</span></strong>
     <div class="pdf-meta">
@@ -141,11 +142,13 @@ async function handlePdfUpload(files) {
           annotations: [],
           scale: fitScale,
           autoFit: true,
-          textItemCount: 0
+          textItemCount: 0,
+          hasTextLayer: null
         };
 
         state.pdfs.push(pdfState);
         await renderPdf(pdfState);
+        detectTextLayer(pdfState);
         addPdfCard(pdfState);
         persistPdfState(pdfState);
         if (!state.activePdfId) setActivePdf(id);
@@ -167,7 +170,9 @@ async function renderPdf(pdfState) {
   pdfState.container.innerHTML = "";
   pdfState.pages = [];
   pdfState.textItemCount = 0;
-  pdfState.hasTextLayer = false;
+  if (pdfState.hasTextLayer !== true && pdfState.hasTextLayer !== false) {
+    pdfState.hasTextLayer = null;
+  }
   if (pdfState.pageObserver) {
     pdfState.pageObserver.disconnect();
     pdfState.pageObserver = null;
@@ -226,6 +231,29 @@ async function getFitScale(pdfDoc) {
     return Math.min(2.0, Math.max(0.75, scale));
   } catch (error) {
     return 1.15;
+  }
+}
+
+async function detectTextLayer(pdfState) {
+  if (!pdfState || pdfState.textDetectionRunning) return;
+  pdfState.textDetectionRunning = true;
+  try {
+    for (let pageNum = 1; pageNum <= pdfState.pageCount; pageNum++) {
+      const page = await pdfState.pdfDoc.getPage(pageNum);
+      const textContent = await page.getTextContent();
+      if (textContent.items?.length) {
+        pdfState.hasTextLayer = true;
+        refreshPdfList();
+        return;
+      }
+    }
+    pdfState.hasTextLayer = false;
+    refreshPdfList();
+  } catch (error) {
+    pdfState.hasTextLayer = false;
+    refreshPdfList();
+  } finally {
+    pdfState.textDetectionRunning = false;
   }
 }
 
@@ -883,11 +911,21 @@ async function updateNavigationForActivePdf() {
   if (!pdfState) {
     elements.outlineList.innerHTML = `<div class="viewer-hint">No PDF loaded.</div>`;
     elements.thumbnailList.innerHTML = "";
+    if (elements.pageJumpInput) {
+      elements.pageJumpInput.value = "";
+      elements.pageJumpInput.placeholder = "Page";
+    }
+    if (elements.pageJumpTotal) {
+      elements.pageJumpTotal.textContent = "/ 0";
+    }
     return;
   }
   if (elements.pageJumpInput) {
     elements.pageJumpInput.max = `${pdfState.pageCount}`;
-    elements.pageJumpInput.placeholder = `Page # (1-${pdfState.pageCount})`;
+    elements.pageJumpInput.placeholder = "Page";
+  }
+  if (elements.pageJumpTotal) {
+    elements.pageJumpTotal.textContent = `/ ${pdfState.pageCount}`;
   }
   await loadOutline(pdfState);
   if (state.navTab === "thumbs") {
@@ -1043,6 +1081,9 @@ function updateActivePageIndicator() {
   const visible = getVisiblePages(pdfState);
   if (!visible.length) return;
   const pageIndex = visible[0].pageNum - 1;
+  if (elements.pageJumpInput) {
+    elements.pageJumpInput.value = `${pageIndex + 1}`;
+  }
   if (state.activePageIndex === pageIndex) return;
   state.activePageIndex = pageIndex;
   if (!elements.thumbnailList) return;
@@ -1130,8 +1171,9 @@ function setPdfScale(pdfState, scale, fromUser = false, anchor = null, preserveP
   if (!preservePreview) {
     clearPreviewScale(pdfState);
   }
+  const prevScale = pdfState.scale || 1;
   const nextScale = Math.min(3.5, Math.max(0.4, scale));
-  const ratio = nextScale / (pdfState.scale || nextScale);
+  const ratio = nextScale / (prevScale || nextScale);
   const startLeft = elements.viewerArea.scrollLeft;
   const startTop = elements.viewerArea.scrollTop;
   const anchorX = anchor?.x ?? elements.viewerArea.clientWidth / 2;
@@ -1155,9 +1197,9 @@ function setPdfScale(pdfState, scale, fromUser = false, anchor = null, preserveP
 }
 
 function updateZoomLabel(pdfState) {
-  if (!elements.zoomLabel || !pdfState) return;
+  if (!elements.zoomInput || !pdfState) return;
   const pct = Math.round(pdfState.scale * 100);
-  elements.zoomLabel.textContent = `${pct}%`;
+  elements.zoomInput.value = `${pct}`;
 }
 
 function setPreviewScale(pdfState, scale, origin = null) {

@@ -24,8 +24,8 @@ function closeModal() {
 }
 
 function notify(title, message, options = {}) {
-  const { type = "info", duration = 2400, force = false } = options;
-  if (type !== "error" && !force) return;
+  const { type = "info", duration = 2400 } = options;
+  if (!title && !message) return;
   showToast(`${title}: ${message}`, type, duration);
 }
 

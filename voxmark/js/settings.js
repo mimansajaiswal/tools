@@ -23,11 +23,15 @@ function saveSettings() {
     ocrEnabled: elements.ocrToggle?.checked ?? false
   };
 
-  if (settings.sttProvider !== "native" && !validateApiKey(settings.sttProvider, settings.sttKey)) {
+  if (
+    settings.sttProvider !== "native" &&
+    settings.sttKey &&
+    !validateApiKey(settings.sttProvider, settings.sttKey)
+  ) {
     notify("Settings", "Invalid STT API key format.", { type: "error", duration: 4000 });
     return;
   }
-  if (!validateApiKey(settings.aiProvider, settings.aiKey) && !settings.mockAI) {
+  if (settings.aiKey && !validateApiKey(settings.aiProvider, settings.aiKey)) {
     notify("Settings", "Invalid AI API key format.", { type: "error", duration: 4000 });
     return;
   }

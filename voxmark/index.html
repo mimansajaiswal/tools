@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Manrope:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <link
@@ -27,11 +27,6 @@
     <div class="app">
       <header class="topbar">
         <div class="topbar-left">
-          <div class="window-controls" aria-hidden="true">
-            <span class="dot close"></span>
-            <span class="dot minimize"></span>
-            <span class="dot zoom"></span>
-          </div>
           <button class="btn icon secondary" id="toggleSidebar" title="Toggle navigation">
             <i class="ph ph-sidebar"></i>
           </button>
@@ -66,8 +61,9 @@
               <span class="label">Find</span>
             </button>
           </div>
-          <div class="page-jump">
-            <input type="number" id="pageJumpInput" min="1" placeholder="Page #" />
+          <div class="page-jump" aria-label="Page navigation">
+            <input type="number" id="pageJumpInput" min="1" inputmode="numeric" />
+            <span class="page-jump-total" id="pageJumpTotal">/ 0</span>
             <button class="btn secondary small" id="pageJumpGo" aria-label="Go to page">
               <i class="ph ph-arrow-right"></i>
               <span class="label">Go</span>
@@ -129,9 +125,6 @@
       <aside class="sidebar nav-sidebar">
         <div class="sidebar-header">
           <h2>Navigation</h2>
-          <button class="btn icon ghost sidebar-close" id="closeSidebar" title="Close navigation">
-            <i class="ph ph-x"></i>
-          </button>
         </div>
         <div class="nav-tabs">
           <button class="tab active" id="outlineTab">
@@ -190,6 +183,10 @@
               <span class="label">Process Queue</span>
             </button>
             <div id="progressLabel" class="queue-indicator hidden">Processing 0 of 0</div>
+            <div class="zoom-indicator">
+              <input id="zoomInput" type="text" inputmode="decimal" value="100" aria-label="Zoom level" />
+              <span class="zoom-suffix">%</span>
+            </div>
             <button class="mic" id="micButton" title="Start/Stop Recording">
               <i class="ph ph-microphone"></i>
             </button>

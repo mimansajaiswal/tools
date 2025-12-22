@@ -136,7 +136,7 @@ html[data-theme="light"] {
 
 body {
   margin: 0;
-  font-family: "Plus Jakarta Sans", sans-serif;
+  font-family: "Manrope", sans-serif;
   color: var(--text-main);
   font-weight: 400;
   background: radial-gradient(1200px 800px at 10% -10%, var(--bg-radial-1) 0%, transparent 60%),
@@ -230,7 +230,7 @@ header {
 }
 
 .brand h1 {
-  font-family: "Fraunces", serif;
+  font-family: "Playfair Display", serif;
   font-size: 20px;
   font-weight: 600;
   margin: 0;
@@ -374,19 +374,26 @@ header {
   border-radius: 999px;
   padding: 2px 6px;
   font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
 }
 
 .search-bar,
 .page-jump {
   display: inline-flex;
   align-items: center;
-  gap: 0;
-  padding: 0;
+  gap: 6px;
+  padding: 0 6px;
   border-radius: 10px;
   border: 1px solid var(--panel-border);
   background: var(--surface);
   height: 34px;
   overflow: hidden;
+}
+
+.page-jump {
+  gap: 4px;
+  padding-right: 0;
 }
 
 .search-bar:focus-within,
@@ -408,9 +415,29 @@ header {
   padding: 0 10px;
 }
 
+.search-bar input {
+  flex: 1 1 auto;
+}
+
 .page-jump input {
-  min-width: 70px;
+  min-width: 52px;
+  width: 56px;
   text-align: center;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+}
+
+.page-jump-total {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .search-bar .btn,
@@ -421,6 +448,14 @@ header {
   border: none;
   border-left: 1px solid var(--panel-border);
   background: transparent;
+}
+
+.search-bar .btn {
+  margin-left: auto;
+}
+
+.page-jump .btn {
+  margin-left: 4px;
 }
 
 .search-bar .btn:hover,
@@ -472,6 +507,9 @@ header {
   background: var(--queue-bg);
   border: 1px solid transparent;
   min-width: auto;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
 }
 
 .status-pill .ph {
@@ -513,7 +551,7 @@ header {
 }
 
 .sidebar h2 {
-  font-family: "Fraunces", serif;
+  font-family: "Playfair Display", serif;
   font-size: 18px;
   font-weight: 400;
   margin: 0 0 12px;
@@ -968,6 +1006,48 @@ header {
   background: transparent;
   border: 1px dashed var(--panel-border);
   padding: 6px 12px;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+}
+
+.viewer-toolbar .zoom-indicator {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-border);
+  background: var(--surface);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+}
+
+.viewer-toolbar .zoom-indicator input {
+  width: 4ch;
+  min-width: 4ch;
+  border: none;
+  background: transparent;
+  color: var(--text-main);
+  font-weight: 600;
+  text-align: right;
+  outline: none;
+  appearance: textfield;
+}
+
+.viewer-toolbar .zoom-indicator input::-webkit-outer-spin-button,
+.viewer-toolbar .zoom-indicator input::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.viewer-toolbar .zoom-suffix {
+  color: var(--text-muted);
+  font-weight: 600;
 }
 
 .mode-group {
@@ -1146,7 +1226,7 @@ header {
 }
 
 .logs-header h3 {
-  font-family: "Fraunces", serif;
+  font-family: "Playfair Display", serif;
   margin: 0;
   font-weight: 500;
 }
@@ -1155,6 +1235,9 @@ header {
   font-size: 12px;
   color: var(--text-muted);
   margin-bottom: 10px;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
 }
 
 .logs-list {
@@ -1182,6 +1265,9 @@ header {
   justify-content: space-between;
   gap: 8px;
   font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
 }
 
 .log-entry summary::-webkit-details-marker {
@@ -1235,7 +1321,7 @@ header {
 }
 
 .settings-panel h3 {
-  font-family: "Fraunces", serif;
+  font-family: "Playfair Display", serif;
   margin: 20px 0 10px;
 }
 
@@ -1561,7 +1647,7 @@ header {
 }
 
 .modal h4 {
-  font-family: "Fraunces", serif;
+  font-family: "Playfair Display", serif;
   margin: 0;
 }
 
@@ -1771,7 +1857,7 @@ header {
   .topbar-center {
     order: 3;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 96px;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: 8px;
   }
@@ -1792,7 +1878,8 @@ header {
   }
 
   .page-jump input {
-    min-width: 60px;
+    min-width: 48px;
+    width: 52px;
   }
 
   .pdf-menu {
@@ -1995,8 +2082,10 @@ header {
 
 @media (max-width: 720px) {
   .topbar-center {
-    grid-template-columns: minmax(0, 1fr) 86px;
-    gap: 6px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
   }
 
   .pdf-label {
@@ -2005,7 +2094,15 @@ header {
 
   .search-bar,
   .page-jump {
-    width: 100%;
+    width: auto;
+  }
+
+  .search-bar {
+    flex: 1 1 auto;
+  }
+
+  .page-jump {
+    flex: 0 0 auto;
   }
 
   .search-bar .ph {
@@ -2019,7 +2116,7 @@ header {
 
   .search-bar .btn,
   .page-jump .btn {
-    width: 30px;
+    width: 34px;
     height: 30px;
     padding: 0;
   }

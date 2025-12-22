@@ -9,6 +9,7 @@ async function downloadActive() {
   link.href = URL.createObjectURL(blob);
   link.download = pdfState.name.replace(".pdf", "-annotated.pdf");
   link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 0);
 }
 
 async function downloadMerged() {
@@ -28,6 +29,7 @@ async function downloadMerged() {
   link.href = URL.createObjectURL(blob);
   link.download = "voxmark-merged.pdf";
   link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 0);
 }
 
 async function downloadZip() {
@@ -44,4 +46,5 @@ async function downloadZip() {
   link.href = URL.createObjectURL(blob);
   link.download = "voxmark-pdfs.zip";
   link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 0);
 }

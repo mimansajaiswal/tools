@@ -1,4 +1,8 @@
 function bindInteractions() {
+  let wheelCommitTimer = null;
+  let wheelPreviewScale = null;
+  let wheelOriginViewport = null;
+
   elements.pdfInput.addEventListener("change", (event) => handlePdfUpload(event.target.files));
   elements.uploadPdf.addEventListener("click", () => {
     closePdfMenu();
@@ -16,7 +20,16 @@ function bindInteractions() {
       toggleOverflowMenu();
     });
   }
-  elements.settingsToggle.addEventListener("click", toggleSettings);
+  elements.settingsToggle.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (typeof closeOverflowMenu === "function") {
+      closeOverflowMenu();
+    }
+    requestAnimationFrame(() => {
+      toggleSettings();
+    });
+  });
   elements.logsToggle.addEventListener("click", toggleLogs);
   elements.logsClose.addEventListener("click", closeLogs);
   document.addEventListener("click", (event) => {
@@ -187,13 +200,6 @@ function bindInteractions() {
     }
     app.classList.toggle("sidebar-collapsed");
   });
-  if (elements.closeSidebar) {
-    elements.closeSidebar.addEventListener("click", () => {
-      const app = document.querySelector(".app");
-      app.classList.remove("sidebar-open");
-      elements.sidebarScrim.classList.remove("active");
-    });
-  }
   elements.sidebarScrim.addEventListener("click", () => {
     const app = document.querySelector(".app");
     app.classList.remove("sidebar-open");
@@ -259,7 +265,6 @@ function bindInteractions() {
     (event) => {
       if (!event.ctrlKey && !event.metaKey) return;
       event.preventDefault();
-      const delta = event.deltaY > 0 ? -0.08 : 0.08;
       const pdfState = getActivePdf();
       if (!pdfState) return;
       const rect = elements.viewerArea.getBoundingClientRect();
@@ -267,7 +272,27 @@ function bindInteractions() {
         x: event.clientX - rect.left,
         y: event.clientY - rect.top
       };
-      setPdfScale(pdfState, pdfState.scale + delta, true, anchor, true);
+      const rawZoom = Math.exp(-event.deltaY * 0.006);
+      const zoomFactor = Math.min(1.25, Math.max(0.8, rawZoom));
+      const baseScale = wheelPreviewScale ?? pdfState.scale;
+      const targetScale = baseScale * zoomFactor;
+      const origin = {
+        x: elements.viewerArea.scrollLeft + anchor.x,
+        y: elements.viewerArea.scrollTop + anchor.y
+      };
+      wheelPreviewScale = targetScale;
+      wheelOriginViewport = anchor;
+      setPreviewScale(pdfState, targetScale, origin);
+      if (wheelCommitTimer) clearTimeout(wheelCommitTimer);
+      wheelCommitTimer = setTimeout(() => {
+        const active = getActivePdf();
+        if (!active || wheelPreviewScale === null) return;
+        const commitScale = wheelPreviewScale;
+        const commitOrigin = wheelOriginViewport;
+        wheelPreviewScale = null;
+        wheelOriginViewport = null;
+        setPdfScale(active, commitScale, true, commitOrigin, true);
+      }, 120);
     },
     { passive: false }
   );
@@ -339,23 +364,14 @@ function bindInteractions() {
   );
   const commitPinchZoom = () => {
     if (!touchState || touchState.type !== "pinch") return;
-    if (touchState.pending) {
-      state.isPinching = false;
-      elements.viewerArea.style.touchAction = "pan-x pan-y";
-      touchState = null;
-      return;
-    }
     const pdfState = getActivePdf();
-    if (!pdfState) {
-      state.isPinching = false;
-      touchState = null;
-      return;
-    }
     const finalScale = touchState.previewScale || touchState.startScale;
-    const origin = touchState.originViewport;
-    setPdfScale(pdfState, finalScale, true, origin, true);
+    const originViewport = touchState.originViewport;
     elements.viewerArea.style.touchAction = "pan-x pan-y";
     state.isPinching = false;
+    touchState = null;
+    if (!pdfState) return;
+    setPdfScale(pdfState, finalScale, true, originViewport, true);
   };
   elements.viewerArea.addEventListener(
     "touchstart",
@@ -408,15 +424,13 @@ function bindInteractions() {
         startDistance: Math.max(1, dist),
         startScale: pdfState?.scale || 1.15,
         previewScale: pdfState?.scale || 1.15,
-        lastDistance: Math.max(1, dist),
-        lastCenter: { x: centerX, y: centerY },
-        pending: dist < 30,
         origin: originContainer,
         originViewport,
-        startScrollLeft: elements.viewerArea.scrollLeft,
-        startScrollTop: elements.viewerArea.scrollTop,
         raf: null
       };
+      if (pdfState) {
+        setPreviewScale(pdfState, touchState.previewScale, touchState.origin);
+      }
     }
     },
     { passive: false }
@@ -431,34 +445,21 @@ function bindInteractions() {
         const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
         const pdfState = getActivePdf();
         if (!pdfState) return;
-        if (touchState.pending) {
-          if (dist < 30) return;
-          touchState.pending = false;
-          touchState.startDistance = dist;
-          touchState.previewScale = touchState.startScale;
-          touchState.lastDistance = dist;
-          return;
-        }
         const viewerRect = elements.viewerArea.getBoundingClientRect();
         const centerX = (t1.clientX + t2.clientX) / 2;
         const centerY = (t1.clientY + t2.clientY) / 2;
-        if (Math.hypot(centerX - touchState.lastCenter.x, centerY - touchState.lastCenter.y) > 32) {
-          touchState.originViewport = {
-            x: centerX - viewerRect.left,
-            y: centerY - viewerRect.top
-          };
-          touchState.origin = {
-            x: elements.viewerArea.scrollLeft + touchState.originViewport.x,
-            y: elements.viewerArea.scrollTop + touchState.originViewport.y
-          };
-          touchState.lastCenter = { x: centerX, y: centerY };
-        }
-        const ratio = dist / Math.max(1, touchState.lastDistance || touchState.startDistance);
-        const clampedRatio = Math.min(1.25, Math.max(0.8, ratio));
-        const targetScale = Math.min(3.5, Math.max(0.4, touchState.previewScale * clampedRatio));
+        touchState.originViewport = {
+          x: centerX - viewerRect.left,
+          y: centerY - viewerRect.top
+        };
+        touchState.origin = {
+          x: elements.viewerArea.scrollLeft + touchState.originViewport.x,
+          y: elements.viewerArea.scrollTop + touchState.originViewport.y
+        };
+        const ratio = dist / Math.max(1, touchState.startDistance || dist);
+        const targetScale = Math.min(3.5, Math.max(0.4, touchState.startScale * ratio));
         touchState.previewScale =
           touchState.previewScale + (targetScale - touchState.previewScale) * 0.35;
-        touchState.lastDistance = dist;
         if (!touchState.raf) {
           touchState.raf = requestAnimationFrame(() => {
             touchState.raf = null;
@@ -510,11 +511,37 @@ function bindInteractions() {
   elements.viewerArea.addEventListener("touchcancel", () => {
     if (touchState?.type === "pinch") {
       commitPinchZoom();
+    } else {
+      state.isPinching = false;
+      elements.viewerArea.style.touchAction = "pan-x pan-y";
+      touchState = null;
     }
-    state.isPinching = false;
-    elements.viewerArea.style.touchAction = "pan-x pan-y";
-    touchState = null;
   });
+
+  if (elements.zoomInput) {
+    const commitZoomInput = () => {
+      const raw = elements.zoomInput.value.trim().replace("%", "");
+      const value = Number(raw);
+      if (!Number.isFinite(value)) {
+        updateZoomLabel(getActivePdf());
+        return;
+      }
+      const pdfState = getActivePdf();
+      if (!pdfState) return;
+      const target = value / 100;
+      setPdfScale(pdfState, target, true, null, false);
+    };
+    elements.zoomInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        elements.zoomInput.blur();
+        commitZoomInput();
+      }
+    });
+    elements.zoomInput.addEventListener("blur", () => {
+      commitZoomInput();
+    });
+  }
 
   document.addEventListener("pointermove", handlePointerMove);
   document.addEventListener("pointerup", handlePointerUp);
@@ -611,6 +638,8 @@ function closeOverflowMenu() {
 
 function positionDropdown(menu, trigger, align = "left") {
   if (!menu || !trigger) return;
+  // Use viewport positioning so dropdowns stay anchored on desktop and mobile.
+  menu.style.position = "fixed";
   const margin = 12;
   const rect = trigger.getBoundingClientRect();
   const viewportW = window.innerWidth;
@@ -637,6 +666,7 @@ function positionDropdown(menu, trigger, align = "left") {
 
 function resetDropdownPosition(menu) {
   if (!menu) return;
+  menu.style.position = "";
   menu.style.left = "";
   menu.style.top = "";
   menu.style.width = "";

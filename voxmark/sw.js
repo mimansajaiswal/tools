@@ -1,7 +1,19 @@
-const CACHE_NAME = "voxmark-cache-v1";
+const CACHE_NAME = "voxmark-cache-v2";
 const CORE_ASSETS = [
   "./index.html",
   "./styles/main.css",
+  "./js/core.js",
+  "./js/ui.js",
+  "./js/settings.js",
+  "./js/storage.js",
+  "./js/pdf.js",
+  "./js/annotations.js",
+  "./js/ai.js",
+  "./js/batch.js",
+  "./js/stt.js",
+  "./js/export.js",
+  "./js/interactions.js",
+  "./js/pwa.js",
   "./js/app.js",
   "./manifest.json",
   "./assets/icon-192.svg",

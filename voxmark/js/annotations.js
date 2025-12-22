@@ -405,12 +405,33 @@ function snapSelectedToText() {
 
 async function applyAllAnnotations(pdfState) {
   const pdfDoc = await PDFLib.PDFDocument.load(pdfState.originalBytes);
+  const pageCount = pdfDoc.getPageCount();
   pdfState.annotationCount = 0;
+  const validAnnotations = [];
+  let invalidCount = 0;
   for (const annotation of pdfState.annotations) {
-    const page = pdfDoc.getPage(annotation.pageIndex);
+    const pageIndex = Number(annotation.pageIndex);
+    if (!Number.isInteger(pageIndex) || pageIndex < 0 || pageIndex >= pageCount) {
+      invalidCount += 1;
+      continue;
+    }
+    if (!annotation.bbox) {
+      invalidCount += 1;
+      continue;
+    }
+    const page = pdfDoc.getPage(pageIndex);
     drawAnnotation(page, annotation, { bbox: annotation.bbox });
     pdfState.annotationCount += 1;
+    validAnnotations.push(annotation);
   }
+  if (invalidCount) {
+    logEvent({
+      title: "Invalid annotations skipped",
+      detail: { pdfId: pdfState.id, skipped: invalidCount },
+      sessionId: state.activeSessionId
+    });
+  }
+  pdfState.annotations = validAnnotations;
   pdfState.bytes = await pdfDoc.save();
   await refreshPdfRender(pdfState);
   refreshPdfList();
@@ -456,6 +477,13 @@ async function applyAnnotations(aiResponse, session) {
     const pdfState = state.pdfs.find((pdf) => pdf.id === pdfId) || getActivePdf();
     if (!pdfState) continue;
     for (const annotation of annotations) {
+      if (
+        !Number.isInteger(annotation.pageIndex) ||
+        annotation.pageIndex < 0 ||
+        annotation.pageIndex >= pdfState.pageCount
+      ) {
+        continue;
+      }
       const target = await resolveTarget(annotation, pdfState, session);
       if (!target) continue;
       pdfState.annotations.push({
