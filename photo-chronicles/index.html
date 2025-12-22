@@ -861,6 +861,7 @@ async function handleRequest(request, env) {
         const UTILS = {
             id: () => Math.random().toString(36).substr(2, 9),
             now: () => new Date().toISOString(),
+            normalizeTag: (tag) => (tag || '').trim().toLowerCase(),
             localToUTC: (localDateTimeString) => {
                 if (!localDateTimeString) return new Date().toISOString();
                 const d = new Date(localDateTimeString);
@@ -995,6 +996,26 @@ async function handleRequest(request, env) {
                 if (diary) {
                     const merged = [...new Set([...diary.tags, ...newTags])];
                     diary.tags = merged;
+                    Storage.setData(data);
+                }
+            },
+            queuePendingTag: (diaryId, tag) => {
+                const data = Storage.getData();
+                const diary = data.find(d => d.id === diaryId);
+                const normalized = UTILS.normalizeTag(tag);
+                if (diary && normalized) {
+                    if (!Array.isArray(diary.pendingTags)) diary.pendingTags = [];
+                    const exists = diary.pendingTags.some(t => UTILS.normalizeTag(t) === normalized);
+                    if (!exists) diary.pendingTags.push(tag.trim());
+                    Storage.setData(data);
+                }
+            },
+            clearPendingTag: (diaryId, tag) => {
+                const data = Storage.getData();
+                const diary = data.find(d => d.id === diaryId);
+                const normalized = UTILS.normalizeTag(tag);
+                if (diary && Array.isArray(diary.pendingTags) && normalized) {
+                    diary.pendingTags = diary.pendingTags.filter(t => UTILS.normalizeTag(t) !== normalized);
                     Storage.setData(data);
                 }
             },
@@ -1250,6 +1271,7 @@ async function handleRequest(request, env) {
 
                     SyncManager.updateUI('synced');
                     SyncManager.fetchTags(true);
+                    SyncManager.syncPendingTags(diaryId);
 
                 } catch (e) {
                     console.error("Sync Error", e);
@@ -1259,6 +1281,54 @@ async function handleRequest(request, env) {
                     App.state.isLoading = false;
                     App.renderDiaryView();
                     App.renderSidebar();
+                }
+            },
+
+            syncPendingTags: async (diaryId) => {
+                const diary = Storage.getData().find(d => d.id === diaryId);
+                const pending = diary?.pendingTags || [];
+                for (const tag of pending) {
+                    await SyncManager.addTagToNotion(diaryId, tag, { silent: true, fromQueue: true });
+                }
+            },
+
+            addTagToNotion: async (diaryId, tag, options = {}) => {
+                const diary = Storage.getData().find(d => d.id === diaryId);
+                const cleanTag = tag ? tag.trim() : '';
+                if (!diary || !diary.dataSourceId || !cleanTag) return;
+                const normalized = UTILS.normalizeTag(cleanTag);
+
+                try {
+                    const res = await API.request('GET', `/data_sources/${diary.dataSourceId}`);
+                    const properties = res.properties || {};
+                    if (!properties["Tags"] || !properties["Tags"].multi_select) {
+                        throw new Error("Tags property missing");
+                    }
+
+                    const currentOptions = properties["Tags"].multi_select.options.map(o => o.name);
+                    const exists = currentOptions.some(t => UTILS.normalizeTag(t) === normalized);
+                    const merged = exists ? currentOptions : [...currentOptions, cleanTag];
+                    const unique = [];
+                    const seen = new Set();
+                    for (const name of merged) {
+                        const key = UTILS.normalizeTag(name);
+                        if (!key || seen.has(key)) continue;
+                        seen.add(key);
+                        unique.push({ name });
+                    }
+
+                    await API.request('PATCH', `/data_sources/${diary.dataSourceId}`, {
+                        properties: { "Tags": { "multi_select": { "options": unique } } }
+                    });
+
+                    Storage.updateDiaryTags(diaryId, unique.map(o => o.name));
+                    Storage.clearPendingTag(diaryId, cleanTag);
+                    App.state.diaries = Storage.getData();
+                    if (!options.silent) App.showToast(`Added "${cleanTag}" tag in Notion.`, "success");
+                } catch (e) {
+                    console.error("Notion tag update failed", e);
+                    if (!options.fromQueue) Storage.queuePendingTag(diaryId, cleanTag);
+                    if (!options.silent) App.showToast("Couldn't update tags in Notion. Will retry later.", "error");
                 }
             },
 
@@ -1326,6 +1396,8 @@ async function handleRequest(request, env) {
                 cachedDataSources: [],
                 isLoading: false
             },
+            tagMatch: (list, tag) => list.find(t => UTILS.normalizeTag(t) === UTILS.normalizeTag(tag)),
+            hasTag: (list, tag) => !!App.tagMatch(list, tag),
 
             collageConfigs: {
                 1: [{ x: 0, y: 0, w: 1, h: 1 }],
@@ -1523,6 +1595,7 @@ async function handleRequest(request, env) {
                     dataSourceId: db.id,
                     description: db.description,
                     tags: [],
+                    pendingTags: [],
                     entries: []
                 };
                 Storage.saveDiary(newDiary);
@@ -2022,32 +2095,66 @@ async function handleRequest(request, env) {
             },
 
             handleTagInput: (e) => {
-                const val = e.target.value.trim().toLowerCase();
+                const rawVal = e.target.value;
+                const val = rawVal.trim();
+                const normalized = UTILS.normalizeTag(val);
                 const suggestions = document.getElementById('tagSuggestions');
                 const diary = App.state.diaries.find(d => d.id === App.state.activeDiaryId);
                 const allTags = diary ? diary.tags : [];
-                const matches = val
-                    ? allTags.filter(t => t.toLowerCase().includes(val) && !App.state.currentTags.includes(t))
-                    : allTags.filter(t => !App.state.currentTags.includes(t));
-                if (matches.length > 0) {
+                const available = allTags.filter(t => !App.hasTag(App.state.currentTags, t));
+                const matches = normalized
+                    ? available.filter(t => t.toLowerCase().includes(normalized))
+                    : available;
+                const exactMatch = normalized && App.hasTag(allTags, val);
+                const showAdd = normalized && !exactMatch;
+                if (matches.length > 0 || showAdd) {
                     suggestions.classList.remove('hidden');
-                    suggestions.innerHTML = matches.map(t =>
-                        `<div class="p-2 hover:bg-oatmeal cursor-pointer text-sm" onclick="App.addTag('${t}')">${t}</div>`
-                    ).join('');
+                    const items = [];
+                    if (showAdd) {
+                        const safeLabel = val.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                        const encoded = encodeURIComponent(val);
+                        items.push(`<div class="p-2 hover:bg-oatmeal cursor-pointer text-sm font-semibold" onclick="App.addNewTag(decodeURIComponent('${encoded}'))">Add "${safeLabel}"</div>`);
+                    }
+                    matches.forEach(t => {
+                        const encoded = encodeURIComponent(t);
+                        items.push(`<div class="p-2 hover:bg-oatmeal cursor-pointer text-sm" onclick="App.addTag(decodeURIComponent('${encoded}'))">${t}</div>`);
+                    });
+                    suggestions.innerHTML = items.join('');
                 } else {
                     suggestions.classList.add('hidden');
                 }
                 if (e.key === 'Enter' && val) {
-                    App.addTag(e.target.value.trim());
+                    if (exactMatch) {
+                        const existing = App.tagMatch(allTags, val);
+                        App.addTag(existing || val);
+                    } else {
+                        App.addNewTag(val);
+                    }
                 }
             },
 
             addTag: (t) => {
-                if (!App.state.currentTags.includes(t)) {
-                    App.state.currentTags.push(t);
+                const tag = t ? t.trim() : '';
+                if (!tag) return;
+                if (!App.hasTag(App.state.currentTags, tag)) {
+                    App.state.currentTags.push(tag);
                     App.renderTags();
                     document.getElementById('tagInput').value = '';
                     document.getElementById('tagSuggestions').classList.add('hidden');
+                }
+            },
+            addNewTag: async (t) => {
+                const tag = t ? t.trim() : '';
+                if (!tag) return;
+                const diaryId = App.state.activeDiaryId;
+                const diary = App.state.diaries.find(d => d.id === diaryId);
+                const existing = diary ? App.tagMatch(diary.tags, tag) : null;
+                const resolvedTag = existing || tag;
+                App.addTag(resolvedTag);
+                if (diaryId) {
+                    Storage.updateDiaryTags(diaryId, [resolvedTag]);
+                    App.state.diaries = Storage.getData();
+                    await SyncManager.addTagToNotion(diaryId, resolvedTag);
                 }
             },
 
