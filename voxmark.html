@@ -1,0 +1,2492 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VoxMark - Voice PDF Annotation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css"
+    />
+    <style>
+      :root {
+        --oatmeal: #e9e1d4;
+        --linen: #f6f1ea;
+        --earth-metal: #b09a7b;
+        --charcoal: #2b2b2b;
+        --dull-purple: #7b6d8d;
+        --muted-pink: #c08fa2;
+        --accent-green: #5f7f6a;
+        --accent-yellow: #d6b85f;
+        --accent-blue: #6a85a6;
+        --shadow-soft: rgba(43, 43, 43, 0.08);
+        --shadow-subtle: rgba(43, 43, 43, 0.04);
+        --radius-lg: 18px;
+        --radius-md: 12px;
+        --radius-sm: 8px;
+        --transition: 180ms ease;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Plus Jakarta Sans", sans-serif;
+        color: var(--charcoal);
+        background: radial-gradient(1200px 800px at 10% -10%, #f2e9dc 0%, transparent 60%),
+          radial-gradient(900px 700px at 90% 0%, #e7d8c6 0%, transparent 55%),
+          linear-gradient(180deg, var(--oatmeal), #efe7da 50%, #f4ede3 100%);
+        min-height: 100vh;
+      }
+
+      .app {
+        display: grid;
+        grid-template-columns: 300px 1fr;
+        grid-template-rows: auto 1fr;
+        height: 100vh;
+      }
+
+      .app.sidebar-collapsed {
+        grid-template-columns: 0 1fr;
+      }
+
+      header {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 24px;
+        background: rgba(246, 241, 234, 0.7);
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid rgba(176, 154, 123, 0.3);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .brand h1 {
+        font-family: "Fraunces", serif;
+        font-size: 24px;
+        margin: 0;
+        letter-spacing: 0.4px;
+      }
+
+      .brand p {
+        margin: 0;
+        font-size: 12px;
+        color: rgba(43, 43, 43, 0.7);
+      }
+
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .status-pill {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: var(--linen);
+        border: 1px solid rgba(176, 154, 123, 0.35);
+        border-radius: 999px;
+        font-size: 12px;
+      }
+
+      .status-pill .ph {
+        font-size: 14px;
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent-green);
+      }
+
+      .status-dot.offline {
+        background: var(--muted-pink);
+      }
+
+      .layout {
+        display: contents;
+      }
+
+      .sidebar {
+        padding: 20px;
+        border-right: 1px solid rgba(176, 154, 123, 0.25);
+        background: rgba(246, 241, 234, 0.6);
+        backdrop-filter: blur(8px);
+        overflow-y: auto;
+        display: grid;
+        grid-auto-rows: max-content;
+        gap: 16px;
+      }
+
+      .sidebar h2 {
+        font-family: "Fraunces", serif;
+        font-size: 18px;
+        margin: 0 0 12px;
+      }
+
+      .section-title {
+        text-transform: uppercase;
+        letter-spacing: 1.4px;
+        font-size: 10px;
+        color: rgba(43, 43, 43, 0.6);
+      }
+
+      .sidebar .actions {
+        display: grid;
+        gap: 10px;
+      }
+
+      .file-input {
+        display: none;
+      }
+
+      .btn {
+        border: 1px solid rgba(176, 154, 123, 0.5);
+        background: var(--linen);
+        color: var(--charcoal);
+        padding: 10px 12px;
+        border-radius: var(--radius-sm);
+        font-weight: 600;
+        cursor: pointer;
+        transition: var(--transition);
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        justify-content: center;
+      }
+
+      .btn:hover {
+        border-color: var(--dull-purple);
+        transform: translateY(-1px);
+      }
+
+      .btn:active {
+        transform: translateY(0);
+      }
+
+      .btn.secondary {
+        background: transparent;
+      }
+
+      .btn.ghost {
+        background: transparent;
+        border-style: dashed;
+      }
+
+      .btn.accent {
+        background: var(--dull-purple);
+        color: var(--linen);
+        border-color: transparent;
+      }
+
+      .btn.danger {
+        background: var(--muted-pink);
+        color: var(--linen);
+        border-color: transparent;
+      }
+
+      .btn.icon {
+        padding: 10px;
+        width: 40px;
+        height: 40px;
+      }
+
+      .btn .ph {
+        font-size: 18px;
+      }
+
+      .pdf-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .pdf-card {
+        padding: 10px 12px;
+        border-radius: var(--radius-sm);
+        border: 1px solid rgba(176, 154, 123, 0.4);
+        background: rgba(255, 255, 255, 0.7);
+        cursor: pointer;
+        transition: var(--transition);
+        display: grid;
+        gap: 6px;
+      }
+
+      .pdf-card strong {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .pdf-card strong .ph {
+        color: var(--dull-purple);
+      }
+
+      .pdf-card:hover {
+        transform: translateY(-1px);
+        border-color: rgba(123, 109, 141, 0.4);
+      }
+
+      .pdf-card.active {
+        border-color: var(--dull-purple);
+        background: rgba(123, 109, 141, 0.12);
+        box-shadow: inset 0 0 0 1px rgba(123, 109, 141, 0.2);
+      }
+
+      .pdf-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 12px;
+      }
+
+      .badge {
+        background: var(--dull-purple);
+        color: var(--linen);
+        border-radius: 999px;
+        padding: 2px 8px;
+        font-size: 11px;
+      }
+
+      .main {
+        position: relative;
+        overflow: hidden;
+        background: rgba(246, 241, 234, 0.35);
+      }
+
+      .viewer-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 18px;
+        border-bottom: 1px solid rgba(176, 154, 123, 0.25);
+        background: rgba(246, 241, 234, 0.6);
+        flex-wrap: wrap;
+      }
+
+      .viewer-area {
+        height: calc(100vh - 140px);
+        overflow: auto;
+        padding: 24px;
+        position: relative;
+      }
+
+      .viewer-area.dragging {
+        outline: 2px dashed rgba(123, 109, 141, 0.4);
+        outline-offset: -8px;
+      }
+
+      .page {
+        position: relative;
+        margin: 0 auto 24px;
+        background: white;
+        border-radius: var(--radius-sm);
+        border: 1px solid rgba(176, 154, 123, 0.35);
+        box-shadow: 0 4px 14px var(--shadow-subtle);
+        width: fit-content;
+      }
+
+      .page canvas {
+        display: block;
+      }
+
+      .textLayer {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        color: transparent;
+      }
+
+      .viewport-marker {
+        position: absolute;
+        border: 2px dashed rgba(123, 109, 141, 0.5);
+        background: rgba(123, 109, 141, 0.08);
+        pointer-events: none;
+      }
+
+      .focus-pin {
+        position: absolute;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--dull-purple);
+        border: 2px solid var(--linen);
+        transform: translate(-50%, -50%);
+        box-shadow: 0 0 0 6px rgba(123, 109, 141, 0.18);
+        pointer-events: none;
+      }
+
+      .settings-panel {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        width: 320px;
+        max-height: calc(100vh - 160px);
+        overflow-y: auto;
+        padding: 18px;
+        background: rgba(246, 241, 234, 0.92);
+        border-radius: var(--radius-lg);
+        border: 1px solid rgba(176, 154, 123, 0.35);
+        box-shadow: 0 6px 20px var(--shadow-soft);
+        display: none;
+        animation: fadeSlide 0.25s ease;
+      }
+
+      .settings-panel.open {
+        display: block;
+      }
+
+      .settings-panel h3 {
+        font-family: "Fraunces", serif;
+        margin-top: 0;
+      }
+
+      .field {
+        display: grid;
+        gap: 6px;
+        margin-bottom: 12px;
+        font-size: 13px;
+      }
+
+      .field input,
+      .field select,
+      .field textarea {
+        padding: 8px 10px;
+        border-radius: var(--radius-sm);
+        border: 1px solid rgba(176, 154, 123, 0.4);
+        font-family: inherit;
+        outline: none;
+        transition: var(--transition);
+      }
+
+      .field input:focus,
+      .field select:focus,
+      .field textarea:focus {
+        border-color: var(--dull-purple);
+        box-shadow: 0 0 0 2px rgba(123, 109, 141, 0.15);
+      }
+
+      .field textarea {
+        min-height: 80px;
+        resize: vertical;
+      }
+
+      .segmented {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .segmented label {
+        border: 1px solid rgba(176, 154, 123, 0.4);
+        padding: 6px 10px;
+        border-radius: 999px;
+        cursor: pointer;
+        background: rgba(255, 255, 255, 0.7);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .segmented input {
+        accent-color: var(--dull-purple);
+      }
+
+      .mic {
+        position: fixed;
+        right: 24px;
+        bottom: 24px;
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        border: none;
+        background: var(--muted-pink);
+        color: white;
+        font-size: 22px;
+        cursor: pointer;
+        box-shadow: 0 8px 24px rgba(192, 143, 162, 0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform var(--transition);
+      }
+
+      .mic:hover {
+        transform: translateY(-2px);
+      }
+
+      .mic .ph {
+        font-size: 26px;
+      }
+
+      .mic.recording {
+        background: #c24d4d;
+        animation: pulse 1.4s infinite;
+      }
+
+      @keyframes pulse {
+        0% {
+          box-shadow: 0 0 0 0 rgba(194, 77, 77, 0.6);
+        }
+        70% {
+          box-shadow: 0 0 0 16px rgba(194, 77, 77, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(194, 77, 77, 0);
+        }
+      }
+
+
+      .queue-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: rgba(123, 109, 141, 0.15);
+      }
+
+      .queue-indicator .ph {
+        font-size: 14px;
+      }
+
+      .viewer-status {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 12px;
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      .empty-state {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        color: rgba(43, 43, 43, 0.65);
+        font-size: 14px;
+        pointer-events: none;
+        text-align: center;
+        padding: 24px;
+      }
+
+      .empty-state i {
+        font-size: 34px;
+        color: var(--dull-purple);
+      }
+
+      @keyframes fadeSlide {
+        from {
+          opacity: 0;
+          transform: translateY(-6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(24, 20, 16, 0.35);
+        backdrop-filter: blur(6px);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 40;
+      }
+
+      .modal-overlay.open {
+        display: flex;
+      }
+
+      .modal {
+        width: min(480px, 90vw);
+        background: var(--linen);
+        border-radius: var(--radius-lg);
+        border: 1px solid rgba(176, 154, 123, 0.4);
+        padding: 20px;
+        box-shadow: 0 10px 30px var(--shadow-soft);
+        display: grid;
+        gap: 12px;
+        animation: modalIn 0.2s ease;
+      }
+
+      .modal h4 {
+        font-family: "Fraunces", serif;
+        margin: 0;
+      }
+
+      .modal-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+      }
+
+      .loading-overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(246, 241, 234, 0.8);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 20;
+      }
+
+      .loading-overlay.active {
+        display: flex;
+      }
+
+      .spinner {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: 3px solid rgba(123, 109, 141, 0.2);
+        border-top-color: var(--dull-purple);
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      @keyframes modalIn {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .annotation-overlay {
+        position: absolute;
+        border: 2px solid rgba(123, 109, 141, 0.7);
+        background: rgba(123, 109, 141, 0.15);
+        cursor: grab;
+      }
+
+      .annotation-overlay.selected {
+        border-color: var(--muted-pink);
+        box-shadow: 0 0 0 2px rgba(192, 143, 162, 0.3);
+      }
+
+      .annotation-handle {
+        position: absolute;
+        width: 10px;
+        height: 10px;
+        background: var(--muted-pink);
+        border-radius: 50%;
+        right: -5px;
+        bottom: -5px;
+        cursor: nwse-resize;
+      }
+
+      .adjust-toolbar {
+        position: absolute;
+        left: 24px;
+        bottom: 24px;
+        display: none;
+        gap: 8px;
+        padding: 10px 12px;
+        background: rgba(246, 241, 234, 0.92);
+        border: 1px solid rgba(176, 154, 123, 0.35);
+        border-radius: var(--radius-md);
+        z-index: 25;
+      }
+
+      .adjust-toolbar.active {
+        display: flex;
+      }
+
+      .danger-zone {
+        border-top: 1px dashed rgba(176, 154, 123, 0.4);
+        padding-top: 12px;
+        display: grid;
+        gap: 10px;
+      }
+
+      @media (max-width: 960px) {
+        .app {
+          grid-template-columns: 1fr;
+        }
+
+        .sidebar {
+          display: none;
+        }
+
+        .viewer-area {
+          padding: 16px 12px 100px;
+        }
+
+        .settings-panel {
+          width: calc(100% - 32px);
+          right: 16px;
+          left: 16px;
+        }
+
+        .mic {
+          right: 16px;
+          bottom: 16px;
+          width: 72px;
+          height: 72px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <div class="brand">
+          <div>
+            <h1>VoxMark</h1>
+            <p>Voice-powered PDF annotation</p>
+          </div>
+          <div class="queue-indicator" id="queueIndicator">
+            <i class="ph ph-stack"></i>
+            Queue: 0
+          </div>
+        </div>
+        <div class="header-actions">
+          <button class="btn icon secondary" id="settingsToggle" title="Settings">
+            <i class="ph ph-gear-six"></i>
+          </button>
+          <button class="btn icon danger" id="resetSession" title="Reset session">
+            <i class="ph ph-broom"></i>
+          </button>
+          <div class="status-pill">
+            <div class="status-dot" id="connectionDot"></div>
+            <i class="ph ph-wifi-high" id="connectionIcon"></i>
+            <span id="connectionLabel">Online</span>
+          </div>
+        </div>
+      </header>
+
+      <aside class="sidebar">
+        <h2>PDF Library</h2>
+        <div class="actions">
+          <input class="file-input" type="file" id="pdfInput" accept="application/pdf" multiple />
+          <button class="btn accent" id="uploadPdf">
+            <i class="ph ph-plus-circle"></i>
+            Add PDFs
+          </button>
+          <button class="btn" id="downloadSingle">
+            <i class="ph ph-download-simple"></i>
+            Download Active PDF
+          </button>
+          <button class="btn" id="downloadMerged">
+            <i class="ph ph-stack-simple"></i>
+            Download Merged PDF
+          </button>
+          <button class="btn" id="downloadZip">
+            <i class="ph ph-file-zip"></i>
+            Download All (ZIP)
+          </button>
+        </div>
+        <div class="section-title">Loaded PDFs</div>
+        <div class="pdf-list" id="pdfList"></div>
+      </aside>
+
+      <main class="main">
+        <div class="viewer-toolbar">
+          <button class="btn secondary" id="toggleSidebar">
+            <i class="ph ph-sidebar"></i>
+            PDFs
+          </button>
+          <button class="btn secondary" id="toggleMarkers">
+            <i class="ph ph-bounding-box"></i>
+            Viewport
+          </button>
+          <button class="btn secondary" id="toggleAdjust">
+            <i class="ph ph-cursor-click"></i>
+            Adjust
+          </button>
+          <button class="btn ghost hidden" id="commitAdjust">
+            <i class="ph ph-check-circle"></i>
+            Commit Adjustments
+          </button>
+          <div class="segmented">
+            <label><input type="radio" name="mode" value="realtime" checked /> Real-time</label>
+            <label><input type="radio" name="mode" value="batch" /> Batch</label>
+          </div>
+          <button class="btn ghost hidden" id="processBatch">
+            <i class="ph ph-play-circle"></i>
+            Process Queue
+          </button>
+          <div id="progressLabel" class="queue-indicator hidden">Processing 0 of 0</div>
+        </div>
+        <div class="viewer-area" id="viewerArea">
+          <div class="empty-state" id="emptyState">
+            <div>
+              <i class="ph ph-file-arrow-up"></i>
+              <p>Drop PDFs here or use “Add PDFs” to begin annotating.</p>
+            </div>
+          </div>
+        </div>
+        <div class="loading-overlay" id="loadingOverlay">
+          <div class="spinner"></div>
+        </div>
+        <div class="adjust-toolbar" id="adjustToolbar">
+          <button class="btn secondary" id="snapToText">
+            <i class="ph ph-magnet"></i>
+            Snap to Text
+          </button>
+          <button class="btn secondary" id="freeBox">
+            <i class="ph ph-square"></i>
+            Free BBox
+          </button>
+        </div>
+        <div class="settings-panel" id="settingsPanel">
+          <h3>Speech-to-Text</h3>
+          <div class="field">
+            <label>Provider</label>
+            <div class="segmented" id="sttProvider">
+              <label><input type="radio" name="stt" value="native" checked /> Browser Native</label>
+              <label><input type="radio" name="stt" value="openai" /> OpenAI Whisper</label>
+              <label><input type="radio" name="stt" value="anthropic" /> Anthropic</label>
+              <label><input type="radio" name="stt" value="gemini" /> Google Gemini</label>
+            </div>
+          </div>
+          <div class="field">
+            <label>STT Model</label>
+            <input type="text" id="sttModel" placeholder="whisper-1" />
+          </div>
+          <div class="field">
+            <label>STT API Key</label>
+            <input type="password" id="sttKey" placeholder="Enter API key" />
+          </div>
+          <div class="field">
+            <label>STT Prompt (online providers)</label>
+            <textarea id="sttPrompt" placeholder="Guide transcription with context..."></textarea>
+          </div>
+
+          <h3>AI Processing</h3>
+          <div class="field">
+            <label>Provider</label>
+            <select id="aiProvider">
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="gemini">Google Gemini</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Model</label>
+            <input type="text" id="aiModel" placeholder="gpt-4o-mini" />
+          </div>
+          <div class="field">
+            <label>API Key</label>
+            <input type="password" id="aiKey" placeholder="Enter API key" />
+          </div>
+          <div class="field">
+            <label>Custom Prompt</label>
+            <textarea id="customPrompt" placeholder="Add your own instructions for annotation processing"></textarea>
+          </div>
+          <div class="field">
+            <label>Mock AI</label>
+            <div class="segmented">
+              <label><input type="checkbox" id="mockToggle" /> Enable mock AI responses</label>
+            </div>
+          </div>
+          <div class="field">
+            <label>Tap Focus Mode</label>
+            <div class="segmented">
+              <label><input type="checkbox" id="tapFocusToggle" /> Enable tap focus</label>
+            </div>
+          </div>
+          <button class="btn accent" id="saveSettings">
+            <i class="ph ph-floppy-disk"></i>
+            Save Settings
+          </button>
+          <button class="btn secondary" id="clearOffline">
+            <i class="ph ph-trash"></i>
+            Clear All Offline Data
+          </button>
+          <div id="storageUsage" class="field">IndexedDB: 0 MB</div>
+          <div class="danger-zone">
+            <strong>Danger Zone</strong>
+            <button class="btn danger" id="resetSessionPanel">
+              <i class="ph ph-warning-circle"></i>
+              Reset PDFs / Reset Session
+            </button>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <button class="mic" id="micButton" title="Start/Stop Recording">
+      <i class="ph ph-microphone"></i>
+    </button>
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+        <h4 id="modalTitle">Modal</h4>
+        <div id="modalBody"></div>
+        <div class="modal-actions" id="modalActions"></div>
+      </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script>
+      const pdfjsLib = window["pdfjs-dist/build/pdf"];
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+      const state = {
+        pdfs: [],
+        activePdfId: null,
+        recording: false,
+        recordingSession: null,
+        queue: [],
+        mode: "realtime",
+        showMarkers: false,
+        adjustMode: false,
+        selectedAnnotationId: null,
+        onlinePrompted: false,
+        settings: {
+          sttProvider: "native",
+          sttModel: "whisper-1",
+          sttKey: "",
+          sttPrompt: "",
+          aiProvider: "openai",
+          aiModel: "gpt-4o-mini",
+          aiKey: "",
+          customPrompt: "",
+          mockAI: false,
+          tapFocus: false
+        }
+      };
+
+      const elements = {
+        pdfInput: document.getElementById("pdfInput"),
+        uploadPdf: document.getElementById("uploadPdf"),
+        pdfList: document.getElementById("pdfList"),
+        viewerArea: document.getElementById("viewerArea"),
+        emptyState: document.getElementById("emptyState"),
+        settingsToggle: document.getElementById("settingsToggle"),
+        settingsPanel: document.getElementById("settingsPanel"),
+        micButton: document.getElementById("micButton"),
+        modalOverlay: document.getElementById("modalOverlay"),
+        modalTitle: document.getElementById("modalTitle"),
+        modalBody: document.getElementById("modalBody"),
+        modalActions: document.getElementById("modalActions"),
+        queueIndicator: document.getElementById("queueIndicator"),
+        processBatch: document.getElementById("processBatch"),
+        progressLabel: document.getElementById("progressLabel"),
+        toggleMarkers: document.getElementById("toggleMarkers"),
+        toggleAdjust: document.getElementById("toggleAdjust"),
+        commitAdjust: document.getElementById("commitAdjust"),
+        adjustToolbar: document.getElementById("adjustToolbar"),
+        snapToText: document.getElementById("snapToText"),
+        freeBox: document.getElementById("freeBox"),
+        loadingOverlay: document.getElementById("loadingOverlay"),
+        connectionDot: document.getElementById("connectionDot"),
+        connectionIcon: document.getElementById("connectionIcon"),
+        connectionLabel: document.getElementById("connectionLabel"),
+        downloadSingle: document.getElementById("downloadSingle"),
+        downloadMerged: document.getElementById("downloadMerged"),
+        downloadZip: document.getElementById("downloadZip"),
+        toggleSidebar: document.getElementById("toggleSidebar"),
+        resetSession: document.getElementById("resetSession"),
+        resetSessionPanel: document.getElementById("resetSessionPanel"),
+        saveSettings: document.getElementById("saveSettings"),
+        clearOffline: document.getElementById("clearOffline"),
+        storageUsage: document.getElementById("storageUsage"),
+        sttModel: document.getElementById("sttModel"),
+        sttKey: document.getElementById("sttKey"),
+        sttPrompt: document.getElementById("sttPrompt"),
+        aiProvider: document.getElementById("aiProvider"),
+        aiModel: document.getElementById("aiModel"),
+        aiKey: document.getElementById("aiKey"),
+        customPrompt: document.getElementById("customPrompt"),
+        mockToggle: document.getElementById("mockToggle"),
+        tapFocusToggle: document.getElementById("tapFocusToggle")
+      };
+
+      const dbName = "voxmark-db";
+      const dbVersion = 1;
+      let db;
+
+      let activeModalResolver = null;
+      function openModal({ title, body, actions = [], onClose }) {
+        elements.modalTitle.textContent = title;
+        elements.modalBody.innerHTML = body;
+        elements.modalActions.innerHTML = "";
+        actions.forEach((action) => {
+          const button = document.createElement("button");
+          button.className = `btn ${action.variant || ""}`.trim();
+          button.textContent = action.label;
+          button.addEventListener("click", () => {
+            if (action.onClick) action.onClick();
+          });
+          elements.modalActions.appendChild(button);
+        });
+        elements.modalOverlay.classList.add("open");
+        activeModalResolver = onClose || null;
+      }
+
+      function closeModal() {
+        elements.modalOverlay.classList.remove("open");
+        if (activeModalResolver) activeModalResolver();
+        activeModalResolver = null;
+      }
+
+      function notify(title, message) {
+        openModal({
+          title,
+          body: `<p>${message}</p>`,
+          actions: [{ label: "OK", variant: "secondary", onClick: closeModal }]
+        });
+        setTimeout(() => {
+          if (elements.modalOverlay.classList.contains("open")) closeModal();
+        }, 1600);
+      }
+
+      function confirmModal({ title, body, confirmLabel = "Confirm", onConfirm }) {
+        openModal({
+          title,
+          body,
+          actions: [
+            { label: "Cancel", variant: "secondary", onClick: closeModal },
+            { label: confirmLabel, variant: "danger", onClick: () => {
+              closeModal();
+              onConfirm();
+            } }
+          ],
+          onClose: null
+        });
+      }
+
+      function setLoading(active, message = "Processing...") {
+        elements.loadingOverlay.classList.toggle("active", active);
+        elements.loadingOverlay.title = message;
+      }
+
+      function updateConnectionStatus() {
+        if (navigator.onLine) {
+          elements.connectionDot.classList.remove("offline");
+          elements.connectionLabel.textContent = "Online";
+          elements.connectionIcon.className = "ph ph-wifi-high";
+          if (state.queue.length && !state.onlinePrompted) {
+            state.onlinePrompted = true;
+            confirmModal({
+              title: "Back Online",
+              body: `<p>${state.queue.length} queued recordings are waiting. Process them now?</p>`,
+              confirmLabel: "Process Queue",
+              onConfirm: processBatchQueue
+            });
+          }
+        } else {
+          elements.connectionDot.classList.add("offline");
+          elements.connectionLabel.textContent = "Offline";
+          elements.connectionIcon.className = "ph ph-wifi-slash";
+          state.onlinePrompted = false;
+        }
+      }
+
+      function toggleSettings() {
+        const open = elements.settingsPanel.classList.toggle("open");
+        elements.settingsToggle.classList.toggle("accent", open);
+      }
+
+      function setMode(value) {
+        state.mode = value;
+        elements.processBatch.classList.toggle("hidden", value !== "batch");
+        localStorage.setItem("voxmark-mode", value);
+      }
+
+      function updateQueueIndicator() {
+        elements.queueIndicator.innerHTML = `<i class="ph ph-stack"></i> Queue: ${state.queue.length}`;
+      }
+
+      function getActivePdf() {
+        return state.pdfs.find((pdf) => pdf.id === state.activePdfId);
+      }
+
+      function validateApiKey(provider, key) {
+        if (!key) return false;
+        if (provider === "openai") return key.startsWith("sk-");
+        if (provider === "anthropic") return key.startsWith("sk-ant");
+        if (provider === "gemini") return key.startsWith("AIza") || key.length > 20;
+        return true;
+      }
+
+      function saveSettings() {
+        const sttProvider = document.querySelector("input[name='stt']:checked").value;
+        const settings = {
+          sttProvider,
+          sttModel: elements.sttModel.value.trim() || "whisper-1",
+          sttKey: elements.sttKey.value.trim(),
+          sttPrompt: elements.sttPrompt.value.trim(),
+          aiProvider: elements.aiProvider.value,
+          aiModel: elements.aiModel.value.trim() || "gpt-4o-mini",
+          aiKey: elements.aiKey.value.trim(),
+          customPrompt: elements.customPrompt.value.trim(),
+          mockAI: elements.mockToggle.checked,
+          tapFocus: elements.tapFocusToggle.checked
+        };
+
+        if (settings.sttProvider !== "native" && !validateApiKey(settings.sttProvider, settings.sttKey)) {
+          notify("Settings", "Invalid STT API key format.");
+          return;
+        }
+        if (!validateApiKey(settings.aiProvider, settings.aiKey) && !settings.mockAI) {
+          notify("Settings", "Invalid AI API key format.");
+          return;
+        }
+
+        state.settings = settings;
+        localStorage.setItem("voxmark-settings", JSON.stringify(settings));
+        notify("Settings", "Settings saved.");
+      }
+
+      function loadSettings() {
+        const stored = localStorage.getItem("voxmark-settings");
+        if (stored) {
+          try {
+            state.settings = { ...state.settings, ...JSON.parse(stored) };
+          } catch (err) {
+            console.warn("Failed to parse settings", err);
+          }
+        }
+
+        document.querySelectorAll("input[name='stt']").forEach((input) => {
+          input.checked = input.value === state.settings.sttProvider;
+        });
+        elements.sttModel.value = state.settings.sttModel;
+        elements.sttKey.value = state.settings.sttKey;
+        elements.sttPrompt.value = state.settings.sttPrompt;
+        elements.aiProvider.value = state.settings.aiProvider;
+        elements.aiModel.value = state.settings.aiModel;
+        elements.aiKey.value = state.settings.aiKey;
+        elements.customPrompt.value = state.settings.customPrompt;
+        elements.mockToggle.checked = state.settings.mockAI;
+        elements.tapFocusToggle.checked = state.settings.tapFocus;
+      }
+
+      function openDB() {
+        return new Promise((resolve, reject) => {
+          const request = indexedDB.open(dbName, dbVersion);
+          request.onupgradeneeded = (event) => {
+            const dbInstance = event.target.result;
+            if (!dbInstance.objectStoreNames.contains("queue")) {
+              dbInstance.createObjectStore("queue", { keyPath: "id" });
+            }
+          };
+          request.onsuccess = () => {
+            db = request.result;
+            resolve(db);
+          };
+          request.onerror = () => reject(request.error);
+        });
+      }
+
+      function addToQueue(session) {
+        session.status = "queued";
+        state.queue.push(session);
+        updateQueueIndicator();
+        updateStorageUsage();
+        if (!db) return;
+        const tx = db.transaction("queue", "readwrite");
+        tx.objectStore("queue").put(session);
+      }
+
+      function removeFromQueue(sessionId) {
+        state.queue = state.queue.filter((item) => item.id !== sessionId);
+        updateQueueIndicator();
+        updateStorageUsage();
+        if (!db) return;
+        const tx = db.transaction("queue", "readwrite");
+        tx.objectStore("queue").delete(sessionId);
+      }
+
+      function loadQueueFromDB() {
+        return new Promise((resolve) => {
+          if (!db) {
+            resolve([]);
+            return;
+          }
+          const tx = db.transaction("queue", "readonly");
+          const store = tx.objectStore("queue");
+          const request = store.getAll();
+          request.onsuccess = () => resolve(request.result || []);
+          request.onerror = () => resolve([]);
+        });
+      }
+
+      async function updateStorageUsage() {
+        if (!navigator.storage || !navigator.storage.estimate) {
+          elements.storageUsage.textContent = "IndexedDB: unavailable";
+          return;
+        }
+        const { usage } = await navigator.storage.estimate();
+        const mb = ((usage || 0) / (1024 * 1024)).toFixed(2);
+        elements.storageUsage.textContent = `IndexedDB: ${mb} MB`;
+      }
+
+      function performReset() {
+        state.pdfs = [];
+        state.activePdfId = null;
+        state.queue = [];
+        state.recordingSession = null;
+        state.onlinePrompted = false;
+        elements.viewerArea.innerHTML = "";
+        elements.pdfList.innerHTML = "";
+        elements.viewerArea.appendChild(elements.emptyState);
+        elements.emptyState.classList.remove("hidden");
+        updateQueueIndicator();
+        if (db) {
+          const tx = db.transaction("queue", "readwrite");
+          tx.objectStore("queue").clear();
+        }
+        notify("Session", "Session reset.");
+      }
+
+      function confirmResetSession() {
+        confirmModal({
+          title: "Reset Session",
+          body:
+            "<p>This will remove all loaded PDFs, recordings, queued items, and annotations from this session. This cannot be undone.</p>",
+          confirmLabel: "Reset Session",
+          onConfirm: performReset
+        });
+      }
+
+      function addPdfCard(pdf) {
+        const card = document.createElement("div");
+        card.className = "pdf-card";
+        card.dataset.id = pdf.id;
+        card.innerHTML = `
+          <strong><i class="ph ph-file-pdf"></i>${pdf.name}</strong>
+          <div class="pdf-meta">
+            <span>${pdf.pageCount} pages</span>
+            <span class="badge">${pdf.annotationCount} notes</span>
+          </div>
+        `;
+        card.addEventListener("click", () => setActivePdf(pdf.id));
+        elements.pdfList.appendChild(card);
+      }
+
+      function refreshPdfList() {
+        elements.pdfList.innerHTML = "";
+        state.pdfs.forEach((pdf) => addPdfCard(pdf));
+        document.querySelectorAll(".pdf-card").forEach((card) => {
+          card.classList.toggle("active", card.dataset.id === state.activePdfId);
+        });
+      }
+
+      function setActivePdf(id) {
+        if (state.recording && state.recordingSession && state.activePdfId && state.activePdfId !== id) {
+          state.recordingSession.pdfContextHistory.push({
+            timestamp: Date.now(),
+            fromPdfId: state.activePdfId,
+            toPdfId: id
+          });
+        }
+        state.activePdfId = id;
+        state.pdfs.forEach((pdf) => {
+          pdf.container.classList.toggle("hidden", pdf.id !== id);
+        });
+        refreshPdfList();
+        renderOverlays(getActivePdf());
+      }
+
+      async function handlePdfUpload(files) {
+        const fileArray = Array.from(files);
+        if (!fileArray.length) return;
+        setLoading(true, "Loading PDFs...");
+        try {
+          for (const file of fileArray) {
+            const bytes = await file.arrayBuffer();
+            const pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise;
+            const id = crypto.randomUUID();
+            const container = document.createElement("div");
+            container.dataset.id = id;
+            elements.viewerArea.appendChild(container);
+
+            const pdfState = {
+              id,
+              name: file.name,
+              bytes,
+              originalBytes: bytes.slice(0),
+              pdfDoc,
+              container,
+              pageCount: pdfDoc.numPages,
+              pages: [],
+              annotationCount: 0,
+              annotations: [],
+              scale: 1.15
+            };
+
+            state.pdfs.push(pdfState);
+            await renderPdf(pdfState);
+            addPdfCard(pdfState);
+            if (!state.activePdfId) setActivePdf(id);
+          }
+          refreshPdfList();
+          elements.emptyState.classList.add("hidden");
+        } catch (error) {
+          notify("PDF Load", "Failed to load one or more PDFs.");
+        } finally {
+          setLoading(false);
+        }
+      }
+
+      async function renderPdf(pdfState) {
+        pdfState.container.innerHTML = "";
+        pdfState.pages = [];
+        for (let pageNum = 1; pageNum <= pdfState.pageCount; pageNum++) {
+          const page = await pdfState.pdfDoc.getPage(pageNum);
+          const viewport = page.getViewport({ scale: pdfState.scale });
+          const pageDiv = document.createElement("div");
+          pageDiv.className = "page";
+          pageDiv.style.width = `${viewport.width}px`;
+          pageDiv.style.height = `${viewport.height}px`;
+          pageDiv.dataset.pageNumber = pageNum;
+
+          const canvas = document.createElement("canvas");
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const context = canvas.getContext("2d");
+          pageDiv.appendChild(canvas);
+
+          const textLayer = document.createElement("div");
+          textLayer.className = "textLayer";
+          pageDiv.appendChild(textLayer);
+
+          pdfState.container.appendChild(pageDiv);
+
+          await page.render({ canvasContext: context, viewport }).promise;
+          const textContent = await page.getTextContent();
+          await pdfjsLib.renderTextLayer({
+            textContent,
+            container: textLayer,
+            viewport
+          }).promise;
+
+          pdfState.pages.push({
+            pageNum,
+            page,
+            viewport,
+            pageDiv,
+            textLayer
+          });
+        }
+        renderOverlays(pdfState);
+      }
+
+      let renderTimeout;
+      function setPdfScale(pdfState, scale) {
+        if (!pdfState) return;
+        pdfState.scale = Math.min(2.4, Math.max(0.6, scale));
+        clearTimeout(renderTimeout);
+        renderTimeout = setTimeout(() => renderPdf(pdfState), 180);
+      }
+
+      function switchPdfByDelta(delta) {
+        if (state.pdfs.length < 2) return;
+        const currentIndex = state.pdfs.findIndex((pdf) => pdf.id === state.activePdfId);
+        if (currentIndex < 0) return;
+        const nextIndex = (currentIndex + delta + state.pdfs.length) % state.pdfs.length;
+        setActivePdf(state.pdfs[nextIndex].id);
+      }
+
+      function getVisiblePages(pdfState) {
+        const containerRect = elements.viewerArea.getBoundingClientRect();
+        return pdfState.pages.filter((p) => {
+          const rect = p.pageDiv.getBoundingClientRect();
+          return rect.bottom > containerRect.top && rect.top < containerRect.bottom;
+        });
+      }
+
+      function getPageSnapshot(pageData) {
+        const rect = pageData.pageDiv.getBoundingClientRect();
+        const containerRect = elements.viewerArea.getBoundingClientRect();
+        const intersection = {
+          left: Math.max(rect.left, containerRect.left),
+          top: Math.max(rect.top, containerRect.top),
+          right: Math.min(rect.right, containerRect.right),
+          bottom: Math.min(rect.bottom, containerRect.bottom)
+        };
+        const width = Math.max(0, intersection.right - intersection.left);
+        const height = Math.max(0, intersection.bottom - intersection.top);
+        const offsetX = intersection.left - rect.left;
+        const offsetY = intersection.top - rect.top;
+        const [pdfX, pdfY] = pageData.viewport.convertToPdfPoint(offsetX, offsetY);
+        const [pdfX2, pdfY2] = pageData.viewport.convertToPdfPoint(offsetX + width, offsetY + height);
+
+        const spans = Array.from(pageData.textLayer.querySelectorAll("span"))
+          .map((span) => {
+            const spanRect = span.getBoundingClientRect();
+            const containerRect = elements.viewerArea.getBoundingClientRect();
+            const visible =
+              spanRect.bottom > containerRect.top &&
+              spanRect.top < containerRect.bottom &&
+              spanRect.right > containerRect.left &&
+              spanRect.left < containerRect.right;
+            if (!visible) return null;
+            const relX = spanRect.left - rect.left;
+            const relY = spanRect.top - rect.top;
+            const [sx, sy] = pageData.viewport.convertToPdfPoint(relX, relY);
+            const [sx2, sy2] = pageData.viewport.convertToPdfPoint(
+              relX + spanRect.width,
+              relY + spanRect.height
+            );
+            return {
+              text: span.textContent || "",
+              bbox: {
+                x: Math.min(sx, sx2),
+                y: Math.min(sy, sy2),
+                width: Math.abs(sx2 - sx),
+                height: Math.abs(sy2 - sy)
+              }
+            };
+          })
+          .filter(Boolean);
+
+        return {
+          pageIndex: pageData.pageNum - 1,
+          viewportBox: {
+            x: Math.min(pdfX, pdfX2),
+            y: Math.min(pdfY, pdfY2),
+            width: Math.abs(pdfX2 - pdfX),
+            height: Math.abs(pdfY2 - pdfY)
+          },
+          spans
+        };
+      }
+
+      function captureSnapshot() {
+        const pdfState = getActivePdf();
+        if (!pdfState) return null;
+        const visiblePages = getVisiblePages(pdfState);
+        return {
+          timestamp: Date.now(),
+          pdfId: pdfState.id,
+          scrollTop: elements.viewerArea.scrollTop,
+          pages: visiblePages.map(getPageSnapshot)
+        };
+      }
+
+      function showViewportMarkers(snapshot) {
+        if (!snapshot) return;
+        const pdfState = getActivePdf();
+        if (!pdfState) return;
+        pdfState.pages.forEach((p) => {
+          const existing = p.pageDiv.querySelector(".viewport-marker");
+          if (existing) existing.remove();
+        });
+        snapshot.pages.forEach((pageSnap) => {
+          const pageData = pdfState.pages.find((p) => p.pageNum - 1 === pageSnap.pageIndex);
+          if (!pageData) return;
+          const [vx, vy] = pageData.viewport.convertToViewportPoint(
+            pageSnap.viewportBox.x,
+            pageSnap.viewportBox.y + pageSnap.viewportBox.height
+          );
+          const [vx2, vy2] = pageData.viewport.convertToViewportPoint(
+            pageSnap.viewportBox.x + pageSnap.viewportBox.width,
+            pageSnap.viewportBox.y
+          );
+          const marker = document.createElement("div");
+          marker.className = "viewport-marker";
+          marker.style.left = `${Math.min(vx, vx2)}px`;
+          marker.style.top = `${Math.min(vy, vy2)}px`;
+          marker.style.width = `${Math.abs(vx2 - vx)}px`;
+          marker.style.height = `${Math.abs(vy2 - vy)}px`;
+          pageData.pageDiv.appendChild(marker);
+        });
+      }
+
+      function startRecordingSession() {
+        state.recording = true;
+        const session = {
+          id: crypto.randomUUID(),
+          startedAt: Date.now(),
+          transcript: "",
+          snapshots: [],
+          taps: [],
+          segments: [],
+          audioChunks: [],
+          pdfContextHistory: [],
+          status: "recording"
+        };
+        if (state.activePdfId) {
+          session.pdfContextHistory.push({
+            timestamp: Date.now(),
+            fromPdfId: null,
+            toPdfId: state.activePdfId
+          });
+        }
+        state.recordingSession = session;
+        elements.micButton.classList.add("recording");
+        notify("Recording", "Recording started.");
+        const initialSnapshot = captureSnapshot();
+        if (initialSnapshot) session.snapshots.push(initialSnapshot);
+        beginCaptureLoop();
+        beginSTT(session);
+      }
+
+      function stopRecordingSession() {
+        state.recording = false;
+        elements.micButton.classList.remove("recording");
+        if (!state.recordingSession) return;
+        state.recordingSession.status = "stopped";
+        endCaptureLoop();
+        endSTT();
+        notify("Recording", "Recording saved.");
+        const session = state.recordingSession;
+        state.recordingSession = null;
+        addToQueue(session);
+        if (state.mode === "realtime") {
+          processSession(session).then((success) => {
+            if (success) removeFromQueue(session.id);
+          });
+        }
+        clearFocusPins();
+      }
+
+      let captureInterval;
+      function beginCaptureLoop() {
+        const interval = window.innerWidth < 900 ? 1500 : 1000;
+        captureInterval = setInterval(() => {
+          if (!state.recording) return;
+          const snapshot = captureSnapshot();
+          if (!snapshot) return;
+          state.recordingSession.snapshots.push(snapshot);
+          if (state.showMarkers) showViewportMarkers(snapshot);
+        }, 1000);
+      }
+
+      function endCaptureLoop() {
+        if (captureInterval) clearInterval(captureInterval);
+      }
+
+      let recognition;
+      let mediaRecorder;
+      let mediaStream;
+
+      async function beginSTT(session) {
+        if (state.settings.sttProvider === "native") {
+          if (!("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) {
+            notify("Speech Recognition", "Speech Recognition not supported.");
+            return;
+          }
+          const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+          recognition = new SpeechRecognition();
+          recognition.continuous = true;
+          recognition.interimResults = true;
+          recognition.onresult = (event) => {
+            let transcript = "";
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+              transcript += event.results[i][0].transcript;
+            }
+            session.transcript = transcript;
+            session.segments.push({
+              timestamp: Date.now(),
+              text: transcript
+            });
+          };
+          recognition.start();
+          return;
+        }
+
+        try {
+          mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaRecorder = new MediaRecorder(mediaStream);
+          mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+              session.audioChunks.push({ blob: event.data, timestamp: Date.now() });
+            }
+          };
+          mediaRecorder.start(1000);
+        } catch (error) {
+          notify("Microphone", "Microphone access denied or unavailable.");
+        }
+      }
+
+      function endSTT() {
+        if (recognition) {
+          recognition.stop();
+          recognition = null;
+        }
+        if (mediaRecorder) {
+          mediaRecorder.stop();
+          mediaRecorder = null;
+        }
+        if (mediaStream) {
+          mediaStream.getTracks().forEach((track) => track.stop());
+          mediaStream = null;
+        }
+      }
+
+      async function processSession(session) {
+        if (!session) return;
+        notify("Processing", "Processing annotation...");
+        setLoading(true);
+        try {
+          if (!session.transcript && !session.audioChunks.length) {
+            notify("Processing", "No audio captured for this session.");
+            return false;
+          }
+          const transcript = session.transcript || (await transcribeAudio(session));
+          session.transcript = transcript || "";
+          const payload = buildAiPayload(session);
+          const response = await callAi(payload);
+          if (response) {
+            await applyAnnotations(response, session);
+            session.status = "processed";
+            notify("Processing", "Annotations applied.");
+            return true;
+          }
+        } catch (error) {
+          notify("Processing", "Processing failed. Please retry.");
+        } finally {
+          setLoading(false);
+        }
+        return false;
+      }
+
+      async function transcribeAudio(session) {
+        if (state.settings.mockAI) {
+          return "Mock transcript: highlight this section in yellow with a note.";
+        }
+        const provider = state.settings.sttProvider;
+        if (!state.settings.sttKey && provider !== "native") {
+          notify("Speech-to-Text", "Missing STT API key.");
+          return "";
+        }
+        const blobs = session.audioChunks.map((chunk) => chunk.blob);
+        const audioBlob = new Blob(blobs, { type: "audio/webm" });
+        if (provider === "openai") {
+          const form = new FormData();
+          form.append("file", audioBlob, "audio.webm");
+          form.append("model", state.settings.sttModel || "whisper-1");
+          if (state.settings.sttPrompt) form.append("prompt", state.settings.sttPrompt);
+          const response = await retryFetch("https://api.openai.com/v1/audio/transcriptions", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${state.settings.sttKey}`
+            },
+            body: form
+          });
+          const data = await response.json();
+          return data.text || "";
+        }
+        if (provider === "gemini" || provider === "anthropic") {
+          notify("Speech-to-Text", "STT provider not implemented. Using mock transcript.");
+          return "Mock transcript: underline this section in purple.";
+        }
+        notify("Speech-to-Text", "STT provider not implemented. Using mock transcript.");
+        return "Mock transcript: underline this section in purple.";
+      }
+
+      function buildAiPayload(session) {
+        return {
+          transcript: session.transcript,
+          transcriptSegments: session.segments,
+          timestamps: session.snapshots.map((snap) => snap.timestamp),
+          snapshots: session.snapshots,
+          taps: session.taps,
+          contextHistory: session.pdfContextHistory,
+          activePdfId: session.snapshots[session.snapshots.length - 1]?.pdfId || null,
+          recentSnapshots: session.snapshots.slice(-5),
+          audioChunkTimestamps: session.audioChunks.map((chunk) => chunk.timestamp)
+        };
+      }
+
+      function getSystemPrompt() {
+        return `
+You are VoxMark, a PDF annotation parser.
+Return ONLY valid JSON matching this schema:
+{
+  "annotations": [
+    {
+      "type": "highlight|underline|strikethrough|note|bbox",
+      "pageIndex": number,
+      "color": "yellow|blue|red|green|purple|pink|custom",
+      "comment": "string",
+      "target": {
+        "mode": "text|bbox|tapFocus|auto",
+        "text": {
+          "exact": "string",
+          "quote": "string",
+          "startHint": "string",
+          "endHint": "string"
+        },
+        "bbox": { "x": number, "y": number, "width": number, "height": number, "unit": "pdf" },
+        "tapFocusIndex": number,
+        "confidence": number
+      },
+      "contextRef": {
+        "previousSection": boolean,
+        "previousPdf": boolean,
+        "recordingIndex": number
+      }
+    }
+  ]
+}
+Use text anchors when possible. If figures/tables, use bbox or tapFocus.
+You receive viewport snapshots, tap focus points, and context history. Use contextRef.previousSection or contextRef.previousPdf when the user references prior sections or files.
+`;
+      }
+
+      async function callAi(payload) {
+        if (state.settings.mockAI) {
+          return mockAi(payload);
+        }
+        if (!navigator.onLine) {
+          notify("AI Processing", "You are offline. Enable mock AI or process later.");
+          return null;
+        }
+        if (!state.settings.aiKey) {
+          notify("AI Processing", "Missing AI API key.");
+          return null;
+        }
+        const provider = state.settings.aiProvider;
+        const model = state.settings.aiModel;
+        const prompt = state.settings.customPrompt ? `\nUser prompt: ${state.settings.customPrompt}` : "";
+        const systemPrompt = getSystemPrompt();
+        const userContent = JSON.stringify(payload);
+
+        if (provider === "openai") {
+          const response = await retryFetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${state.settings.aiKey}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              model,
+              temperature: 0,
+              response_format: { type: "json_object" },
+              messages: [
+                { role: "system", content: systemPrompt + prompt },
+                { role: "user", content: userContent }
+              ]
+            })
+          });
+          const data = await response.json();
+          return safeJsonParse(data.choices?.[0]?.message?.content || "");
+        }
+
+        if (provider === "anthropic") {
+          const response = await retryFetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "x-api-key": state.settings.aiKey,
+              "anthropic-version": "2023-06-01",
+              "content-type": "application/json"
+            },
+            body: JSON.stringify({
+              model,
+              max_tokens: 1000,
+              messages: [{ role: "user", content: systemPrompt + prompt + "\n" + userContent }]
+            })
+          });
+          const data = await response.json();
+          return safeJsonParse(data.content?.[0]?.text || "");
+        }
+
+        if (provider === "gemini") {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${state.settings.aiKey}`;
+          const response = await retryFetch(url, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ role: "user", parts: [{ text: systemPrompt + prompt + "\n" + userContent }] }]
+            })
+          });
+          const data = await response.json();
+          const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          return safeJsonParse(text);
+        }
+
+        notify("AI Processing", "AI provider not configured.");
+        return null;
+      }
+
+      function safeJsonParse(text) {
+        try {
+          const trimmed = (text || "").trim();
+          const start = trimmed.indexOf("{");
+          const end = trimmed.lastIndexOf("}");
+          if (start === -1 || end === -1) return null;
+          const jsonText = trimmed.slice(start, end + 1);
+          return JSON.parse(jsonText);
+        } catch (err) {
+          notify("AI Processing", "Failed to parse AI response.");
+          return null;
+        }
+      }
+
+      function mockAi(payload) {
+        const snapshot = payload.snapshots?.[payload.snapshots.length - 1];
+        const pageIndex = snapshot?.pages?.[0]?.pageIndex || 0;
+        return {
+          annotations: [
+            {
+              type: "highlight",
+              pageIndex,
+              color: "yellow",
+              comment: "Mock: highlight this section.",
+              target: {
+                mode: "auto",
+                text: { exact: "", quote: "", startHint: "", endHint: "" },
+                bbox: { x: 60, y: 100, width: 200, height: 40, unit: "pdf" },
+                tapFocusIndex: 0,
+                confidence: 0.4
+              },
+              contextRef: {
+                previousSection: false,
+                previousPdf: false,
+                recordingIndex: 0
+              }
+            }
+          ]
+        };
+      }
+
+      async function applyAnnotations(aiResponse, session) {
+        if (!aiResponse?.annotations?.length) return;
+        const grouped = new Map();
+        for (const annotation of aiResponse.annotations) {
+          const pdfId = resolvePdfIdForAnnotation(annotation, session);
+          if (!grouped.has(pdfId)) grouped.set(pdfId, []);
+          grouped.get(pdfId).push(annotation);
+        }
+        for (const [pdfId, annotations] of grouped.entries()) {
+          const pdfState = state.pdfs.find((pdf) => pdf.id === pdfId) || getActivePdf();
+          if (!pdfState) continue;
+          for (const annotation of annotations) {
+            const target = await resolveTarget(annotation, pdfState, session);
+            if (!target) continue;
+            pdfState.annotations.push({
+              id: crypto.randomUUID(),
+              pageIndex: annotation.pageIndex,
+              type: annotation.type,
+              color: annotation.color || "yellow",
+              comment: annotation.comment || "",
+              mode: annotation.target?.mode || "auto",
+              bbox: target.bbox
+            });
+          }
+          await applyAllAnnotations(pdfState);
+        }
+      }
+
+      function resolvePdfIdForAnnotation(annotation, session) {
+        const lastSnapshotPdf = session?.snapshots?.[session.snapshots.length - 1]?.pdfId;
+        if (annotation?.contextRef?.previousPdf && session?.pdfContextHistory?.length) {
+          const last = session.pdfContextHistory[session.pdfContextHistory.length - 1];
+          return last.fromPdfId || lastSnapshotPdf;
+        }
+        return lastSnapshotPdf || state.activePdfId;
+      }
+
+      async function refreshPdfRender(pdfState) {
+        const bytes = pdfState.bytes;
+        pdfState.pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise;
+        pdfState.pageCount = pdfState.pdfDoc.numPages;
+        await renderPdf(pdfState);
+      }
+
+      function normalizeText(text) {
+        return (text || "")
+          .replace(/[^\w\s]/g, "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .toLowerCase();
+      }
+
+      function tokenize(text) {
+        return normalizeText(text).split(" ").filter(Boolean);
+      }
+
+      async function resolveTarget(annotation, pdfState, session) {
+        const pageData = pdfState.pages.find((p) => p.pageNum - 1 === annotation.pageIndex);
+        if (!pageData) return null;
+        const target = annotation.target || {};
+
+        if (target.mode === "tapFocus" && session?.taps?.length) {
+          const tap = session.taps[target.tapFocusIndex] || session.taps[session.taps.length - 1];
+          if (tap && tap.pageIndex === annotation.pageIndex) {
+            return { bbox: { x: tap.pdfX, y: tap.pdfY, width: 60, height: 20 } };
+          }
+        }
+
+        if (target.mode === "bbox" && target.bbox) {
+          return { bbox: target.bbox };
+        }
+
+        const query = target.text?.exact || target.text?.quote;
+        const startHint = target.text?.startHint;
+        const endHint = target.text?.endHint;
+        if (query || startHint || endHint) {
+          const spans = Array.from(pageData.textLayer.querySelectorAll("span")).map((span) => {
+            const rect = span.getBoundingClientRect();
+            const pageRect = pageData.pageDiv.getBoundingClientRect();
+            const relX = rect.left - pageRect.left;
+            const relY = rect.top - pageRect.top;
+            const [sx, sy] = pageData.viewport.convertToPdfPoint(relX, relY);
+            const [sx2, sy2] = pageData.viewport.convertToPdfPoint(relX + rect.width, relY + rect.height);
+            return {
+              text: span.textContent || "",
+              bbox: {
+                x: Math.min(sx, sx2),
+                y: Math.min(sy, sy2),
+                width: Math.abs(sx2 - sx),
+                height: Math.abs(sy2 - sy)
+              }
+            };
+          });
+          const tokens = buildTokenMap(spans);
+          let match = null;
+          if (startHint || endHint) {
+            match = findMatchFromHints(tokens, startHint, endHint);
+          }
+          if (!match && query) {
+            match = findTextMatch(tokens, query);
+          }
+          if (match) return { bbox: match };
+        }
+
+        const snapshotIndex =
+          annotation?.contextRef?.previousSection && session.snapshots.length > 1
+            ? session.snapshots.length - 2
+            : session.snapshots.length - 1;
+        const latestSnapshot = session.snapshots[snapshotIndex];
+        const pageSnapshot = latestSnapshot?.pages?.find((p) => p.pageIndex === annotation.pageIndex);
+        if (pageSnapshot) return { bbox: pageSnapshot.viewportBox };
+        return null;
+      }
+
+      function buildTokenMap(spans) {
+        const tokens = [];
+        spans.forEach((span) => {
+          const words = tokenize(span.text);
+          if (!words.length) return;
+          const widthPerWord = span.bbox.width / words.length;
+          words.forEach((word, index) => {
+            tokens.push({
+              text: word,
+              bbox: {
+                x: span.bbox.x + widthPerWord * index,
+                y: span.bbox.y,
+                width: widthPerWord,
+                height: span.bbox.height
+              }
+            });
+          });
+        });
+        return tokens;
+      }
+
+      function findMatchFromHints(tokens, startHint, endHint) {
+        const startTokens = tokenize(startHint);
+        const endTokens = tokenize(endHint);
+        if (!startTokens.length && !endTokens.length) return null;
+        let startIndex = 0;
+        if (startTokens.length) {
+          startIndex = findTokenSequence(tokens, startTokens);
+          if (startIndex < 0) return null;
+        }
+        let endIndex = tokens.length - 1;
+        if (endTokens.length) {
+          endIndex = findTokenSequence(tokens, endTokens, startIndex);
+          if (endIndex < 0) return null;
+          endIndex += endTokens.length - 1;
+        }
+        const boxes = tokens.slice(startIndex, endIndex + 1).map((t) => t.bbox);
+        return combineBoxes(boxes);
+      }
+
+      function findTextMatch(tokens, query) {
+        const queryTokens = tokenize(query);
+        if (!queryTokens.length) return null;
+        const startIndex = findTokenSequence(tokens, queryTokens);
+        if (startIndex < 0) return null;
+        const boxes = tokens
+          .slice(startIndex, startIndex + queryTokens.length)
+          .map((t) => t.bbox);
+        return combineBoxes(boxes);
+      }
+
+      function findTokenSequence(tokens, sequence, start = 0) {
+        for (let i = start; i <= tokens.length - sequence.length; i++) {
+          let matched = true;
+          for (let j = 0; j < sequence.length; j++) {
+            if (tokens[i + j].text !== sequence[j]) {
+              matched = false;
+              break;
+            }
+          }
+          if (matched) return i;
+        }
+        return -1;
+      }
+
+      function combineBoxes(boxes) {
+        if (!boxes.length) return null;
+        const xs = boxes.map((b) => b.x);
+        const ys = boxes.map((b) => b.y);
+        const x2s = boxes.map((b) => b.x + b.width);
+        const y2s = boxes.map((b) => b.y + b.height);
+        const x = Math.min(...xs);
+        const y = Math.min(...ys);
+        const width = Math.max(...x2s) - x;
+        const height = Math.max(...y2s) - y;
+        return { x, y, width, height };
+      }
+
+      function drawAnnotation(page, annotation, target) {
+        const colorMap = {
+          yellow: PDFLib.rgb(0.98, 0.9, 0.55),
+          blue: PDFLib.rgb(0.45, 0.6, 0.85),
+          red: PDFLib.rgb(0.9, 0.45, 0.45),
+          green: PDFLib.rgb(0.45, 0.75, 0.55),
+          purple: PDFLib.rgb(0.62, 0.52, 0.76),
+          pink: PDFLib.rgb(0.82, 0.6, 0.7)
+        };
+        const color = colorMap[annotation.color] || colorMap.yellow;
+        const { x, y, width, height } = target.bbox;
+
+        if (annotation.type === "highlight") {
+          page.drawRectangle({ x, y, width, height, color, opacity: 0.35 });
+        } else if (annotation.type === "underline") {
+          page.drawLine({
+            start: { x, y: y + 2 },
+            end: { x: x + width, y: y + 2 },
+            thickness: 2,
+            color
+          });
+        } else if (annotation.type === "strikethrough") {
+          page.drawLine({
+            start: { x, y: y + height / 2 },
+            end: { x: x + width, y: y + height / 2 },
+            thickness: 2,
+            color
+          });
+        } else if (annotation.type === "note") {
+          page.drawRectangle({ x, y, width: width + 60, height: height + 30, color, opacity: 0.2 });
+          page.drawText(annotation.comment || "Note", {
+            x: x + 4,
+            y: y + height + 8,
+            size: 9,
+            color: PDFLib.rgb(0.2, 0.2, 0.2)
+          });
+        } else if (annotation.type === "bbox") {
+          page.drawRectangle({ x, y, width, height, borderColor: color, borderWidth: 2 });
+        }
+      }
+
+      function renderOverlays(pdfState) {
+        if (!pdfState) return;
+        pdfState.pages.forEach((page) => {
+          page.pageDiv.querySelectorAll(".annotation-overlay").forEach((el) => el.remove());
+        });
+        if (!state.adjustMode) return;
+        pdfState.annotations.forEach((annotation) => {
+          const pageData = pdfState.pages.find((p) => p.pageNum - 1 === annotation.pageIndex);
+          if (!pageData) return;
+          const rect = pdfToViewportRect(pageData, annotation.bbox);
+          const overlay = document.createElement("div");
+          overlay.className = "annotation-overlay";
+          overlay.dataset.id = annotation.id;
+          overlay.style.left = `${rect.x}px`;
+          overlay.style.top = `${rect.y}px`;
+          overlay.style.width = `${rect.width}px`;
+          overlay.style.height = `${rect.height}px`;
+          overlay.style.borderColor = annotation.color === "purple" ? "rgba(123,109,141,0.7)" : "rgba(192,143,162,0.7)";
+          overlay.addEventListener("pointerdown", (event) => beginDrag(event, annotation, pageData));
+
+          const handle = document.createElement("div");
+          handle.className = "annotation-handle";
+          handle.addEventListener("pointerdown", (event) => beginResize(event, annotation, pageData));
+          overlay.appendChild(handle);
+
+          if (annotation.id === state.selectedAnnotationId) {
+            overlay.classList.add("selected");
+          }
+
+          pageData.pageDiv.appendChild(overlay);
+        });
+      }
+
+      function pdfToViewportRect(pageData, bbox) {
+        const [vx, vy] = pageData.viewport.convertToViewportPoint(bbox.x, bbox.y + bbox.height);
+        const [vx2, vy2] = pageData.viewport.convertToViewportPoint(
+          bbox.x + bbox.width,
+          bbox.y
+        );
+        return {
+          x: Math.min(vx, vx2),
+          y: Math.min(vy, vy2),
+          width: Math.abs(vx2 - vx),
+          height: Math.abs(vy2 - vy)
+        };
+      }
+
+      function viewportToPdfRect(pageData, rect) {
+        const [pdfX1, pdfY1] = pageData.viewport.convertToPdfPoint(rect.x, rect.y + rect.height);
+        const [pdfX2, pdfY2] = pageData.viewport.convertToPdfPoint(
+          rect.x + rect.width,
+          rect.y
+        );
+        return {
+          x: Math.min(pdfX1, pdfX2),
+          y: Math.min(pdfY1, pdfY2),
+          width: Math.abs(pdfX2 - pdfX1),
+          height: Math.abs(pdfY2 - pdfY1)
+        };
+      }
+
+      let dragState = null;
+
+      function beginDrag(event, annotation, pageData) {
+        if (!state.adjustMode) return;
+        event.preventDefault();
+        selectAnnotation(annotation.id);
+        const rect = pdfToViewportRect(pageData, annotation.bbox);
+        dragState = {
+          type: "move",
+          annotation,
+          pageData,
+          startX: event.clientX,
+          startY: event.clientY,
+          startRect: rect
+        };
+        event.target.setPointerCapture(event.pointerId);
+      }
+
+      function beginResize(event, annotation, pageData) {
+        if (!state.adjustMode) return;
+        event.preventDefault();
+        event.stopPropagation();
+        selectAnnotation(annotation.id);
+        const rect = pdfToViewportRect(pageData, annotation.bbox);
+        dragState = {
+          type: "resize",
+          annotation,
+          pageData,
+          startX: event.clientX,
+          startY: event.clientY,
+          startRect: rect
+        };
+        event.target.setPointerCapture(event.pointerId);
+      }
+
+      function handlePointerMove(event) {
+        if (!dragState) return;
+        const { type, startX, startY, startRect, annotation, pageData } = dragState;
+        const dx = event.clientX - startX;
+        const dy = event.clientY - startY;
+        let rect = { ...startRect };
+        if (type === "move") {
+          rect.x += dx;
+          rect.y += dy;
+        } else if (type === "resize") {
+          rect.width = Math.max(12, startRect.width + dx);
+          rect.height = Math.max(12, startRect.height + dy);
+        }
+        annotation.bbox = viewportToPdfRect(pageData, rect);
+        renderOverlays(getActivePdf());
+      }
+
+      function handlePointerUp() {
+        dragState = null;
+      }
+
+      function selectAnnotation(id) {
+        state.selectedAnnotationId = id;
+        updateAdjustToolbarState();
+        renderOverlays(getActivePdf());
+      }
+
+      function updateAdjustToolbarState() {
+        const hasSelection = Boolean(state.selectedAnnotationId);
+        elements.snapToText.disabled = !hasSelection;
+        elements.freeBox.disabled = !hasSelection;
+      }
+
+      function snapSelectedToText() {
+        const pdfState = getActivePdf();
+        const annotation = pdfState?.annotations.find((a) => a.id === state.selectedAnnotationId);
+        if (!annotation || !pdfState) {
+          notify("Adjust Mode", "Select an annotation to snap.");
+          return;
+        }
+        const pageData = pdfState.pages.find((p) => p.pageNum - 1 === annotation.pageIndex);
+        if (!pageData) return;
+        const spans = Array.from(pageData.textLayer.querySelectorAll("span"));
+        if (!spans.length) return;
+        const center = {
+          x: annotation.bbox.x + annotation.bbox.width / 2,
+          y: annotation.bbox.y + annotation.bbox.height / 2
+        };
+        let best = null;
+        let bestDist = Infinity;
+        spans.forEach((span) => {
+          const rect = span.getBoundingClientRect();
+          const pageRect = pageData.pageDiv.getBoundingClientRect();
+          const relX = rect.left - pageRect.left;
+          const relY = rect.top - pageRect.top;
+          const [sx, sy] = pageData.viewport.convertToPdfPoint(relX, relY);
+          const [sx2, sy2] = pageData.viewport.convertToPdfPoint(
+            relX + rect.width,
+            relY + rect.height
+          );
+          const bbox = {
+            x: Math.min(sx, sx2),
+            y: Math.min(sy, sy2),
+            width: Math.abs(sx2 - sx),
+            height: Math.abs(sy2 - sy)
+          };
+          const cx = bbox.x + bbox.width / 2;
+          const cy = bbox.y + bbox.height / 2;
+          const dist = Math.hypot(cx - center.x, cy - center.y);
+          if (dist < bestDist) {
+            best = bbox;
+            bestDist = dist;
+          }
+        });
+        if (best) {
+          annotation.bbox = best;
+          annotation.mode = "text";
+          renderOverlays(pdfState);
+          notify("Adjust Mode", "Snapped to nearest text.");
+        }
+      }
+
+      async function applyAllAnnotations(pdfState) {
+        const pdfDoc = await PDFLib.PDFDocument.load(pdfState.originalBytes);
+        pdfState.annotationCount = 0;
+        for (const annotation of pdfState.annotations) {
+          const page = pdfDoc.getPage(annotation.pageIndex);
+          drawAnnotation(page, annotation, { bbox: annotation.bbox });
+          pdfState.annotationCount += 1;
+        }
+        pdfState.bytes = await pdfDoc.save();
+        await refreshPdfRender(pdfState);
+        refreshPdfList();
+      }
+
+      function toggleAdjustMode() {
+        const pdfState = getActivePdf();
+        if (!state.adjustMode && (!pdfState || !pdfState.annotations.length)) {
+          notify("Adjust Mode", "No annotations to adjust yet.");
+          return;
+        }
+        state.adjustMode = !state.adjustMode;
+        elements.adjustToolbar.classList.toggle("active", state.adjustMode);
+        elements.commitAdjust.classList.toggle("hidden", !state.adjustMode);
+        if (!state.adjustMode) {
+          state.selectedAnnotationId = null;
+        }
+        renderOverlays(getActivePdf());
+        updateAdjustToolbarState();
+        notify("Adjust Mode", state.adjustMode ? "Adjust mode enabled." : "Adjust mode disabled.");
+      }
+
+      async function commitAdjustments() {
+        const pdfState = getActivePdf();
+        if (!pdfState) return;
+        notify("Adjust Mode", "Applying adjustments...");
+        await applyAllAnnotations(pdfState);
+      }
+
+      async function retryFetch(url, options, retries = 2) {
+        for (let attempt = 0; attempt <= retries; attempt++) {
+          try {
+            const response = await fetch(url, options);
+            if (response.ok) return response;
+            if (response.status === 429) {
+              await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+              continue;
+            }
+            if (attempt === retries) throw new Error("Request failed");
+          } catch (error) {
+            if (attempt === retries) {
+              notify("Network", "Request failed. Check your connection or API key.");
+              throw error;
+            }
+          }
+        }
+        return null;
+      }
+
+      function handleTapFocus(event) {
+        if (!state.recording || !state.settings.tapFocus || state.adjustMode) return;
+        if (!state.recordingSession) return;
+        const pdfState = getActivePdf();
+        if (!pdfState) return;
+        const pageDiv = event.target.closest(".page");
+        if (!pageDiv) return;
+        const pageNum = Number(pageDiv.dataset.pageNumber);
+        const pageData = pdfState.pages.find((p) => p.pageNum === pageNum);
+        if (!pageData) return;
+        const rect = pageDiv.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        const [pdfX, pdfY] = pageData.viewport.convertToPdfPoint(x, y);
+        const pin = document.createElement("div");
+        pin.className = "focus-pin";
+        pin.style.left = `${x}px`;
+        pin.style.top = `${y}px`;
+        pageDiv.appendChild(pin);
+
+        state.recordingSession.taps.push({
+          timestamp: Date.now(),
+          pdfId: pdfState.id,
+          pageIndex: pageNum - 1,
+          pdfX,
+          pdfY
+        });
+      }
+
+      function clearFocusPins() {
+        document.querySelectorAll(".focus-pin").forEach((pin) => pin.remove());
+      }
+
+      async function processBatchQueue() {
+        if (!state.queue.length) return;
+        elements.progressLabel.classList.remove("hidden");
+        const queueCopy = [...state.queue];
+        for (let i = 0; i < queueCopy.length; i++) {
+          const session = queueCopy[i];
+          elements.progressLabel.textContent = `Processing ${i + 1} of ${queueCopy.length}...`;
+          const success = await processSession(session);
+          if (success) removeFromQueue(session.id);
+        }
+        elements.progressLabel.classList.add("hidden");
+        notify("Batch Mode", "Batch processing complete.");
+      }
+
+      async function downloadActive() {
+        const pdfState = getActivePdf();
+        if (!pdfState) {
+          notify("Export", "No active PDF to download.");
+          return;
+        }
+        const blob = new Blob([pdfState.bytes], { type: "application/pdf" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = pdfState.name.replace(".pdf", "-annotated.pdf");
+        link.click();
+      }
+
+      async function downloadMerged() {
+        if (!state.pdfs.length) {
+          notify("Export", "No PDFs loaded.");
+          return;
+        }
+        const merged = await PDFLib.PDFDocument.create();
+        for (const pdfState of state.pdfs) {
+          const doc = await PDFLib.PDFDocument.load(pdfState.bytes);
+          const pages = await merged.copyPages(doc, doc.getPageIndices());
+          pages.forEach((page) => merged.addPage(page));
+        }
+        const bytes = await merged.save();
+        const blob = new Blob([bytes], { type: "application/pdf" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "voxmark-merged.pdf";
+        link.click();
+      }
+
+      async function downloadZip() {
+        if (!state.pdfs.length) {
+          notify("Export", "No PDFs loaded.");
+          return;
+        }
+        const zip = new JSZip();
+        for (const pdfState of state.pdfs) {
+          zip.file(pdfState.name.replace(".pdf", "-annotated.pdf"), pdfState.bytes);
+        }
+        const blob = await zip.generateAsync({ type: "blob" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "voxmark-pdfs.zip";
+        link.click();
+      }
+
+      elements.pdfInput.addEventListener("change", (event) => handlePdfUpload(event.target.files));
+      elements.uploadPdf.addEventListener("click", () => elements.pdfInput.click());
+      elements.settingsToggle.addEventListener("click", toggleSettings);
+      document.addEventListener("click", (event) => {
+        if (!elements.settingsPanel.classList.contains("open")) return;
+        const isToggle = elements.settingsToggle.contains(event.target);
+        const isPanel = elements.settingsPanel.contains(event.target);
+        if (!isToggle && !isPanel) {
+          elements.settingsPanel.classList.remove("open");
+        }
+      });
+      elements.saveSettings.addEventListener("click", saveSettings);
+      elements.clearOffline.addEventListener("click", () => {
+        if (db) {
+          const tx = db.transaction("queue", "readwrite");
+          tx.objectStore("queue").clear();
+        }
+        state.queue = [];
+        updateQueueIndicator();
+        updateStorageUsage();
+        notify("Storage", "Offline data cleared.");
+      });
+      elements.micButton.addEventListener("click", () => {
+        if (state.recording) stopRecordingSession();
+        else startRecordingSession();
+      });
+      elements.processBatch.addEventListener("click", processBatchQueue);
+      elements.toggleMarkers.addEventListener("click", () => {
+        state.showMarkers = !state.showMarkers;
+        notify("Viewport", state.showMarkers ? "Viewport markers on." : "Viewport markers off.");
+      });
+      elements.toggleAdjust.addEventListener("click", toggleAdjustMode);
+      elements.commitAdjust.addEventListener("click", commitAdjustments);
+      elements.snapToText.addEventListener("click", snapSelectedToText);
+      elements.freeBox.addEventListener("click", () => {
+        const pdfState = getActivePdf();
+        const annotation = pdfState?.annotations.find((a) => a.id === state.selectedAnnotationId);
+        if (!annotation) {
+          notify("Adjust Mode", "Select an annotation to unlock free bbox.");
+          return;
+        }
+        annotation.mode = "bbox";
+        renderOverlays(pdfState);
+        notify("Adjust Mode", "Free bbox enabled for selected annotation.");
+      });
+      elements.downloadSingle.addEventListener("click", downloadActive);
+      elements.downloadMerged.addEventListener("click", downloadMerged);
+      elements.downloadZip.addEventListener("click", downloadZip);
+      elements.toggleSidebar.addEventListener("click", () => {
+        document.querySelector(".sidebar").classList.toggle("hidden");
+        document.querySelector(".app").classList.toggle("sidebar-collapsed");
+      });
+      elements.resetSession.addEventListener("click", confirmResetSession);
+      elements.resetSessionPanel.addEventListener("click", confirmResetSession);
+      elements.viewerArea.addEventListener("click", handleTapFocus);
+      document.querySelectorAll("input[name='mode']").forEach((input) => {
+        input.addEventListener("change", (event) => setMode(event.target.value));
+      });
+      elements.viewerArea.addEventListener("scroll", () => {
+        if (!state.recording) return;
+        const snapshot = captureSnapshot();
+        if (snapshot) state.recordingSession.snapshots.push(snapshot);
+      });
+      elements.viewerArea.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        elements.viewerArea.classList.add("dragging");
+      });
+      elements.viewerArea.addEventListener("dragleave", () => {
+        elements.viewerArea.classList.remove("dragging");
+      });
+      elements.viewerArea.addEventListener("drop", (event) => {
+        event.preventDefault();
+        elements.viewerArea.classList.remove("dragging");
+        if (event.dataTransfer?.files?.length) {
+          handlePdfUpload(event.dataTransfer.files);
+        }
+      });
+      let touchState = null;
+      elements.viewerArea.addEventListener("touchstart", (event) => {
+        if (event.touches.length === 1) {
+          touchState = {
+            type: "swipe",
+            startX: event.touches[0].clientX,
+            startY: event.touches[0].clientY
+          };
+        } else if (event.touches.length === 2) {
+          const [t1, t2] = event.touches;
+          const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+          const pdfState = getActivePdf();
+          touchState = {
+            type: "pinch",
+            startDistance: dist,
+            startScale: pdfState?.scale || 1.15
+          };
+        }
+      });
+      elements.viewerArea.addEventListener("touchmove", (event) => {
+        if (!touchState) return;
+        if (touchState.type === "pinch" && event.touches.length === 2) {
+          const [t1, t2] = event.touches;
+          const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+          const scale = touchState.startScale * (dist / touchState.startDistance);
+          setPdfScale(getActivePdf(), scale);
+        }
+      });
+      elements.viewerArea.addEventListener("touchend", (event) => {
+        if (!touchState) return;
+        if (touchState.type === "swipe" && event.changedTouches.length) {
+          const endX = event.changedTouches[0].clientX;
+          const endY = event.changedTouches[0].clientY;
+          const dx = endX - touchState.startX;
+          const dy = endY - touchState.startY;
+          if (Math.abs(dx) > 60 && Math.abs(dy) < 40) {
+            switchPdfByDelta(dx < 0 ? 1 : -1);
+          }
+        }
+        touchState = null;
+      });
+      document.addEventListener("pointermove", handlePointerMove);
+      document.addEventListener("pointerup", handlePointerUp);
+      elements.modalOverlay.addEventListener("click", (event) => {
+        if (event.target === elements.modalOverlay) closeModal();
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && elements.modalOverlay.classList.contains("open")) {
+          closeModal();
+        }
+      });
+      window.addEventListener("online", updateConnectionStatus);
+      window.addEventListener("offline", updateConnectionStatus);
+
+      (async () => {
+        loadSettings();
+        const storedMode = localStorage.getItem("voxmark-mode");
+        if (storedMode) {
+          document.querySelectorAll("input[name='mode']").forEach((input) => {
+            input.checked = input.value === storedMode;
+          });
+          setMode(storedMode);
+        }
+        await openDB();
+        updateConnectionStatus();
+        updateStorageUsage();
+        const queue = await loadQueueFromDB();
+        if (queue.length) {
+          state.queue = queue;
+          updateQueueIndicator();
+          notify("Offline Queue", "Loaded offline queue.");
+        }
+      })();
+    </script>
+  </body>
+</html>

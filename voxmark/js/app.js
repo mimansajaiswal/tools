@@ -1,0 +1,2 @@
+initApp();
+registerServiceWorker();
