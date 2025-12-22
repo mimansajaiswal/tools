@@ -652,38 +652,38 @@ async function handleRequest(request, env) {
                 </div>
 
                 <!-- Main Controls Row -->
-                <div class="flex items-center justify-center gap-4 md:gap-6">
+                <div class="flex items-center justify-center gap-2 sm:gap-4 md:gap-6">
 
                     <!-- 1. Mirror Toggle (If user facing) -->
                     <button id="mirrorToggleBtn" onclick="App.toggleMirror()"
-                        class="hidden bg-black/40 backdrop-blur-md p-3 rounded-full hover:bg-black/60 text-white transition">
-                        <i data-lucide="flip-horizontal" class="w-6 h-6"></i>
+                        class="hidden bg-black/40 backdrop-blur-md p-2 sm:p-3 rounded-full hover:bg-black/60 text-white transition">
+                        <i data-lucide="flip-horizontal" class="w-5 h-5 sm:w-6 sm:h-6"></i>
                     </button>
 
                     <!-- 2. Flip Camera Button -->
                     <button onclick="App.flipCamera()"
-                        class="bg-black/40 backdrop-blur-md p-3 rounded-full hover:bg-black/60 text-white transition">
-                        <i data-lucide="refresh-ccw" class="w-6 h-6"></i>
+                        class="bg-black/40 backdrop-blur-md p-2 sm:p-3 rounded-full hover:bg-black/60 text-white transition">
+                        <i data-lucide="refresh-ccw" class="w-5 h-5 sm:w-6 sm:h-6"></i>
                     </button>
 
                     <!-- 3. Insert Image (File Input) -->
                     <label
-                        class="cursor-pointer bg-black/40 backdrop-blur-md p-3 rounded-full hover:bg-black/60 text-white transition">
-                        <i data-lucide="image" class="w-6 h-6"></i>
+                        class="cursor-pointer bg-black/40 backdrop-blur-md p-2 sm:p-3 rounded-full hover:bg-black/60 text-white transition">
+                        <i data-lucide="image" class="w-5 h-5 sm:w-6 sm:h-6"></i>
                         <input type="file" id="fileInput" accept="image/*" class="hidden"
                             onchange="App.handleFileUpload(event)">
                     </label>
 
                     <!-- 4. Capture Button (Center) -->
                     <button onclick="App.captureSegment()" id="captureBtn"
-                        class="w-16 h-16 rounded-full border-4 border-white/80 bg-charcoal/60 shadow-[0_0_12px_rgba(0,0,0,0.5)] flex items-center justify-center hover:bg-black/70 transition active:scale-95 backdrop-blur-sm">
-                        <div class="w-12 h-12 bg-white rounded-full shadow-inner"></div>
+                        class="w-14 h-14 sm:w-16 sm:h-16 rounded-full border-4 border-white/80 bg-charcoal/60 shadow-[0_0_12px_rgba(0,0,0,0.5)] flex items-center justify-center hover:bg-black/70 transition active:scale-95 backdrop-blur-sm">
+                        <div class="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-full shadow-inner"></div>
                     </button>
 
                     <!-- 5. Layout Button (Grid Mode) -->
                     <div class="relative group">
                         <button onclick="App.toggleCollageMenu()" id="gridBtn"
-                            class="bg-black/40 backdrop-blur-md p-3 rounded-full hover:bg-black/60 text-white transition font-bold text-xs flex items-center justify-center w-12 h-12">
+                            class="bg-black/40 backdrop-blur-md p-2 sm:p-3 rounded-full hover:bg-black/60 text-white transition font-bold text-[10px] sm:text-xs flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12">
                             1x
                         </button>
 
@@ -726,15 +726,15 @@ async function handleRequest(request, env) {
 
                     <!-- 6. Portrait/Landscape Toggle -->
                     <button onclick="App.toggleOrientation()" id="orientationBtn"
-                        class="bg-black/40 backdrop-blur-md p-3 rounded-full hover:bg-black/60 text-white transition">
-                        <i data-lucide="rectangle-horizontal" class="w-6 h-6"></i>
+                        class="bg-black/40 backdrop-blur-md p-2 sm:p-3 rounded-full hover:bg-black/60 text-white transition">
+                        <i data-lucide="rectangle-horizontal" class="w-5 h-5 sm:w-6 sm:h-6"></i>
                     </button>
 
                     <!-- 7. Ghost Button -->
                     <div class="relative flex items-center">
                         <button onclick="App.toggleGhost()" id="ghostToggleBtn"
-                            class="bg-black/40 backdrop-blur-md p-3 rounded-full hover:bg-black/60 text-white transition opacity-50 peer">
-                            <i data-lucide="ghost" class="w-6 h-6"></i>
+                            class="bg-black/40 backdrop-blur-md p-2 sm:p-3 rounded-full hover:bg-black/60 text-white transition opacity-50 peer">
+                            <i data-lucide="ghost" class="w-5 h-5 sm:w-6 sm:h-6"></i>
                         </button>
                         <!-- Slider ABOVE - Fixed width & Position -->
                         <div id="ghostSliderContainer"
@@ -941,6 +941,14 @@ async function handleRequest(request, env) {
             setSettings: (s) => localStorage.setItem('chronicles_settings', JSON.stringify(s)),
             getData: () => JSON.parse(localStorage.getItem('chronicles_data') || '[]'),
             setData: (d) => localStorage.setItem('chronicles_data', JSON.stringify(d)),
+            getLastActiveDiaryId: () => localStorage.getItem('chronicles_last_diary'),
+            setLastActiveDiaryId: (id) => {
+                if (id) {
+                    localStorage.setItem('chronicles_last_diary', id);
+                } else {
+                    localStorage.removeItem('chronicles_last_diary');
+                }
+            },
 
             // Cache for valid Notion data sources
             getCachedDataSources: () => JSON.parse(localStorage.getItem('chronicles_ds_cache') || '[]'),
@@ -1438,8 +1446,16 @@ async function handleRequest(request, env) {
                     if (newSettings.workerUrl) App.scanForDataSources(newSettings);
                 }
 
-                if (window.innerWidth < 768 && App.state.diaries.length > 0) {
-                    App.selectDiary(App.state.diaries[0].id);
+                if (App.state.diaries.length > 0) {
+                    const lastDiaryId = Storage.getLastActiveDiaryId();
+                    const hasLast = lastDiaryId && App.state.diaries.some(diary => diary.id === lastDiaryId);
+                    const fallbackId = window.innerWidth < 768 ? App.state.diaries[0].id : null;
+                    const diaryToSelect = hasLast ? lastDiaryId : fallbackId;
+                    if (diaryToSelect) {
+                        App.selectDiary(diaryToSelect);
+                    } else {
+                        App.renderWelcomeState();
+                    }
                 } else {
                     App.renderWelcomeState();
                 }
@@ -1792,6 +1808,7 @@ async function handleRequest(request, env) {
 
             selectDiary: (id) => {
                 App.state.activeDiaryId = id;
+                Storage.setLastActiveDiaryId(id);
                 App.renderSidebar();
                 App.renderDiaryView();
                 if (window.innerWidth < 768) {
