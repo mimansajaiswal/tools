@@ -374,6 +374,24 @@
                         </button>
                     </div>
                 </div>
+
+                <!-- 3. Upload Limits -->
+                <div class="space-y-2 bg-oatmeal/30 p-3 rounded border border-oatmeal-dark/50">
+                    <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal">Upload Size
+                        Cap</label>
+                    <div class="text-[11px] text-earth-metal/70">Default is 5MB (Notion free plan). Paid plans allow up
+                        to 20MB.</div>
+                    <div class="flex flex-col gap-2 text-xs">
+                        <label class="flex items-center gap-2">
+                            <input type="radio" name="uploadCapMb" value="5" onchange="App.setUploadCap(this.value)">
+                            <span>5 MB (Free plan)</span>
+                        </label>
+                        <label class="flex items-center gap-2">
+                            <input type="radio" name="uploadCapMb" value="20" onchange="App.setUploadCap(this.value)">
+                            <span>20 MB (Paid plan)</span>
+                        </label>
+                    </div>
+                </div>
             </div>
 
             <details class="group mt-8 border-t border-oatmeal-dark pt-4">
@@ -853,6 +871,14 @@ async function handleRequest(request, env) {
                             .map((reg) => reg.unregister())
                     );
                 }
+                if ('indexedDB' in window) {
+                    await new Promise((resolve) => {
+                        const req = indexedDB.deleteDatabase('photo-chronicles-db');
+                        req.onsuccess = () => resolve();
+                        req.onerror = () => resolve();
+                        req.onblocked = () => resolve();
+                    });
+                }
             } catch (err) {
                 console.warn('PWA cleanup skipped:', err);
             }
@@ -862,6 +888,22 @@ async function handleRequest(request, env) {
             id: () => Math.random().toString(36).substr(2, 9),
             now: () => new Date().toISOString(),
             normalizeTag: (tag) => (tag || '').trim().toLowerCase(),
+            sanitizeFilename: (name) => (name || 'photo')
+                .toString()
+                .replace(/[^a-z0-9-_]+/gi, '_')
+                .replace(/^_+|_+$/g, '')
+                .slice(0, 80) || 'photo',
+            formatTimestampForFilename: (iso) => {
+                const d = iso ? new Date(iso) : new Date();
+                if (Number.isNaN(d.getTime())) return new Date().toISOString().replace(/[:.]/g, '').slice(0, 15);
+                const pad = (n) => String(n).padStart(2, '0');
+                return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+            },
+            buildPhotoFilename: (diaryTitle, iso, ext = 'webp') => {
+                const base = UTILS.sanitizeFilename(diaryTitle || 'Diary');
+                const stamp = UTILS.formatTimestampForFilename(iso);
+                return `${base}_${stamp}.${ext}`;
+            },
             localToUTC: (localDateTimeString) => {
                 if (!localDateTimeString) return new Date().toISOString();
                 const d = new Date(localDateTimeString);
@@ -884,6 +926,7 @@ async function handleRequest(request, env) {
                 while (n--) { u8arr[n] = bstr.charCodeAt(n); }
                 return new Blob([u8arr], { type: mime });
             },
+            estimateDataUrlSize: (url) => (url.length * 3 / 4) - (url.indexOf(',') > -1 ? url.indexOf(',') : 0),
             // Create a local thumbnail version (350px, 0.6 quality, webp)
             processImage: (imageSource, width = 350, quality = 0.6) => {
                 return new Promise((resolve, reject) => {
@@ -907,37 +950,108 @@ async function handleRequest(request, env) {
                     img.src = imageSource;
                 });
             },
-            // High Quality Compression < 5MB
-            compressToLimit: async (dataUrl, maxBytes = 5 * 1024 * 1024) => {
-                let quality = 0.95;
-                let result = dataUrl;
+            // High Quality Compression with size cap
+            compressToLimit: async (dataUrl, options = {}) => {
+                const maxBytes = options.maxBytes ?? 5 * 1024 * 1024;
+                const minQuality = options.minQuality ?? 0.86;
+                const startQuality = options.startQuality ?? 0.96;
+                const step = options.step ?? 0.04;
+                const minScale = options.minScale ?? 0.7;
 
-                // Helper size check
-                const getSize = (url) => (url.length * 3 / 4) - (url.indexOf(',') > -1 ? url.indexOf(',') : 0); // rough approx
+                const originalSize = UTILS.estimateDataUrlSize(dataUrl);
+                if (originalSize <= maxBytes) return dataUrl;
 
-                if (getSize(result) < maxBytes) return result;
-
-                // If too big, try creating blob/canvas loop
-                // Simplified: Just return a reasonable high quality webp immediately as webp is usually efficient
                 return new Promise((resolve) => {
                     const img = new Image();
                     img.onload = () => {
                         const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
                         canvas.width = img.width;
                         canvas.height = img.height;
-                        const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0);
-                        // Try 0.8 webp immediately if original passed was too big or raw
-                        const newUrl = canvas.toDataURL('image/webp', 0.85);
-                        resolve(newUrl);
+
+                        let quality = startQuality;
+                        let result = dataUrl;
+                        let size = originalSize;
+
+                        while (quality >= minQuality) {
+                            result = canvas.toDataURL('image/webp', quality);
+                            size = UTILS.estimateDataUrlSize(result);
+                            if (size <= maxBytes) {
+                                resolve(result);
+                                return;
+                            }
+                            quality -= step;
+                        }
+
+                        if (size > maxBytes) {
+                            const scale = Math.max(minScale, Math.sqrt(maxBytes / size));
+                            const newW = Math.max(1, Math.round(canvas.width * scale));
+                            const newH = Math.max(1, Math.round(canvas.height * scale));
+                            const scaledCanvas = document.createElement('canvas');
+                            scaledCanvas.width = newW;
+                            scaledCanvas.height = newH;
+                            const sctx = scaledCanvas.getContext('2d');
+                            sctx.drawImage(canvas, 0, 0, newW, newH);
+                            result = scaledCanvas.toDataURL('image/webp', minQuality);
+                        }
+
+                        resolve(result);
                     };
                     img.src = dataUrl;
                 });
             }
         };
 
+        const ImageStore = {
+            db: null,
+            dbName: 'photo-chronicles-db',
+            storeName: 'photos',
+            version: 1,
+            isAvailable: () => typeof indexedDB !== 'undefined',
+            open: () => {
+                if (!ImageStore.isAvailable()) return Promise.reject(new Error('IndexedDB unavailable'));
+                if (ImageStore.db) return Promise.resolve(ImageStore.db);
+                return new Promise((resolve, reject) => {
+                    const req = indexedDB.open(ImageStore.dbName, ImageStore.version);
+                    req.onupgradeneeded = () => {
+                        const db = req.result;
+                        if (!db.objectStoreNames.contains(ImageStore.storeName)) {
+                            db.createObjectStore(ImageStore.storeName);
+                        }
+                    };
+                    req.onsuccess = () => {
+                        ImageStore.db = req.result;
+                        resolve(req.result);
+                    };
+                    req.onerror = () => reject(req.error);
+                });
+            },
+            get: (key) => ImageStore.open().then((db) => new Promise((resolve, reject) => {
+                const tx = db.transaction(ImageStore.storeName, 'readonly');
+                const store = tx.objectStore(ImageStore.storeName);
+                const req = store.get(key);
+                req.onsuccess = () => resolve(req.result || null);
+                req.onerror = () => reject(req.error);
+            })),
+            set: (key, blob) => ImageStore.open().then((db) => new Promise((resolve, reject) => {
+                const tx = db.transaction(ImageStore.storeName, 'readwrite');
+                const store = tx.objectStore(ImageStore.storeName);
+                const req = store.put(blob, key);
+                req.onsuccess = () => resolve(true);
+                req.onerror = () => reject(req.error);
+            })),
+            del: (key) => ImageStore.open().then((db) => new Promise((resolve, reject) => {
+                const tx = db.transaction(ImageStore.storeName, 'readwrite');
+                const store = tx.objectStore(ImageStore.storeName);
+                const req = store.delete(key);
+                req.onsuccess = () => resolve(true);
+                req.onerror = () => reject(req.error);
+            }))
+        };
+
         const Storage = {
-            getSettings: () => JSON.parse(localStorage.getItem('chronicles_settings') || '{"workerUrl":"","authToken":"","proxyToken":"","orientation":"landscape","collageMode":1,"ghostOpacity":0.3}'),
+            getSettings: () => JSON.parse(localStorage.getItem('chronicles_settings') || '{"workerUrl":"","authToken":"","proxyToken":"","orientation":"landscape","collageMode":1,"ghostOpacity":0.3,"uploadCapMb":5}'),
             setSettings: (s) => localStorage.setItem('chronicles_settings', JSON.stringify(s)),
             getData: () => JSON.parse(localStorage.getItem('chronicles_data') || '[]'),
             setData: (d) => localStorage.setItem('chronicles_data', JSON.stringify(d)),
@@ -1229,6 +1343,8 @@ async function handleRequest(request, env) {
                         // Check if we need to download the image
                         let localPhotoData = null;
                         const existingEntry = localIndex > -1 ? activeDiary.entries[localIndex] : null;
+                        let photoKey = existingEntry?.photoKey || null;
+                        const entryId = existingEntry ? existingEntry.id : UTILS.id();
 
                         // If we have a local entry with a dataURL, keep it unless forced update (logic simplified here: keep local if exists)
                         if (existingEntry && existingEntry.photoDataURL && existingEntry.photoDataURL.startsWith('data:')) {
@@ -1236,13 +1352,20 @@ async function handleRequest(request, env) {
                         }
 
                         // If no local photo but notion has one, fetch and compress it
-                        if (!localPhotoData && notionPhotoUrl) {
+                        if (!localPhotoData && !photoKey && notionPhotoUrl) {
                             try {
                                 // Using the worker proxy to fetch image if needed to avoid strict CORS on signed URLs, 
                                 // but usually signed S3 URLs are okay if origin is handled. 
                                 // We'll try direct first, if that fails, we can't easily use the proxy for binary without encoding tweaks.
                                 // Let's try UTILS.processImage directly on the URL.
-                                localPhotoData = await UTILS.processImage(notionPhotoUrl, 350, 0.6);
+                                const previewData = await UTILS.processImage(notionPhotoUrl, 640, 0.72);
+                                if (ImageStore.isAvailable()) {
+                                    const key = `entry_${entryId}_preview`;
+                                    await ImageStore.set(key, UTILS.dataURLtoBlob(previewData));
+                                    photoKey = key;
+                                } else {
+                                    localPhotoData = previewData;
+                                }
                             } catch (err) {
                                 console.warn("Failed to download/process image from Notion", err);
                                 // Fallback: store the URL (will expire, but better than null)
@@ -1251,13 +1374,14 @@ async function handleRequest(request, env) {
                         }
 
                         const syncedEntry = {
-                            id: existingEntry ? existingEntry.id : UTILS.id(),
+                            id: entryId,
                             notionId: page.id,
                             date: getDate(props.Date),
                             title: titleContent,
                             notes: notesContent,
                             tags: getTags(props.Tags),
-                            photoDataURL: localPhotoData, // Now utilizing the local WebP blob
+                            photoDataURL: localPhotoData,
+                            photoKey: photoKey,
                             synced: true
                         };
 
@@ -1343,19 +1467,15 @@ async function handleRequest(request, env) {
             pushEntryToNotion: async (dbId, entry) => {
                 let uploadedFileId = null;
 
-                // Note: entry.photoDataURL might be the low-res version if refreshed.
-                // If it's the session where we just took it, we might want to use the high-res one if available.
-                // But to simplify, we push what we have. Ideally, in App.saveEntry we trigger sync immediately 
-                // while App.state.capturedImageHighRes (if we implemented it) is available.
-                // For now, we assume entry.photoDataURL is what we upload.
-                // If it's data URI:
-                if (entry.photoDataURL && entry.photoDataURL.startsWith('data:')) {
+                // Prefer stored upload blob, then preview blob/data URL as fallback.
+                const uploadBlob = await App.getUploadBlob(entry);
+                if (uploadBlob) {
                     try {
+                        const filename = UTILS.buildPhotoFilename(entry.diaryTitle || entry.title, entry.date, 'webp');
                         const initRes = await API.request('POST', '/file_uploads', {
-                            "object": "file_upload", "filename": "photo.webp", "content_type": "image/webp"
+                            "object": "file_upload", "filename": filename, "content_type": "image/webp"
                         });
-                        const blob = UTILS.dataURLtoBlob(entry.photoDataURL);
-                        await API.uploadFileContent(initRes.upload_url, blob);
+                        await API.uploadFileContent(initRes.upload_url, uploadBlob);
                         uploadedFileId = initRes.id;
                     } catch (err) {
                         App.showToast("Image upload failed, saving text.", "error");
@@ -1391,6 +1511,8 @@ async function handleRequest(request, env) {
                 facingMode: 'environment',
                 capturedImage: null, // Low res for UI
                 capturedImageHighRes: null, // New: High res for upload
+                captureBase: null,
+                videoDims: { width: 0, height: 0 },
                 currentTags: [],
                 ghostMode: false,
                 ghostImageObj: null,
@@ -1402,10 +1524,155 @@ async function handleRequest(request, env) {
                 mirrorVideo: false,
                 selectedDataSource: null,
                 cachedDataSources: [],
-                isLoading: false
+                isLoading: false,
+                imageUrlCache: new Map()
             },
             tagMatch: (list, tag) => list.find(t => UTILS.normalizeTag(t) === UTILS.normalizeTag(tag)),
             hasTag: (list, tag) => !!App.tagMatch(list, tag),
+            getUploadCapBytes: () => {
+                const s = Storage.getSettings();
+                const mb = Number(s.uploadCapMb) || 5;
+                return mb * 1024 * 1024;
+            },
+            getMaxUploadPixels: () => {
+                const capMb = Number(Storage.getSettings().uploadCapMb) || 5;
+                return capMb >= 20 ? 32000000 : 16000000;
+            },
+            getTargetBaseDimensions: () => {
+                if (App.state.orientation === 'portrait') {
+                    return { width: 1920, height: 2560 };
+                }
+                return { width: 2560, height: 1920 };
+            },
+            getMaxCropDimensions: (videoW, videoH, ratio) => {
+                if (!videoW || !videoH) return null;
+                const srcRatio = videoW / videoH;
+                if (srcRatio > ratio) {
+                    const h = videoH;
+                    const w = Math.round(h * ratio);
+                    return { width: w, height: h };
+                }
+                const w = videoW;
+                const h = Math.round(w / ratio);
+                return { width: w, height: h };
+            },
+            getBaseDimensions: (videoW, videoH) => {
+                const target = App.getTargetBaseDimensions();
+                const ratio = target.width / target.height;
+                const maxFromVideo = App.getMaxCropDimensions(videoW, videoH, ratio);
+                if (!maxFromVideo) return target;
+                return {
+                    width: Math.min(target.width, maxFromVideo.width),
+                    height: Math.min(target.height, maxFromVideo.height)
+                };
+            },
+            getFinalCanvasDimensions: (baseW, baseH, multW, multH) => {
+                let W = baseW * multW;
+                let H = baseH * multH;
+                const maxPixels = App.getMaxUploadPixels();
+                const totalPixels = W * H;
+                if (totalPixels > maxPixels) {
+                    const scale = Math.sqrt(maxPixels / totalPixels);
+                    W = Math.max(1, Math.round(W * scale));
+                    H = Math.max(1, Math.round(H * scale));
+                }
+                return { width: W, height: H };
+            },
+            getVideoConstraints: () => {
+                const target = App.getTargetBaseDimensions();
+                return {
+                    facingMode: App.state.facingMode,
+                    width: { ideal: target.width },
+                    height: { ideal: target.height },
+                    aspectRatio: { ideal: target.width / target.height }
+                };
+            },
+            clearImageUrlCache: () => {
+                App.state.imageUrlCache.forEach((val) => {
+                    if (val && val.isObjectUrl) URL.revokeObjectURL(val.src);
+                });
+                App.state.imageUrlCache.clear();
+            },
+            loadEntryImage: async (entry) => {
+                if (!entry) return null;
+                if (entry.photoDataURL) return { src: entry.photoDataURL, isObjectUrl: false };
+                if (entry.photoKey && ImageStore.isAvailable()) {
+                    try {
+                        const blob = await ImageStore.get(entry.photoKey);
+                        if (blob) {
+                            return { src: URL.createObjectURL(blob), isObjectUrl: true };
+                        }
+                    } catch (e) {
+                    }
+                }
+                return null;
+            },
+            loadEntryImages: async (entries) => {
+                App.clearImageUrlCache();
+                const results = await Promise.all(entries.map(async (entry) => {
+                    const res = await App.loadEntryImage(entry);
+                    if (res) App.state.imageUrlCache.set(entry.id, res);
+                    return { id: entry.id, src: res?.src || null };
+                }));
+                const map = new Map();
+                results.forEach(r => map.set(r.id, r.src));
+                return map;
+            },
+            getUploadBlob: async (entry) => {
+                if (!entry) return null;
+                if (entry.uploadKey && ImageStore.isAvailable()) {
+                    try {
+                        const blob = await ImageStore.get(entry.uploadKey);
+                        if (blob) return blob;
+                    } catch (e) {
+                    }
+                }
+                if (entry.photoKey && ImageStore.isAvailable()) {
+                    try {
+                        const blob = await ImageStore.get(entry.photoKey);
+                        if (blob) return blob;
+                    } catch (e) {
+                    }
+                }
+                if (entry.uploadDataURL && entry.uploadDataURL.startsWith('data:')) {
+                    return UTILS.dataURLtoBlob(entry.uploadDataURL);
+                }
+                if (entry.photoDataURL && entry.photoDataURL.startsWith('data:')) {
+                    return UTILS.dataURLtoBlob(entry.photoDataURL);
+                }
+                return null;
+            },
+            migratePhotoStorage: async () => {
+                if (!ImageStore.isAvailable()) return;
+                const data = Storage.getData();
+                let changed = false;
+                for (const diary of data) {
+                    for (const entry of diary.entries || []) {
+                        if (entry.photoDataURL && entry.photoDataURL.startsWith('data:') && !entry.photoKey) {
+                            const key = `entry_${entry.id}_preview`;
+                            try {
+                                await ImageStore.set(key, UTILS.dataURLtoBlob(entry.photoDataURL));
+                                entry.photoKey = key;
+                                delete entry.photoDataURL;
+                                changed = true;
+                            } catch (e) {
+                            }
+                        }
+                        if (entry.uploadDataURL && entry.uploadDataURL.startsWith('data:') && !entry.uploadKey) {
+                            const key = `entry_${entry.id}_upload`;
+                            try {
+                                await ImageStore.set(key, UTILS.dataURLtoBlob(entry.uploadDataURL));
+                                entry.uploadKey = key;
+                                delete entry.uploadDataURL;
+                                changed = true;
+                            } catch (e) {
+                            }
+                        }
+                    }
+                }
+                if (changed) Storage.setData(data);
+                App.state.diaries = data;
+            },
 
             collageConfigs: {
                 1: [{ x: 0, y: 0, w: 1, h: 1 }],
@@ -1421,6 +1688,11 @@ async function handleRequest(request, env) {
                 lucide.createIcons();
                 App.state.diaries = Storage.getData();
                 App.renderSidebar();
+                App.migratePhotoStorage().then(() => {
+                    App.state.diaries = Storage.getData();
+                    App.renderSidebar();
+                    App.renderDiaryView();
+                });
 
                 const s = Storage.getSettings();
                 App.state.orientation = s.orientation || 'landscape';
@@ -1731,7 +2003,7 @@ async function handleRequest(request, env) {
                 lucide.createIcons();
             },
 
-            renderDiaryView: () => {
+            renderDiaryView: async () => {
                 const diary = App.state.diaries.find(d => d.id === App.state.activeDiaryId);
                 const gallery = document.getElementById('entryGallery');
                 const title = document.getElementById('activeDiaryTitle');
@@ -1745,34 +2017,38 @@ async function handleRequest(request, env) {
                         <div class="loader w-8 h-8 border-4 border-dull-purple border-t-transparent rounded-full mb-4"></div>
                         <p>Loading entries...</p>
                     </div>`;
+                    App.clearImageUrlCache();
                     return;
                 }
 
                 if (diary.entries.length === 0) {
                     gallery.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-center text-earth-metal/60"><i data-lucide="camera" class="w-12 h-12 mb-4 opacity-50"></i><p>Empty.</p></div>`;
                     lucide.createIcons();
+                    App.clearImageUrlCache();
                     return;
                 }
+
+                // Limit to 25 entries display if more exist (safety)
+                const displayEntries = diary.entries.slice(0, 25);
+                const imageMap = await App.loadEntryImages(displayEntries);
 
                 // Updated Denser Grid
                 const grid = document.createElement('div');
                 grid.className = "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3";
 
-                // Limit to 25 entries display if more exist (safety)
-                const displayEntries = diary.entries.slice(0, 25);
-
                 displayEntries.forEach(entry => {
                     const card = document.createElement('div');
                     card.className = "relative group bg-white-linen rounded-lg overflow-hidden shadow-sm border border-oatmeal-dark hover:shadow-md transition-shadow flex flex-col";
 
-                    const imgHtml = entry.photoDataURL
-                        ? `<img src="${entry.photoDataURL}" class="w-full aspect-square object-cover bg-oatmeal" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNjY2MiIHN0cm9rZS13aWR0aD0iMiI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiPjwvcmVjdD48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSI+PC9jaXJjbGU+PHBvbHlsaW5lIHBvaW50cz0iMjEgMTUgMTYgMTAgNSAyMSI+PC9wb2x5bGluZT48L3N2Zz4n">`
+                    const imgSrc = imageMap.get(entry.id);
+                    const imgHtml = imgSrc
+                        ? `<img src="${imgSrc}" class="w-full aspect-square object-cover bg-oatmeal" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNjY2MiIHN0cm9rZS13aWR0aD0iMiI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiPjwvcmVjdD48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSI+PC9jaXJjbGU+PHBvbHlsaW5lIHBvaW50cz0iMjEgMTUgMTYgMTAgNSAyMSI+PC9wb2x5bGluZT48L3N2Zz4n">`
                         : `<div class="w-full aspect-square bg-oatmeal flex items-center justify-center text-earth-metal/30"><i data-lucide="image-off"></i></div>`;
 
                     const dispTitle = entry.title || "Untitled";
 
                     const deleteBtn = `
-                        <div class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                        <div class="absolute top-1 right-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10">
                             <button onclick="event.stopPropagation(); App.confirmDelete('${diary.id}', '${entry.id}')" class="bg-white/80 hover:bg-white text-red-500 p-1.5 rounded-full shadow-sm backdrop-blur-sm transition">
                                 <i data-lucide="trash-2" class="w-3 h-3"></i>
                             </button>
@@ -1836,6 +2112,7 @@ async function handleRequest(request, env) {
                 App.state.currentTags = [];
                 App.state.capturedImage = null;
                 App.state.capturedImageHighRes = null; // Reset High Res
+                App.state.captureBase = null;
                 App.state.activeSegment = 0;
                 App.state.segments = [];
                 App.state.mirrorVideo = false;
@@ -1859,11 +2136,13 @@ async function handleRequest(request, env) {
                 if (!diary) return App.showToast("Create a diary first.", "error");
 
                 const toggleBtn = document.getElementById('ghostToggleBtn');
-                const lastEntryWithPhoto = diary.entries.find(e => e.photoDataURL);
+                const lastEntryWithPhoto = diary.entries.find(e => e.photoDataURL || e.photoKey);
                 const ghostImg = document.getElementById('ghostOverlay');
 
                 if (lastEntryWithPhoto) {
-                    ghostImg.src = lastEntryWithPhoto.photoDataURL;
+                    const ghostData = await App.loadEntryImage(lastEntryWithPhoto);
+                    if (!ghostData) return;
+                    ghostImg.src = ghostData.src;
                     toggleBtn.classList.remove('hidden');
                     toggleBtn.classList.remove('opacity-50');
                     App.state.ghostMode = true;
@@ -1875,7 +2154,7 @@ async function handleRequest(request, env) {
                     document.getElementById('ghostSliderContainer').classList.add('hidden');
                     const img = new Image();
                     img.onload = () => { App.state.ghostImageObj = img; };
-                    img.src = lastEntryWithPhoto.photoDataURL;
+                    img.src = ghostData.src;
                 } else {
                     toggleBtn.classList.add('hidden');
                     App.state.ghostMode = false;
@@ -1963,10 +2242,13 @@ async function handleRequest(request, env) {
                         App.state.stream.getTracks().forEach(t => t.stop());
                     }
                     App.state.stream = await navigator.mediaDevices.getUserMedia({
-                        video: { facingMode: App.state.facingMode },
+                        video: App.getVideoConstraints(),
                         audio: false
                     });
                     video.srcObject = App.state.stream;
+                    video.onloadedmetadata = () => {
+                        App.state.videoDims = { width: video.videoWidth, height: video.videoHeight };
+                    };
                     const mirrorBtn = document.getElementById('mirrorToggleBtn');
                     if (App.state.facingMode === 'user') {
                         mirrorBtn.classList.remove('hidden');
@@ -1985,10 +2267,8 @@ async function handleRequest(request, env) {
                 const video = document.getElementById('videoSource');
                 const cvs = document.getElementById('viewfinder');
                 const ctx = cvs.getContext('2d');
-                const isPortrait = App.state.orientation === 'portrait';
                 const mode = App.state.collageMode;
-                const BaseW = isPortrait ? 960 : 1280;
-                const BaseH = isPortrait ? 1280 : 960;
+                const baseDims = App.getBaseDimensions(video.videoWidth || App.state.videoDims.width, video.videoHeight || App.state.videoDims.height);
                 let multW = 1;
                 let multH = 1;
                 if (mode === 2) multW = 2;
@@ -1997,8 +2277,9 @@ async function handleRequest(request, env) {
                 else if (mode === 5) { multH = 2; }
                 else if (mode === 6) { multH = 3; }
                 else if (mode === 7) { multW = 2; multH = 2; }
-                const W = BaseW * multW;
-                const H = BaseH * multH;
+                const dims = App.getFinalCanvasDimensions(baseDims.width, baseDims.height, multW, multH);
+                const W = dims.width;
+                const H = dims.height;
                 if (cvs.width !== W || cvs.height !== H) {
                     cvs.width = W;
                     cvs.height = H;
@@ -2203,6 +2484,10 @@ async function handleRequest(request, env) {
                 const diary = Storage.getData().find(d => d.id === diaryId);
                 const entry = diary?.entries.find(e => e.id === entryId);
                 const notionId = entry?.notionId;
+                if (entry && ImageStore.isAvailable()) {
+                    if (entry.photoKey) await ImageStore.del(entry.photoKey);
+                    if (entry.uploadKey) await ImageStore.del(entry.uploadKey);
+                }
                 Storage.deleteEntry(diaryId, entryId);
                 App.state.diaries = Storage.getData();
                 App.renderDiaryView();
@@ -2228,6 +2513,8 @@ async function handleRequest(request, env) {
                     weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
                     hour: '2-digit', minute: '2-digit'
                 });
+                const diary = Storage.getData().find(d => d.id === App.state.activeDiaryId);
+                const diaryTitle = diary?.title || "Diary";
 
                 if (!App.state.capturedImage) return App.showToast('An image is required.', 'error');
 
@@ -2236,13 +2523,40 @@ async function handleRequest(request, env) {
                 let photoToSave = App.state.capturedImage;
                 let photoToUpload = App.state.capturedImageHighRes || App.state.capturedImage;
 
+                const entryId = UTILS.id();
+                let photoKey = null;
+                let uploadKey = null;
+                let photoDataURL = null;
+                let uploadDataURL = null;
+
+                if (ImageStore.isAvailable()) {
+                    try {
+                        const previewKey = `entry_${entryId}_preview`;
+                        const uploadKeyName = `entry_${entryId}_upload`;
+                        await ImageStore.set(previewKey, UTILS.dataURLtoBlob(photoToSave));
+                        await ImageStore.set(uploadKeyName, UTILS.dataURLtoBlob(photoToUpload));
+                        photoKey = previewKey;
+                        uploadKey = uploadKeyName;
+                    } catch (e) {
+                        photoDataURL = photoToSave;
+                        uploadDataURL = photoToUpload;
+                    }
+                } else {
+                    photoDataURL = photoToSave;
+                    uploadDataURL = photoToUpload;
+                }
+
                 const newEntry = {
-                    id: UTILS.id(),
+                    id: entryId,
                     date: date,
                     title: title,
                     notes: notes,
                     tags: App.state.currentTags,
-                    photoDataURL: photoToSave, // Local storage gets low res
+                    diaryTitle: diaryTitle,
+                    photoDataURL: photoDataURL,
+                    photoKey: photoKey,
+                    uploadKey: uploadKey,
+                    uploadDataURL: uploadDataURL,
                     synced: false,
                     notionId: null
                 };
@@ -2265,7 +2579,6 @@ async function handleRequest(request, env) {
                 // So we bypass standard sync loop for this new entry
                 try {
                     SyncManager.updateUI('syncing');
-                    const diary = Storage.getData().find(d => d.id === App.state.activeDiaryId);
                     const notionId = await SyncManager.pushEntryToNotion(diary.dataSourceId, entryForSync);
                     Storage.updateEntrySyncStatus(App.state.activeDiaryId, newEntry.id, true, notionId);
                     SyncManager.updateUI('synced');
@@ -2298,9 +2611,9 @@ async function handleRequest(request, env) {
             captureSegment: () => {
                 const video = document.getElementById('videoSource');
                 const canvas = document.createElement('canvas');
-                const isPortrait = App.state.orientation === 'portrait';
-                const BaseW = isPortrait ? 960 : 1280;
-                const BaseH = isPortrait ? 1280 : 960;
+                const baseDims = App.getBaseDimensions(video.videoWidth || App.state.videoDims.width, video.videoHeight || App.state.videoDims.height);
+                const BaseW = baseDims.width;
+                const BaseH = baseDims.height;
                 canvas.width = BaseW;
                 canvas.height = BaseH;
                 const ctx = canvas.getContext('2d');
@@ -2319,6 +2632,9 @@ async function handleRequest(request, env) {
                     ctx.restore();
                 } else {
                     ctx.drawImage(video, sx, sy, sw, sh, 0, 0, BaseW, BaseH);
+                }
+                if (!App.state.captureBase) {
+                    App.state.captureBase = { width: BaseW, height: BaseH };
                 }
                 App.state.segments[App.state.activeSegment] = canvas;
                 const layout = App.collageConfigs[App.state.collageMode];
@@ -2344,10 +2660,10 @@ async function handleRequest(request, env) {
                 const layout = App.collageConfigs[App.state.collageMode];
                 const finalCanvas = document.getElementById('photoCanvas');
                 if (!finalCanvas) return;
-                const isPortrait = App.state.orientation === 'portrait';
                 const mode = App.state.collageMode;
-                const BaseW = isPortrait ? 960 : 1280;
-                const BaseH = isPortrait ? 1280 : 960;
+                const baseDims = App.state.captureBase || App.getBaseDimensions(App.state.videoDims.width, App.state.videoDims.height);
+                const BaseW = baseDims.width;
+                const BaseH = baseDims.height;
                 let multW = 1;
                 let multH = 1;
                 if (mode === 2) multW = 2;
@@ -2356,8 +2672,9 @@ async function handleRequest(request, env) {
                 else if (mode === 5) { multH = 2; }
                 else if (mode === 6) { multH = 3; }
                 else if (mode === 7) { multW = 2; multH = 2; }
-                const W = BaseW * multW;
-                const H = BaseH * multH;
+                const dims = App.getFinalCanvasDimensions(BaseW, BaseH, multW, multH);
+                const W = dims.width;
+                const H = dims.height;
                 finalCanvas.width = W; finalCanvas.height = H;
                 const ctx = finalCanvas.getContext('2d');
                 ctx.fillStyle = "black";
@@ -2374,12 +2691,13 @@ async function handleRequest(request, env) {
                 });
 
                 // 1. Generate High Res Version for Upload (WebP Max Quality)
-                // We must ensure it's under 5MB
-                const highResBase = finalCanvas.toDataURL('image/webp', 0.95);
-                App.state.capturedImageHighRes = await UTILS.compressToLimit(highResBase, 4.5 * 1024 * 1024);
+                // We must ensure it's under the selected cap
+                const highResBase = finalCanvas.toDataURL('image/webp', 0.96);
+                const capBytes = App.getUploadCapBytes();
+                App.state.capturedImageHighRes = await UTILS.compressToLimit(highResBase, { maxBytes: capBytes });
 
-                // 2. Generate Low Res Version for Local Storage (WebP 350px 0.6)
-                App.state.capturedImage = await UTILS.processImage(highResBase, 350, 0.6);
+                // 2. Generate Preview Version for UI (larger thumbnail for IndexedDB)
+                App.state.capturedImage = await UTILS.processImage(highResBase, 640, 0.72);
 
                 document.getElementById('cameraSection').classList.add('hidden');
                 document.getElementById('smallPreview').src = App.state.capturedImage; // Show low res preview
@@ -2416,6 +2734,7 @@ async function handleRequest(request, env) {
             retakeAll: () => {
                 App.state.activeSegment = 0;
                 App.state.segments = [];
+                App.state.captureBase = null;
                 document.getElementById('takenPhotoUI').classList.add('hidden');
                 document.getElementById('takenPhotoUI').classList.remove('flex');
                 document.getElementById('cameraSection').classList.remove('hidden');
@@ -2434,9 +2753,9 @@ async function handleRequest(request, env) {
                     img.src = base64;
                     img.onload = () => {
                         const canvas = document.createElement('canvas');
-                        const isPortrait = App.state.orientation === 'portrait';
-                        const BaseW = isPortrait ? 960 : 1280;
-                        const BaseH = isPortrait ? 1280 : 960;
+                        const baseDims = App.getTargetBaseDimensions();
+                        const BaseW = baseDims.width;
+                        const BaseH = baseDims.height;
                         canvas.width = BaseW;
                         canvas.height = BaseH;
                         const ctx = canvas.getContext('2d');
@@ -2446,6 +2765,9 @@ async function handleRequest(request, env) {
                         if (srcRatio > dstRatio) { sh = img.height; sw = sh * dstRatio; sy = 0; sx = (img.width - sw) / 2; }
                         else { sw = img.width; sh = sw / dstRatio; sx = 0; sy = (img.height - sh) / 2; }
                         ctx.drawImage(img, sx, sy, sw, sh, 0, 0, BaseW, BaseH);
+                        if (!App.state.captureBase) {
+                            App.state.captureBase = { width: BaseW, height: BaseH };
+                        }
                         App.state.segments[App.state.activeSegment] = canvas;
                         const layout = App.collageConfigs[App.state.collageMode];
                         const total = layout.length;
@@ -2512,6 +2834,10 @@ async function handleRequest(request, env) {
                 document.getElementById('settingAuthToken').value = isSecret ? s.authToken : '';
                 document.getElementById('settingWorkerUrl').value = s.workerUrl || '';
                 document.getElementById('settingProxyToken').value = s.proxyToken || '';
+                const capValue = String(s.uploadCapMb || 5);
+                document.querySelectorAll('input[name="uploadCapMb"]').forEach((input) => {
+                    input.checked = input.value === capValue;
+                });
                 const hasVerifiedWorker = !!s.workerUrl;
                 const authSection = document.getElementById('authSection');
                 if (hasVerifiedWorker) {
@@ -2525,6 +2851,12 @@ async function handleRequest(request, env) {
             onSettingInput: () => {
                 const workerUrl = document.getElementById('settingWorkerUrl').value;
                 document.getElementById('verifyWorkerBtn').disabled = !workerUrl;
+            },
+            setUploadCap: (value) => {
+                const cap = Number(value) || 5;
+                const current = Storage.getSettings();
+                Storage.setSettings({ ...current, uploadCapMb: cap });
+                App.showToast(`Upload cap set to ${cap}MB`, "success");
             },
             verifyWorker: async () => {
                 const btn = document.getElementById('verifyWorkerBtn');
