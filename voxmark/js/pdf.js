@@ -1172,13 +1172,13 @@ function highlightSpanRange(span, start, end) {
     mark.className = "search-hit-fragment";
     mark.textContent = match;
     span.appendChild(mark);
-    return mark;
   }
   if (after) {
     const afterNode = document.createElement("span");
     afterNode.textContent = after;
     span.appendChild(afterNode);
   }
+  return span.querySelector(".search-hit-fragment");
 }
 
 function findNthMatchIndex(text, needle, targetIndex) {
@@ -1578,9 +1578,9 @@ function getPageSnapshot(pageData) {
   const [pdfX, pdfY] = pageData.viewport.convertToPdfPoint(offsetX, offsetY);
   const [pdfX2, pdfY2] = pageData.viewport.convertToPdfPoint(offsetX + width, offsetY + height);
 
-  const spans = pageData.textLayer
+  const spans = (pageData.textLayer
     ? Array.from(pageData.textLayer.querySelectorAll("span"))
-    : []
+    : [])
     .map((span) => {
       const spanRect = span.getBoundingClientRect();
       const containerRectInner = elements.viewerArea.getBoundingClientRect();

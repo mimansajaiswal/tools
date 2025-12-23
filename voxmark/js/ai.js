@@ -21,14 +21,18 @@ function buildAiPayload(session, chunk = null) {
 }
 
 function getSystemPrompt() {
-  const palette = getAllowedColors();
-  const paletteList = palette.length ? palette.map((c) => c.name).join(", ") : "Yellow, Blue, Red, Green, Purple, Pink";
+  const palette = getPaletteForPrompt();
+  const paletteList = palette.length
+    ? palette.map((c) => c.name).join(", ")
+    : "Yellow, Blue, Red, Green, Purple, Pink";
   const paletteDetails = palette.length
     ? palette.map((c) => `${c.name} (${c.color})`).join(", ")
     : "Yellow (#f9de6f), Blue (#6f9fe6), Red (#e56b6b), Green (#6dbb8a), Purple (#b1a0d4), Pink (#d9a0b5)";
   return `
 You are VoxMark, a PDF annotation parser.
-Return ONLY valid JSON matching this schema:
+Return ONLY valid JSON. No markdown, no code fences, no extra text.
+If there are no annotations, return {"annotations": []}.
+Schema:
 {
   "annotations": [
     {
@@ -56,10 +60,13 @@ Return ONLY valid JSON matching this schema:
     }
   ]
 }
-Use text anchors when possible. If figures/tables, use bbox or tapFocus.
-Only use these annotation colors by name: ${paletteList}.
+Guidelines:
+- Use text anchors (target.text) when possible. Use bbox or tapFocus for figures/tables or when text is unavailable.
+- Use 0-based pageIndex.
+- Use color names EXACTLY as listed; if the user doesn't specify a color, choose the closest from the palette.
+- Use contextRef.previousSection or contextRef.previousPdf when referencing prior sections or files.
+Palette names: ${paletteList}.
 Palette reference: ${paletteDetails}.
-You receive viewport snapshots, tap focus points, and context history. Use contextRef.previousSection or contextRef.previousPdf when the user references prior sections or files.
 `;
 }
 
@@ -155,7 +162,7 @@ function safeJsonParse(text) {
   }
 }
 
-function getAllowedColors() {
+function getPaletteForPrompt() {
   const palette = Array.isArray(state.settings.colorPalette)
     ? state.settings.colorPalette
     : [];

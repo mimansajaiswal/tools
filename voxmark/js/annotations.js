@@ -30,28 +30,39 @@ async function resolveTarget(annotation, pdfState, session) {
   const startHint = target.text?.startHint;
   const endHint = target.text?.endHint;
   if (query || startHint || endHint) {
-    const spans = Array.from(pageData.textLayer.querySelectorAll("span"))
-      .map((span) => {
-        const rect = span.getBoundingClientRect();
-        const pageRect = pageData.pageDiv.getBoundingClientRect();
-        const relX = rect.left - pageRect.left;
-        const relY = rect.top - pageRect.top;
-        const [sx, sy] = pageData.viewport.convertToPdfPoint(relX, relY);
-        const [sx2, sy2] = pageData.viewport.convertToPdfPoint(
-          relX + rect.width,
-          relY + rect.height
-        );
-        return {
-          text: span.textContent || "",
-          bbox: {
-            x: Math.min(sx, sx2),
-            y: Math.min(sy, sy2),
-            width: Math.abs(sx2 - sx),
-            height: Math.abs(sy2 - sy)
-          }
-        };
-      })
-      .filter(Boolean);
+    if (!pageData.textLayer) {
+      await renderPage(pdfState, pageData);
+    }
+    let spans = [];
+    if (pageData.textLayer) {
+      spans = Array.from(pageData.textLayer.querySelectorAll("span"))
+        .map((span) => {
+          const rect = span.getBoundingClientRect();
+          const pageRect = pageData.pageDiv.getBoundingClientRect();
+          const relX = rect.left - pageRect.left;
+          const relY = rect.top - pageRect.top;
+          const [sx, sy] = pageData.viewport.convertToPdfPoint(relX, relY);
+          const [sx2, sy2] = pageData.viewport.convertToPdfPoint(
+            relX + rect.width,
+            relY + rect.height
+          );
+          return {
+            text: span.textContent || "",
+            bbox: {
+              x: Math.min(sx, sx2),
+              y: Math.min(sy, sy2),
+              width: Math.abs(sx2 - sx),
+              height: Math.abs(sy2 - sy)
+            }
+          };
+        })
+        .filter(Boolean);
+    } else if (pageData.ocrSpans?.length) {
+      spans = pageData.ocrSpans.map((span) => ({
+        text: span.text || "",
+        bbox: span.bbox
+      }));
+    }
     const tokens = buildTokenMap(spans);
     let match = null;
     if (startHint || endHint) {

@@ -1,19 +1,7 @@
-const CACHE_NAME = "voxmark-cache-v5";
-const CORE_ASSETS = [
+const CACHE_NAME = "voxmark-cache-v6";
+const LOCAL_ASSETS = [
   "./index.html",
   "./styles/main.css",
-  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
-  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js",
-  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf_viewer.min.css",
-  "https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js",
-  "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js",
-  "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js",
-  "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js",
-  "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0/tesseract-core.wasm.js",
-  "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0/tesseract-core.wasm",
-  "https://tessdata.projectnaptha.com/4.0.0/eng.traineddata.gz",
-  "https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css",
-  "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Manrope:wght@400;500;600;700&display=swap",
   "./js/core.js",
   "./js/ui.js",
   "./js/settings.js",
@@ -31,11 +19,37 @@ const CORE_ASSETS = [
   "./assets/icon-192.svg",
   "./assets/icon-512.svg"
 ];
+const REMOTE_ASSETS = [
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf_viewer.min.css",
+  "https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js",
+  "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js",
+  "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js",
+  "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js",
+  "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0/tesseract-core.wasm.js",
+  "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0/tesseract-core.wasm",
+  "https://tessdata.projectnaptha.com/4.0.0/eng.traineddata.gz",
+  "https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css",
+  "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Manrope:wght@400;500;600;700&display=swap"
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(CORE_ASSETS);
+    caches.open(CACHE_NAME).then(async (cache) => {
+      await cache.addAll(LOCAL_ASSETS);
+      await Promise.all(
+        REMOTE_ASSETS.map(async (url) => {
+          try {
+            const response = await fetch(url, { mode: "no-cors" });
+            if (response) {
+              await cache.put(url, response);
+            }
+          } catch (error) {
+            // Best-effort caching for remote assets.
+          }
+        })
+      );
     })
   );
   self.skipWaiting();
