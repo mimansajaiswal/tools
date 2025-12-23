@@ -15,6 +15,9 @@ function openDB() {
       if (!dbInstance.objectStoreNames.contains("logs")) {
         dbInstance.createObjectStore("logs", { keyPath: "id" });
       }
+      if (!dbInstance.objectStoreNames.contains("settings")) {
+        dbInstance.createObjectStore("settings", { keyPath: "key" });
+      }
     };
     request.onsuccess = () => {
       db = request.result;
@@ -25,8 +28,23 @@ function openDB() {
 }
 
 function addToQueue(session) {
-  session.status = "queued";
+  session.status = session.status || "queued";
+  session.attempts = session.attempts || 0;
+  session.lastError = session.lastError || "";
   state.queue.push(session);
+  updateQueueIndicator();
+  updateStorageUsage();
+  if (!db) return;
+  const tx = db.transaction("queue", "readwrite");
+  tx.objectStore("queue").put(session);
+}
+
+function updateQueueItem(session) {
+  if (!session) return;
+  const index = state.queue.findIndex((item) => item.id === session.id);
+  if (index >= 0) {
+    state.queue[index] = session;
+  }
   updateQueueIndicator();
   updateStorageUsage();
   if (!db) return;
@@ -124,12 +142,49 @@ function loadSessionState() {
 
 function addLogEntry(entry) {
   if (!entry) return;
+  const MAX_LOGS = 250;
   state.logs.push(entry);
+  if (state.logs.length > MAX_LOGS) {
+    const overflow = state.logs.length - MAX_LOGS;
+    const removed = state.logs.splice(0, overflow);
+    if (db && removed.length) {
+      const tx = db.transaction("logs", "readwrite");
+      const store = tx.objectStore("logs");
+      removed.forEach((item) => store.delete(item.id));
+    }
+  }
   updateLogIndicator();
   renderLogs();
   if (!db) return;
   const tx = db.transaction("logs", "readwrite");
   tx.objectStore("logs").put(entry);
+  updateStorageUsage();
+}
+
+function clearLogs(scope = "active") {
+  const sessionId = state.activeSessionId;
+  if (scope === "active" && sessionId) {
+    state.logs = state.logs.filter((log) => log.sessionId !== sessionId);
+  } else {
+    state.logs = [];
+  }
+  updateLogIndicator();
+  renderLogs();
+  if (!db) return;
+  const tx = db.transaction("logs", "readwrite");
+  const store = tx.objectStore("logs");
+  if (scope === "active" && sessionId) {
+    const request = store.getAll();
+    request.onsuccess = () => {
+      const items = request.result || [];
+      items
+        .filter((item) => item.sessionId === sessionId)
+        .forEach((item) => store.delete(item.id));
+    };
+    updateStorageUsage();
+    return;
+  }
+  store.clear();
   updateStorageUsage();
 }
 
@@ -147,6 +202,26 @@ function loadLogsFromDB() {
   });
 }
 
+function saveSettingsToDB(settings) {
+  if (!db) return;
+  const tx = db.transaction("settings", "readwrite");
+  tx.objectStore("settings").put({ key: "current", value: settings });
+}
+
+function loadSettingsFromDB() {
+  return new Promise((resolve) => {
+    if (!db) {
+      resolve(null);
+      return;
+    }
+    const tx = db.transaction("settings", "readonly");
+    const store = tx.objectStore("settings");
+    const request = store.get("current");
+    request.onsuccess = () => resolve(request.result?.value || null);
+    request.onerror = () => resolve(null);
+  });
+}
+
 async function updateStorageUsage() {
   if (!navigator.storage || !navigator.storage.estimate) {
     elements.storageUsage.textContent = "IndexedDB: unavailable";
@@ -158,6 +233,10 @@ async function updateStorageUsage() {
 }
 
 function performReset() {
+  performResetSession();
+}
+
+function performResetSession() {
   state.pdfs = [];
   state.activePdfId = null;
   state.queue = [];
@@ -194,7 +273,31 @@ function performReset() {
     mediaStream.getTracks().forEach((track) => track.stop());
     mediaStream = null;
   }
-  notify("Session", "Session reset.");
+  notify("Session", "Session data reset.");
+}
+
+function performResetApp() {
+  performResetSession();
+  if (db) {
+    const tx = db.transaction("settings", "readwrite");
+    tx.objectStore("settings").clear();
+  }
+  localStorage.removeItem("voxmark-settings");
+  localStorage.removeItem("voxmark-mode");
+  localStorage.removeItem("voxmark-default-palette");
+  state.settings = { ...DEFAULT_SETTINGS };
+  loadSettings().then(() => {
+    persistSettings();
+    updatePdfInvert();
+  });
+  if (window.caches && caches.keys) {
+    caches.keys().then((keys) =>
+      keys
+        .filter((key) => key.startsWith("voxmark-"))
+        .forEach((key) => caches.delete(key))
+    );
+  }
+  notify("App", "App reset (including settings).");
 }
 
 function confirmResetSession() {
@@ -203,7 +306,17 @@ function confirmResetSession() {
     body:
       "<p>This will remove all loaded PDFs, recordings, queued items, and annotations from this session. This cannot be undone.</p>",
     confirmLabel: "Reset Session",
-    onConfirm: performReset
+    onConfirm: performResetSession
+  });
+}
+
+function confirmResetApp() {
+  confirmModal({
+    title: "Reset App",
+    body:
+      "<p>This will remove session data and all settings (including API keys and color palette). This cannot be undone.</p>",
+    confirmLabel: "Reset App",
+    onConfirm: performResetApp
   });
 }
 function toArrayBuffer(data) {

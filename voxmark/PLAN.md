@@ -25,6 +25,10 @@ This plan captures the complete scope and requirements for the VoxMark voice-pow
 - Use toasts for informational feedback; reserve modals for confirmations and destructive actions.
 - Add theme switcher (light/dark/system) with full color tokens and hover variants.
 - Theme toggle should be a 3-state icon clicker (system -> dark -> light -> system).
+- Add a queue panel (from overflow menu + queue badge) with retry/remove actions.
+- Add a search toggle on medium screens (collapse search/jump into a popover panel).
+- Add a clear (X) button in search to reset input/results/highlights.
+- Palette editor uses multiple color pickers with editable names; defaults prefilled.
 
 ## Functional Requirements
 - PDF Management
@@ -64,12 +68,16 @@ This plan captures the complete scope and requirements for the VoxMark voice-pow
   - Real-time: process after mic stop.
   - Batch: queue multiple sessions; process on button.
   - UI uses a compact mode toggle (icon + label) instead of radio pills.
+  - Failed sessions remain queued by default with retry support.
 
 - Offline
   - Full offline capture: PDFs + recordings + context.
   - IndexedDB storage for unprocessed sessions.
   - Prompt to process queued sessions when online.
   - Persist PDFs, annotations, session state, and logs in IndexedDB for refresh survival.
+  - Use CDN assets and cache them via service worker (PDF.js, worker, viewer CSS, fonts, icons, pdf-lib, jszip, Tesseract core/worker/lang) after first online load.
+  - Store settings in IndexedDB; reset app removes settings store.
+  - Cache/cleanup must be scoped to VoxMark only (multiple tools share the domain).
 
 - Export
   - Download active annotated PDF.
@@ -85,19 +93,23 @@ This plan captures the complete scope and requirements for the VoxMark voice-pow
   - Add a logs toggle in the header that opens a panel.
   - Store all processing events for the current session.
   - Render logs as expandable entries for long payloads.
+  - Allow clearing logs for the active session and cap log retention.
 
 - Persistence
-  - LocalStorage: settings, mode, API keys.
+  - IndexedDB: settings, queued/unprocessed sessions, PDFs, annotations, session state, logs.
+  - LocalStorage: mode (fallback only).
   - IndexedDB: queued/unprocessed sessions, PDFs, annotations, session state, logs.
   - Clear processed sessions from IDB; keep annotated PDFs in IDB for restore.
 
 - Safety
-  - Reset action in danger zone with modal confirmation.
+  - Two reset actions in danger zone with modal confirmation.
+  - Reset session clears PDFs/queue/logs/session state only.
+  - Reset app clears session + settings (API keys, palette, theme) and scoped caches.
   - No native browser alerts/toasts (use custom modals).
   - Add keyboard shortcut for mic toggle on md/lg screens (e.g., M).
 
 ## Architecture / Files
-- `voxmark/index.html` (structure + CDN dependencies)
+- `voxmark/index.html` (structure + CDN dependencies cached offline)
 - `voxmark/styles/main.css` (theme + layout + motion)
 - `voxmark/js/` (modular app: core, ui, settings, pdf, annotations, ai, stt, batch, export, storage, interactions, pwa)
 - `voxmark/manifest.json` + `voxmark/sw.js` (PWA support)
@@ -108,10 +120,13 @@ This plan captures the complete scope and requirements for the VoxMark voice-pow
 - Record long session across pages/PDFs; stop mic to process.
 - Batch queue 10+ sessions; reload and verify queue persistence.
 - Offline/online transitions with queue prompt.
+- Verify failed AI processing remains queued with retry.
+- Clear logs for the active session and confirm log count resets.
 - Tap focus pins captured and used.
 - Adjust mode drag/resize/snap and commit.
 - Export single, merged, zip.
 - PWA install and offline load after first visit.
+- Run OCR offline on scanned pages (English traineddata).
 ## Additional UX/Behavior Notes
 - Ensure mock AI bypasses API key requirements and runs without keys.
 - Improve PDF load resilience; show per-file errors and indicate whether a PDF has a text layer.
@@ -121,7 +136,7 @@ This plan captures the complete scope and requirements for the VoxMark voice-pow
 - Add ability to unload a PDF from the list with a confirmation when it has annotations.
 - Auto-fit PDF scale to viewer width and allow trackpad/gesture zoom.
 - Fix pinch zoom to avoid jumpy min/max clamps; apply smooth preview scaling.
-- Remove +/- zoom buttons and numeric zoom badge; rely on pinch + scroll zoom.
+- Use numeric zoom input only; commit on blur/enter (no +/- controls).
 - Trim long PDF filenames with ellipses to avoid sidebar horizontal scroll.
 - Remove viewport overlay UI toggle; keep context capture without intrusive UI.
 - Improve text selection reliability by ensuring text layers render and are selectable.
@@ -134,16 +149,28 @@ This plan captures the complete scope and requirements for the VoxMark voice-pow
 - Render PDF link annotations and handle internal link navigation with a return popup.
 - Add outline/bookmarks, thumbnails, and page search/jump UI in the sidebar.
 - Search results should highlight the matching text on-page after jump.
+- Search highlights should target the exact matched substring (not whole spans).
+- Search should match across span boundaries when the cached join-with-space would otherwise break matches.
+- Ensure search interactions do not break thumbnail rendering.
+- Search clear button should clear input/results/highlights immediately.
 - Render existing PDF annotations (highlights, notes, shapes) alongside link overlays.
 - Handle Named, GoToR, Launch, and file attachment link actions.
-- Add optional OCR (beta) for scanned pages using Tesseract.js.
+- Add optional OCR (beta) for scanned pages using Tesseract.js, fully offline.
+- Add a PDF inversion toggle for dark mode (user-controlled in settings).
+- Define a color palette setting and send it to the AI so annotation colors are always mapped to the same set.
 - Virtualize page rendering with IntersectionObserver to avoid rendering all pages at once.
 - Polish mobile UI: compact search/jump inputs, icon-only controls, and better spacing in top bar and bottom action bar.
+- Mobile bottom bar should be a single floating pill (no inner floating groups), fit on one line.
+- Hide the empty-state prompt whenever any PDF is loaded (avoid showing during zoom/refresh).
+- Drag-and-drop PDFs should work alongside file picker uploads.
 - Ensure dropdown menus are positioned near their triggers on mobile (avoid off-screen placement).
 - Make settings/logs panels scrollable on mobile with proper max-height and touch scrolling.
 - Smooth pinch-zoom behavior and disable auto-fit during pinch gestures to avoid jumpy scale changes.
 - Simplify mobile top bar and bottom toolbar layouts; keep mic inside the toolbar and remove redundant floating controls.
 - Lighten general UI typography for a more refined, less heavy look.
+- Add keyboard navigation for page up/down and zoom +/- (when focus is not in inputs).
+- Add focus trapping for panels and ESC to close panels on desktop.
+- Keep X/clear icon buttons compact and borderless in both themes.
 
 ## PDF Library Evaluation
 ### PDFium

@@ -101,20 +101,91 @@ function toggleSettings() {
   if (typeof closePdfMenu === "function") {
     closePdfMenu();
   }
+  if (typeof closeSearchPanel === "function") {
+    closeSearchPanel();
+  }
   if (elements.logsPanel?.classList.contains("open")) {
     closeLogs();
   }
   const open = elements.settingsPanel.classList.toggle("open");
   elements.settingsScrim.classList.toggle("active", open);
+  elements.settingsToggle?.setAttribute("aria-expanded", open ? "true" : "false");
+  if (open) {
+    elements.settingsPanel?.focus();
+  }
+}
+
+function toggleSearchPanel() {
+  const app = document.querySelector(".app");
+  if (!app) return;
+  if (elements.settingsPanel?.classList.contains("open")) {
+    elements.settingsPanel.classList.remove("open");
+    elements.settingsScrim.classList.remove("active");
+    elements.settingsToggle?.setAttribute("aria-expanded", "false");
+  }
+  if (elements.logsPanel?.classList.contains("open")) {
+    closeLogs();
+  }
+  if (elements.queuePanel?.classList.contains("open")) {
+    closeQueue();
+  }
+  const open = app.classList.toggle("search-open");
+  elements.searchScrim?.classList.toggle("active", open);
+  elements.searchToggle?.setAttribute("aria-expanded", open ? "true" : "false");
+  if (open) {
+    elements.searchInput?.focus();
+  }
+}
+
+function closeSearchPanel() {
+  const app = document.querySelector(".app");
+  if (!app) return;
+  app.classList.remove("search-open");
+  elements.searchScrim?.classList.remove("active");
+  elements.searchToggle?.setAttribute("aria-expanded", "false");
+}
+
+function openSidebar() {
+  const app = document.querySelector(".app");
+  if (!app) return;
+  if (window.innerWidth < 960) {
+    app.classList.add("sidebar-open");
+    elements.sidebarScrim?.classList.add("active");
+  }
+}
+
+function closeSidebar() {
+  const app = document.querySelector(".app");
+  if (!app) return;
+  app.classList.remove("sidebar-open");
+  elements.sidebarScrim?.classList.remove("active");
+}
+
+function updateHeaderOffset() {
+  if (!elements.header) return;
+  const height = elements.header.getBoundingClientRect().height || 0;
+  document.documentElement.style.setProperty("--topbar-height", `${height}px`);
 }
 
 function updateQueueIndicator() {
   const count = state.queue.length;
+  const failed = state.queue.filter((item) => item.status === "failed").length;
   elements.queueIndicator.innerHTML = `<i class="ph ph-stack"></i><span class="queue-count">${count}</span>`;
   elements.queueIndicator.classList.toggle("hidden", count === 0);
-  elements.queueIndicator.title = count ? `${count} queued recordings` : "No queued recordings";
+  if (count) {
+    const suffix = failed ? ` (${failed} failed)` : "";
+    const label = `${count} queued recordings${suffix}`;
+    elements.queueIndicator.title = label;
+    elements.queueIndicator.setAttribute("aria-label", label);
+  } else {
+    elements.queueIndicator.title = "No queued recordings";
+    elements.queueIndicator.setAttribute("aria-label", "No queued recordings");
+  }
   if (elements.connectionLabel) {
     elements.connectionLabel.classList.toggle("sr-only", count > 0);
+  }
+  if (elements.queuePanel?.classList.contains("open")) {
+    renderQueue();
   }
 }
 
@@ -125,6 +196,9 @@ function updateLogIndicator() {
     ? state.logs.filter((log) => log.sessionId === sessionId).length
     : state.logs.length;
   elements.logsCount.textContent = `${count}`;
+  if (elements.logsPanel?.classList.contains("open")) {
+    renderLogs();
+  }
 }
 
 function showJumpBack(returnPoint, label = "Jumped to linked page.") {
@@ -142,7 +216,11 @@ function hideJumpBack() {
 
 function renderLogs() {
   if (!elements.logsList) return;
-  const sessionId = state.activeSessionId;
+  let sessionId = state.activeSessionId;
+  if (!sessionId && state.logs.length) {
+    sessionId = state.logs[state.logs.length - 1].sessionId || null;
+    state.activeSessionId = sessionId;
+  }
   const logs = sessionId
     ? state.logs.filter((log) => log.sessionId === sessionId)
     : state.logs;
@@ -173,6 +251,130 @@ function renderLogs() {
     });
 }
 
+function formatRelativeTime(timestamp) {
+  if (!timestamp) return "unknown time";
+  const delta = Math.max(0, Date.now() - timestamp);
+  const minutes = Math.floor(delta / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function renderQueue() {
+  if (!elements.queueList) return;
+  const sessions = state.queue
+    .slice()
+    .sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0));
+  elements.queueMeta.textContent = sessions.length
+    ? `${sessions.length} queued session${sessions.length === 1 ? "" : "s"}`
+    : "Queue is empty.";
+  if (!sessions.length) {
+    elements.queueList.innerHTML = `<div class="viewer-hint">No queued recordings yet.</div>`;
+    return;
+  }
+  elements.queueList.innerHTML = "";
+  sessions.forEach((session) => {
+    const row = document.createElement("div");
+    const status = session.status || "queued";
+    row.className = `queue-item status-${status}`;
+    const label = status === "failed" ? "Failed" : status === "processing" ? "Processing" : "Queued";
+    const summary = document.createElement("div");
+    summary.className = "queue-summary";
+    summary.innerHTML = `
+      <div class="queue-title">Session ${session.id.slice(0, 6).toUpperCase()}</div>
+      <div class="queue-subtitle">${formatRelativeTime(session.startedAt)} · ${session.snapshots?.length || 0} snapshots</div>
+      ${session.lastError ? `<div class="queue-error">${session.lastError}</div>` : ""}
+    `;
+    const statusPill = document.createElement("div");
+    statusPill.className = "queue-status";
+    statusPill.textContent = label;
+    const actions = document.createElement("div");
+    actions.className = "queue-actions";
+    const retry = document.createElement("button");
+    retry.className = "btn secondary small";
+    retry.type = "button";
+    retry.textContent =
+      status === "processing" ? "Working..." : status === "failed" ? "Retry" : "Process";
+    retry.disabled = status === "processing";
+    retry.addEventListener("click", () => processQueueItem(session));
+    const remove = document.createElement("button");
+    remove.className = "btn ghost small";
+    remove.type = "button";
+    remove.textContent = "Remove";
+    remove.addEventListener("click", () => {
+      confirmModal({
+        title: "Remove Session",
+        body: "<p>Remove this session from the queue?</p>",
+        confirmLabel: "Remove",
+        onConfirm: () => {
+          removeFromQueue(session.id);
+          renderQueue();
+        }
+      });
+    });
+    actions.appendChild(retry);
+    actions.appendChild(remove);
+    row.appendChild(summary);
+    row.appendChild(statusPill);
+    row.appendChild(actions);
+    elements.queueList.appendChild(row);
+  });
+}
+
+async function processQueueItem(session) {
+  if (!session) return;
+  session.status = "processing";
+  session.lastError = "";
+  if (typeof updateQueueItem === "function") {
+    updateQueueItem(session);
+  }
+  renderQueue();
+  state.activeSessionId = session.id;
+  updateLogIndicator();
+  const success = await processSession(session);
+  if (success) {
+    removeFromQueue(session.id);
+  } else if (typeof updateQueueItem === "function") {
+    updateQueueItem(session);
+  }
+  renderQueue();
+}
+
+function toggleQueue() {
+  if (typeof closeOverflowMenu === "function") {
+    closeOverflowMenu();
+  }
+  if (typeof closePdfMenu === "function") {
+    closePdfMenu();
+  }
+  if (typeof closeSearchPanel === "function") {
+    closeSearchPanel();
+  }
+  if (elements.settingsPanel?.classList.contains("open")) {
+    elements.settingsPanel.classList.remove("open");
+    elements.settingsScrim.classList.remove("active");
+  }
+  if (elements.logsPanel?.classList.contains("open")) {
+    closeLogs();
+  }
+  const open = elements.queuePanel.classList.toggle("open");
+  elements.queueScrim.classList.toggle("active", open);
+  elements.queueToggle?.setAttribute("aria-expanded", open ? "true" : "false");
+  if (open) {
+    renderQueue();
+    elements.queuePanel?.focus();
+  }
+}
+
+function closeQueue() {
+  elements.queuePanel?.classList.remove("open");
+  elements.queueScrim?.classList.remove("active");
+  elements.queueToggle?.setAttribute("aria-expanded", "false");
+}
+
 function toggleLogs() {
   if (typeof closeOverflowMenu === "function") {
     closeOverflowMenu();
@@ -180,18 +382,26 @@ function toggleLogs() {
   if (typeof closePdfMenu === "function") {
     closePdfMenu();
   }
+  if (typeof closeSearchPanel === "function") {
+    closeSearchPanel();
+  }
   if (elements.settingsPanel?.classList.contains("open")) {
     elements.settingsPanel.classList.remove("open");
     elements.settingsScrim.classList.remove("active");
   }
   const open = elements.logsPanel.classList.toggle("open");
   elements.logsScrim.classList.toggle("active", open);
-  if (open) renderLogs();
+  elements.logsToggle?.setAttribute("aria-expanded", open ? "true" : "false");
+  if (open) {
+    renderLogs();
+    elements.logsPanel?.focus();
+  }
 }
 
 function closeLogs() {
   elements.logsPanel.classList.remove("open");
   elements.logsScrim.classList.remove("active");
+  elements.logsToggle?.setAttribute("aria-expanded", "false");
 }
 
 function logEvent({ title, detail = "", type = "info", sessionId }) {

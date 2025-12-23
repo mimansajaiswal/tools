@@ -14,7 +14,22 @@ async function ensureMediaStream() {
   return mediaStream;
 }
 
-function startRecordingSession() {
+async function startRecordingSession() {
+  if (state.recording) return;
+  const provider = state.settings.sttProvider;
+  if (provider === "native") {
+    if (!("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) {
+      notify("Speech Recognition", "Speech Recognition not supported.");
+      return;
+    }
+  } else {
+    try {
+      await ensureMediaStream();
+    } catch (error) {
+      notify("Microphone", "Microphone access denied or unavailable.");
+      return;
+    }
+  }
   state.recording = true;
   const session = {
     id: crypto.randomUUID(),
@@ -25,7 +40,10 @@ function startRecordingSession() {
     segments: [],
     audioChunks: [],
     pdfContextHistory: [],
-    status: "recording"
+    status: "recording",
+    attempts: 0,
+    lastError: "",
+    processedChunks: []
   };
   if (state.activePdfId) {
     session.pdfContextHistory.push({
@@ -47,7 +65,7 @@ function startRecordingSession() {
     },
     sessionId: session.id
   });
-  const initialSnapshot = captureSnapshot();
+  const initialSnapshot = await captureSnapshot();
   if (initialSnapshot) session.snapshots.push(initialSnapshot);
   beginCaptureLoop();
   beginSTT(session);
@@ -63,6 +81,19 @@ function stopRecordingSession() {
   notify("Recording", "Recording saved.");
   const session = state.recordingSession;
   state.recordingSession = null;
+  if (!session.transcript && !session.audioChunks.length) {
+    notify("Recording", "No audio captured. Session discarded.");
+    logEvent({
+      title: "Recording discarded",
+      detail: {
+        sessionId: session.id,
+        reason: "No audio captured"
+      },
+      sessionId: session.id
+    });
+    clearFocusPins();
+    return;
+  }
   logEvent({
     title: "Recording stopped",
     detail: {
@@ -77,6 +108,7 @@ function stopRecordingSession() {
   if (state.mode === "realtime") {
     processSession(session).then((success) => {
       if (success) removeFromQueue(session.id);
+      else if (typeof updateQueueItem === "function") updateQueueItem(session);
     });
   }
   clearFocusPins();
@@ -86,10 +118,11 @@ function beginCaptureLoop() {
   const interval = window.innerWidth < 900 ? 1500 : 1000;
   captureInterval = setInterval(() => {
     if (!state.recording) return;
-    const snapshot = captureSnapshot();
-    if (!snapshot) return;
-    state.recordingSession.snapshots.push(snapshot);
-    if (state.showMarkers) showViewportMarkers(snapshot);
+    captureSnapshot().then((snapshot) => {
+      if (!snapshot) return;
+      state.recordingSession.snapshots.push(snapshot);
+      if (state.showMarkers) showViewportMarkers(snapshot);
+    });
   }, interval);
 }
 
@@ -107,6 +140,7 @@ async function beginSTT(session) {
     recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
+    recognition.lang = navigator.language || "en-US";
     recognition.onresult = (event) => {
       let fullTranscript = "";
       let deltaTranscript = "";
@@ -123,6 +157,24 @@ async function beginSTT(session) {
         session.segments.push({
           timestamp: Date.now(),
           text: delta
+        });
+      }
+    };
+    recognition.onerror = (event) => {
+      notify("Speech Recognition", "Speech recognition error.");
+      logEvent({
+        title: "Speech recognition error",
+        detail: event?.error || "Unknown error",
+        sessionId: session.id
+      });
+    };
+    recognition.onend = () => {
+      if (state.recording) {
+        notify("Speech Recognition", "Speech recognition stopped unexpectedly.");
+        logEvent({
+          title: "Speech recognition ended",
+          detail: { sessionId: session.id },
+          sessionId: session.id
         });
       }
     };

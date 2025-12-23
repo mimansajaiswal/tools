@@ -40,6 +40,14 @@ function updateActivePdfLabel() {
   elements.activePdfLabel.title = active ? active.name : "No PDF loaded";
 }
 
+function updateEmptyStateVisibility() {
+  if (!elements.emptyState || !elements.viewerArea) return;
+  if (!elements.viewerArea.contains(elements.emptyState)) {
+    elements.viewerArea.appendChild(elements.emptyState);
+  }
+  elements.emptyState.classList.toggle("hidden", state.pdfs.length > 0);
+}
+
 function setActivePdf(id) {
   if (state.recording && state.recordingSession && state.activePdfId && state.activePdfId !== id) {
     state.recordingSession.pdfContextHistory.push({
@@ -60,6 +68,7 @@ function setActivePdf(id) {
   scheduleActivePageUpdate();
   saveSessionState({ activePdfId: id });
   updateActivePdfLabel();
+  updateEmptyStateVisibility();
   if (typeof closePdfMenu === "function") {
     closePdfMenu();
   }
@@ -100,9 +109,8 @@ function removePdf(id) {
     if (next) setActivePdf(next);
   }
   refreshPdfList();
+  updateEmptyStateVisibility();
   if (!state.pdfs.length) {
-    elements.viewerArea.appendChild(elements.emptyState);
-    elements.emptyState.classList.remove("hidden");
     updateNavigationForActivePdf();
   }
 }
@@ -158,7 +166,7 @@ async function handlePdfUpload(files) {
       }
     }
     refreshPdfList();
-    elements.emptyState.classList.add("hidden");
+    updateEmptyStateVisibility();
   } catch (error) {
     notify("PDF Load", "Failed to load one or more PDFs.", { type: "error", duration: 6000 });
   } finally {
@@ -188,17 +196,6 @@ async function renderPdf(pdfState) {
     pageDiv.dataset.pageNumber = pageNum;
     pageDiv.dataset.rendered = "false";
 
-    const canvas = document.createElement("canvas");
-    pageDiv.appendChild(canvas);
-
-    const textLayer = document.createElement("div");
-    textLayer.className = "textLayer";
-    pageDiv.appendChild(textLayer);
-
-    const annotationLayer = document.createElement("div");
-    annotationLayer.className = "annotationLayer";
-    pageDiv.appendChild(annotationLayer);
-
     pdfState.container.appendChild(pageDiv);
 
     pdfState.pages.push({
@@ -206,9 +203,9 @@ async function renderPdf(pdfState) {
       page,
       viewport,
       pageDiv,
-      textLayer,
-      annotationLayer,
-      canvas,
+      textLayer: null,
+      annotationLayer: null,
+      canvas: null,
       rendered: false,
       rendering: false,
       ocrSpans: null
@@ -330,16 +327,18 @@ function setupPageObserver(pdfState) {
   renderVisiblePages(pdfState);
 }
 
-function renderVisiblePages(pdfState) {
+async function renderVisiblePages(pdfState) {
   if (!pdfState) return;
   const visible = getVisiblePages(pdfState);
-  visible.forEach((pageData) => renderPage(pdfState, pageData));
+  await Promise.all(visible.map((pageData) => renderPage(pdfState, pageData)));
+  cleanupPageRendering(pdfState, visible);
 }
 
 async function renderPage(pdfState, pageData) {
   if (!pdfState || !pageData || pageData.rendered || pageData.rendering) return;
   pageData.rendering = true;
   try {
+    ensurePageLayers(pageData);
     const viewport = pageData.page.getViewport({ scale: pdfState.scale });
     pageData.viewport = viewport;
     pageData.pageDiv.style.width = `${viewport.width}px`;
@@ -391,6 +390,21 @@ async function renderPage(pdfState, pageData) {
   } finally {
     pageData.rendering = false;
   }
+}
+
+function ensurePageLayers(pageData) {
+  if (!pageData || pageData.canvas) return;
+  const canvas = document.createElement("canvas");
+  pageData.pageDiv.appendChild(canvas);
+  const textLayer = document.createElement("div");
+  textLayer.className = "textLayer";
+  pageData.pageDiv.appendChild(textLayer);
+  const annotationLayer = document.createElement("div");
+  annotationLayer.className = "annotationLayer";
+  pageData.pageDiv.appendChild(annotationLayer);
+  pageData.canvas = canvas;
+  pageData.textLayer = textLayer;
+  pageData.annotationLayer = annotationLayer;
 }
 
 async function renderAnnotationLayer({ annotations, annotationLayer, viewport, pdfState }) {
@@ -724,7 +738,14 @@ function navigateToReturnPoint(point) {
   });
 }
 
-function navigateToPageIndex(pageIndex, pdfState, highlightTerm = "") {
+function navigateToPageIndex(
+  pageIndex,
+  pdfState,
+  highlightTerm = "",
+  matchIndex = null,
+  matchStart = null,
+  matchStartNoSpace = null
+) {
   const targetPdf = pdfState || getActivePdf();
   if (!targetPdf) return;
   const pageData = targetPdf.pages[pageIndex];
@@ -735,7 +756,14 @@ function navigateToPageIndex(pageIndex, pdfState, highlightTerm = "") {
   elements.viewerArea.scrollTop = target;
   renderPage(targetPdf, pageData).then(() => {
     if (highlightTerm) {
-      highlightSearchMatches(targetPdf, pageIndex, highlightTerm);
+      highlightSearchMatches(
+        targetPdf,
+        pageIndex,
+        highlightTerm,
+        matchIndex,
+        matchStart,
+        matchStartNoSpace
+      );
     }
   });
   scheduleActivePageUpdate();
@@ -765,47 +793,132 @@ async function searchInActivePdf(query) {
   const term = (query || "").trim();
   elements.searchResults.innerHTML = "";
   clearSearchHighlights(pdfState);
-  if (!pdfState || !term) return;
+  if (!pdfState || !term) {
+    state.searchResults = [];
+    state.searchTerm = "";
+    state.activeSearchIndex = -1;
+    updateSearchNavButtons();
+    return;
+  }
   if (searchRunning) return;
   searchRunning = true;
   elements.searchResults.innerHTML = `<div class="viewer-hint">Searching...</div>`;
   const results = [];
   const termLower = term.toLowerCase();
+  const hasWhitespace = /\s/.test(termLower);
+  const seen = new Set();
   for (const pageData of pdfState.pages) {
-    const text = await getPageText(pdfState, pageData);
+    const textRecord = await getPageTextRecord(pdfState, pageData);
+    const text = textRecord.text || "";
+    const textNoSpace = textRecord.textNoSpace || "";
+    const noSpaceMap = textRecord.noSpaceMap || [];
     if (!text) continue;
     const lower = text.toLowerCase();
     let idx = lower.indexOf(termLower);
+    let matchIndex = 0;
     while (idx !== -1) {
       const start = Math.max(0, idx - 24);
       const end = Math.min(text.length, idx + term.length + 24);
       const snippet = text.slice(start, end).replace(/\s+/g, " ").trim();
-      results.push({
-        pageIndex: pageData.pageNum - 1,
-        snippet
-      });
+      const key = `t:${pageData.pageNum}:${idx}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        results.push({
+          pageIndex: pageData.pageNum - 1,
+          snippet,
+          matchIndex,
+          matchStart: idx
+        });
+      }
       idx = lower.indexOf(termLower, idx + termLower.length);
+      matchIndex += 1;
       if (results.length > 50) break;
+    }
+    if (!hasWhitespace && results.length <= 50 && textNoSpace) {
+      const lowerNoSpace = textNoSpace.toLowerCase();
+      let idxNoSpace = lowerNoSpace.indexOf(termLower);
+      while (idxNoSpace !== -1) {
+        const mappedIndex = noSpaceMap[idxNoSpace] ?? 0;
+        if (text.slice(mappedIndex, mappedIndex + term.length).toLowerCase() !== termLower) {
+          const start = Math.max(0, mappedIndex - 24);
+          const end = Math.min(text.length, mappedIndex + term.length + 24);
+          const snippet = text.slice(start, end).replace(/\s+/g, " ").trim();
+          const key = `n:${pageData.pageNum}:${idxNoSpace}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            results.push({
+              pageIndex: pageData.pageNum - 1,
+              snippet,
+              matchIndex: null,
+              matchStart: null,
+              matchStartNoSpace: idxNoSpace
+            });
+          }
+        }
+        idxNoSpace = lowerNoSpace.indexOf(termLower, idxNoSpace + termLower.length);
+        if (results.length > 50) break;
+      }
     }
     if (results.length > 50) break;
   }
   renderSearchResults(results, term);
+  state.searchResults = results;
+  state.searchTerm = term;
+  state.activeSearchIndex = results.length ? 0 : -1;
+  updateSearchNavButtons();
   searchRunning = false;
+  if (window.innerWidth < 960) {
+    openSidebar();
+  }
+  if (document.querySelector(".app")?.classList.contains("search-open")) {
+    closeSearchPanel();
+  }
 }
 
 async function getPageText(pdfState, pageData) {
+  const record = await getPageTextRecord(pdfState, pageData);
+  return record.text;
+}
+
+async function getPageTextRecord(pdfState, pageData) {
   if (!pdfState.pageTextCache) pdfState.pageTextCache = {};
-  if (pdfState.pageTextCache[pageData.pageNum]) return pdfState.pageTextCache[pageData.pageNum];
+  if (pdfState.pageTextCache[pageData.pageNum]) {
+    return pdfState.pageTextCache[pageData.pageNum];
+  }
   const textContent = await pageData.page.getTextContent();
-  const text = textContent.items.map((item) => item.str).join(" ");
-  pdfState.pageTextCache[pageData.pageNum] = text;
-  return text;
+  const items = textContent.items.map((item) => item.str || "");
+  const textParts = [];
+  const noSpaceParts = [];
+  const noSpaceMap = [];
+  let textIndex = 0;
+  items.forEach((item, idx) => {
+    const str = item || "";
+    for (let i = 0; i < str.length; i += 1) {
+      const ch = str[i];
+      textParts.push(ch);
+      noSpaceParts.push(ch);
+      noSpaceMap.push(textIndex);
+      textIndex += 1;
+    }
+    if (idx < items.length - 1) {
+      textParts.push(" ");
+      textIndex += 1;
+    }
+  });
+  const text = textParts.join("");
+  const textNoSpace = noSpaceParts.join("");
+  pdfState.pageTextCache[pageData.pageNum] = { text, items, textNoSpace, noSpaceMap };
+  return pdfState.pageTextCache[pageData.pageNum];
 }
 
 let searchHighlightTimeout;
 function clearSearchHighlights(pdfState) {
   if (!pdfState) return;
   pdfState.pages.forEach((pageData) => {
+    pageData.textLayer?.querySelectorAll("span[data-search-original]").forEach((span) => {
+      span.textContent = span.dataset.searchOriginal;
+      delete span.dataset.searchOriginal;
+    });
     pageData.textLayer?.querySelectorAll(".search-hit").forEach((span) => {
       span.classList.remove("search-hit");
     });
@@ -817,29 +930,107 @@ function clearSearchHighlights(pdfState) {
   }
 }
 
-async function highlightSearchMatches(pdfState, pageIndex, term) {
+async function highlightSearchMatches(
+  pdfState,
+  pageIndex,
+  term,
+  matchIndex = null,
+  matchStart = null,
+  matchStartNoSpace = null
+) {
   if (!pdfState || !term) return;
   const pageData = pdfState.pages[pageIndex];
   if (!pageData) return;
   await renderPage(pdfState, pageData);
   clearSearchHighlights(pdfState);
   const termLower = term.toLowerCase();
-  const spans = Array.from(pageData.textLayer.querySelectorAll("span"));
+  const spans = pageData.textLayer
+    ? Array.from(pageData.textLayer.querySelectorAll("span"))
+    : [];
   let matched = false;
   let firstMatchRect = null;
-  spans.forEach((span) => {
-    const text = (span.textContent || "").toLowerCase();
-    if (text.includes(termLower)) {
-      span.classList.add("search-hit");
-      if (!firstMatchRect) {
-        firstMatchRect = span.getBoundingClientRect();
-      }
-      matched = true;
+  const countOccurrences = (text, needle) => {
+    if (!text || !needle) return 0;
+    let count = 0;
+    let start = 0;
+    let idx = text.indexOf(needle, start);
+    while (idx !== -1) {
+      count += 1;
+      start = idx + needle.length;
+      idx = text.indexOf(needle, start);
     }
-  });
+    return count;
+  };
+  const spanIndex = buildSpanIndex(spans);
+  if (matchStart === null && matchIndex !== null) {
+    matchStart = findNthMatchIndex(spanIndex.combinedText.toLowerCase(), termLower, matchIndex);
+  }
+  const applyRangeHighlight = (startIndex, useNoSpace) => {
+    if (startIndex === null) return false;
+    const matchEnd = startIndex + term.length;
+    let applied = false;
+    spanIndex.entries.forEach((entry) => {
+      const entryStart = useNoSpace ? entry.startNoSpace : entry.start;
+      const entryEnd = useNoSpace ? entry.endNoSpace : entry.end;
+      if (entryEnd < startIndex || entryStart > matchEnd) return;
+      const localStart = Math.max(0, startIndex - entryStart);
+      const localEnd = Math.min(entry.text.length, matchEnd - entryStart);
+      if (localEnd <= localStart) return;
+      const mark = highlightSpanRange(entry.span, localStart, localEnd);
+      if (!firstMatchRect) {
+        const rectTarget = mark || entry.span;
+        firstMatchRect = rectTarget.getBoundingClientRect();
+      }
+      applied = true;
+    });
+    return applied;
+  };
+  if (matchStartNoSpace !== null) {
+    matched = applyRangeHighlight(matchStartNoSpace, true);
+  } else if (matchStart !== null) {
+    matched = applyRangeHighlight(matchStart, false);
+    if (!matched && matchIndex !== null) {
+      matchStart = findNthMatchIndex(spanIndex.combinedText.toLowerCase(), termLower, matchIndex);
+      matched = applyRangeHighlight(matchStart, false);
+    }
+  } else {
+    let currentIndex = 0;
+    spans.forEach((span) => {
+      const text = (span.textContent || "").toLowerCase();
+      if (!text.includes(termLower)) return;
+      const occurrences = countOccurrences(text, termLower);
+      if (matchIndex === null) {
+        span.classList.add("search-hit");
+        if (!firstMatchRect) {
+          firstMatchRect = span.getBoundingClientRect();
+        }
+        matched = true;
+        return;
+      }
+      if (matchIndex >= currentIndex && matchIndex < currentIndex + occurrences) {
+        span.classList.add("search-hit");
+        firstMatchRect = span.getBoundingClientRect();
+        matched = true;
+      }
+      currentIndex += occurrences;
+    });
+  }
   if (!matched && pageData.ocrSpans?.length) {
+    let ocrIndex = 0;
     pageData.ocrSpans.forEach((span) => {
       if (!span.text || !span.text.toLowerCase().includes(termLower)) return;
+      const occurrences = countOccurrences(span.text.toLowerCase(), termLower);
+      if (
+        matchStart !== null &&
+        !(matchStart >= ocrIndex && matchStart < ocrIndex + occurrences * term.length)
+      ) {
+        ocrIndex += occurrences;
+        return;
+      }
+      if (matchIndex !== null && !(matchIndex >= ocrIndex && matchIndex < ocrIndex + occurrences)) {
+        ocrIndex += occurrences;
+        return;
+      }
       const rect = pdfBoxToViewportRect(pageData, span.bbox);
       const box = document.createElement("div");
       box.className = "search-hit-box";
@@ -855,6 +1046,8 @@ async function highlightSearchMatches(pdfState, pageIndex, term) {
           bottom: pageRect.top + rect.top + rect.height
         };
       }
+      matched = true;
+      ocrIndex += occurrences;
     });
   }
   if (firstMatchRect) {
@@ -887,6 +1080,7 @@ function renderSearchResults(results, term) {
     elements.searchResults.innerHTML = `<div class="viewer-hint">No results for "${escapeHtml(
       term
     )}".</div>`;
+    updateSearchNavButtons();
     return;
   }
   elements.searchResults.innerHTML = "";
@@ -897,10 +1091,106 @@ function renderSearchResults(results, term) {
     button.textContent = `Page ${result.pageIndex + 1} · ${result.snippet}`;
     button.addEventListener("click", () => {
       const pdfState = getActivePdf();
-      navigateToPageIndex(result.pageIndex, pdfState, term);
+      state.activeSearchIndex = results.indexOf(result);
+      updateSearchNavButtons();
+      navigateToPageIndex(
+        result.pageIndex,
+        pdfState,
+        term,
+        result.matchIndex,
+        result.matchStart,
+        result.matchStartNoSpace
+      );
     });
     elements.searchResults.appendChild(button);
   });
+}
+
+function updateSearchNavButtons() {
+  const disabled = !state.searchResults || state.searchResults.length === 0;
+  if (elements.searchPrev) elements.searchPrev.disabled = disabled;
+  if (elements.searchNext) elements.searchNext.disabled = disabled;
+}
+
+function goToSearchResult(delta = 1) {
+  if (!state.searchResults || !state.searchResults.length) {
+    notify("Search", "No matches yet.", { type: "info", duration: 1600 });
+    return;
+  }
+  const total = state.searchResults.length;
+  let index = state.activeSearchIndex;
+  if (typeof index !== "number" || index < 0) index = 0;
+  index = (index + delta + total) % total;
+  const result = state.searchResults[index];
+  state.activeSearchIndex = index;
+  updateSearchNavButtons();
+  navigateToPageIndex(
+    result.pageIndex,
+    getActivePdf(),
+    state.searchTerm,
+    result.matchIndex,
+    result.matchStart,
+    result.matchStartNoSpace
+  );
+}
+
+function buildSpanIndex(spans) {
+  let index = 0;
+  let indexNoSpace = 0;
+  const entries = spans.map((span) => {
+    const text = span.textContent || "";
+    const start = index;
+    const end = start + text.length;
+    const startNoSpace = indexNoSpace;
+    const endNoSpace = startNoSpace + text.length;
+    index = end + 1;
+    indexNoSpace = endNoSpace;
+    return { span, text, start, end, startNoSpace, endNoSpace };
+  });
+  const combinedText = entries.map((entry) => entry.text).join(" ");
+  const combinedNoSpace = entries.map((entry) => entry.text).join("");
+  return { entries, combinedText, combinedNoSpace };
+}
+
+function highlightSpanRange(span, start, end) {
+  if (!span || start >= end) return;
+  if (!span.dataset.searchOriginal) {
+    span.dataset.searchOriginal = span.textContent || "";
+  }
+  const text = span.dataset.searchOriginal;
+  const before = text.slice(0, start);
+  const match = text.slice(start, end);
+  const after = text.slice(end);
+  span.innerHTML = "";
+  if (before) {
+    const beforeNode = document.createElement("span");
+    beforeNode.textContent = before;
+    span.appendChild(beforeNode);
+  }
+  if (match) {
+    const mark = document.createElement("span");
+    mark.className = "search-hit-fragment";
+    mark.textContent = match;
+    span.appendChild(mark);
+    return mark;
+  }
+  if (after) {
+    const afterNode = document.createElement("span");
+    afterNode.textContent = after;
+    span.appendChild(afterNode);
+  }
+}
+
+function findNthMatchIndex(text, needle, targetIndex) {
+  if (!text || !needle || targetIndex == null) return null;
+  let idx = text.indexOf(needle);
+  let current = 0;
+  while (idx !== -1) {
+    if (current === targetIndex) return idx;
+    current += 1;
+    idx = text.indexOf(needle, idx + needle.length);
+  }
+  return null;
 }
 
 async function updateNavigationForActivePdf() {
@@ -908,6 +1198,10 @@ async function updateNavigationForActivePdf() {
   if (!elements.outlineList || !elements.thumbnailList) return;
   elements.searchResults.innerHTML = "";
   clearSearchHighlights(pdfState);
+  state.searchResults = [];
+  state.searchTerm = "";
+  state.activeSearchIndex = -1;
+  updateSearchNavButtons();
   if (!pdfState) {
     elements.outlineList.innerHTML = `<div class="viewer-hint">No PDF loaded.</div>`;
     elements.thumbnailList.innerHTML = "";
@@ -1025,6 +1319,7 @@ function setupThumbnailStrip(pdfState) {
     button.addEventListener("click", () => navigateToPageIndex(index, pdfState));
     elements.thumbnailList.appendChild(button);
     pageData.thumbCanvas = canvas;
+    pageData.thumbRendered = false;
   });
   const observer = new IntersectionObserver(
     (entries) => {
@@ -1142,7 +1437,11 @@ async function runOcrOnPage(pdfState, pageData, Tesseract) {
   canvas.height = viewport.height;
   const context = canvas.getContext("2d");
   await pageData.page.render({ canvasContext: context, viewport }).promise;
-  const result = await Tesseract.recognize(canvas, "eng");
+  const result = await Tesseract.recognize(canvas, "eng", {
+    langPath: "https://tessdata.projectnaptha.com/4.0.0",
+    workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js",
+    corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0/tesseract-core.wasm.js"
+  });
   const words = result?.data?.words || [];
   const spans = words
     .filter((word) => word.text && word.bbox)
@@ -1237,6 +1536,32 @@ function getVisiblePages(pdfState) {
   });
 }
 
+function cleanupPageRendering(pdfState, visible = []) {
+  if (!pdfState || !pdfState.pages.length) return;
+  if (!visible.length) return;
+  const minPage = Math.max(1, visible[0].pageNum - 3);
+  const maxPage = Math.min(pdfState.pageCount, visible[visible.length - 1].pageNum + 3);
+  pdfState.pages.forEach((pageData) => {
+    if (pageData.pageNum >= minPage && pageData.pageNum <= maxPage) return;
+    if (!pageData.canvas && !pageData.textLayer && !pageData.annotationLayer) return;
+    if (pageData.canvas) {
+      pageData.canvas.remove();
+      pageData.canvas = null;
+    }
+    if (pageData.textLayer) {
+      pageData.textLayer.remove();
+      pageData.textLayer = null;
+    }
+    if (pageData.annotationLayer) {
+      pageData.annotationLayer.remove();
+      pageData.annotationLayer = null;
+    }
+    pageData.rendered = false;
+    pageData.rendering = false;
+    pageData.pageDiv.dataset.rendered = "false";
+  });
+}
+
 function getPageSnapshot(pageData) {
   const rect = pageData.pageDiv.getBoundingClientRect();
   const containerRect = elements.viewerArea.getBoundingClientRect();
@@ -1253,7 +1578,9 @@ function getPageSnapshot(pageData) {
   const [pdfX, pdfY] = pageData.viewport.convertToPdfPoint(offsetX, offsetY);
   const [pdfX2, pdfY2] = pageData.viewport.convertToPdfPoint(offsetX + width, offsetY + height);
 
-  const spans = Array.from(pageData.textLayer.querySelectorAll("span"))
+  const spans = pageData.textLayer
+    ? Array.from(pageData.textLayer.querySelectorAll("span"))
+    : []
     .map((span) => {
       const spanRect = span.getBoundingClientRect();
       const containerRectInner = elements.viewerArea.getBoundingClientRect();
@@ -1296,10 +1623,10 @@ function getPageSnapshot(pageData) {
   };
 }
 
-function captureSnapshot() {
+async function captureSnapshot() {
   const pdfState = getActivePdf();
   if (!pdfState) return null;
-  renderVisiblePages(pdfState);
+  await renderVisiblePages(pdfState);
   const visiblePages = getVisiblePages(pdfState);
   return {
     timestamp: Date.now(),
@@ -1382,8 +1709,11 @@ async function restorePdfState(stored) {
       restoring: true
     };
     state.pdfs.push(pdfState);
+    updateEmptyStateVisibility();
     if (pdfState.annotations.length) {
-      await applyAllAnnotations(pdfState);
+      await applyAllAnnotations(pdfState, {
+        invertForView: document.documentElement.classList.contains("pdf-invert")
+      });
     } else {
       await renderPdf(pdfState);
     }

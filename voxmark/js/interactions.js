@@ -20,6 +20,18 @@ function bindInteractions() {
       toggleOverflowMenu();
     });
   }
+  if (elements.queueToggle) {
+    elements.queueToggle.addEventListener("click", toggleQueue);
+  }
+  if (elements.queueIndicator) {
+    elements.queueIndicator.addEventListener("click", toggleQueue);
+  }
+  if (elements.searchToggle) {
+    elements.searchToggle.addEventListener("click", (event) => {
+      event.preventDefault();
+      toggleSearchPanel();
+    });
+  }
   elements.settingsToggle.addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -32,6 +44,16 @@ function bindInteractions() {
   });
   elements.logsToggle.addEventListener("click", toggleLogs);
   elements.logsClose.addEventListener("click", closeLogs);
+  if (elements.logsClear) {
+    elements.logsClear.addEventListener("click", () => {
+      confirmModal({
+        title: "Clear Logs",
+        body: "<p>Clear logs for the current session?</p>",
+        confirmLabel: "Clear Logs",
+        onConfirm: () => clearLogs("active")
+      });
+    });
+  }
   document.addEventListener("click", (event) => {
     if (!elements.settingsPanel.classList.contains("open")) return;
     const isToggle = elements.settingsToggle.contains(event.target);
@@ -39,6 +61,7 @@ function bindInteractions() {
     if (!isToggle && !isPanel) {
       elements.settingsPanel.classList.remove("open");
       elements.settingsScrim.classList.remove("active");
+      elements.settingsToggle?.setAttribute("aria-expanded", "false");
     }
   });
   document.addEventListener("click", (event) => {
@@ -60,8 +83,30 @@ function bindInteractions() {
   elements.settingsScrim.addEventListener("click", () => {
     elements.settingsPanel.classList.remove("open");
     elements.settingsScrim.classList.remove("active");
+    elements.settingsToggle?.setAttribute("aria-expanded", "false");
   });
   elements.logsScrim.addEventListener("click", closeLogs);
+  if (elements.queueScrim) {
+    elements.queueScrim.addEventListener("click", closeQueue);
+  }
+  if (elements.searchScrim) {
+    elements.searchScrim.addEventListener("click", closeSearchPanel);
+  }
+  if (elements.queueClose) {
+    elements.queueClose.addEventListener("click", closeQueue);
+  }
+  if (elements.queueRetryAll) {
+    elements.queueRetryAll.addEventListener("click", async () => {
+      const failed = state.queue.filter((item) => item.status === "failed");
+      if (!failed.length) {
+        notify("Queue", "No failed sessions to retry.");
+        return;
+      }
+      for (const session of failed) {
+        await processQueueItem(session);
+      }
+    });
+  }
   if (elements.jumpBackReturn) {
     elements.jumpBackReturn.addEventListener("click", () => {
       if (!state.linkReturn) return;
@@ -73,6 +118,53 @@ function bindInteractions() {
     elements.jumpBackClose.addEventListener("click", hideJumpBack);
   }
   elements.saveSettings.addEventListener("click", saveSettings);
+  if (elements.paletteAdd) {
+    elements.paletteAdd.addEventListener("click", () => {
+      const palette = Array.isArray(state.settings.colorPalette)
+        ? [...state.settings.colorPalette]
+        : [];
+      palette.push({ name: "Color", color: "#f9de6f" });
+      state.settings.colorPalette = palette;
+      renderPaletteEditor();
+      persistSettings();
+    });
+  }
+  if (elements.paletteSaveDefault) {
+    elements.paletteSaveDefault.addEventListener("click", () => {
+      const palette = getPaletteFromDOM();
+      localStorage.setItem("voxmark-default-palette", JSON.stringify(palette));
+      notify("Palette", "Default palette saved.");
+    });
+  }
+  if (elements.paletteRestoreDefault) {
+    elements.paletteRestoreDefault.addEventListener("click", () => {
+      const stored = localStorage.getItem("voxmark-default-palette");
+      const palette = stored ? JSON.parse(stored) : [...DEFAULT_SETTINGS.colorPalette];
+      state.settings.colorPalette = palette;
+      renderPaletteEditor();
+      persistSettings();
+      notify("Palette", "Default palette restored.");
+    });
+  }
+  if (elements.paletteList) {
+    elements.paletteList.addEventListener("input", () => {
+      state.settings.colorPalette = getPaletteFromDOM();
+      persistSettings();
+    });
+    elements.paletteList.addEventListener("click", (event) => {
+      const target = event.target.closest(".palette-remove");
+      if (!target) return;
+      const row = target.closest(".palette-row");
+      if (!row) return;
+      const index = Number(row.dataset.index);
+      if (!Number.isFinite(index)) return;
+      const palette = getPaletteFromDOM().filter((_, i) => i !== index);
+      state.settings.colorPalette =
+        palette.length ? palette : [...DEFAULT_SETTINGS.colorPalette];
+      renderPaletteEditor();
+      persistSettings();
+    });
+  }
   elements.themeToggle.addEventListener("click", cycleTheme);
   elements.themeTogglePanel.addEventListener("click", cycleTheme);
   elements.clearOffline.addEventListener("click", () => {
@@ -89,18 +181,21 @@ function bindInteractions() {
     state.queue = [];
     state.logs = [];
     state.sessionState = null;
+    state.activeSessionId = null;
     updateQueueIndicator();
     updateLogIndicator();
     renderLogs();
     updateStorageUsage();
     if (window.caches && caches.keys) {
-      caches.keys().then((keys) => keys.forEach((key) => caches.delete(key)));
+      caches.keys().then((keys) =>
+        keys.filter((key) => key.startsWith("voxmark-")).forEach((key) => caches.delete(key))
+      );
     }
     notify("Storage", "Offline data cleared.");
   });
-  elements.micButton.addEventListener("click", () => {
+  elements.micButton.addEventListener("click", async () => {
     if (state.recording) stopRecordingSession();
-    else startRecordingSession();
+    else await startRecordingSession();
   });
   elements.processBatch.addEventListener("click", processBatchQueue);
   if (elements.processBatchMenu) {
@@ -128,6 +223,13 @@ function bindInteractions() {
     elements.ocrToggle.addEventListener("change", (event) => {
       state.settings.ocrEnabled = event.target.checked;
       persistSettings();
+    });
+  }
+  if (elements.invertPdfToggle) {
+    elements.invertPdfToggle.addEventListener("change", (event) => {
+      state.settings.invertPdf = event.target.checked;
+      persistSettings();
+      updatePdfInvert();
     });
   }
   if (elements.ocrRun) {
@@ -177,6 +279,9 @@ function bindInteractions() {
   if (elements.searchGo) {
     elements.searchGo.addEventListener("click", () => {
       searchInActivePdf(elements.searchInput.value);
+      if (document.querySelector(".app")?.classList.contains("search-open")) {
+        closeSearchPanel();
+      }
     });
   }
   if (elements.searchInput) {
@@ -184,7 +289,35 @@ function bindInteractions() {
       if (event.key === "Enter") {
         event.preventDefault();
         searchInActivePdf(elements.searchInput.value);
+        if (document.querySelector(".app")?.classList.contains("search-open")) {
+          closeSearchPanel();
+        }
       }
+    });
+  }
+  if (elements.searchClear) {
+    elements.searchClear.addEventListener("click", () => {
+      elements.searchInput.value = "";
+      elements.searchResults.innerHTML = "";
+      clearSearchHighlights(getActivePdf());
+      state.searchResults = [];
+      state.activeSearchIndex = -1;
+      state.searchTerm = "";
+      updateSearchNavButtons();
+      elements.searchInput.focus();
+      if (document.querySelector(".app")?.classList.contains("search-open")) {
+        closeSearchPanel();
+      }
+    });
+  }
+  if (elements.searchPrev) {
+    elements.searchPrev.addEventListener("click", () => {
+      goToSearchResult(-1);
+    });
+  }
+  if (elements.searchNext) {
+    elements.searchNext.addEventListener("click", () => {
+      goToSearchResult(1);
     });
   }
   if (elements.outlineTab && elements.thumbTab) {
@@ -210,6 +343,20 @@ function bindInteractions() {
     confirmResetSession();
   });
   elements.resetSessionPanel.addEventListener("click", confirmResetSession);
+  if (elements.resetApp) {
+    elements.resetApp.addEventListener("click", () => {
+      closeOverflowMenu();
+      confirmResetApp();
+    });
+  }
+  if (elements.resetAppPanel) {
+    elements.resetAppPanel.addEventListener("click", confirmResetApp);
+  }
+  document.querySelectorAll(".inline-form").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+    });
+  });
   let tapFocusPointer = null;
   elements.viewerArea.addEventListener("pointerdown", (event) => {
     if (!state.settings.tapFocus || state.adjustMode) return;
@@ -242,8 +389,9 @@ function bindInteractions() {
   elements.viewerArea.addEventListener("scroll", () => {
     scheduleActivePageUpdate();
     if (!state.recording) return;
-    const snapshot = captureSnapshot();
-    if (snapshot) state.recordingSession.snapshots.push(snapshot);
+    captureSnapshot().then((snapshot) => {
+      if (snapshot) state.recordingSession.snapshots.push(snapshot);
+    });
   });
   elements.viewerArea.addEventListener("dragover", (event) => {
     event.preventDefault();
@@ -549,6 +697,8 @@ function bindInteractions() {
     if (event.target === elements.modalOverlay) closeModal();
   });
   document.addEventListener("keydown", (event) => {
+    const tag = event.target.tagName;
+    const isEditable = tag === "INPUT" || tag === "TEXTAREA" || event.target.isContentEditable;
     if (event.key === "Escape" && elements.modalOverlay.classList.contains("open")) {
       closeModal();
     }
@@ -558,6 +708,10 @@ function bindInteractions() {
     if (event.key === "Escape" && elements.settingsPanel.classList.contains("open")) {
       elements.settingsPanel.classList.remove("open");
       elements.settingsScrim.classList.remove("active");
+      elements.settingsToggle?.setAttribute("aria-expanded", "false");
+    }
+    if (event.key === "Escape" && elements.queuePanel?.classList.contains("open")) {
+      closeQueue();
     }
     if (event.key === "Escape" && elements.jumpBack?.classList.contains("open")) {
       hideJumpBack();
@@ -568,9 +722,35 @@ function bindInteractions() {
     if (event.key === "Escape" && elements.overflowMenu?.classList.contains("open")) {
       closeOverflowMenu();
     }
+    if (event.key === "Escape" && document.querySelector(".app")?.classList.contains("search-open")) {
+      closeSearchPanel();
+    }
+    if (isEditable) return;
+    if (event.key === "PageDown") {
+      const pdfState = getActivePdf();
+      if (!pdfState) return;
+      event.preventDefault();
+      navigateToPageIndex(Math.min(pdfState.pageCount - 1, state.activePageIndex + 1), pdfState);
+    }
+    if (event.key === "PageUp") {
+      const pdfState = getActivePdf();
+      if (!pdfState) return;
+      event.preventDefault();
+      navigateToPageIndex(Math.max(0, state.activePageIndex - 1), pdfState);
+    }
+    if (event.key === "+" || event.key === "=") {
+      const pdfState = getActivePdf();
+      if (!pdfState) return;
+      event.preventDefault();
+      setPdfScale(pdfState, (pdfState.scale || 1) * 1.1, true);
+    }
+    if (event.key === "-") {
+      const pdfState = getActivePdf();
+      if (!pdfState) return;
+      event.preventDefault();
+      setPdfScale(pdfState, (pdfState.scale || 1) / 1.1, true);
+    }
     if (window.innerWidth >= 960 && event.code === "KeyM") {
-      const tag = event.target.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || event.target.isContentEditable) return;
       event.preventDefault();
       if (state.recording) stopRecordingSession();
       else startRecordingSession();
@@ -581,9 +761,10 @@ function bindInteractions() {
   window.addEventListener("resize", () => {
     const app = document.querySelector(".app");
     if (window.innerWidth >= 960) {
-      app.classList.remove("sidebar-open");
-      elements.sidebarScrim.classList.remove("active");
+      closeSidebar();
+      closeSearchPanel();
     }
+    updateHeaderOffset();
     if (elements.pdfMenu?.classList.contains("open")) {
       requestAnimationFrame(() => {
         positionDropdown(elements.pdfMenu, elements.pdfMenuToggle, "left");
@@ -674,10 +855,11 @@ function resetDropdownPosition(menu) {
 }
 
 async function initApp() {
-  loadSettings();
+  await openDB();
+  await loadSettings();
+  updateHeaderOffset();
   const storedMode = localStorage.getItem("voxmark-mode");
   setMode(storedMode || state.mode);
-  await openDB();
   updateConnectionStatus();
   updateStorageUsage();
   const storedPdfs = await loadPdfsFromDB();
@@ -700,8 +882,38 @@ async function initApp() {
     renderLogs();
   }
   const queue = await loadQueueFromDB();
-  state.queue = queue;
+  state.queue = queue.map((item) => ({
+    ...item,
+    status: item.status || "queued",
+    attempts: item.attempts || 0,
+    lastError: item.lastError || "",
+    processedChunks: item.processedChunks || []
+  }));
   updateQueueIndicator();
   bindInteractions();
   setNavTab(state.navTab || "outline");
 }
+
+function setupFocusTrap(panel) {
+  if (!panel) return;
+  panel.addEventListener("keydown", (event) => {
+    if (event.key !== "Tab") return;
+    const focusable = panel.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
+}
+
+setupFocusTrap(elements.settingsPanel);
+setupFocusTrap(elements.logsPanel);
+setupFocusTrap(elements.queuePanel);

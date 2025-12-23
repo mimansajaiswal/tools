@@ -5,6 +5,30 @@ if (location.protocol === "file:") {
   pdfjsLib.disableWorker = true;
 }
 
+const DEFAULT_SETTINGS = {
+  sttProvider: "native",
+  sttModel: "whisper-1",
+  sttKey: "",
+  sttPrompt: "",
+  aiProvider: "openai",
+  aiModel: "gpt-4o-mini",
+  aiKey: "",
+  customPrompt: "",
+  colorPalette: [
+    { name: "Yellow", color: "#f9de6f" },
+    { name: "Blue", color: "#6f9fe6" },
+    { name: "Red", color: "#e56b6b" },
+    { name: "Green", color: "#6dbb8a" },
+    { name: "Purple", color: "#b1a0d4" },
+    { name: "Pink", color: "#d9a0b5" }
+  ],
+  mockAI: false,
+  tapFocus: false,
+  theme: "system",
+  ocrEnabled: false,
+  invertPdf: false
+};
+
 const state = {
   pdfs: [],
   activePdfId: null,
@@ -24,20 +48,10 @@ const state = {
   activePageIndex: 0,
   linkReturn: null,
   isPinching: false,
-  settings: {
-    sttProvider: "native",
-    sttModel: "whisper-1",
-    sttKey: "",
-    sttPrompt: "",
-    aiProvider: "openai",
-    aiModel: "gpt-4o-mini",
-    aiKey: "",
-    customPrompt: "",
-    mockAI: false,
-    tapFocus: false,
-    theme: "system",
-    ocrEnabled: false
-  }
+  searchResults: [],
+  activeSearchIndex: -1,
+  searchTerm: "",
+  settings: { ...DEFAULT_SETTINGS }
 };
 
 const elements = {
@@ -49,6 +63,9 @@ const elements = {
   activePdfLabel: document.getElementById("activePdfLabel"),
   overflowToggle: document.getElementById("overflowToggle"),
   overflowMenu: document.getElementById("overflowMenu"),
+  queueToggle: document.getElementById("queueToggle"),
+  searchToggle: document.getElementById("searchToggle"),
+  searchScrim: document.getElementById("searchScrim"),
   viewerArea: document.getElementById("viewerArea"),
   emptyState: document.getElementById("emptyState"),
   settingsToggle: document.getElementById("settingsToggle"),
@@ -76,6 +93,7 @@ const elements = {
   downloadSingle: document.getElementById("downloadSingle"),
   downloadMerged: document.getElementById("downloadMerged"),
   downloadZip: document.getElementById("downloadZip"),
+  header: document.querySelector("header"),
   toggleSidebar: document.getElementById("toggleSidebar"),
   sidebarScrim: document.getElementById("sidebarScrim"),
   settingsScrim: document.getElementById("settingsScrim"),
@@ -83,9 +101,16 @@ const elements = {
   logsPanel: document.getElementById("logsPanel"),
   logsToggle: document.getElementById("logsToggle"),
   logsClose: document.getElementById("logsClose"),
+  logsClear: document.getElementById("logsClear"),
   logsList: document.getElementById("logsList"),
   logsCount: document.getElementById("logsCount"),
   logsMeta: document.getElementById("logsMeta"),
+  queueScrim: document.getElementById("queueScrim"),
+  queuePanel: document.getElementById("queuePanel"),
+  queueClose: document.getElementById("queueClose"),
+  queueList: document.getElementById("queueList"),
+  queueMeta: document.getElementById("queueMeta"),
+  queueRetryAll: document.getElementById("queueRetryAll"),
   jumpBack: document.getElementById("jumpBack"),
   jumpBackText: document.getElementById("jumpBackText"),
   jumpBackReturn: document.getElementById("jumpBackReturn"),
@@ -94,7 +119,10 @@ const elements = {
   pageJumpGo: document.getElementById("pageJumpGo"),
   pageJumpTotal: document.getElementById("pageJumpTotal"),
   searchInput: document.getElementById("searchInput"),
+  searchClear: document.getElementById("searchClear"),
   searchGo: document.getElementById("searchGo"),
+  searchPrev: document.getElementById("searchPrev"),
+  searchNext: document.getElementById("searchNext"),
   searchResults: document.getElementById("searchResults"),
   outlineTab: document.getElementById("outlineTab"),
   thumbTab: document.getElementById("thumbTab"),
@@ -104,6 +132,8 @@ const elements = {
   thumbnailList: document.getElementById("thumbnailList"),
   resetSession: document.getElementById("resetSession"),
   resetSessionPanel: document.getElementById("resetSessionPanel"),
+  resetApp: document.getElementById("resetApp"),
+  resetAppPanel: document.getElementById("resetAppPanel"),
   saveSettings: document.getElementById("saveSettings"),
   clearOffline: document.getElementById("clearOffline"),
   storageUsage: document.getElementById("storageUsage"),
@@ -122,14 +152,19 @@ const elements = {
   aiModel: document.getElementById("aiModel"),
   aiKey: document.getElementById("aiKey"),
   customPrompt: document.getElementById("customPrompt"),
+  paletteList: document.getElementById("paletteList"),
+  paletteAdd: document.getElementById("paletteAdd"),
+  paletteSaveDefault: document.getElementById("paletteSaveDefault"),
+  paletteRestoreDefault: document.getElementById("paletteRestoreDefault"),
   mockToggle: document.getElementById("mockToggle"),
   ocrToggle: document.getElementById("ocrToggle"),
   ocrRun: document.getElementById("ocrRun"),
+  invertPdfToggle: document.getElementById("invertPdfToggle"),
   processBatchMenu: document.getElementById("processBatchMenu")
 };
 
 const dbName = "voxmark-db";
-const dbVersion = 2;
+const dbVersion = 3;
 let db;
 
 function getActivePdf() {

@@ -183,16 +183,24 @@ function combineBoxes(boxes) {
   return { x, y, width, height };
 }
 
-function drawAnnotation(page, annotation, target) {
+function drawAnnotation(page, annotation, target, options = {}) {
   const colorMap = {
-    yellow: PDFLib.rgb(0.98, 0.9, 0.55),
-    blue: PDFLib.rgb(0.45, 0.6, 0.85),
-    red: PDFLib.rgb(0.9, 0.45, 0.45),
-    green: PDFLib.rgb(0.45, 0.75, 0.55),
-    purple: PDFLib.rgb(0.62, 0.52, 0.76),
-    pink: PDFLib.rgb(0.82, 0.6, 0.7)
+    yellow: "#f9de6f",
+    blue: "#6f9fe6",
+    red: "#e56b6b",
+    green: "#6dbb8a",
+    purple: "#b1a0d4",
+    pink: "#d9a0b5"
   };
-  const color = colorMap[annotation.color] || colorMap.yellow;
+  const normalized = normalizeAnnotationColor(annotation.color);
+  const palette = getAllowedColors();
+  const paletteEntry = palette.find((entry) => entry.key === normalized);
+  const hex = paletteEntry?.color || colorMap[normalized] || colorMap.yellow;
+  let color = hexToRgb(hex);
+  if (!color) color = PDFLib.rgb(0.98, 0.9, 0.55);
+  if (options.invertForView) {
+    color = adjustColorForInvert(color);
+  }
   const { x, y, width, height } = target.bbox;
 
   if (annotation.type === "highlight") {
@@ -222,6 +230,88 @@ function drawAnnotation(page, annotation, target) {
   } else if (annotation.type === "bbox") {
     page.drawRectangle({ x, y, width, height, borderColor: color, borderWidth: 2 });
   }
+}
+
+function hexToRgb(hex) {
+  if (!hex) return null;
+  const value = hex.replace("#", "").trim();
+  if (![3, 6].includes(value.length)) return null;
+  const expanded =
+    value.length === 3
+      ? value
+          .split("")
+          .map((ch) => ch + ch)
+          .join("")
+      : value;
+  const int = parseInt(expanded, 16);
+  if (Number.isNaN(int)) return null;
+  const r = (int >> 16) & 255;
+  const g = (int >> 8) & 255;
+  const b = int & 255;
+  return PDFLib.rgb(r / 255, g / 255, b / 255);
+}
+
+function normalizeAnnotationColor(value) {
+  const palette = getAllowedColors();
+  const color = (value || "").toString().trim().toLowerCase();
+  if (palette.length && palette.map((entry) => entry.key).includes(color)) return color;
+  if (["yellow", "blue", "red", "green", "purple", "pink"].includes(color)) return color;
+  return palette[0]?.key || "yellow";
+}
+
+function getAllowedColors() {
+  const palette = Array.isArray(state.settings.colorPalette)
+    ? state.settings.colorPalette
+    : [];
+  return palette
+    .map((entry) => ({
+      key: String(entry.name || "").trim().toLowerCase(),
+      color: String(entry.color || "").trim()
+    }))
+    .filter((entry) => entry.key);
+}
+
+function adjustColorForInvert(color) {
+  if (!color) return color;
+  const inverted = {
+    r: 1 - color.r,
+    g: 1 - color.g,
+    b: 1 - color.b
+  };
+  const rotated = hueRotate(inverted, 180);
+  return PDFLib.rgb(
+    clamp01(rotated.r),
+    clamp01(rotated.g),
+    clamp01(rotated.b)
+  );
+}
+
+function hueRotate(color, degrees) {
+  const angle = (degrees * Math.PI) / 180;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const r = color.r;
+  const g = color.g;
+  const b = color.b;
+  return {
+    r:
+      (0.213 + 0.787 * cos - 0.213 * sin) * r +
+      (0.715 - 0.715 * cos - 0.715 * sin) * g +
+      (0.072 - 0.072 * cos + 0.928 * sin) * b,
+    g:
+      (0.213 - 0.213 * cos + 0.143 * sin) * r +
+      (0.715 + 0.285 * cos + 0.14 * sin) * g +
+      (0.072 - 0.072 * cos - 0.283 * sin) * b,
+    b:
+      (0.213 - 0.213 * cos - 0.787 * sin) * r +
+      (0.715 - 0.715 * cos + 0.715 * sin) * g +
+      (0.072 + 0.928 * cos + 0.072 * sin) * b
+  };
+}
+
+function clamp01(value) {
+  if (Number.isNaN(value)) return 0;
+  return Math.min(1, Math.max(0, value));
 }
 
 function renderOverlays(pdfState) {
@@ -403,7 +493,19 @@ function snapSelectedToText() {
   }
 }
 
-async function applyAllAnnotations(pdfState) {
+async function applyAllAnnotations(pdfState, options = {}) {
+  const bytes = await buildAnnotatedBytes(pdfState, options);
+  if (!bytes) return;
+  pdfState.bytes = bytes;
+  await refreshPdfRender(pdfState);
+  refreshPdfList();
+  if (!pdfState.restoring) {
+    persistPdfState(pdfState);
+  }
+}
+
+async function buildAnnotatedBytes(pdfState, options = {}) {
+  if (!pdfState) return null;
   const pdfDoc = await PDFLib.PDFDocument.load(pdfState.originalBytes);
   const pageCount = pdfDoc.getPageCount();
   pdfState.annotationCount = 0;
@@ -420,7 +522,7 @@ async function applyAllAnnotations(pdfState) {
       continue;
     }
     const page = pdfDoc.getPage(pageIndex);
-    drawAnnotation(page, annotation, { bbox: annotation.bbox });
+    drawAnnotation(page, annotation, { bbox: annotation.bbox }, options);
     pdfState.annotationCount += 1;
     validAnnotations.push(annotation);
   }
@@ -432,12 +534,7 @@ async function applyAllAnnotations(pdfState) {
     });
   }
   pdfState.annotations = validAnnotations;
-  pdfState.bytes = await pdfDoc.save();
-  await refreshPdfRender(pdfState);
-  refreshPdfList();
-  if (!pdfState.restoring) {
-    persistPdfState(pdfState);
-  }
+  return await pdfDoc.save();
 }
 
 function toggleAdjustMode() {
@@ -462,11 +559,12 @@ async function commitAdjustments() {
   const pdfState = getActivePdf();
   if (!pdfState) return;
   notify("Adjust Mode", "Applying adjustments...");
-  await applyAllAnnotations(pdfState);
+  await applyAllAnnotations(pdfState, { invertForView: isPdfInvertedView() });
 }
 
 async function applyAnnotations(aiResponse, session) {
-  if (!aiResponse?.annotations?.length) return;
+  if (!aiResponse?.annotations?.length) return 0;
+  let addedTotal = 0;
   const grouped = new Map();
   for (const annotation of aiResponse.annotations) {
     const pdfId = resolvePdfIdForAnnotation(annotation, session);
@@ -476,6 +574,7 @@ async function applyAnnotations(aiResponse, session) {
   for (const [pdfId, annotations] of grouped.entries()) {
     const pdfState = state.pdfs.find((pdf) => pdf.id === pdfId) || getActivePdf();
     if (!pdfState) continue;
+    let added = 0;
     for (const annotation of annotations) {
       if (
         !Number.isInteger(annotation.pageIndex) ||
@@ -490,23 +589,30 @@ async function applyAnnotations(aiResponse, session) {
         id: crypto.randomUUID(),
         pageIndex: annotation.pageIndex,
         type: annotation.type,
-        color: annotation.color || "yellow",
+        color: normalizeAnnotationColor(annotation.color || "yellow"),
         comment: annotation.comment || "",
         mode: annotation.target?.mode || "auto",
         bbox: target.bbox
       });
+      added += 1;
     }
-    await applyAllAnnotations(pdfState);
+    await applyAllAnnotations(pdfState, { invertForView: isPdfInvertedView() });
+    addedTotal += added;
     logEvent({
       title: "Annotations applied",
       detail: {
         pdfId,
-        added: annotations.length,
+        added,
         total: pdfState.annotations.length
       },
       sessionId: session?.id
     });
   }
+  return addedTotal;
+}
+
+function isPdfInvertedView() {
+  return document.documentElement.classList.contains("pdf-invert");
 }
 
 function resolvePdfIdForAnnotation(annotation, session) {

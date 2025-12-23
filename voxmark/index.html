@@ -30,6 +30,9 @@
           <button class="btn icon secondary" id="toggleSidebar" title="Toggle navigation">
             <i class="ph ph-sidebar"></i>
           </button>
+          <button class="btn icon secondary theme-toggle" id="themeToggle" title="Theme: System" aria-label="Theme: system">
+            <i class="ph ph-desktop" id="themeToggleIcon"></i>
+          </button>
           <div class="brand compact">
             <h1>VoxMark</h1>
           </div>
@@ -51,17 +54,19 @@
               <div class="pdf-list" id="pdfList"></div>
             </div>
           </div>
+          <button class="btn icon secondary" id="overflowToggle" title="More options" aria-haspopup="true" aria-expanded="false">
+            <i class="ph ph-faders-horizontal"></i>
+          </button>
         </div>
         <div class="topbar-center">
-          <div class="search-bar">
-            <i class="ph ph-magnifying-glass"></i>
-            <input type="text" id="searchInput" placeholder="Search in document" />
-            <button class="btn secondary small" id="searchGo" aria-label="Find">
-              <i class="ph ph-arrow-right"></i>
-              <span class="label">Find</span>
-            </button>
+        </div>
+        <div class="topbar-right">
+          <div class="zoom-indicator">
+            <input id="zoomInput" type="text" inputmode="decimal" value="100" aria-label="Zoom level" />
+            <span class="zoom-suffix">%</span>
           </div>
           <div class="page-jump" aria-label="Page navigation">
+            <label class="sr-only" for="pageJumpInput">Go to page</label>
             <input type="number" id="pageJumpInput" min="1" inputmode="numeric" />
             <span class="page-jump-total" id="pageJumpTotal">/ 0</span>
             <button class="btn secondary small" id="pageJumpGo" aria-label="Go to page">
@@ -69,24 +74,41 @@
               <span class="label">Go</span>
             </button>
           </div>
-        </div>
-        <div class="topbar-right">
+          <div class="search-bar">
+            <label class="sr-only" for="searchInput">Search in document</label>
+            <i class="ph ph-magnifying-glass"></i>
+            <input type="text" id="searchInput" placeholder="Search in document" />
+            <button class="btn icon ghost small" id="searchClear" aria-label="Clear search">
+              <i class="ph ph-x"></i>
+            </button>
+            <button class="btn secondary small" id="searchGo" aria-label="Find">
+              <i class="ph ph-arrow-right"></i>
+              <span class="label">Find</span>
+            </button>
+            <button class="btn icon ghost small" id="searchPrev" aria-label="Previous match">
+              <i class="ph ph-caret-up"></i>
+            </button>
+            <button class="btn icon ghost small" id="searchNext" aria-label="Next match">
+              <i class="ph ph-caret-down"></i>
+            </button>
+          </div>
+          <button class="btn icon secondary" id="searchToggle" title="Search" aria-expanded="false" aria-label="Search">
+            <i class="ph ph-magnifying-glass"></i>
+          </button>
           <div class="status-pill">
             <div class="status-dot" id="connectionDot"></div>
             <i class="ph ph-wifi-high" id="connectionIcon"></i>
             <span id="connectionLabel" class="sr-only">Online</span>
-            <div class="queue-indicator" id="queueIndicator">
+            <div class="queue-indicator" id="queueIndicator" role="status" aria-live="polite" aria-atomic="true">
               <i class="ph ph-stack"></i>
               <span class="queue-count">0</span>
             </div>
           </div>
-          <button class="btn icon secondary theme-toggle" id="themeToggle" title="Theme: System" aria-label="Theme: system">
-            <i class="ph ph-desktop" id="themeToggleIcon"></i>
-          </button>
-          <button class="btn icon secondary" id="overflowToggle" title="More options" aria-haspopup="true" aria-expanded="false">
-            <i class="ph ph-dots-three-vertical"></i>
-          </button>
           <div class="overflow-menu" id="overflowMenu">
+            <button class="menu-item" id="queueToggle">
+              <i class="ph ph-stack"></i>
+              Queue
+            </button>
             <button class="menu-item" id="settingsToggle">
               <i class="ph ph-gear-six"></i>
               Settings
@@ -118,9 +140,14 @@
               <i class="ph ph-broom"></i>
               Reset Session
             </button>
+            <button class="menu-item danger" id="resetApp">
+              <i class="ph ph-skull"></i>
+              Reset App
+            </button>
           </div>
         </div>
       </header>
+      <div class="search-scrim" id="searchScrim"></div>
 
       <aside class="sidebar nav-sidebar">
         <div class="sidebar-header">
@@ -168,25 +195,21 @@
             </div>
             <div class="mode-group" role="group" aria-label="Processing mode">
               <button class="btn secondary" id="modeRealtime" aria-pressed="true">
-                <i class="ph ph-waveform"></i>
+                <i class="ph ph-clock"></i>
                 <span class="label">Real-time</span>
               </button>
               <button class="btn secondary" id="modeBatch" aria-pressed="false">
-                <i class="ph ph-stack"></i>
+                <i class="ph ph-rows-plus-bottom"></i>
                 <span class="label">Batch</span>
+              </button>
+              <button class="btn secondary hidden" id="processBatch" aria-label="Process queue">
+                <i class="ph ph-queue"></i>
+                <span class="label">Process</span>
               </button>
             </div>
           </div>
           <div class="toolbar-right">
-            <button class="btn secondary hidden" id="processBatch" aria-label="Process queue">
-              <i class="ph ph-play-circle"></i>
-              <span class="label">Process Queue</span>
-            </button>
             <div id="progressLabel" class="queue-indicator hidden">Processing 0 of 0</div>
-            <div class="zoom-indicator">
-              <input id="zoomInput" type="text" inputmode="decimal" value="100" aria-label="Zoom level" />
-              <span class="zoom-suffix">%</span>
-            </div>
             <button class="mic" id="micButton" title="Start/Stop Recording">
               <i class="ph ph-microphone"></i>
             </button>
@@ -225,7 +248,7 @@
           </button>
         </div>
         <div class="settings-scrim" id="settingsScrim"></div>
-        <div class="settings-panel" id="settingsPanel">
+        <div class="settings-panel" id="settingsPanel" role="dialog" aria-label="Settings" tabindex="-1">
           <h3>Theme</h3>
           <div class="field">
             <label>Appearance</label>
@@ -233,6 +256,12 @@
               <i class="ph ph-desktop" id="themeTogglePanelIcon"></i>
               <span class="theme-label" id="themeTogglePanelLabel">System</span>
             </button>
+          </div>
+          <div class="field">
+            <label>Invert PDF in dark mode</label>
+            <div class="segmented">
+              <label><input type="checkbox" id="invertPdfToggle" /> Enable PDF inversion</label>
+            </div>
           </div>
           <h3>Speech-to-Text</h3>
           <div class="field">
@@ -248,10 +277,12 @@
             <label>STT Model</label>
             <input type="text" id="sttModel" placeholder="whisper-1" />
           </div>
-          <div class="field">
-            <label>STT API Key</label>
-            <input type="password" id="sttKey" placeholder="Enter API key" />
-          </div>
+          <form class="inline-form" autocomplete="on">
+            <div class="field">
+              <label>STT API Key</label>
+              <input type="password" id="sttKey" name="sttKey" placeholder="Enter API key" />
+            </div>
+          </form>
           <div class="field">
             <label>STT Prompt (online providers)</label>
             <textarea id="sttPrompt" placeholder="Guide transcription with context..."></textarea>
@@ -270,13 +301,35 @@
             <label>Model</label>
             <input type="text" id="aiModel" placeholder="gpt-4o-mini" />
           </div>
-          <div class="field">
-            <label>API Key</label>
-            <input type="password" id="aiKey" placeholder="Enter API key" />
-          </div>
+          <form class="inline-form" autocomplete="on">
+            <div class="field">
+              <label>API Key</label>
+              <input type="password" id="aiKey" name="aiKey" placeholder="Enter API key" />
+            </div>
+          </form>
           <div class="field">
             <label>Custom Prompt</label>
             <textarea id="customPrompt" placeholder="Add your own instructions for annotation processing"></textarea>
+          </div>
+          <div class="field">
+            <label>Annotation Color Palette</label>
+            <div class="palette-editor">
+              <div class="palette-list" id="paletteList"></div>
+              <div class="palette-actions">
+                <button class="btn secondary small" id="paletteAdd" type="button">
+                  <i class="ph ph-plus"></i>
+                  Add
+                </button>
+                <button class="btn secondary small" id="paletteSaveDefault" type="button">
+                  <i class="ph ph-floppy-disk"></i>
+                  Save
+                </button>
+                <button class="btn ghost small" id="paletteRestoreDefault" type="button">
+                  <i class="ph ph-arrow-counter-clockwise"></i>
+                  Reset
+                </button>
+              </div>
+            </div>
           </div>
           <div class="field">
             <label>Mock AI</label>
@@ -298,11 +351,11 @@
             </button>
           </div>
           <div class="settings-actions">
-            <button class="btn accent" id="saveSettings">
+            <button class="btn accent" id="saveSettings" type="button">
               <i class="ph ph-floppy-disk"></i>
               Save Settings
             </button>
-            <button class="btn secondary" id="clearOffline">
+            <button class="btn secondary" id="clearOffline" type="button">
               <i class="ph ph-trash"></i>
               Clear All Offline Data
             </button>
@@ -310,22 +363,43 @@
           <div id="storageUsage" class="field">IndexedDB: 0 MB</div>
           <div class="danger-zone">
             <strong>Danger Zone</strong>
-            <button class="btn danger" id="resetSessionPanel">
+            <button class="btn danger" id="resetSessionPanel" type="button">
               <i class="ph ph-warning-circle"></i>
-              Reset PDFs / Reset Session
+              Reset Session Data
+            </button>
+            <button class="btn danger" id="resetAppPanel" type="button">
+              <i class="ph ph-skull"></i>
+              Reset App (incl. settings)
             </button>
           </div>
         </div>
         <div class="logs-scrim" id="logsScrim"></div>
-        <div class="logs-panel" id="logsPanel">
+        <div class="logs-panel" id="logsPanel" role="dialog" aria-label="System logs" tabindex="-1">
           <div class="logs-header">
             <h3>System Logs</h3>
-            <button class="btn icon secondary" id="logsClose" title="Close logs">
-              <i class="ph ph-x"></i>
-            </button>
+            <div class="logs-actions">
+              <button class="btn secondary small" id="logsClear" title="Clear logs">Clear Logs</button>
+              <button class="btn icon secondary" id="logsClose" title="Close logs">
+                <i class="ph ph-x"></i>
+              </button>
+            </div>
           </div>
           <div class="logs-meta" id="logsMeta">Session logs</div>
           <div class="logs-list" id="logsList"></div>
+        </div>
+        <div class="queue-scrim" id="queueScrim"></div>
+        <div class="queue-panel" id="queuePanel" role="dialog" aria-label="Queue" tabindex="-1">
+          <div class="queue-header">
+            <h3>Queue</h3>
+            <div class="queue-actions">
+              <button class="btn secondary small" id="queueRetryAll" title="Retry failed">Retry Failed</button>
+              <button class="btn icon secondary" id="queueClose" title="Close queue">
+                <i class="ph ph-x"></i>
+              </button>
+            </div>
+          </div>
+          <div class="queue-meta" id="queueMeta">Queue is empty.</div>
+          <div class="queue-list" id="queueList"></div>
         </div>
       </main>
     </div>

@@ -21,6 +21,11 @@ function buildAiPayload(session, chunk = null) {
 }
 
 function getSystemPrompt() {
+  const palette = getAllowedColors();
+  const paletteList = palette.length ? palette.map((c) => c.name).join(", ") : "Yellow, Blue, Red, Green, Purple, Pink";
+  const paletteDetails = palette.length
+    ? palette.map((c) => `${c.name} (${c.color})`).join(", ")
+    : "Yellow (#f9de6f), Blue (#6f9fe6), Red (#e56b6b), Green (#6dbb8a), Purple (#b1a0d4), Pink (#d9a0b5)";
   return `
 You are VoxMark, a PDF annotation parser.
 Return ONLY valid JSON matching this schema:
@@ -29,7 +34,7 @@ Return ONLY valid JSON matching this schema:
     {
       "type": "highlight|underline|strikethrough|note|bbox",
       "pageIndex": number,
-      "color": "yellow|blue|red|green|purple|pink|custom",
+      "color": "one of the palette color names",
       "comment": "string",
       "target": {
         "mode": "text|bbox|tapFocus|auto",
@@ -52,6 +57,8 @@ Return ONLY valid JSON matching this schema:
   ]
 }
 Use text anchors when possible. If figures/tables, use bbox or tapFocus.
+Only use these annotation colors by name: ${paletteList}.
+Palette reference: ${paletteDetails}.
 You receive viewport snapshots, tap focus points, and context history. Use contextRef.previousSection or contextRef.previousPdf when the user references prior sections or files.
 `;
 }
@@ -148,6 +155,18 @@ function safeJsonParse(text) {
   }
 }
 
+function getAllowedColors() {
+  const palette = Array.isArray(state.settings.colorPalette)
+    ? state.settings.colorPalette
+    : [];
+  return palette
+    .map((entry) => ({
+      name: String(entry.name || "").trim(),
+      color: String(entry.color || "").trim()
+    }))
+    .filter((entry) => entry.name);
+}
+
 function mockAi(payload) {
   const snapshot = payload.snapshots?.[payload.snapshots.length - 1];
   const pageIndex = snapshot?.pages?.[0]?.pageIndex || 0;
@@ -231,17 +250,37 @@ async function transcribeAudio(session) {
 
 async function processSession(session) {
   if (!session) return false;
+  const queued = state.queue.find((item) => item.id === session.id);
+  if (queued) {
+    session.status = "processing";
+    session.lastError = "";
+    if (typeof updateQueueItem === "function") {
+      updateQueueItem(session);
+    }
+  }
   notify("Processing", "Processing annotation...");
   setLoading(true);
   try {
     if (!session.transcript && !session.audioChunks.length && !state.settings.mockAI) {
       notify("Processing", "No audio captured for this session.");
+      session.status = "failed";
+      session.lastError = "No audio captured.";
+      session.attempts = (session.attempts || 0) + 1;
+      if (typeof updateQueueItem === "function") {
+        updateQueueItem(session);
+      }
       return false;
     }
     const transcript = session.transcript || (state.settings.mockAI ? "" : await transcribeAudio(session));
     session.transcript = transcript || "";
     if (!session.transcript && !state.settings.mockAI) {
       notify("Processing", "Transcription failed. Check STT settings.");
+      session.status = "failed";
+      session.lastError = "Transcription failed.";
+      session.attempts = (session.attempts || 0) + 1;
+      if (typeof updateQueueItem === "function") {
+        updateQueueItem(session);
+      }
       return false;
     }
     const chunks = splitSessionForProcessing(session);
@@ -251,8 +290,11 @@ async function processSession(session) {
       sessionId: session.id
     });
     let chunkIndex = 0;
+    let anyResponse = false;
+    const processedChunks = new Set(session.processedChunks || []);
     for (const chunk of chunks) {
       chunkIndex += 1;
+      if (processedChunks.has(chunkIndex)) continue;
       const payload = buildAiPayload(session, chunk);
       logEvent({
         title: `AI request (chunk ${chunkIndex}/${chunks.length})`,
@@ -261,7 +303,9 @@ async function processSession(session) {
       });
       const response = await callAi(payload);
       if (response) {
+        anyResponse = true;
         await applyAnnotations(response, session);
+        processedChunks.add(chunkIndex);
         logEvent({
           title: `AI response (chunk ${chunkIndex}/${chunks.length})`,
           detail: response,
@@ -269,7 +313,31 @@ async function processSession(session) {
         });
       }
     }
+    session.processedChunks = Array.from(processedChunks).sort((a, b) => a - b);
+    if (!anyResponse || processedChunks.size < chunks.length) {
+      session.status = "failed";
+      session.lastError = "AI processing incomplete.";
+      session.attempts = (session.attempts || 0) + 1;
+      if (typeof updateQueueItem === "function") {
+        updateQueueItem(session);
+      }
+      notify("Processing", "Processing incomplete. Session kept in queue.", {
+        type: "error",
+        duration: 4000
+      });
+      logEvent({
+        title: "Processing incomplete",
+        detail: {
+          sessionId: session.id,
+          processed: processedChunks.size,
+          total: chunks.length
+        },
+        sessionId: session.id
+      });
+      return false;
+    }
     session.status = "processed";
+    session.lastError = "";
     notify("Processing", "Annotations applied.");
     logEvent({
       title: "Processing complete",
@@ -279,6 +347,12 @@ async function processSession(session) {
     return true;
   } catch (error) {
     notify("Processing", "Processing failed. Please retry.");
+    session.status = "failed";
+    session.lastError = error?.message || "Processing failed.";
+    session.attempts = (session.attempts || 0) + 1;
+    if (typeof updateQueueItem === "function") {
+      updateQueueItem(session);
+    }
     logEvent({
       title: "Processing failed",
       detail: error?.message || "Unknown error",
