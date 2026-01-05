@@ -447,83 +447,69 @@
                         Code</button>
                     <pre id="workerCodeBlock"
                         class="bg-charcoal text-white-linen p-4 rounded text-xs font-mono overflow-x-auto">
-const NOTION_API_END_POINT = "https://api.notion.com/v1";
-
 export default {
   async fetch(request, env) {
-    return await handleRequest(request, env);
-  }
+      return await handleRequest(request, env);
+  },
 };
 
 function getCorsHeaders(request) {
   return {
-    "Access-Control-Allow-Origin": request.headers.get("Origin") || "*",
-    "Access-Control-Allow-Methods": "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, Notion-Version",
+      "Access-Control-Allow-Origin": request.headers.get("Origin") || "*",
+      "Access-Control-Allow-Methods": "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, Notion-Version",
   };
 }
 
 function handleOptions(request) {
   return new Response(null, {
-    headers: getCorsHeaders(request),
+      headers: getCorsHeaders(request),
   });
+}
+
+function withCors(request, response) {
+  const corsHeaders = getCorsHeaders(request);
+  const newResponse = new Response(response.body, response);
+  for (const [key, value] of Object.entries(corsHeaders)) {
+      newResponse.headers.set(key, value);
+  }
+  newResponse.headers.append("Vary", "Origin");
+  return newResponse;
 }
 
 async function handleRequest(request, env) {
   if (request.method === "OPTIONS") {
-    return handleOptions(request);
+      return handleOptions(request);
   }
 
   const url = new URL(request.url);
   const requiredToken = (env.ALL_CORS_PROXY_MATCH_TOKEN || "").trim();
 
   if (requiredToken !== "") {
-    const providedToken = url.searchParams.get("token");
-    if (providedToken !== requiredToken) {
-      return new Response("Unauthorized", { status: 403 });
-    }
-    url.searchParams.delete("token");
+      const providedToken = url.searchParams.get("token");
+      if (providedToken !== requiredToken) {
+          return withCors(request, new Response("Unauthorized", { status: 403 }));
+      }
+      url.searchParams.delete("token");
   }
 
-  const isGeneral = url.searchParams.has("url");
+  const targetUrlParam = url.searchParams.get("url");
+  if (!targetUrlParam) {
+      return withCors(request, new Response("Missing url parameter", { status: 400 }));
+  }
+
   let targetUrl;
-  let secretKey = null;
-
-  if (isGeneral) {
-    targetUrl = url.searchParams.get("url");
-    url.searchParams.delete("url");
-    try {
-      targetUrl = new URL(targetUrl).toString();
-    } catch (err) {
-      return new Response("Invalid target URL", { status: 400 });
-    }
-  } else {
-    secretKey = url.searchParams.get("secret");
-    if (!secretKey) {
-      return new Response("Missing secret key parameter", { status: 400 });
-    }
-    url.searchParams.delete("secret");
-
-    let normalizedPath = url.pathname.replace(/\/{2,}/g, '/');
-    const base = NOTION_API_END_POINT.replace(/\/$/, "");
-    const path = normalizedPath.startsWith("/") ? normalizedPath : "/" + normalizedPath;
-    targetUrl = base + path + url.search;
+  try {
+      targetUrl = new URL(targetUrlParam).toString();
+  } catch (err) {
+      return withCors(request, new Response("Invalid target URL", { status: 400 }));
   }
 
   const modifiedRequest = new Request(targetUrl, request);
   modifiedRequest.headers.set("Origin", new URL(targetUrl).origin);
 
-  if (!isGeneral && secretKey) {
-    modifiedRequest.headers.set("Authorization", `Bearer ${secretKey}`);
-    modifiedRequest.headers.set("Notion-Version", "2025-09-03");
-  }
-
   const response = await fetch(modifiedRequest);
-  const newResponse = new Response(response.body, response);
-  newResponse.headers.set("Access-Control-Allow-Origin", request.headers.get("Origin") || "*");
-  newResponse.headers.append("Vary", "Origin");
-
-  return newResponse;
+  return withCors(request, response);
 }
                     </pre>
                 </div>
@@ -1141,6 +1127,15 @@ async function handleRequest(request, env) {
                     Storage.setData(data);
                 }
             },
+            updateDiaryCameraConfig: (diaryId, config) => {
+                const data = Storage.getData();
+                const diary = data.find(d => d.id === diaryId);
+                if (diary) {
+                    const current = diary.cameraConfig || {};
+                    diary.cameraConfig = { ...current, ...config };
+                    Storage.setData(data);
+                }
+            },
             setLastFetch: (diaryId, timeStr) => {
                 const data = Storage.getData();
                 const diary = data.find(d => d.id === diaryId);
@@ -1527,6 +1522,32 @@ async function handleRequest(request, env) {
                 isLoading: false,
                 imageUrlCache: new Map()
             },
+            getDiaryCameraConfig: (diary) => {
+                const s = Storage.getSettings();
+                const defaults = {
+                    facingMode: 'environment',
+                    mirrorVideo: false,
+                    collageMode: s.collageMode || 1
+                };
+                if (!diary) return defaults;
+                const cfg = diary.cameraConfig || {};
+                return {
+                    facingMode: cfg.facingMode || defaults.facingMode,
+                    mirrorVideo: typeof cfg.mirrorVideo === 'boolean' ? cfg.mirrorVideo : defaults.mirrorVideo,
+                    collageMode: Number(cfg.collageMode) || defaults.collageMode
+                };
+            },
+            applyDiaryCameraConfig: (diary) => {
+                const cfg = App.getDiaryCameraConfig(diary);
+                App.state.facingMode = cfg.facingMode;
+                App.state.mirrorVideo = cfg.mirrorVideo;
+                App.setCollageMode(cfg.collageMode);
+            },
+            persistActiveDiaryCameraConfig: (config) => {
+                if (!App.state.activeDiaryId) return;
+                Storage.updateDiaryCameraConfig(App.state.activeDiaryId, config);
+                App.state.diaries = Storage.getData();
+            },
             tagMatch: (list, tag) => list.find(t => UTILS.normalizeTag(t) === UTILS.normalizeTag(tag)),
             hasTag: (list, tag) => !!App.tagMatch(list, tag),
             getUploadCapBytes: () => {
@@ -1884,7 +1905,12 @@ async function handleRequest(request, env) {
                     description: db.description,
                     tags: [],
                     pendingTags: [],
-                    entries: []
+                    entries: [],
+                    cameraConfig: {
+                        facingMode: App.state.facingMode,
+                        mirrorVideo: App.state.mirrorVideo,
+                        collageMode: App.state.collageMode
+                    }
                 };
                 Storage.saveDiary(newDiary);
                 App.state.diaries = Storage.getData();
@@ -2085,6 +2111,10 @@ async function handleRequest(request, env) {
             selectDiary: (id) => {
                 App.state.activeDiaryId = id;
                 Storage.setLastActiveDiaryId(id);
+                const diary = App.state.diaries.find(d => d.id === id);
+                if (diary) {
+                    App.applyDiaryCameraConfig(diary);
+                }
                 App.renderSidebar();
                 App.renderDiaryView();
                 if (window.innerWidth < 768) {
@@ -2115,10 +2145,7 @@ async function handleRequest(request, env) {
                 App.state.captureBase = null;
                 App.state.activeSegment = 0;
                 App.state.segments = [];
-                App.state.mirrorVideo = false;
                 App.state.ghostImageObj = null;
-
-                App.setCollageMode(App.state.collageMode);
 
                 document.getElementById('entryNotes').value = '';
                 document.getElementById('entryTitle').value = '';
@@ -2134,6 +2161,7 @@ async function handleRequest(request, env) {
 
                 const diary = App.state.diaries.find(d => d.id === App.state.activeDiaryId);
                 if (!diary) return App.showToast("Create a diary first.", "error");
+                App.applyDiaryCameraConfig(diary);
 
                 const toggleBtn = document.getElementById('ghostToggleBtn');
                 const lastEntryWithPhoto = diary.entries.find(e => e.photoDataURL || e.photoKey);
@@ -2141,23 +2169,33 @@ async function handleRequest(request, env) {
 
                 if (lastEntryWithPhoto) {
                     const ghostData = await App.loadEntryImage(lastEntryWithPhoto);
-                    if (!ghostData) return;
-                    ghostImg.src = ghostData.src;
-                    toggleBtn.classList.remove('hidden');
-                    toggleBtn.classList.remove('opacity-50');
-                    App.state.ghostMode = true;
-                    const savedOpacity = App.state.ghostOpacity;
-                    ghostImg.classList.remove('opacity-0');
-                    ghostImg.style.opacity = savedOpacity;
-                    const sliderInput = document.querySelector('#ghostSliderContainer input');
-                    if (sliderInput) sliderInput.value = savedOpacity;
-                    document.getElementById('ghostSliderContainer').classList.add('hidden');
-                    const img = new Image();
-                    img.onload = () => { App.state.ghostImageObj = img; };
-                    img.src = ghostData.src;
+                    if (!ghostData) {
+                        toggleBtn.classList.add('hidden');
+                        App.state.ghostMode = false;
+                        ghostImg.src = '';
+                        ghostImg.style.opacity = '0';
+                        ghostImg.classList.add('opacity-0');
+                        document.getElementById('ghostSliderContainer').classList.add('hidden');
+                    } else {
+                        ghostImg.src = ghostData.src;
+                        toggleBtn.classList.remove('hidden');
+                        toggleBtn.classList.remove('opacity-50');
+                        App.state.ghostMode = true;
+                        const savedOpacity = App.state.ghostOpacity;
+                        ghostImg.classList.remove('opacity-0');
+                        ghostImg.style.opacity = savedOpacity;
+                        const sliderInput = document.querySelector('#ghostSliderContainer input');
+                        if (sliderInput) sliderInput.value = savedOpacity;
+                        document.getElementById('ghostSliderContainer').classList.add('hidden');
+                        const img = new Image();
+                        img.onload = () => { App.state.ghostImageObj = img; };
+                        img.src = ghostData.src;
+                    }
                 } else {
                     toggleBtn.classList.add('hidden');
                     App.state.ghostMode = false;
+                    ghostImg.src = '';
+                    ghostImg.style.opacity = '0';
                     ghostImg.classList.add('opacity-0');
                     document.getElementById('ghostSliderContainer').classList.add('hidden');
                 }
@@ -2171,9 +2209,7 @@ async function handleRequest(request, env) {
                 App.state.collageMode = mode;
                 App.state.activeSegment = 0;
                 App.state.segments = [];
-                const s = Storage.getSettings();
-                s.collageMode = mode;
-                Storage.setSettings(s);
+                App.persistActiveDiaryCameraConfig({ collageMode: mode });
                 document.querySelectorAll('.collage-btn').forEach(btn => {
                     btn.classList.add('bg-white/20', 'hover:bg-white/10');
                     btn.classList.remove('bg-white', 'text-black');
@@ -2252,9 +2288,20 @@ async function handleRequest(request, env) {
                     const mirrorBtn = document.getElementById('mirrorToggleBtn');
                     if (App.state.facingMode === 'user') {
                         mirrorBtn.classList.remove('hidden');
+                        if (App.state.mirrorVideo) {
+                            mirrorBtn.classList.add('bg-white/40');
+                            mirrorBtn.classList.remove('bg-black/40');
+                        } else {
+                            mirrorBtn.classList.remove('bg-white/40');
+                            mirrorBtn.classList.add('bg-black/40');
+                        }
                     } else {
                         mirrorBtn.classList.add('hidden');
                         App.state.mirrorVideo = false;
+                        App.persistActiveDiaryCameraConfig({
+                            facingMode: App.state.facingMode,
+                            mirrorVideo: App.state.mirrorVideo
+                        });
                         const btn = document.getElementById('mirrorToggleBtn');
                         btn.classList.remove('bg-white/40');
                         btn.classList.add('bg-black/40');
@@ -2345,6 +2392,13 @@ async function handleRequest(request, env) {
 
             flipCamera: () => {
                 App.state.facingMode = App.state.facingMode === 'user' ? 'environment' : 'user';
+                if (App.state.facingMode !== 'user') {
+                    App.state.mirrorVideo = false;
+                }
+                App.persistActiveDiaryCameraConfig({
+                    facingMode: App.state.facingMode,
+                    mirrorVideo: App.state.mirrorVideo
+                });
                 App.initCamera();
             },
 
@@ -2358,6 +2412,7 @@ async function handleRequest(request, env) {
                     btn.classList.remove('bg-white/40');
                     btn.classList.add('bg-black/40');
                 }
+                App.persistActiveDiaryCameraConfig({ mirrorVideo: App.state.mirrorVideo });
             },
 
             toggleGhost: () => {

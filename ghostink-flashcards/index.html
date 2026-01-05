@@ -1174,63 +1174,69 @@
                         class="absolute top-2 right-2 bg-white/80 hover:bg-white px-2 py-1 rounded text-xs shadow text-charcoal font-bold dark:bg-white/10 dark:hover:bg-white/20 dark:text-white">Copy</button>
                     <pre id="workerCodeBlock"
                         class="bg-charcoal text-white-linen p-4 rounded text-xs font-mono overflow-x-auto">
-const NOTION_API_END_POINT = "https://api.notion.com/v1";
-
 export default {
   async fetch(request, env) {
-    return await handleRequest(request, env);
-  }
+      return await handleRequest(request, env);
+  },
 };
 
-function corsHeaders(request) {
+function getCorsHeaders(request) {
   return {
-    "Access-Control-Allow-Origin": request.headers.get("Origin") || "*",
-    "Access-Control-Allow-Methods": "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, Notion-Version",
+      "Access-Control-Allow-Origin": request.headers.get("Origin") || "*",
+      "Access-Control-Allow-Methods": "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, Notion-Version",
   };
 }
 
 function handleOptions(request) {
-  return new Response(null, { headers: corsHeaders(request) });
+  return new Response(null, {
+      headers: getCorsHeaders(request),
+  });
+}
+
+function withCors(request, response) {
+  const corsHeaders = getCorsHeaders(request);
+  const newResponse = new Response(response.body, response);
+  for (const [key, value] of Object.entries(corsHeaders)) {
+      newResponse.headers.set(key, value);
+  }
+  newResponse.headers.append("Vary", "Origin");
+  return newResponse;
 }
 
 async function handleRequest(request, env) {
-  if (request.method === "OPTIONS") return handleOptions(request);
+  if (request.method === "OPTIONS") {
+      return handleOptions(request);
+  }
 
   const url = new URL(request.url);
   const requiredToken = (env.ALL_CORS_PROXY_MATCH_TOKEN || "").trim();
-  if (requiredToken) {
-    const provided = url.searchParams.get("token");
-    if (provided !== requiredToken) return new Response("Unauthorized", { status: 403 });
-    url.searchParams.delete("token");
+
+  if (requiredToken !== "") {
+      const providedToken = url.searchParams.get("token");
+      if (providedToken !== requiredToken) {
+          return withCors(request, new Response("Unauthorized", { status: 403 }));
+      }
+      url.searchParams.delete("token");
   }
 
-  const isGeneral = url.searchParams.has("url");
+  const targetUrlParam = url.searchParams.get("url");
+  if (!targetUrlParam) {
+      return withCors(request, new Response("Missing url parameter", { status: 400 }));
+  }
+
   let targetUrl;
-  if (isGeneral) {
-    targetUrl = url.searchParams.get("url");
-    url.searchParams.delete("url");
-    try { targetUrl = new URL(targetUrl).toString(); } catch (err) { return new Response("Invalid target URL", { status: 400 }); }
-  } else {
-    const secretKey = url.searchParams.get("secret");
-    if (!secretKey) return new Response("Missing secret key parameter", { status: 400 });
-    url.searchParams.delete("secret");
-    const base = NOTION_API_END_POINT.replace(/\/$/, "");
-    const path = url.pathname.startsWith("/") ? url.pathname : "/" + url.pathname;
-    targetUrl = base + path + url.search;
-    request = new Request(targetUrl, request);
-    request.headers.set("Authorization", `Bearer ${secretKey}`);
-	    request.headers.set("Notion-Version", "2025-09-03");
+  try {
+      targetUrl = new URL(targetUrlParam).toString();
+  } catch (err) {
+      return withCors(request, new Response("Invalid target URL", { status: 400 }));
   }
 
-  const proxied = new Request(targetUrl, request);
-  proxied.headers.set("Origin", new URL(targetUrl).origin);
+  const modifiedRequest = new Request(targetUrl, request);
+  modifiedRequest.headers.set("Origin", new URL(targetUrl).origin);
 
-  const response = await fetch(proxied);
-  const out = new Response(response.body, response);
-  out.headers.set("Access-Control-Allow-Origin", request.headers.get("Origin") || "*");
-  out.headers.append("Vary", "Origin");
-  return out;
+  const response = await fetch(modifiedRequest);
+  return withCors(request, response);
 }
                     </pre>
                 </div>
