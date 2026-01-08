@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -77,7 +78,6 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: var(--shadow);
       cursor: pointer;
       padding: 0;
       line-height: 1;
@@ -127,11 +127,14 @@
       margin-bottom: 6px;
     }
 
-    input, select, button {
+    input,
+    select,
+    button {
       font-family: inherit;
     }
 
-    input, select {
+    input,
+    select {
       width: 100%;
       padding: 10px 12px;
       border-radius: 12px;
@@ -247,6 +250,7 @@
     }
 
     .display-settings {
+      display: grid;
       gap: 12px;
     }
 
@@ -265,6 +269,16 @@
       display: grid;
       grid-template-columns: repeat(10, minmax(26px, 1fr));
       gap: 6px;
+    }
+
+    .board.expanded-12 {
+      grid-template-columns: repeat(12, minmax(22px, 1fr));
+      gap: 4px;
+    }
+
+    .board.expanded-13 {
+      grid-template-columns: repeat(13, minmax(20px, 1fr));
+      gap: 4px;
     }
 
     .board-scroll {
@@ -328,10 +342,21 @@
       box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
     }
 
-    .chip.team-0 { background: var(--chip-0); }
-    .chip.team-1 { background: var(--chip-1); }
-    .chip.team-2 { background: var(--chip-2); }
-    .chip.team-3 { background: var(--chip-3); }
+    .chip.team-0 {
+      background: var(--chip-0);
+    }
+
+    .chip.team-1 {
+      background: var(--chip-1);
+    }
+
+    .chip.team-2 {
+      background: var(--chip-2);
+    }
+
+    .chip.team-3 {
+      background: var(--chip-3);
+    }
 
     .chip.sequence {
       outline: 2px dashed rgba(255, 255, 255, 0.8);
@@ -396,10 +421,21 @@
       color: #fff;
     }
 
-    .badge.team-0 { background: var(--chip-0); }
-    .badge.team-1 { background: var(--chip-1); }
-    .badge.team-2 { background: var(--chip-2); }
-    .badge.team-3 { background: var(--chip-3); }
+    .badge.team-0 {
+      background: var(--chip-0);
+    }
+
+    .badge.team-1 {
+      background: var(--chip-1);
+    }
+
+    .badge.team-2 {
+      background: var(--chip-2);
+    }
+
+    .badge.team-3 {
+      background: var(--chip-3);
+    }
 
     .log-code {
       background: #f9f4ee;
@@ -449,6 +485,7 @@
       align-items: center;
       justify-content: center;
     }
+
     .log-copy-btn svg {
       width: 18px;
       height: 18px;
@@ -510,6 +547,43 @@
 
     .hidden {
       display: none !important;
+    }
+
+    .code-hidden input {
+      filter: blur(6px);
+      user-select: none;
+    }
+
+    .code-hidden input:focus {
+      filter: blur(6px);
+    }
+
+    .kick-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 4px 8px;
+      font-size: 11px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .kick-btn:hover {
+      background: #fbe8e8;
+      border-color: #d97777;
+      color: #a33;
+    }
+
+    .room-locked-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      background: #fff3e0;
+      border: 1px solid #e6a756;
+      color: #9a6b2a;
     }
 
     .board-panel {
@@ -606,7 +680,7 @@
       box-shadow: inset 0 -2px 0 var(--accent);
     }
 
-    .settings-panel .accordion + .accordion {
+    .settings-panel .accordion+.accordion {
       margin-top: 12px;
     }
 
@@ -644,15 +718,18 @@
         align-items: start;
         gap: 16px;
       }
+
       .board-panel {
         grid-column: 1;
         max-width: none;
       }
+
       .hand-panel {
         grid-column: 2;
         position: sticky;
         top: 20px;
       }
+
       .settings-panel {
         grid-column: 2;
       }
@@ -660,34 +737,45 @@
       .log-panel {
         grid-column: 1 / -1;
       }
+
       section {
         padding: 14px;
       }
+
       .stack {
         gap: 10px;
       }
+
       label {
         margin-bottom: 4px;
       }
-      input, select {
+
+      input,
+      select {
         padding: 8px 10px;
       }
+
       button {
         padding: 8px 12px;
       }
+
       .accordion-toggle {
         padding: 8px 10px;
       }
+
       .accordion-content {
         padding: 8px 10px 10px;
       }
+
       .player-row {
         padding: 6px 8px;
       }
+
       .tab-bar {
         gap: 6px;
         margin-bottom: 8px;
       }
+
       .tab-btn {
         padding: 6px 0;
       }
@@ -746,6 +834,7 @@
         opacity: 0;
         transform: translateY(10px);
       }
+
       to {
         opacity: 1;
         transform: translateY(0);
@@ -753,6 +842,7 @@
     }
   </style>
 </head>
+
 <body>
   <header>
     <div>
@@ -769,14 +859,16 @@
     <div class="header-actions">
       <button id="gameControlBtn" class="secondary hidden">Start game</button>
       <button id="openInfoBtn" class="icon-btn" aria-label="Game info">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+          stroke-linejoin="round">
           <circle cx="12" cy="12" r="9"></circle>
           <path d="M12 10v6"></path>
           <path d="M12 7h.01"></path>
         </svg>
       </button>
       <button id="openGameSettingsBtn" class="icon-btn" aria-label="Game settings">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+          stroke-linejoin="round">
           <path d="M6 8h12a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4h-1l-2-3h-6l-2 3H6a4 4 0 0 1-4-4v-4a4 4 0 0 1 4-4z"></path>
           <path d="M9 11v2"></path>
           <path d="M7 12h4"></path>
@@ -784,9 +876,12 @@
         </svg>
       </button>
       <button id="openDisplaySettingsBtn" class="icon-btn" aria-label="Display settings">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+          stroke-linejoin="round">
           <circle cx="12" cy="12" r="3.5"></circle>
-          <path d="M19.4 15a1.8 1.8 0 0 0 .36 2l.05.05a2 2 0 1 1-2.83 2.83l-.05-.05a1.8 1.8 0 0 0-2-.36 1.8 1.8 0 0 0-1 1.64V21a2 2 0 1 1-4 0v-.08a1.8 1.8 0 0 0-1-1.64 1.8 1.8 0 0 0-2 .36l-.05.05a2 2 0 1 1-2.83-2.83l.05-.05a1.8 1.8 0 0 0 .36-2 1.8 1.8 0 0 0-1.64-1H3a2 2 0 1 1 0-4h.08a1.8 1.8 0 0 0 1.64-1 1.8 1.8 0 0 0-.36-2l-.05-.05a2 2 0 1 1 2.83-2.83l.05.05a1.8 1.8 0 0 0 2 .36 1.8 1.8 0 0 0 1-1.64V3a2 2 0 1 1 4 0v.08a1.8 1.8 0 0 0 1 1.64 1.8 1.8 0 0 0 2-.36l.05-.05a2 2 0 1 1 2.83 2.83l-.05.05a1.8 1.8 0 0 0-.36 2 1.8 1.8 0 0 0 1.64 1H21a2 2 0 1 1 0 4h-.08a1.8 1.8 0 0 0-1.64 1Z"></path>
+          <path
+            d="M19.4 15a1.8 1.8 0 0 0 .36 2l.05.05a2 2 0 1 1-2.83 2.83l-.05-.05a1.8 1.8 0 0 0-2-.36 1.8 1.8 0 0 0-1 1.64V21a2 2 0 1 1-4 0v-.08a1.8 1.8 0 0 0-1-1.64 1.8 1.8 0 0 0-2 .36l-.05.05a2 2 0 1 1-2.83-2.83l.05-.05a1.8 1.8 0 0 0 .36-2 1.8 1.8 0 0 0-1.64-1H3a2 2 0 1 1 0-4h.08a1.8 1.8 0 0 0 1.64-1 1.8 1.8 0 0 0-.36-2l-.05-.05a2 2 0 1 1 2.83-2.83l.05.05a1.8 1.8 0 0 0 2 .36 1.8 1.8 0 0 0 1-1.64V3a2 2 0 1 1 4 0v.08a1.8 1.8 0 0 0 1 1.64 1.8 1.8 0 0 0 2-.36l.05-.05a2 2 0 1 1 2.83 2.83l-.05.05a1.8 1.8 0 0 0-.36 2 1.8 1.8 0 0 0 1.64 1H21a2 2 0 1 1 0 4h-.08a1.8 1.8 0 0 0-1.64 1Z">
+          </path>
         </svg>
       </button>
     </div>
@@ -829,7 +924,8 @@
         <div class="accordion-content">
           <div class="log-code-wrap">
             <button id="copyLogBtn" class="secondary log-copy-btn" aria-label="Copy log">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+                stroke-linejoin="round" aria-hidden="true">
                 <rect x="9" y="9" width="13" height="13" rx="2"></rect>
                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
               </svg>
@@ -856,7 +952,8 @@
       <div class="hand-header">
         <h2 class="panel-title" id="settingsTitle">Game settings</h2>
         <button id="closeGameSettingsBtn" class="icon-btn" aria-label="Close game settings">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+            stroke-linejoin="round">
             <path d="M18 6L6 18"></path>
             <path d="M6 6l12 12"></path>
           </svg>
@@ -883,10 +980,10 @@
                   <label>Saved session</label>
                   <div class="stack">
                     <div id="sessionInfo" style="font-size: 13px; color: var(--muted);"></div>
-                  <div style="display: grid; gap: 8px;">
-                    <button id="rejoinBtn" class="secondary">Rejoin</button>
-                    <button id="rehostBtn" class="secondary">Rehost</button>
-                  </div>
+                    <div style="display: grid; gap: 8px;">
+                      <button id="rejoinBtn" class="secondary">Rejoin</button>
+                      <button id="rehostBtn" class="secondary">Rehost</button>
+                    </div>
                   </div>
                 </div>
                 <div class="connection-tab-panel" data-tab="host">
@@ -900,6 +997,18 @@
                     <div class="inline">
                       <input id="shareLink" readonly />
                       <button id="copyLinkBtn" class="secondary">Copy</button>
+                    </div>
+                    <div class="toggle-row" style="margin-top: 10px;">
+                      <label class="toggle-row" for="hideCodeToggle">
+                        <input type="checkbox" id="hideCodeToggle" />
+                        Hide codes (streamer mode)
+                      </label>
+                    </div>
+                    <div class="toggle-row">
+                      <label class="toggle-row" for="lockRoomToggle">
+                        <input type="checkbox" id="lockRoomToggle" />
+                        Lock room (prevent new joins)
+                      </label>
                     </div>
                   </div>
                 </div>
@@ -944,9 +1053,9 @@
                   <div id="teamCountRow">
                     <label for="teamCount" style="margin-top: 8px;">Teams</label>
                     <select id="teamCount">
-                    <option value="2">Two Teams</option>
-                    <option value="3">Three Teams</option>
-                    <option value="4">Four Teams</option>
+                      <option value="2">Two Teams</option>
+                      <option value="3">Three Teams</option>
+                      <option value="4">Four Teams</option>
                     </select>
                   </div>
                   <label for="sequenceLengthSelect" style="margin-top: 8px;">Sequence length</label>
@@ -960,10 +1069,12 @@
                     <option value="2">2 sequences</option>
                     <option value="3">3 sequences</option>
                   </select>
-                  <label for="deckModeSelect" style="margin-top: 8px;">Deck size</label>
-                  <select id="deckModeSelect">
-                    <option value="original">Original (2 decks)</option>
-                    <option value="expanded">Expanded (3 decks)</option>
+                  <label for="boardModeSelect" style="margin-top: 8px;">Board &amp; deck</label>
+                  <select id="boardModeSelect">
+                    <option value="standard">Standard (10×10, 2 decks)</option>
+                    <option value="expanded-deck">Expanded deck (10×10, 3 decks)</option>
+                    <option value="expanded-challenge">Challenge (12×12, 3 decks, no corners)</option>
+                    <option value="expanded-classic">Classic+ (12×13, 3 decks, with corners)</option>
                   </select>
                   <label for="turnTimerSelect" style="margin-top: 8px;">Turn timer</label>
                   <select id="turnTimerSelect">
@@ -1004,6 +1115,7 @@
                 <div>Sequences to win: <strong id="infoSeqWin">--</strong></div>
                 <div>Decks: <strong id="infoDecks">--</strong></div>
                 <div>Turn timer: <strong id="infoTimer">--</strong></div>
+                <div>Room status: <strong id="infoRoomStatus">Open</strong></div>
               </div>
             </div>
           </div>
@@ -1017,7 +1129,8 @@
       <div class="hand-header">
         <h2 class="panel-title">Display settings</h2>
         <button id="closeDisplaySettingsBtn" class="icon-btn" aria-label="Close display settings">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+            stroke-linejoin="round">
             <path d="M18 6L6 18"></path>
             <path d="M6 6l12 12"></path>
           </svg>
@@ -1048,8 +1161,8 @@
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script>
     const SUITS = { S: "♠", H: "♥", D: "♦", C: "♣" };
-    const RANKS = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
-    const NON_JACK_RANKS = ["A","2","3","4","5","6","7","8","9","10","Q","K"];
+    const RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+    const NON_JACK_RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "Q", "K"];
     const TWO_EYED = new Set(["JC", "JD"]);
     const ONE_EYED = new Set(["JS", "JH"]);
     const DEFAULT_LAYOUT = [
@@ -1062,7 +1175,37 @@
       ["QC", "9S", "9C", "8H", "9H", "10H", "QH", "QD", "5H", "3D"],
       ["KC", "8S", "10C", "QC", "KC", "AC", "AD", "KD", "4H", "4D"],
       ["AC", "7S", "6S", "5S", "4S", "3S", "2S", "2H", "3H", "5D"],
-      [null, "AD", "KD", "QD", "10S", "9D", "8D", "7D", "6D", null]
+      [null, "AD", "KD", "QD", "10D", "9D", "8D", "7D", "6D", null]
+    ];
+
+    const EXPANDED_CHALLENGE_LAYOUT = [
+      ["4H", "7H", "9S", "2S", "8S", "KH", "8H", "5S", "4D", "4S", "4C", "KC"],
+      ["2D", "7S", "6S", "AD", "8D", "2H", "KH", "2C", "AS", "5D", "5D", "QS"],
+      ["KH", "KC", "KD", "10D", "4D", "5S", "3C", "6D", "8H", "QS", "6C", "5H"],
+      ["KC", "7C", "AH", "7C", "8S", "4H", "9H", "2D", "3C", "KS", "9S", "8C"],
+      ["5H", "3H", "4S", "9D", "3C", "2S", "8H", "QH", "KS", "8S", "9C", "6D"],
+      ["9D", "4C", "3H", "2D", "10H", "8D", "QH", "7D", "AD", "9C", "3S", "3D"],
+      ["2H", "KD", "KS", "7C", "4S", "6C", "8C", "2C", "6H", "QH", "10S", "QC"],
+      ["6H", "5C", "10S", "QD", "10C", "7S", "5C", "10D", "10H", "10C", "7H", "QS"],
+      ["KD", "7D", "10D", "5D", "7D", "6C", "QC", "QC", "8C", "7S", "2H", "AD"],
+      ["2C", "9H", "9H", "10H", "4H", "4C", "3H", "10C", "AS", "5H", "5S", "5C"],
+      ["9D", "3S", "AH", "9S", "6S", "6H", "4D", "AS", "AC", "3S", "8D", "6D"],
+      ["2S", "3D", "3D", "QD", "7H", "6S", "AC", "AC", "9C", "QD", "AH", "10S"]
+    ];
+
+    const EXPANDED_CLASSIC_LAYOUT = [
+      [null, "5H", "7D", "6C", "6H", "AS", null, "3D", "8C", "KS", "4S", "10S", null],
+      ["8D", "6S", "5S", "9S", "4D", "10H", "10S", "8S", "2S", "2D", "7S", "7H", "AH"],
+      ["3H", "KS", "QD", "7C", "2H", "9C", "3S", "3H", "7D", "6H", "QC", "10D", "9D"],
+      ["KD", "QD", "8S", "5C", null, "4C", "4H", "9D", null, "5H", "10C", "KD", "QH"],
+      ["KH", "2S", "2H", "KS", "7D", "3S", "3D", "5C", "2C", "5C", "6C", "AC", "9C"],
+      [null, "3C", "3C", "9D", "8C", "QS", "7H", "8C", "KC", "2C", "QC", "4S", "6S"],
+      ["8H", "QS", "4H", "8D", "AD", "6D", "6D", "2C", "8H", "5D", "4C", "10D", null],
+      ["8D", "QH", "4H", "3C", "AH", "2S", "10H", "5D", "AD", "4D", "KC", "10C", "2D"],
+      ["7S", "4S", "2D", "6S", null, "8H", "9H", "AD", null, "5S", "AH", "4D", "10S"],
+      ["2H", "QD", "4C", "5H", "AC", "9H", "7H", "10C", "KH", "AC", "9H", "3S", "AS"],
+      ["7C", "9S", "9C", "7S", "5S", "5D", "10H", "QC", "AS", "8S", "10D", "3H", "6D"],
+      [null, "6H", "QS", "6C", "KC", "KH", null, "7C", "KD", "QH", "3D", "9S", null]
     ];
 
     const boardEl = document.getElementById("board");
@@ -1134,9 +1277,10 @@
     const infoDecks = document.getElementById("infoDecks");
     const infoSeqLen = document.getElementById("infoSeqLen");
     const infoSeqWin = document.getElementById("infoSeqWin");
+    const infoRoomStatus = document.getElementById("infoRoomStatus");
     const sequenceLengthSelect = document.getElementById("sequenceLengthSelect");
     const sequencesToWinSelect = document.getElementById("sequencesToWinSelect");
-    const deckModeSelect = document.getElementById("deckModeSelect");
+    const boardModeSelect = document.getElementById("boardModeSelect");
     const boardPanel = document.getElementById("boardPanel");
     const logPanel = document.getElementById("logPanel");
     const handPanel = document.getElementById("handPanel");
@@ -1144,6 +1288,8 @@
     const shuffleBoardRow = document.getElementById("shuffleBoardRow");
     const gameSettingsGroup = document.getElementById("gameSettingsGroup");
     const infoSettingsGroup = document.getElementById("infoSettingsGroup");
+    const hideCodeToggle = document.getElementById("hideCodeToggle");
+    const lockRoomToggle = document.getElementById("lockRoomToggle");
 
     let peer = null;
     let connections = new Map();
@@ -1165,6 +1311,11 @@
     let fallbackHostIdInProgress = false;
     let lastTeamCount = 2;
     let logWasVisible = false;
+    let pendingJoinCode = null;
+    let pendingJoinToken = null;
+    let pendingJoinName = null;
+    let roomLocked = false;
+    let codesHidden = false;
 
     const STORAGE_KEY = "sequence-multiplayer-session";
     const DISPLAY_KEY = "sequence-card-display";
@@ -1181,7 +1332,7 @@
       roomCover: null,
       sequencesToWin: 2,
       sequenceLength: 5,
-      deckMode: "original",
+      boardMode: "standard",
       gameStarted: false,
       hasMoves: false,
       deck: [],
@@ -1190,7 +1341,8 @@
       sequencesByTeam: initSequences(2),
       gameOver: false,
       winnerTeam: null,
-      log: []
+      log: [],
+      roomLocked: false
     };
     lastTeamCount = hostState.teamCount;
 
@@ -1249,23 +1401,28 @@
       return shuffle(cards);
     }
 
-    function createBoardLayout(shuffleBoard = false) {
+    function createBoardLayout(boardMode = "standard", shuffleBoard = false) {
+      const config = getBoardConfig(boardMode);
+      const baseLayout = config.layout;
+
       if (!shuffleBoard) {
-        return DEFAULT_LAYOUT.map(row => row.map(card => (card ? { type: "card", card } : { type: "corner" })));
+        return baseLayout.map(row => row.map(card => (card ? { type: "card", card } : { type: "corner" })));
       }
+
       const cards = [];
       for (const suit of Object.keys(SUITS)) {
         for (const rank of NON_JACK_RANKS) {
           cards.push(`${rank}${suit}`);
         }
       }
-      const boardCards = shuffle([...cards, ...cards]);
+      const boardCards = shuffle([].concat(...Array(config.deckCount).fill(cards)));
       const layout = [];
       let index = 0;
-      for (let r = 0; r < 10; r += 1) {
+      for (let r = 0; r < config.rows; r += 1) {
         const row = [];
-        for (let c = 0; c < 10; c += 1) {
-          if ((r === 0 && c === 0) || (r === 0 && c === 9) || (r === 9 && c === 0) || (r === 9 && c === 9)) {
+        for (let c = 0; c < config.cols; c += 1) {
+          const isFreeSpace = baseLayout[r][c] === null;
+          if (isFreeSpace) {
             row.push({ type: "corner" });
           } else {
             row.push({ type: "card", card: boardCards[index] });
@@ -1277,8 +1434,26 @@
       return layout;
     }
 
-    function createEmptyChips() {
-      return Array.from({ length: 10 }, () => Array.from({ length: 10 }, () => ({ team: null, inSequence: false })));
+    function createEmptyChips(rows = 10, cols = 10) {
+      return Array.from({ length: rows }, () => Array.from({ length: cols }, () => ({ team: null, inSequence: false })));
+    }
+
+    function getBoardSize(layout) {
+      if (!layout || !layout.length) return { rows: 10, cols: 10 };
+      return { rows: layout.length, cols: layout[0].length };
+    }
+
+    function getBoardConfig(boardMode) {
+      switch (boardMode) {
+        case "expanded-deck":
+          return { rows: 10, cols: 10, deckCount: 3, layout: DEFAULT_LAYOUT };
+        case "expanded-challenge":
+          return { rows: 12, cols: 12, deckCount: 3, layout: EXPANDED_CHALLENGE_LAYOUT };
+        case "expanded-classic":
+          return { rows: 12, cols: 13, deckCount: 3, layout: EXPANDED_CLASSIC_LAYOUT };
+        default:
+          return { rows: 10, cols: 10, deckCount: 2, layout: DEFAULT_LAYOUT };
+      }
     }
 
     function initSequences(count) {
@@ -1393,7 +1568,7 @@
         roomCover: hostState.roomCover,
         sequencesToWin: hostState.sequencesToWin,
         sequenceLength: hostState.sequenceLength,
-        deckMode: hostState.deckMode,
+        boardMode: hostState.boardMode,
         gameStarted: hostState.gameStarted,
         hasMoves: hostState.hasMoves,
         deck: hostState.deck,
@@ -1402,14 +1577,17 @@
         sequencesByTeam,
         gameOver: hostState.gameOver,
         winnerTeam: hostState.winnerTeam,
-        log: hostState.log
+        log: hostState.log,
+        roomLocked: hostState.roomLocked
       };
     }
 
     function restoreHostState(snapshot) {
       if (!snapshot) return;
-      hostState.boardLayout = snapshot.boardLayout || createBoardLayout();
-      hostState.chips = snapshot.chips || createEmptyChips();
+      const boardMode = snapshot.boardMode || "standard";
+      const config = getBoardConfig(boardMode);
+      hostState.boardLayout = snapshot.boardLayout || createBoardLayout(boardMode);
+      hostState.chips = snapshot.chips || createEmptyChips(config.rows, config.cols);
       hostState.players = snapshot.players || [];
       hostState.teamCount = snapshot.teamCount || 2;
       hostState.teamMode = snapshot.teamMode !== false;
@@ -1418,7 +1596,7 @@
       hostState.roomCover = snapshot.roomCover || null;
       hostState.sequenceLength = snapshot.sequenceLength || 5;
       hostState.sequencesToWin = snapshot.sequencesToWin || 2;
-      hostState.deckMode = snapshot.deckMode || "original";
+      hostState.boardMode = boardMode;
       hostState.gameStarted = !!snapshot.gameStarted;
       hostState.hasMoves = !!snapshot.hasMoves;
       hostState.deck = snapshot.deck || [];
@@ -1433,6 +1611,7 @@
       hostState.gameOver = !!snapshot.gameOver;
       hostState.winnerTeam = snapshot.winnerTeam ?? null;
       hostState.log = snapshot.log || [];
+      hostState.roomLocked = !!snapshot.roomLocked;
     }
 
     function updateSessionUI(session) {
@@ -1496,7 +1675,7 @@
     }
 
     function getDeckCount() {
-      return hostState.deckMode === "expanded" ? 3 : 2;
+      return getBoardConfig(hostState.boardMode).deckCount;
     }
 
     function updateSettingsVisibility() {
@@ -1644,7 +1823,7 @@
         roomCover: hostState.roomCover,
         sequenceLength: hostState.sequenceLength,
         sequencesToWin: hostState.sequencesToWin,
-        deckMode: hostState.deckMode,
+        boardMode: hostState.boardMode,
         gameStarted: false,
         hasMoves: false,
         turnPlayerId: null,
@@ -1761,19 +1940,19 @@
       teamCountSelect.disabled = !canEditSettings || !hostState.teamMode;
       sequenceLengthSelect.disabled = !canEditSettings;
       sequencesToWinSelect.disabled = !canEditSettings;
-      deckModeSelect.disabled = !canEditSettings;
+      boardModeSelect.disabled = !canEditSettings;
       turnTimerSelect.disabled = !canEditSettings;
       shuffleBoardToggle.disabled = !showHostActions;
       if (shuffleBoardRow) {
         shuffleBoardRow.classList.toggle("hidden", !showHostActions);
       }
-      if (hostState.teamCount > 4) {
-        teamCountSelect.value = "4";
-        hostState.teamCount = 4;
-      }
-      if (hostState.teamMode && hostState.teamCount < 2) {
-        hostState.teamCount = 2;
-        teamCountSelect.value = "2";
+      if (hostState.teamMode) {
+        if (hostState.teamCount > 4) {
+          hostState.teamCount = 4;
+        } else if (hostState.teamCount < 2) {
+          hostState.teamCount = 2;
+        }
+        teamCountSelect.value = String(hostState.teamCount);
       }
       if (saveSettingsBtn) {
         saveSettingsBtn.disabled = !showHostActions || !settingsDirty;
@@ -1807,10 +1986,14 @@
 
     function renderBoard(state) {
       boardEl.innerHTML = "";
+      const { rows, cols } = getBoardSize(state.boardLayout);
+      boardEl.classList.remove("expanded-12", "expanded-13");
+      if (cols === 12) boardEl.classList.add("expanded-12");
+      if (cols === 13) boardEl.classList.add("expanded-13");
       const selection = getSelectedCard();
       const possible = selection ? getPossiblePositions(selection.card) : [];
-      for (let r = 0; r < 10; r += 1) {
-        for (let c = 0; c < 10; c += 1) {
+      for (let r = 0; r < rows; r += 1) {
+        for (let c = 0; c < cols; c += 1) {
           const cell = document.createElement("div");
           cell.className = "cell";
           cell.dataset.row = r;
@@ -1873,6 +2056,18 @@
             });
             controls.appendChild(select);
           }
+        }
+        if (isHost && player.id !== selfId) {
+          const kickBtn = document.createElement("button");
+          kickBtn.className = "kick-btn";
+          kickBtn.textContent = "Kick";
+          kickBtn.title = `Remove ${player.name} from the room`;
+          kickBtn.addEventListener("click", () => {
+            if (confirm(`Kick ${player.name} from the room?`)) {
+              kickPlayer(player.id, player.name);
+            }
+          });
+          controls.appendChild(kickBtn);
         }
         row.append(name, badge, count, controls);
         playerListEl.appendChild(row);
@@ -1938,11 +2133,12 @@
       } else {
         logWasVisible = false;
       }
-      const deckMode = state.deckMode || "original";
+      const boardMode = state.boardMode || "standard";
+      const config = getBoardConfig(boardMode);
       const seqLength = state.sequenceLength || 5;
       const seqToWin = state.sequencesToWin || 2;
       deckStatusEl.querySelector("span").textContent = `Deck: ${state.deckCount}`;
-      deckStatusEl.querySelector(".tip").textContent = `Cards left to draw. Decks in play: ${deckMode === "expanded" ? 3 : 2}.`;
+      deckStatusEl.querySelector(".tip").textContent = `Cards left to draw. Decks in play: ${config.deckCount}.`;
       timerStatusEl.querySelector("span").textContent = state.turnTimeLimit
         ? `Timer: ${state.timeLeft ?? state.turnTimeLimit}s`
         : "Timer: Off";
@@ -1983,9 +2179,19 @@
       infoTeamMode.textContent = state.teamMode ? "Teams" : "Free-for-all";
       infoTeamCount.textContent = state.teamMode ? state.teamCount : state.players.length || "--";
       infoTimer.textContent = state.turnTimeLimit ? `${state.turnTimeLimit}s` : "Off";
-      infoDecks.textContent = deckMode === "expanded" ? "3 decks" : "2 decks";
+      const boardLabels = {
+        "standard": "2 decks (10×10)",
+        "expanded-deck": "3 decks (10×10)",
+        "expanded-challenge": "3 decks (12×12)",
+        "expanded-classic": "3 decks (12×13)"
+      };
+      infoDecks.textContent = boardLabels[boardMode] || boardLabels["standard"];
       infoSeqLen.textContent = `${seqLength} in a row`;
       infoSeqWin.textContent = `${seqToWin} sequences`;
+      if (infoRoomStatus) {
+        infoRoomStatus.textContent = state.roomLocked ? "🔒 Locked" : "Open";
+        infoRoomStatus.style.color = state.roomLocked ? "#9a6b2a" : "inherit";
+      }
 
       const turnPlayer = currentPlayer();
       if (state.gameOver) {
@@ -2057,10 +2263,11 @@
 
     function getPossiblePositions(card) {
       if (!localState || !localState.gameStarted) return [];
+      const { rows, cols } = getBoardSize(localState.boardLayout);
       const positions = [];
       if (TWO_EYED.has(card)) {
-        for (let r = 0; r < 10; r += 1) {
-          for (let c = 0; c < 10; c += 1) {
+        for (let r = 0; r < rows; r += 1) {
+          for (let c = 0; c < cols; c += 1) {
             if (localState.boardLayout[r][c].type === "corner") continue;
             if (localState.chips[r][c].team === null) {
               positions.push({ r, c });
@@ -2070,8 +2277,8 @@
         return positions;
       }
       if (ONE_EYED.has(card)) {
-        for (let r = 0; r < 10; r += 1) {
-          for (let c = 0; c < 10; c += 1) {
+        for (let r = 0; r < rows; r += 1) {
+          for (let c = 0; c < cols; c += 1) {
             const chip = localState.chips[r][c];
             if (chip.team !== null && chip.team !== getMyTeam() && !chip.inSequence) {
               positions.push({ r, c });
@@ -2080,8 +2287,8 @@
         }
         return positions;
       }
-      for (let r = 0; r < 10; r += 1) {
-        for (let c = 0; c < 10; c += 1) {
+      for (let r = 0; r < rows; r += 1) {
+        for (let c = 0; c < cols; c += 1) {
           if (localState.boardLayout[r][c].type === "card" && localState.boardLayout[r][c].card === card) {
             if (localState.chips[r][c].team === null) {
               positions.push({ r, c });
@@ -2152,7 +2359,7 @@
         timeLeft,
         sequenceLength: hostState.sequenceLength,
         sequencesToWin: hostState.sequencesToWin,
-        deckMode: hostState.deckMode,
+        boardMode: hostState.boardMode,
         roomCover: hostState.roomCover,
         gameStarted: hostState.gameStarted,
         hasMoves: hostState.hasMoves,
@@ -2163,7 +2370,8 @@
         sequencesCount,
         gameOver: hostState.gameOver,
         winnerTeam: hostState.winnerTeam,
-        log: hostState.log
+        log: hostState.log,
+        roomLocked: hostState.roomLocked
       };
     }
 
@@ -2229,11 +2437,13 @@
     }
 
     function resetGame() {
+      const config = getBoardConfig(hostState.boardMode);
       hostState.gameStarted = false;
       hostState.hasMoves = false;
       hostState.deck = [];
       hostState.hands = {};
-      hostState.chips = createEmptyChips();
+      hostState.boardLayout = createBoardLayout(hostState.boardMode);
+      hostState.chips = createEmptyChips(config.rows, config.cols);
       hostState.sequencesByTeam = initSequences(hostState.teamCount);
       hostState.turnIndex = 0;
       hostState.gameOver = false;
@@ -2248,6 +2458,7 @@
       assignTeams();
       if (!hostState.teamMode && hostState.players.length > 3) {
         hostState.teamMode = true;
+        toast("Switched to team mode (4+ players).");
         assignTeams();
       }
       if (hostState.teamMode && hostState.teamCount > 4) {
@@ -2283,9 +2494,11 @@
         broadcastState();
         return;
       }
+      const config = getBoardConfig(hostState.boardMode);
+      hostState.boardLayout = createBoardLayout(hostState.boardMode);
       hostState.deck = createDeck(getDeckCount());
       hostState.hands = {};
-      hostState.chips = createEmptyChips();
+      hostState.chips = createEmptyChips(config.rows, config.cols);
       hostState.sequencesByTeam = initSequences(hostState.teamCount);
       hostState.turnIndex = 0;
       hostState.gameOver = false;
@@ -2386,10 +2599,11 @@
     }
 
     function getPossiblePositionsHost(card, team) {
+      const { rows, cols } = getBoardSize(hostState.boardLayout);
       const positions = [];
       if (TWO_EYED.has(card)) {
-        for (let r = 0; r < 10; r += 1) {
-          for (let c = 0; c < 10; c += 1) {
+        for (let r = 0; r < rows; r += 1) {
+          for (let c = 0; c < cols; c += 1) {
             if (hostState.boardLayout[r][c].type === "corner") continue;
             if (hostState.chips[r][c].team === null) {
               positions.push({ r, c });
@@ -2399,8 +2613,8 @@
         return positions;
       }
       if (ONE_EYED.has(card)) {
-        for (let r = 0; r < 10; r += 1) {
-          for (let c = 0; c < 10; c += 1) {
+        for (let r = 0; r < rows; r += 1) {
+          for (let c = 0; c < cols; c += 1) {
             const chip = hostState.chips[r][c];
             if (chip.team !== null && chip.team !== team && !chip.inSequence) {
               positions.push({ r, c });
@@ -2409,8 +2623,8 @@
         }
         return positions;
       }
-      for (let r = 0; r < 10; r += 1) {
-        for (let c = 0; c < 10; c += 1) {
+      for (let r = 0; r < rows; r += 1) {
+        for (let c = 0; c < cols; c += 1) {
           if (hostState.boardLayout[r][c].type === "card" && hostState.boardLayout[r][c].card === card) {
             if (hostState.chips[r][c].team === null) {
               positions.push({ r, c });
@@ -2470,7 +2684,8 @@
     }
 
     function isValidPlay(card, row, col, team) {
-      if (row < 0 || row > 9 || col < 0 || col > 9) return false;
+      const { rows, cols } = getBoardSize(hostState.boardLayout);
+      if (row < 0 || row >= rows || col < 0 || col >= cols) return false;
       if (hostState.boardLayout[row][col].type === "corner") return false;
       const chip = hostState.chips[row][col];
       if (ONE_EYED.has(card)) {
@@ -2485,9 +2700,10 @@
 
     function isDeadCardHost(card) {
       if (card.startsWith("J")) return false;
+      const { rows, cols } = getBoardSize(hostState.boardLayout);
       let openCount = 0;
-      for (let r = 0; r < 10; r += 1) {
-        for (let c = 0; c < 10; c += 1) {
+      for (let r = 0; r < rows; r += 1) {
+        for (let c = 0; c < cols; c += 1) {
           if (hostState.boardLayout[r][c].type === "card" && hostState.boardLayout[r][c].card === card) {
             if (hostState.chips[r][c].team === null) {
               openCount += 1;
@@ -2499,6 +2715,7 @@
     }
 
     function evaluateSequences(team) {
+      const { rows, cols } = getBoardSize(hostState.boardLayout);
       const length = hostState.sequenceLength || 5;
       const directions = [
         { dr: 0, dc: 1 },
@@ -2508,13 +2725,13 @@
       ];
       const sequenceSet = hostState.sequencesByTeam[team];
       directions.forEach(({ dr, dc }) => {
-        for (let r = 0; r < 10; r += 1) {
-          for (let c = 0; c < 10; c += 1) {
+        for (let r = 0; r < rows; r += 1) {
+          for (let c = 0; c < cols; c += 1) {
             const cells = [];
             for (let k = 0; k < length; k += 1) {
               const rr = r + dr * k;
               const cc = c + dc * k;
-              if (rr < 0 || rr > 9 || cc < 0 || cc > 9) {
+              if (rr < 0 || rr >= rows || cc < 0 || cc >= cols) {
                 cells.length = 0;
                 break;
               }
@@ -2622,6 +2839,18 @@
           assignTeams();
           updateLobbyControls();
           broadcastState();
+        } else if (pendingJoinCode) {
+          connectToHost(pendingJoinCode);
+          pendingJoinCode = null;
+        }
+      });
+      peer.on("disconnected", () => {
+        if (peer && !peer.destroyed) {
+          setTimeout(() => {
+            if (peer && !peer.destroyed) {
+              peer.reconnect();
+            }
+          }, 1000);
         }
       });
       peer.on("error", (err) => {
@@ -2691,10 +2920,59 @@
       }
     }
 
+    const kickedTokens = new Set();
+
+    function kickPlayer(playerId, playerName) {
+      if (!isHost) return;
+      const player = hostState.players.find(p => p.id === playerId);
+      if (!player) return;
+      if (player.token) {
+        kickedTokens.add(player.token);
+      }
+      const conn = connections.get(playerId);
+      if (conn) {
+        conn.send({ type: "kicked", reason: "You were kicked by the host." });
+        setTimeout(() => {
+          conn.close();
+        }, 100);
+      }
+      const currentTurnId = hostState.players[hostState.turnIndex]?.id || null;
+      hostState.players = hostState.players.filter(p => p.id !== playerId);
+      delete hostState.hands[playerId];
+      connections.delete(playerId);
+      if (hostState.players.length === 0) {
+        hostState.turnIndex = 0;
+        hostState.turnEndsAt = null;
+      } else if (hostState.gameStarted) {
+        const currentIndex = hostState.players.findIndex(p => p.id === currentTurnId);
+        if (currentIndex === -1) {
+          hostState.turnIndex = hostState.turnIndex % hostState.players.length;
+        } else {
+          hostState.turnIndex = currentIndex;
+        }
+        setTurnTimer();
+      } else if (hostState.turnIndex >= hostState.players.length) {
+        hostState.turnIndex = 0;
+      }
+      assignTeams();
+      logHost(`${playerName} was kicked from the room.`, false);
+      updateLobbyControls();
+      broadcastState();
+      toast(`Kicked ${playerName}`);
+    }
+
     function handleIncoming(peerId, data) {
       if (data.type === "join") {
         const playerName = data.name || "Player";
         const token = data.token;
+        if (kickedTokens.has(token)) {
+          const conn = connections.get(peerId);
+          if (conn) {
+            conn.send({ type: "kicked", reason: "You were kicked from this room." });
+            setTimeout(() => conn.close(), 100);
+          }
+          return;
+        }
         const existingIndex = hostState.players.findIndex(p => p.token && p.token === token);
         if (existingIndex !== -1) {
           const oldId = hostState.players[existingIndex].id;
@@ -2707,7 +2985,20 @@
           broadcastState();
           return;
         }
+        if (hostState.roomLocked) {
+          const conn = connections.get(peerId);
+          if (conn) {
+            conn.send({ type: "room_locked", reason: "The room is locked. No new players allowed." });
+            setTimeout(() => conn.close(), 100);
+          }
+          return;
+        }
         if (hostState.gameStarted) {
+          const conn = connections.get(peerId);
+          if (conn) {
+            conn.send({ type: "game_in_progress", reason: "Game already in progress." });
+            setTimeout(() => conn.close(), 100);
+          }
           return;
         }
         hostState.players.push({ id: peerId, name: playerName, team: 0, token });
@@ -2743,8 +3034,11 @@
       hostState.teamCount = Number(teamCountSelect.value);
       hostState.sequenceLength = Number(sequenceLengthSelect.value);
       hostState.sequencesToWin = Number(sequencesToWinSelect.value);
-      hostState.deckMode = deckModeSelect.value;
+      hostState.boardMode = boardModeSelect.value;
       hostState.turnTimeLimit = Number(turnTimerSelect.value);
+      const config = getBoardConfig(hostState.boardMode);
+      hostState.boardLayout = createBoardLayout(hostState.boardMode);
+      hostState.chips = createEmptyChips(config.rows, config.cols);
       assignTeams();
       saveSession({
         role: "host",
@@ -2766,27 +3060,19 @@
       hostLocked = false;
       isHost = false;
       const playerToken = ensureToken("client");
+      pendingJoinToken = playerToken;
+      pendingJoinName = playerNameInput.value || "Player";
       connectPeer();
-      hostConn = peer.connect(joinCodeInput.value.trim());
+      if (!peer || !peer.open) {
+        pendingJoinCode = joinCodeInput.value.trim();
+      } else {
+        connectToHost(joinCodeInput.value.trim());
+      }
       saveSession({
         role: "client",
         playerName: playerNameInput.value || "Player",
         playerToken,
         joinCode: joinCodeInput.value.trim()
-      });
-      hostConn.on("data", data => {
-        if (data.type === "state") {
-          renderState(data.payload);
-        }
-      });
-      hostConn.on("open", () => {
-        hostConn.send({ type: "join", name: playerNameInput.value || "Player", token: playerToken });
-      });
-      hostConn.on("close", () => {
-        handleHostDisconnect();
-      });
-      hostConn.on("error", () => {
-        handleHostDisconnect();
       });
       updateGameControlButton();
     });
@@ -2856,9 +3142,12 @@
       }
     });
 
-    deckModeSelect.addEventListener("change", () => {
+    boardModeSelect.addEventListener("change", () => {
       if (hostState.gameStarted) return;
-      hostState.deckMode = deckModeSelect.value;
+      hostState.boardMode = boardModeSelect.value;
+      const config = getBoardConfig(hostState.boardMode);
+      hostState.boardLayout = createBoardLayout(hostState.boardMode);
+      hostState.chips = createEmptyChips(config.rows, config.cols);
       if (isHost) {
         markSettingsDirty();
         refreshHostPreview();
@@ -2968,13 +3257,56 @@
         return;
       }
       if (!shuffleBoardToggle.checked) return;
-      hostState.boardLayout = createBoardLayout(true);
-      hostState.chips = createEmptyChips();
+      const config = getBoardConfig(hostState.boardMode);
+      hostState.boardLayout = createBoardLayout(hostState.boardMode, true);
+      hostState.chips = createEmptyChips(config.rows, config.cols);
       logHost("Board shuffled.", false);
       markSettingsDirty();
       refreshHostPreview();
       shuffleBoardToggle.checked = false;
     });
+
+    hideCodeToggle.addEventListener("change", () => {
+      codesHidden = hideCodeToggle.checked;
+      if (shareBox) {
+        shareBox.classList.toggle("code-hidden", codesHidden);
+      }
+      if (codesHidden) {
+        toast("Codes hidden for streaming");
+      }
+    });
+
+    lockRoomToggle.addEventListener("change", () => {
+      hostState.roomLocked = lockRoomToggle.checked;
+      roomLocked = hostState.roomLocked;
+      updateRoomLockedBadge();
+      if (hostState.roomLocked) {
+        toast("Room locked — no new players can join");
+        logHost("Room locked by host.", false);
+      } else {
+        toast("Room unlocked — players can join again");
+        logHost("Room unlocked by host.", false);
+      }
+      broadcastState();
+    });
+
+    function updateRoomLockedBadge() {
+      let badge = document.getElementById("roomLockedBadge");
+      if (hostState.roomLocked && isHost && selfId) {
+        if (!badge) {
+          badge = document.createElement("span");
+          badge.id = "roomLockedBadge";
+          badge.className = "room-locked-badge";
+          badge.textContent = "🔒 Locked";
+          const shareBoxEl = document.getElementById("shareBox");
+          if (shareBoxEl) {
+            shareBoxEl.insertBefore(badge, shareBoxEl.firstChild);
+          }
+        }
+      } else if (badge) {
+        badge.remove();
+      }
+    }
 
     if (gameControlBtn) {
       gameControlBtn.addEventListener("click", () => {
@@ -3025,8 +3357,9 @@
       hostLocked = false;
       selfId = null;
       localState = null;
-      hostState.boardLayout = createBoardLayout();
-      hostState.chips = createEmptyChips();
+      hostState.boardMode = "standard";
+      hostState.boardLayout = createBoardLayout("standard");
+      hostState.chips = createEmptyChips(10, 10);
       hostState.players = [];
       hostState.hands = {};
       hostState.gameStarted = false;
@@ -3037,6 +3370,15 @@
       hostState.roomCover = null;
       hostState.turnEndsAt = null;
       hostState.log = [];
+      hostState.roomLocked = false;
+      roomLocked = false;
+      codesHidden = false;
+      kickedTokens.clear();
+      if (hideCodeToggle) hideCodeToggle.checked = false;
+      if (lockRoomToggle) lockRoomToggle.checked = false;
+      if (shareBox) shareBox.classList.remove("code-hidden");
+      const badge = document.getElementById("roomLockedBadge");
+      if (badge) badge.remove();
       clearSessionKeepName();
       closeAccordion(lobbyAccordion);
       closeAccordion(playersAccordion);
@@ -3083,7 +3425,9 @@
       turnTimerSelect.value = String(hostState.turnTimeLimit || 0);
       sequenceLengthSelect.value = String(hostState.sequenceLength);
       sequencesToWinSelect.value = String(hostState.sequencesToWin);
-      deckModeSelect.value = hostState.deckMode;
+      boardModeSelect.value = hostState.boardMode;
+      lockRoomToggle.checked = hostState.roomLocked;
+      roomLocked = hostState.roomLocked;
       pendingHostName = session.playerName || "Host";
       pendingHostToken = session.playerToken || ensureToken("host");
       pendingHostId = session.hostId || pendingHostId;
@@ -3093,6 +3437,7 @@
       connectPeer(pendingHostId);
       closeAccordion(lobbyAccordion);
       openAccordion(playersAccordion);
+      updateRoomLockedBadge();
     });
 
     resetSessionBtn.addEventListener("click", () => {
@@ -3134,7 +3479,7 @@
         roomCover: hostState.roomCover,
         sequenceLength: hostState.sequenceLength,
         sequencesToWin: hostState.sequencesToWin,
-        deckMode: hostState.deckMode,
+        boardMode: hostState.boardMode,
         gameStarted: false,
         hasMoves: false,
         turnPlayerId: null,
@@ -3148,6 +3493,42 @@
       });
       updateGameControlButton();
       updateSettingsVisibility();
+    }
+
+    function connectToHost(code) {
+      if (!peer || !code) return;
+      if (hostConn) {
+        hostConn.close();
+      }
+      hostConn = peer.connect(code);
+      hostConn.on("data", data => {
+        if (data.type === "state") {
+          renderState(data.payload);
+        } else if (data.type === "kicked") {
+          toast(data.reason || "You were kicked from the room.");
+          handleHostDisconnect();
+          clearSessionKeepName();
+        } else if (data.type === "room_locked") {
+          toast(data.reason || "Room is locked.");
+          handleHostDisconnect();
+        } else if (data.type === "game_in_progress") {
+          toast(data.reason || "Game already in progress.");
+          handleHostDisconnect();
+        }
+      });
+      hostConn.on("open", () => {
+        hostConn.send({
+          type: "join",
+          name: pendingJoinName || playerNameInput.value || "Player",
+          token: pendingJoinToken || ensureToken("client")
+        });
+      });
+      hostConn.on("close", () => {
+        handleHostDisconnect();
+      });
+      hostConn.on("error", () => {
+        handleHostDisconnect();
+      });
     }
 
     setInterval(() => {
@@ -3202,7 +3583,7 @@
       turnTimerSelect.value = String(hostState.turnTimeLimit || 0);
       sequenceLengthSelect.value = String(hostState.sequenceLength);
       sequencesToWinSelect.value = String(hostState.sequencesToWin);
-      deckModeSelect.value = hostState.deckMode;
+      boardModeSelect.value = hostState.boardMode;
       renderState({
         boardLayout: hostState.boardLayout,
         chips: hostState.chips,
@@ -3214,7 +3595,7 @@
         roomCover: hostState.roomCover,
         sequenceLength: hostState.sequenceLength,
         sequencesToWin: hostState.sequencesToWin,
-        deckMode: hostState.deckMode,
+        boardMode: hostState.boardMode,
         gameStarted: false,
         hasMoves: false,
         turnPlayerId: null,
@@ -3236,4 +3617,5 @@
     });
   </script>
 </body>
+
 </html>
