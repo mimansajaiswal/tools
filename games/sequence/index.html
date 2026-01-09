@@ -2132,7 +2132,8 @@
 
     function updateViewState(state) {
       const active = !!state?.gameStarted;
-      const showPreGame = !!selfId && isHost;
+      const inRoom = state?.players && state.players.length > 0;
+      const showPreGame = !!selfId && (isHost || inRoom);
       const mustStayOpen = !selfId;
       const showPanels = active || showPreGame;
       const showLog = !!state?.hasMoves;
