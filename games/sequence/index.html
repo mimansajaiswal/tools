@@ -218,6 +218,34 @@
       filter: brightness(0.98);
     }
 
+    button.danger {
+      background: #b54a4a;
+      color: #fff;
+    }
+
+    button.start-btn {
+      background: #2f6f4e;
+      color: #fff;
+    }
+
+    .join-code-row button {
+      padding: 8px 10px;
+      font-size: 12px;
+      border-radius: 8px;
+    }
+
+    .card-symbol .suit-icon {
+      width: 0.95em;
+      height: 0.95em;
+      display: inline-flex;
+    }
+
+    .card-symbol .suit-icon svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
     .divider {
       height: 1px;
       background: var(--border);
@@ -364,6 +392,9 @@
       font-size: 11px;
       position: absolute;
       line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
     }
 
     .card-symbol.top-left {
@@ -398,7 +429,7 @@
     }
 
     .use-symbols .chip {
-      width: 40%;
+      width: 52%;
     }
 
     .chip::before {
@@ -495,6 +526,7 @@
     .hand-card.selected {
       border-color: #3d6a99;
       box-shadow: 0 0 10px rgba(61, 106, 153, 0.6), inset 0 0 0 2px rgba(53, 99, 138, 0.3);
+      border-radius: 3px;
     }
 
     .hand-card.dead-card {
@@ -743,6 +775,10 @@
       margin-bottom: 8px;
     }
 
+    #boardPanel .hand-header {
+      min-height: 46px;
+    }
+
     .cover-badge {
       display: inline-flex;
       align-items: center;
@@ -824,6 +860,52 @@
     .settings-overlay.open {
       opacity: 1;
       pointer-events: auto;
+    }
+
+    .confirm-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 12, 16, 0.4);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      z-index: 70;
+      display: grid;
+      place-items: center;
+      padding: 16px;
+    }
+
+    .confirm-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .confirm-panel {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      padding: 16px;
+      width: min(360px, 100%);
+      display: grid;
+      gap: 10px;
+    }
+
+    .confirm-panel h3 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .confirm-panel p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .confirm-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
     }
 
     .settings-panel {
@@ -1018,11 +1100,9 @@
       }
 
       .use-symbols .cell .card-symbol {
-        -webkit-text-stroke: 0.8px currentColor;
-        -webkit-text-fill-color: transparent;
+        -webkit-text-stroke: 0.6px currentColor;
         paint-order: stroke fill;
-        color: rgba(74, 64, 56, 0.7);
-        opacity: 1;
+        color: rgba(74, 64, 56, 0.75);
       }
 
       .use-symbols .cell .card-symbol.red {
@@ -1095,7 +1175,7 @@
       </div>
     </div>
     <div class="header-actions">
-      <button id="gameControlBtn" class="secondary hidden">Start game</button>
+      <button id="gameControlBtn" class="game-control-btn hidden">Start game</button>
       <button id="openInfoBtn" class="icon-btn" aria-label="Game info">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
           stroke-linejoin="round">
@@ -1132,7 +1212,7 @@
               <option value="symbols">Symbols</option>
             </select>
             <div class="divider"></div>
-            <button id="leaveRoomBtn" class="secondary" style="width: 100%;">Leave game</button>
+            <button id="leaveRoomBtn" class="danger" style="width: 100%;">Leave game</button>
             <button id="resetSessionBtn" class="secondary" style="width: 100%; margin-top: 6px;">Reset game</button>
             <button id="clearDataBtn" class="secondary" style="width: 100%; margin-top: 6px;">Clear saved data</button>
           </div>
@@ -1264,7 +1344,10 @@
                 <div class="connection-tab-panel hidden" data-tab="join">
                   <div id="joinBox">
                     <label for="joinCode">Join code</label>
-                    <input id="joinCode" placeholder="Paste host code" />
+                    <div class="inline join-code-row">
+                      <input id="joinCode" type="password" placeholder="Paste host code" />
+                      <button id="toggleJoinCodeBtn" class="secondary" type="button">Show</button>
+                    </div>
                     <button class="secondary" id="joinBtn" style="margin-top: 8px;">Join room</button>
                   </div>
                 </div>
@@ -1346,7 +1429,7 @@
           </div>
         </div>
         <div class="button-row" id="gameActionsRow">
-          <button id="leaveRoomBtnGame" class="secondary">Leave game</button>
+          <button id="leaveRoomBtnGame" class="danger">Leave game</button>
           <button id="resetSessionBtnGame" class="secondary">Reset game</button>
         </div>
 
@@ -1377,6 +1460,17 @@
 
   </main>
   <div class="settings-overlay" id="settingsOverlay"></div>
+  <div class="confirm-overlay" id="confirmOverlay" aria-hidden="true">
+    <div class="confirm-panel" role="dialog" aria-modal="true" aria-labelledby="confirmTitle"
+      aria-describedby="confirmMessage">
+      <h3 id="confirmTitle">Confirm</h3>
+      <p id="confirmMessage"></p>
+      <div class="confirm-actions">
+        <button id="confirmCancelBtn" class="secondary" type="button">Cancel</button>
+        <button id="confirmOkBtn" class="danger" type="button">Confirm</button>
+      </div>
+    </div>
+  </div>
   <div class="toast-container" id="toastContainer"></div>
 
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
@@ -1486,6 +1580,11 @@
     const saveSettingsBtn = document.getElementById("saveSettingsBtn");
     const clearDataBtn = document.getElementById("clearDataBtn");
     const toastContainer = document.getElementById("toastContainer");
+    const confirmOverlay = document.getElementById("confirmOverlay");
+    const confirmTitle = document.getElementById("confirmTitle");
+    const confirmMessage = document.getElementById("confirmMessage");
+    const confirmCancelBtn = document.getElementById("confirmCancelBtn");
+    const confirmOkBtn = document.getElementById("confirmOkBtn");
     const logAccordion = document.getElementById("logAccordion");
     const lobbyAccordion = document.getElementById("lobbyAccordion");
     const playersAccordion = document.getElementById("playersAccordion");
@@ -1511,6 +1610,7 @@
     const hideCodeToggle = document.getElementById("hideCodeToggle");
     const lockRoomToggle = document.getElementById("lockRoomToggle");
     const waitingBanner = document.getElementById("waitingBanner");
+    const toggleJoinCodeBtn = document.getElementById("toggleJoinCodeBtn");
 
     let peer = null;
     let connections = new Map();
@@ -1590,6 +1690,29 @@
       setTimeout(() => {
         item.remove();
       }, 2600);
+    }
+
+    let confirmResolver = null;
+
+    function openConfirm({ title, message, confirmText }) {
+      return new Promise(resolve => {
+        confirmResolver = resolve;
+        if (confirmTitle) confirmTitle.textContent = title || "Confirm";
+        if (confirmMessage) confirmMessage.textContent = message || "";
+        if (confirmOkBtn) confirmOkBtn.textContent = confirmText || "Confirm";
+        confirmOverlay.classList.add("open");
+        confirmOverlay.setAttribute("aria-hidden", "false");
+      });
+    }
+
+    function closeConfirm(result) {
+      if (!confirmOverlay.classList.contains("open")) return;
+      confirmOverlay.classList.remove("open");
+      confirmOverlay.setAttribute("aria-hidden", "true");
+      if (confirmResolver) {
+        confirmResolver(result);
+        confirmResolver = null;
+      }
     }
 
     function shuffle(array) {
@@ -1948,10 +2071,43 @@
       }
     }
 
+    const SUIT_SVGS = {
+      S: {
+        filled: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><path fill="currentColor" d="M232 136a56 56 0 0 1-83.4 48.82l11.06 36.88A8 8 0 0 1 152 232h-48a8 8 0 0 1-7.66-10.3l11.06-36.88A56 56 0 0 1 24 136c0-32 17.65-62.84 51-89.27a234 234 0 0 1 49.89-30.11a7.93 7.93 0 0 1 6.16 0A234 234 0 0 1 181 46.73C214.35 73.16 232 104 232 136"/></svg>',
+        outline: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><path fill="currentColor" d="M178.56 52.93a281 281 0 0 0-48.77-32.51a4 4 0 0 0-3.58 0a281 281 0 0 0-48.77 32.51C45.1 79.88 28 108.61 28 136a52 52 0 0 0 76.46 45.89l-12.29 41A4 4 0 0 0 96 228h64a4 4 0 0 0 3.83-5.15l-12.29-41A52 52 0 0 0 228 136c0-27.39-17.1-56.12-49.44-83.07M176 180a44 44 0 0 1-28.92-10.84a4 4 0 0 0-6.46 4.17l14 46.67h-53.24l14-46.67a4 4 0 0 0-6.46-4.17A44 44 0 0 1 36 136c0-56.06 79-100.56 92-107.49c13 6.93 92 51.38 92 107.49a44.05 44.05 0 0 1-44 44"/></svg>'
+      },
+      H: {
+        filled: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><path fill="currentColor" d="M240 98a57.63 57.63 0 0 1-17 41l-89.3 90.62a8 8 0 0 1-11.4 0L33 139a58 58 0 0 1 82-82.1l13 12.15l13.09-12.19A58 58 0 0 1 240 98"/></svg>',
+        outline: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><path fill="currentColor" d="M221.6 58.38a56.06 56.06 0 0 0-79.12-.08L128 71.78L113.52 58.3a56 56 0 0 0-79.15 79.25l89.36 90.66a6 6 0 0 0 8.54 0l89.33-90.62a56 56 0 0 0 0-79.21m-8.52 70.75L128 215.45L42.89 129.1a44 44 0 0 1 62.22-62.23a1 1 0 0 0 .16.14l18.64 17.36a6 6 0 0 0 8.18 0L150.73 67a1 1 0 0 0 .16-.14a44 44 0 1 1 62.19 62.26Z"/></svg>'
+      },
+      D: {
+        filled: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><path fill="currentColor" d="M113.99 62.45L65.95.97c-.94-1.2-2.96-1.2-3.9 0L14.01 62.44c-.7.9-.7 2.16 0 3.05l48.04 61.48a2.478 2.478 0 0 0 3.9 0l48.03-61.48c.7-.89.7-2.15.01-3.04"/></svg>',
+        outline: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><path fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round" d="M113.99 62.45L65.95.97c-.94-1.2-2.96-1.2-3.9 0L14.01 62.44c-.7.9-.7 2.16 0 3.05l48.04 61.48a2.478 2.478 0 0 0 3.9 0l48.03-61.48c.7-.89.7-2.15.01-3.04"/></svg>'
+      },
+      C: {
+        filled: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><path fill="currentColor" d="M240 144a56 56 0 0 1-84.81 48h-4.44l8.91 29.7A8 8 0 0 1 152 232h-48a8 8 0 0 1-7.66-10.3l8.91-29.7h-4.44A56 56 0 1 1 72 88h2.33a56 56 0 1 1 107.34 0H184a56.06 56.06 0 0 1 56 56"/></svg>',
+        outline: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><path fill="currentColor" d="M184 92a53 53 0 0 0-8.26.65a52 52 0 1 0-95.48 0A53 53 0 0 0 72 92a52 52 0 1 0 31.38 93.48l-11.21 37.37A4 4 0 0 0 96 228h64a4 4 0 0 0 3.83-5.15l-11.21-37.37A52 52 0 1 0 184 92m0 96a43.92 43.92 0 0 1-36.73-19.77a4 4 0 0 0-7.17 3.36L154.62 220h-53.24l14.52-48.41a4 4 0 0 0-7.17-3.36a44 44 0 1 1-21.91-65.67a4 4 0 0 0 4.66-6a44 44 0 1 1 73 0a4 4 0 0 0 4.66 6A44 44 0 1 1 184 188"/></svg>'
+      }
+    };
+
+    function cardRank(card) {
+      return card.slice(0, -1);
+    }
+
+    function cardSuit(card) {
+      return card.slice(-1);
+    }
+
     function cardLabel(card) {
-      const suit = card.slice(-1);
-      const rank = card.slice(0, -1);
+      const suit = cardSuit(card);
+      const rank = cardRank(card);
       return `${rank}${SUITS[suit]}`;
+    }
+
+    function suitSvg(suit, outline) {
+      const entry = SUIT_SVGS[suit];
+      if (!entry) return "";
+      return outline ? entry.outline : entry.filled;
     }
 
     function cardImagePath(card) {
@@ -1970,14 +2126,27 @@
 
     function createCardContent(card, forCell = false) {
       if (shouldUseSymbols()) {
+        const outlineSymbols = window.matchMedia("(max-width: 819px)").matches;
         const wrapper = document.createDocumentFragment();
         const topLeft = document.createElement("span");
         topLeft.className = "card-symbol top-left";
-        topLeft.textContent = cardLabel(card);
+        const topRank = document.createElement("span");
+        topRank.className = "rank";
+        topRank.textContent = cardRank(card);
+        const topSuit = document.createElement("span");
+        topSuit.className = "suit-icon";
+        topSuit.innerHTML = suitSvg(cardSuit(card), outlineSymbols);
+        topLeft.append(topRank, topSuit);
         if (isRedSuit(card)) topLeft.classList.add("red");
         const bottomRight = document.createElement("span");
         bottomRight.className = "card-symbol bottom-right";
-        bottomRight.textContent = cardLabel(card);
+        const bottomRank = document.createElement("span");
+        bottomRank.className = "rank";
+        bottomRank.textContent = cardRank(card);
+        const bottomSuit = document.createElement("span");
+        bottomSuit.className = "suit-icon";
+        bottomSuit.innerHTML = suitSvg(cardSuit(card), outlineSymbols);
+        bottomRight.append(bottomRank, bottomSuit);
         if (isRedSuit(card)) bottomRight.classList.add("red");
         wrapper.appendChild(topLeft);
         wrapper.appendChild(bottomRight);
@@ -2106,6 +2275,27 @@
       if (name) {
         playerNameInput.value = name;
       }
+    }
+
+    function buildLeaveSessionSnapshot() {
+      const existing = loadSession();
+      if (isHost) {
+        const hostToken = pendingHostToken || existing?.playerToken || ensureToken("host");
+        return {
+          role: "host",
+          playerName: pendingHostName || playerNameInput.value || "Host",
+          playerToken: hostToken,
+          hostId: selfId || pendingHostId || requestedHostId || null,
+          hostSnapshot: serializeHostState()
+        };
+      }
+      const clientToken = pendingJoinToken || existing?.playerToken || ensureToken("client");
+      return {
+        role: "client",
+        playerName: playerNameInput.value || "Player",
+        playerToken: clientToken,
+        joinCode: joinCodeInput.value.trim() || existing?.joinCode || ""
+      };
     }
 
     function markSettingsDirty() {
@@ -2283,11 +2473,13 @@
         return;
       }
       const gameStarted = localState?.gameStarted || hostState.gameStarted;
+      gameControlBtn.classList.remove("start-btn", "danger");
       if (gameStarted) {
         gameControlBtn.classList.remove("hidden");
         gameControlBtn.textContent = "Leave game";
         gameControlBtn.disabled = false;
         gameControlBtn.dataset.action = "leave";
+        gameControlBtn.classList.add("danger");
         return;
       }
       if (!isHost) {
@@ -2298,6 +2490,7 @@
       gameControlBtn.textContent = "Start game";
       gameControlBtn.disabled = hostState.players.length < 2;
       gameControlBtn.dataset.action = "start";
+      gameControlBtn.classList.add("start-btn");
     }
 
     function renderBoard(state) {
@@ -3422,6 +3615,14 @@
       updateConnectionButtons();
     });
 
+    if (toggleJoinCodeBtn) {
+      toggleJoinCodeBtn.addEventListener("click", () => {
+        const isHidden = joinCodeInput.type === "password";
+        joinCodeInput.type = isHidden ? "text" : "password";
+        toggleJoinCodeBtn.textContent = isHidden ? "Hide" : "Show";
+      });
+    }
+
     teamCountSelect.addEventListener("change", () => {
       if (hostState.gameStarted) return;
       hostState.teamCount = Number(teamCountSelect.value);
@@ -3570,6 +3771,16 @@
       toggleDisplayDropdown(false);
     });
 
+    if (confirmCancelBtn && confirmOkBtn && confirmOverlay) {
+      confirmCancelBtn.addEventListener("click", () => closeConfirm(false));
+      confirmOkBtn.addEventListener("click", () => closeConfirm(true));
+      confirmOverlay.addEventListener("click", (event) => {
+        if (event.target === confirmOverlay) {
+          closeConfirm(false);
+        }
+      });
+    }
+
     document.querySelectorAll(".accordion-toggle").forEach(toggle => {
       toggle.addEventListener("click", () => {
         const parent = toggle.closest(".accordion");
@@ -3663,7 +3874,7 @@
           if (!isHost || hostState.gameStarted) return;
           startGame();
         } else if (gameControlBtn.dataset.action === "leave") {
-          leaveRoom();
+          requestLeave();
         }
       });
     }
@@ -3710,8 +3921,11 @@
       } catch { }
     }
 
-    function leaveRoom() {
+    function leaveRoom({ preserveSession = false } = {}) {
       if (peer) peer.destroy();
+      if (preserveSession) {
+        saveSession(buildLeaveSessionSnapshot());
+      }
       connections = new Map();
       hostConn = null;
       isHost = false;
@@ -3743,7 +3957,11 @@
       updateCodeDisplay();
       const badge = document.getElementById("roomLockedBadge");
       if (badge) badge.remove();
-      clearSessionKeepName();
+      if (!preserveSession) {
+        clearSessionKeepName();
+      } else {
+        updateSessionUI(loadSession());
+      }
       clearJoinParam();
       closeAccordion(lobbyAccordion);
       closeAccordion(playersAccordion);
@@ -3752,12 +3970,23 @@
       updateGameControlButton();
     }
 
+    async function requestLeave() {
+      const ok = await openConfirm({
+        title: "Leave game?",
+        message: "You’ll exit the room and lose your current hand.",
+        confirmText: "Leave"
+      });
+      if (ok) {
+        leaveRoom({ preserveSession: true });
+      }
+    }
+
     leaveRoomBtn.addEventListener("click", () => {
-      leaveRoom();
+      requestLeave();
     });
 
     leaveRoomBtnGame.addEventListener("click", () => {
-      leaveRoom();
+      requestLeave();
     });
 
     // Sessions auto-save during gameplay; no manual save button.
@@ -3860,9 +4089,10 @@
       hostConn = peer.connect(code);
       hostConn.on("data", data => {
         if (data.type === "state") {
-          const isFirstState = !localState;
+          const wasInRoom = !!(localState && localState.players && localState.players.length > 0);
           renderState(data.payload);
-          if (isFirstState && !isHost) {
+          const isNowInRoom = !!(data.payload.players && data.payload.players.length > 0);
+          if (!wasInRoom && isNowInRoom && !isHost) {
             setSettingsMode("game");
             playersAccordion.classList.remove("hidden");
             openAccordion(playersAccordion);
@@ -3943,11 +4173,14 @@
       try {
         const url = new URL(window.location.href);
         const joinCode = url.searchParams.get("join");
-        if (joinCode && !joinCodeInput.value.trim()) {
-          joinCodeInput.value = joinCode;
-          setConnectionTab("join");
-          toggleGameSettings(true);
-          updateConnectionButtons();
+        if (joinCode) {
+          if (!joinCodeInput.value.trim()) {
+            joinCodeInput.value = joinCode;
+            setConnectionTab("join");
+            toggleGameSettings(true);
+            updateConnectionButtons();
+          }
+          clearJoinParam();
         }
       } catch {
         // ignore invalid URL parsing
