@@ -412,6 +412,10 @@
       color: #b54a4a;
     }
 
+    .card-symbol.black {
+      color: rgba(191, 107, 34, 0.82);
+    }
+
     .chip {
       position: absolute;
       width: 55%;
@@ -467,8 +471,8 @@
 
     .cell.has-chip .card-image,
     .cell.has-chip .card-symbol {
-      opacity: 0.55;
-      filter: grayscale(0.1) saturate(0.85);
+      opacity: 0.75;
+      filter: grayscale(0.05) saturate(0.92);
     }
 
     .waiting-banner {
@@ -491,7 +495,7 @@
     .hand-card {
       background: #fff;
       border: 1px solid var(--border);
-      border-radius: 1px;
+      border-radius: 3px;
       padding: 5px;
       text-align: center;
       cursor: pointer;
@@ -1100,14 +1104,19 @@
       }
 
       .use-symbols .cell .card-symbol {
-        -webkit-text-stroke: 0.6px currentColor;
+        -webkit-text-stroke: 0.9px currentColor;
         paint-order: stroke fill;
-        color: rgba(74, 64, 56, 0.75);
+        color: rgba(0, 0, 0, 0.58);
       }
 
       .use-symbols .cell .card-symbol.red {
-        color: #b54a4a;
+        color: rgba(181, 74, 74, 0.8);
         -webkit-text-stroke-color: #b54a4a;
+      }
+
+      .use-symbols .cell .card-symbol.black {
+        color: rgba(0, 0, 0, 0.6);
+        -webkit-text-stroke-color: rgba(0, 0, 0, 0.75);
       }
 
       .board-scroll {
@@ -1379,8 +1388,8 @@
                 <div id="hostSettingsBox" class="hidden">
                   <label for="teamModeToggle">Team mode</label>
                   <select id="teamModeToggle">
-                    <option value="teams">Teams</option>
                     <option value="solo">Free-for-all</option>
+                    <option value="teams">Teams</option>
                   </select>
                   <div id="teamCountRow">
                     <label for="teamCount" style="margin-top: 8px;">Teams</label>
@@ -1648,7 +1657,7 @@
       chips: createEmptyChips(),
       players: [],
       teamCount: 2,
-      teamMode: true,
+      teamMode: false,
       turnTimeLimit: 0,
       turnEndsAt: null,
       roomCover: null,
@@ -2137,7 +2146,11 @@
         topSuit.className = "suit-icon";
         topSuit.innerHTML = suitSvg(cardSuit(card), outlineSymbols);
         topLeft.append(topRank, topSuit);
-        if (isRedSuit(card)) topLeft.classList.add("red");
+        if (isRedSuit(card)) {
+          topLeft.classList.add("red");
+        } else {
+          topLeft.classList.add("black");
+        }
         const bottomRight = document.createElement("span");
         bottomRight.className = "card-symbol bottom-right";
         const bottomRank = document.createElement("span");
@@ -2147,7 +2160,11 @@
         bottomSuit.className = "suit-icon";
         bottomSuit.innerHTML = suitSvg(cardSuit(card), outlineSymbols);
         bottomRight.append(bottomRank, bottomSuit);
-        if (isRedSuit(card)) bottomRight.classList.add("red");
+        if (isRedSuit(card)) {
+          bottomRight.classList.add("red");
+        } else {
+          bottomRight.classList.add("black");
+        }
         wrapper.appendChild(topLeft);
         wrapper.appendChild(bottomRight);
         return wrapper;
@@ -2962,6 +2979,29 @@
       return uniqueCounts.size === 1;
     }
 
+    function buildTeamTurnOrder() {
+      const buckets = Array.from({ length: hostState.teamCount }, () => []);
+      hostState.players.forEach(player => {
+        if (typeof player.team === "number" && player.team < buckets.length) {
+          buckets[player.team].push(player);
+        }
+      });
+      buckets.forEach((bucket, index) => {
+        buckets[index] = shuffle(bucket.slice());
+      });
+      const maxLen = Math.max(0, ...buckets.map(list => list.length));
+      const ordered = [];
+      for (let i = 0; i < maxLen; i += 1) {
+        for (let team = 0; team < buckets.length; team += 1) {
+          const member = buckets[team][i];
+          if (member) ordered.push(member);
+        }
+      }
+      if (ordered.length === hostState.players.length) {
+        hostState.players = ordered;
+      }
+    }
+
     function resetGame() {
       const config = getBoardConfig(hostState.boardMode);
       hostState.gameStarted = false;
@@ -3026,6 +3066,9 @@
       hostState.hands = {};
       hostState.chips = createEmptyChips(config.rows, config.cols);
       hostState.sequencesByTeam = initSequences(hostState.teamCount);
+      if (hostState.teamMode) {
+        buildTeamTurnOrder();
+      }
       hostState.turnIndex = 0;
       hostState.gameOver = false;
       hostState.winnerTeam = null;
@@ -4191,6 +4234,7 @@
       sequenceLengthSelect.value = String(hostState.sequenceLength);
       sequencesToWinSelect.value = String(hostState.sequencesToWin);
       boardModeSelect.value = hostState.boardMode;
+      updateLobbyControls();
       renderState({
         boardLayout: hostState.boardLayout,
         chips: hostState.chips,
