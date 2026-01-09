@@ -246,6 +246,19 @@
       display: block;
     }
 
+    .card-symbol .rank {
+      color: currentColor;
+      opacity: 1;
+    }
+
+    .card-symbol .suit-icon svg path {
+      fill: currentColor;
+      fill-opacity: 0.8;
+      stroke: currentColor;
+      stroke-width: 1.6;
+      stroke-linejoin: round;
+    }
+
     .divider {
       height: 1px;
       background: var(--border);
@@ -1119,6 +1132,10 @@
         -webkit-text-stroke-color: rgba(0, 0, 0, 0.75);
       }
 
+      .card-symbol .suit-icon svg path {
+        stroke-width: 2.2;
+      }
+
       .board-scroll {
         max-height: none;
       }
@@ -1673,7 +1690,8 @@
       gameOver: false,
       winnerTeam: null,
       log: [],
-      roomLocked: false
+      roomLocked: false,
+      lastPlay: null
     };
     lastTeamCount = hostState.teamCount;
 
@@ -2021,7 +2039,8 @@
         gameOver: hostState.gameOver,
         winnerTeam: hostState.winnerTeam,
         log: hostState.log,
-        roomLocked: hostState.roomLocked
+        roomLocked: hostState.roomLocked,
+        lastPlay: hostState.lastPlay || null
       };
     }
 
@@ -2055,6 +2074,7 @@
       hostState.winnerTeam = snapshot.winnerTeam ?? null;
       hostState.log = snapshot.log || [];
       hostState.roomLocked = !!snapshot.roomLocked;
+      hostState.lastPlay = snapshot.lastPlay || null;
     }
 
     function updateSessionUI(session) {
@@ -3016,6 +3036,7 @@
       hostState.winnerTeam = null;
       hostState.turnEndsAt = null;
       hostState.log = [{ type: "text", text: "Game reset. Ready for a new round." }];
+      hostState.lastPlay = null;
       clearSettingsDirty();
       broadcastState();
     }
@@ -3069,6 +3090,7 @@
       if (hostState.teamMode) {
         buildTeamTurnOrder();
       }
+      hostState.lastPlay = null;
       hostState.turnIndex = 0;
       hostState.gameOver = false;
       hostState.winnerTeam = null;
@@ -3479,7 +3501,16 @@
         hostState.hands = { [newId]: hostState.hands[newId] || [] };
         return;
       }
-      const hostIndex = hostState.players.findIndex(p => p.token === pendingHostToken);
+      let hostIndex = hostState.players.findIndex(p => p.token === pendingHostToken);
+      if (hostIndex === -1) {
+        const oldId = pendingHostId || requestedHostId;
+        if (oldId) {
+          hostIndex = hostState.players.findIndex(p => p.id === oldId);
+        }
+      }
+      if (hostIndex === -1 && pendingHostName) {
+        hostIndex = hostState.players.findIndex(p => p.name === pendingHostName);
+      }
       if (hostIndex === -1) {
         hostState.players.unshift({ id: newId, name: pendingHostName || "Host", team: 0, token: pendingHostToken });
         hostState.hands[newId] = hostState.hands[newId] || [];
@@ -3487,6 +3518,9 @@
       }
       const oldId = hostState.players[hostIndex].id;
       hostState.players[hostIndex].id = newId;
+      if (pendingHostToken) {
+        hostState.players[hostIndex].token = pendingHostToken;
+      }
       if (hostState.hands[oldId]) {
         hostState.hands[newId] = hostState.hands[oldId];
         delete hostState.hands[oldId];
@@ -3989,6 +4023,7 @@
       hostState.turnEndsAt = null;
       hostState.log = [];
       hostState.roomLocked = false;
+      hostState.lastPlay = null;
       roomLocked = false;
       codesHidden = false;
       kickedTokens.clear();
@@ -4037,15 +4072,22 @@
     rejoinBtn.addEventListener("click", () => {
       const session = loadSession();
       if (!session || session.role !== "client") return;
+      hostLocked = false;
+      isHost = false;
       if (session.playerName) {
         playerNameInput.value = session.playerName;
       }
       if (session.joinCode) {
         joinCodeInput.value = session.joinCode;
       }
+      pendingJoinToken = session.playerToken || pendingJoinToken;
+      pendingJoinName = session.playerName || pendingJoinName;
       if (session.playerToken) {
         saveSession({ ...session, playerName: playerNameInput.value || session.playerName, joinCode: session.joinCode });
       }
+      setConnectionTab("join");
+      toggleGameSettings(true);
+      updateConnectionButtons();
       joinBtn.click();
     });
 
@@ -4070,6 +4112,9 @@
       pendingHostId = session.hostId || pendingHostId;
       hostLocked = true;
       isHost = true;
+      setSettingsMode("game");
+      updateSettingsVisibility();
+      updateLobbyControls();
       fallbackHostIdInProgress = false;
       connectPeer(pendingHostId);
       closeAccordion(lobbyAccordion);
