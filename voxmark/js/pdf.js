@@ -265,6 +265,12 @@ async function renderTextLayerSafe({ textContentSource, textContent, container, 
   container.style.width = `${viewport.width}px`;
   container.style.height = `${viewport.height}px`;
   container.style.setProperty("--scale-factor", viewport.scale);
+  container.style.position = "absolute";
+  container.style.left = "0";
+  container.style.top = "0";
+  container.style.zIndex = "2";
+  container.style.userSelect = "text";
+  container.style.pointerEvents = "auto";
   const isStream = textContentSource && typeof textContentSource.getReader === "function";
   if (pdfjsLib.renderTextLayer && isStream) {
     const task = pdfjsLib.renderTextLayer({
@@ -279,30 +285,121 @@ async function renderTextLayerSafe({ textContentSource, textContent, container, 
     } else if (typeof task?.then === "function") {
       await task;
     }
+    fixTextLayerSpans(container);
     return;
   }
   renderTextLayerManual(textContent, container, viewport);
 }
 
+function fixTextLayerSpans(container) {
+  const spans = container.querySelectorAll("span");
+  spans.forEach((span) => {
+    span.style.userSelect = "text";
+    span.style.pointerEvents = "auto";
+    if (!span.style.fontFamily || span.style.fontFamily === "sans-serif") {
+      span.style.fontFamily = "sans-serif";
+    }
+  });
+}
+
 function renderTextLayerManual(textContent, container, viewport) {
   container.innerHTML = "";
   const frag = document.createDocumentFragment();
-  textContent.items.forEach((item) => {
+  let lastItem = null;
+  textContent.items.forEach((item, index) => {
+    if (item.str === "" && !item.hasEOL) return;
+    if (lastItem && item.str !== "" && needsWhitespace(lastItem, item, viewport)) {
+      const space = document.createElement("span");
+      space.textContent = " ";
+      space.style.position = "absolute";
+      space.style.opacity = "0";
+      space.style.userSelect = "text";
+      space.style.pointerEvents = "none";
+      frag.appendChild(space);
+    }
     const span = document.createElement("span");
-    span.textContent = item.str;
+    span.textContent = item.hasEOL ? item.str + "\n" : item.str;
     const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
     const [a, b, c, d, e, f] = tx;
+    const fontSize = Math.hypot(a, b) || Math.hypot(c, d) || 12;
     span.style.position = "absolute";
     span.style.left = "0";
     span.style.top = "0";
     span.style.transform = `matrix(${a}, ${b}, ${c}, ${d}, ${e}, ${f})`;
     span.style.transformOrigin = "0 0";
-    span.style.fontSize = `${Math.hypot(b, d)}px`;
-    span.style.fontFamily = item.fontName ? `"${item.fontName}", sans-serif` : "sans-serif";
+    span.style.fontSize = `${fontSize}px`;
+    span.style.fontFamily = "sans-serif";
+    span.style.lineHeight = "1.0";
+    span.style.letterSpacing = "0";
     span.style.whiteSpace = "pre";
+    span.style.color = "transparent";
+    span.style.userSelect = "text";
+    span.style.pointerEvents = "auto";
+    if (item.width) {
+      const textWidth = item.width * viewport.scale;
+      span.style.width = `${textWidth}px`;
+    }
     frag.appendChild(span);
+    lastItem = item;
   });
   container.appendChild(frag);
+}
+
+function needsWhitespace(prevItem, currItem, viewport) {
+  if (!prevItem || !currItem) return false;
+  const prevTx = pdfjsLib.Util.transform(viewport.transform, prevItem.transform);
+  const currTx = pdfjsLib.Util.transform(viewport.transform, currItem.transform);
+  const prevEndX = prevTx[4] + (prevItem.width || 0) * viewport.scale;
+  const currStartX = currTx[4];
+  const prevY = prevTx[5];
+  const currY = currTx[5];
+  const fontSize = Math.hypot(prevTx[0], prevTx[1]) || 12;
+  const sameLine = Math.abs(prevY - currY) < fontSize * 0.5;
+  const hasGap = currStartX - prevEndX > fontSize * 0.15;
+  return sameLine && hasGap;
+}
+
+const renderQueue = {
+  high: [],
+  low: [],
+  processing: false,
+  recentlyViewed: new Map()
+};
+
+function schedulePageRender(pdfState, pageData, priority = "low") {
+  if (!pdfState || !pageData || pageData.rendered || pageData.rendering) return;
+  const queue = priority === "high" ? renderQueue.high : renderQueue.low;
+  const existing = queue.find((item) => item.pageData === pageData);
+  if (existing) return;
+  queue.push({ pdfState, pageData });
+  processRenderQueue();
+}
+
+function processRenderQueue() {
+  if (renderQueue.processing) return;
+  const next = renderQueue.high.shift() || renderQueue.low.shift();
+  if (!next) return;
+  renderQueue.processing = true;
+  const doRender = () => {
+    renderPage(next.pdfState, next.pageData).finally(() => {
+      renderQueue.processing = false;
+      processRenderQueue();
+    });
+  };
+  if (renderQueue.high.length === 0 && typeof requestIdleCallback !== "undefined") {
+    requestIdleCallback(() => doRender(), { timeout: 100 });
+  } else {
+    doRender();
+  }
+}
+
+let scrollThrottleTimeout = null;
+function throttledScrollHandler(pdfState) {
+  if (scrollThrottleTimeout) return;
+  scrollThrottleTimeout = setTimeout(() => {
+    scrollThrottleTimeout = null;
+    renderVisiblePages(pdfState);
+  }, 50);
 }
 
 function setupPageObserver(pdfState) {
@@ -313,14 +410,28 @@ function setupPageObserver(pdfState) {
   }
   const observer = new IntersectionObserver(
     (entries) => {
+      const containerRect = elements.viewerArea.getBoundingClientRect();
+      const containerCenter = containerRect.top + containerRect.height / 2;
       entries.forEach((entry) => {
-        if (!entry.isIntersecting) return;
         const pageNum = Number(entry.target.dataset.pageNumber);
         const pageData = pdfState.pages.find((p) => p.pageNum === pageNum);
-        if (pageData) renderPage(pdfState, pageData);
+        if (!pageData) return;
+        if (entry.isIntersecting) {
+          const rect = entry.target.getBoundingClientRect();
+          const pageCenter = rect.top + rect.height / 2;
+          const distanceFromCenter = Math.abs(pageCenter - containerCenter);
+          const isCenterVisible = entry.intersectionRatio >= 0.5;
+          const priority = isCenterVisible || distanceFromCenter < containerRect.height / 3 ? "high" : "low";
+          schedulePageRender(pdfState, pageData, priority);
+          renderQueue.recentlyViewed.set(pageNum, Date.now());
+        }
       });
     },
-    { root: elements.viewerArea, rootMargin: "800px 0px" }
+    {
+      root: elements.viewerArea,
+      rootMargin: "1200px 0px",
+      threshold: [0, 0.1, 0.5, 1]
+    }
   );
   pdfState.pageObserver = observer;
   pdfState.pages.forEach((pageData) => observer.observe(pageData.pageDiv));
@@ -394,13 +505,29 @@ async function renderPage(pdfState, pageData) {
 
 function ensurePageLayers(pageData) {
   if (!pageData || pageData.canvas) return;
+  pageData.pageDiv.style.position = "relative";
   const canvas = document.createElement("canvas");
+  canvas.style.position = "absolute";
+  canvas.style.left = "0";
+  canvas.style.top = "0";
+  canvas.style.zIndex = "1";
   pageData.pageDiv.appendChild(canvas);
   const textLayer = document.createElement("div");
   textLayer.className = "textLayer";
+  textLayer.style.position = "absolute";
+  textLayer.style.left = "0";
+  textLayer.style.top = "0";
+  textLayer.style.zIndex = "2";
+  textLayer.style.pointerEvents = "auto";
+  textLayer.style.userSelect = "text";
   pageData.pageDiv.appendChild(textLayer);
   const annotationLayer = document.createElement("div");
   annotationLayer.className = "annotationLayer";
+  annotationLayer.style.position = "absolute";
+  annotationLayer.style.left = "0";
+  annotationLayer.style.top = "0";
+  annotationLayer.style.zIndex = "3";
+  annotationLayer.style.pointerEvents = "none";
   pageData.pageDiv.appendChild(annotationLayer);
   pageData.canvas = canvas;
   pageData.textLayer = textLayer;
@@ -1295,9 +1422,41 @@ function renderOutlineItem(pdfState, item, depth) {
   }
 }
 
+const thumbnailRenderQueue = {
+  queue: [],
+  processing: false
+};
+
+function scheduleThumbnailRender(pdfState, pageData) {
+  if (!pdfState || !pageData || pageData.thumbRendered || pageData.thumbRendering || !pageData.thumbCanvas) return;
+  const existing = thumbnailRenderQueue.queue.find((item) => item.pageData === pageData);
+  if (existing) return;
+  thumbnailRenderQueue.queue.push({ pdfState, pageData });
+  processThumbnailQueue();
+}
+
+function processThumbnailQueue() {
+  if (thumbnailRenderQueue.processing) return;
+  const next = thumbnailRenderQueue.queue.shift();
+  if (!next) return;
+  thumbnailRenderQueue.processing = true;
+  const doRender = () => {
+    renderThumbnail(next.pdfState, next.pageData).finally(() => {
+      thumbnailRenderQueue.processing = false;
+      processThumbnailQueue();
+    });
+  };
+  if (typeof requestIdleCallback !== "undefined") {
+    requestIdleCallback(() => doRender(), { timeout: 200 });
+  } else {
+    setTimeout(doRender, 16);
+  }
+}
+
 function setupThumbnailStrip(pdfState) {
   if (!elements.thumbnailList || !pdfState) return;
   elements.thumbnailList.innerHTML = "";
+  thumbnailRenderQueue.queue = [];
   if (pdfState.thumbnailObserver) {
     pdfState.thumbnailObserver.disconnect();
     pdfState.thumbnailObserver = null;
@@ -1320,6 +1479,7 @@ function setupThumbnailStrip(pdfState) {
     elements.thumbnailList.appendChild(button);
     pageData.thumbCanvas = canvas;
     pageData.thumbRendered = false;
+    pageData.thumbRendering = false;
   });
   const observer = new IntersectionObserver(
     (entries) => {
@@ -1327,10 +1487,14 @@ function setupThumbnailStrip(pdfState) {
         if (!entry.isIntersecting) return;
         const index = Number(entry.target.dataset.pageIndex);
         const pageData = pdfState.pages[index];
-        if (pageData) renderThumbnail(pdfState, pageData);
+        if (pageData) scheduleThumbnailRender(pdfState, pageData);
       });
     },
-    { root: elements.thumbnailList, rootMargin: "200px 0px" }
+    {
+      root: elements.thumbnailList,
+      rootMargin: "400px 0px",
+      threshold: [0, 0.1]
+    }
   );
   pdfState.thumbnailObserver = observer;
   elements.thumbnailList.querySelectorAll(".thumb-item").forEach((item) => observer.observe(item));
@@ -1348,17 +1512,22 @@ function clearThumbnailStrip(pdfState) {
 }
 
 async function renderThumbnail(pdfState, pageData) {
-  if (!pageData || pageData.thumbRendered || !pageData.thumbCanvas) return;
-  pageData.thumbRendered = true;
-  const baseViewport = pageData.page.getViewport({ scale: 1 });
-  const maxWidth = 140;
-  const scale = Math.min(0.25, maxWidth / baseViewport.width);
-  const viewport = pageData.page.getViewport({ scale });
-  const canvas = pageData.thumbCanvas;
-  canvas.width = viewport.width;
-  canvas.height = viewport.height;
-  const context = canvas.getContext("2d");
-  await pageData.page.render({ canvasContext: context, viewport }).promise;
+  if (!pageData || pageData.thumbRendered || pageData.thumbRendering || !pageData.thumbCanvas) return;
+  pageData.thumbRendering = true;
+  try {
+    const baseViewport = pageData.page.getViewport({ scale: 1 });
+    const maxWidth = 140;
+    const scale = Math.min(0.25, maxWidth / baseViewport.width);
+    const viewport = pageData.page.getViewport({ scale });
+    const canvas = pageData.thumbCanvas;
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const context = canvas.getContext("2d");
+    await pageData.page.render({ canvasContext: context, viewport }).promise;
+    pageData.thumbRendered = true;
+  } finally {
+    pageData.thumbRendering = false;
+  }
 }
 
 let pageIndicatorRaf = null;
@@ -1487,6 +1656,9 @@ function setPdfScale(pdfState, scale, fromUser = false, anchor = null, preserveP
       elements.viewerArea.scrollLeft = targetLeft;
       elements.viewerArea.scrollTop = targetTop;
       if (preservePreview) clearPreviewScale(pdfState);
+      if (state.adjustMode) {
+        renderOverlays(pdfState);
+      }
     });
   }, 180);
   if (fromUser) {
@@ -1539,10 +1711,15 @@ function getVisiblePages(pdfState) {
 function cleanupPageRendering(pdfState, visible = []) {
   if (!pdfState || !pdfState.pages.length) return;
   if (!visible.length) return;
-  const minPage = Math.max(1, visible[0].pageNum - 3);
-  const maxPage = Math.min(pdfState.pageCount, visible[visible.length - 1].pageNum + 3);
+  const minPage = Math.max(1, visible[0].pageNum - 5);
+  const maxPage = Math.min(pdfState.pageCount, visible[visible.length - 1].pageNum + 5);
+  const now = Date.now();
+  const recentThreshold = 30000;
   pdfState.pages.forEach((pageData) => {
     if (pageData.pageNum >= minPage && pageData.pageNum <= maxPage) return;
+    if (pageData.rendering) return;
+    const lastViewed = renderQueue.recentlyViewed.get(pageData.pageNum);
+    if (lastViewed && now - lastViewed < recentThreshold) return;
     if (!pageData.canvas && !pageData.textLayer && !pageData.annotationLayer) return;
     if (pageData.canvas) {
       pageData.canvas.remove();
@@ -1559,6 +1736,7 @@ function cleanupPageRendering(pdfState, visible = []) {
     pageData.rendered = false;
     pageData.rendering = false;
     pageData.pageDiv.dataset.rendered = "false";
+    renderQueue.recentlyViewed.delete(pageData.pageNum);
   });
 }
 
@@ -1718,6 +1896,14 @@ async function restorePdfState(stored) {
       await renderPdf(pdfState);
     }
     pdfState.restoring = false;
+    if (stored.ocrSpans && typeof stored.ocrSpans === "object") {
+      Object.entries(stored.ocrSpans).forEach(([idx, spans]) => {
+        const pageIndex = Number(idx);
+        if (pdfState.pages[pageIndex] && Array.isArray(spans)) {
+          pdfState.pages[pageIndex].ocrSpans = spans;
+        }
+      });
+    }
     addPdfCard(pdfState);
     return pdfState;
   } catch (error) {

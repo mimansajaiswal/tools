@@ -161,21 +161,45 @@ async function beginSTT(session) {
       }
     };
     recognition.onerror = (event) => {
-      notify("Speech Recognition", "Speech recognition error.");
+      const errorType = event?.error || "Unknown error";
+      if (errorType === "no-speech" || errorType === "aborted") {
+        if (state.recording) {
+          try {
+            recognition.start();
+          } catch (e) {
+            logEvent({
+              title: "Speech recognition restart failed",
+              detail: e?.message || "Unknown",
+              sessionId: session.id
+            });
+          }
+        }
+        return;
+      }
+      notify("Speech Recognition", `Speech recognition error: ${errorType}`);
       logEvent({
         title: "Speech recognition error",
-        detail: event?.error || "Unknown error",
+        detail: errorType,
         sessionId: session.id
       });
     };
     recognition.onend = () => {
       if (state.recording) {
-        notify("Speech Recognition", "Speech recognition stopped unexpectedly.");
         logEvent({
-          title: "Speech recognition ended",
+          title: "Speech recognition ended, restarting",
           detail: { sessionId: session.id },
           sessionId: session.id
         });
+        try {
+          recognition.start();
+        } catch (e) {
+          notify("Speech Recognition", "Failed to restart recognition.");
+          logEvent({
+            title: "Speech recognition restart failed",
+            detail: e?.message || "Unknown",
+            sessionId: session.id
+          });
+        }
       }
     };
     recognition.start();

@@ -446,6 +446,25 @@ function bindInteractions() {
   );
   let touchState = null;
   let gestureState = null;
+  const LERP_FACTOR = 0.25;
+  const MAX_SCALE_CHANGE_PER_FRAME = 0.15;
+  const DEAD_ZONE = 0.02;
+  const MOMENTUM_FRICTION = 0.92;
+  const MIN_VELOCITY_THRESHOLD = 0.001;
+
+  function applyMomentum(pdfState, velocity, lastScale, originViewport) {
+    if (Math.abs(velocity) < MIN_VELOCITY_THRESHOLD) {
+      state.isPinching = false;
+      elements.viewerArea.classList.remove("pinching");
+      return;
+    }
+    const newScale = Math.min(3.5, Math.max(0.4, lastScale * (1 + velocity)));
+    setPdfScale(pdfState, newScale, true, originViewport, true);
+    requestAnimationFrame(() => {
+      applyMomentum(pdfState, velocity * MOMENTUM_FRICTION, newScale, originViewport);
+    });
+  }
+
   elements.viewerArea.addEventListener(
     "gesturestart",
     (event) => {
@@ -455,6 +474,7 @@ function bindInteractions() {
       event.preventDefault();
       pdfState.autoFit = false;
       state.isPinching = true;
+      elements.viewerArea.classList.add("pinching");
       const rect = elements.viewerArea.getBoundingClientRect();
       const originViewport = {
         x: event.clientX - rect.left,
@@ -468,7 +488,10 @@ function bindInteractions() {
         origin: {
           x: elements.viewerArea.scrollLeft + originViewport.x,
           y: elements.viewerArea.scrollTop + originViewport.y
-        }
+        },
+        velocity: 0,
+        lastTime: performance.now(),
+        raf: null
       };
       setPreviewScale(pdfState, gestureState.previewScale, gestureState.origin);
     },
@@ -481,13 +504,39 @@ function bindInteractions() {
       const pdfState = getActivePdf();
       if (!pdfState) return;
       event.preventDefault();
+      const now = performance.now();
+      const dt = Math.max(1, now - gestureState.lastTime);
+      gestureState.lastTime = now;
+
+      const rect = elements.viewerArea.getBoundingClientRect();
+      gestureState.originViewport = {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top
+      };
+      gestureState.origin = {
+        x: elements.viewerArea.scrollLeft + gestureState.originViewport.x,
+        y: elements.viewerArea.scrollTop + gestureState.originViewport.y
+      };
+
       const ratio = (event.scale || 1) / Math.max(0.01, gestureState.lastScale || 1);
-      const clamped = Math.min(1.3, Math.max(0.7, ratio));
-      const target = Math.min(3.5, Math.max(0.4, gestureState.previewScale * clamped));
-      gestureState.previewScale =
-        gestureState.previewScale + (target - gestureState.previewScale) * 0.35;
+      if (Math.abs(ratio - 1) < DEAD_ZONE) return;
+
+      const clampedRatio = Math.min(1 + MAX_SCALE_CHANGE_PER_FRAME, Math.max(1 - MAX_SCALE_CHANGE_PER_FRAME, ratio));
+      const target = Math.min(3.5, Math.max(0.4, gestureState.previewScale * clampedRatio));
+      const prev = gestureState.previewScale;
+      gestureState.previewScale = prev + (target - prev) * LERP_FACTOR;
+
+      gestureState.velocity = (gestureState.previewScale / prev - 1) / dt * 16;
       gestureState.lastScale = event.scale || 1;
-      setPreviewScale(pdfState, gestureState.previewScale, gestureState.origin);
+
+      if (!gestureState.raf) {
+        gestureState.raf = requestAnimationFrame(() => {
+          gestureState.raf = null;
+          if (gestureState) {
+            setPreviewScale(pdfState, gestureState.previewScale, gestureState.origin);
+          }
+        });
+      }
     },
     { passive: false }
   );
@@ -499,32 +548,69 @@ function bindInteractions() {
       if (!pdfState) {
         gestureState = null;
         state.isPinching = false;
+        elements.viewerArea.classList.remove("pinching");
         return;
       }
       event.preventDefault();
       const finalScale = gestureState.previewScale || gestureState.startScale;
-      const origin = gestureState.originViewport;
+      const originViewport = gestureState.originViewport;
+      const velocity = gestureState.velocity || 0;
       gestureState = null;
-      setPdfScale(pdfState, finalScale, true, origin, true);
-      state.isPinching = false;
+
+      if (Math.abs(velocity) > MIN_VELOCITY_THRESHOLD * 2) {
+        applyMomentum(pdfState, velocity, finalScale, originViewport);
+      } else {
+        setPdfScale(pdfState, finalScale, true, originViewport, true);
+        state.isPinching = false;
+        elements.viewerArea.classList.remove("pinching");
+      }
     },
     { passive: false }
   );
-  const commitPinchZoom = () => {
+  let commitPinchTimeout = null;
+
+  const commitPinchZoom = (usesMomentum = false) => {
+    if (commitPinchTimeout) {
+      clearTimeout(commitPinchTimeout);
+      commitPinchTimeout = null;
+    }
     if (!touchState || touchState.type !== "pinch") return;
     const pdfState = getActivePdf();
     const finalScale = touchState.previewScale || touchState.startScale;
     const originViewport = touchState.originViewport;
+    const velocity = touchState.velocity || 0;
     elements.viewerArea.style.touchAction = "pan-x pan-y";
-    state.isPinching = false;
+    elements.viewerArea.classList.remove("pinching");
     touchState = null;
-    if (!pdfState) return;
-    setPdfScale(pdfState, finalScale, true, originViewport, true);
+
+    if (!pdfState) {
+      state.isPinching = false;
+      return;
+    }
+
+    if (usesMomentum && Math.abs(velocity) > MIN_VELOCITY_THRESHOLD * 2) {
+      applyMomentum(pdfState, velocity, finalScale, originViewport);
+    } else {
+      setPdfScale(pdfState, finalScale, true, originViewport, true);
+      state.isPinching = false;
+    }
   };
+
+  const debouncedCommitPinch = () => {
+    if (commitPinchTimeout) clearTimeout(commitPinchTimeout);
+    commitPinchTimeout = setTimeout(() => {
+      commitPinchZoom(true);
+    }, 50);
+  };
+
   elements.viewerArea.addEventListener(
     "touchstart",
     (event) => {
     if (event.touches.length === 1) {
+      if (touchState?.type === "pinch") {
+        debouncedCommitPinch();
+        return;
+      }
       const touch = event.touches[0];
       touchState = {
         type: "swipe",
@@ -549,6 +635,10 @@ function bindInteractions() {
         }
       }
     } else if (event.touches.length === 2) {
+      if (commitPinchTimeout) {
+        clearTimeout(commitPinchTimeout);
+        commitPinchTimeout = null;
+      }
       const [t1, t2] = event.touches;
       const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
       const pdfState = getActivePdf();
@@ -556,6 +646,7 @@ function bindInteractions() {
       state.isPinching = true;
       event.preventDefault();
       elements.viewerArea.style.touchAction = "none";
+      elements.viewerArea.classList.add("pinching");
       const viewerRect = elements.viewerArea.getBoundingClientRect();
       const centerX = (t1.clientX + t2.clientX) / 2;
       const centerY = (t1.clientY + t2.clientY) / 2;
@@ -570,10 +661,13 @@ function bindInteractions() {
       touchState = {
         type: "pinch",
         startDistance: Math.max(1, dist),
+        lastDistance: dist,
         startScale: pdfState?.scale || 1.15,
         previewScale: pdfState?.scale || 1.15,
         origin: originContainer,
         originViewport,
+        velocity: 0,
+        lastTime: performance.now(),
         raf: null
       };
       if (pdfState) {
@@ -593,6 +687,11 @@ function bindInteractions() {
         const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
         const pdfState = getActivePdf();
         if (!pdfState) return;
+
+        const now = performance.now();
+        const dt = Math.max(1, now - touchState.lastTime);
+        touchState.lastTime = now;
+
         const viewerRect = elements.viewerArea.getBoundingClientRect();
         const centerX = (t1.clientX + t2.clientX) / 2;
         const centerY = (t1.clientY + t2.clientY) / 2;
@@ -604,14 +703,26 @@ function bindInteractions() {
           x: elements.viewerArea.scrollLeft + touchState.originViewport.x,
           y: elements.viewerArea.scrollTop + touchState.originViewport.y
         };
-        const ratio = dist / Math.max(1, touchState.startDistance || dist);
+
+        const ratio = dist / Math.max(1, touchState.startDistance);
+        const deltaRatio = dist / Math.max(1, touchState.lastDistance || dist);
+
+        if (Math.abs(deltaRatio - 1) < DEAD_ZONE) return;
+
+        const clampedDelta = Math.min(1 + MAX_SCALE_CHANGE_PER_FRAME, Math.max(1 - MAX_SCALE_CHANGE_PER_FRAME, deltaRatio));
         const targetScale = Math.min(3.5, Math.max(0.4, touchState.startScale * ratio));
-        touchState.previewScale =
-          touchState.previewScale + (targetScale - touchState.previewScale) * 0.35;
+        const prev = touchState.previewScale;
+        touchState.previewScale = prev + (targetScale - prev) * LERP_FACTOR;
+        touchState.lastDistance = dist;
+
+        touchState.velocity = (touchState.previewScale / prev - 1) / dt * 16;
+
         if (!touchState.raf) {
           touchState.raf = requestAnimationFrame(() => {
-            touchState.raf = null;
-            setPreviewScale(pdfState, touchState.previewScale, touchState.origin);
+            if (touchState) {
+              touchState.raf = null;
+              setPreviewScale(pdfState, touchState.previewScale, touchState.origin);
+            }
           });
         }
         return;
@@ -630,7 +741,12 @@ function bindInteractions() {
   elements.viewerArea.addEventListener("touchend", (event) => {
     if (!touchState) return;
     if (touchState.type === "pinch") {
-      commitPinchZoom();
+      if (event.touches.length === 1) {
+        debouncedCommitPinch();
+      } else if (event.touches.length === 0) {
+        commitPinchZoom(true);
+      }
+      return;
     }
     if (touchState.type === "swipe" && event.changedTouches.length) {
       const endX = event.changedTouches[0].clientX;
@@ -657,16 +773,25 @@ function bindInteractions() {
     touchState = null;
   });
   elements.viewerArea.addEventListener("touchcancel", () => {
-    if (touchState?.type === "pinch") {
-      commitPinchZoom();
-    } else {
-      state.isPinching = false;
-      elements.viewerArea.style.touchAction = "pan-x pan-y";
-      touchState = null;
+    if (commitPinchTimeout) {
+      clearTimeout(commitPinchTimeout);
+      commitPinchTimeout = null;
     }
+    if (touchState?.type === "pinch") {
+      elements.viewerArea.classList.remove("pinching");
+      const pdfState = getActivePdf();
+      if (pdfState) {
+        clearPreviewScale(pdfState);
+      }
+    }
+    state.isPinching = false;
+    elements.viewerArea.style.touchAction = "pan-x pan-y";
+    touchState = null;
   });
 
   if (elements.zoomInput) {
+    const MIN_ZOOM = 25;
+    const MAX_ZOOM = 400;
     const commitZoomInput = () => {
       const raw = elements.zoomInput.value.trim().replace("%", "");
       const value = Number(raw);
@@ -674,9 +799,13 @@ function bindInteractions() {
         updateZoomLabel(getActivePdf());
         return;
       }
+      const clamped = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
+      if (clamped !== value) {
+        notify("Zoom", `Zoom must be between ${MIN_ZOOM}% and ${MAX_ZOOM}%`);
+      }
       const pdfState = getActivePdf();
       if (!pdfState) return;
-      const target = value / 100;
+      const target = clamped / 100;
       setPdfScale(pdfState, target, true, null, false);
     };
     elements.zoomInput.addEventListener("keydown", (event) => {
@@ -754,6 +883,16 @@ function bindInteractions() {
       event.preventDefault();
       if (state.recording) stopRecordingSession();
       else startRecordingSession();
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key === "z" && !event.shiftKey) {
+      event.preventDefault();
+      if (typeof undoAnnotation === "function") {
+        undoAnnotation();
+      }
+    }
+    if (event.key === "?" && !isEditable) {
+      event.preventDefault();
+      showKeyboardShortcutsHelp();
     }
   });
   window.addEventListener("online", updateConnectionStatus);
@@ -917,3 +1056,23 @@ function setupFocusTrap(panel) {
 setupFocusTrap(elements.settingsPanel);
 setupFocusTrap(elements.logsPanel);
 setupFocusTrap(elements.queuePanel);
+
+function showKeyboardShortcutsHelp() {
+  const shortcuts = `
+    <div class="shortcuts-list">
+      <div class="shortcut-row"><kbd>M</kbd> Toggle recording (desktop)</div>
+      <div class="shortcut-row"><kbd>Ctrl/⌘ + Z</kbd> Undo annotation</div>
+      <div class="shortcut-row"><kbd>PageUp</kbd> Previous page</div>
+      <div class="shortcut-row"><kbd>PageDown</kbd> Next page</div>
+      <div class="shortcut-row"><kbd>+</kbd> / <kbd>=</kbd> Zoom in</div>
+      <div class="shortcut-row"><kbd>-</kbd> Zoom out</div>
+      <div class="shortcut-row"><kbd>Escape</kbd> Close panels</div>
+      <div class="shortcut-row"><kbd>?</kbd> Show this help</div>
+    </div>
+  `;
+  openModal({
+    title: "Keyboard Shortcuts",
+    body: shortcuts,
+    actions: [{ label: "Close", variant: "secondary", onClick: closeModal }]
+  });
+}

@@ -4,20 +4,89 @@ function buildAiPayload(session, chunk = null) {
     transcriptSegments: session.segments,
     snapshots: session.snapshots,
     taps: session.taps,
-    contextHistory: session.pdfContextHistory
+    contextHistory: session.pdfContextHistory,
+    chunkMeta: { index: 1, total: 1 }
   };
-  return {
+  const meta = base.chunkMeta || { index: 1, total: 1 };
+  const optimizedSnapshots = optimizeSnapshots(base.snapshots, meta);
+  const compressedSegments = compressTranscriptSegments(base.transcriptSegments);
+  const payload = {
     transcript: base.transcript,
-    transcriptSegments: base.transcriptSegments,
+    transcriptSegments: compressedSegments,
     timestamps: base.snapshots.map((snap) => snap.timestamp),
-    snapshots: base.snapshots,
-    taps: base.taps,
-    contextHistory: base.contextHistory,
+    snapshots: optimizedSnapshots,
+    taps: base.taps?.map((tap) => ({
+      timestamp: tap.timestamp,
+      pageIndex: tap.pageIndex,
+      x: tap.x,
+      y: tap.y
+    })) || [],
+    contextHistory: base.contextHistory?.slice(-3) || [],
     activePdfId: base.snapshots[base.snapshots.length - 1]?.pdfId || null,
-    recentSnapshots: base.snapshots.slice(-5),
-    audioChunkTimestamps: session.audioChunks.map((chunk) => chunk.timestamp),
-    chunkMeta: base.chunkMeta || null
+    chunkMeta: meta
   };
+  if (meta.index > 1 && meta.precedingSummary) {
+    payload.precedingContext = meta.precedingSummary;
+  }
+  return payload;
+}
+
+function optimizeSnapshots(snapshots, chunkMeta) {
+  if (!snapshots?.length) return [];
+  const isMultiChunk = chunkMeta.total > 1;
+  const isFirstChunk = chunkMeta.index === 1;
+  const isLastChunk = chunkMeta.index === chunkMeta.total;
+  return snapshots.map((snap, idx) => {
+    const isFirst = idx === 0;
+    const isLast = idx === snapshots.length - 1;
+    const isOverlap = snap._isOverlap;
+    const includeFullText = isFirst || isLast || !isMultiChunk;
+    const optimized = {
+      timestamp: snap.timestamp,
+      pdfId: snap.pdfId,
+      pageIndex: snap.pages?.[0]?.pageIndex ?? snap.pageIndex
+    };
+    if (snap.pages) {
+      optimized.pages = snap.pages.map((page, pageIdx) => {
+        const pageData = {
+          pageIndex: page.pageIndex,
+          scrollY: page.scrollY
+        };
+        if (includeFullText || pageIdx === 0) {
+          pageData.visibleText = page.visibleText;
+        } else if (page.visibleText) {
+          pageData.textLength = page.visibleText.length;
+          pageData.textPreview = page.visibleText.slice(0, 100);
+        }
+        return pageData;
+      });
+    }
+    if (isOverlap) {
+      optimized._isOverlap = true;
+    }
+    return optimized;
+  });
+}
+
+function compressTranscriptSegments(segments) {
+  if (!segments?.length) return [];
+  const compressed = [];
+  let prevText = "";
+  for (const seg of segments) {
+    if (seg.text === prevText) {
+      if (compressed.length) {
+        compressed[compressed.length - 1].repeatCount =
+          (compressed[compressed.length - 1].repeatCount || 1) + 1;
+      }
+    } else {
+      compressed.push({
+        timestamp: seg.timestamp,
+        text: seg.text
+      });
+      prevText = seg.text;
+    }
+  }
+  return compressed;
 }
 
 function getSystemPrompt() {
@@ -113,6 +182,8 @@ async function callAi(payload) {
   }
 
   if (provider === "anthropic") {
+    const estimatedInputTokens = estimateTokens(systemPrompt + prompt + userContent);
+    const maxTokens = Math.max(2000, Math.min(8000, estimatedInputTokens));
     const response = await retryFetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -122,8 +193,9 @@ async function callAi(payload) {
       },
       body: JSON.stringify({
         model,
-        max_tokens: 1000,
-        messages: [{ role: "user", content: systemPrompt + prompt + "\n" + userContent }]
+        max_tokens: maxTokens,
+        system: systemPrompt + prompt,
+        messages: [{ role: "user", content: userContent }]
       })
     });
     const data = await response.json();
@@ -153,11 +225,24 @@ function safeJsonParse(text) {
     const trimmed = (text || "").trim();
     const start = trimmed.indexOf("{");
     const end = trimmed.lastIndexOf("}");
-    if (start === -1 || end === -1) return null;
+    if (start === -1 || end === -1) {
+      logEvent({
+        title: "JSON parse error",
+        detail: `No JSON object found in response: "${trimmed.slice(0, 200)}..."`,
+        type: "error"
+      });
+      notify("AI Processing", "No valid JSON in AI response.", { type: "error", duration: 4000 });
+      return null;
+    }
     const jsonText = trimmed.slice(start, end + 1);
     return JSON.parse(jsonText);
   } catch (err) {
-    notify("AI Processing", "Failed to parse AI response.");
+    logEvent({
+      title: "JSON parse error",
+      detail: `Parse failed: ${err.message}. Raw: "${(text || "").slice(0, 300)}..."`,
+      type: "error"
+    });
+    notify("AI Processing", `Failed to parse AI response: ${err.message}`, { type: "error", duration: 4000 });
     return null;
   }
 }
@@ -237,19 +322,70 @@ async function transcribeAudio(session) {
     });
     return data.text || "";
   }
-  if (provider === "gemini" || provider === "anthropic") {
-    notify("Speech-to-Text", "STT provider not implemented.", { type: "error", duration: 4000 });
+  if (provider === "gemini") {
+    const base64Audio = await blobToBase64(audioBlob);
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${state.settings.sttModel || "gemini-1.5-flash"}:generateContent?key=${state.settings.sttKey}`;
+    const response = await retryFetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        contents: [{
+          role: "user",
+          parts: [
+            { inline_data: { mime_type: "audio/webm", data: base64Audio } },
+            { text: state.settings.sttPrompt || "Transcribe this audio accurately." }
+          ]
+        }]
+      })
+    });
+    const data = await response.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
     logEvent({
-      title: "STT unsupported",
-      detail: { provider, message: "Not implemented." },
+      title: "STT response (Gemini)",
+      detail: data,
       sessionId: session.id
     });
-    return "";
+    return text.trim();
   }
-  notify("Speech-to-Text", "STT provider not implemented.", { type: "error", duration: 4000 });
+
+  if (provider === "anthropic") {
+    const base64Audio = await blobToBase64(audioBlob);
+    const response = await retryFetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": state.settings.sttKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        model: state.settings.sttModel || "claude-sonnet-4-20250514",
+        max_tokens: 4096,
+        messages: [{
+          role: "user",
+          content: [
+            {
+              type: "document",
+              source: { type: "base64", media_type: "audio/webm", data: base64Audio }
+            },
+            { type: "text", text: state.settings.sttPrompt || "Transcribe this audio accurately. Return only the transcription." }
+          ]
+        }]
+      })
+    });
+    const data = await response.json();
+    const text = data.content?.[0]?.text || "";
+    logEvent({
+      title: "STT response (Anthropic)",
+      detail: data,
+      sessionId: session.id
+    });
+    return text.trim();
+  }
+
+  notify("Speech-to-Text", "Unknown STT provider.", { type: "error", duration: 4000 });
   logEvent({
     title: "STT fallback",
-    detail: { provider, message: "Not implemented." },
+    detail: { provider, message: "Unknown provider." },
     sessionId: session.id
   });
   return "";
@@ -302,6 +438,8 @@ async function processSession(session) {
     for (const chunk of chunks) {
       chunkIndex += 1;
       if (processedChunks.has(chunkIndex)) continue;
+      elements.progressLabel.textContent = `Processing chunk ${chunkIndex} of ${chunks.length}...`;
+      elements.progressLabel.classList.remove("hidden");
       const payload = buildAiPayload(session, chunk);
       logEvent({
         title: `AI request (chunk ${chunkIndex}/${chunks.length})`,
@@ -320,6 +458,7 @@ async function processSession(session) {
         });
       }
     }
+    elements.progressLabel.classList.add("hidden");
     session.processedChunks = Array.from(processedChunks).sort((a, b) => a - b);
     if (!anyResponse || processedChunks.size < chunks.length) {
       session.status = "failed";
@@ -373,12 +512,13 @@ async function processSession(session) {
 
 function splitSessionForProcessing(session) {
   const snapshots = session.snapshots || [];
+  const segments = session.segments || [];
   const transcript = session.transcript || "";
   if (!snapshots.length) {
     return [
       {
         transcript,
-        transcriptSegments: session.segments || [],
+        transcriptSegments: segments,
         snapshots: [],
         taps: session.taps || [],
         contextHistory: session.pdfContextHistory || [],
@@ -386,18 +526,21 @@ function splitSessionForProcessing(session) {
       }
     ];
   }
-  const maxSnapshots = 12;
-  const maxChars = 2000;
-  const chunkCount = Math.max(
+  const breakpoints = findNaturalBreakpoints(snapshots, segments);
+  const estimatedTokens = estimateSessionTokens(session);
+  const targetTokensPerChunk = 6000;
+  const maxSnapshotsPerChunk = 15;
+  const overlapCount = 2;
+  let chunkCount = Math.max(
     1,
-    Math.ceil(snapshots.length / maxSnapshots),
-    Math.ceil(transcript.length / maxChars)
+    Math.ceil(estimatedTokens / targetTokensPerChunk),
+    Math.ceil(snapshots.length / maxSnapshotsPerChunk)
   );
   if (chunkCount === 1) {
     return [
       {
         transcript,
-        transcriptSegments: session.segments || [],
+        transcriptSegments: segments,
         snapshots,
         taps: session.taps || [],
         contextHistory: session.pdfContextHistory || [],
@@ -405,65 +548,239 @@ function splitSessionForProcessing(session) {
       }
     ];
   }
-  const snapshotsPerChunk = Math.ceil(snapshots.length / chunkCount);
-  const transcriptChunks = splitTranscript(transcript, chunkCount);
+  const chunkBoundaries = computeChunkBoundaries(snapshots, breakpoints, chunkCount, overlapCount);
+  chunkCount = chunkBoundaries.length;
   const chunks = [];
+  let prevChunkSummary = null;
   for (let i = 0; i < chunkCount; i++) {
-    const startIndex = i * snapshotsPerChunk;
-    const endIndex = Math.min(snapshots.length, (i + 1) * snapshotsPerChunk + 2);
-    const slice = snapshots.slice(startIndex, endIndex);
+    const { startIdx, endIdx, overlapStart } = chunkBoundaries[i];
+    const slice = snapshots.slice(startIdx, endIdx).map((snap, idx) => {
+      if (idx < overlapStart - startIdx && i > 0) {
+        return { ...snap, _isOverlap: true };
+      }
+      return snap;
+    });
     const startTime = slice[0]?.timestamp || 0;
     const endTime = slice[slice.length - 1]?.timestamp || startTime;
-    const segments =
-      session.segments?.filter(
-        (seg) => seg.timestamp >= startTime && seg.timestamp <= endTime
-      ) || [];
-    const taps =
-      session.taps?.filter(
-        (tap) => tap.timestamp >= startTime && tap.timestamp <= endTime
-      ) || [];
-    const contextHistory =
-      session.pdfContextHistory?.filter(
-        (entry) => entry.timestamp >= startTime - 1000 && entry.timestamp <= endTime + 1000
-      ) || [];
+    const chunkSegments = segments.filter(
+      (seg) => seg.timestamp >= startTime && seg.timestamp <= endTime
+    );
+    const taps = session.taps?.filter(
+      (tap) => tap.timestamp >= startTime && tap.timestamp <= endTime
+    ) || [];
+    const contextHistory = session.pdfContextHistory?.filter(
+      (entry) => entry.timestamp >= startTime - 1000 && entry.timestamp <= endTime + 1000
+    ) || [];
+    const chunkTranscript = chunkSegments.length
+      ? chunkSegments.map((s) => s.text).join(" ")
+      : splitTranscriptByTime(transcript, segments, startTime, endTime);
+    const chunkMeta = {
+      index: i + 1,
+      total: chunkCount,
+      timeRange: { startTime, endTime },
+      snapshotRange: { start: startIdx, end: endIdx },
+      hasOverlap: i > 0
+    };
+    if (prevChunkSummary) {
+      chunkMeta.precedingSummary = prevChunkSummary;
+    }
     chunks.push({
-      transcript: segments.length ? segments.map((s) => s.text).join(" ") : transcriptChunks[i] || transcript,
-      transcriptSegments: segments,
+      transcript: chunkTranscript,
+      transcriptSegments: chunkSegments,
       snapshots: slice,
       taps,
       contextHistory,
-      chunkMeta: {
-        index: i + 1,
-        total: chunkCount,
-        timeRange: { startTime, endTime }
-      }
+      chunkMeta
     });
+    prevChunkSummary = buildChunkSummary(slice, chunkSegments, i + 1);
   }
   return chunks;
 }
 
-function splitTranscript(text, parts) {
-  if (!text) return Array(parts).fill("");
-  const size = Math.ceil(text.length / parts);
-  return Array.from({ length: parts }, (_, i) => text.slice(i * size, (i + 1) * size));
+function findNaturalBreakpoints(snapshots, segments) {
+  const breakpoints = [];
+  for (let i = 1; i < snapshots.length; i++) {
+    const prev = snapshots[i - 1];
+    const curr = snapshots[i];
+    const timeDiff = curr.timestamp - prev.timestamp;
+    const pageChanged = prev.pages?.[0]?.pageIndex !== curr.pages?.[0]?.pageIndex;
+    const pdfChanged = prev.pdfId !== curr.pdfId;
+    let score = 0;
+    if (pdfChanged) score += 100;
+    if (pageChanged) score += 50;
+    if (timeDiff > 5000) score += 30;
+    if (timeDiff > 2000) score += 10;
+    const segmentGap = findSegmentGapNear(segments, curr.timestamp);
+    if (segmentGap > 2000) score += 20;
+    if (score > 0) {
+      breakpoints.push({ index: i, score, timeDiff, pageChanged, pdfChanged });
+    }
+  }
+  return breakpoints.sort((a, b) => b.score - a.score);
+}
+
+function findSegmentGapNear(segments, timestamp) {
+  if (!segments?.length) return 0;
+  let minDist = Infinity;
+  let gapBefore = 0;
+  for (let i = 0; i < segments.length; i++) {
+    const dist = Math.abs(segments[i].timestamp - timestamp);
+    if (dist < minDist) {
+      minDist = dist;
+      if (i > 0) {
+        gapBefore = segments[i].timestamp - segments[i - 1].timestamp;
+      }
+    }
+  }
+  return gapBefore;
+}
+
+function computeChunkBoundaries(snapshots, breakpoints, targetChunkCount, overlapCount) {
+  const n = snapshots.length;
+  const idealSize = Math.ceil(n / targetChunkCount);
+  const boundaries = [];
+  let currentStart = 0;
+  for (let chunk = 0; chunk < targetChunkCount && currentStart < n; chunk++) {
+    const idealEnd = Math.min(n, currentStart + idealSize);
+    let bestEnd = idealEnd;
+    const searchStart = Math.max(currentStart + Math.floor(idealSize * 0.7), currentStart + 3);
+    const searchEnd = Math.min(currentStart + Math.ceil(idealSize * 1.3), n);
+    for (const bp of breakpoints) {
+      if (bp.index >= searchStart && bp.index <= searchEnd) {
+        bestEnd = bp.index;
+        break;
+      }
+    }
+    const overlapStart = chunk > 0 ? Math.max(0, currentStart - overlapCount) : currentStart;
+    boundaries.push({
+      startIdx: overlapStart,
+      endIdx: bestEnd,
+      overlapStart: currentStart
+    });
+    currentStart = bestEnd;
+  }
+  if (currentStart < n) {
+    const lastBoundary = boundaries[boundaries.length - 1];
+    lastBoundary.endIdx = n;
+  }
+  return boundaries;
+}
+
+function splitTranscriptByTime(fullTranscript, segments, startTime, endTime) {
+  if (!segments?.length || !fullTranscript) return fullTranscript;
+  const relevantSegments = segments.filter(
+    (s) => s.timestamp >= startTime && s.timestamp <= endTime
+  );
+  if (relevantSegments.length) {
+    return relevantSegments.map((s) => s.text).join(" ");
+  }
+  const totalDuration = segments[segments.length - 1]?.timestamp - segments[0]?.timestamp || 1;
+  const startRatio = (startTime - segments[0]?.timestamp) / totalDuration;
+  const endRatio = (endTime - segments[0]?.timestamp) / totalDuration;
+  const startChar = Math.floor(startRatio * fullTranscript.length);
+  const endChar = Math.ceil(endRatio * fullTranscript.length);
+  return fullTranscript.slice(Math.max(0, startChar), Math.min(fullTranscript.length, endChar));
+}
+
+function buildChunkSummary(snapshots, segments, chunkIndex) {
+  const pages = new Set();
+  const pdfs = new Set();
+  snapshots.forEach((snap) => {
+    if (snap.pdfId) pdfs.add(snap.pdfId);
+    snap.pages?.forEach((p) => pages.add(p.pageIndex));
+  });
+  const transcriptPreview = segments.length
+    ? segments.map((s) => s.text).join(" ").slice(0, 200)
+    : "";
+  return {
+    chunkIndex,
+    pagesCovered: Array.from(pages),
+    pdfIds: Array.from(pdfs),
+    snapshotCount: snapshots.length,
+    transcriptPreview: transcriptPreview + (transcriptPreview.length >= 200 ? "..." : ""),
+    timeRange: {
+      start: snapshots[0]?.timestamp,
+      end: snapshots[snapshots.length - 1]?.timestamp
+    }
+  };
 }
 
 async function retryFetch(url, options, retries = 2) {
+  let lastError = null;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const response = await fetch(url, options);
       if (response.ok) return response;
       if (response.status === 429) {
-        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+        const waitTime = 1000 * (attempt + 1);
+        notify("Rate Limit", `Rate limited. Retrying in ${waitTime / 1000}s...`, { type: "info", duration: waitTime });
+        await new Promise((r) => setTimeout(r, waitTime));
         continue;
       }
-      if (attempt === retries) throw new Error("Request failed");
+      if (response.status === 401 || response.status === 403) {
+        notify("Auth Error", "Invalid API key or unauthorized.", { type: "error", duration: 4000 });
+        throw new Error(`Auth error: ${response.status}`);
+      }
+      lastError = new Error(`Request failed with status ${response.status}`);
+      if (attempt === retries) throw lastError;
     } catch (error) {
+      lastError = error;
       if (attempt === retries) {
-        notify("Network", "Request failed. Check your connection or API key.");
+        notify("Network", `Request failed: ${error.message || "Check connection"}`, { type: "error", duration: 4000 });
         throw error;
       }
     }
   }
-  return null;
+  throw lastError || new Error("Request failed after retries");
+}
+
+async function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = reader.result.split(",")[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function estimateTokens(text) {
+  if (!text) return 0;
+  const words = text.split(/\s+/).filter(Boolean).length;
+  const chars = text.length;
+  const punctuation = (text.match(/[.,!?;:'"()\[\]{}]/g) || []).length;
+  const numbers = (text.match(/\d+/g) || []).length;
+  const tokensFromWords = words * 1.3;
+  const tokensFromChars = chars / 4;
+  const tokensFromPunctuation = punctuation * 0.5;
+  const tokensFromNumbers = numbers * 0.5;
+  return Math.ceil(
+    (tokensFromWords + tokensFromChars) / 2 + tokensFromPunctuation + tokensFromNumbers
+  );
+}
+
+function estimateSessionTokens(session) {
+  let total = 0;
+  total += estimateTokens(session.transcript || "");
+  const snapshots = session.snapshots || [];
+  for (const snap of snapshots) {
+    total += 20;
+    if (snap.pages) {
+      for (const page of snap.pages) {
+        total += estimateTokens(page.visibleText || "");
+        total += 10;
+      }
+    }
+  }
+  const segments = session.segments || [];
+  for (const seg of segments) {
+    total += estimateTokens(seg.text || "");
+    total += 5;
+  }
+  total += (session.taps?.length || 0) * 15;
+  total += (session.pdfContextHistory?.length || 0) * 30;
+  total += 500;
+  return total;
 }

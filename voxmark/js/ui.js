@@ -31,19 +31,32 @@ function notify(title, message, options = {}) {
 
 function showToast(message, type = "info", duration = 2400) {
   const existing = elements.toastContainer.querySelectorAll(".toast");
-  if (existing.length >= 3) {
-    existing[0].remove();
+  const MAX_TOASTS = 3;
+  while (existing.length >= MAX_TOASTS) {
+    const oldest = existing[0];
+    oldest.remove();
+  }
+  const duplicate = Array.from(elements.toastContainer.querySelectorAll(".toast"))
+    .find((t) => t.textContent === message);
+  if (duplicate) {
+    duplicate.classList.add("toast-pulse");
+    setTimeout(() => duplicate.classList.remove("toast-pulse"), 300);
+    return;
   }
   const toast = document.createElement("div");
   toast.className = `toast ${type === "error" ? "error" : ""}`.trim();
   toast.textContent = message;
   toast.dataset.toastId = `${Date.now()}-${toastCounter++}`;
   elements.toastContainer.appendChild(toast);
-  setTimeout(() => {
+  const timer = setTimeout(() => {
     toast.style.opacity = "0";
     toast.style.transform = "translateY(6px)";
     setTimeout(() => toast.remove(), 200);
   }, duration);
+  toast.addEventListener("click", () => {
+    clearTimeout(timer);
+    toast.remove();
+  });
 }
 
 function confirmModal({ title, body, confirmLabel = "Confirm", onConfirm }) {
