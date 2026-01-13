@@ -97,6 +97,58 @@
             border-bottom-color: rgb(var(--accent-color));
         }
 
+        .nav-link {
+            position: relative;
+            z-index: 0;
+            padding: 0.25rem 0.75rem;
+        }
+
+        .nav-link::before {
+            content: "";
+            position: absolute;
+            left: 0.08em;
+            right: 0.08em;
+            bottom: 0;
+            height: 0.42em;
+            border-radius: 0.4em 0.2em;
+            background-image: linear-gradient(
+                to right,
+                rgb(var(--accent-color) / 0.04),
+                rgb(var(--accent-color) / 0.10) 6%,
+                rgb(var(--accent-color) / 0.05)
+            );
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform 200ms ease;
+            z-index: -1;
+        }
+
+        .dark .nav-link::before {
+            background-image: linear-gradient(
+                to right,
+                rgb(var(--accent-color) / 0.06),
+                rgb(var(--accent-color) / 0.14) 6%,
+                rgb(var(--accent-color) / 0.07)
+            );
+        }
+
+        .nav-link:hover::before,
+        .nav-link:focus-visible::before {
+            transform: scaleX(1);
+        }
+
+        .nav-link[aria-current="page"]::before,
+        .nav-link.current::before {
+            transform: scaleX(1);
+            height: 0.62em;
+            background-image: linear-gradient(
+                to right,
+                rgb(var(--accent-2-color) / 0.08),
+                rgb(var(--accent-2-color) / 0.20) 6%,
+                rgb(var(--accent-2-color) / 0.10)
+            );
+        }
+
         .fun-card {
             background: linear-gradient(135deg, rgb(var(--accent-color) / 0.06), transparent);
             border: 1px solid rgb(var(--accent-color) / 0.15);
@@ -144,28 +196,28 @@
                     class="text-accent absolute -inset-x-4 top-14 hidden flex-col items-end rounded-md py-2 text-base shadow-sm backdrop-blur-md group-[.menu-open]:z-50 group-[.menu-open]:flex sm:static sm:z-auto sm:-ms-4 sm:mt-1 sm:flex sm:flex-row sm:items-center sm:rounded-none sm:py-0 sm:text-sm sm:shadow-none sm:backdrop-blur-none lg:text-base print:hidden"
                     aria-label="Main menu">
                     <a href="https://mimansajaiswal.github.io/"
-                        class="sm:hover:decoration-accent-2/40 w-full px-4 py-4 text-right underline-offset-4 sm:w-auto sm:py-0 sm:text-left sm:hover:underline sm:hover:decoration-wavy">
+                        class="nav-link w-full py-4 text-right sm:w-auto sm:py-0 sm:text-left">
                         Home </a>
                     <a href="https://mimansajaiswal.github.io/papers"
-                        class="sm:hover:decoration-accent-2/40 w-full px-4 py-4 text-right underline-offset-4 sm:w-auto sm:py-0 sm:text-left sm:hover:underline sm:hover:decoration-wavy">
+                        class="nav-link w-full py-4 text-right sm:w-auto sm:py-0 sm:text-left">
                         Publications </a>
                     <a href="https://mimansajaiswal.github.io/collections/research"
-                        class="sm:hover:decoration-accent-2/40 w-full px-4 py-4 text-right underline-offset-4 sm:w-auto sm:py-0 sm:text-left sm:hover:underline sm:hover:decoration-wavy">
+                        class="nav-link w-full py-4 text-right sm:w-auto sm:py-0 sm:text-left">
                         Research </a>
                     <a href="https://mimansajaiswal.github.io/collections/fieldnotes"
-                        class="sm:hover:decoration-accent-2/40 w-full px-4 py-4 text-right underline-offset-4 sm:w-auto sm:py-0 sm:text-left sm:hover:underline sm:hover:decoration-wavy">
+                        class="nav-link w-full py-4 text-right sm:w-auto sm:py-0 sm:text-left">
                         Fieldnotes </a>
                     <a href="https://mimansajaiswal.github.io/collections/personal"
-                        class="sm:hover:decoration-accent-2/40 w-full px-4 py-4 text-right underline-offset-4 sm:w-auto sm:py-0 sm:text-left sm:hover:underline sm:hover:decoration-wavy">
+                        class="nav-link w-full py-4 text-right sm:w-auto sm:py-0 sm:text-left">
                         Personal </a>
                     <a href="https://mimansajaiswal.github.io/collections/blurbs"
-                        class="sm:hover:decoration-accent-2/40 w-full px-4 py-4 text-right underline-offset-4 sm:w-auto sm:py-0 sm:text-left sm:hover:underline sm:hover:decoration-wavy">
+                        class="nav-link w-full py-4 text-right sm:w-auto sm:py-0 sm:text-left">
                         Blurbs </a>
                     <a href="../index.html"
-                        class="sm:hover:decoration-accent-2/40 w-full px-4 py-4 text-right underline-offset-4 sm:w-auto sm:py-0 sm:text-left sm:hover:underline sm:hover:decoration-wavy">
+                        class="nav-link w-full py-4 text-right sm:w-auto sm:py-0 sm:text-left">
                         Tools </a>
                     <span
-                        class="sm:hover:decoration-accent-2/40 w-full px-4 py-4 text-right underline-offset-4 sm:w-auto sm:py-0 sm:text-left font-bold decoration-wavy underline decoration-accent-2/40 cursor-default">
+                        class="nav-link current w-full py-4 text-right sm:w-auto sm:py-0 sm:text-left cursor-default">
                         Games </span>
                 </nav>
             </div>
