@@ -12,7 +12,10 @@ import {
     DEFAULT_DESIRED_RETENTION,
     MAX_INTERVAL,
     ratingsMap,
+    DEFAULT_LEECH_LAPSE_THRESHOLD,
     DEFAULT_AI_PROMPT,
+    parseSrsConfig,
+    parseSrsState,
     el,
     isMac,
     encodeDataAttr,
@@ -56,9 +59,7 @@ import {
     compactReviewHistory,
     parseReviewHistory,
     richToMarkdown,
-    markdownToNotionRichText,
-    parseFsrsParamsText,
-    serializeFsrsParamsText
+    markdownToNotionRichText
 } from './notion-mapper.js';
 
 import {
@@ -124,6 +125,17 @@ const createIconsInScope = (container) => {
     }
 };
 
+const isTypingTarget = (target) => {
+    if (!target) return false;
+    const tag = target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+    if (target.isContentEditable) return true;
+    return typeof target.closest === 'function' && !!target.closest('[contenteditable="true"]');
+};
+
+const SYNC_QUEUE_WARN_THRESHOLD = 500;
+const SYNC_QUEUE_WARN_COOLDOWN_MS = 10 * 60 * 1000;
+
 // Phase 22: Focus trap for modals
 const focusTrap = {
     active: null,
@@ -166,9 +178,10 @@ export const App = {
         queue: [],
         lastQueueError: null,
         queueLastChangedAt: null,
+        lastQueueWarnAt: null,
         selectedDeck: null,
         selectedCard: null,
-        filters: { again: false, hard: false, addedToday: false, tags: [], suspended: false, leech: false, studyDecks: [] },
+        filters: { again: false, hard: false, addedToday: false, tags: [], suspended: false, leech: false, marked: false, flag: '', studyDecks: [] },
         cardSearch: '',
         deckSearch: '',
         cardLimit: 50,
@@ -188,6 +201,8 @@ export const App = {
         syncing: false,
         autoScanPending: false,
         answerRevealed: false,
+        cardShownAt: null,
+        answerRevealedAt: null,
         aiLocked: false,
         lockAiUntilNextCard: false,
         activeMicButton: null,  // 'inline' | 'fab'
@@ -276,7 +291,7 @@ export const App = {
         btn.classList.toggle('opacity-70', btn.disabled);
         if (icon) icon.classList.toggle('animate-spin', on);
     },
-    async ensureMicPermission() {
+    async ensureMicPermission({ toastOnError = false } = {}) {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return true;
         if (this.state.micPermissionPromise) return this.state.micPermissionPromise;
         this.state.micPermissionPromise = navigator.mediaDevices.getUserMedia({ audio: true })
@@ -293,6 +308,7 @@ export const App = {
                 // Permission denied or other error - ensure state reflects reality
                 this.state.settings.sttPermissionWarmed = false;
                 Storage.setSettings(this.state.settings);
+                if (toastOnError) toast('Microphone access denied');
                 throw err;
             })
             .finally(() => {
@@ -303,7 +319,7 @@ export const App = {
     warmMicStreamForAi() {
         // Only warm when explicitly requested elsewhere; avoid auto prompts on load
         if (this.state.micPermissionPromise) return;
-        this.ensureMicPermission().catch(() => { /* permission denied handled later */ });
+        this.ensureMicPermission({ toastOnError: true }).catch(() => { /* handled via toast */ });
     },
     isSttEnabled() {
         return !!this.state.settings.sttProvider;
@@ -433,7 +449,8 @@ export const App = {
         this.setMicVisualState(listening);
         this.updateMobileFab();
     },
-    generateCardQueue(deckIds, includeNonDue = false) {
+    generateCardQueue(deckIds, includeNonDue = false, opts = {}) {
+        const { precomputeReverse = true } = opts || {};
         const selectedDeckIds = (deckIds || []).filter(id => !!this.deckById(id));
         if (selectedDeckIds.length === 0) return [];
 
@@ -451,8 +468,8 @@ export const App = {
             const lastReview = card.fsrs?.lastReview || card.sm2?.lastReview || null;
             const hasHistory = Array.isArray(card.reviewHistory) && card.reviewHistory.length > 0;
             const reps = card.sm2?.repetitions ?? 0;
-            // Check learning state - cards in learning are NOT new, they're being learned
-            const isLearning = card.fsrs?.state === 'learning' || card.sm2?.state === 'learning';
+            const learning = parseSrsState(card.srsState || null).learning;
+            const isLearning = ['learning', 'relearning'].includes(learning?.state);
             // A card is only new if it has no reviews, no history, no repetitions, and is not in learning
             return !lastReview && !hasHistory && reps === 0 && !isLearning;
         };
@@ -564,6 +581,9 @@ export const App = {
 
         // Pre-compute reverse decisions PER-CARD based on its own deck's settings.
         return chosen.map(card => {
+            if (!precomputeReverse) {
+                return { cardId: card.id, reversed: null };
+            }
             const deck = this.deckById(card.deckId);
             const typeKey = (card.type || '').toLowerCase();
             const isCloze = typeKey === 'cloze';
@@ -584,7 +604,7 @@ export const App = {
             return;
         }
 
-        // Check card selection mode (due only vs all)
+        // Check card selection mode (due only vs all vs cram)
         const cardSelectionMode = el('#cardSelectionMode')?.value || 'due';
         let revisionMode = el('#revisionMode')?.value || 'manual';
 
@@ -593,10 +613,12 @@ export const App = {
             toast('Offline: switched to Manual mode');
         }
 
-        const includeNonDue = cardSelectionMode === 'all';
-        const noScheduleChanges = includeNonDue
-            ? (el('#noScheduleChanges')?.checked ?? true)
-            : false;
+        const includeNonDue = cardSelectionMode !== 'due';
+        const noScheduleChanges = cardSelectionMode === 'cram'
+            ? true
+            : includeNonDue
+                ? (el('#noScheduleChanges')?.checked ?? true)
+                : false;
 
         const cardQueue = this.generateCardQueue(deckIds, includeNonDue);
 
@@ -871,10 +893,44 @@ export const App = {
             ...d,
             orderMode: d.orderMode || (d.ordered ? 'created' : 'none') || 'none',
             aiPrompt: d.aiPrompt || DEFAULT_AI_PROMPT,
-            fsrsDesiredRetention: clampRetention(d.fsrsDesiredRetention ?? DEFAULT_DESIRED_RETENTION),
-            fsrsWeights: Array.isArray(d.fsrsWeights) && d.fsrsWeights.length === 21 ? d.fsrsWeights : (d.fsrsWeights || null)
+            srsConfig: parseSrsConfig(d.srsConfig || d.srsConfigRaw || null, d.algorithm || 'SM-2')
         }));
-        this.state.cards = await Storage.getAll('cards');
+        this.state.cards = (await Storage.getAll('cards')).map(c => {
+            const srsState = parseSrsState(c.srsState || null);
+            if (srsState.learning.state === 'new' && ((c.reviewHistory || []).length > 0 || c.fsrs?.lastReview || c.sm2?.lastReview)) {
+                srsState.learning.state = 'review';
+                srsState.learning.step = 0;
+                srsState.learning.due = null;
+            }
+            return {
+                ...c,
+                srsState,
+                fsrs: {
+                    difficulty: c.fsrs?.difficulty ?? srsState.fsrs.difficulty,
+                    stability: c.fsrs?.stability ?? srsState.fsrs.stability,
+                    retrievability: c.fsrs?.retrievability ?? srsState.fsrs.retrievability,
+                    lastRating: c.fsrs?.lastRating ?? c.lastRating ?? null,
+                    lastReview: c.fsrs?.lastReview ?? c.lastReview ?? null,
+                    dueDate: c.fsrs?.dueDate ?? c.dueDate ?? null
+                },
+                sm2: {
+                    interval: c.sm2?.interval ?? srsState.sm2.interval,
+                    easeFactor: c.sm2?.easeFactor ?? srsState.sm2.easeFactor,
+                    repetitions: c.sm2?.repetitions ?? srsState.sm2.repetitions,
+                    lastRating: c.sm2?.lastRating ?? c.lastRating ?? null,
+                    lastReview: c.sm2?.lastReview ?? c.lastReview ?? null,
+                    dueDate: c.sm2?.dueDate ?? c.dueDate ?? null
+                }
+            };
+        });
+        const invalidDeckConfigs = this.state.decks.filter(d => d.srsConfigError).length;
+        if (invalidDeckConfigs > 0) {
+            toast(`Invalid SRS Config in ${invalidDeckConfigs} deck${invalidDeckConfigs === 1 ? '' : 's'} — using defaults`);
+        }
+        const invalidCardStates = this.state.cards.filter(c => c.srsStateError).length;
+        if (invalidCardStates > 0) {
+            toast(`Invalid SRS State in ${invalidCardStates} card${invalidCardStates === 1 ? '' : 's'} — using defaults`);
+        }
         this.state.queue = (await Storage.getMeta('queue')) || [];
         this.state.lastQueueError = (await Storage.getMeta('lastQueueError')) || null;
         this.state.queueLastChangedAt = (await Storage.getMeta('queueLastChangedAt')) || null;
@@ -891,9 +947,15 @@ export const App = {
     async seedIfEmpty() {
         return;
     },
+    makeTempId() {
+        return `tmp_${crypto.randomUUID()}`;
+    },
+    isTempId(id) {
+        return typeof id === 'string' && id.startsWith('tmp_');
+    },
     newDeck(name, algorithm = 'SM-2') {
         return {
-            id: crypto.randomUUID(),
+            id: this.makeTempId(),
             notionId: null,
             name,
             algorithm,
@@ -907,14 +969,13 @@ export const App = {
             aiModel: '',
             aiKey: '',
             orderMode: 'none',
-            fsrsDesiredRetention: DEFAULT_DESIRED_RETENTION,
-            fsrsWeights: null
+            srsConfig: parseSrsConfig(null, algorithm)
         };
     },
     newCard(deckId, name, back, type) {
         const now = new Date().toISOString();
         return {
-            id: crypto.randomUUID(),
+            id: this.makeTempId(),
             notionId: null,
             deckId,
             name,
@@ -922,16 +983,141 @@ export const App = {
             type,
             tags: [],
             notes: '',
+            marked: false,
+            flag: '',
             suspended: false,
             leech: false,
             order: null,
             fsrs: { difficulty: 4, stability: 1, retrievability: 0.9, lastRating: null, lastReview: null, dueDate: now },
-            sm2: { interval: 1, easeFactor: 2.5, dueDate: now },
+            sm2: { interval: 1, easeFactor: 2.5, repetitions: 0, dueDate: now },
             syncId: crypto.randomUUID(),
             updatedInApp: true,
             reviewHistory: [],
+            srsState: parseSrsState(null),
             createdAt: now
         };
+    },
+    async applyIdMappings({ deckIdMap = {}, cardIdMap = {} } = {}) {
+        const hasDeckMap = deckIdMap && Object.keys(deckIdMap).length > 0;
+        const hasCardMap = cardIdMap && Object.keys(cardIdMap).length > 0;
+        if (!hasDeckMap && !hasCardMap) return;
+
+        const deckChanges = [];
+        const cardIdChanges = [];
+        const cardUpdates = [];
+
+        // Update decks
+        if (hasDeckMap) {
+            for (const deck of this.state.decks) {
+                const newId = deckIdMap[deck.id];
+                if (newId && newId !== deck.id) {
+                    const oldId = deck.id;
+                    deck.id = newId;
+                    deck.notionId = newId;
+                    deckChanges.push({ oldId, value: deck });
+                }
+            }
+
+            if (this.state.selectedDeck && deckIdMap[this.state.selectedDeck.id]) {
+                this.state.selectedDeck.id = deckIdMap[this.state.selectedDeck.id];
+                this.state.selectedDeck.notionId = this.state.selectedDeck.id;
+            }
+
+            if (this.state.filters?.studyDecks?.length) {
+                this.state.filters.studyDecks = this.state.filters.studyDecks.map(id => deckIdMap[id] || id);
+            }
+
+            if (this.state.session?.deckIds?.length) {
+                this.state.session.deckIds = this.state.session.deckIds.map(id => deckIdMap[id] || id);
+            }
+        }
+
+        // Update cards
+        for (const card of this.state.cards) {
+            let changed = false;
+            const newDeckId = hasDeckMap ? (deckIdMap[card.deckId] || card.deckId) : card.deckId;
+            if (newDeckId !== card.deckId) {
+                card.deckId = newDeckId;
+                changed = true;
+            }
+            if (hasCardMap) {
+                const newId = cardIdMap[card.id];
+                if (newId && newId !== card.id) {
+                    const oldId = card.id;
+                    card.id = newId;
+                    card.notionId = newId;
+                    cardIdChanges.push({ oldId, value: card });
+                    changed = true;
+                }
+            }
+            if (changed && !cardIdChanges.find(c => c.value === card)) {
+                cardUpdates.push(card);
+            }
+        }
+
+        if (this.state.selectedCard && hasCardMap && cardIdMap[this.state.selectedCard.id]) {
+            this.state.selectedCard.id = cardIdMap[this.state.selectedCard.id];
+            this.state.selectedCard.notionId = this.state.selectedCard.id;
+        }
+
+        // Update session references
+        if (this.state.session) {
+            const session = this.state.session;
+            if (hasCardMap && Array.isArray(session.cardQueue)) {
+                session.cardQueue.forEach(item => {
+                    if (cardIdMap[item.cardId]) item.cardId = cardIdMap[item.cardId];
+                });
+            }
+            if (hasCardMap && Array.isArray(session.completed)) {
+                session.completed = session.completed.map(id => cardIdMap[id] || id);
+            }
+            if (hasCardMap && Array.isArray(session.skipped)) {
+                session.skipped = session.skipped.map(id => cardIdMap[id] || id);
+            }
+        }
+
+        // Update lastRating reference for undo
+        if (this.state.lastRating?.cardId && hasCardMap && cardIdMap[this.state.lastRating.cardId]) {
+            this.state.lastRating.cardId = cardIdMap[this.state.lastRating.cardId];
+        }
+
+        // Update queue payloads
+        if (Array.isArray(this.state.queue)) {
+            for (const op of this.state.queue) {
+                if (op?.payload) {
+                    const pid = op.payload.id;
+                    if (pid && deckIdMap[pid]) {
+                        op.payload.id = deckIdMap[pid];
+                        op.payload.notionId = op.payload.id;
+                    }
+                    if (pid && cardIdMap[pid]) {
+                        op.payload.id = cardIdMap[pid];
+                        op.payload.notionId = op.payload.id;
+                    }
+                    if (op.payload.deckId && deckIdMap[op.payload.deckId]) {
+                        op.payload.deckId = deckIdMap[op.payload.deckId];
+                    }
+                }
+                if (op?.type === 'block-append' && op.payload?.pageId && hasCardMap && cardIdMap[op.payload.pageId]) {
+                    op.payload.pageId = cardIdMap[op.payload.pageId];
+                }
+            }
+        }
+
+        // Persist updates
+        if (deckChanges.length > 0) {
+            await Storage.replaceIds('decks', deckChanges);
+        }
+        if (cardIdChanges.length > 0) {
+            await Storage.replaceIds('cards', cardIdChanges);
+        }
+        if (cardUpdates.length > 0) {
+            await Storage.putMany('cards', cardUpdates);
+        }
+        if (this.state.session) {
+            this.saveSession();
+        }
+        await Storage.setMeta('queue', this.state.queue);
     },
     bind() {
         el('#syncNowBtn').onclick = () => this.syncNow();
@@ -970,10 +1156,18 @@ export const App = {
         const noScheduleChk = el('#noScheduleChanges');
         const toggleNoScheduleUI = () => {
             const isAll = cardSelectionMode.value === 'all';
+            const isCram = cardSelectionMode.value === 'cram';
             if (noScheduleRow) {
-                noScheduleRow.classList.toggle('hidden', !isAll);
-                if (isAll && noScheduleChk) noScheduleChk.checked = true;
-                if (!isAll && noScheduleChk) noScheduleChk.checked = false;
+                noScheduleRow.classList.toggle('hidden', !(isAll || isCram));
+                if (noScheduleChk) {
+                    if (isCram) {
+                        noScheduleChk.checked = true;
+                        noScheduleChk.disabled = true;
+                    } else {
+                        noScheduleChk.disabled = false;
+                        noScheduleChk.checked = isAll;
+                    }
+                }
             }
         };
         if (cardSelectionMode) {
@@ -1024,6 +1218,20 @@ export const App = {
         }
         const refreshTagsBtn = el('#refreshTagOptionsBtn');
         if (refreshTagsBtn) refreshTagsBtn.onclick = () => this.refreshTagOptions();
+        el('#openShortcuts')?.addEventListener('click', () => this.openModal('shortcutsModal'));
+        el('#openShortcutsMobile')?.addEventListener('click', () => this.openModal('shortcutsModal'));
+        el('#closeShortcutsModal')?.addEventListener('click', () => this.closeModal('shortcutsModal'));
+        el('#shortcutsModal')?.addEventListener('click', (e) => {
+            if (e.target === el('#shortcutsModal')) this.closeModal('shortcutsModal');
+        });
+        const markBtn = el('#markCardBtn');
+        if (markBtn) markBtn.onclick = () => this.toggleMarkForSelected();
+        const flagBtn = el('#flagCardBtn');
+        if (flagBtn) flagBtn.onclick = (e) => this.openFlagPicker(e.currentTarget);
+        const analyticsDeckSelect = el('#analyticsDeckSelect');
+        if (analyticsDeckSelect) analyticsDeckSelect.onchange = () => this.renderAnalytics();
+        const analyticsRangeSelect = el('#analyticsRangeSelect');
+        if (analyticsRangeSelect) analyticsRangeSelect.onchange = () => this.renderAnalytics();
         // Phase 14: Debounce search inputs for better performance
         const debouncedCardSearch = debounce((val) => {
             this.state.cardSearch = val;
@@ -1067,6 +1275,8 @@ export const App = {
         }
         el('#filterSuspended').onchange = (e) => { this.state.filters.suspended = e.target.checked; this.renderCards(); this.updateActiveFiltersCount(); };
         el('#filterLeech').onchange = (e) => { this.state.filters.leech = e.target.checked; this.renderCards(); this.updateActiveFiltersCount(); };
+        el('#filterMarked').onchange = (e) => { this.state.filters.marked = e.target.checked; this.renderCards(); this.updateActiveFiltersCount(); };
+        el('#filterFlag').onchange = (e) => { this.state.filters.flag = e.target.value || ''; this.renderCards(); this.updateActiveFiltersCount(); };
         // Toggle filters panel
         el('#toggleFilters').onclick = () => this.toggleFiltersPanel();
         el('#ankiImportInput').onchange = (e) => this.handleAnkiImport(e.target.files[0]);
@@ -1077,6 +1287,12 @@ export const App = {
             menu.classList.toggle('hidden');
             menu.classList.toggle('flex');
         };
+        // Show mobile menu by default on small screens (avoid hidden-only controls)
+        const mobileMenu = el('#mobileMoreMenu');
+        if (mobileMenu && window.innerWidth < 640) {
+            mobileMenu.classList.remove('hidden');
+            mobileMenu.classList.add('flex');
+        }
         const exportMobile = el('#exportAnkiBtnMobile');
         if (exportMobile) exportMobile.onclick = () => this.exportAnki();
         const importMobile = el('#ankiImportInputMobile');
@@ -1086,6 +1302,11 @@ export const App = {
         // Keyboard shortcuts for study
         // Use capture to ensure we can intercept combo hotkeys even when textarea is focused.
         document.addEventListener('keydown', (e) => {
+            if ((e.key === '?' || (e.shiftKey && e.key === '/')) && !isTypingTarget(e.target)) {
+                e.preventDefault();
+                this.openModal('shortcutsModal');
+                return;
+            }
             // Undo shortcut (Ctrl+Z or Cmd+Z) - works globally during study
             if ((e.ctrlKey || e.metaKey) && e.key === 'z' && this.state.lastRating) {
                 e.preventDefault();
@@ -1101,7 +1322,7 @@ export const App = {
             }
             // Start session via Cmd/Ctrl+Enter (desktop)
             if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !this.state.session && this.state.activeTab === 'study') {
-                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+                if (isTypingTarget(e.target)) return;
                 e.preventDefault();
                 this.startSession();
                 return;
@@ -1153,7 +1374,7 @@ export const App = {
                 this.stopMicActivity(false);
             }
 
-            if ((e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') && e.key !== 'Escape') return;
+            if (isTypingTarget(e.target) && e.key !== 'Escape') return;
 
             // Space key logic
             if (e.key === ' ' && !this.state.answerRevealed) {
@@ -1177,6 +1398,19 @@ export const App = {
                 if (ratings[e.key]) this.rate(ratings[e.key]);
             }
             if (e.key.toLowerCase() === 's') this.nextCard();
+            if (e.key.toLowerCase() === 'm') this.toggleMarkForSelected();
+            if (e.key.toLowerCase() === 'f') {
+                if (e.shiftKey) {
+                    this.setFlagForSelected('');
+                } else {
+                    const order = this.getFlagOrder();
+                    const card = this.state.selectedCard;
+                    if (!card) return;
+                    const idx = Math.max(0, order.indexOf(card.flag || ''));
+                    const next = order[(idx + 1) % order.length];
+                    this.setFlagForSelected(next);
+                }
+            }
         }, true);
         document.addEventListener('click', (e) => {
             // Handle edit deck button click
@@ -1239,7 +1473,7 @@ export const App = {
         el('#toggleDangerZone').onclick = () => this.toggleDangerZone();
         el('#resetConfirmModal').addEventListener('click', (e) => { if (e.target === el('#resetConfirmModal')) this.closeModal('resetConfirmModal'); });
         this.updateSettingsButtons();
-        window.addEventListener('keydown', (e) => { if (e.key === 'Escape') { this.closeSettings(); this.closeModal('workerHelpModal'); this.closeDeckModal(); this.closeCardModal(); this.closeModal('confirmModal'); this.closeModal('aiSettingsRequiredModal'); this.closeModal('notesModal'); this.closeModal('addBlockModal'); } });
+        window.addEventListener('keydown', (e) => { if (e.key === 'Escape') { this.closeSettings(); this.closeModal('workerHelpModal'); this.closeDeckModal(); this.closeCardModal(); this.closeModal('confirmModal'); this.closeModal('aiSettingsRequiredModal'); this.closeModal('notesModal'); this.closeModal('addBlockModal'); this.closeModal('shortcutsModal'); } });
         el('#settingsModal').addEventListener('click', (e) => { if (e.target === el('#settingsModal')) this.closeSettings(); });
         el('#workerHelpModal').addEventListener('click', (e) => { if (e.target === el('#workerHelpModal')) this.closeModal('workerHelpModal'); });
         el('#revisionMode').onchange = (e) => {
@@ -1332,6 +1566,16 @@ export const App = {
         if (startHotkey) startHotkey.textContent = `${ctrlSymbol} ${enterSymbol}`;
         const stopHotkey = el('#stopSessionHotkey');
         if (stopHotkey) stopHotkey.textContent = `${ctrlSymbol} .`;
+        const shortcutsStart = el('#shortcutsStartSession');
+        if (shortcutsStart) shortcutsStart.textContent = `${ctrlSymbol} ${enterSymbol}`;
+        const shortcutsStop = el('#shortcutsStopSession');
+        if (shortcutsStop) shortcutsStop.textContent = `${ctrlSymbol} .`;
+        const shortcutsUndo = el('#shortcutsUndo');
+        if (shortcutsUndo) shortcutsUndo.textContent = `${ctrlSymbol} Z`;
+        const shortcutsSend = el('#shortcutsSend');
+        if (shortcutsSend) shortcutsSend.textContent = `${ctrlSymbol} ${enterSymbol}`;
+        const shortcutsMic = el('#shortcutsMic');
+        if (shortcutsMic) shortcutsMic.textContent = `${ctrlSymbol} E`;
     },
     // Tab switching
     switchTab(tab) {
@@ -1347,6 +1591,7 @@ export const App = {
         const btnEl = el(`[data-tab="${tab}"]`);
         if (btnEl) btnEl.classList.add('active');
         this.state.activeTab = tab;
+        if (tab === 'analytics') this.renderAnalytics();
         lucide.createIcons();
     },
     // Toggle filters panel
@@ -1369,6 +1614,8 @@ export const App = {
         if (f.tags && f.tags.length > 0) count++;
         if (f.suspended) count++;
         if (f.leech) count++;
+        if (f.marked) count++;
+        if (f.flag) count++;
         if (f.studyDecks && f.studyDecks.length > 0) count++;
         // Show reset button if any filters are active
         const resetBtn = el('#resetFilters');
@@ -1574,13 +1821,22 @@ export const App = {
                 // Strip HTML tags and cloze syntax for display, then escape for safety
                 const plainName = (c.name || '').replace(/<[^>]*>/g, '').replace(/\{\{c\d+::(.*?)\}\}/g, '$1');
                 const nameText = escapeHtml(plainName.slice(0, 50));
+                const flagClass = c.flag ? this.getFlagClass(c.flag) : '';
+                const flagDot = c.flag ? `<span class="flag-dot ${flagClass}" title="${escapeHtml(c.flag)}"></span>` : '';
+                const markIcon = c.marked ? `<i data-lucide="star" class="w-3 h-3 text-dull-purple" title="Marked"></i>` : '';
                 const tagPills = c.tags.slice(0, 2).map(t => `<span class="notion-color-${t.color.replace('_', '-')}-background px-1.5 py-0.5 rounded text-[10px]">${escapeHtml(t.name)}</span>`).join(' ');
                 // Get due date
                 const dueDate = c.fsrs?.dueDate || c.sm2?.dueDate;
                 const dueDisplay = dueDate ? new Date(dueDate).toLocaleDateString() : '—';
                 return `
                         <tr class="hover:bg-oatmeal/50 dark:hover:bg-white/5" data-card-id="${c.id}">
-                            <td class="py-2 pr-2 text-charcoal"><div class="truncate max-w-[150px] sm:max-w-[250px] md:max-w-[350px] lg:max-w-[450px]">${nameText}</div></td>
+                            <td class="py-2 pr-2 text-charcoal">
+                                <div class="flex items-center gap-2">
+                                    ${markIcon}
+                                    ${flagDot}
+                                    <div class="truncate max-w-[150px] sm:max-w-[250px] md:max-w-[350px] lg:max-w-[450px]">${nameText}</div>
+                                </div>
+                            </td>
                             <td class="py-2 pr-2 capitalize hidden sm:table-cell">${c.type}</td>
                             <td class="py-2 pr-2 text-earth-metal/70 text-xs whitespace-nowrap">${dueDisplay}</td>
                             <td class="py-2 pr-2 hidden md:table-cell text-xs"><div class="flex gap-1 flex-wrap">${tagPills}${c.tags.length > 2 ? '<span class="text-earth-metal/50 dark:text-white/60">...</span>' : ''}</div></td>
@@ -1678,6 +1934,24 @@ export const App = {
             if (activeBar) activeBar.classList.add('hidden');
         }
 
+        if (!session && this.state.decks.length === 0) {
+            el('#studyDeckLabel').textContent = 'No decks yet';
+            el('#cardFront').innerHTML = `
+                <div class="text-center py-4">
+                    <p class="text-earth-metal/70 text-sm mb-2">No decks found.</p>
+                    <p class="text-earth-metal/60 text-xs">Create a deck to start studying.</p>
+                </div>
+            `;
+            el('#cardBack').innerHTML = '';
+            el('#cardBack').classList.add('hidden');
+            el('#aiControls').classList.add('hidden');
+            this.state.answerRevealed = false;
+            this.setRatingEnabled(false);
+            this.updateMobileFab();
+            this.state.selectedCard = null;
+            return;
+        }
+
         const card = this.pickCard();
         const deck = card ? this.deckById(card.deckId) : null;
         const isCloze = card && (card.type || '').toLowerCase() === 'cloze';
@@ -1772,9 +2046,13 @@ export const App = {
         if (addNoteBtn) addNoteBtn.classList.add('hidden');
         // Reset answer revealed state and disable rating buttons
         this.state.answerRevealed = false;
+        this.state.answerRevealedAt = null;
         this.setRatingEnabled(false);
         this.updateMobileFab();
         this.state.selectedCard = card || null;
+        this.state.cardShownAt = card ? Date.now() : null;
+        if (card) this.updateMarkFlagButtons(card);
+        else this.updateMarkFlagButtons({ marked: false, flag: '' });
         this.renderNotes();
         this.renderFsrsMeta();
         el('#aiAnswer').value = '';
@@ -1847,6 +2125,669 @@ export const App = {
                 this.updateActiveFiltersCount();
             };
         });
+    },
+    formatDuration(ms) {
+        if (!Number.isFinite(ms) || ms <= 0) return '0m';
+        const totalSec = Math.round(ms / 1000);
+        const mins = Math.floor(totalSec / 60);
+        const secs = totalSec % 60;
+        if (mins <= 0) return `${secs}s`;
+        return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+    },
+    parseDurationToMs(token) {
+        if (!token) return null;
+        const s = token.toString().trim().toLowerCase();
+        const match = s.match(/^(\d+(?:\.\d+)?)([smhd])$/);
+        if (!match) return null;
+        const val = parseFloat(match[1]);
+        const unit = match[2];
+        const mult = unit === 's' ? 1000 : unit === 'm' ? 60000 : unit === 'h' ? 3600000 : 86400000;
+        return Math.round(val * mult);
+    },
+    stepsToMs(steps) {
+        if (!Array.isArray(steps)) return [];
+        return steps.map(s => this.parseDurationToMs(s)).filter(ms => Number.isFinite(ms) && ms > 0);
+    },
+    adjustDueDateForEasyDays(dueIso, easyDays) {
+        if (!dueIso) return dueIso;
+        const days = Array.isArray(easyDays) ? easyDays : [];
+        if (!days.length) return dueIso;
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const set = new Set(days.map(d => d.toString().slice(0, 3)));
+        const d = new Date(dueIso);
+        if (!Number.isFinite(d.getTime())) return dueIso;
+        let guard = 0;
+        while (set.has(dayNames[d.getDay()]) && guard < 14) {
+            d.setDate(d.getDate() + 1);
+            guard++;
+        }
+        return d.toISOString();
+    },
+    buildSrsState(card, learningOverride = null) {
+        const base = parseSrsState(card.srsState || null);
+        const learning = learningOverride || base.learning;
+        return {
+            fsrs: {
+                difficulty: card.fsrs?.difficulty ?? base.fsrs.difficulty,
+                stability: card.fsrs?.stability ?? base.fsrs.stability,
+                retrievability: card.fsrs?.retrievability ?? base.fsrs.retrievability
+            },
+            sm2: {
+                easeFactor: card.sm2?.easeFactor ?? base.sm2.easeFactor,
+                interval: card.sm2?.interval ?? base.sm2.interval,
+                repetitions: card.sm2?.repetitions ?? base.sm2.repetitions
+            },
+            learning: {
+                state: learning?.state ?? base.learning.state,
+                step: Number.isFinite(learning?.step) ? learning.step : base.learning.step,
+                due: learning?.due ?? base.learning.due,
+                lapses: Number.isFinite(learning?.lapses) ? learning.lapses : base.learning.lapses
+            }
+        };
+    },
+    getFlagOrder() {
+        return ['', 'Red', 'Orange', 'Yellow', 'Green', 'Blue', 'Purple'];
+    },
+    getFlagClass(flag) {
+        const key = (flag || '').toLowerCase();
+        return {
+            red: 'flag-red',
+            orange: 'flag-orange',
+            yellow: 'flag-yellow',
+            green: 'flag-green',
+            blue: 'flag-blue',
+            purple: 'flag-purple'
+        }[key] || '';
+    },
+    async toggleMarkForSelected() {
+        const card = this.state.selectedCard;
+        if (!card) return;
+        card.marked = !card.marked;
+        await Storage.put('cards', card);
+        this.queueOp({ type: 'card-upsert', payload: card });
+        this.updateMarkFlagButtons(card);
+        this.renderCards();
+    },
+    async setFlagForSelected(flag) {
+        const card = this.state.selectedCard;
+        if (!card) return;
+        card.flag = flag || '';
+        await Storage.put('cards', card);
+        this.queueOp({ type: 'card-upsert', payload: card });
+        this.updateMarkFlagButtons(card);
+        this.renderCards();
+    },
+    updateMarkFlagButtons(card) {
+        const markBtn = el('#markCardBtn');
+        const flagBtn = el('#flagCardBtn');
+        if (markBtn) {
+            markBtn.classList.toggle('text-dull-purple', !!card?.marked);
+            markBtn.classList.toggle('text-earth-metal/60', !card?.marked);
+        }
+        if (flagBtn) {
+            flagBtn.dataset.flag = card?.flag || '';
+            flagBtn.classList.toggle('text-dull-purple', !!card?.flag);
+            flagBtn.classList.toggle('text-earth-metal/60', !card?.flag);
+        }
+    },
+    openFlagPicker(anchor) {
+        const card = this.state.selectedCard;
+        if (!card || !anchor) return;
+        const existing = document.querySelector('.flag-picker-popover');
+        if (existing) existing.remove();
+        const flags = this.getFlagOrder().filter(f => f);
+        const popover = document.createElement('div');
+        popover.className = 'flag-picker-popover fixed z-50 bg-oatmeal dark:bg-zinc-800 border border-charcoal/20 dark:border-white/10 rounded-lg shadow-lg p-2 flex gap-2';
+        popover.innerHTML = `
+            <button class="flag-choice px-2 py-1 text-xs rounded-lg border border-oatmeal-dark/60" data-flag="">None</button>
+            ${flags.map(f => `<button class="flag-choice px-2 py-1 text-xs rounded-lg border border-oatmeal-dark/60 flex items-center gap-2" data-flag="${f}">
+                <span class="flag-dot ${this.getFlagClass(f)}"></span>${f}
+            </button>`).join('')}
+        `;
+        document.body.appendChild(popover);
+        const rect = anchor.getBoundingClientRect();
+        popover.style.left = `${Math.min(window.innerWidth - popover.offsetWidth - 8, rect.right - popover.offsetWidth)}px`;
+        popover.style.top = `${rect.bottom + 6}px`;
+        popover.querySelectorAll('.flag-choice').forEach(btn => {
+            btn.onclick = async () => {
+                const flag = btn.dataset.flag || '';
+                await this.setFlagForSelected(flag);
+                popover.remove();
+            };
+        });
+        const closeOnClickOutside = (e) => {
+            if (!popover.contains(e.target) && e.target !== anchor) {
+                popover.remove();
+                document.removeEventListener('click', closeOnClickOutside);
+            }
+        };
+        setTimeout(() => document.addEventListener('click', closeOnClickOutside), 0);
+    },
+    applySm2Learning(card, ratingKey, deck) {
+        const config = parseSrsConfig(deck?.srsConfig || null, deck?.algorithm || 'SM-2');
+        const learningSteps = this.stepsToMs(config.learningSteps);
+        const relearningSteps = this.stepsToMs(config.relearningSteps);
+        const learning = parseSrsState(card.srsState || null).learning;
+
+        if (learning.state === 'review') {
+            if (ratingKey !== 'again' || relearningSteps.length === 0) return false;
+            learning.state = 'relearning';
+            learning.step = 0;
+        } else if (learning.state === 'new') {
+            if (learningSteps.length === 0) return false;
+            learning.state = 'learning';
+            learning.step = 0;
+        }
+
+        const steps = learning.state === 'relearning' ? relearningSteps : learningSteps;
+        if (steps.length === 0) return false;
+
+        if (ratingKey === 'again') {
+            learning.lapses = (learning.lapses || 0) + 1;
+            learning.step = 0;
+        } else if (ratingKey === 'hard') {
+            // stay on same step
+        } else if (ratingKey === 'good') {
+            learning.step += 1;
+        } else if (ratingKey === 'easy') {
+            learning.step = steps.length;
+        }
+
+        const now = new Date();
+        const nowIso = now.toISOString();
+
+        if (learning.step >= steps.length || ratingKey === 'easy') {
+            learning.state = 'review';
+            learning.step = 0;
+            learning.due = null;
+            const intervalMs = this.parseDurationToMs(ratingKey === 'easy' ? config.easyInterval : config.graduatingInterval) || 86400000;
+            const intervalDays = Math.max(1, Math.round(intervalMs / 86400000));
+            let due = SRS.getDueDate(intervalDays);
+            due = this.adjustDueDateForEasyDays(due, config.easyDays);
+            card.sm2.interval = intervalDays;
+            card.sm2.repetitions = Math.max(1, (card.sm2.repetitions ?? 0) + 1);
+            card.sm2.dueDate = due;
+        } else {
+            const stepMs = steps[Math.min(learning.step, steps.length - 1)];
+            let due = new Date(now.getTime() + stepMs).toISOString();
+            due = this.adjustDueDateForEasyDays(due, config.easyDays);
+            learning.due = due;
+            card.sm2.interval = 0;
+            card.sm2.repetitions = 0;
+            card.sm2.dueDate = due;
+        }
+
+        card.sm2.lastReview = nowIso;
+        card.sm2.lastRating = ratingKey;
+        card.srsState = this.buildSrsState(card, learning);
+        return true;
+    },
+    formatDateKey(date) {
+        const d = new Date(date);
+        if (!Number.isFinite(d.getTime())) return '';
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    },
+    startOfDay(date) {
+        const d = new Date(date);
+        d.setHours(0, 0, 0, 0);
+        return d;
+    },
+    buildSparkBars(values, opts = {}) {
+        const height = opts.height || 80;
+        const width = opts.width || 6;
+        const gap = opts.gap ?? 2;
+        const color = opts.color || '#917FB3';
+        const max = Math.max(1, ...values);
+        const svgWidth = values.length * (width + gap);
+        const parts = values.map((val, i) => {
+            const h = max > 0 ? Math.round((val / max) * (height - 6)) : 0;
+            const x = i * (width + gap);
+            const y = height - h;
+            const title = opts.titleFormatter ? opts.titleFormatter(val, i) : `${val}`;
+            return `<g><title>${escapeHtml(String(title))}</title><rect x="${x}" y="${y}" width="${width}" height="${Math.max(h, 1)}" rx="2" fill="${color}"></rect></g>`;
+        }).join('');
+        return `<svg class="chart-svg" width="${svgWidth}" height="${height}" viewBox="0 0 ${svgWidth} ${height}" xmlns="http://www.w3.org/2000/svg">${parts}</svg>`;
+    },
+    buildDistributionBars(items) {
+        if (!items || items.length === 0) return '<p class="text-xs text-earth-metal/60">No data yet.</p>';
+        const max = Math.max(1, ...items.map(i => i.value));
+        return `
+            <div class="space-y-2">
+                ${items.map(item => `
+                    <div class="flex items-center gap-2 text-xs">
+                        <span class="w-16 text-earth-metal/70">${escapeHtml(item.label)}</span>
+                        <div class="flex-1 h-2 rounded-full bg-oatmeal-dark/30 overflow-hidden">
+                            <div class="h-full rounded-full" style="width:${(item.value / max) * 100}%; background:${item.color || 'rgba(145,127,179,0.65)'}"></div>
+                        </div>
+                        <span class="w-10 text-right text-earth-metal/60">${item.value}</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    },
+    buildPieChart(slices) {
+        const total = slices.reduce((sum, s) => sum + s.value, 0);
+        const radius = 44;
+        const cx = 50;
+        const cy = 50;
+        if (total <= 0) {
+            return `<svg width="100" height="100" viewBox="0 0 100 100" aria-hidden="true">
+                <circle cx="${cx}" cy="${cy}" r="${radius}" fill="rgba(145,127,179,0.12)"></circle>
+                <circle cx="${cx}" cy="${cy}" r="${radius * 0.6}" fill="var(--card-bg, #fff)"></circle>
+            </svg>`;
+        }
+        let startAngle = -90;
+        const paths = slices.map(slice => {
+            const angle = (slice.value / total) * 360;
+            const endAngle = startAngle + angle;
+            const large = angle > 180 ? 1 : 0;
+            const start = this.polarToCartesian(cx, cy, radius, endAngle);
+            const end = this.polarToCartesian(cx, cy, radius, startAngle);
+            const d = [
+                'M', start.x, start.y,
+                'A', radius, radius, 0, large, 0, end.x, end.y,
+                'L', cx, cy,
+                'Z'
+            ].join(' ');
+            const title = `${slice.label}: ${slice.value}`;
+            startAngle = endAngle;
+            return `<path d="${d}" fill="${slice.color}" aria-label="${escapeHtml(title)}"><title>${escapeHtml(title)}</title></path>`;
+        }).join('');
+        const hole = `<circle cx="${cx}" cy="${cy}" r="${radius * 0.6}" fill="var(--card-bg, #fff)"></circle>`;
+        return `<svg width="100" height="100" viewBox="0 0 100 100" aria-hidden="true">${paths}${hole}</svg>`;
+    },
+    polarToCartesian(cx, cy, r, angleDeg) {
+        const rad = (angleDeg - 90) * Math.PI / 180.0;
+        return { x: cx + (r * Math.cos(rad)), y: cy + (r * Math.sin(rad)) };
+    },
+    isCardNew(card) {
+        const lastReview = card.fsrs?.lastReview || card.sm2?.lastReview || null;
+        const hasHistory = Array.isArray(card.reviewHistory) && card.reviewHistory.length > 0;
+        const reps = card.sm2?.repetitions ?? 0;
+        const learning = parseSrsState(card.srsState || null).learning;
+        const isLearning = ['learning', 'relearning'].includes(learning?.state);
+        return !lastReview && !hasHistory && reps === 0 && !isLearning;
+    },
+    renderAnalytics() {
+        const container = el('#analyticsTab');
+        if (!container) return;
+        const deckSelect = el('#analyticsDeckSelect');
+        const rangeSelect = el('#analyticsRangeSelect');
+        const currentDeck = deckSelect ? deckSelect.value : 'all';
+        if (deckSelect) {
+            const opts = ['all', ...this.state.decks.map(d => d.id)];
+            deckSelect.innerHTML = [
+                `<option value="all">All decks</option>`,
+                ...this.state.decks.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`)
+            ].join('');
+            deckSelect.value = opts.includes(currentDeck) ? currentDeck : 'all';
+        }
+        const selectedDeckId = deckSelect ? deckSelect.value : 'all';
+        const rangeDays = Number(rangeSelect?.value || 90);
+        const cards = selectedDeckId === 'all'
+            ? this.state.cards
+            : this.state.cards.filter(c => c.deckId === selectedDeckId);
+
+        const events = [];
+        cards.forEach(card => {
+            (card.reviewHistory || []).forEach(h => {
+                const at = new Date(h.at);
+                if (!Number.isFinite(at.getTime())) return;
+                events.push({
+                    rating: normalizeRating(h.rating) || h.rating,
+                    at,
+                    ms: Number.isFinite(h.ms) ? Math.max(0, h.ms) : 0
+                });
+            });
+        });
+        events.sort((a, b) => a.at - b.at);
+
+        const dayMap = new Map();
+        events.forEach(e => {
+            const key = this.formatDateKey(e.at);
+            if (!key) return;
+            if (!dayMap.has(key)) dayMap.set(key, { count: 0, ms: 0 });
+            const entry = dayMap.get(key);
+            entry.count += 1;
+            entry.ms += e.ms || 0;
+        });
+
+        const now = new Date();
+        const todayKey = this.formatDateKey(now);
+        const todayStats = dayMap.get(todayKey) || { count: 0, ms: 0 };
+        const dueToday = cards.filter(c => !c.suspended && this.isDue(c)).length;
+
+        const ratings = { again: 0, hard: 0, good: 0, easy: 0 };
+        events.forEach(e => {
+            const key = ratingsMap[e.rating] ? e.rating : 'good';
+            ratings[key] = (ratings[key] || 0) + 1;
+        });
+        const totalRatings = Object.values(ratings).reduce((a, b) => a + b, 0);
+        const successCount = totalRatings - (ratings.again || 0);
+        const retentionPct = totalRatings ? Math.round((successCount / totalRatings) * 100) : 0;
+
+        const getCountForDate = (date) => {
+            const key = this.formatDateKey(date);
+            return dayMap.get(key)?.count || 0;
+        };
+        let streak = 0;
+        let cursor = this.startOfDay(now);
+        while (getCountForDate(cursor) > 0) {
+            streak += 1;
+            cursor.setDate(cursor.getDate() - 1);
+        }
+        let longest = 0;
+        let current = 0;
+        const earliestEvent = events.length ? this.startOfDay(events[0].at) : this.startOfDay(now);
+        const scanDate = new Date(earliestEvent);
+        const endDate = this.startOfDay(now);
+        while (scanDate <= endDate) {
+            if (getCountForDate(scanDate) > 0) {
+                current += 1;
+                longest = Math.max(longest, current);
+            } else {
+                current = 0;
+            }
+            scanDate.setDate(scanDate.getDate() + 1);
+        }
+
+        const todayEl = el('#analyticsToday');
+        if (todayEl) {
+            todayEl.innerHTML = `
+                <div class="flex flex-wrap gap-2">
+                    <span class="analytics-pill">Reviews: ${todayStats.count}</span>
+                    <span class="analytics-pill">Time: ${this.formatDuration(todayStats.ms)}</span>
+                    <span class="analytics-pill">Due now: ${dueToday}</span>
+                </div>
+            `;
+        }
+        const streakEl = el('#analyticsStreaks');
+        if (streakEl) {
+            streakEl.innerHTML = `
+                <div class="flex flex-wrap gap-2">
+                    <span class="analytics-pill">Current: ${streak} day${streak === 1 ? '' : 's'}</span>
+                    <span class="analytics-pill">Longest: ${longest} day${longest === 1 ? '' : 's'}</span>
+                    <span class="analytics-pill">Active days: ${dayMap.size}</span>
+                </div>
+            `;
+        }
+        const retentionEl = el('#analyticsRetention');
+        if (retentionEl) {
+            retentionEl.innerHTML = `
+                <div class="flex flex-wrap gap-2">
+                    <span class="analytics-pill">Overall retention: ${retentionPct}%</span>
+                    <span class="analytics-pill">Total reviews: ${totalRatings}</span>
+                </div>
+            `;
+        }
+        const streakBadge = el('#analyticsStreakBadge');
+        if (streakBadge) streakBadge.textContent = `${streak} day streak`;
+
+        const rangeStart = this.startOfDay(new Date(now));
+        rangeStart.setDate(rangeStart.getDate() - (rangeDays - 1));
+        const rangeDates = [];
+        const rangeCounts = [];
+        const rangeMinutes = [];
+        const tempDate = new Date(rangeStart);
+        while (tempDate <= this.startOfDay(now)) {
+            const key = this.formatDateKey(tempDate);
+            const dayStat = dayMap.get(key) || { count: 0, ms: 0 };
+            rangeDates.push(key);
+            rangeCounts.push(dayStat.count);
+            rangeMinutes.push(Math.round((dayStat.ms || 0) / 60000));
+            tempDate.setDate(tempDate.getDate() + 1);
+        }
+        const countChart = el('#analyticsReviewCount');
+        if (countChart) {
+            countChart.innerHTML = this.buildSparkBars(rangeCounts, {
+                height: 90,
+                titleFormatter: (val, i) => `${rangeDates[i]} • ${val} reviews`
+            });
+        }
+        const timeChart = el('#analyticsReviewTime');
+        if (timeChart) {
+            timeChart.innerHTML = this.buildSparkBars(rangeMinutes, {
+                height: 90,
+                color: '#C1A7C9',
+                titleFormatter: (val, i) => `${rangeDates[i]} • ${val} min`
+            });
+        }
+
+        const answerBreakdown = el('#analyticsAnswerBreakdown');
+        if (answerBreakdown) {
+            const rows = [
+                { label: 'Again', key: 'again', color: '#f87171' },
+                { label: 'Hard', key: 'hard', color: '#fb923c' },
+                { label: 'Good', key: 'good', color: '#4ade80' },
+                { label: 'Easy', key: 'easy', color: '#60a5fa' }
+            ];
+            answerBreakdown.innerHTML = `
+                <div class="space-y-2 text-xs">
+                    ${rows.map(r => {
+                        const count = ratings[r.key] || 0;
+                        const pct = totalRatings ? Math.round((count / totalRatings) * 100) : 0;
+                        return `
+                            <div class="flex items-center gap-2">
+                                <span class="w-12 text-earth-metal/70">${r.label}</span>
+                                <div class="flex-1 h-2 rounded-full bg-oatmeal-dark/30 overflow-hidden">
+                                    <div class="h-full rounded-full" style="width:${pct}%; background:${r.color}"></div>
+                                </div>
+                                <span class="w-16 text-right text-earth-metal/60">${count} (${pct}%)</span>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+        }
+
+        const hourly = new Array(24).fill(0);
+        events.forEach(e => {
+            const h = e.at.getHours();
+            hourly[h] += 1;
+        });
+        const hourlyEl = el('#analyticsHourlyBreakdown');
+        if (hourlyEl) {
+            hourlyEl.innerHTML = this.buildSparkBars(hourly, {
+                height: 90,
+                color: '#B08BBB',
+                titleFormatter: (val, i) => `${i}:00 • ${val} reviews`
+            });
+        }
+
+        const intervalBuckets = [
+            { label: 'New', min: null, max: null, value: 0 },
+            { label: '0d', min: 0, max: 0, value: 0 },
+            { label: '1d', min: 1, max: 1, value: 0 },
+            { label: '2d', min: 2, max: 2, value: 0 },
+            { label: '3-6d', min: 3, max: 6, value: 0 },
+            { label: '7-13d', min: 7, max: 13, value: 0 },
+            { label: '14-29d', min: 14, max: 29, value: 0 },
+            { label: '30-59d', min: 30, max: 59, value: 0 },
+            { label: '60-119d', min: 60, max: 119, value: 0 },
+            { label: '120d+', min: 120, max: Infinity, value: 0 }
+        ];
+        cards.forEach(card => {
+            if (this.isCardNew(card)) {
+                intervalBuckets[0].value += 1;
+                return;
+            }
+            const lastReview = card.fsrs?.lastReview || card.sm2?.lastReview;
+            const due = card.fsrs?.dueDate || card.sm2?.dueDate;
+            const last = lastReview ? new Date(lastReview) : null;
+            const dueDate = due ? new Date(due) : null;
+            if (!last || !Number.isFinite(last.getTime()) || !dueDate || !Number.isFinite(dueDate.getTime())) return;
+            const days = Math.max(0, Math.round((dueDate - last) / 86400000));
+            const bucket = intervalBuckets.find(b => b.min !== null && days >= b.min && days <= b.max);
+            if (bucket) bucket.value += 1;
+        });
+        const intervalEl = el('#analyticsIntervalDistribution');
+        if (intervalEl) intervalEl.innerHTML = this.buildDistributionBars(intervalBuckets);
+
+        const easeBuckets = [
+            { label: '1.3-1.7', min: 1.3, max: 1.69, value: 0 },
+            { label: '1.7-2.1', min: 1.7, max: 2.09, value: 0 },
+            { label: '2.1-2.5', min: 2.1, max: 2.49, value: 0 },
+            { label: '2.5-2.9', min: 2.5, max: 2.89, value: 0 },
+            { label: '2.9+', min: 2.9, max: Infinity, value: 0 }
+        ];
+        const diffBuckets = [
+            { label: '1-3', min: 1, max: 3, value: 0 },
+            { label: '4-6', min: 4, max: 6, value: 0 },
+            { label: '7-8', min: 7, max: 8, value: 0 },
+            { label: '9-10', min: 9, max: 10, value: 0 }
+        ];
+        cards.forEach(card => {
+            if (card.sm2?.easeFactor) {
+                const ease = card.sm2.easeFactor;
+                const bucket = easeBuckets.find(b => ease >= b.min && ease <= b.max);
+                if (bucket) bucket.value += 1;
+            }
+            if (card.fsrs?.difficulty) {
+                const diff = card.fsrs.difficulty;
+                const bucket = diffBuckets.find(b => diff >= b.min && diff <= b.max);
+                if (bucket) bucket.value += 1;
+            }
+        });
+        const easeEl = el('#analyticsEaseDifficulty');
+        if (easeEl) {
+            easeEl.innerHTML = `
+                <div class="space-y-4">
+                    <div>
+                        <p class="text-xs text-earth-metal/60 mb-2">SM-2 ease factor</p>
+                        ${this.buildDistributionBars(easeBuckets)}
+                    </div>
+                    <div>
+                        <p class="text-xs text-earth-metal/60 mb-2">FSRS difficulty</p>
+                        ${this.buildDistributionBars(diffBuckets)}
+                    </div>
+                </div>
+            `;
+        }
+
+        const cardCounts = {
+            New: 0,
+            Due: 0,
+            'Not due': 0,
+            Suspended: 0
+        };
+        cards.forEach(card => {
+            if (card.suspended) {
+                cardCounts.Suspended += 1;
+                return;
+            }
+            if (this.isCardNew(card)) {
+                cardCounts.New += 1;
+                return;
+            }
+            if (this.isDue(card)) cardCounts.Due += 1;
+            else cardCounts['Not due'] += 1;
+        });
+        const pieSlices = [
+            { label: 'New', value: cardCounts.New, color: '#c4b5fd' },
+            { label: 'Due', value: cardCounts.Due, color: '#fca5a5' },
+            { label: 'Not due', value: cardCounts['Not due'], color: '#93c5fd' },
+            { label: 'Suspended', value: cardCounts.Suspended, color: '#fcd34d' }
+        ];
+        const cardCountsEl = el('#analyticsCardCounts');
+        if (cardCountsEl) {
+            cardCountsEl.innerHTML = `
+                <div class="analytics-pie">
+                    ${this.buildPieChart(pieSlices)}
+                    <div class="analytics-legend">
+                        ${pieSlices.map(s => `
+                            <span><i class="analytics-dot" style="background:${s.color}"></i>${s.label}: ${s.value}</span>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        const bins = [
+            { label: '0d', min: 0, max: 0 },
+            { label: '1d', min: 1, max: 1 },
+            { label: '2d', min: 2, max: 2 },
+            { label: '3-6d', min: 3, max: 6 },
+            { label: '7-13d', min: 7, max: 13 },
+            { label: '14-29d', min: 14, max: 29 },
+            { label: '30-59d', min: 30, max: 59 },
+            { label: '60-119d', min: 60, max: 119 },
+            { label: '120d+', min: 120, max: Infinity }
+        ];
+        const retentionRows = bins.map(b => ({ label: b.label, total: 0, success: 0 }));
+        cards.forEach(card => {
+            const history = (card.reviewHistory || []).slice().sort((a, b) => new Date(a.at) - new Date(b.at));
+            for (let i = 1; i < history.length; i++) {
+                const prev = new Date(history[i - 1].at);
+                const curr = new Date(history[i].at);
+                if (!Number.isFinite(prev.getTime()) || !Number.isFinite(curr.getTime())) continue;
+                const days = Math.max(0, Math.floor((curr - prev) / 86400000));
+                const rating = normalizeRating(history[i].rating) || history[i].rating;
+                const row = retentionRows.find(r => {
+                    const bin = bins.find(b => b.label === r.label);
+                    return days >= bin.min && days <= bin.max;
+                });
+                if (row) {
+                    row.total += 1;
+                    if (rating !== 'again') row.success += 1;
+                }
+            }
+        });
+        const retentionTable = el('#analyticsTrueRetention');
+        if (retentionTable) {
+            retentionTable.innerHTML = `
+                <table class="analytics-table">
+                    <thead>
+                        <tr>
+                            <th>Interval</th>
+                            <th>Reviews</th>
+                            <th>Retention</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${retentionRows.map(r => {
+                            const pct = r.total ? Math.round((r.success / r.total) * 100) : 0;
+                            return `<tr>
+                                <td>${r.label}</td>
+                                <td>${r.total}</td>
+                                <td>${r.total ? `${pct}%` : '—'}</td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        const heatmapEl = el('#analyticsHeatmap');
+        if (heatmapEl) {
+            const weeks = Math.ceil(rangeDays / 7);
+            const endHeat = this.startOfDay(now);
+            const startHeat = new Date(endHeat);
+            startHeat.setDate(startHeat.getDate() - (weeks * 7 - 1));
+            const startWeek = new Date(startHeat);
+            startWeek.setDate(startWeek.getDate() - startWeek.getDay());
+            const cells = [];
+            const maxDayCount = Math.max(1, ...Array.from(dayMap.values()).map(v => v.count));
+            for (let d = new Date(startHeat); d <= endHeat; d.setDate(d.getDate() + 1)) {
+                const key = this.formatDateKey(d);
+                const count = dayMap.get(key)?.count || 0;
+                let level = 0;
+                if (count > 0) {
+                    const ratio = count / maxDayCount;
+                    if (ratio > 0.75) level = 4;
+                    else if (ratio > 0.5) level = 3;
+                    else if (ratio > 0.25) level = 2;
+                    else level = 1;
+                }
+                const weekIndex = Math.floor((d - startWeek) / (7 * 86400000));
+                const row = d.getDay() + 1;
+                const title = `${key}: ${count} review${count === 1 ? '' : 's'}`;
+                cells.push(`<div class="heatmap-cell level-${level}" style="grid-column:${weekIndex + 1}; grid-row:${row}" title="${escapeHtml(title)}"></div>`);
+            }
+            heatmapEl.innerHTML = cells.join('');
+        }
     },
     buildLocalTagOptions() {
         const tagMap = new Map();
@@ -1966,6 +2907,25 @@ export const App = {
         const input = el('#deckSearchInput');
         if (!dropdown || !display || !input) return;
 
+        const startBtn = el('#startSessionBtn');
+        if (this.state.decks.length === 0) {
+            dropdown.classList.add('hidden');
+            display.innerHTML = '<span class="text-earth-metal/60 text-xs">No decks yet — create one in the Library tab.</span>';
+            input.value = '';
+            input.disabled = true;
+            if (startBtn) {
+                startBtn.disabled = true;
+                startBtn.classList.add('opacity-60', 'cursor-not-allowed');
+            }
+            return;
+        }
+
+        input.disabled = false;
+        if (startBtn) {
+            startBtn.disabled = false;
+            startBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+        }
+
         const selected = this.state.filters.studyDecks || [];
         const query = (input.value || '').toLowerCase();
 
@@ -2070,16 +3030,30 @@ export const App = {
         el('#deckReverseInput').checked = deck?.reverse ?? false;
         el('#deckPromptInput').value = deck?.aiPrompt ?? DEFAULT_AI_PROMPT;
 
+        const srsConfig = parseSrsConfig(deck?.srsConfig || null, algo);
+        const srsConfigInput = el('#deckSrsConfigInput');
+        if (srsConfigInput) srsConfigInput.value = JSON.stringify(srsConfig, null, 2);
+        const learningStepsInput = el('#deckLearningSteps');
+        if (learningStepsInput) learningStepsInput.value = (srsConfig.learningSteps || []).join(', ');
+        const relearningStepsInput = el('#deckRelearningSteps');
+        if (relearningStepsInput) relearningStepsInput.value = (srsConfig.relearningSteps || []).join(', ');
+        const graduatingInput = el('#deckGraduatingInterval');
+        if (graduatingInput) graduatingInput.value = srsConfig.graduatingInterval || '';
+        const easyIntervalInput = el('#deckEasyInterval');
+        if (easyIntervalInput) easyIntervalInput.value = srsConfig.easyInterval || '';
+        const easyDaysInput = el('#deckEasyDays');
+        if (easyDaysInput) easyDaysInput.value = (srsConfig.easyDays || []).join(', ');
+
         // Populate FSRS params
         const paramsField = el('#fsrsParamsField');
         const paramsInput = el('#deckFsrsParams');
         const retentionInput = el('#deckFsrsDesiredRetention');
         const optimizeBtn = el('#optimizeFsrsBtn');
         if (paramsInput) {
-            paramsInput.value = (deck?.fsrsWeights || fsrsW).join(', ');
+            paramsInput.value = (srsConfig.fsrs?.weights || fsrsW).join(', ');
         }
         if (retentionInput) {
-            retentionInput.value = (deck?.fsrsDesiredRetention ?? DEFAULT_DESIRED_RETENTION).toFixed(2);
+            retentionInput.value = (srsConfig.fsrs?.retention ?? DEFAULT_DESIRED_RETENTION).toFixed(2);
         }
         if (optimizeBtn) {
             optimizeBtn.onclick = async () => {
@@ -2113,6 +3087,7 @@ export const App = {
 
         const optimizeBtn = el('#optimizeFsrsBtn');
         if (optimizeBtn) optimizeBtn.disabled = true;
+        const startedOnline = navigator.onLine;
 
         // Cancellation flag
         let cancelled = false;
@@ -2122,7 +3097,7 @@ export const App = {
         };
 
         try {
-            const start = constrainWeights(Array.isArray(deck.fsrsWeights) && deck.fsrsWeights.length === 21 ? deck.fsrsWeights : fsrsW);
+            const start = constrainWeights(Array.isArray(deck.srsConfig?.fsrs?.weights) && deck.srsConfig.fsrs.weights.length === 21 ? deck.srsConfig.fsrs.weights : fsrsW);
             showLoading('Optimizing FSRS weights...', `Using ${trainingSet.length} cards (~${totalEvents} reviews)`, cancelOptimization);
             setLoadingProgress(0, `0% • iter 0/220`);
             await new Promise(r => setTimeout(r, 0));
@@ -2146,6 +3121,11 @@ export const App = {
             for (let k = 0; k < iters; k++) {
                 // Check for cancellation
                 if (cancelled) {
+                    return;
+                }
+                if (startedOnline && !navigator.onLine) {
+                    cancelled = true;
+                    toast('Network disconnected — optimization cancelled');
                     return;
                 }
 
@@ -2216,9 +3196,12 @@ export const App = {
 
             const rounded = bestW.map(n => +n.toFixed(4));
             // Update modal fields (user still presses Save to persist/sync).
-            deck.fsrsWeights = rounded;
+            deck.srsConfig = parseSrsConfig(deck.srsConfig || null, deck.algorithm);
+            deck.srsConfig.fsrs.weights = rounded;
             const paramsInput = el('#deckFsrsParams');
             if (paramsInput) paramsInput.value = rounded.join(', ');
+            const srsConfigInput = el('#deckSrsConfigInput');
+            if (srsConfigInput) srsConfigInput.value = JSON.stringify(deck.srsConfig, null, 2);
             toast(`Optimized FSRS weights loaded (best logloss ${bestLoss.toFixed(4)}). Press Save to apply.`);
         } finally {
             hideLoading();
@@ -2244,27 +3227,60 @@ export const App = {
         d.reverse = el('#deckReverseInput').checked;
         d.aiPrompt = el('#deckPromptInput').value || '';
 
-        // Save FSRS params if present
-        if (d.algorithm === 'FSRS') {
+        const rawConfig = el('#deckSrsConfigInput')?.value || '';
+        const hasConfig = !!rawConfig.trim();
+        let srsConfig = null;
+        if (hasConfig) {
+            try {
+                JSON.parse(rawConfig);
+                srsConfig = parseSrsConfig(rawConfig, d.algorithm);
+            } catch (e) {
+                toast('Invalid SRS Config JSON — using defaults');
+                srsConfig = parseSrsConfig(null, d.algorithm);
+                const srsConfigInput = el('#deckSrsConfigInput');
+                if (srsConfigInput) srsConfigInput.value = JSON.stringify(srsConfig, null, 2);
+            }
+        } else {
+            srsConfig = parseSrsConfig(d.srsConfig || null, d.algorithm);
+        }
+
+        const learningSteps = el('#deckLearningSteps')?.value || '';
+        const relearningSteps = el('#deckRelearningSteps')?.value || '';
+        const graduatingInterval = el('#deckGraduatingInterval')?.value || '';
+        const easyInterval = el('#deckEasyInterval')?.value || '';
+        const easyDays = el('#deckEasyDays')?.value || '';
+        const toList = (val) => val.split(',').map(s => s.trim()).filter(Boolean);
+        if (learningSteps.trim()) srsConfig.learningSteps = toList(learningSteps);
+        if (relearningSteps.trim()) srsConfig.relearningSteps = toList(relearningSteps);
+        if (graduatingInterval.trim()) srsConfig.graduatingInterval = graduatingInterval.trim();
+        if (easyInterval.trim()) srsConfig.easyInterval = easyInterval.trim();
+        if (easyDays.trim()) srsConfig.easyDays = toList(easyDays).map(d => d.slice(0, 3));
+
+        if (d.algorithm === 'FSRS' && !hasConfig) {
             const rawRetention = el('#deckFsrsDesiredRetention')?.value?.trim() || '';
             const rawParams = el('#deckFsrsParams')?.value?.trim() || '';
-
-            // Use parseFsrsParamsText to handle recovery and various formats
-            const parsed = parseFsrsParamsText(rawParams || rawRetention);
-
-            // If the user explicitly provided a retention value in the numeric field, prioritize it
             if (rawRetention) {
-                d.fsrsDesiredRetention = clampRetention(parseFloat(rawRetention)) || DEFAULT_DESIRED_RETENTION;
-            } else {
-                d.fsrsDesiredRetention = parsed.desiredRetention;
+                srsConfig.fsrs.retention = clampRetention(parseFloat(rawRetention)) || DEFAULT_DESIRED_RETENTION;
             }
-
-            // Always ensure we have 21 weights if it's FSRS
-            d.fsrsWeights = parsed.weights || [...fsrsW];
-        } else {
-            d.fsrsWeights = null;
-            d.fsrsDesiredRetention = DEFAULT_DESIRED_RETENTION;
+            if (rawParams) {
+                let weights = null;
+                if (rawParams.trim().startsWith('{') || rawParams.trim().startsWith('[')) {
+                    try {
+                        const parsed = JSON.parse(rawParams);
+                        if (Array.isArray(parsed)) weights = parsed;
+                        else if (parsed && Array.isArray(parsed.weights)) weights = parsed.weights;
+                    } catch (_) { }
+                }
+                if (!weights) {
+                    const nums = rawParams.split(/[^0-9\.\-]+/).map(n => parseFloat(n)).filter(n => Number.isFinite(n));
+                    if (nums.length >= 21) weights = nums.slice(0, 21);
+                }
+                if (weights) srsConfig.fsrs.weights = constrainWeights(weights);
+            }
         }
+        d.srsConfig = srsConfig;
+        const srsConfigInput = el('#deckSrsConfigInput');
+        if (srsConfigInput) srsConfigInput.value = JSON.stringify(srsConfig, null, 2);
 
         if (!this.state.editingDeck) this.state.decks.push(d);
         d.updatedInApp = true;
@@ -2348,7 +3364,7 @@ export const App = {
         // Reset algorithm parameters for all cards in the deck
         const total = cards.length;
         const CHUNK_SIZE = 50; // Larger chunks for batch writes
-        const weights = deck.fsrsWeights || fsrsW;
+        const weights = deck.srsConfig?.fsrs?.weights || fsrsW;
 
         for (let i = 0; i < total; i += CHUNK_SIZE) {
             const chunk = cards.slice(i, i + CHUNK_SIZE);
@@ -2380,6 +3396,7 @@ export const App = {
                     lastRating: null,
                     retrievability: 0.9
                 };
+                card.srsState = this.buildSrsState(card, { state: 'new', step: 0, due: null, lapses: 0 });
             }
 
             // Batch save to IndexedDB - single transaction for the chunk
@@ -2440,6 +3457,8 @@ export const App = {
         el('#cardOrderInput').value = (typeof card?.order === 'number') ? card.order : '';
         el('#cardSuspendedInput').checked = card?.suspended ?? false;
         el('#cardLeechInput').checked = card?.leech ?? false;
+        el('#cardMarkedInput').checked = card?.marked ?? false;
+        el('#cardFlagInput').value = card?.flag || '';
         el('#deleteCardBtn').classList.toggle('hidden', !card);
         // Show/hide back section based on card type
         this.updateCardBackVisibility();
@@ -2510,6 +3529,8 @@ export const App = {
         card.tags = selectedTags.map(name => ({ name, color: optionMap.get(name) || existingColors.get(name) || 'default' }));
         const orderVal = el('#cardOrderInput').value;
         card.order = orderVal === '' ? null : Number(orderVal);
+        card.marked = el('#cardMarkedInput').checked;
+        card.flag = el('#cardFlagInput').value || '';
         card.suspended = el('#cardSuspendedInput').checked;
         card.leech = el('#cardLeechInput').checked;
         // Only set updatedInApp if name/back/notes changed (affects rich_text preservation)
@@ -2624,6 +3645,14 @@ export const App = {
         const mappedDecks = deckPages
             .filter(p => !p?.archived && !isHiddenDeck(p))
             .map(d => NotionMapper.deckFrom(d));
+        const invalidDeckConfigs = mappedDecks.filter(d => d.srsConfigError);
+        if (invalidDeckConfigs.length > 0) {
+            toast(`Invalid SRS Config in ${invalidDeckConfigs.length} deck${invalidDeckConfigs.length === 1 ? '' : 's'} — healed to defaults`);
+            invalidDeckConfigs.forEach(d => {
+                d.updatedInApp = true;
+                this.queueOp({ type: 'deck-upsert', payload: d });
+            });
+        }
 
         // Identify decks that are new (not in local state) - need to fetch their cards
         const existingActiveDeckNotionIds = new Set(
@@ -2644,6 +3673,14 @@ export const App = {
         const cards = await API.queryDatabase(cardSource, cardFilter);
         const deletedCardNotionIds = new Set((cards || []).filter(p => p?.archived).map(p => p.id));
         let mappedCards = (cards || []).filter(p => !p?.archived).map(c => NotionMapper.cardFrom(c, mappedDecks));
+        const invalidCardStates = mappedCards.filter(c => c.srsStateError);
+        if (invalidCardStates.length > 0) {
+            toast(`Invalid SRS State in ${invalidCardStates.length} card${invalidCardStates.length === 1 ? '' : 's'} — healed to defaults`);
+            invalidCardStates.forEach(c => {
+                c.updatedInApp = true;
+                this.queueOp({ type: 'card-upsert', payload: c });
+            });
+        }
 
         // If we have new decks, fetch their cards separately (they may not have been edited recently)
         if (since && newDeckIds.length > 0) {
@@ -2785,10 +3822,14 @@ export const App = {
                     const props = NotionMapper.deckProps(op.payload);
                     if (op.payload.notionId) await API.updatePage(op.payload.notionId, props);
                     else {
+                        const oldId = op.payload.id;
                         const res = await API.createPage(deckSource, props);
                         op.payload.notionId = res.id;
-                        op.payload.id = op.payload.id || res.id;
+                        op.payload.id = res.id;
                         await Storage.put('decks', op.payload);
+                        if (oldId && oldId !== res.id) {
+                            await this.applyIdMappings({ deckIdMap: { [oldId]: res.id } });
+                        }
                         // If the queue was rehydrated from storage, op.payload may not be the same object
                         // instance as the deck in memory. Ensure we update in-memory state so subsequent
                         // card upserts in this same run can resolve `deck.notionId`.
@@ -2807,10 +3848,14 @@ export const App = {
                     const props = NotionMapper.cardProps(op.payload, deck);
                     if (op.payload.notionId) await API.updatePage(op.payload.notionId, props);
                     else {
+                        const oldId = op.payload.id;
                         const res = await API.createPage(cardSource, props);
                         op.payload.notionId = res.id;
-                        op.payload.id = op.payload.id || res.id;
+                        op.payload.id = res.id;
                         op.payload.syncId = res.id;
+                        if (oldId && oldId !== res.id) {
+                            await this.applyIdMappings({ cardIdMap: { [oldId]: res.id } });
+                        }
                     }
                     // After successful push, reset updatedInApp and update _notionRichText
                     // so subsequent pushes (e.g., SRS updates) preserve the rich_text we just sent
@@ -2897,6 +3942,14 @@ export const App = {
         Storage.setMeta('queue', this.state.queue).catch(e => console.debug('Storage setMeta queue failed:', e));
         this.state.queueLastChangedAt = new Date().toISOString();
         Storage.setMeta('queueLastChangedAt', this.state.queueLastChangedAt).catch(e => console.debug('Storage setMeta queueLastChangedAt failed:', e));
+        if (!navigator.onLine && this.state.queue.length >= SYNC_QUEUE_WARN_THRESHOLD) {
+            const now = Date.now();
+            const lastWarn = this.state.lastQueueWarnAt || 0;
+            if (now - lastWarn > SYNC_QUEUE_WARN_COOLDOWN_MS) {
+                toastLong(`Sync queue is large (${this.state.queue.length}). Go online soon to avoid storage limits.`);
+                this.state.lastQueueWarnAt = now;
+            }
+        }
         this.updateSyncButtonState();
         this.renderConnection();
         const delay = (reason === 'rating') ? (5 * 60 * 1000) : 1500;
@@ -3153,11 +4206,20 @@ export const App = {
         if (f.tags.length && !f.tags.some(t => card.tags.some(ct => ct.name === t))) return false;
         if (f.suspended && card.suspended) return false;
         if (f.leech && card.leech) return false;
+        if (f.marked && !card.marked) return false;
+        if (f.flag && (card.flag || '') !== f.flag) return false;
         return true;
     },
     isDue(card) {
         const deck = this.deckById(card.deckId);
         const alg = deck?.algorithm || 'SM-2';
+        const learning = parseSrsState(card.srsState || null).learning;
+        if (learning && ['learning', 'relearning'].includes(learning.state) && learning.due) {
+            const due = new Date(learning.due);
+            if (Number.isFinite(due.getTime())) {
+                return due <= new Date();
+            }
+        }
         const duePrimary = alg === 'FSRS' ? card.fsrs?.dueDate : card.sm2?.dueDate;
         const dueFallback = alg === 'FSRS' ? card.sm2?.dueDate : card.fsrs?.dueDate;
         const due = duePrimary || dueFallback;
@@ -3183,27 +4245,20 @@ export const App = {
         }
 
         const f = this.state.filters;
-        // If studyNonDue is enabled, include all cards regardless of due date
-        let pool = this.state.studyNonDue
-            ? this.state.cards.filter(c => this.passFilters(c))
-            : this.state.cards.filter(c => this.passFilters(c) && this.isDue(c));
-        // Filter by selected study decks
-        if (f.studyDecks && f.studyDecks.length > 0) {
-            pool = pool.filter(c => f.studyDecks.includes(c.deckId));
+        const deckIds = (f.studyDecks && f.studyDecks.length > 0)
+            ? f.studyDecks
+            : this.state.decks.map(d => d.id);
+        const queue = this.generateCardQueue(deckIds, this.state.studyNonDue, { precomputeReverse: false });
+        if (!queue.length) return null;
+        return this.cardById(queue[0].cardId) || null;
+    },
+    stableReverseDecision(card, deck) {
+        const key = `${card?.id || ''}:${deck?.id || ''}`;
+        let hash = 5381;
+        for (let i = 0; i < key.length; i++) {
+            hash = ((hash << 5) + hash) ^ key.charCodeAt(i);
         }
-        if (pool.length === 0) return null;
-
-        // Sort by due date (most overdue first, new cards at the end)
-        pool.sort((a, b) => {
-            const dueA = (a.fsrs?.dueDate || a.sm2?.dueDate);
-            const dueB = (b.fsrs?.dueDate || b.sm2?.dueDate);
-            if (!dueA && !dueB) return 0;
-            if (!dueA) return 1;
-            if (!dueB) return -1;
-            return new Date(dueA) - new Date(dueB);
-        });
-
-        return pool[0] || null;
+        return (hash >>> 0) % 2 === 0;
     },
     renderCardFront(card, deck) {
         const typeKey = (card.type || '').toLowerCase();
@@ -3214,7 +4269,7 @@ export const App = {
         if (this.state.session && typeof this.state.sessionReversed === 'boolean') {
             shouldReverse = !isCloze && this.state.sessionReversed;
         } else {
-            shouldReverse = !isCloze && deck?.reverse && isFrontStyle && Math.random() < 0.5;
+            shouldReverse = !isCloze && deck?.reverse && isFrontStyle && this.stableReverseDecision(card, deck);
         }
         // Store reverse state for reveal
         this.state.cardReversed = shouldReverse;
@@ -3307,6 +4362,7 @@ export const App = {
 
         // Enable rating (in both Manual and AI modes, reveal() signifies answer is now visible)
         this.state.answerRevealed = true;
+        this.state.answerRevealedAt = Date.now();
         this.setRatingEnabled(true);
         this.updateMobileFab();
         const revealBtn = el('#revealBtn');
@@ -3336,6 +4392,9 @@ export const App = {
             sm2: JSON.parse(JSON.stringify(card.sm2 || {})),
             fsrs: JSON.parse(JSON.stringify(card.fsrs || {})),
             history: [...card.reviewHistory],
+            srsState: JSON.parse(JSON.stringify(card.srsState || {})),
+            leech: !!card.leech,
+            suspended: !!card.suspended,
             rating: ratingLabel,
             sessionIndex: this.state.session ? this.state.session.currentIndex : null,
             ratingCounts: this.state.session?.ratingCounts ? { ...this.state.session.ratingCounts } : null
@@ -3359,15 +4418,50 @@ export const App = {
 
             const deck = this.deckById(card.deckId);
             const alg = deck?.algorithm || 'SM-2';
-            if (alg === 'FSRS') card.fsrs = SRS.fsrs(card, ratingKey, deck?.fsrsWeights, deck?.fsrsDesiredRetention);
-            else card.sm2 = SRS.sm2(card, ratingKey);  // SM-2 is default
+            const srsConfig = parseSrsConfig(deck?.srsConfig || null, alg);
+            let handledLearning = false;
+            if (alg === 'SM-2') {
+                handledLearning = this.applySm2Learning(card, ratingKey, deck);
+                if (!handledLearning) {
+                    card.sm2 = SRS.sm2(card, ratingKey);  // SM-2 is default
+                    card.sm2.dueDate = this.adjustDueDateForEasyDays(card.sm2.dueDate, srsConfig.easyDays);
+                }
+            } else {
+                card.fsrs = SRS.fsrs(card, ratingKey, srsConfig.fsrs?.weights, srsConfig.fsrs?.retention);
+                card.fsrs.dueDate = this.adjustDueDateForEasyDays(card.fsrs.dueDate, srsConfig.easyDays);
+            }
             card.fsrs = card.fsrs || {};
             if (alg === 'FSRS') card.fsrs.lastRating = ratingKey;
             else {
                 card.sm2 = card.sm2 || {};
                 card.sm2.lastRating = ratingKey;
             }
-            card.reviewHistory.push({ rating: ratingKey, at: new Date().toISOString() });
+            let learning = parseSrsState(card.srsState || null).learning;
+            if (alg === 'SM-2' && !handledLearning) {
+                learning.state = 'review';
+                learning.step = 0;
+                learning.due = null;
+            }
+            if (alg === 'FSRS') {
+                learning.state = 'review';
+                learning.step = 0;
+                learning.due = null;
+            }
+            if (ratingKey === 'again' && !handledLearning) {
+                learning.lapses = (learning.lapses || 0) + 1;
+            }
+            if (!card.leech && (learning.lapses || 0) >= DEFAULT_LEECH_LAPSE_THRESHOLD) {
+                card.leech = true;
+                card.suspended = true;
+                toast(`Leech detected (lapses: ${learning.lapses}) — auto-suspended`);
+            }
+            card.srsState = this.buildSrsState(card, learning);
+            const now = new Date();
+            const nowMs = now.getTime();
+            const startMs = this.state.answerRevealedAt || this.state.cardShownAt || nowMs;
+            let durationMs = Math.max(0, nowMs - startMs);
+            durationMs = Math.min(durationMs, 10 * 60 * 1000);
+            card.reviewHistory.push({ rating: ratingKey, at: now.toISOString(), ms: durationMs });
 
             // Persist to storage first - if this fails, we haven't modified session state yet
             await Storage.put('cards', card);
@@ -3392,6 +4486,9 @@ export const App = {
             card.sm2 = previousState.sm2;
             card.fsrs = previousState.fsrs;
             card.reviewHistory = previousState.history;
+            card.srsState = previousState.srsState;
+            card.leech = previousState.leech;
+            card.suspended = previousState.suspended;
             toast('Rating failed, please try again');
         }
     },
@@ -3443,6 +4540,9 @@ export const App = {
         card.sm2 = prev.sm2;
         card.fsrs = prev.fsrs;
         card.reviewHistory = prev.history;
+        card.srsState = prev.srsState || parseSrsState(null);
+        card.leech = !!prev.leech;
+        card.suspended = !!prev.suspended;
         // Save restored card
         await Storage.put('cards', card);
         // Ensure undo is propagated to Notion on next sync.
@@ -3502,12 +4602,14 @@ export const App = {
         return `${deckIds.length} decks`;
     },
     resetFilters() {
-        this.state.filters = { again: false, hard: false, addedToday: false, tags: [], suspended: false, leech: false, studyDecks: [] };
+        this.state.filters = { again: false, hard: false, addedToday: false, tags: [], suspended: false, leech: false, marked: false, flag: '', studyDecks: [] };
         el('#filterAgain').checked = false;
         el('#filterHard').checked = false;
         el('#filterAddedToday').checked = false;
         el('#filterSuspended').checked = false;
         el('#filterLeech').checked = false;
+        el('#filterMarked').checked = false;
+        el('#filterFlag').value = '';
         this.renderStudyDeckSelection();
         this.renderTagFilter();
         this.renderStudy();
@@ -4250,7 +5352,7 @@ export const App = {
             const cardOptions = [];
             for (const d of dbs) {
                 const id = d.id;
-                const title = d.title?.[0]?.plain_text || id;
+                const title = d.title?.[0]?.plain_text || d.name || id;
                 if (await this.validateDb(d, 'deck')) deckOptions.push({ id, title });
                 if (await this.validateDb(d, 'card')) cardOptions.push({ id, title });
             }
@@ -4377,7 +5479,9 @@ export const App = {
     },
     async validateDb(dbOrId, type) {
         try {
-            const meta = typeof dbOrId === 'string' ? await API.getDatabase(dbOrId) : dbOrId;
+            const meta = typeof dbOrId === 'string'
+                ? await API.getDatabase(dbOrId)
+                : dbOrId;
             const props = meta?.properties || {};
             const has = (name, kind) => props[name]?.type === kind;
             if (type === 'deck') {
@@ -4389,12 +5493,11 @@ export const App = {
                     ['New Card Limit', 'number'],
                     ['Reverse Mode Enabled', 'checkbox'],
                     ['Created In-App', 'checkbox'],
-                    ['Archived?', 'checkbox']
+                    ['Archived?', 'checkbox'],
+                    ['SRS Config', 'rich_text']
                 ];
                 const missing = required.filter(([n, k]) => !has(n, k));
                 if (missing.length) return false;
-                // FSRS configuration storage
-                if (!has('FSRS Params', 'rich_text')) return false;
                 return true;
             }
             if (type === 'card') {
@@ -4404,18 +5507,19 @@ export const App = {
                     ['Card Type', 'select'],
                     ['Deck', 'relation'],
                     ['Tags', 'multi_select'],
+                    ['Notes', 'rich_text'],
+                    ['Marked', 'checkbox'],
+                    ['Flag', 'select'],
                     ['Suspended', 'checkbox'],
                     ['Leech', 'checkbox'],
                     ['Order', 'number'],
-                    ['Difficulty', 'number'],
-                    ['Stability', 'number'],
-                    ['Retrievability', 'number'],
                     ['Last Rating', 'select'],
                     ['Last Review', 'date'],
                     ['Due Date', 'date'],
-                    ['Interval / Box Level', 'number'],
-                    ['Ease Factor', 'number'],
-                    ['Updated In-App', 'checkbox']
+                    ['Updated In-App', 'checkbox'],
+                    ['Review History', 'rich_text'],
+                    ['Cloze Indexes', 'rich_text'],
+                    ['SRS State', 'rich_text']
                 ];
                 const missing = required.filter(([n, k]) => !has(n, k));
                 if (missing.length) return false;
@@ -4726,7 +5830,7 @@ export const App = {
         // Only request mic permission when transitioning from disabled -> enabled.
         const shouldRequest = !!(requestPermission && !prevProvider && provider);
         if (!shouldRequest) return;
-        this.ensureMicPermission()
+        this.ensureMicPermission({ toastOnError: false })
             .then(() => {
                 this.state.settings.sttPermissionWarmed = true;
                 Storage.setSettings(this.state.settings);
@@ -5137,6 +6241,11 @@ export const App = {
             toast('Speech recognition not supported. Configure a cloud provider in settings.');
             return;
         }
+        try {
+            await this.ensureMicPermission({ toastOnError: true });
+        } catch (_) {
+            return;
+        }
         const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
         const rec = new SR();
         rec.lang = 'en-US';
@@ -5170,7 +6279,11 @@ export const App = {
         rec.onerror = (e) => {
             if (e.error !== 'aborted') {
                 el('#aiFeedback').innerHTML = '';
-                toast('Mic error: ' + e.error);
+                if (['not-allowed', 'service-not-allowed', 'permission-denied'].includes(e.error)) {
+                    toast('Microphone access denied');
+                } else {
+                    toast('Mic error: ' + e.error);
+                }
             }
             this.state.currentRecorder = null;
             this.state.userStoppedMic = false;

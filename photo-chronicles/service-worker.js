@@ -1,4 +1,4 @@
-const CACHE_NAME = 'photo-chronicles-cache-v6';
+const CACHE_NAME = 'photo-chronicles-cache-v7';
 const OFFLINE_ASSETS = [
   './',
   './index.html',
@@ -8,7 +8,7 @@ const OFFLINE_ASSETS = [
   './icons/icon-512.png',
   'https://cdn.tailwindcss.com',
   'https://unpkg.com/lucide@0.561.0/dist/umd/lucide.min.js',
-  'https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@300;400;500;600&display=swap'
+  'https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=DM+Serif+Display&family=Inter:wght@300;400;500;600&display=swap'
 ];
 
 const CDN_ORIGINS = [

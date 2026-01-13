@@ -55,6 +55,95 @@ export const fsrsW = [0.212, 1.2931, 2.3065, 8.2956, 6.4133, 0.8334, 3.0194, 0.0
 export const DEFAULT_DESIRED_RETENTION = 0.9;
 export const MAX_INTERVAL = 36500;
 export const ratingsMap = { again: 1, hard: 2, good: 3, easy: 4 };
+export const DEFAULT_LEECH_LAPSE_THRESHOLD = 8;
+
+export const DEFAULT_SRS_CONFIG = {
+    learningSteps: ['1m', '10m'],
+    relearningSteps: ['10m'],
+    graduatingInterval: '1d',
+    easyInterval: '4d',
+    easyDays: [],
+    fsrs: {
+        retention: DEFAULT_DESIRED_RETENTION,
+        weights: fsrsW.slice()
+    }
+};
+
+export const parseSrsConfig = (raw, algorithm = 'SM-2') => {
+    let obj = null;
+    if (raw && typeof raw === 'string') {
+        try { obj = JSON.parse(raw); } catch { obj = null; }
+    } else if (raw && typeof raw === 'object') {
+        obj = raw;
+    }
+    const out = JSON.parse(JSON.stringify(DEFAULT_SRS_CONFIG));
+    if (!obj || typeof obj !== 'object') return out;
+
+    const normalizeSteps = (val, fallback) => {
+        if (!Array.isArray(val)) return fallback;
+        const cleaned = val.map(v => (v ?? '').toString().trim()).filter(Boolean);
+        return cleaned.length ? cleaned : fallback;
+    };
+    const normalizeDays = (val) => {
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        if (!Array.isArray(val)) return [];
+        const cleaned = val.map(v => (v ?? '').toString().trim().slice(0, 3))
+            .map(v => v.charAt(0).toUpperCase() + v.slice(1).toLowerCase())
+            .filter(v => days.includes(v));
+        return Array.from(new Set(cleaned));
+    };
+
+    out.learningSteps = normalizeSteps(obj.learningSteps, out.learningSteps);
+    out.relearningSteps = normalizeSteps(obj.relearningSteps, out.relearningSteps);
+    if (obj.graduatingInterval) out.graduatingInterval = obj.graduatingInterval.toString().trim() || out.graduatingInterval;
+    if (obj.easyInterval) out.easyInterval = obj.easyInterval.toString().trim() || out.easyInterval;
+    out.easyDays = normalizeDays(obj.easyDays);
+
+    const fsrs = obj.fsrs || {};
+    out.fsrs.retention = clampRetention(fsrs.retention ?? out.fsrs.retention);
+    out.fsrs.weights = constrainWeights(fsrs.weights || out.fsrs.weights);
+
+    // If algorithm is FSRS, learning config is still stored but ignored during scheduling.
+    return out;
+};
+
+export const parseSrsState = (raw) => {
+    const defaults = {
+        fsrs: { difficulty: 4, stability: 1, retrievability: 0.9 },
+        sm2: { easeFactor: 2.5, interval: 1, repetitions: 0 },
+        learning: { state: 'new', step: 0, due: null, lapses: 0 }
+    };
+    let obj = null;
+    if (raw && typeof raw === 'string') {
+        try { obj = JSON.parse(raw); } catch { obj = null; }
+    } else if (raw && typeof raw === 'object') {
+        obj = raw;
+    }
+    if (!obj || typeof obj !== 'object') return JSON.parse(JSON.stringify(defaults));
+
+    const out = JSON.parse(JSON.stringify(defaults));
+    const num = (v, fallback) => Number.isFinite(Number(v)) ? Number(v) : fallback;
+
+    out.fsrs.difficulty = num(obj.fsrs?.difficulty, out.fsrs.difficulty);
+    out.fsrs.stability = num(obj.fsrs?.stability, out.fsrs.stability);
+    out.fsrs.retrievability = num(obj.fsrs?.retrievability, out.fsrs.retrievability);
+
+    out.sm2.easeFactor = num(obj.sm2?.easeFactor, out.sm2.easeFactor);
+    out.sm2.interval = num(obj.sm2?.interval, out.sm2.interval);
+    out.sm2.repetitions = num(obj.sm2?.repetitions, out.sm2.repetitions);
+
+    const state = (obj.learning?.state || out.learning.state).toString().toLowerCase();
+    const allowed = new Set(['new', 'learning', 'relearning', 'review']);
+    out.learning.state = allowed.has(state) ? state : out.learning.state;
+    out.learning.step = Math.max(0, Math.floor(num(obj.learning?.step, out.learning.step)));
+    if (obj.learning?.due) {
+        const d = new Date(obj.learning.due);
+        out.learning.due = Number.isFinite(d.getTime()) ? d.toISOString() : out.learning.due;
+    }
+    out.learning.lapses = Math.max(0, Math.floor(num(obj.learning?.lapses, out.learning.lapses)));
+
+    return out;
+};
 
 // Default AI prompt template
 export const DEFAULT_AI_PROMPT = 'You are a strict flashcard grader.\nQuestion: {{question}}\nCorrect answer: {{answer}}\nLearner answer: {{user}}\nJudge correctness (short) and give brief feedback.';
