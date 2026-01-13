@@ -267,6 +267,30 @@ export const Storage = {
         }
     },
 
+    // Replace primary IDs in a store by deleting old keys and writing new records.
+    // Each change: { oldId, value } where value.id is the new key.
+    async replaceIds(store, changes) {
+        await this.ensureReady();
+        if (!changes || changes.length === 0) return;
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction(store, 'readwrite');
+            const objectStore = tx.objectStore(store);
+            for (const change of changes) {
+                const oldId = change?.oldId;
+                const value = change?.value;
+                if (!value || typeof value !== 'object') continue;
+                const newId = value.id;
+                if (oldId && newId && oldId !== newId) {
+                    objectStore.delete(oldId);
+                }
+                objectStore.put(value);
+            }
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(new Error(`Transaction failed for ${store}: ${tx.error?.message || 'Unknown error'}`));
+            tx.onabort = () => reject(new Error(`Transaction aborted for ${store}`));
+        });
+    },
+
     async delete(store, key) {
         await this.ensureReady();
         return new Promise((resolve, reject) => {
@@ -579,7 +603,7 @@ export const Storage = {
         if (typeof window.initSqlJs === 'undefined') {
             await new Promise((resolve, reject) => {
                 const script = document.createElement('script');
-                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/sql-wasm.js';
+                script.src = 'https://unpkg.com/sql.js@1.13.0/dist/sql-wasm.js';
                 script.onload = resolve;
                 script.onerror = () => reject(new Error('Failed to load sql.js'));
                 document.head.appendChild(script);
@@ -587,7 +611,7 @@ export const Storage = {
         }
 
         this.sqlReady = window.initSqlJs({
-            locateFile: (file) => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/${file}`
+            locateFile: (file) => `https://unpkg.com/sql.js@1.13.0/dist/${file}`
         }).catch(err => {
             this._sqlError = true;
             throw err;

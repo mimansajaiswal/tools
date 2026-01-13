@@ -7,7 +7,8 @@ import {
     fsrsW,
     DEFAULT_DESIRED_RETENTION,
     DEFAULT_AI_PROMPT,
-    clampRetention
+    parseSrsConfig,
+    parseSrsState
 } from './config.js';
 
 import {
@@ -31,42 +32,55 @@ export const toRichTextChunks = (text) => {
     return chunks;
 };
 
-// Compact review history format: "g1702473000,h1702559400,a1702645800"
+export const parseSrsConfigText = (raw, algorithm = 'SM-2') => parseSrsConfig(raw, algorithm);
+
+// Compact review history format: "gk3f9s.2a,hk3g5a.1c,ak3h2b.2o"
+// Rating code + base36 epoch seconds + '.' + base36 duration milliseconds
 // Rating codes: a=again, h=hard, g=good, e=easy
 // Timestamp: Unix epoch seconds
 export const compactReviewHistory = (history) => {
     if (!history || !history.length) return '';
     const ratingCodes = { again: 'a', hard: 'h', good: 'g', easy: 'e' };
+    const seen = new Set();
     return history.map(entry => {
         const code = ratingCodes[entry.rating] || 'g';
         const ms = new Date(entry.at).getTime();
         if (!Number.isFinite(ms)) return null;
         const ts = Math.floor(ms / 1000);
-        return `${code}${ts}`;
+        const ts36 = ts.toString(36);
+        const durMs = Math.max(0, Math.round(Number(entry.ms || 0)));
+        const dur36 = durMs.toString(36);
+        const key = `${code}${ts36}.${dur36}`;
+        if (seen.has(key)) return null;
+        seen.add(key);
+        return key;
     }).filter(Boolean).join(',');
 };
 
 // Phase 4: Review history parse validation
 export const parseReviewHistory = (compact) => {
     if (!compact || typeof compact !== 'string') return [];
-    // Handle legacy JSON format
-    if (compact.startsWith('[')) {
-        try { return JSON.parse(compact); } catch { return []; }
-    }
     const ratingNames = { a: 'again', h: 'hard', g: 'good', e: 'easy' };
+    const seen = new Set();
     return compact.split(',').filter(Boolean).map(entry => {
-        // Need at least 2 characters (rating code + timestamp)
-        if (!entry || entry.length < 2) return null;
+        if (!entry || entry.length < 4) return null;
         const code = entry[0].toLowerCase();
         const rating = ratingNames[code];
-        // Skip invalid rating characters
         if (!rating) return null;
-        const ts = parseInt(entry.slice(1), 10);
-        // Skip invalid or non-positive timestamps
+        const parts = entry.slice(1).split('.');
+        if (parts.length !== 2) return null;
+        const [tsRaw, durRaw] = parts;
+        const ts = parseInt(tsRaw, 36);
         if (!Number.isFinite(ts) || ts <= 0) return null;
+        const dur = parseInt(durRaw, 36);
+        if (!Number.isFinite(dur) || dur < 0) return null;
+        const key = `${code}${tsRaw}.${durRaw}`;
+        if (seen.has(key)) return null;
+        seen.add(key);
         return {
             rating,
-            at: new Date(ts * 1000).toISOString()
+            at: new Date(ts * 1000).toISOString(),
+            ms: dur
         };
     }).filter(Boolean);
 };
@@ -371,70 +385,6 @@ export const markdownToNotionRichText = (markdown) => {
     return out.slice(0, MAX_ITEMS);
 };
 
-// FSRS params parsing/serialization
-export const parseFsrsParamsText = (raw) => {
-    const text = (raw || '').toString().trim();
-    const out = { desiredRetention: DEFAULT_DESIRED_RETENTION, weights: null };
-    if (!text) return out;
-
-    // JSON format (recommended): {"desired_retention":0.9,"weights":[...]}
-    if (text.startsWith('{')) {
-        try {
-            const obj = JSON.parse(text);
-            const dr = obj.desired_retention ?? obj.desiredRetention ?? obj.request_retention ?? obj.requestRetention;
-            if (dr !== undefined) out.desiredRetention = clampRetention(dr);
-            const w = obj.weights ?? obj.w ?? obj.params;
-            if (Array.isArray(w)) {
-                if (w.length === 21) {
-                    out.weights = w.map(n => Number(n));
-                } else if (w.length > 0) {
-                    // Recovery: pad with defaults
-                    const recovered = w.map(n => Number.isFinite(Number(n)) ? Number(n) : 0);
-                    while (recovered.length < 21) {
-                        recovered.push(fsrsW[recovered.length]);
-                    }
-                    out.weights = recovered.slice(0, 21);
-                }
-            }
-            if (out.weights) return out;
-        } catch (_) { }
-    }
-
-    // Numeric format: either "0.9, w1, w2, ... w21" or just "w1, ... w21"
-    const nums = text.split(/[\s,]+/).map(s => parseFloat(s.trim())).filter(n => Number.isFinite(n));
-
-    if (nums.length === 0) return out;
-
-    if (nums.length === 1 && nums[0] > 0 && nums[0] < 1) {
-        out.desiredRetention = clampRetention(nums[0]);
-        return out;
-    }
-
-    // Check if first number looks like retention
-    let startIdx = 0;
-    if (nums[0] > 0 && nums[0] < 1 && nums.length > 1) {
-        out.desiredRetention = clampRetention(nums[0]);
-        startIdx = 1;
-    }
-
-    // Extract weights and recover if needed
-    const rawWeights = nums.slice(startIdx);
-    const recovered = [...rawWeights];
-    while (recovered.length < 21) {
-        recovered.push(fsrsW[recovered.length]);
-    }
-    out.weights = recovered.slice(0, 21);
-
-    return out;
-};
-
-export const serializeFsrsParamsText = (deck) => {
-    if (!deck || deck.algorithm !== 'FSRS') return '';
-    const desiredRetention = clampRetention(deck.fsrsDesiredRetention ?? DEFAULT_DESIRED_RETENTION);
-    const weights = (Array.isArray(deck.fsrsWeights) && deck.fsrsWeights.length === 21) ? deck.fsrsWeights : fsrsW;
-    const obj = { desired_retention: desiredRetention, weights: weights };
-    return JSON.stringify(obj);
-};
 
 /**
  * NotionMapper - Bidirectional mapping between app objects and Notion API format.
@@ -451,8 +401,12 @@ export const NotionMapper = {
         const title = props['Deck Name']?.title?.map(t => t.plain_text).join('') || 'Untitled deck';
         const rawMode = props['Order Mode']?.select?.name || 'None';
         const orderMap = { 'none': 'none', 'created time': 'created', 'order property': 'property' };
-        const fsrsParamsRaw = props['FSRS Params']?.rich_text?.map(t => t.plain_text).join('') || '';
-        const fsrsParams = parseFsrsParamsText(fsrsParamsRaw);
+        const srsConfigRaw = props['SRS Config']?.rich_text?.map(t => t.plain_text).join('') || '';
+        let srsConfigError = false;
+        if (srsConfigRaw) {
+            try { JSON.parse(srsConfigRaw); } catch { srsConfigError = true; }
+        }
+        const srsConfig = parseSrsConfigText(srsConfigRaw, props['SRS Algorithm']?.select?.name || 'SM-2');
         return {
             id: page.id,
             notionId: page.id,
@@ -466,9 +420,9 @@ export const NotionMapper = {
             archived: props['Archived?']?.checkbox || false,
             ankiMetadata: props['Anki Metadata']?.rich_text?.[0]?.plain_text || '',
             aiPrompt: props['AI Revision Prompt']?.rich_text?.map(t => t.plain_text).join('') || DEFAULT_AI_PROMPT,
-            fsrsDesiredRetention: fsrsParams.desiredRetention,
-            fsrsWeights: fsrsParams.weights,
-            fsrsParamsRaw,
+            srsConfig,
+            srsConfigRaw,
+            srsConfigError,
             updatedInApp: false
         };
     },
@@ -491,7 +445,7 @@ export const NotionMapper = {
             'Archived?': { checkbox: !!deck.archived },
             'Anki Metadata': { rich_text: deck.ankiMetadata ? [{ text: { content: deck.ankiMetadata } }] : [] },
             'AI Revision Prompt': { rich_text: markdownToNotionRichText(deck.aiPrompt) },
-            'FSRS Params': { rich_text: toRichTextChunks(serializeFsrsParamsText(deck)) }
+            'SRS Config': { rich_text: toRichTextChunks(JSON.stringify(deck.srsConfig || parseSrsConfig(null, deck.algorithm))) }
         };
     },
 
@@ -508,23 +462,33 @@ export const NotionMapper = {
         const back = richToMarkdown(p['Back']?.rich_text) || '';
         const tags = p['Tags']?.multi_select?.map(t => ({ name: t.name, color: t.color || 'default' })) || [];
         const lastReview = p['Last Review']?.date?.start || null;
+        const dueDate = p['Due Date']?.date?.start || null;
+        const lastRating = normalizeRating(p['Last Rating']?.select?.name) || null;
+        const srsStateRaw = p['SRS State']?.rich_text?.map(t => t.plain_text).join('') || '';
+        let srsStateError = false;
+        if (srsStateRaw) {
+            try { JSON.parse(srsStateRaw); } catch { srsStateError = true; }
+        }
+        const srsState = parseSrsState(srsStateRaw);
+        if (srsState.learning.state === 'new' && (lastReview || (p['Review History']?.rich_text?.[0]?.plain_text || '').length > 0)) {
+            srsState.learning.state = 'review';
+            srsState.learning.step = 0;
+            srsState.learning.due = null;
+        }
         const fsrs = {
-            difficulty: p['Difficulty']?.number ?? initDifficulty(fsrsW, 'good'),
-            stability: p['Stability']?.number ?? initStability(fsrsW, 'good'),
-            retrievability: p['Retrievability']?.number ?? 0.9,
-            lastRating: normalizeRating(p['Last Rating']?.select?.name) || null,
+            difficulty: srsState.fsrs.difficulty ?? initDifficulty(fsrsW, 'good'),
+            stability: srsState.fsrs.stability ?? initStability(fsrsW, 'good'),
+            retrievability: srsState.fsrs.retrievability ?? 0.9,
+            lastRating,
             lastReview,
-            dueDate: p['Due Date']?.date?.start || null
+            dueDate
         };
-        const intervalVal = p['Interval / Box Level']?.number ?? 1;
         const sm2 = {
-            interval: intervalVal,
-            easeFactor: p['Ease Factor']?.number ?? 2.5,
-            // If there's no lastReview, treat as new card (0 reps) to avoid jumping straight to the 6-day step.
-            // Otherwise, infer repetitions from interval: 0 days = 0 reps (failed), 1 day = 1 rep, 6 days = 2 reps, else 3+.
-            repetitions: !lastReview ? 0 : (intervalVal === 0 ? 0 : (intervalVal <= 1 ? 1 : (intervalVal === 6 ? 2 : 3))),
-            dueDate: p['Due Date']?.date?.start || null,
-            lastRating: normalizeRating(p['Last Rating']?.select?.name) || null,
+            interval: srsState.sm2.interval ?? 1,
+            easeFactor: srsState.sm2.easeFactor ?? 2.5,
+            repetitions: srsState.sm2.repetitions ?? 0,
+            dueDate,
+            lastRating,
             lastReview
         };
         return {
@@ -536,8 +500,13 @@ export const NotionMapper = {
             type: p['Card Type']?.select?.name || detectCardType(name, back),
             tags,
             notes: richToMarkdown(p['Notes']?.rich_text) || '',
+            marked: p['Marked']?.checkbox || false,
+            flag: p['Flag']?.select?.name || '',
             suspended: p['Suspended']?.checkbox || false,
             leech: p['Leech']?.checkbox || false,
+            srsState,
+            srsStateRaw,
+            srsStateError,
             fsrs,
             sm2,
             syncId: page.id,
@@ -573,6 +542,13 @@ export const NotionMapper = {
         const dueDate = (deckAlgorithm === 'FSRS' ? card.fsrs?.dueDate : card.sm2?.dueDate) || card.fsrs?.dueDate || card.sm2?.dueDate || null;
         const lastReview = (deckAlgorithm === 'FSRS' ? card.fsrs?.lastReview : card.sm2?.lastReview) || card.fsrs?.lastReview || card.sm2?.lastReview || null;
         const lastRating = (deckAlgorithm === 'FSRS' ? card.fsrs?.lastRating : card.sm2?.lastRating) || card.fsrs?.lastRating || card.sm2?.lastRating || null;
+        const srsState = parseSrsState(card.srsState || null);
+        srsState.fsrs.difficulty = card.fsrs?.difficulty ?? srsState.fsrs.difficulty;
+        srsState.fsrs.stability = card.fsrs?.stability ?? srsState.fsrs.stability;
+        srsState.fsrs.retrievability = card.fsrs?.retrievability ?? srsState.fsrs.retrievability;
+        srsState.sm2.easeFactor = card.sm2?.easeFactor ?? srsState.sm2.easeFactor;
+        srsState.sm2.interval = card.sm2?.interval ?? srsState.sm2.interval;
+        srsState.sm2.repetitions = card.sm2?.repetitions ?? srsState.sm2.repetitions;
 
         // Helper to get rich_text: use original if content unchanged, else convert markdown
         const getRichText = (field, content, originalRichText) => {
@@ -596,19 +572,17 @@ export const NotionMapper = {
             'Card Type': { select: { name: card.type } },
             'Tags': { multi_select: card.tags.map(t => ({ name: t.name })) },
             'Notes': { rich_text: getRichText('notes', card.notes, orig.notes) },
+            'Marked': { checkbox: !!card.marked },
+            'Flag': card.flag ? { select: { name: card.flag } } : { select: null },
             'Suspended': { checkbox: !!card.suspended },
             'Leech': { checkbox: !!card.leech },
             'Order': { number: typeof card.order === 'number' ? card.order : null },
-            'Difficulty': { number: card.fsrs?.difficulty ?? 4 },
-            'Stability': { number: card.fsrs?.stability ?? 1 },
-            'Retrievability': { number: card.fsrs?.retrievability ?? 0.9 },
             'Last Rating': lastRating ? { select: { name: displayRating(lastRating) } } : { select: null },
             'Last Review': { date: lastReview ? { start: lastReview } : null },
             'Due Date': { date: dueDate ? { start: dueDate } : null },
-            'Interval / Box Level': { number: card.sm2?.interval ?? 1 },
-            'Ease Factor': { number: card.sm2?.easeFactor ?? 2.5 },
             'Updated In-App': { checkbox: false },
             'Review History': { rich_text: toRichTextChunks(compactReviewHistory(card.reviewHistory || [])) },
+            'SRS State': { rich_text: toRichTextChunks(JSON.stringify(srsState)) },
             'Anki GUID': card.ankiGuid ? { rich_text: [{ type: 'text', text: { content: card.ankiGuid } }] } : { rich_text: [] },
             'Anki Note Type': card.ankiNoteType ? { select: { name: card.ankiNoteType } } : { select: null },
             'Anki Fields JSON': card.ankiFields ? { rich_text: [{ type: 'text', text: { content: card.ankiFields } }] } : { rich_text: [] },
