@@ -188,14 +188,15 @@
 
         <!-- Mobile Nav Items (Only visible on small screens) -->
         <div class="md:hidden flex w-full justify-around items-center px-4">
-            <button onclick="App.openModal('settingsModal')" class="p-2 text-earth-metal hover:text-dull-purple">
+            <button onclick="App.openModal('settingsModal')" class="p-2 text-earth-metal hover:text-dull-purple" aria-label="Open settings">
                 <i data-lucide="settings" class="w-6 h-6"></i>
             </button>
             <button onclick="App.initNewEntry()"
+                aria-label="Add entry"
                 class="p-3 -mt-6 bg-dull-purple text-white rounded-full shadow-lg border-4 border-oatmeal">
                 <i data-lucide="plus" class="w-6 h-6"></i>
             </button>
-            <button onclick="App.attemptNewDiary()" class="p-2 text-earth-metal hover:text-dull-purple">
+            <button onclick="App.attemptNewDiary()" class="p-2 text-earth-metal hover:text-dull-purple" aria-label="Create new diary">
                 <i data-lucide="book-plus" class="w-6 h-6"></i>
             </button>
         </div>
@@ -223,7 +224,7 @@
             class="h-16 border-b border-oatmeal-dark flex items-center justify-between px-4 md:px-6 bg-oatmeal/80 backdrop-blur-sm z-10 flex-shrink-0">
             <div class="flex items-center gap-3 overflow-hidden">
                 <!-- Mobile Diary Switcher Trigger -->
-                <button id="mobileDiaryToggleBtn" onclick="App.toggleMobileDiaryMenu(event)"
+                <button id="mobileDiaryToggleBtn" onclick="App.toggleMobileDiaryMenu(event)" aria-label="Toggle diary list"
                     class="md:hidden bg-white border border-oatmeal-dark shadow-sm w-9 h-9 rounded-lg text-earth-metal hover:bg-white-linen transition-colors flex items-center justify-center mr-1">
                     <i data-lucide="library" class="w-4 h-4"></i>
                 </button>
@@ -238,7 +239,7 @@
             </div>
 
             <div class="flex items-center gap-2">
-                <button onclick="SyncManager.syncCurrentDiary()" title="Refresh Sync"
+                <button onclick="SyncManager.syncCurrentDiary()" title="Refresh Sync" aria-label="Refresh sync"
                     class="bg-white border border-oatmeal-dark shadow-sm w-9 h-9 rounded-lg text-earth-metal hover:bg-white-linen transition-colors flex items-center justify-center">
                     <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                 </button>
@@ -269,12 +270,12 @@
     <!-- MODALS -->
 
     <!-- 1. Settings Modal -->
-    <div id="settingsModal"
+    <div id="settingsModal" role="dialog" aria-modal="true"
         class="fixed inset-0 bg-charcoal/20 backdrop-blur-sm hidden items-center justify-center z-50 p-4"
         onclick="if(event.target===this) App.closeModal('settingsModal')">
         <div
             class="bg-white-linen w-full max-w-md p-6 rounded-xl shadow-xl border border-oatmeal-dark relative max-h-full overflow-y-auto">
-            <button onclick="App.closeModal('settingsModal')"
+            <button onclick="App.closeModal('settingsModal')" aria-label="Close settings"
                 class="absolute top-4 right-4 text-earth-metal/50 hover:text-earth-metal">
                 <i data-lucide="x" class="w-5 h-5"></i>
             </button>
@@ -310,7 +311,7 @@
                         <div class="flex justify-between items-center mb-1">
                             <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal">API Proxy
                                 Worker URL</label>
-                            <button onclick="App.openModal('workerHelpModal')"
+                            <button onclick="App.openModal('workerHelpModal')" aria-label="Worker setup help"
                                 class="text-dull-purple hover:text-charcoal" title="How to set up Worker">
                                 <i data-lucide="info" class="w-4 h-4"></i>
                             </button>
@@ -418,14 +419,15 @@
     </div>
 
     <!-- 2. Worker Help Modal -->
-    <div id="workerHelpModal"
+    <div id="workerHelpModal" role="dialog" aria-modal="true"
         class="fixed inset-0 bg-charcoal/20 backdrop-blur-sm hidden items-center justify-center z-[60] p-4"
         onclick="if(event.target===this) App.closeModal('workerHelpModal')">
         <div
             class="bg-white-linen w-full max-w-2xl h-[80vh] p-6 rounded-xl shadow-2xl border border-oatmeal-dark flex flex-col">
             <div class="flex justify-between items-center mb-4 border-b border-oatmeal-dark pb-2">
                 <h3 class="font-serif text-xl text-charcoal">Setup Cloudflare Worker</h3>
-                <button onclick="App.closeModal('workerHelpModal')" class="text-earth-metal/50 hover:text-earth-metal">
+                <button onclick="App.closeModal('workerHelpModal')" aria-label="Close worker help"
+                    class="text-earth-metal/50 hover:text-earth-metal">
                     <i data-lucide="x" class="w-6 h-6"></i>
                 </button>
             </div>
@@ -518,7 +520,7 @@ async function handleRequest(request, env) {
     </div>
 
     <!-- 3. New Diary Modal (Revamped) -->
-    <div id="newDiaryModal"
+    <div id="newDiaryModal" role="dialog" aria-modal="true"
         class="fixed inset-0 bg-charcoal/20 backdrop-blur-sm hidden items-center justify-center z-50 p-4"
         onclick="if(event.target===this) App.closeModal('newDiaryModal')">
         <div
@@ -580,7 +582,7 @@ async function handleRequest(request, env) {
     </div>
 
     <!-- 4. Delete Confirmation Modal -->
-    <div id="deleteModal"
+    <div id="deleteModal" role="dialog" aria-modal="true"
         class="fixed inset-0 bg-charcoal/20 backdrop-blur-sm hidden items-center justify-center z-[70] p-4"
         onclick="if(event.target===this) App.closeModal('deleteModal')">
         <div class="bg-white-linen w-full max-w-sm p-6 rounded-xl shadow-xl border border-oatmeal-dark">
@@ -599,7 +601,7 @@ async function handleRequest(request, env) {
     </div>
 
     <!-- 6. Reset Confirmation Modal (New) -->
-    <div id="resetConfirmationModal"
+    <div id="resetConfirmationModal" role="dialog" aria-modal="true"
         class="fixed inset-0 bg-charcoal/20 backdrop-blur-sm hidden items-center justify-center z-[80] p-4"
         onclick="if(event.target===this) App.closeModal('resetConfirmationModal')">
         <div class="bg-white-linen w-full max-w-sm p-6 rounded-xl shadow-xl border border-red-200">
@@ -623,13 +625,22 @@ async function handleRequest(request, env) {
     </div>
 
     <!-- 5. Entry Modal (Live Composite Layout) -->
-    <div id="entryModal" class="fixed inset-0 bg-white-linen z-50 hidden flex-col overflow-hidden">
+    <div id="entryModal" role="dialog" aria-modal="true"
+        class="fixed inset-0 bg-white-linen z-50 hidden flex-col overflow-hidden">
 
         <!-- Close Button -->
-        <button onclick="App.closeModal('entryModal')"
+        <button onclick="App.closeModal('entryModal')" aria-label="Close entry"
             class="absolute top-4 left-4 z-50 bg-black/50 text-white p-2 rounded-full backdrop-blur-sm hover:bg-black/70 transition">
             <i data-lucide="x" class="w-6 h-6"></i>
         </button>
+
+        <div id="entryLoadingOverlay"
+            class="absolute inset-0 bg-white/80 z-50 hidden items-center justify-center">
+            <div class="flex flex-col items-center gap-3 text-earth-metal">
+                <div class="loader w-8 h-8 border-4 border-dull-purple border-t-transparent rounded-full"></div>
+                <span id="entryLoadingText" class="text-xs font-semibold tracking-wide uppercase">Processing...</span>
+            </div>
+        </div>
 
         <!-- Top Section: Camera Viewfinder (Canvas-based) -->
         <div id="cameraSection"
@@ -659,19 +670,19 @@ async function handleRequest(request, env) {
                 <div class="flex items-center justify-center gap-2 sm:gap-4 md:gap-6">
 
                     <!-- 1. Mirror Toggle (If user facing) -->
-                    <button id="mirrorToggleBtn" onclick="App.toggleMirror()"
+                    <button id="mirrorToggleBtn" onclick="App.toggleMirror()" aria-label="Toggle mirror"
                         class="hidden bg-black/40 backdrop-blur-md p-2 sm:p-3 rounded-full hover:bg-black/60 text-white transition">
                         <i data-lucide="flip-horizontal" class="w-5 h-5 sm:w-6 sm:h-6"></i>
                     </button>
 
                     <!-- 2. Flip Camera Button -->
-                    <button onclick="App.flipCamera()"
+                    <button onclick="App.flipCamera()" aria-label="Flip camera"
                         class="bg-black/40 backdrop-blur-md p-2 sm:p-3 rounded-full hover:bg-black/60 text-white transition">
                         <i data-lucide="refresh-ccw" class="w-5 h-5 sm:w-6 sm:h-6"></i>
                     </button>
 
                     <!-- 3. Insert Image (File Input) -->
-                    <label
+                    <label aria-label="Insert image"
                         class="cursor-pointer bg-black/40 backdrop-blur-md p-2 sm:p-3 rounded-full hover:bg-black/60 text-white transition">
                         <i data-lucide="image" class="w-5 h-5 sm:w-6 sm:h-6"></i>
                         <input type="file" id="fileInput" accept="image/*" class="hidden"
@@ -679,14 +690,14 @@ async function handleRequest(request, env) {
                     </label>
 
                     <!-- 4. Capture Button (Center) -->
-                    <button onclick="App.captureSegment()" id="captureBtn"
+                    <button onclick="App.captureSegment()" id="captureBtn" aria-label="Capture segment"
                         class="w-14 h-14 sm:w-16 sm:h-16 rounded-full border-4 border-white/80 bg-charcoal/60 shadow-[0_0_12px_rgba(0,0,0,0.5)] flex items-center justify-center hover:bg-black/70 transition active:scale-95 backdrop-blur-sm">
                         <div class="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-full shadow-inner"></div>
                     </button>
 
                     <!-- 5. Layout Button (Grid Mode) -->
                     <div class="relative group">
-                        <button onclick="App.toggleCollageMenu()" id="gridBtn"
+                        <button onclick="App.toggleCollageMenu()" id="gridBtn" aria-label="Select collage layout"
                             class="bg-black/40 backdrop-blur-md p-2 sm:p-3 rounded-full hover:bg-black/60 text-white transition font-bold text-[10px] sm:text-xs flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12">
                             1x
                         </button>
@@ -729,14 +740,14 @@ async function handleRequest(request, env) {
                     </div>
 
                     <!-- 6. Portrait/Landscape Toggle -->
-                    <button onclick="App.toggleOrientation()" id="orientationBtn"
+                    <button onclick="App.toggleOrientation()" id="orientationBtn" aria-label="Toggle orientation"
                         class="bg-black/40 backdrop-blur-md p-2 sm:p-3 rounded-full hover:bg-black/60 text-white transition">
                         <i data-lucide="rectangle-horizontal" class="w-5 h-5 sm:w-6 sm:h-6"></i>
                     </button>
 
                     <!-- 7. Ghost Button -->
                     <div class="relative flex items-center">
-                        <button onclick="App.toggleGhost()" id="ghostToggleBtn"
+                        <button onclick="App.toggleGhost()" id="ghostToggleBtn" aria-label="Toggle ghost overlay"
                             class="bg-black/40 backdrop-blur-md p-2 sm:p-3 rounded-full hover:bg-black/60 text-white transition opacity-50 peer">
                             <i data-lucide="ghost" class="w-5 h-5 sm:w-6 sm:h-6"></i>
                         </button>
@@ -1025,7 +1036,20 @@ async function handleRequest(request, env) {
                 const store = tx.objectStore(ImageStore.storeName);
                 const req = store.put(blob, key);
                 req.onsuccess = () => resolve(true);
-                req.onerror = () => reject(req.error);
+                req.onerror = () => {
+                    const err = req.error;
+                    if (err && (err.name === 'QuotaExceededError' || err.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
+                        err.isQuotaExceeded = true;
+                    }
+                    reject(err);
+                };
+                tx.onabort = () => {
+                    const err = tx.error;
+                    if (err && (err.name === 'QuotaExceededError' || err.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
+                        err.isQuotaExceeded = true;
+                    }
+                    reject(err || new Error('IndexedDB write aborted'));
+                };
             })),
             del: (key) => ImageStore.open().then((db) => new Promise((resolve, reject) => {
                 const tx = db.transaction(ImageStore.storeName, 'readwrite');
@@ -1037,9 +1061,34 @@ async function handleRequest(request, env) {
         };
 
         const Storage = {
-            getSettings: () => JSON.parse(localStorage.getItem('chronicles_settings') || '{"workerUrl":"","authToken":"","proxyToken":"","orientation":"landscape","collageMode":1,"ghostOpacity":0.3,"uploadCapMb":5}'),
+            getSettings: () => {
+                const fallback = {
+                    workerUrl: "",
+                    authToken: "",
+                    proxyToken: "",
+                    orientation: "landscape",
+                    collageMode: 1,
+                    ghostOpacity: 0.3,
+                    uploadCapMb: 5
+                };
+                try {
+                    const raw = localStorage.getItem('chronicles_settings');
+                    return raw ? JSON.parse(raw) : fallback;
+                } catch (e) {
+                    localStorage.setItem('chronicles_settings', JSON.stringify(fallback));
+                    return fallback;
+                }
+            },
             setSettings: (s) => localStorage.setItem('chronicles_settings', JSON.stringify(s)),
-            getData: () => JSON.parse(localStorage.getItem('chronicles_data') || '[]'),
+            getData: () => {
+                try {
+                    const raw = localStorage.getItem('chronicles_data');
+                    return raw ? JSON.parse(raw) : [];
+                } catch (e) {
+                    localStorage.setItem('chronicles_data', JSON.stringify([]));
+                    return [];
+                }
+            },
             setData: (d) => localStorage.setItem('chronicles_data', JSON.stringify(d)),
             getLastActiveDiaryId: () => localStorage.getItem('chronicles_last_diary'),
             setLastActiveDiaryId: (id) => {
@@ -1051,7 +1100,15 @@ async function handleRequest(request, env) {
             },
 
             // Cache for valid Notion data sources
-            getCachedDataSources: () => JSON.parse(localStorage.getItem('chronicles_ds_cache') || '[]'),
+            getCachedDataSources: () => {
+                try {
+                    const raw = localStorage.getItem('chronicles_ds_cache');
+                    return raw ? JSON.parse(raw) : [];
+                } catch (e) {
+                    localStorage.setItem('chronicles_ds_cache', JSON.stringify([]));
+                    return [];
+                }
+            },
             setCachedDataSources: (sources) => localStorage.setItem('chronicles_ds_cache', JSON.stringify(sources)),
 
             saveDiary: (diary) => {
@@ -1075,8 +1132,9 @@ async function handleRequest(request, env) {
                     const unique = [];
                     const map = new Map();
                     for (const item of diary.entries) {
-                        if (!map.has(item.id)) {
-                            map.set(item.id, true);
+                        const dedupeKey = item.notionId ? `notion:${item.notionId}` : `local:${item.id}`;
+                        if (!map.has(dedupeKey)) {
+                            map.set(dedupeKey, true);
                             unique.push(item);
                         }
                     }
@@ -1107,6 +1165,14 @@ async function handleRequest(request, env) {
                     Storage.setData(data);
                 }
             },
+            replaceDiaryTags: (diaryId, newTags) => {
+                const data = Storage.getData();
+                const diary = data.find(d => d.id === diaryId);
+                if (diary) {
+                    diary.tags = [...new Set(newTags)];
+                    Storage.setData(data);
+                }
+            },
             queuePendingTag: (diaryId, tag) => {
                 const data = Storage.getData();
                 const diary = data.find(d => d.id === diaryId);
@@ -1126,6 +1192,29 @@ async function handleRequest(request, env) {
                     diary.pendingTags = diary.pendingTags.filter(t => UTILS.normalizeTag(t) !== normalized);
                     Storage.setData(data);
                 }
+            },
+            queuePendingEntry: (diaryId, entryId) => {
+                const data = Storage.getData();
+                const diary = data.find(d => d.id === diaryId);
+                if (diary && entryId) {
+                    if (!Array.isArray(diary.pendingEntries)) diary.pendingEntries = [];
+                    if (!diary.pendingEntries.includes(entryId)) {
+                        diary.pendingEntries.push(entryId);
+                        Storage.setData(data);
+                    }
+                }
+            },
+            clearPendingEntry: (diaryId, entryId) => {
+                const data = Storage.getData();
+                const diary = data.find(d => d.id === diaryId);
+                if (diary && Array.isArray(diary.pendingEntries)) {
+                    diary.pendingEntries = diary.pendingEntries.filter(id => id !== entryId);
+                    Storage.setData(data);
+                }
+            },
+            getPendingEntries: (diaryId) => {
+                const diary = Storage.getData().find(d => d.id === diaryId);
+                return diary?.pendingEntries || [];
             },
             updateDiaryCameraConfig: (diaryId, config) => {
                 const data = Storage.getData();
@@ -1183,7 +1272,10 @@ async function handleRequest(request, env) {
                     return await res.json();
                 } catch (e) {
                     if (e.name === 'TypeError' && e.message.includes('Failed to fetch')) {
-                        throw new Error("CORS Error: Please check your Worker allowed headers.");
+                        if (!navigator.onLine) {
+                            throw new Error("Network Error: You're offline.");
+                        }
+                        throw new Error("Network Error: Failed to reach proxy. Check Worker URL, CORS headers, or proxy token.");
                     }
                     throw e;
                 }
@@ -1225,6 +1317,10 @@ async function handleRequest(request, env) {
 
         const SyncManager = {
             statusEl: null,
+            tagSyncQueues: new Map(),
+            tagSyncTimers: new Map(),
+            retryTimers: new Map(),
+            isSyncing: false,
             init: () => {
                 SyncManager.statusEl = document.getElementById('syncStatus');
                 window.addEventListener('online', SyncManager.syncCurrentDiary);
@@ -1264,7 +1360,7 @@ async function handleRequest(request, env) {
 
                     if (properties["Tags"] && properties["Tags"].multi_select) {
                         const options = properties["Tags"].multi_select.options.map(o => o.name);
-                        Storage.updateDiaryTags(diaryId, options);
+                        Storage.replaceDiaryTags(diaryId, options);
                         App.state.diaries = Storage.getData();
                         if (!silent) App.showToast(`Updated ${options.length} tags.`, "success");
                     }
@@ -1272,6 +1368,35 @@ async function handleRequest(request, env) {
                     console.error("Tag fetch failed", e);
                     if (!silent) App.showToast("Could not fetch tags schema.", "error");
                 }
+            },
+            queueTagSync: (diaryId, tag) => {
+                if (!diaryId || !tag) return;
+                const cleanTag = tag.trim();
+                if (!cleanTag) return;
+                const queue = SyncManager.tagSyncQueues.get(diaryId) || new Set();
+                queue.add(cleanTag);
+                SyncManager.tagSyncQueues.set(diaryId, queue);
+
+                const existingTimer = SyncManager.tagSyncTimers.get(diaryId);
+                if (existingTimer) clearTimeout(existingTimer);
+                const timer = setTimeout(async () => {
+                    SyncManager.tagSyncTimers.delete(diaryId);
+                    const pending = Array.from(SyncManager.tagSyncQueues.get(diaryId) || []);
+                    SyncManager.tagSyncQueues.delete(diaryId);
+                    for (const pendingTag of pending) {
+                        await SyncManager.addTagToNotion(diaryId, pendingTag);
+                    }
+                }, 400);
+                SyncManager.tagSyncTimers.set(diaryId, timer);
+            },
+            scheduleRetry: (diaryId) => {
+                if (!diaryId || !navigator.onLine) return;
+                if (SyncManager.retryTimers.has(diaryId)) return;
+                const timer = setTimeout(() => {
+                    SyncManager.retryTimers.delete(diaryId);
+                    SyncManager.syncCurrentDiary();
+                }, 15000);
+                SyncManager.retryTimers.set(diaryId, timer);
             },
 
             syncCurrentDiary: async () => {
@@ -1281,6 +1406,8 @@ async function handleRequest(request, env) {
 
                 let diary = Storage.getData().find(d => d.id === diaryId);
                 if (!diary || !diary.dataSourceId) return;
+                if (SyncManager.isSyncing) return;
+                SyncManager.isSyncing = true;
 
                 SyncManager.updateUI('syncing');
                 App.state.isLoading = true;
@@ -1288,8 +1415,19 @@ async function handleRequest(request, env) {
 
                 try {
                     // 1. PUSH
+                    const pendingIds = Storage.getPendingEntries(diaryId);
+                    const pendingEntries = pendingIds.map(id => diary.entries.find(e => e.id === id)).filter(Boolean);
                     const unsynced = diary.entries.filter(e => !e.synced);
-                    for (const entry of unsynced) {
+                    const pushQueue = [];
+                    const pushSeen = new Set();
+                    for (const item of [...pendingEntries, ...unsynced]) {
+                        if (!item) continue;
+                        const key = item.notionId ? `notion:${item.notionId}` : `local:${item.id}`;
+                        if (pushSeen.has(key)) continue;
+                        pushSeen.add(key);
+                        pushQueue.push(item);
+                    }
+                    for (const entry of pushQueue) {
                         try {
                             // Ensure we push the high res if we have it, or the current local one
                             // Note: In saveEntry we now save LOW res to disk, but we should attempt to keep High Res in memory if possible?
@@ -1298,10 +1436,13 @@ async function handleRequest(request, env) {
                             // Ideally app stays open.
                             const notionId = await SyncManager.pushEntryToNotion(diary.dataSourceId, entry);
                             Storage.updateEntrySyncStatus(diaryId, entry.id, true, notionId);
+                            Storage.clearPendingEntry(diaryId, entry.id);
                             App.state.diaries = Storage.getData();
                         } catch (err) {
                             console.error("Failed to push entry", entry, err);
                             App.showToast(`Sync failed for entry "${entry.title}".`, "error");
+                            Storage.queuePendingEntry(diaryId, entry.id);
+                            SyncManager.scheduleRetry(diaryId);
                         }
                     }
 
@@ -1356,15 +1497,24 @@ async function handleRequest(request, env) {
                                 const previewData = await UTILS.processImage(notionPhotoUrl, 640, 0.72);
                                 if (ImageStore.isAvailable()) {
                                     const key = `entry_${entryId}_preview`;
-                                    await ImageStore.set(key, UTILS.dataURLtoBlob(previewData));
-                                    photoKey = key;
+                                    try {
+                                        await ImageStore.set(key, UTILS.dataURLtoBlob(previewData));
+                                        photoKey = key;
+                                    } catch (storeErr) {
+                                        if (storeErr?.isQuotaExceeded) {
+                                            localPhotoData = previewData;
+                                            App.showToast("Storage full; keeping preview in memory only.", "error");
+                                        } else {
+                                            throw storeErr;
+                                        }
+                                    }
                                 } else {
                                     localPhotoData = previewData;
                                 }
                             } catch (err) {
                                 console.warn("Failed to download/process image from Notion", err);
-                                // Fallback: store the URL (will expire, but better than null)
-                                localPhotoData = notionPhotoUrl;
+                                // Avoid storing expiring signed URLs as permanent fallbacks.
+                                localPhotoData = null;
                             }
                         }
 
@@ -1403,11 +1553,12 @@ async function handleRequest(request, env) {
                 } catch (e) {
                     console.error("Sync Error", e);
                     SyncManager.updateUI('error');
-                    if (e.message.includes("CORS")) App.showToast(e.message, 'error');
+                    if (e.message.includes("CORS") || e.message.includes("Network Error")) App.showToast(e.message, 'error');
                 } finally {
                     App.state.isLoading = false;
                     App.renderDiaryView();
                     App.renderSidebar();
+                    SyncManager.isSyncing = false;
                 }
             },
 
@@ -1448,7 +1599,7 @@ async function handleRequest(request, env) {
                         properties: { "Tags": { "multi_select": { "options": unique } } }
                     });
 
-                    Storage.updateDiaryTags(diaryId, unique.map(o => o.name));
+                    Storage.replaceDiaryTags(diaryId, unique.map(o => o.name));
                     Storage.clearPendingTag(diaryId, cleanTag);
                     App.state.diaries = Storage.getData();
                     if (!options.silent) App.showToast(`Added "${cleanTag}" tag in Notion.`, "success");
@@ -1511,6 +1662,8 @@ async function handleRequest(request, env) {
                 currentTags: [],
                 ghostMode: false,
                 ghostImageObj: null,
+                ghostImageUrl: null,
+                ghostImageIsObjectUrl: false,
                 ghostOpacity: 0.3,
                 orientation: 'landscape',
                 collageMode: 1,
@@ -1520,27 +1673,36 @@ async function handleRequest(request, env) {
                 selectedDataSource: null,
                 cachedDataSources: [],
                 isLoading: false,
-                imageUrlCache: new Map()
+                imageUrlCache: new Map(),
+                isEntryModalOpen: false,
+                drawLoopHandle: null,
+                entryLoading: false
             },
             getDiaryCameraConfig: (diary) => {
                 const s = Storage.getSettings();
                 const defaults = {
                     facingMode: 'environment',
                     mirrorVideo: false,
-                    collageMode: s.collageMode || 1
+                    collageMode: s.collageMode || 1,
+                    ghostOpacity: s.ghostOpacity || 0.3,
+                    ghostMode: false
                 };
                 if (!diary) return defaults;
                 const cfg = diary.cameraConfig || {};
                 return {
                     facingMode: cfg.facingMode || defaults.facingMode,
                     mirrorVideo: typeof cfg.mirrorVideo === 'boolean' ? cfg.mirrorVideo : defaults.mirrorVideo,
-                    collageMode: Number(cfg.collageMode) || defaults.collageMode
+                    collageMode: Number(cfg.collageMode) || defaults.collageMode,
+                    ghostOpacity: typeof cfg.ghostOpacity === 'number' ? cfg.ghostOpacity : defaults.ghostOpacity,
+                    ghostMode: typeof cfg.ghostMode === 'boolean' ? cfg.ghostMode : defaults.ghostMode
                 };
             },
             applyDiaryCameraConfig: (diary) => {
                 const cfg = App.getDiaryCameraConfig(diary);
                 App.state.facingMode = cfg.facingMode;
                 App.state.mirrorVideo = cfg.mirrorVideo;
+                App.state.ghostOpacity = cfg.ghostOpacity;
+                App.state.ghostMode = cfg.ghostMode;
                 App.setCollageMode(cfg.collageMode);
             },
             persistActiveDiaryCameraConfig: (config) => {
@@ -1613,6 +1775,58 @@ async function handleRequest(request, env) {
                     if (val && val.isObjectUrl) URL.revokeObjectURL(val.src);
                 });
                 App.state.imageUrlCache.clear();
+            },
+            revokeEntryImageCache: (entryId) => {
+                const cached = App.state.imageUrlCache.get(entryId);
+                if (cached && cached.isObjectUrl) URL.revokeObjectURL(cached.src);
+                App.state.imageUrlCache.delete(entryId);
+            },
+            setEntryLoading: (isLoading, message = "Processing...") => {
+                App.state.entryLoading = isLoading;
+                const overlay = document.getElementById('entryLoadingOverlay');
+                const text = document.getElementById('entryLoadingText');
+                if (text) text.innerText = message;
+                if (overlay) {
+                    overlay.classList.toggle('hidden', !isLoading);
+                    overlay.classList.toggle('flex', isLoading);
+                }
+                const saveBtn = document.getElementById('saveEntryBtn');
+                const captureBtn = document.getElementById('captureBtn');
+                if (saveBtn) {
+                    if (isLoading) {
+                        saveBtn.dataset.wasDisabled = saveBtn.disabled ? "1" : "0";
+                        saveBtn.disabled = true;
+                    } else {
+                        if (saveBtn.dataset.wasDisabled === "0") saveBtn.disabled = false;
+                        delete saveBtn.dataset.wasDisabled;
+                    }
+                }
+                if (captureBtn) {
+                    if (isLoading) {
+                        captureBtn.dataset.wasDisabled = captureBtn.disabled ? "1" : "0";
+                        captureBtn.disabled = true;
+                    } else {
+                        if (captureBtn.dataset.wasDisabled === "0") captureBtn.disabled = false;
+                        delete captureBtn.dataset.wasDisabled;
+                    }
+                }
+            },
+            hasUnsavedEntry: () => {
+                if (!App.state.isEntryModalOpen) return false;
+                const title = document.getElementById('entryTitle')?.value?.trim() || '';
+                const notes = document.getElementById('entryNotes')?.value?.trim() || '';
+                const hasSegments = Array.isArray(App.state.segments) && App.state.segments.some(Boolean);
+                return !!(App.state.capturedImage || hasSegments || App.state.currentTags.length || title || notes);
+            },
+            startDrawLoop: () => {
+                if (App.state.drawLoopHandle) return;
+                App.state.drawLoopHandle = requestAnimationFrame(App.drawLoop);
+            },
+            stopDrawLoop: () => {
+                if (App.state.drawLoopHandle) {
+                    cancelAnimationFrame(App.state.drawLoopHandle);
+                    App.state.drawLoopHandle = null;
+                }
             },
             loadEntryImage: async (entry) => {
                 if (!entry) return null;
@@ -1756,10 +1970,13 @@ async function handleRequest(request, env) {
                 document.addEventListener('keydown', (e) => {
                     if (e.key === 'Escape') {
                         const modals = ['settingsModal', 'newDiaryModal', 'workerHelpModal', 'deleteModal', 'entryModal'];
-                        modals.forEach(id => {
+                        for (const id of modals) {
                             const el = document.getElementById(id);
-                            if (el && !el.classList.contains('hidden')) App.closeModal(id);
-                        });
+                            if (el && !el.classList.contains('hidden')) {
+                                const closed = App.closeModal(id);
+                                if (!closed) return;
+                            }
+                        }
                         document.getElementById('mobileDiaryMenu').classList.add('hidden');
                     }
                 });
@@ -1779,7 +1996,6 @@ async function handleRequest(request, env) {
                 });
 
                 SyncManager.init();
-                requestAnimationFrame(App.drawLoop);
             },
 
             isValidChronicleSource: (props) => {
@@ -2129,6 +2345,7 @@ async function handleRequest(request, env) {
             toggleMobileSidebar: () => {
                 const sidebar = document.getElementById('sidebar');
                 const overlay = document.getElementById('mobileSidebarOverlay');
+                if (!sidebar || !overlay) return;
                 if (sidebar.classList.contains('-translate-x-full')) {
                     sidebar.classList.remove('-translate-x-full');
                     overlay.classList.remove('hidden');
@@ -2146,6 +2363,11 @@ async function handleRequest(request, env) {
                 App.state.activeSegment = 0;
                 App.state.segments = [];
                 App.state.ghostImageObj = null;
+                if (App.state.ghostImageIsObjectUrl && App.state.ghostImageUrl) {
+                    URL.revokeObjectURL(App.state.ghostImageUrl);
+                }
+                App.state.ghostImageUrl = null;
+                App.state.ghostImageIsObjectUrl = false;
 
                 document.getElementById('entryNotes').value = '';
                 document.getElementById('entryTitle').value = '';
@@ -2166,6 +2388,9 @@ async function handleRequest(request, env) {
                 const toggleBtn = document.getElementById('ghostToggleBtn');
                 const lastEntryWithPhoto = diary.entries.find(e => e.photoDataURL || e.photoKey);
                 const ghostImg = document.getElementById('ghostOverlay');
+                const ghostCfg = App.getDiaryCameraConfig(diary);
+                App.state.ghostOpacity = ghostCfg.ghostOpacity;
+                App.state.ghostMode = ghostCfg.ghostMode;
 
                 if (lastEntryWithPhoto) {
                     const ghostData = await App.loadEntryImage(lastEntryWithPhoto);
@@ -2173,17 +2398,29 @@ async function handleRequest(request, env) {
                         toggleBtn.classList.add('hidden');
                         App.state.ghostMode = false;
                         ghostImg.src = '';
+                        App.state.ghostImageUrl = null;
+                        App.state.ghostImageIsObjectUrl = false;
                         ghostImg.style.opacity = '0';
                         ghostImg.classList.add('opacity-0');
                         document.getElementById('ghostSliderContainer').classList.add('hidden');
                     } else {
                         ghostImg.src = ghostData.src;
+                        App.state.ghostImageUrl = ghostData.src;
+                        App.state.ghostImageIsObjectUrl = !!ghostData.isObjectUrl;
                         toggleBtn.classList.remove('hidden');
-                        toggleBtn.classList.remove('opacity-50');
-                        App.state.ghostMode = true;
+                        if (App.state.ghostMode) {
+                            toggleBtn.classList.remove('opacity-50');
+                        } else {
+                            toggleBtn.classList.add('opacity-50');
+                        }
                         const savedOpacity = App.state.ghostOpacity;
-                        ghostImg.classList.remove('opacity-0');
-                        ghostImg.style.opacity = savedOpacity;
+                        if (App.state.ghostMode) {
+                            ghostImg.classList.remove('opacity-0');
+                            ghostImg.style.opacity = savedOpacity;
+                        } else {
+                            ghostImg.classList.add('opacity-0');
+                            ghostImg.style.opacity = '0';
+                        }
                         const sliderInput = document.querySelector('#ghostSliderContainer input');
                         if (sliderInput) sliderInput.value = savedOpacity;
                         document.getElementById('ghostSliderContainer').classList.add('hidden');
@@ -2195,13 +2432,14 @@ async function handleRequest(request, env) {
                     toggleBtn.classList.add('hidden');
                     App.state.ghostMode = false;
                     ghostImg.src = '';
+                    App.state.ghostImageUrl = null;
+                    App.state.ghostImageIsObjectUrl = false;
                     ghostImg.style.opacity = '0';
                     ghostImg.classList.add('opacity-0');
                     document.getElementById('ghostSliderContainer').classList.add('hidden');
                 }
 
                 App.openModal('entryModal');
-                App.initCamera();
                 SyncManager.fetchTags(true);
             },
 
@@ -2307,10 +2545,16 @@ async function handleRequest(request, env) {
                         btn.classList.add('bg-black/40');
                     }
                 } catch (e) {
+                    console.error("Camera init failed", e);
+                    App.showToast("Camera access failed. Check permissions or use file upload.", "error");
                 }
             },
 
             drawLoop: () => {
+                if (!App.state.isEntryModalOpen) {
+                    App.stopDrawLoop();
+                    return;
+                }
                 const video = document.getElementById('videoSource');
                 const cvs = document.getElementById('viewfinder');
                 const ctx = cvs.getContext('2d');
@@ -2387,7 +2631,7 @@ async function handleRequest(request, env) {
                     ctx.lineWidth = 2;
                     ctx.strokeRect(dx, dy, dw, dh);
                 });
-                requestAnimationFrame(App.drawLoop);
+                App.state.drawLoopHandle = requestAnimationFrame(App.drawLoop);
             },
 
             flipCamera: () => {
@@ -2435,6 +2679,7 @@ async function handleRequest(request, env) {
                     btn.classList.remove('opacity-50');
                     slider.classList.remove('hidden');
                 }
+                App.persistActiveDiaryCameraConfig({ ghostMode: App.state.ghostMode });
             },
 
             setGhostOpacity: (val) => {
@@ -2445,6 +2690,7 @@ async function handleRequest(request, env) {
                 const s = Storage.getSettings();
                 s.ghostOpacity = newVal;
                 Storage.setSettings(s);
+                App.persistActiveDiaryCameraConfig({ ghostOpacity: newVal });
             },
 
             handleTagInput: (e) => {
@@ -2507,7 +2753,7 @@ async function handleRequest(request, env) {
                 if (diaryId) {
                     Storage.updateDiaryTags(diaryId, [resolvedTag]);
                     App.state.diaries = Storage.getData();
-                    await SyncManager.addTagToNotion(diaryId, resolvedTag);
+                    SyncManager.queueTagSync(diaryId, resolvedTag);
                 }
             },
 
@@ -2523,7 +2769,8 @@ async function handleRequest(request, env) {
             },
 
             removeTag: (t) => {
-                App.state.currentTags = App.state.currentTags.filter(x => x !== t);
+                const normalized = UTILS.normalizeTag(t);
+                App.state.currentTags = App.state.currentTags.filter(x => UTILS.normalizeTag(x) !== normalized);
                 App.renderTags();
             },
 
@@ -2539,6 +2786,7 @@ async function handleRequest(request, env) {
                 const diary = Storage.getData().find(d => d.id === diaryId);
                 const entry = diary?.entries.find(e => e.id === entryId);
                 const notionId = entry?.notionId;
+                App.revokeEntryImageCache(entryId);
                 if (entry && ImageStore.isAvailable()) {
                     if (entry.photoKey) await ImageStore.del(entry.photoKey);
                     if (entry.uploadKey) await ImageStore.del(entry.uploadKey);
@@ -2572,6 +2820,7 @@ async function handleRequest(request, env) {
                 const diaryTitle = diary?.title || "Diary";
 
                 if (!App.state.capturedImage) return App.showToast('An image is required.', 'error');
+                App.setEntryLoading(true, "Saving entry...");
 
                 // Generate both versions if not already done (though finalizeCollage creates UI version)
                 // We should ensure we save the Low Res version to local storage to save space
@@ -2584,83 +2833,97 @@ async function handleRequest(request, env) {
                 let photoDataURL = null;
                 let uploadDataURL = null;
 
-                if (ImageStore.isAvailable()) {
-                    try {
+                try {
+                    if (ImageStore.isAvailable()) {
                         const previewKey = `entry_${entryId}_preview`;
                         const uploadKeyName = `entry_${entryId}_upload`;
-                        await ImageStore.set(previewKey, UTILS.dataURLtoBlob(photoToSave));
-                        await ImageStore.set(uploadKeyName, UTILS.dataURLtoBlob(photoToUpload));
-                        photoKey = previewKey;
-                        uploadKey = uploadKeyName;
-                    } catch (e) {
+                        try {
+                            await ImageStore.set(previewKey, UTILS.dataURLtoBlob(photoToSave));
+                            await ImageStore.set(uploadKeyName, UTILS.dataURLtoBlob(photoToUpload));
+                            photoKey = previewKey;
+                            uploadKey = uploadKeyName;
+                        } catch (e) {
+                            if (e?.isQuotaExceeded) {
+                                App.showToast("Storage full; saving images inline.", "error");
+                            }
+                            photoDataURL = photoToSave;
+                            uploadDataURL = photoToUpload;
+                        }
+                    } else {
                         photoDataURL = photoToSave;
                         uploadDataURL = photoToUpload;
                     }
-                } else {
-                    photoDataURL = photoToSave;
-                    uploadDataURL = photoToUpload;
-                }
 
-                const newEntry = {
-                    id: entryId,
-                    date: date,
-                    title: title,
-                    notes: notes,
-                    tags: App.state.currentTags,
-                    diaryTitle: diaryTitle,
-                    photoDataURL: photoDataURL,
-                    photoKey: photoKey,
-                    uploadKey: uploadKey,
-                    uploadDataURL: uploadDataURL,
-                    synced: false,
-                    notionId: null
-                };
+                    const newEntry = {
+                        id: entryId,
+                        date: date,
+                        title: title,
+                        notes: notes,
+                        tags: App.state.currentTags,
+                        diaryTitle: diaryTitle,
+                        photoDataURL: photoDataURL,
+                        photoKey: photoKey,
+                        uploadKey: uploadKey,
+                        uploadDataURL: uploadDataURL,
+                        synced: false,
+                        notionId: null
+                    };
 
-                Storage.saveEntry(App.state.activeDiaryId, newEntry);
-                App.state.diaries = Storage.getData();
-
-                App.closeModal('entryModal');
-                App.renderDiaryView();
-                App.showToast("Saved locally", 'success');
-
-                // For sync, we temporarily attach the High Res image to the entry object in memory 
-                // so the push function uses it, but we don't save it to localStorage
-                // Or we can just pass it directly if we restructure sync. 
-                // Simplest hack: Modify the entry object in memory before calling sync
-                const entryForSync = { ...newEntry, photoDataURL: photoToUpload };
-
-                // We need to manually trigger push for this specific entry with high res data
-                // Because SyncManager reads from Storage (which has low res)
-                // So we bypass standard sync loop for this new entry
-                try {
-                    SyncManager.updateUI('syncing');
-                    const notionId = await SyncManager.pushEntryToNotion(diary.dataSourceId, entryForSync);
-                    Storage.updateEntrySyncStatus(App.state.activeDiaryId, newEntry.id, true, notionId);
-                    SyncManager.updateUI('synced');
+                    Storage.saveEntry(App.state.activeDiaryId, newEntry);
                     App.state.diaries = Storage.getData();
+
+                    App.closeModal('entryModal', { force: true });
                     App.renderDiaryView();
-                } catch (e) {
-                    console.error("Immediate sync failed", e);
-                    SyncManager.updateUI('error');
-                    // It will retry later with low res version from storage, which is acceptable fallback
+                    App.showToast("Saved locally", 'success');
+
+                    // For sync, we temporarily attach the High Res image to the entry object in memory 
+                    // so the push function uses it, but we don't save it to localStorage
+                    // Or we can just pass it directly if we restructure sync. 
+                    // Simplest hack: Modify the entry object in memory before calling sync
+                    const entryForSync = { ...newEntry, photoDataURL: photoToUpload };
+
+                    // We need to manually trigger push for this specific entry with high res data
+                    // Because SyncManager reads from Storage (which has low res)
+                    // So we bypass standard sync loop for this new entry
+                    try {
+                        SyncManager.updateUI('syncing');
+                        const notionId = await SyncManager.pushEntryToNotion(diary.dataSourceId, entryForSync);
+                        Storage.updateEntrySyncStatus(App.state.activeDiaryId, newEntry.id, true, notionId);
+                        SyncManager.updateUI('synced');
+                        App.state.diaries = Storage.getData();
+                        App.renderDiaryView();
+                    } catch (e) {
+                        console.error("Immediate sync failed", e);
+                        SyncManager.updateUI('error');
+                        // It will retry later with low res version from storage, which is acceptable fallback
+                        Storage.queuePendingEntry(App.state.activeDiaryId, newEntry.id);
+                        SyncManager.scheduleRetry(App.state.activeDiaryId);
+                    }
+                } finally {
+                    App.setEntryLoading(false);
                 }
             },
 
-            copyWorkerCode: (btn) => {
+            copyWorkerCode: async (btn) => {
                 const code = document.getElementById('workerCodeBlock').innerText;
-                const textArea = document.createElement('textarea');
-                textArea.value = code;
-                document.body.appendChild(textArea);
-                textArea.select();
                 try {
-                    document.execCommand('copy');
+                    if (navigator.clipboard?.writeText) {
+                        await navigator.clipboard.writeText(code);
+                    } else {
+                        const textArea = document.createElement('textarea');
+                        textArea.value = code;
+                        document.body.appendChild(textArea);
+                        textArea.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(textArea);
+                    }
                     const originalText = btn.innerText;
                     btn.innerText = "Copied!";
                     setTimeout(() => btn.innerText = originalText, 2000);
                 } catch (err) {
-                    console.error('Fallback copy failed', err);
+                    console.error('Copy failed', err);
+                    App.showToast("Copy failed. Please copy manually.", "error");
                 }
-                document.body.removeChild(textArea);
             },
 
             captureSegment: () => {
@@ -2715,6 +2978,7 @@ async function handleRequest(request, env) {
                 const layout = App.collageConfigs[App.state.collageMode];
                 const finalCanvas = document.getElementById('photoCanvas');
                 if (!finalCanvas) return;
+                App.setEntryLoading(true, "Processing photo...");
                 const mode = App.state.collageMode;
                 const baseDims = App.state.captureBase || App.getBaseDimensions(App.state.videoDims.width, App.state.videoDims.height);
                 const BaseW = baseDims.width;
@@ -2745,22 +3009,26 @@ async function handleRequest(request, env) {
                     }
                 });
 
-                // 1. Generate High Res Version for Upload (WebP Max Quality)
-                // We must ensure it's under the selected cap
-                const highResBase = finalCanvas.toDataURL('image/webp', 0.96);
-                const capBytes = App.getUploadCapBytes();
-                App.state.capturedImageHighRes = await UTILS.compressToLimit(highResBase, { maxBytes: capBytes });
+                try {
+                    // 1. Generate High Res Version for Upload (WebP Max Quality)
+                    // We must ensure it's under the selected cap
+                    const highResBase = finalCanvas.toDataURL('image/webp', 0.96);
+                    const capBytes = App.getUploadCapBytes();
+                    App.state.capturedImageHighRes = await UTILS.compressToLimit(highResBase, { maxBytes: capBytes });
 
-                // 2. Generate Preview Version for UI (larger thumbnail for IndexedDB)
-                App.state.capturedImage = await UTILS.processImage(highResBase, 640, 0.72);
+                    // 2. Generate Preview Version for UI (larger thumbnail for IndexedDB)
+                    App.state.capturedImage = await UTILS.processImage(highResBase, 640, 0.72);
 
-                document.getElementById('cameraSection').classList.add('hidden');
-                document.getElementById('smallPreview').src = App.state.capturedImage; // Show low res preview
-                document.getElementById('takenPhotoUI').classList.remove('hidden');
-                document.getElementById('takenPhotoUI').classList.add('flex');
-                document.getElementById('saveEntryBtn').disabled = false;
+                    document.getElementById('cameraSection').classList.add('hidden');
+                    document.getElementById('smallPreview').src = App.state.capturedImage; // Show low res preview
+                    document.getElementById('takenPhotoUI').classList.remove('hidden');
+                    document.getElementById('takenPhotoUI').classList.add('flex');
+                    document.getElementById('saveEntryBtn').disabled = false;
 
-                if (App.state.stream) App.state.stream.getTracks().forEach(t => t.stop());
+                    if (App.state.stream) App.state.stream.getTracks().forEach(t => t.stop());
+                } finally {
+                    App.setEntryLoading(false);
+                }
             },
 
             handleCollageClick: (e) => {
@@ -2998,13 +3266,32 @@ async function handleRequest(request, env) {
                     App.populateSettingsInputs();
                     App.renderSettingsStatus();
                 }
-                if (id === 'entryModal' && !App.state.stream) App.initCamera();
+                if (id === 'entryModal') {
+                    App.state.isEntryModalOpen = true;
+                    if (!App.state.stream) App.initCamera();
+                    App.startDrawLoop();
+                }
                 lucide.createIcons();
             },
-            closeModal: (id) => {
+            closeModal: (id, options = {}) => {
+                const { force = false } = options;
+                if (id === 'entryModal') {
+                    if (!force && App.hasUnsavedEntry()) {
+                        const ok = confirm("Discard this entry? Your captured photo and notes will be lost.");
+                        if (!ok) return false;
+                    }
+                    App.state.isEntryModalOpen = false;
+                    App.stopDrawLoop();
+                    if (App.state.stream) App.state.stream.getTracks().forEach(t => t.stop());
+                    if (App.state.ghostImageIsObjectUrl && App.state.ghostImageUrl) {
+                        URL.revokeObjectURL(App.state.ghostImageUrl);
+                    }
+                    App.state.ghostImageUrl = null;
+                    App.state.ghostImageIsObjectUrl = false;
+                }
                 document.getElementById(id).classList.add('hidden');
                 document.getElementById(id).classList.remove('flex');
-                if (id === 'entryModal' && App.state.stream) App.state.stream.getTracks().forEach(t => t.stop());
+                return true;
             }
         };
 

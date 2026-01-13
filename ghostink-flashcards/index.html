@@ -133,6 +133,11 @@
                         <span class="font-swatch-mono inline-block">Aa</span>
                     </button>
                 </div>
+                <button id="openShortcuts"
+                    class="hidden sm:flex p-1.5 sm:p-2 rounded-full bg-white-linen border border-oatmeal-dark hover:border-dull-purple transition-all"
+                    title="Keyboard shortcuts" aria-label="Keyboard shortcuts">
+                    <i data-lucide="keyboard" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
+                </button>
                 <div class="hidden sm:flex items-center gap-0.5 sm:gap-1 pill-toggle rounded-full px-1 sm:px-2 py-1">
                     <button id="exportAnkiBtn" class="p-1 rounded-full" title="Export Anki" aria-label="Export to Anki">
                         <i data-lucide="download" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
@@ -185,6 +190,8 @@
                         <input aria-label="Import .apkg" id="ankiImportInputMobile" type="file" accept=".apkg,.json"
                             class="hidden">
                     </label>
+                    <button id="openShortcutsMobile" class="p-1 rounded-full" title="Keyboard shortcuts"
+                        aria-label="Keyboard shortcuts"><i data-lucide="keyboard" class="w-4 h-4"></i></button>
                 </div>
             </div>
         </header>
@@ -194,6 +201,7 @@
             class="px-3 sm:px-5 md:px-10 py-2 sm:py-3 flex gap-1.5 sm:gap-2 border-b border-[color:var(--card-border)]">
             <button data-tab="study" class="tab-btn active text-xs sm:text-sm">📖 Study</button>
             <button data-tab="library" class="tab-btn text-xs sm:text-sm">📚 Library</button>
+            <button data-tab="analytics" class="tab-btn text-xs sm:text-sm">📊 Analytics</button>
         </nav>
 
         <main class="px-3 sm:px-5 md:px-10 pb-6 sm:pb-10 space-y-4 md:space-y-6">
@@ -482,6 +490,7 @@
                                             class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
                                             <option value="due">Due cards only</option>
                                             <option value="all">All cards</option>
+                                            <option value="cram">Cram (no scheduling)</option>
                                         </select>
                                     </div>
                                     <div id="noScheduleRow" class="col-span-2 hidden">
@@ -526,6 +535,23 @@
                                         <input id="filterLeech" type="checkbox" class="accent-dull-purple">
                                         <span>Hide leeches</span>
                                     </label>
+                                    <label class="flex items-center gap-2">
+                                        <input id="filterMarked" type="checkbox" class="accent-dull-purple">
+                                        <span>Only marked</span>
+                                    </label>
+                                    <div class="col-span-2">
+                                        <label class="text-xs text-earth-metal/70">Flag</label>
+                                        <select id="filterFlag"
+                                            class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
+                                            <option value="">All flags</option>
+                                            <option value="Red">Red</option>
+                                            <option value="Orange">Orange</option>
+                                            <option value="Yellow">Yellow</option>
+                                            <option value="Green">Green</option>
+                                            <option value="Blue">Blue</option>
+                                            <option value="Purple">Purple</option>
+                                        </select>
+                                    </div>
                                     <button id="resetFiltersMobile"
                                         class="col-span-2 sm:hidden text-xs text-dull-purple hover:underline text-center py-2">Reset
                                         all filters</button>
@@ -538,6 +564,16 @@
                             <div class="flex items-center justify-between gap-2">
                                 <h2 class="font-display text-base md:text-lg text-charcoal">Study</h2>
                                 <div class="flex items-center gap-1">
+                                    <button id="markCardBtn"
+                                        class="p-1.5 rounded-lg hover:bg-oatmeal text-earth-metal/60"
+                                        title="Mark card (M)">
+                                        <i data-lucide="star" class="w-4 h-4"></i>
+                                    </button>
+                                    <button id="flagCardBtn"
+                                        class="p-1.5 rounded-lg hover:bg-oatmeal text-earth-metal/60"
+                                        title="Flag card (F)">
+                                        <i data-lucide="flag" class="w-4 h-4"></i>
+                                    </button>
                                     <button id="addNoteBlock"
                                         class="p-1.5 rounded-lg hover:bg-oatmeal text-dull-purple hidden"
                                         title="Add note to page">
@@ -709,6 +745,112 @@
 
                         <!-- Mobile bottom spacer to prevent joystick overlap -->
                         <div class="h-36 md:hidden" aria-hidden="true"></div>
+                    </div>
+                </div>
+
+                <!-- ANALYTICS TAB -->
+                <div id="analyticsTab" class="tab-content hidden space-y-4 md:space-y-6">
+                    <article class="card rounded-2xl p-4 md:p-5 shadow-soft text-[color:var(--text-main)]">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <h2 class="font-display text-base md:text-lg text-charcoal">Analytics</h2>
+                                <p class="text-xs text-earth-metal/70">Stats from review history. Time stats only apply
+                                    to reviews recorded after this update.</p>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <select id="analyticsDeckSelect"
+                                    class="rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-xs">
+                                    <option value="all">All decks</option>
+                                </select>
+                                <select id="analyticsRangeSelect"
+                                    class="rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-xs">
+                                    <option value="30">Last 30 days</option>
+                                    <option value="90" selected>Last 90 days</option>
+                                    <option value="180">Last 180 days</option>
+                                    <option value="365">Last 365 days</option>
+                                </select>
+                            </div>
+                        </div>
+                    </article>
+
+                    <div class="grid md:grid-cols-3 gap-3">
+                        <article class="card rounded-2xl p-4 shadow-soft">
+                            <p class="text-[11px] uppercase tracking-wider text-earth-metal/60">Today</p>
+                            <div id="analyticsToday" class="mt-2 text-sm text-charcoal"></div>
+                        </article>
+                        <article class="card rounded-2xl p-4 shadow-soft">
+                            <p class="text-[11px] uppercase tracking-wider text-earth-metal/60">Streaks</p>
+                            <div id="analyticsStreaks" class="mt-2 text-sm text-charcoal"></div>
+                        </article>
+                        <article class="card rounded-2xl p-4 shadow-soft">
+                            <p class="text-[11px] uppercase tracking-wider text-earth-metal/60">Retention</p>
+                            <div id="analyticsRetention" class="mt-2 text-sm text-charcoal"></div>
+                        </article>
+                    </div>
+
+                    <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                        <div class="flex items-center justify-between gap-2">
+                            <h3 class="font-display text-sm md:text-base text-charcoal">Review heatmap</h3>
+                            <span id="analyticsStreakBadge"
+                                class="text-[11px] px-2 py-1 rounded-full bg-oatmeal text-earth-metal border border-oatmeal-dark/60"></span>
+                        </div>
+                        <div class="mt-3">
+                            <div id="analyticsHeatmap" class="heatmap-grid"></div>
+                            <div class="heatmap-legend">
+                                <span class="text-[10px] text-earth-metal/60">Less</span>
+                                <span class="heatmap-swatch level-0"></span>
+                                <span class="heatmap-swatch level-1"></span>
+                                <span class="heatmap-swatch level-2"></span>
+                                <span class="heatmap-swatch level-3"></span>
+                                <span class="heatmap-swatch level-4"></span>
+                                <span class="text-[10px] text-earth-metal/60">More</span>
+                            </div>
+                        </div>
+                    </article>
+
+                    <div class="grid md:grid-cols-2 gap-3">
+                        <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                            <h3 class="font-display text-sm md:text-base text-charcoal">Review count</h3>
+                            <div id="analyticsReviewCount" class="chart-scroll mt-3"></div>
+                        </article>
+                        <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                            <h3 class="font-display text-sm md:text-base text-charcoal">Review time (minutes)</h3>
+                            <div id="analyticsReviewTime" class="chart-scroll mt-3"></div>
+                        </article>
+                    </div>
+
+                    <div class="grid md:grid-cols-2 gap-3">
+                        <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                            <h3 class="font-display text-sm md:text-base text-charcoal">Answer buttons breakdown</h3>
+                            <div id="analyticsAnswerBreakdown" class="mt-3"></div>
+                        </article>
+                        <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                            <h3 class="font-display text-sm md:text-base text-charcoal">Hourly breakdown</h3>
+                            <div id="analyticsHourlyBreakdown" class="chart-scroll mt-3"></div>
+                        </article>
+                    </div>
+
+                    <div class="grid md:grid-cols-2 gap-3">
+                        <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                            <h3 class="font-display text-sm md:text-base text-charcoal">Interval distribution</h3>
+                            <div id="analyticsIntervalDistribution" class="mt-3"></div>
+                        </article>
+                        <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                            <h3 class="font-display text-sm md:text-base text-charcoal">Ease / difficulty distribution
+                            </h3>
+                            <div id="analyticsEaseDifficulty" class="mt-3"></div>
+                        </article>
+                    </div>
+
+                    <div class="grid md:grid-cols-2 gap-3">
+                        <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                            <h3 class="font-display text-sm md:text-base text-charcoal">Card counts</h3>
+                            <div id="analyticsCardCounts" class="mt-3"></div>
+                        </article>
+                        <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                            <h3 class="font-display text-sm md:text-base text-charcoal">True retention</h3>
+                            <div id="analyticsTrueRetention" class="mt-3"></div>
+                        </article>
                     </div>
                 </div>
             </section>
@@ -1309,6 +1451,41 @@ async function handleRequest(request, env) {
                     <p class="mt-2 text-[11px] text-earth-metal/70 dark:text-white/70">Variables replace question,
                         correct answer, and learner answer.</p>
                 </div>
+                <div>
+                    <label class="text-xs text-earth-metal/70">SRS config (JSON)</label>
+                    <textarea id="deckSrsConfigInput" rows="6"
+                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-xs font-mono"
+                        placeholder='{"learningSteps":["1m","10m"],"relearningSteps":["10m"],"graduatingInterval":"1d","easyInterval":"4d","easyDays":["Sat","Sun"],"fsrs":{"retention":0.9,"weights":[...]}}'></textarea>
+                    <p class="mt-2 text-[10px] text-earth-metal/60">Self-healing: invalid or missing fields fall back
+                        to defaults. Learning steps apply to SM-2 only.</p>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="col-span-2">
+                        <label class="text-xs text-earth-metal/70">Learning steps (SM-2)</label>
+                        <input id="deckLearningSteps" type="text" placeholder="1m,10m"
+                            class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-xs font-mono">
+                    </div>
+                    <div class="col-span-2">
+                        <label class="text-xs text-earth-metal/70">Relearning steps (SM-2)</label>
+                        <input id="deckRelearningSteps" type="text" placeholder="10m"
+                            class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-xs font-mono">
+                    </div>
+                    <div>
+                        <label class="text-xs text-earth-metal/70">Graduating interval</label>
+                        <input id="deckGraduatingInterval" type="text" placeholder="1d"
+                            class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-xs font-mono">
+                    </div>
+                    <div>
+                        <label class="text-xs text-earth-metal/70">Easy interval</label>
+                        <input id="deckEasyInterval" type="text" placeholder="4d"
+                            class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-xs font-mono">
+                    </div>
+                    <div class="col-span-2">
+                        <label class="text-xs text-earth-metal/70">Easy days</label>
+                        <input id="deckEasyDays" type="text" placeholder="Sat,Sun"
+                            class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-xs font-mono">
+                    </div>
+                </div>
                 <div id="fsrsParamsField" class="hidden">
                     <div class="grid grid-cols-2 gap-3 items-end">
                         <div>
@@ -1330,7 +1507,7 @@ async function handleRequest(request, env) {
                         <span class="text-[10px] text-earth-metal/60">Uses this deck’s review history</span>
                     </div>
                     <p class="text-[10px] text-earth-metal/60 mt-1">Leave retention empty to use 0.90. Leave weights
-                        empty to use defaults. These also sync via the Notion “FSRS Params” property (rich_text).</p>
+                        empty to use defaults. These sync via the Notion “SRS Config” property.</p>
                 </div>
             </div>
             <div class="flex justify-end gap-2 mt-4">
@@ -1355,7 +1532,7 @@ async function handleRequest(request, env) {
             <p class="text-[10px] text-earth-metal/50 dark:text-white/60 mb-2">Editing Name, Back, or Notes will remove
                 Notion text colors
                 and highlights on sync</p>
-            <div class="grid md:grid-cols-2 gap-4 text-sm">
+                <div class="grid md:grid-cols-2 gap-4 text-sm">
                 <div class="space-y-2">
                     <label class="text-xs text-earth-metal/70">Deck</label>
                     <select id="cardDeckInput"
@@ -1373,6 +1550,26 @@ async function handleRequest(request, env) {
                     <label class="text-xs text-earth-metal/70">Name</label>
                     <textarea id="cardNameInput" rows="3"
                         class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"></textarea>
+                </div>
+                <div class="space-y-2">
+                    <label class="text-xs text-earth-metal/70">Marked</label>
+                    <label class="flex items-center gap-2 text-sm">
+                        <input id="cardMarkedInput" type="checkbox" class="accent-dull-purple">
+                        <span>Starred</span>
+                    </label>
+                </div>
+                <div class="space-y-2">
+                    <label class="text-xs text-earth-metal/70">Flag</label>
+                    <select id="cardFlagInput"
+                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
+                        <option value="">None</option>
+                        <option value="Red">Red</option>
+                        <option value="Orange">Orange</option>
+                        <option value="Yellow">Yellow</option>
+                        <option value="Green">Green</option>
+                        <option value="Blue">Blue</option>
+                        <option value="Purple">Purple</option>
+                    </select>
                 </div>
                 <div id="cardBackSection" class="md:col-span-2 space-y-2">
                     <label class="text-xs text-earth-metal/70">Back</label>
@@ -1433,6 +1630,47 @@ async function handleRequest(request, env) {
                     card</button>
                 <button id="saveCardBtn"
                     class="px-4 py-2 rounded-lg bg-charcoal dark:bg-white/10 dark:border-white/10 dark:border text-white text-sm hover:bg-earth-metal dark:hover:bg-white/20">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shortcuts modal -->
+    <div id="shortcutsModal" role="dialog" aria-modal="true" aria-labelledby="shortcutsModalTitle"
+        class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="card rounded-2xl p-5 w-full max-w-lg shadow-soft max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-display text-lg text-charcoal" id="shortcutsModalTitle">Keyboard shortcuts</h3>
+                <button id="closeShortcutsModal" aria-label="Close shortcuts"
+                    class="text-earth-metal/60 hover:text-charcoal"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div class="space-y-3 text-sm">
+                <div class="rounded-lg border border-oatmeal-dark/60 p-3 bg-[color:var(--surface)]">
+                    <p class="text-xs text-earth-metal/60 mb-2 uppercase tracking-wider font-semibold">Study</p>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div class="flex items-center justify-between"><span>Reveal</span><kbd>Space</kbd></div>
+                        <div class="flex items-center justify-between"><span>Skip</span><kbd>S</kbd></div>
+                        <div class="flex items-center justify-between"><span>Again / Hard / Good / Easy</span><kbd>1–4</kbd></div>
+                        <div class="flex items-center justify-between"><span>Mark</span><kbd>M</kbd></div>
+                        <div class="flex items-center justify-between"><span>Flag (cycle)</span><kbd>F</kbd></div>
+                        <div class="flex items-center justify-between"><span>Clear flag</span><kbd>Shift + F</kbd></div>
+                    </div>
+                </div>
+                <div class="rounded-lg border border-oatmeal-dark/60 p-3 bg-[color:var(--surface)]">
+                    <p class="text-xs text-earth-metal/60 mb-2 uppercase tracking-wider font-semibold">Sessions</p>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div class="flex items-center justify-between"><span>Start session</span><kbd id="shortcutsStartSession">⌘/Ctrl + Enter</kbd></div>
+                        <div class="flex items-center justify-between"><span>Stop session</span><kbd id="shortcutsStopSession">⌘/Ctrl + .</kbd></div>
+                        <div class="flex items-center justify-between"><span>Undo rating</span><kbd id="shortcutsUndo">⌘/Ctrl + Z</kbd></div>
+                    </div>
+                </div>
+                <div class="rounded-lg border border-oatmeal-dark/60 p-3 bg-[color:var(--surface)]">
+                    <p class="text-xs text-earth-metal/60 mb-2 uppercase tracking-wider font-semibold">AI mode</p>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div class="flex items-center justify-between"><span>Send answer</span><kbd id="shortcutsSend">⌘/Ctrl + Enter</kbd></div>
+                        <div class="flex items-center justify-between"><span>Toggle mic</span><kbd id="shortcutsMic">⌘/Ctrl + E</kbd></div>
+                        <div class="flex items-center justify-between"><span>Skip (AI)</span><kbd>Alt + Shift + S</kbd></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
