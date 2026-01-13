@@ -1091,3 +1091,19 @@ async function refreshPdfRender(pdfState) {
   pdfState.pageCount = pdfState.pdfDoc.numPages;
   await renderPdf(pdfState);
 }
+
+async function undoAnnotation() {
+  const pdfState = getActivePdf();
+  if (!pdfState || !pdfState.annotations.length) {
+    notify("Undo", "No annotations to undo.");
+    return;
+  }
+  const removed = pdfState.annotations.pop();
+  await applyAllAnnotations(pdfState, { invertForView: isPdfInvertedView() });
+  logEvent({
+    title: "Annotation undone",
+    detail: { pdfId: pdfState.id, removed: removed?.id },
+    sessionId: state.activeSessionId
+  });
+  notify("Undo", "Last annotation removed.");
+}

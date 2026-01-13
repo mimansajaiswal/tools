@@ -143,22 +143,20 @@ async function beginSTT(session) {
     recognition.lang = navigator.language || "en-US";
     recognition.onresult = (event) => {
       let fullTranscript = "";
-      let deltaTranscript = "";
       for (let i = 0; i < event.results.length; i++) {
         const text = event.results[i][0]?.transcript || "";
         fullTranscript += text;
-        if (i >= event.resultIndex) {
-          deltaTranscript += text;
+        if (event.results[i].isFinal && i >= event.resultIndex) {
+          const delta = text.trim();
+          if (delta) {
+            session.segments.push({
+              timestamp: Date.now(),
+              text: delta
+            });
+          }
         }
       }
       session.transcript = fullTranscript.trim();
-      const delta = deltaTranscript.trim();
-      if (delta) {
-        session.segments.push({
-          timestamp: Date.now(),
-          text: delta
-        });
-      }
     };
     recognition.onerror = (event) => {
       const errorType = event?.error || "Unknown error";

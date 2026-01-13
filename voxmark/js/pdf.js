@@ -1915,3 +1915,63 @@ async function restorePdfState(stored) {
     return null;
   }
 }
+
+async function runOcrOnVisiblePages() {
+  const pdfState = getActivePdf();
+  if (!pdfState) {
+    notify("OCR", "No PDF loaded.");
+    return;
+  }
+  if (typeof Tesseract === "undefined") {
+    notify("OCR", "Tesseract.js not loaded. Check your connection.", { type: "error" });
+    return;
+  }
+  const visiblePages = getVisiblePages(pdfState);
+  if (!visiblePages.length) {
+    notify("OCR", "No visible pages to process.");
+    return;
+  }
+  setLoading(true, "Running OCR...");
+  let processed = 0;
+  try {
+    const worker = await Tesseract.createWorker("eng", 1, {
+      logger: () => {}
+    });
+    for (const pageData of visiblePages) {
+      if (pageData.ocrSpans?.length) continue;
+      if (!pageData.canvas) {
+        await renderPage(pdfState, pageData);
+      }
+      if (!pageData.canvas) continue;
+      const dataUrl = pageData.canvas.toDataURL("image/png");
+      const { data } = await worker.recognize(dataUrl);
+      const viewport = pageData.viewport;
+      const scale = pdfState.scale || 1;
+      const spans = (data.words || []).map((word) => {
+        const bbox = word.bbox;
+        const [pdfX, pdfY] = viewport.convertToPdfPoint(bbox.x0 / scale, bbox.y0 / scale);
+        const [pdfX2, pdfY2] = viewport.convertToPdfPoint(bbox.x1 / scale, bbox.y1 / scale);
+        return {
+          text: word.text,
+          bbox: {
+            x: Math.min(pdfX, pdfX2),
+            y: Math.min(pdfY, pdfY2),
+            width: Math.abs(pdfX2 - pdfX),
+            height: Math.abs(pdfY2 - pdfY)
+          }
+        };
+      });
+      pageData.ocrSpans = spans;
+      processed++;
+    }
+    await worker.terminate();
+    if (processed) {
+      persistPdfState(pdfState);
+    }
+    notify("OCR", `Processed ${processed} page${processed === 1 ? "" : "s"}.`);
+  } catch (error) {
+    notify("OCR", `OCR failed: ${error.message || "Unknown error"}`, { type: "error" });
+  } finally {
+    setLoading(false);
+  }
+}

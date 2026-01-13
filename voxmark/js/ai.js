@@ -189,6 +189,7 @@ async function callAi(payload) {
       headers: {
         "x-api-key": state.settings.aiKey,
         "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
         "content-type": "application/json"
       },
       body: JSON.stringify({

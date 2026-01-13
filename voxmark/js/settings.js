@@ -2,7 +2,7 @@ function validateApiKey(provider, key) {
   if (!key) return false;
   if (provider === "openai") return key.startsWith("sk-");
   if (provider === "anthropic") return key.startsWith("sk-ant");
-  if (provider === "gemini") return key.startsWith("AIza") || key.length > 20;
+  if (provider === "gemini") return key.length >= 30;
   return true;
 }
 

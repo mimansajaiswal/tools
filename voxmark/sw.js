@@ -1,4 +1,4 @@
-const CACHE_NAME = "voxmark-cache-v7";
+const CACHE_NAME = "voxmark-cache-v8";
 const LOCAL_ASSETS = [
   "./index.html",
   "./styles/main.css",
@@ -22,18 +22,14 @@ const LOCAL_ASSETS = [
 const REMOTE_ASSETS = [
   "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js",
-  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf_viewer.min.css",
   "https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js",
   "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js",
   "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js",
-  "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js",
-  "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0/tesseract-core.wasm.js",
-  "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0/tesseract-core.wasm",
-  "https://tessdata.projectnaptha.com/4.0.0/eng.traineddata.gz",
   "https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css"
 ];
 
 const FONT_CSS_URL = "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Manrope:wght@400;500;600;700&display=swap";
+const PHOSPHOR_CSS_URL = "https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css";
 
 async function cacheFonts(cache) {
   try {
@@ -56,6 +52,29 @@ async function cacheFonts(cache) {
   } catch (e) { /* ignore font caching errors */ }
 }
 
+async function cachePhosphorIcons(cache) {
+  try {
+    const cssResponse = await fetch(PHOSPHOR_CSS_URL);
+    if (!cssResponse.ok) return;
+    const cssText = await cssResponse.text();
+    await cache.put(PHOSPHOR_CSS_URL, new Response(cssText, {
+      headers: { "Content-Type": "text/css" }
+    }));
+    const fontUrls = cssText.match(/url\(['"]?([^'")]+\.woff2?)['"]?\)/g) || [];
+    const baseUrl = PHOSPHOR_CSS_URL.replace(/\/[^/]+$/, "/");
+    await Promise.all(fontUrls.map(async (match) => {
+      try {
+        const path = match.replace(/url\(['"]?/, "").replace(/['"]?\)/, "");
+        const url = path.startsWith("http") ? path : new URL(path, baseUrl).href;
+        const fontResponse = await fetch(url);
+        if (fontResponse.ok) {
+          await cache.put(url, fontResponse);
+        }
+      } catch (e) { /* ignore icon font fetch errors */ }
+    }));
+  } catch (e) { /* ignore icon caching errors */ }
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
@@ -76,6 +95,7 @@ self.addEventListener("install", (event) => {
         })
       );
       await cacheFonts(cache);
+      await cachePhosphorIcons(cache);
     })
   );
   self.skipWaiting();

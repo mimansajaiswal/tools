@@ -24,14 +24,7 @@ async function processBatchQueue() {
       }
     }
   }
-  if (processedIds.size) {
-    state.queue = state.queue.filter((item) => !processedIds.has(item.id));
-    if (db) {
-      const tx = db.transaction("queue", "readwrite");
-      const store = tx.objectStore("queue");
-      processedIds.forEach((id) => store.delete(id));
-    }
-  }
+
   state.activeSessionId = previousSessionId;
   elements.progressLabel.classList.add("hidden");
   updateQueueIndicator();
