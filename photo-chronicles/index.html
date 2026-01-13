@@ -2252,7 +2252,6 @@ async function handleRequest(request, env) {
 
                 if (!diary) return;
                 title.innerText = diary.title;
-                gallery.innerHTML = '';
 
                 if (App.state.isLoading && diary.entries.length === 0) {
                     gallery.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-center text-earth-metal/60">
@@ -2273,6 +2272,9 @@ async function handleRequest(request, env) {
                 // Limit to 25 entries display if more exist (safety)
                 const displayEntries = diary.entries.slice(0, 25);
                 const imageMap = await App.loadEntryImages(displayEntries);
+
+                // Clear gallery after async work to prevent race condition duplicates
+                gallery.innerHTML = '';
 
                 // Updated Denser Grid
                 const grid = document.createElement('div');
