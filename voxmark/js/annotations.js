@@ -10,10 +10,171 @@ function tokenize(text) {
   return normalizeText(text).split(" ").filter(Boolean);
 }
 
+const FIGURE_CAPTION_PATTERNS = [
+  /^(figure|fig\.?)\s*\d+/i,
+  /^(table|tbl\.?)\s*\d+/i,
+  /^(chart|graph|diagram)\s*\d+/i,
+  /^(exhibit|plate)\s*\d+/i
+];
+
+function extractFigureReference(text) {
+  if (!text) return null;
+  const patterns = [
+    /(figure|fig\.?)\s*(\d+[a-z]?)/i,
+    /(table|tbl\.?)\s*(\d+[a-z]?)/i,
+    /(chart|graph|diagram)\s*(\d+[a-z]?)/i
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) {
+      return { type: match[1].toLowerCase().replace(".", ""), number: match[2] };
+    }
+  }
+  return null;
+}
+
+function isCaptionSpan(text) {
+  const trimmed = (text || "").trim();
+  return FIGURE_CAPTION_PATTERNS.some((p) => p.test(trimmed));
+}
+
+function findFigureOrTableRegion(pageData, hint) {
+  if (!pageData) return null;
+
+  let spans = [];
+  if (pageData.textLayer) {
+    spans = Array.from(pageData.textLayer.querySelectorAll("span")).map((span) => {
+      const rect = span.getBoundingClientRect();
+      const pageRect = pageData.pageDiv.getBoundingClientRect();
+      const relX = rect.left - pageRect.left;
+      const relY = rect.top - pageRect.top;
+      const [sx, sy] = pageData.viewport.convertToPdfPoint(relX, relY);
+      const [sx2, sy2] = pageData.viewport.convertToPdfPoint(
+        relX + rect.width,
+        relY + rect.height
+      );
+      return {
+        text: span.textContent || "",
+        bbox: {
+          x: Math.min(sx, sx2),
+          y: Math.min(sy, sy2),
+          width: Math.abs(sx2 - sx),
+          height: Math.abs(sy2 - sy)
+        }
+      };
+    });
+  } else if (pageData.ocrSpans?.length) {
+    spans = pageData.ocrSpans.map((s) => ({ text: s.text || "", bbox: s.bbox }));
+  }
+
+  if (!spans.length) return null;
+
+  const captions = spans.filter((s) => isCaptionSpan(s.text));
+  if (!captions.length) return null;
+
+  let targetCaption = null;
+  if (hint) {
+    const ref = extractFigureReference(hint);
+    if (ref) {
+      const pattern = new RegExp(
+        `^(${ref.type}|fig\\.?|tbl\\.?)\\s*${ref.number}`,
+        "i"
+      );
+      targetCaption = captions.find((c) => pattern.test(c.text.trim()));
+    }
+    if (!targetCaption) {
+      const hintLower = hint.toLowerCase();
+      targetCaption = captions.find((c) => c.text.toLowerCase().includes(hintLower));
+    }
+  }
+  if (!targetCaption && captions.length) {
+    targetCaption = captions[0];
+  }
+  if (!targetCaption) return null;
+
+  const captionY = targetCaption.bbox.y;
+  const pageBox = pageData.viewport?.viewBox || [0, 0, 612, 792];
+  const pageWidth = pageBox[2] - pageBox[0];
+  const pageHeight = pageBox[3] - pageBox[1];
+
+  const aboveSpans = spans.filter(
+    (s) => s.bbox.y > captionY && s !== targetCaption
+  );
+  const belowSpans = spans.filter(
+    (s) => s.bbox.y + s.bbox.height < captionY && s !== targetCaption
+  );
+
+  let figureTop = captionY + targetCaption.bbox.height;
+  let figureBottom = captionY;
+  const gapThreshold = pageHeight * 0.04;
+
+  if (aboveSpans.length) {
+    const sortedAbove = aboveSpans.sort((a, b) => a.bbox.y - b.bbox.y);
+    for (const s of sortedAbove) {
+      const gap = s.bbox.y - figureTop;
+      if (gap > gapThreshold) break;
+      figureTop = Math.max(figureTop, s.bbox.y + s.bbox.height);
+    }
+  } else {
+    figureTop = Math.min(pageHeight, captionY + pageHeight * 0.35);
+  }
+
+  if (belowSpans.length) {
+    const sortedBelow = belowSpans.sort((a, b) => b.bbox.y - a.bbox.y);
+    let lastTextBottom = sortedBelow[0].bbox.y + sortedBelow[0].bbox.height;
+    for (let i = 1; i < sortedBelow.length; i++) {
+      const s = sortedBelow[i];
+      const gap = lastTextBottom - (s.bbox.y + s.bbox.height);
+      if (gap > gapThreshold) {
+        figureBottom = s.bbox.y + s.bbox.height + gapThreshold * 0.5;
+        break;
+      }
+      lastTextBottom = s.bbox.y + s.bbox.height;
+    }
+  }
+
+  const captionX = targetCaption.bbox.x;
+  const captionRight = captionX + targetCaption.bbox.width;
+  const margin = pageWidth * 0.05;
+  const x = Math.max(0, captionX - margin);
+  const width = Math.min(pageWidth, captionRight - captionX + margin * 2);
+
+  return {
+    x,
+    y: figureBottom,
+    width,
+    height: figureTop - figureBottom
+  };
+}
+
+function expandBboxToFigureRegion(bbox, pageData, hint) {
+  const figureRegion = findFigureOrTableRegion(pageData, hint);
+  if (!figureRegion) return bbox;
+
+  const bboxCenter = { x: bbox.x + bbox.width / 2, y: bbox.y + bbox.height / 2 };
+  const figCenter = {
+    x: figureRegion.x + figureRegion.width / 2,
+    y: figureRegion.y + figureRegion.height / 2
+  };
+  const dist = Math.hypot(bboxCenter.x - figCenter.x, bboxCenter.y - figCenter.y);
+
+  const pageBox = pageData.viewport?.viewBox || [0, 0, 612, 792];
+  const pageHeight = pageBox[3] - pageBox[1];
+  if (dist < pageHeight * 0.3) {
+    return figureRegion;
+  }
+  return bbox;
+}
+
 async function resolveTarget(annotation, pdfState, session) {
   const pageData = pdfState.pages.find((p) => p.pageNum - 1 === annotation.pageIndex);
   if (!pageData) return null;
   const target = annotation.target || {};
+
+  const figureHint = extractFigureReference(annotation.comment) || 
+                     extractFigureReference(target.text?.exact) ||
+                     extractFigureReference(target.text?.quote);
+  const hintText = figureHint ? `${figureHint.type} ${figureHint.number}` : null;
 
   if (target.mode === "tapFocus" && session?.taps?.length) {
     const tap = session.taps[target.tapFocusIndex] || session.taps[session.taps.length - 1];
@@ -22,8 +183,25 @@ async function resolveTarget(annotation, pdfState, session) {
     }
   }
 
+  if (target.mode === "figure" || target.mode === "table") {
+    if (!pageData.textLayer) {
+      await renderPage(pdfState, pageData);
+    }
+    const figureRegion = findFigureOrTableRegion(pageData, hintText || target.text?.exact);
+    if (figureRegion) {
+      return { bbox: figureRegion };
+    }
+  }
+
   if (target.mode === "bbox" && target.bbox) {
-    return { bbox: target.bbox };
+    let bbox = target.bbox;
+    if (hintText || target.confidence === "low") {
+      if (!pageData.textLayer) {
+        await renderPage(pdfState, pageData);
+      }
+      bbox = expandBboxToFigureRegion(bbox, pageData, hintText);
+    }
+    return { bbox };
   }
 
   const query = target.text?.exact || target.text?.quote;
@@ -74,6 +252,16 @@ async function resolveTarget(annotation, pdfState, session) {
     if (match) return { bbox: match };
   }
 
+  if (target.mode === "auto" && (hintText || target.confidence === "low")) {
+    if (!pageData.textLayer) {
+      await renderPage(pdfState, pageData);
+    }
+    const figureRegion = findFigureOrTableRegion(pageData, hintText);
+    if (figureRegion) {
+      return { bbox: figureRegion };
+    }
+  }
+
   const snapshotIndex =
     annotation?.contextRef?.previousSection && session.snapshots.length > 1
       ? session.snapshots.length - 2
@@ -108,33 +296,185 @@ function buildTokenMap(spans) {
 
 function orderSpansForColumns(spans) {
   if (!spans.length) return spans;
+
   const xs = spans.map((s) => s.bbox.x);
   const x2s = spans.map((s) => s.bbox.x + s.bbox.width);
   const minX = Math.min(...xs);
   const maxX = Math.max(...x2s);
-  const width = Math.max(1, maxX - minX);
+  const pageWidth = Math.max(1, maxX - minX);
+
+  const avgCharWidth = spans.reduce((sum, s) => {
+    const charCount = Math.max(1, (s.text || "").length);
+    return sum + s.bbox.width / charCount;
+  }, 0) / spans.length;
+  const gapThreshold = Math.max(avgCharWidth * 4, pageWidth * 0.08);
+
   const centers = spans.map((s) => s.bbox.x + s.bbox.width / 2);
   const sortedCenters = [...centers].sort((a, b) => a - b);
-  let maxGap = 0;
-  let splitAt = null;
+
+  const gaps = [];
   for (let i = 1; i < sortedCenters.length; i++) {
     const gap = sortedCenters[i] - sortedCenters[i - 1];
-    if (gap > maxGap) {
-      maxGap = gap;
-      splitAt = (sortedCenters[i] + sortedCenters[i - 1]) / 2;
+    if (gap > gapThreshold) {
+      gaps.push({
+        gap,
+        splitAt: (sortedCenters[i] + sortedCenters[i - 1]) / 2
+      });
     }
   }
-  const hasColumns = splitAt && maxGap > width * 0.18;
-  const sortByLine = (a, b) => {
-    if (b.bbox.y !== a.bbox.y) return b.bbox.y - a.bbox.y;
-    return a.bbox.x - b.bbox.x;
-  };
-  if (!hasColumns) {
-    return [...spans].sort(sortByLine);
+
+  gaps.sort((a, b) => b.gap - a.gap);
+  const maxColumns = 4;
+  const significantGaps = gaps
+    .slice(0, maxColumns - 1)
+    .filter((g) => g.gap > pageWidth * 0.06)
+    .sort((a, b) => a.splitAt - b.splitAt);
+
+  const avgHeight = spans.reduce((sum, s) => sum + s.bbox.height, 0) / spans.length;
+  const lineTolerance = avgHeight * 0.5;
+
+  function groupByLines(columnSpans) {
+    if (!columnSpans.length) return [];
+    const sorted = [...columnSpans].sort((a, b) => b.bbox.y - a.bbox.y);
+    const lines = [];
+    let currentLine = [sorted[0]];
+    let currentY = sorted[0].bbox.y;
+
+    for (let i = 1; i < sorted.length; i++) {
+      const span = sorted[i];
+      if (Math.abs(span.bbox.y - currentY) <= lineTolerance) {
+        currentLine.push(span);
+      } else {
+        currentLine.sort((a, b) => a.bbox.x - b.bbox.x);
+        lines.push(...currentLine);
+        currentLine = [span];
+        currentY = span.bbox.y;
+      }
+    }
+    currentLine.sort((a, b) => a.bbox.x - b.bbox.x);
+    lines.push(...currentLine);
+    return lines;
   }
-  const left = spans.filter((s) => s.bbox.x + s.bbox.width / 2 <= splitAt).sort(sortByLine);
-  const right = spans.filter((s) => s.bbox.x + s.bbox.width / 2 > splitAt).sort(sortByLine);
-  return [...left, ...right];
+
+  if (!significantGaps.length) {
+    return groupByLines(spans);
+  }
+
+  const splitPoints = significantGaps.map((g) => g.splitAt);
+  const columns = Array.from({ length: splitPoints.length + 1 }, () => []);
+
+  spans.forEach((span) => {
+    const center = span.bbox.x + span.bbox.width / 2;
+    let colIndex = 0;
+    for (let i = 0; i < splitPoints.length; i++) {
+      if (center > splitPoints[i]) colIndex = i + 1;
+    }
+    columns[colIndex].push(span);
+  });
+
+  const fullWidthThreshold = pageWidth * 0.7;
+  const result = [];
+  const fullWidthSpans = [];
+
+  columns.forEach((col) => {
+    col.forEach((span) => {
+      if (span.bbox.width > fullWidthThreshold) {
+        fullWidthSpans.push(span);
+      }
+    });
+  });
+
+  columns.forEach((col, idx) => {
+    columns[idx] = col.filter((s) => s.bbox.width <= fullWidthThreshold);
+  });
+
+  const sortedFullWidth = groupByLines(fullWidthSpans);
+  const columnResults = columns.map((col) => groupByLines(col));
+
+  let colPointers = columnResults.map(() => 0);
+  let fullPointer = 0;
+
+  while (colPointers.some((p, i) => p < columnResults[i].length) || fullPointer < sortedFullWidth.length) {
+    if (fullPointer < sortedFullWidth.length) {
+      const fwSpan = sortedFullWidth[fullPointer];
+      const fwY = fwSpan.bbox.y;
+
+      let allColumnsBelow = true;
+      for (let c = 0; c < columnResults.length; c++) {
+        if (colPointers[c] < columnResults[c].length) {
+          const colSpan = columnResults[c][colPointers[c]];
+          if (colSpan.bbox.y >= fwY - lineTolerance) {
+            allColumnsBelow = false;
+            break;
+          }
+        }
+      }
+
+      if (allColumnsBelow) {
+        result.push(fwSpan);
+        fullPointer++;
+        continue;
+      }
+    }
+
+    for (let c = 0; c < columnResults.length; c++) {
+      while (colPointers[c] < columnResults[c].length) {
+        const span = columnResults[c][colPointers[c]];
+        if (fullPointer < sortedFullWidth.length) {
+          const fwY = sortedFullWidth[fullPointer].bbox.y;
+          if (span.bbox.y < fwY - lineTolerance) break;
+        }
+        result.push(span);
+        colPointers[c]++;
+      }
+    }
+
+    if (fullPointer < sortedFullWidth.length) {
+      result.push(sortedFullWidth[fullPointer]);
+      fullPointer++;
+    }
+  }
+
+  return result;
+}
+
+function fuzzyTokenMatch(token1, token2, threshold = 0.8) {
+  if (token1 === token2) return true;
+  if (Math.abs(token1.length - token2.length) > 2) return false;
+
+  const longer = token1.length >= token2.length ? token1 : token2;
+  const shorter = token1.length < token2.length ? token1 : token2;
+
+  if (longer.includes(shorter) && shorter.length >= 3) return true;
+
+  let matches = 0;
+  const len = Math.min(token1.length, token2.length);
+  for (let i = 0; i < len; i++) {
+    if (token1[i] === token2[i]) matches++;
+  }
+  return matches / Math.max(token1.length, token2.length) >= threshold;
+}
+
+function findTokenSequenceFuzzy(tokens, sequence, start = 0, fuzzyThreshold = 0.8) {
+  for (let i = start; i <= tokens.length - sequence.length; i++) {
+    let matched = true;
+    let fuzzyCount = 0;
+    for (let j = 0; j < sequence.length; j++) {
+      if (tokens[i + j].text === sequence[j]) continue;
+      if (fuzzyTokenMatch(tokens[i + j].text, sequence[j], fuzzyThreshold)) {
+        fuzzyCount++;
+        if (fuzzyCount > Math.ceil(sequence.length * 0.2)) {
+          matched = false;
+          break;
+        }
+      } else {
+        matched = false;
+        break;
+      }
+    }
+    if (matched) return i;
+  }
+  return -1;
 }
 
 function findMatchFromHints(tokens, startHint, endHint) {
@@ -144,11 +484,17 @@ function findMatchFromHints(tokens, startHint, endHint) {
   let startIndex = 0;
   if (startTokens.length) {
     startIndex = findTokenSequence(tokens, startTokens);
+    if (startIndex < 0) {
+      startIndex = findTokenSequenceFuzzy(tokens, startTokens);
+    }
     if (startIndex < 0) return null;
   }
   let endIndex = tokens.length - 1;
   if (endTokens.length) {
     endIndex = findTokenSequence(tokens, endTokens, startIndex);
+    if (endIndex < 0) {
+      endIndex = findTokenSequenceFuzzy(tokens, endTokens, startIndex);
+    }
     if (endIndex < 0) return null;
     endIndex += endTokens.length - 1;
   }
@@ -159,7 +505,10 @@ function findMatchFromHints(tokens, startHint, endHint) {
 function findTextMatch(tokens, query) {
   const queryTokens = tokenize(query);
   if (!queryTokens.length) return null;
-  const startIndex = findTokenSequence(tokens, queryTokens);
+  let startIndex = findTokenSequence(tokens, queryTokens);
+  if (startIndex < 0) {
+    startIndex = findTokenSequenceFuzzy(tokens, queryTokens);
+  }
   if (startIndex < 0) return null;
   const boxes = tokens
     .slice(startIndex, startIndex + queryTokens.length)
@@ -265,9 +614,39 @@ function hexToRgb(hex) {
 function normalizeAnnotationColor(value) {
   const palette = getAllowedColors();
   const color = (value || "").toString().trim().toLowerCase();
-  if (palette.length && palette.map((entry) => entry.key).includes(color)) return color;
-  if (["yellow", "blue", "red", "green", "purple", "pink"].includes(color)) return color;
+  const paletteKeys = palette.map((entry) => entry.key);
+  if (paletteKeys.includes(color)) return color;
+  const fuzzyMatch = paletteKeys.find((key) => 
+    key.includes(color) || color.includes(key) ||
+    levenshteinDistance(key, color) <= 2
+  );
+  if (fuzzyMatch) return fuzzyMatch;
+  const defaults = ["yellow", "blue", "red", "green", "purple", "pink"];
+  if (defaults.includes(color)) return color;
+  const defaultFuzzy = defaults.find((d) => 
+    d.includes(color) || color.includes(d) ||
+    levenshteinDistance(d, color) <= 2
+  );
+  if (defaultFuzzy) return defaultFuzzy;
   return palette[0]?.key || "yellow";
+}
+
+function levenshteinDistance(a, b) {
+  if (!a || !b) return Math.max((a || "").length, (b || "").length);
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      const cost = a[j - 1] === b[i - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+  return matrix[b.length][a.length];
 }
 
 function getAllowedColors() {
@@ -351,12 +730,75 @@ function renderOverlays(pdfState) {
     handle.addEventListener("pointerdown", (event) => beginResize(event, annotation, pageData));
     overlay.appendChild(handle);
 
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "annotation-delete";
+    deleteBtn.innerHTML = '<i class="ph ph-trash"></i>';
+    deleteBtn.title = "Delete annotation";
+    deleteBtn.addEventListener("pointerdown", (event) => {
+      event.stopPropagation();
+      event.preventDefault();
+    });
+    deleteBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      deleteAnnotation(pdfState, annotation.id);
+    });
+    overlay.appendChild(deleteBtn);
+
     if (annotation.id === state.selectedAnnotationId) {
       overlay.classList.add("selected");
     }
 
     pageData.pageDiv.appendChild(overlay);
   });
+}
+
+const annotationHistory = [];
+const MAX_HISTORY = 50;
+
+function pushAnnotationHistory(pdfState) {
+  if (!pdfState) return;
+  const snapshot = {
+    pdfId: pdfState.id,
+    annotations: JSON.parse(JSON.stringify(pdfState.annotations)),
+    timestamp: Date.now()
+  };
+  annotationHistory.push(snapshot);
+  if (annotationHistory.length > MAX_HISTORY) {
+    annotationHistory.shift();
+  }
+}
+
+function undoAnnotation() {
+  const pdfState = getActivePdf();
+  if (!pdfState) {
+    notify("Undo", "No active PDF.");
+    return;
+  }
+  const lastForPdf = [...annotationHistory]
+    .reverse()
+    .find((s) => s.pdfId === pdfState.id);
+  if (!lastForPdf) {
+    notify("Undo", "Nothing to undo.");
+    return;
+  }
+  const index = annotationHistory.indexOf(lastForPdf);
+  annotationHistory.splice(index, 1);
+  pdfState.annotations = lastForPdf.annotations;
+  applyAllAnnotations(pdfState, { invertForView: isPdfInvertedView() });
+  notify("Undo", "Annotation change undone.");
+}
+
+function deleteAnnotation(pdfState, annotationId) {
+  if (!pdfState) return;
+  pushAnnotationHistory(pdfState);
+  const index = pdfState.annotations.findIndex((a) => a.id === annotationId);
+  if (index === -1) return;
+  pdfState.annotations.splice(index, 1);
+  if (state.selectedAnnotationId === annotationId) {
+    state.selectedAnnotationId = null;
+  }
+  applyAllAnnotations(pdfState, { invertForView: isPdfInvertedView() });
+  notify("Adjust Mode", "Annotation deleted.");
 }
 
 function pdfToViewportRect(pageData, bbox) {
@@ -464,8 +906,15 @@ function snapSelectedToText() {
   }
   const pageData = pdfState.pages.find((p) => p.pageNum - 1 === annotation.pageIndex);
   if (!pageData) return;
+  if (!pageData.textLayer) {
+    notify("Adjust Mode", "No text layer available on this page.");
+    return;
+  }
   const spans = Array.from(pageData.textLayer.querySelectorAll("span"));
-  if (!spans.length) return;
+  if (!spans.length) {
+    notify("Adjust Mode", "No text found on this page.");
+    return;
+  }
   const center = {
     x: annotation.bbox.x + annotation.bbox.width / 2,
     y: annotation.bbox.y + annotation.bbox.height / 2

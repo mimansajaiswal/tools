@@ -75,9 +75,27 @@ function loadQueueFromDB() {
   });
 }
 
-function persistPdfState(pdfState) {
+async function persistPdfState(pdfState) {
   if (!db || !pdfState) return;
   const original = cloneArrayBuffer(pdfState.originalBytes || pdfState.bytes);
+  const estimatedSize = (original?.byteLength || 0) + 10000;
+  const hasQuota = await checkStorageQuota(estimatedSize);
+  if (!hasQuota) {
+    logEvent({
+      title: "PDF persist failed",
+      detail: "Insufficient storage quota",
+      sessionId: state.activeSessionId
+    });
+    return;
+  }
+  const ocrData = {};
+  if (pdfState.pages) {
+    pdfState.pages.forEach((page, idx) => {
+      if (page.ocrSpans && page.ocrSpans.length) {
+        ocrData[idx] = page.ocrSpans;
+      }
+    });
+  }
   const record = {
     id: pdfState.id,
     name: pdfState.name,
@@ -86,6 +104,7 @@ function persistPdfState(pdfState) {
     annotationCount: pdfState.annotationCount || 0,
     scale: pdfState.scale || 1.15,
     autoFit: pdfState.autoFit ?? true,
+    ocrSpans: Object.keys(ocrData).length ? ocrData : null,
     updatedAt: Date.now()
   };
   const tx = db.transaction("pdfs", "readwrite");
@@ -227,9 +246,29 @@ async function updateStorageUsage() {
     elements.storageUsage.textContent = "IndexedDB: unavailable";
     return;
   }
-  const { usage } = await navigator.storage.estimate();
-  const mb = ((usage || 0) / (1024 * 1024)).toFixed(2);
-  elements.storageUsage.textContent = `IndexedDB: ${mb} MB`;
+  const { usage, quota } = await navigator.storage.estimate();
+  const usageMb = ((usage || 0) / (1024 * 1024)).toFixed(2);
+  const quotaMb = ((quota || 0) / (1024 * 1024)).toFixed(0);
+  const percent = quota ? Math.round((usage / quota) * 100) : 0;
+  elements.storageUsage.textContent = `IndexedDB: ${usageMb} MB / ${quotaMb} MB (${percent}%)`;
+  if (percent > 90) {
+    notify("Storage", "Storage nearly full. Consider clearing offline data.", { type: "error", duration: 5000 });
+  }
+}
+
+async function checkStorageQuota(bytesNeeded) {
+  if (!navigator.storage || !navigator.storage.estimate) return true;
+  try {
+    const { usage, quota } = await navigator.storage.estimate();
+    const available = (quota || 0) - (usage || 0);
+    if (bytesNeeded > available) {
+      notify("Storage", `Not enough storage. Need ${(bytesNeeded / 1024 / 1024).toFixed(1)} MB, have ${(available / 1024 / 1024).toFixed(1)} MB.`, { type: "error", duration: 5000 });
+      return false;
+    }
+    return true;
+  } catch (e) {
+    return true;
+  }
 }
 
 function performReset() {

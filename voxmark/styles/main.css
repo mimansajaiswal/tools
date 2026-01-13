@@ -1199,6 +1199,20 @@ header {
   outline-offset: -8px;
 }
 
+.viewer-area.pinching {
+  touch-action: none;
+  overflow: hidden;
+}
+
+.viewer-area.pinching > * {
+  will-change: transform;
+  transition: none;
+}
+
+.viewer-area:not(.pinching) > [data-id] {
+  transition: transform 0.12s ease-out;
+}
+
 .page {
   position: relative;
   margin: 0 auto 24px;
@@ -1226,19 +1240,35 @@ header {
   color: transparent;
   pointer-events: auto;
   user-select: text;
+  -webkit-user-select: text;
   z-index: 2;
   cursor: text;
+  overflow: hidden;
+  line-height: 1;
 }
 
 .textLayer span {
+  position: absolute;
   color: transparent;
   user-select: text;
+  -webkit-user-select: text;
   line-height: 1;
   transform-origin: 0 0;
   pointer-events: auto;
+  white-space: pre;
+  cursor: text;
+}
+
+.textLayer::selection {
+  background: var(--selection-bg);
 }
 
 .textLayer span::selection {
+  background: var(--selection-bg);
+  color: transparent;
+}
+
+.textLayer *::selection {
   background: var(--selection-bg);
 }
 
@@ -2014,6 +2044,36 @@ html.pdf-invert .search-hit-box {
   cursor: nwse-resize;
 }
 
+.annotation-delete {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: var(--muted-pink);
+  color: var(--text-on-danger);
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s, transform 0.15s;
+  z-index: 10;
+}
+
+.annotation-overlay:hover .annotation-delete,
+.annotation-overlay.selected .annotation-delete {
+  opacity: 1;
+}
+
+.annotation-delete:hover {
+  transform: scale(1.15);
+  background: #c24d4d;
+}
+
 .adjust-toolbar {
   position: absolute;
   left: 24px;
@@ -2070,10 +2130,49 @@ html.pdf-invert .search-hit-box {
   font-size: 12px;
   box-shadow: var(--toast-shadow);
   animation: toastIn 0.2s ease;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.toast:hover {
+  opacity: 0.85;
 }
 
 .toast.error {
   background: var(--toast-error-bg);
+}
+
+.toast.toast-pulse {
+  animation: toastPulse 0.3s ease;
+}
+
+@keyframes toastPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+.shortcuts-list {
+  display: grid;
+  gap: 8px;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.shortcut-row kbd {
+  display: inline-block;
+  min-width: 28px;
+  padding: 4px 8px;
+  background: var(--surface);
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 11px;
+  text-align: center;
 }
 
 @keyframes toastIn {
@@ -2450,17 +2549,61 @@ html.pdf-invert .search-hit-box {
 }
 
 @media (max-width: 720px) {
+  header {
+    padding: 8px 10px;
+    gap: 6px;
+  }
+
+  .topbar-left,
+  .topbar-right {
+    gap: 6px;
+  }
+
   .topbar-center {
     display: none;
+  }
+
+  .topbar .btn.icon,
+  .theme-toggle {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+  }
+
+  .topbar .btn .label,
+  #uploadPdf .label,
+  #pdfMenuToggle .label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  #uploadPdf {
+    padding: 0;
+    width: 32px;
+    height: 32px;
+  }
+
+  .pdf-menu {
+    left: 0;
+    right: 0;
+    width: calc(100vw - 24px);
+    max-width: none;
   }
 
   .app.search-open .topbar-right .search-bar {
     display: flex;
     position: fixed;
-    top: 68px;
-    left: 12px;
-    right: 12px;
-    padding: 12px;
+    top: 56px;
+    left: 8px;
+    right: 8px;
+    padding: 10px;
     background: var(--panel-strong);
     border-radius: var(--radius-md);
     border: 1px solid var(--panel-border);
@@ -2475,6 +2618,7 @@ html.pdf-invert .search-hit-box {
   .search-bar,
   .page-jump {
     width: auto;
+    height: 36px;
   }
 
   .search-bar {
@@ -2492,12 +2636,333 @@ html.pdf-invert .search-hit-box {
   .search-bar input,
   .page-jump input {
     min-width: 0;
+    font-size: 14px;
+    padding: 0 8px;
   }
 
   .search-bar .btn,
   .page-jump .btn {
-    width: 34px;
-    height: 30px;
+    width: 36px;
+    height: 32px;
     padding: 0;
+    min-height: 44px;
+  }
+
+  .search-bar .btn .label,
+  .page-jump .btn .label {
+    display: none;
+  }
+
+  .zoom-indicator {
+    padding: 4px 6px;
+    font-size: 11px;
+    height: 32px;
+  }
+
+  .zoom-indicator input {
+    width: 32px;
+    font-size: 11px;
+  }
+
+  .page-jump-total {
+    font-size: 11px;
+  }
+
+  .viewer-toolbar {
+    padding: 6px 8px calc(8px + env(safe-area-inset-bottom));
+    gap: 6px;
+    border-radius: 18px;
+  }
+
+  .tool-group,
+  .mode-group {
+    padding: 3px;
+    gap: 4px;
+  }
+
+  .viewer-toolbar .btn {
+    min-width: 32px;
+    height: 32px;
+    padding: 4px 6px;
+  }
+
+  .viewer-toolbar .btn.icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .mode-group .btn {
+    width: 30px;
+    height: 30px;
+  }
+
+  .mic {
+    width: 44px;
+    height: 44px;
+  }
+
+  .sidebar {
+    width: min(88vw, 320px);
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .sidebar-scrim {
+    position: fixed;
+    inset: 0;
+    top: var(--topbar-height);
+    background: var(--sidebar-scrim);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--transition);
+    z-index: 19;
+  }
+
+  .app.sidebar-open .sidebar-scrim {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .nav-content {
+    max-height: 40vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .search-results {
+    max-height: 30vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .settings-panel,
+  .logs-panel,
+  .queue-panel {
+    width: calc(100% - 16px);
+    left: 8px;
+    right: 8px;
+    top: 8px;
+    max-height: calc(100vh - 80px);
+    padding: 16px;
+  }
+
+  .settings-panel .field,
+  .logs-panel .logs-header,
+  .queue-panel .queue-header {
+    padding: 10px 0;
+  }
+
+  .settings-panel input[type="text"],
+  .settings-panel input[type="password"],
+  .settings-panel select,
+  .settings-panel textarea {
+    min-height: 44px;
+    padding: 10px 12px;
+    font-size: 16px;
+  }
+
+  .settings-panel .btn,
+  .logs-panel .btn,
+  .queue-panel .btn {
+    min-height: 44px;
+  }
+
+  .settings-panel label,
+  .settings-panel h3 {
+    font-size: 14px;
+  }
+
+  .logs-list,
+  .queue-list {
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .log-item,
+  .queue-item {
+    padding: 12px;
+    min-height: 44px;
+  }
+
+  .overflow-menu {
+    left: auto;
+    right: 8px;
+    width: calc(100vw - 16px);
+    max-width: 280px;
+  }
+
+  .menu-item {
+    min-height: 44px;
+    padding: 12px;
+  }
+
+  .brand h1 {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  header {
+    padding: 6px 8px;
+    gap: 4px;
+  }
+
+  .topbar-left,
+  .topbar-right {
+    gap: 4px;
+  }
+
+  .topbar .btn.icon,
+  .theme-toggle {
+    width: 32px;
+    height: 32px;
+  }
+
+  #pdfMenuToggle {
+    padding: 0 6px;
+    gap: 4px;
+  }
+
+  #pdfMenuToggle .ph-caret-down {
+    display: none;
+  }
+
+  .brand {
+    display: none;
+  }
+
+  .zoom-indicator {
+    display: none;
+  }
+
+  .page-jump {
+    gap: 2px;
+  }
+
+  .page-jump input {
+    width: 40px;
+    min-width: 40px;
+  }
+
+  .page-jump-total {
+    font-size: 10px;
+  }
+
+  .app.search-open .topbar-right .search-bar {
+    top: 50px;
+    left: 6px;
+    right: 6px;
+    padding: 8px;
+  }
+
+  .viewer-area {
+    padding: 12px 8px 140px;
+  }
+
+  .viewer-toolbar {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    padding: 4px 6px calc(6px + env(safe-area-inset-bottom));
+    gap: 4px;
+    border-radius: 16px;
+  }
+
+  .toolbar-left,
+  .toolbar-right {
+    gap: 4px;
+  }
+
+  .tool-group,
+  .mode-group {
+    padding: 2px;
+    gap: 2px;
+  }
+
+  .viewer-toolbar .btn {
+    min-width: 28px;
+    height: 28px;
+    padding: 2px 4px;
+    font-size: 12px;
+  }
+
+  .viewer-toolbar .btn.icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .viewer-toolbar .btn .ph {
+    font-size: 16px;
+  }
+
+  .mode-group .btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .mic {
+    width: 40px;
+    height: 40px;
+  }
+
+  .mic .ph {
+    font-size: 20px;
+  }
+
+  .sidebar {
+    width: 100vw;
+    max-width: none;
+  }
+
+  .settings-panel,
+  .logs-panel,
+  .queue-panel {
+    width: calc(100% - 12px);
+    left: 6px;
+    right: 6px;
+    top: 6px;
+    max-height: calc(100vh - 60px);
+    padding: 12px;
+  }
+
+  .pdf-menu {
+    left: 6px;
+    right: 6px;
+    width: calc(100vw - 12px);
+  }
+
+  .overflow-menu {
+    right: 6px;
+    width: calc(100vw - 12px);
+    max-width: none;
+  }
+
+  .toast-container {
+    left: 8px;
+    right: 8px;
+    bottom: 72px;
+  }
+
+  .toast {
+    width: 100%;
+  }
+
+  .jump-back {
+    left: 8px;
+    right: 8px;
+    bottom: calc(130px + env(safe-area-inset-bottom));
+  }
+
+  .empty-state {
+    padding: 24px;
+  }
+
+  .empty-state .ph {
+    font-size: 48px;
+  }
+
+  .empty-state p {
+    font-size: 14px;
   }
 }
