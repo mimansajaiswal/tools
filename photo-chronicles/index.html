@@ -21,7 +21,7 @@
 
     <!-- Font: DM Serif Display (Headers) & Inter (Body) -->
     <link
-        href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=DM+Serif+Display&family=Inter:wght@300;400;500;600&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Kalam:wght@400;700&family=DM+Serif+Display&family=Inter:wght@300;400;500;600&display=swap"
         rel="stylesheet">
 
     <!-- Tailwind Config for Custom Palette -->
@@ -2333,26 +2333,7 @@ async function handleRequest(request, env) {
                 }
                 App.renderSidebar();
                 App.renderDiaryView();
-                if (window.innerWidth < 768) {
-                    const sidebar = document.getElementById('sidebar');
-                    if (sidebar) sidebar.classList.add('-translate-x-full');
-                    const overlay = document.getElementById('mobileSidebarOverlay');
-                    if (overlay) overlay.classList.add('hidden');
-                }
                 SyncManager.syncCurrentDiary();
-            },
-
-            toggleMobileSidebar: () => {
-                const sidebar = document.getElementById('sidebar');
-                const overlay = document.getElementById('mobileSidebarOverlay');
-                if (!sidebar || !overlay) return;
-                if (sidebar.classList.contains('-translate-x-full')) {
-                    sidebar.classList.remove('-translate-x-full');
-                    overlay.classList.remove('hidden');
-                } else {
-                    sidebar.classList.add('-translate-x-full');
-                    overlay.classList.add('hidden');
-                }
             },
 
             initNewEntry: async () => {
@@ -2459,7 +2440,7 @@ async function handleRequest(request, env) {
                     targetBtn.classList.remove('bg-white/20', 'hover:bg-white/10');
                     targetBtn.classList.add('bg-white', 'text-black');
                 }
-                App.updateGridOverlay();
+                
                 const segInd = document.getElementById('segmentIndicator');
                 if (mode > 1) {
                     segInd.classList.remove('hidden');
@@ -2504,9 +2485,6 @@ async function handleRequest(request, env) {
                     btn.innerHTML = `<i data-lucide="${iconName}" class="w-6 h-6"></i>`;
                     lucide.createIcons();
                 }
-            },
-
-            updateGridOverlay: () => {
             },
 
             initCamera: async () => {
@@ -2970,7 +2948,7 @@ async function handleRequest(request, env) {
                 } else {
                     App.state.activeSegment = nextEmpty;
                     document.getElementById('segCurrent').innerText = App.state.activeSegment + 1;
-                    App.updateGridOverlay();
+                    
                 }
             },
 
@@ -3050,7 +3028,7 @@ async function handleRequest(request, env) {
                 document.getElementById('takenPhotoUI').classList.remove('flex');
                 document.getElementById('cameraSection').classList.remove('hidden');
                 App.initCamera();
-                App.updateGridOverlay();
+                
                 document.getElementById('segCurrent').innerText = App.state.activeSegment + 1;
             },
 
@@ -3109,7 +3087,7 @@ async function handleRequest(request, env) {
                             if (nextEmpty !== -1) {
                                 App.state.activeSegment = nextEmpty;
                                 document.getElementById('segCurrent').innerText = App.state.activeSegment + 1;
-                                App.updateGridOverlay();
+                                
                             }
                         }
                     }

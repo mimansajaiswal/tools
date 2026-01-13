@@ -81,7 +81,6 @@ self.addEventListener('fetch', (event) => {
         if (response && response.ok) cache.put(request, response.clone());
         return response;
       } catch (err) {
-        if (cached) return cached;
         throw err;
       }
     })());
