@@ -6,7 +6,7 @@
 // Issue 1 Fix: Improved cache versioning strategy
 // The CACHE_VERSION should be incremented when making breaking changes.
 // Additionally, local files use content-aware caching with revalidation.
-const CACHE_VERSION = 10; // Increment this on each deployment with breaking changes
+const CACHE_VERSION = 11; // Increment this on each deployment with breaking changes
 const CACHE_NAME = `ghostink-cache-v${CACHE_VERSION}`;
 const CACHE_PREFIX = 'ghostink-cache-';
 
@@ -61,7 +61,7 @@ self.addEventListener('install', (event) => {
       // after the first successful online load.
       // Using pinned versions to ensure consistent behavior and avoid cache invalidation issues
       const cdnNoCorsAssets = [
-        'https://cdn.tailwindcss.com?plugins=forms',
+        'https://cdn.tailwindcss.com',
         'https://unpkg.com/lucide@0.562.0/dist/umd/lucide.min.js',
         'https://cdn.jsdelivr.net/npm/marked@17.0.1/lib/marked.umd.min.js',
         'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js',
@@ -102,7 +102,7 @@ self.addEventListener('install', (event) => {
             } catch {
               response = await fetchWithTimeout(url, { mode: 'no-cors' }, 8000);
             }
-            if (response) {
+            if (response && response.ok && response.type !== 'opaque') {
               await cache.put(new Request(url), response);
             }
           } catch (e) {
@@ -275,10 +275,9 @@ self.addEventListener('fetch', (event) => {
           // Note: opaque responses (from no-cors CDN requests) can't be inspected for errors,
           // but we only cache them if they exist. If the fetch succeeds, it's likely valid.
           // For transparent responses, require status 200.
-          const isOpaqueResponse = networkResponse.type === 'opaque';
           const isValidTransparent = networkResponse.status === 200 &&
             (networkResponse.type === 'basic' || networkResponse.type === 'cors');
-          const cacheable = networkResponse && (isOpaqueResponse || isValidTransparent);
+          const cacheable = networkResponse && isValidTransparent;
 
           if (cacheable) {
             // Clone response before caching

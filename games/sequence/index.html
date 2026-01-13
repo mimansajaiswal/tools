@@ -1,0 +1,4320 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sequence Online - Peer Multiplayer</title>
+  <link rel="icon" href="data:," />
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Space+Grotesk:wght@400;500;600&display=swap');
+
+    :root {
+      --bg: #f6efe6;
+      --bg-2: #efe0cf;
+      --ink: #2b1d16;
+      --muted: #6c5a4f;
+      --accent: #5c6f82;
+      --accent-2: #6f88a3;
+      --chip-0: #2d6cdf;
+      --chip-1: #2e8b57;
+      --chip-2: #c4532d;
+      --chip-3: #7b5c8c;
+      --card: #fffaf3;
+      --border: #d8c6b4;
+      --shadow: 0 10px 30px rgba(37, 24, 16, 0.15);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Space Grotesk", system-ui, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 800px at 10% -10%, #fff3dc, transparent 60%),
+        radial-gradient(1200px 800px at 110% 10%, #f2dcc3, transparent 60%),
+        linear-gradient(120deg, var(--bg), var(--bg-2));
+      min-height: 100vh;
+    }
+
+    header {
+      padding: 28px clamp(20px, 4vw, 46px);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    header h1 {
+      font-family: "Fraunces", serif;
+      font-size: clamp(28px, 4vw, 44px);
+      margin: 0;
+      letter-spacing: 0.5px;
+    }
+
+    header p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      max-width: 520px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .display-dropdown-wrap {
+      position: relative;
+    }
+
+    .display-dropdown {
+      display: none;
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      z-index: 60;
+      min-width: 200px;
+      animation: rise 0.2s ease;
+    }
+
+    .display-dropdown.open {
+      display: block;
+    }
+
+    .display-dropdown-content {
+      padding: 12px;
+    }
+
+    .display-dropdown label {
+      margin-bottom: 6px;
+    }
+
+    .display-dropdown select {
+      margin-bottom: 0;
+    }
+
+    .icon-btn {
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--ink);
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      padding: 0;
+      line-height: 1;
+      box-shadow: none;
+    }
+
+    .icon-btn svg {
+      width: 22px;
+      height: 22px;
+      display: block;
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+      padding: 0 clamp(16px, 4vw, 40px) 40px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+      animation: rise 0.5s ease;
+    }
+
+    .panel-title {
+      font-family: "Fraunces", serif;
+      font-size: 18px;
+      letter-spacing: 0.4px;
+      margin: 0 0 12px;
+    }
+
+    .stack {
+      display: grid;
+      gap: 12px;
+    }
+
+    label {
+      font-size: 13px;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    input,
+    select,
+    button {
+      font-family: inherit;
+    }
+
+    input,
+    select {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: #fff;
+    }
+
+    .settings-panel select {
+      position: relative;
+      z-index: 1;
+    }
+
+    .inline {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+      box-shadow: none;
+    }
+
+    button.secondary {
+      background: #f2e3d2;
+      color: var(--ink);
+      box-shadow: none;
+      border: 1px solid var(--border);
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+
+    button:hover:not(:disabled) {
+      filter: brightness(0.98);
+    }
+
+    button.danger {
+      background: #b54a4a;
+      color: #fff;
+    }
+
+    button.start-btn {
+      background: #2f6f4e;
+      color: #fff;
+    }
+
+    .join-code-row button {
+      padding: 8px 10px;
+      font-size: 12px;
+      border-radius: 8px;
+    }
+
+    .card-symbol .suit-icon {
+      width: 0.95em;
+      height: 0.95em;
+      display: inline-flex;
+    }
+
+    .card-symbol .suit-icon svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .card-symbol .rank {
+      color: currentColor;
+      opacity: 1;
+    }
+
+    .card-symbol .suit-icon svg path {
+      fill: currentColor;
+      fill-opacity: 0.8;
+      stroke: currentColor;
+      stroke-width: 1.6;
+      stroke-linejoin: round;
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 14px 0;
+      border-radius: 999px;
+    }
+
+    .settings-panel .accordion {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .settings-panel .accordion-toggle {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 14px;
+      background: #fff;
+      color: var(--ink);
+      border-radius: 16px;
+      border: 0;
+      font-weight: 600;
+    }
+
+
+    .settings-panel .accordion-content {
+      display: none;
+      padding: 10px 14px 14px;
+      border-top: 1px solid var(--border);
+      background: #fffaf3;
+    }
+
+    .settings-panel .accordion.open .accordion-content {
+      display: block;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    .toggle-row input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent);
+    }
+
+    #teamPicker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    #teamPicker button {
+      flex: 1 1 140px;
+    }
+
+    .display-settings {
+      display: grid;
+      gap: 12px;
+    }
+
+    .button-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: nowrap;
+    }
+
+    .button-row button {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(10, 48px);
+      gap: 6px;
+      justify-content: center;
+    }
+
+    .board.expanded-12 {
+      grid-template-columns: repeat(12, 42px);
+      gap: 5px;
+    }
+
+    .board.expanded-13 {
+      grid-template-columns: repeat(13, 38px);
+      gap: 4px;
+    }
+
+    .board-scroll {
+      max-height: none;
+      overflow: visible;
+      padding-right: 0;
+    }
+
+    .cell {
+      position: relative;
+      background: #fffdf8;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+      padding: 3px;
+      aspect-ratio: 2.5 / 3.5;
+      text-align: center;
+      display: grid;
+      place-items: center;
+      font-size: 13px;
+      cursor: default;
+      transition: border-color 0.15s ease, transform 0.15s ease;
+    }
+
+    .board.can-play .cell.possible {
+      cursor: pointer;
+    }
+
+    .cell.corner {
+      background: linear-gradient(135deg, #f1d8c2, #f9e8d6);
+      font-weight: 600;
+    }
+
+    .cell.possible {
+      border-color: #3d6a99;
+      box-shadow: 0 0 8px rgba(61, 106, 153, 0.5), inset 0 0 0 2px rgba(53, 99, 138, 0.3);
+      transform: translateY(-1px);
+    }
+
+    .card-image {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    .card-symbol {
+      font-weight: 600;
+      font-size: 11px;
+      position: absolute;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .card-symbol.top-left {
+      top: 2px;
+      left: 3px;
+    }
+
+    .card-symbol.bottom-right {
+      bottom: 2px;
+      right: 3px;
+      transform: rotate(180deg);
+    }
+
+    .card-symbol.red {
+      color: #b54a4a;
+    }
+
+    .card-symbol.black {
+      color: rgba(191, 107, 34, 0.82);
+    }
+
+    .chip {
+      position: absolute;
+      width: 55%;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      border: 2px solid rgba(255, 255, 255, 0.95);
+      display: grid;
+      place-items: center;
+      font-weight: 600;
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25), inset 0 1px 2px rgba(255, 255, 255, 0.3);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    .use-symbols .chip {
+      width: 52%;
+    }
+
+    .chip::before {
+      content: "";
+      position: absolute;
+      top: 15%;
+      left: 20%;
+      width: 30%;
+      height: 20%;
+      background: rgba(255, 255, 255, 0.35);
+      border-radius: 50%;
+      transform: rotate(-30deg);
+    }
+
+    .chip.team-0 {
+      background: var(--chip-0);
+    }
+
+    .chip.team-1 {
+      background: var(--chip-1);
+    }
+
+    .chip.team-2 {
+      background: var(--chip-2);
+    }
+
+    .chip.team-3 {
+      background: var(--chip-3);
+    }
+
+    .chip.sequence {
+      outline: 2px solid rgba(255, 255, 255, 0.9);
+      outline-offset: 1px;
+    }
+
+    .cell.has-chip .card-image,
+    .cell.has-chip .card-symbol {
+      opacity: 0.75;
+      filter: grayscale(0.05) saturate(0.92);
+    }
+
+    .waiting-banner {
+      background: linear-gradient(135deg, #f5ebe0, #ede3d6);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .hand {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
+      gap: 8px;
+    }
+
+    .hand-card {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 5px;
+      text-align: center;
+      cursor: pointer;
+      font-weight: 600;
+      aspect-ratio: 2.5 / 3.5;
+      display: grid;
+      place-items: center;
+      position: relative;
+    }
+
+    .hand-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    .hand-card .card-symbol {
+      font-size: 13px;
+    }
+
+    .hand-card .card-symbol.top-left {
+      top: 4px;
+      left: 5px;
+    }
+
+    .hand-card .card-symbol.bottom-right {
+      bottom: 4px;
+      right: 5px;
+    }
+
+    .hand-card.selected {
+      border-color: #3d6a99;
+      box-shadow: 0 0 10px rgba(61, 106, 153, 0.6), inset 0 0 0 2px rgba(53, 99, 138, 0.3);
+      border-radius: 3px;
+    }
+
+    .hand-card.dead-card {
+      opacity: 0.7;
+    }
+
+    .dead-card-btn {
+      position: absolute;
+      bottom: 4px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #d97777;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 9px;
+      font-weight: 600;
+      cursor: pointer;
+      z-index: 5;
+      white-space: nowrap;
+    }
+
+    .dead-card-btn:hover {
+      background: #c55;
+    }
+
+    .use-images .cell {
+      border-color: transparent;
+      background: transparent;
+    }
+
+    .use-images .cell.corner {
+      background: linear-gradient(135deg, #f1d8c2, #f9e8d6);
+      border-color: var(--border);
+    }
+
+    .use-images .hand-card {
+      border-color: transparent;
+      background: transparent;
+      padding: 0;
+    }
+
+    .use-images .hand-card.selected {
+      border-color: var(--accent-2);
+      background: #fff;
+    }
+
+    .player-list {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: 1fr;
+    }
+
+    @media (min-width: 520px) {
+      .player-list {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .player-row {
+      padding: 8px 10px;
+      border-radius: 12px;
+      background: #fff;
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .badge {
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      color: #fff;
+    }
+
+    .badge.team-0 {
+      background: var(--chip-0);
+    }
+
+    .badge.team-1 {
+      background: var(--chip-1);
+    }
+
+    .badge.team-2 {
+      background: var(--chip-2);
+    }
+
+    .badge.team-3 {
+      background: var(--chip-3);
+    }
+
+    .log-code {
+      background: #f9f4ee;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      font-family: "Spline Sans Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      color: var(--ink);
+      white-space: pre-wrap;
+      max-height: 260px;
+      overflow: auto;
+    }
+
+    .log-code-wrap {
+      position: relative;
+    }
+
+    .log-copy-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      padding: 6px;
+      font-size: 12px;
+      width: 34px;
+      height: 34px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .log-copy-btn svg {
+      width: 18px;
+      height: 18px;
+      display: block;
+    }
+
+    .status-pill {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      background: #fff;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      margin-top: 8px;
+    }
+
+    .status-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .status-pill .tip {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 10px;
+      background: #fff;
+      color: var(--ink);
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+      font-size: 12px;
+      min-width: 240px;
+      max-width: 320px;
+      display: none;
+      z-index: 20;
+    }
+
+    .status-pill.show-tip .tip {
+      display: block;
+    }
+
+    .status-pill.warning {
+      border-color: #d39a5a;
+      box-shadow: 0 0 0 2px rgba(211, 154, 90, 0.2);
+    }
+
+    .turn-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent-2);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .kick-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 4px 8px;
+      font-size: 11px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .kick-btn:hover {
+      background: #fbe8e8;
+      border-color: #d97777;
+      color: #a33;
+    }
+
+    .room-locked-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      background: #fff3e0;
+      border: 1px solid #e6a756;
+      color: #9a6b2a;
+    }
+
+    .board-panel {
+      max-width: 620px;
+      margin: 0 auto;
+    }
+
+    .hand-panel {
+      order: 2;
+    }
+
+    .settings-panel {
+      order: 3;
+    }
+
+    .log-panel {
+      order: 4;
+    }
+
+    .log-panel .accordion-content {
+      display: none;
+    }
+
+    .log-panel .accordion.open .accordion-content {
+      display: block;
+    }
+
+    .hand-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    #boardPanel .hand-header {
+      min-height: 46px;
+    }
+
+    .cover-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--ink);
+    }
+
+    .last-played {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--muted);
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 4px 10px 4px 6px;
+    }
+
+    .last-played .card-preview {
+      position: relative;
+      width: 28px;
+      height: 38px;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+      background: #fff;
+      display: grid;
+      place-items: center;
+      font-size: 11px;
+      overflow: hidden;
+    }
+
+    .last-played .card-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .last-played .card-preview .card-symbol {
+      font-size: 10px;
+      position: absolute;
+    }
+
+    .last-played .card-preview .card-symbol.top-left {
+      top: 1px;
+      left: 2px;
+    }
+
+    .last-played .card-preview .card-symbol.bottom-right {
+      bottom: 1px;
+      right: 2px;
+    }
+
+    .last-played .play-info {
+      font-size: 12px;
+      line-height: 1.3;
+    }
+
+    .last-played .play-info strong {
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    .settings-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 12, 16, 0.4);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      z-index: 40;
+    }
+
+    .settings-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .confirm-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 12, 16, 0.4);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      z-index: 70;
+      display: grid;
+      place-items: center;
+      padding: 16px;
+    }
+
+    .confirm-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .confirm-panel {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      padding: 16px;
+      width: min(360px, 100%);
+      display: grid;
+      gap: 10px;
+    }
+
+    .confirm-panel h3 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .confirm-panel p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .confirm-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .settings-panel {
+      display: none;
+      position: fixed;
+      --panel-pad: clamp(16px, 4vw, 48px);
+      top: var(--panel-pad);
+      left: var(--panel-pad);
+      right: var(--panel-pad);
+      bottom: auto;
+      z-index: 50;
+      overflow: auto;
+      max-width: 820px;
+      max-height: calc(100vh - (var(--panel-pad) * 2));
+      height: fit-content;
+      margin: 0 auto;
+    }
+
+    .settings-panel.open {
+      display: block;
+    }
+
+    .tab-bar {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+
+    .tab-btn {
+      background: transparent;
+      color: var(--muted);
+      border: 0;
+      padding: 6px 0;
+      border-radius: 0;
+      font-weight: 600;
+      text-align: left;
+    }
+
+    .tab-btn.active {
+      color: var(--ink);
+      box-shadow: inset 0 -2px 0 var(--accent);
+    }
+
+    .settings-panel .accordion+.accordion {
+      margin-top: 12px;
+    }
+
+    .host-action-row {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 12px;
+    }
+
+    .toast-container {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      display: grid;
+      gap: 8px;
+      z-index: 60;
+    }
+
+    .toast {
+      background: #fff;
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      font-size: 13px;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    @media (min-width: 820px) {
+      main {
+        grid-template-columns: minmax(0, 1fr) 320px;
+        align-items: start;
+        gap: 16px;
+      }
+
+      .board-panel {
+        grid-column: 1;
+        max-width: none;
+      }
+
+      .hand-panel {
+        grid-column: 2;
+        position: sticky;
+        top: 20px;
+      }
+
+      .settings-panel {
+        grid-column: 2;
+      }
+
+      .log-panel {
+        grid-column: 1 / -1;
+      }
+
+      section {
+        padding: 14px;
+      }
+
+      .stack {
+        gap: 10px;
+      }
+
+      label {
+        margin-bottom: 4px;
+      }
+
+      input,
+      select {
+        padding: 8px 10px;
+      }
+
+      button {
+        padding: 8px 12px;
+      }
+
+      .accordion-toggle {
+        padding: 8px 10px;
+      }
+
+      .accordion-content {
+        padding: 8px 10px 10px;
+      }
+
+      .player-row {
+        padding: 6px 8px;
+      }
+
+      .tab-bar {
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+
+      .tab-btn {
+        padding: 6px 0;
+      }
+    }
+
+    @media (max-width: 819px) {
+      main {
+        padding-bottom: 180px;
+      }
+
+      .board {
+        grid-template-columns: repeat(10, minmax(24px, 1fr));
+        gap: 3px;
+      }
+
+      .board.expanded-12 {
+        grid-template-columns: repeat(12, minmax(20px, 1fr));
+        gap: 2px;
+      }
+
+      .board.expanded-13 {
+        grid-template-columns: repeat(13, minmax(18px, 1fr));
+        gap: 2px;
+      }
+
+      .cell {
+        border-radius: 2px;
+        font-size: 9px;
+        padding: 2px;
+      }
+
+      .cell .card-symbol {
+        font-size: 8px;
+      }
+
+      .cell .card-symbol.top-left {
+        top: 1px;
+        left: 2px;
+      }
+
+      .cell .card-symbol.bottom-right {
+        bottom: 1px;
+        right: 2px;
+      }
+
+      .chip {
+        width: 78%;
+      }
+
+      .use-symbols .chip {
+        width: 62%;
+      }
+
+      .use-symbols .cell .card-symbol {
+        -webkit-text-stroke: 0.9px currentColor;
+        paint-order: stroke fill;
+        color: rgba(0, 0, 0, 0.58);
+      }
+
+      .use-symbols .cell .card-symbol.red {
+        color: rgba(181, 74, 74, 0.8);
+        -webkit-text-stroke-color: #b54a4a;
+      }
+
+      .use-symbols .cell .card-symbol.black {
+        color: rgba(0, 0, 0, 0.6);
+        -webkit-text-stroke-color: rgba(0, 0, 0, 0.75);
+      }
+
+      .card-symbol .suit-icon svg path {
+        stroke-width: 2.2;
+      }
+
+      .board-scroll {
+        max-height: none;
+      }
+
+      .hand-panel {
+        position: fixed;
+        left: 12px;
+        right: 12px;
+        bottom: 0;
+        z-index: 30;
+        padding: 12px;
+        padding-bottom: calc(12px + env(safe-area-inset-bottom));
+        border-radius: 16px;
+        box-shadow: 0 12px 28px rgba(24, 20, 16, 0.2);
+      }
+
+      .hand {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        padding-bottom: 4px;
+      }
+
+      .hand-card {
+        min-width: 60px;
+        flex: 0 0 auto;
+      }
+
+      .settings-panel .panel-title {
+        margin-bottom: 6px;
+      }
+
+    }
+
+    @keyframes rise {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <div>
+      <h1>Sequence Online</h1>
+      <p>Multiplayer Sequence with PeerJS. Host a room, shuffle the board, and race for five-in-a-row sequences.</p>
+      <div class="status-row">
+        <div class="status-pill" id="turnStatus">
+          <span class="turn-dot"></span>
+          <span>Waiting for game</span>
+          <span class="tip">Whose turn it is right now.</span>
+        </div>
+        <div class="status-pill hidden" id="yourNameStatus">
+          <span>You: --</span>
+        </div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button id="gameControlBtn" class="game-control-btn hidden">Start game</button>
+      <button id="openInfoBtn" class="icon-btn" aria-label="Game info">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+          stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9"></circle>
+          <path d="M12 10v6"></path>
+          <path d="M12 7h.01"></path>
+        </svg>
+      </button>
+      <button id="openGameSettingsBtn" class="icon-btn" aria-label="Game settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M6 8h12a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4h-1l-2-3h-6l-2 3H6a4 4 0 0 1-4-4v-4a4 4 0 0 1 4-4z"></path>
+          <path d="M9 11v2"></path>
+          <path d="M7 12h4"></path>
+          <path d="M15 11v2"></path>
+        </svg>
+      </button>
+      <div class="display-dropdown-wrap">
+        <button id="openDisplaySettingsBtn" class="icon-btn" aria-label="Display settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+            stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3.5"></circle>
+            <path
+              d="M19.4 15a1.8 1.8 0 0 0 .36 2l.05.05a2 2 0 1 1-2.83 2.83l-.05-.05a1.8 1.8 0 0 0-2-.36 1.8 1.8 0 0 0-1 1.64V21a2 2 0 1 1-4 0v-.08a1.8 1.8 0 0 0-1-1.64 1.8 1.8 0 0 0-2 .36l-.05.05a2 2 0 1 1-2.83-2.83l.05-.05a1.8 1.8 0 0 0 .36-2 1.8 1.8 0 0 0-1.64-1H3a2 2 0 1 1 0-4h.08a1.8 1.8 0 0 0 1.64-1 1.8 1.8 0 0 0-.36-2l-.05-.05a2 2 0 1 1 2.83-2.83l.05.05a1.8 1.8 0 0 0 2 .36 1.8 1.8 0 0 0 1-1.64V3a2 2 0 1 1 4 0v.08a1.8 1.8 0 0 0 1 1.64 1.8 1.8 0 0 0 2-.36l.05-.05a2 2 0 1 1 2.83 2.83l-.05.05a1.8 1.8 0 0 0-.36 2 1.8 1.8 0 0 0 1.64 1H21a2 2 0 1 1 0 4h-.08a1.8 1.8 0 0 0-1.64 1Z">
+            </path>
+          </svg>
+        </button>
+        <div class="display-dropdown" id="displayDropdown">
+          <div class="display-dropdown-content">
+            <label for="cardDisplaySelect">Card display</label>
+            <select id="cardDisplaySelect">
+              <option value="auto">Auto (symbols on mobile)</option>
+              <option value="images">Images</option>
+              <option value="symbols">Symbols</option>
+            </select>
+            <div class="divider"></div>
+            <button id="leaveRoomBtn" class="danger" style="width: 100%;">Leave game</button>
+            <button id="resetSessionBtn" class="secondary" style="width: 100%; margin-top: 6px;">Reset game</button>
+            <button id="clearDataBtn" class="secondary" style="width: 100%; margin-top: 6px;">Clear saved data</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="status-row" style="margin-bottom: 10px;">
+      <div class="status-pill" id="deckStatus">
+        <span>Deck: 0</span>
+        <span class="tip">Cards left to draw. Decks in play shown in room info.</span>
+      </div>
+      <div class="status-pill" id="sequenceStatus">
+        <span>Sequences: --</span>
+        <span class="tip">Sequences completed per team or player. Rules set by host.</span>
+      </div>
+      <div class="status-pill" id="timerStatus">
+        <span>Timer: Off</span>
+        <span class="tip">Turn timer for the active player. Auto-play triggers on timeout.</span>
+      </div>
+    </div>
+
+    <section class="board-panel" id="boardPanel">
+      <div class="hand-header">
+        <h2 class="panel-title">Board</h2>
+        <div id="lastPlayedCard" class="last-played hidden"></div>
+      </div>
+      <div class="board-scroll">
+        <div id="board" class="board"></div>
+      </div>
+    </section>
+
+    <section class="log-panel" id="logPanel">
+      <div class="accordion" id="logAccordion">
+        <button class="accordion-toggle" type="button">
+          <span>Game log</span>
+          <span>▾</span>
+        </button>
+        <div class="accordion-content">
+          <div class="log-code-wrap">
+            <button id="copyLogBtn" class="secondary log-copy-btn" aria-label="Copy log">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+                stroke-linejoin="round" aria-hidden="true">
+                <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+            </button>
+            <pre class="log-code"><code id="gameLog"></code></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="hand-panel" id="handPanel">
+      <div class="hand-header">
+        <h2 class="panel-title">Your hand</h2>
+      </div>
+      <div id="waitingBanner" class="waiting-banner hidden">Waiting for host to start the game...</div>
+      <div class="hand" id="hand"></div>
+      <div id="hintText" style="margin-top: 8px; font-size: 13px; color: var(--muted);"></div>
+    </section>
+
+    <section class="settings-panel" id="gameSettingsPanel">
+      <div class="hand-header">
+        <h2 class="panel-title" id="settingsTitle">Game settings</h2>
+        <button id="closeGameSettingsBtn" class="icon-btn" aria-label="Close game settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+            stroke-linejoin="round">
+            <path d="M18 6L6 18"></path>
+            <path d="M6 6l12 12"></path>
+          </svg>
+        </button>
+      </div>
+      <div class="tab-bar" id="roomTabBar" role="tablist" aria-label="Room setup">
+        <button id="hostTabBtn" class="tab-btn active" type="button" role="tab" aria-selected="true">Host</button>
+        <button id="joinTabBtn" class="tab-btn" type="button" role="tab" aria-selected="false">Join</button>
+      </div>
+      <div class="stack">
+        <div class="settings-group" id="gameSettingsGroup">
+          <div class="accordion open">
+            <button class="accordion-toggle" type="button">
+              <span>Connection</span>
+              <span>▾</span>
+            </button>
+            <div class="accordion-content">
+              <div class="stack">
+                <div>
+                  <label for="playerName">Display name</label>
+                  <input id="playerName" placeholder="Your name" />
+                </div>
+                <div id="sessionBox" class="hidden">
+                  <label>Saved session</label>
+                  <div class="stack">
+                    <div id="sessionInfo" style="font-size: 13px; color: var(--muted);"></div>
+                    <div style="display: grid; gap: 8px;">
+                      <button id="rejoinBtn" class="secondary">Rejoin</button>
+                      <button id="rehostBtn" class="secondary">Rehost</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="connection-tab-panel" data-tab="host">
+                  <div id="shareBox" class="hidden">
+                    <label>Room code</label>
+                    <div class="inline">
+                      <input id="roomCode" readonly />
+                      <button id="copyCodeBtn" class="secondary">Copy</button>
+                    </div>
+                    <label style="margin-top: 8px;">Share link</label>
+                    <div class="inline">
+                      <input id="shareLink" readonly />
+                      <button id="copyLinkBtn" class="secondary">Copy</button>
+                    </div>
+                    <div class="toggle-row" style="margin-top: 10px;">
+                      <label class="toggle-row" for="hideCodeToggle">
+                        <input type="checkbox" id="hideCodeToggle" />
+                        Hide codes (streamer mode)
+                      </label>
+                    </div>
+                    <div class="toggle-row">
+                      <label class="toggle-row" for="lockRoomToggle">
+                        <input type="checkbox" id="lockRoomToggle" />
+                        Lock room (prevent new joins)
+                      </label>
+                    </div>
+                  </div>
+                </div>
+                <div class="connection-tab-panel hidden" data-tab="join">
+                  <div id="joinBox">
+                    <label for="joinCode">Join code</label>
+                    <div class="inline join-code-row">
+                      <input id="joinCode" type="password" placeholder="Paste host code" />
+                      <button id="toggleJoinCodeBtn" class="secondary" type="button">Show</button>
+                    </div>
+                    <button class="secondary" id="joinBtn" style="margin-top: 8px;">Join room</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="accordion hidden" id="playersAccordion">
+            <button class="accordion-toggle" type="button">
+              <span>Players</span>
+              <span>▾</span>
+            </button>
+            <div class="accordion-content">
+              <div class="stack">
+                <div id="teamPickerBox" class="hidden">
+                  <label>Choose your team</label>
+                  <div class="stack" id="teamPicker"></div>
+                </div>
+                <div class="player-list" id="playerList"></div>
+              </div>
+            </div>
+          </div>
+          <div class="accordion open" id="lobbyAccordion">
+            <button class="accordion-toggle" type="button">
+              <span>Lobby & Players</span>
+              <span>▾</span>
+            </button>
+            <div class="accordion-content">
+              <div class="stack">
+                <div id="hostSettingsBox" class="hidden">
+                  <label for="teamModeToggle">Team mode</label>
+                  <select id="teamModeToggle">
+                    <option value="solo">Free-for-all</option>
+                    <option value="teams">Teams</option>
+                  </select>
+                  <div id="teamCountRow">
+                    <label for="teamCount" style="margin-top: 8px;">Teams</label>
+                    <select id="teamCount">
+                      <option value="2">Two Teams</option>
+                      <option value="3">Three Teams</option>
+                      <option value="4">Four Teams</option>
+                    </select>
+                  </div>
+                  <label for="sequenceLengthSelect" style="margin-top: 8px;">Sequence length</label>
+                  <select id="sequenceLengthSelect">
+                    <option value="5">5 in a row</option>
+                    <option value="6">6 in a row</option>
+                    <option value="7">7 in a row</option>
+                  </select>
+                  <label for="sequencesToWinSelect" style="margin-top: 8px;">Sequences to win</label>
+                  <select id="sequencesToWinSelect">
+                    <option value="2">2 sequences</option>
+                    <option value="3">3 sequences</option>
+                  </select>
+                  <label for="boardModeSelect" style="margin-top: 8px;">Board &amp; deck</label>
+                  <select id="boardModeSelect">
+                    <option value="standard">Standard (10×10, 2 decks)</option>
+                    <option value="expanded-deck">Expanded deck (10×10, 3 decks)</option>
+                    <option value="expanded-challenge">Challenge (12×12, 3 decks, no corners)</option>
+                    <option value="expanded-classic">Classic+ (12×13, 3 decks, with corners)</option>
+                  </select>
+                  <label for="turnTimerSelect" style="margin-top: 8px;">Turn timer</label>
+                  <select id="turnTimerSelect">
+                    <option value="0">Off</option>
+                    <option value="20">20s</option>
+                    <option value="30">30s</option>
+                    <option value="45">45s</option>
+                    <option value="60">60s</option>
+                  </select>
+                  <label class="toggle-row" id="shuffleBoardRow" for="shuffleBoardToggle">
+                    <input type="checkbox" id="shuffleBoardToggle" />
+                    Shuffle board
+                  </label>
+                  <div class="button-row" style="margin-top: 8px;">
+                    <button id="saveSettingsBtn" class="secondary">Save settings</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="button-row" id="gameActionsRow">
+          <button id="leaveRoomBtnGame" class="danger">Leave game</button>
+          <button id="resetSessionBtnGame" class="secondary">Reset game</button>
+        </div>
+
+        <div class="settings-group hidden" id="infoSettingsGroup">
+          <div class="accordion open" id="infoAccordion">
+            <button class="accordion-toggle" type="button">
+              <span>Room info</span>
+              <span>▾</span>
+            </button>
+            <div class="accordion-content">
+              <div class="stack" style="font-size: 13px; color: var(--muted);">
+                <div>Team mode: <strong id="infoTeamMode">--</strong></div>
+                <div>Teams: <strong id="infoTeamCount">--</strong></div>
+                <div>Sequence length: <strong id="infoSeqLen">--</strong></div>
+                <div>Sequences to win: <strong id="infoSeqWin">--</strong></div>
+                <div>Decks: <strong id="infoDecks">--</strong></div>
+                <div>Turn timer: <strong id="infoTimer">--</strong></div>
+                <div>Room status: <strong id="infoRoomStatus">Open</strong></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="hostSetupBox" class="host-action-row hidden">
+          <button id="hostBtn">Host room</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+  <div class="settings-overlay" id="settingsOverlay"></div>
+  <div class="confirm-overlay" id="confirmOverlay" aria-hidden="true">
+    <div class="confirm-panel" role="dialog" aria-modal="true" aria-labelledby="confirmTitle"
+      aria-describedby="confirmMessage">
+      <h3 id="confirmTitle">Confirm</h3>
+      <p id="confirmMessage"></p>
+      <div class="confirm-actions">
+        <button id="confirmCancelBtn" class="secondary" type="button">Cancel</button>
+        <button id="confirmOkBtn" class="danger" type="button">Confirm</button>
+      </div>
+    </div>
+  </div>
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script>
+    const SUITS = { S: "♠", H: "♥", D: "♦", C: "♣" };
+    const RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"];
+    const NON_JACK_RANKS = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "Q", "K"];
+    const TWO_EYED = new Set(["JC", "JD"]);
+    const ONE_EYED = new Set(["JS", "JH"]);
+    const DEFAULT_LAYOUT = [
+      [null, "2S", "3S", "4S", "5S", "6S", "7S", "8S", "9S", null],
+      ["6C", "5C", "4C", "3C", "2C", "AH", "KH", "QH", "10H", "10S"],
+      ["7C", "AS", "2D", "3D", "4D", "5D", "6D", "7D", "9H", "QS"],
+      ["8C", "KS", "6C", "5C", "4C", "3C", "2C", "8D", "8H", "KS"],
+      ["9C", "QS", "7C", "6H", "5H", "4H", "AH", "9D", "7H", "AS"],
+      ["10C", "10S", "8C", "7H", "2H", "3H", "KH", "10D", "6H", "2D"],
+      ["QC", "9S", "9C", "8H", "9H", "10H", "QH", "QD", "5H", "3D"],
+      ["KC", "8S", "10C", "QC", "KC", "AC", "AD", "KD", "4H", "4D"],
+      ["AC", "7S", "6S", "5S", "4S", "3S", "2S", "2H", "3H", "5D"],
+      [null, "AD", "KD", "QD", "10D", "9D", "8D", "7D", "6D", null]
+    ];
+
+    const EXPANDED_CHALLENGE_LAYOUT = [
+      ["4H", "7H", "9S", "2S", "8S", "KH", "8H", "5S", "4D", "4S", "4C", "KC"],
+      ["2D", "7S", "6S", "AD", "8D", "2H", "KH", "2C", "AS", "5D", "5D", "QS"],
+      ["KH", "KC", "KD", "10D", "4D", "5S", "3C", "6D", "8H", "QS", "6C", "5H"],
+      ["KC", "7C", "AH", "7C", "8S", "4H", "9H", "2D", "3C", "KS", "9S", "8C"],
+      ["5H", "3H", "4S", "9D", "3C", "2S", "8H", "QH", "KS", "8S", "9C", "6D"],
+      ["9D", "4C", "3H", "2D", "10H", "8D", "QH", "7D", "AD", "9C", "3S", "3D"],
+      ["2H", "KD", "KS", "7C", "4S", "6C", "8C", "2C", "6H", "QH", "10S", "QC"],
+      ["6H", "5C", "10S", "QD", "10C", "7S", "5C", "10D", "10H", "10C", "7H", "QS"],
+      ["KD", "7D", "10D", "5D", "7D", "6C", "QC", "QC", "8C", "7S", "2H", "AD"],
+      ["2C", "9H", "9H", "10H", "4H", "4C", "3H", "10C", "AS", "5H", "5S", "5C"],
+      ["9D", "3S", "AH", "9S", "6S", "6H", "4D", "AS", "AC", "3S", "8D", "6D"],
+      ["2S", "3D", "3D", "QD", "7H", "6S", "AC", "AC", "9C", "QD", "AH", "10S"]
+    ];
+
+    const EXPANDED_CLASSIC_LAYOUT = [
+      [null, "5H", "7D", "6C", "6H", "AS", null, "3D", "8C", "KS", "4S", "10S", null],
+      ["8D", "6S", "5S", "9S", "4D", "10H", "10S", "8S", "2S", "2D", "7S", "7H", "AH"],
+      ["3H", "KS", "QD", "7C", "2H", "9C", "3S", "3H", "7D", "6H", "QC", "10D", "9D"],
+      ["KD", "QD", "8S", "5C", null, "4C", "4H", "9D", null, "5H", "10C", "KD", "QH"],
+      ["KH", "2S", "2H", "KS", "7D", "3S", "3D", "5C", "2C", "5C", "6C", "AC", "9C"],
+      [null, "3C", "3C", "9D", "8C", "QS", "7H", "8C", "KC", "2C", "QC", "4S", "6S"],
+      ["8H", "QS", "4H", "8D", "AD", "6D", "6D", "2C", "8H", "5D", "4C", "10D", null],
+      ["8D", "QH", "4H", "3C", "AH", "2S", "10H", "5D", "AD", "4D", "KC", "10C", "2D"],
+      ["7S", "4S", "2D", "6S", null, "8H", "9H", "AD", null, "5S", "AH", "4D", "10S"],
+      ["2H", "QD", "4C", "5H", "AC", "9H", "7H", "10C", "KH", "AC", "9H", "3S", "AS"],
+      ["7C", "9S", "9C", "7S", "5S", "5D", "10H", "QC", "AS", "8S", "10D", "3H", "6D"],
+      [null, "6H", "QS", "6C", "KC", "KH", null, "7C", "KD", "QH", "3D", "9S", null]
+    ];
+
+    const boardEl = document.getElementById("board");
+    const playerListEl = document.getElementById("playerList");
+    const handEl = document.getElementById("hand");
+    const hintText = document.getElementById("hintText");
+    const logEl = document.getElementById("gameLog");
+    const turnStatusEl = document.getElementById("turnStatus");
+    const yourNameStatusEl = document.getElementById("yourNameStatus");
+    const deckStatusEl = document.getElementById("deckStatus");
+    const sequenceStatusEl = document.getElementById("sequenceStatus");
+    const timerStatusEl = document.getElementById("timerStatus");
+    const lastPlayedCardEl = document.getElementById("lastPlayedCard");
+
+    const hostBtn = document.getElementById("hostBtn");
+    const joinBtn = document.getElementById("joinBtn");
+    const gameControlBtn = document.getElementById("gameControlBtn");
+    const joinCodeInput = document.getElementById("joinCode");
+    const roomCodeInput = document.getElementById("roomCode");
+    const shareLinkInput = document.getElementById("shareLink");
+    const copyCodeBtn = document.getElementById("copyCodeBtn");
+    const copyLinkBtn = document.getElementById("copyLinkBtn");
+    const playerNameInput = document.getElementById("playerName");
+    const sessionBox = document.getElementById("sessionBox");
+    const sessionInfo = document.getElementById("sessionInfo");
+    const rejoinBtn = document.getElementById("rejoinBtn");
+    const rehostBtn = document.getElementById("rehostBtn");
+    const resetSessionBtn = document.getElementById("resetSessionBtn");
+    const teamModeToggle = document.getElementById("teamModeToggle");
+    const teamCountSelect = document.getElementById("teamCount");
+    const teamCountRow = document.getElementById("teamCountRow");
+
+    const turnTimerSelect = document.getElementById("turnTimerSelect");
+    const gameSettingsPanel = document.getElementById("gameSettingsPanel");
+    const displayDropdown = document.getElementById("displayDropdown");
+    const settingsOverlay = document.getElementById("settingsOverlay");
+    const settingsTitle = document.getElementById("settingsTitle");
+    const roomTabBar = document.getElementById("roomTabBar");
+    const openGameSettingsBtn = document.getElementById("openGameSettingsBtn");
+    const openDisplaySettingsBtn = document.getElementById("openDisplaySettingsBtn");
+    const openInfoBtn = document.getElementById("openInfoBtn");
+    const closeGameSettingsBtn = document.getElementById("closeGameSettingsBtn");
+    const hostTabBtn = document.getElementById("hostTabBtn");
+    const joinTabBtn = document.getElementById("joinTabBtn");
+    const connectionTabPanels = Array.from(document.querySelectorAll(".connection-tab-panel"));
+    const cardDisplaySelect = document.getElementById("cardDisplaySelect");
+    const hostSetupBox = document.getElementById("hostSetupBox");
+    const joinBox = document.getElementById("joinBox");
+    const shareBox = document.getElementById("shareBox");
+    const hostSettingsBox = document.getElementById("hostSettingsBox");
+    const teamPickerBox = document.getElementById("teamPickerBox");
+    const teamPicker = document.getElementById("teamPicker");
+    const leaveRoomBtn = document.getElementById("leaveRoomBtn");
+    const leaveRoomBtnGame = document.getElementById("leaveRoomBtnGame");
+    const copyLogBtn = document.getElementById("copyLogBtn");
+    const resetSessionBtnGame = document.getElementById("resetSessionBtnGame");
+    const saveSettingsBtn = document.getElementById("saveSettingsBtn");
+    const clearDataBtn = document.getElementById("clearDataBtn");
+    const toastContainer = document.getElementById("toastContainer");
+    const confirmOverlay = document.getElementById("confirmOverlay");
+    const confirmTitle = document.getElementById("confirmTitle");
+    const confirmMessage = document.getElementById("confirmMessage");
+    const confirmCancelBtn = document.getElementById("confirmCancelBtn");
+    const confirmOkBtn = document.getElementById("confirmOkBtn");
+    const logAccordion = document.getElementById("logAccordion");
+    const lobbyAccordion = document.getElementById("lobbyAccordion");
+    const playersAccordion = document.getElementById("playersAccordion");
+    const gameActionsRow = document.getElementById("gameActionsRow");
+    const infoAccordion = document.getElementById("infoAccordion");
+    const infoTeamMode = document.getElementById("infoTeamMode");
+    const infoTeamCount = document.getElementById("infoTeamCount");
+    const infoTimer = document.getElementById("infoTimer");
+    const infoDecks = document.getElementById("infoDecks");
+    const infoSeqLen = document.getElementById("infoSeqLen");
+    const infoSeqWin = document.getElementById("infoSeqWin");
+    const infoRoomStatus = document.getElementById("infoRoomStatus");
+    const sequenceLengthSelect = document.getElementById("sequenceLengthSelect");
+    const sequencesToWinSelect = document.getElementById("sequencesToWinSelect");
+    const boardModeSelect = document.getElementById("boardModeSelect");
+    const boardPanel = document.getElementById("boardPanel");
+    const logPanel = document.getElementById("logPanel");
+    const handPanel = document.getElementById("handPanel");
+    const shuffleBoardToggle = document.getElementById("shuffleBoardToggle");
+    const shuffleBoardRow = document.getElementById("shuffleBoardRow");
+    const gameSettingsGroup = document.getElementById("gameSettingsGroup");
+    const infoSettingsGroup = document.getElementById("infoSettingsGroup");
+    const hideCodeToggle = document.getElementById("hideCodeToggle");
+    const lockRoomToggle = document.getElementById("lockRoomToggle");
+    const waitingBanner = document.getElementById("waitingBanner");
+    const toggleJoinCodeBtn = document.getElementById("toggleJoinCodeBtn");
+
+    let peer = null;
+    let connections = new Map();
+    let hostConn = null;
+    let isHost = false;
+    let selfId = null;
+    let localState = null;
+    let selectedCardIndex = null;
+    let pendingHostName = null;
+    let pendingHostToken = null;
+    let pendingHostId = null;
+    let lastTimeLeft = null;
+    let settingsForcedOpen = false;
+    let activeConnectionTab = "host";
+    let settingsMode = "game";
+    let hostLocked = false;
+    let settingsDirty = false;
+    let requestedHostId = null;
+    let fallbackHostIdInProgress = false;
+    let lastTeamCount = 2;
+    let logWasVisible = false;
+    let pendingJoinCode = null;
+    let pendingJoinToken = null;
+    let pendingJoinName = null;
+    let roomLocked = false;
+    let codesHidden = false;
+    let hasShownJoinToast = false;
+
+    const STORAGE_KEY = "sequence-multiplayer-session";
+    const DISPLAY_KEY = "sequence-card-display";
+    let cardDisplayMode = "auto";
+
+    const hostState = {
+      boardLayout: createBoardLayout(),
+      chips: createEmptyChips(),
+      players: [],
+      teamCount: 2,
+      teamMode: false,
+      turnTimeLimit: 0,
+      turnEndsAt: null,
+      roomCover: null,
+      sequencesToWin: 2,
+      sequenceLength: 5,
+      boardMode: "standard",
+      gameStarted: false,
+      hasMoves: false,
+      deck: [],
+      hands: {},
+      turnIndex: 0,
+      sequencesByTeam: initSequences(2),
+      gameOver: false,
+      winnerTeam: null,
+      log: [],
+      roomLocked: false,
+      lastPlay: null
+    };
+    lastTeamCount = hostState.teamCount;
+
+    function setStatus(el, text) {
+      if (!el) return;
+      const label = el.querySelector("span:nth-child(2)");
+      if (label) {
+        label.textContent = text;
+      }
+    }
+
+    function toast(message, extraNode) {
+      if (!toastContainer) return;
+      const item = document.createElement("div");
+      item.className = "toast";
+      if (extraNode) {
+        item.appendChild(extraNode);
+      }
+      const text = document.createElement("span");
+      text.textContent = message;
+      item.appendChild(text);
+      toastContainer.appendChild(item);
+      setTimeout(() => {
+        item.remove();
+      }, 2600);
+    }
+
+    let confirmResolver = null;
+
+    function openConfirm({ title, message, confirmText }) {
+      return new Promise(resolve => {
+        confirmResolver = resolve;
+        if (confirmTitle) confirmTitle.textContent = title || "Confirm";
+        if (confirmMessage) confirmMessage.textContent = message || "";
+        if (confirmOkBtn) confirmOkBtn.textContent = confirmText || "Confirm";
+        confirmOverlay.classList.add("open");
+        confirmOverlay.setAttribute("aria-hidden", "false");
+      });
+    }
+
+    function closeConfirm(result) {
+      if (!confirmOverlay.classList.contains("open")) return;
+      confirmOverlay.classList.remove("open");
+      confirmOverlay.setAttribute("aria-hidden", "true");
+      if (confirmResolver) {
+        confirmResolver(result);
+        confirmResolver = null;
+      }
+    }
+
+    function shuffle(array) {
+      for (let i = array.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+
+    function generateRoomCover() {
+      const covers = [
+        { name: "Harbor Glow", color: "#6f88a3" },
+        { name: "Linen Tide", color: "#9aa6b2" },
+        { name: "Oat Fog", color: "#b0a297" },
+        { name: "Slate Orchard", color: "#70808f" },
+        { name: "Glass Dusk", color: "#7b8fa3" }
+      ];
+      return covers[Math.floor(Math.random() * covers.length)];
+    }
+
+    function createDeck(deckCount = 2) {
+      const cards = [];
+      for (let d = 0; d < deckCount; d += 1) {
+        for (const suit of Object.keys(SUITS)) {
+          for (const rank of RANKS) {
+            cards.push(`${rank}${suit}`);
+          }
+        }
+      }
+      return shuffle(cards);
+    }
+
+    function createBoardLayout(boardMode = "standard", shuffleBoard = false) {
+      const config = getBoardConfig(boardMode);
+      const baseLayout = config.layout;
+
+      if (!shuffleBoard) {
+        return baseLayout.map(row => row.map(card => (card ? { type: "card", card } : { type: "corner" })));
+      }
+
+      const cards = [];
+      for (const suit of Object.keys(SUITS)) {
+        for (const rank of NON_JACK_RANKS) {
+          cards.push(`${rank}${suit}`);
+        }
+      }
+      const boardCards = shuffle([].concat(...Array(config.deckCount).fill(cards)));
+
+      const nullCount = baseLayout.flat().filter(c => c === null).length;
+      const totalCells = config.rows * config.cols;
+      const cardCellCount = totalCells - nullCount;
+
+      const nullPositions = placeNullsWithSpacing(config.rows, config.cols, nullCount, boardMode);
+
+      const layout = [];
+      let cardIndex = 0;
+      for (let r = 0; r < config.rows; r += 1) {
+        const row = [];
+        for (let c = 0; c < config.cols; c += 1) {
+          if (nullPositions.has(`${r},${c}`)) {
+            row.push({ type: "corner" });
+          } else {
+            row.push({ type: "card", card: boardCards[cardIndex] });
+            cardIndex += 1;
+          }
+        }
+        layout.push(row);
+      }
+      return layout;
+    }
+
+    function placeNullsWithSpacing(rows, cols, nullCount, boardMode) {
+      if (nullCount === 0) return new Set();
+
+      const minSpacing = 4;
+
+      if (boardMode === "standard" || boardMode === "expanded-deck") {
+        return new Set(["0,0", `0,${cols - 1}`, `${rows - 1},0`, `${rows - 1},${cols - 1}`]);
+      }
+
+      if (boardMode === "expanded-classic") {
+        const positions = new Set();
+        const candidates = [];
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            candidates.push([r, c]);
+          }
+        }
+        shuffle(candidates);
+
+        for (const [r, c] of candidates) {
+          if (positions.size >= nullCount) break;
+          if (isValidNullPosition(r, c, positions, minSpacing, rows, cols)) {
+            positions.add(`${r},${c}`);
+          }
+        }
+
+        if (positions.size < nullCount) {
+          for (const [r, c] of candidates) {
+            if (positions.size >= nullCount) break;
+            if (!positions.has(`${r},${c}`)) {
+              positions.add(`${r},${c}`);
+            }
+          }
+        }
+        return positions;
+      }
+
+      return new Set();
+    }
+
+    function isValidNullPosition(r, c, existingNulls, minSpacing, rows, cols) {
+      const directions = [
+        [0, 1], [0, -1], [1, 0], [-1, 0],
+        [1, 1], [1, -1], [-1, 1], [-1, -1]
+      ];
+
+      for (const posStr of existingNulls) {
+        const [er, ec] = posStr.split(",").map(Number);
+        for (const [dr, dc] of directions) {
+          let onSameLine = false;
+          if (dr === 0 && r === er) onSameLine = true;
+          if (dc === 0 && c === ec) onSameLine = true;
+          if (dr !== 0 && dc !== 0) {
+            if ((r - er) !== 0 && (c - ec) !== 0 && Math.abs(r - er) === Math.abs(c - ec)) {
+              if (Math.sign(r - er) === dr && Math.sign(c - ec) === dc) onSameLine = true;
+              if (Math.sign(er - r) === dr && Math.sign(ec - c) === dc) onSameLine = true;
+            }
+          }
+          if (!onSameLine) continue;
+
+          const dist = Math.max(Math.abs(r - er), Math.abs(c - ec));
+          if (dist > 0 && dist < minSpacing) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+
+    function createEmptyChips(rows = 10, cols = 10) {
+      return Array.from({ length: rows }, () => Array.from({ length: cols }, () => ({ team: null, inSequence: false })));
+    }
+
+    function getBoardSize(layout) {
+      if (!layout || !layout.length) return { rows: 10, cols: 10 };
+      return { rows: layout.length, cols: layout[0].length };
+    }
+
+    function getBoardConfig(boardMode) {
+      switch (boardMode) {
+        case "expanded-deck":
+          return { rows: 10, cols: 10, deckCount: 3, layout: DEFAULT_LAYOUT };
+        case "expanded-challenge":
+          return { rows: 12, cols: 12, deckCount: 3, layout: EXPANDED_CHALLENGE_LAYOUT };
+        case "expanded-classic":
+          return { rows: 12, cols: 13, deckCount: 3, layout: EXPANDED_CLASSIC_LAYOUT };
+        default:
+          return { rows: 10, cols: 10, deckCount: 2, layout: DEFAULT_LAYOUT };
+      }
+    }
+
+    function initSequences(count) {
+      const sequences = {};
+      for (let i = 0; i < count; i += 1) {
+        sequences[i] = new Set();
+      }
+      return sequences;
+    }
+
+    function saveSession(data) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      } catch {
+        // ignore storage errors
+      }
+    }
+
+    function loadSession() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return null;
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    }
+
+    function clearSession() {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch {
+        // ignore storage errors
+      }
+    }
+
+    function loadCardDisplayMode() {
+      try {
+        return localStorage.getItem(DISPLAY_KEY) || "auto";
+      } catch {
+        return "auto";
+      }
+    }
+
+    function saveCardDisplayMode(mode) {
+      try {
+        localStorage.setItem(DISPLAY_KEY, mode);
+      } catch {
+        // ignore storage errors
+      }
+    }
+
+    function ensureToken(role) {
+      const session = loadSession();
+      if (session && session.role === role && session.playerToken) {
+        return session.playerToken;
+      }
+      const token = (crypto && crypto.randomUUID) ? crypto.randomUUID() : `t_${Math.random().toString(36).slice(2)}${Date.now()}`;
+      saveSession({
+        role,
+        playerName: playerNameInput.value || (role === "host" ? "Host" : "Player"),
+        playerToken: token,
+        joinCode: session?.joinCode || ""
+      });
+      return token;
+    }
+
+    let actualRoomCode = "";
+    let actualShareLink = "";
+
+    function setRoomCode(code) {
+      actualRoomCode = code || "";
+      actualShareLink = buildJoinLink(code);
+      updateCodeDisplay();
+    }
+
+    function updateCodeDisplay() {
+      if (codesHidden) {
+        roomCodeInput.value = "••••••••••••••••";
+        shareLinkInput.value = "••••••••••••••••••••••••••••••••";
+      } else {
+        roomCodeInput.value = actualRoomCode;
+        shareLinkInput.value = actualShareLink;
+      }
+    }
+
+    function buildJoinLink(code) {
+      if (!code) return "";
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set("join", code);
+        return url.toString();
+      } catch {
+        const base = window.location.href.split("?")[0];
+        return `${base}?join=${code}`;
+      }
+    }
+
+    async function copyText(value) {
+      if (!value) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(value);
+        return;
+      }
+      const temp = document.createElement("input");
+      temp.value = value;
+      document.body.appendChild(temp);
+      temp.select();
+      document.execCommand("copy");
+      document.body.removeChild(temp);
+    }
+
+    function serializeHostState() {
+      const sequencesByTeam = {};
+      Object.entries(hostState.sequencesByTeam).forEach(([key, set]) => {
+        sequencesByTeam[key] = Array.from(set);
+      });
+      return {
+        boardLayout: hostState.boardLayout,
+        chips: hostState.chips,
+        players: hostState.players,
+        teamCount: hostState.teamCount,
+        teamMode: hostState.teamMode,
+        turnTimeLimit: hostState.turnTimeLimit,
+        turnEndsAt: hostState.turnEndsAt,
+        roomCover: hostState.roomCover,
+        sequencesToWin: hostState.sequencesToWin,
+        sequenceLength: hostState.sequenceLength,
+        boardMode: hostState.boardMode,
+        gameStarted: hostState.gameStarted,
+        hasMoves: hostState.hasMoves,
+        deck: hostState.deck,
+        hands: hostState.hands,
+        turnIndex: hostState.turnIndex,
+        sequencesByTeam,
+        gameOver: hostState.gameOver,
+        winnerTeam: hostState.winnerTeam,
+        log: hostState.log,
+        roomLocked: hostState.roomLocked,
+        lastPlay: hostState.lastPlay || null
+      };
+    }
+
+    function restoreHostState(snapshot) {
+      if (!snapshot) return;
+      const boardMode = snapshot.boardMode || "standard";
+      const config = getBoardConfig(boardMode);
+      hostState.boardLayout = snapshot.boardLayout || createBoardLayout(boardMode);
+      hostState.chips = snapshot.chips || createEmptyChips(config.rows, config.cols);
+      hostState.players = snapshot.players || [];
+      hostState.teamCount = snapshot.teamCount || 2;
+      hostState.teamMode = snapshot.teamMode !== false;
+      hostState.turnTimeLimit = snapshot.turnTimeLimit || 0;
+      hostState.turnEndsAt = snapshot.turnEndsAt || null;
+      hostState.roomCover = snapshot.roomCover || null;
+      hostState.sequenceLength = snapshot.sequenceLength || 5;
+      hostState.sequencesToWin = snapshot.sequencesToWin || 2;
+      hostState.boardMode = boardMode;
+      hostState.gameStarted = !!snapshot.gameStarted;
+      hostState.hasMoves = !!snapshot.hasMoves;
+      hostState.deck = snapshot.deck || [];
+      hostState.hands = snapshot.hands || {};
+      hostState.turnIndex = snapshot.turnIndex || 0;
+      hostState.sequencesByTeam = initSequences(hostState.teamCount);
+      if (snapshot.sequencesByTeam) {
+        Object.entries(snapshot.sequencesByTeam).forEach(([key, arr]) => {
+          hostState.sequencesByTeam[key] = new Set(arr);
+        });
+      }
+      hostState.gameOver = !!snapshot.gameOver;
+      hostState.winnerTeam = snapshot.winnerTeam ?? null;
+      hostState.log = snapshot.log || [];
+      hostState.roomLocked = !!snapshot.roomLocked;
+      hostState.lastPlay = snapshot.lastPlay || null;
+    }
+
+    function updateSessionUI(session) {
+      if (!session) {
+        sessionBox.classList.add("hidden");
+        return;
+      }
+      sessionBox.classList.remove("hidden");
+      if (session.playerName && !playerNameInput.value.trim()) {
+        playerNameInput.value = session.playerName;
+      }
+      if (session.role === "host") {
+        sessionInfo.textContent = "Recovered host session. Rehost to restore the game state.";
+        rehostBtn.disabled = false;
+        rejoinBtn.disabled = true;
+      } else {
+        sessionInfo.textContent = `Recovered join code ${session.joinCode || ""}. Rejoin to reconnect.`;
+        if (session.joinCode && !joinCodeInput.value.trim()) {
+          joinCodeInput.value = session.joinCode;
+        }
+        rehostBtn.disabled = true;
+        rejoinBtn.disabled = false;
+      }
+    }
+
+    const SUIT_SVGS = {
+      S: {
+        filled: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><path fill="currentColor" d="M232 136a56 56 0 0 1-83.4 48.82l11.06 36.88A8 8 0 0 1 152 232h-48a8 8 0 0 1-7.66-10.3l11.06-36.88A56 56 0 0 1 24 136c0-32 17.65-62.84 51-89.27a234 234 0 0 1 49.89-30.11a7.93 7.93 0 0 1 6.16 0A234 234 0 0 1 181 46.73C214.35 73.16 232 104 232 136"/></svg>',
+        outline: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><path fill="currentColor" d="M178.56 52.93a281 281 0 0 0-48.77-32.51a4 4 0 0 0-3.58 0a281 281 0 0 0-48.77 32.51C45.1 79.88 28 108.61 28 136a52 52 0 0 0 76.46 45.89l-12.29 41A4 4 0 0 0 96 228h64a4 4 0 0 0 3.83-5.15l-12.29-41A52 52 0 0 0 228 136c0-27.39-17.1-56.12-49.44-83.07M176 180a44 44 0 0 1-28.92-10.84a4 4 0 0 0-6.46 4.17l14 46.67h-53.24l14-46.67a4 4 0 0 0-6.46-4.17A44 44 0 0 1 36 136c0-56.06 79-100.56 92-107.49c13 6.93 92 51.38 92 107.49a44.05 44.05 0 0 1-44 44"/></svg>'
+      },
+      H: {
+        filled: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><path fill="currentColor" d="M240 98a57.63 57.63 0 0 1-17 41l-89.3 90.62a8 8 0 0 1-11.4 0L33 139a58 58 0 0 1 82-82.1l13 12.15l13.09-12.19A58 58 0 0 1 240 98"/></svg>',
+        outline: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><path fill="currentColor" d="M221.6 58.38a56.06 56.06 0 0 0-79.12-.08L128 71.78L113.52 58.3a56 56 0 0 0-79.15 79.25l89.36 90.66a6 6 0 0 0 8.54 0l89.33-90.62a56 56 0 0 0 0-79.21m-8.52 70.75L128 215.45L42.89 129.1a44 44 0 0 1 62.22-62.23a1 1 0 0 0 .16.14l18.64 17.36a6 6 0 0 0 8.18 0L150.73 67a1 1 0 0 0 .16-.14a44 44 0 1 1 62.19 62.26Z"/></svg>'
+      },
+      D: {
+        filled: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><path fill="currentColor" d="M113.99 62.45L65.95.97c-.94-1.2-2.96-1.2-3.9 0L14.01 62.44c-.7.9-.7 2.16 0 3.05l48.04 61.48a2.478 2.478 0 0 0 3.9 0l48.03-61.48c.7-.89.7-2.15.01-3.04"/></svg>',
+        outline: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><path fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round" d="M113.99 62.45L65.95.97c-.94-1.2-2.96-1.2-3.9 0L14.01 62.44c-.7.9-.7 2.16 0 3.05l48.04 61.48a2.478 2.478 0 0 0 3.9 0l48.03-61.48c.7-.89.7-2.15.01-3.04"/></svg>'
+      },
+      C: {
+        filled: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><path fill="currentColor" d="M240 144a56 56 0 0 1-84.81 48h-4.44l8.91 29.7A8 8 0 0 1 152 232h-48a8 8 0 0 1-7.66-10.3l8.91-29.7h-4.44A56 56 0 1 1 72 88h2.33a56 56 0 1 1 107.34 0H184a56.06 56.06 0 0 1 56 56"/></svg>',
+        outline: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><path fill="currentColor" d="M184 92a53 53 0 0 0-8.26.65a52 52 0 1 0-95.48 0A53 53 0 0 0 72 92a52 52 0 1 0 31.38 93.48l-11.21 37.37A4 4 0 0 0 96 228h64a4 4 0 0 0 3.83-5.15l-11.21-37.37A52 52 0 1 0 184 92m0 96a43.92 43.92 0 0 1-36.73-19.77a4 4 0 0 0-7.17 3.36L154.62 220h-53.24l14.52-48.41a4 4 0 0 0-7.17-3.36a44 44 0 1 1-21.91-65.67a4 4 0 0 0 4.66-6a44 44 0 1 1 73 0a4 4 0 0 0 4.66 6A44 44 0 1 1 184 188"/></svg>'
+      }
+    };
+
+    function cardRank(card) {
+      return card.slice(0, -1);
+    }
+
+    function cardSuit(card) {
+      return card.slice(-1);
+    }
+
+    function cardLabel(card) {
+      const suit = cardSuit(card);
+      const rank = cardRank(card);
+      return `${rank}${SUITS[suit]}`;
+    }
+
+    function suitSvg(suit, outline) {
+      const entry = SUIT_SVGS[suit];
+      if (!entry) return "";
+      return outline ? entry.outline : entry.filled;
+    }
+
+    function cardImagePath(card) {
+      return `./images/${card}.jpg`;
+    }
+
+    function isRedSuit(card) {
+      return card.endsWith("H") || card.endsWith("D");
+    }
+
+    function shouldUseSymbols() {
+      if (cardDisplayMode === "symbols") return true;
+      if (cardDisplayMode === "images") return false;
+      return window.matchMedia("(max-width: 819px)").matches;
+    }
+
+    function createCardContent(card, forCell = false) {
+      if (shouldUseSymbols()) {
+        const outlineSymbols = window.matchMedia("(max-width: 819px)").matches;
+        const wrapper = document.createDocumentFragment();
+        const topLeft = document.createElement("span");
+        topLeft.className = "card-symbol top-left";
+        const topRank = document.createElement("span");
+        topRank.className = "rank";
+        topRank.textContent = cardRank(card);
+        const topSuit = document.createElement("span");
+        topSuit.className = "suit-icon";
+        topSuit.innerHTML = suitSvg(cardSuit(card), outlineSymbols);
+        topLeft.append(topRank, topSuit);
+        if (isRedSuit(card)) {
+          topLeft.classList.add("red");
+        } else {
+          topLeft.classList.add("black");
+        }
+        const bottomRight = document.createElement("span");
+        bottomRight.className = "card-symbol bottom-right";
+        const bottomRank = document.createElement("span");
+        bottomRank.className = "rank";
+        bottomRank.textContent = cardRank(card);
+        const bottomSuit = document.createElement("span");
+        bottomSuit.className = "suit-icon";
+        bottomSuit.innerHTML = suitSvg(cardSuit(card), outlineSymbols);
+        bottomRight.append(bottomRank, bottomSuit);
+        if (isRedSuit(card)) {
+          bottomRight.classList.add("red");
+        } else {
+          bottomRight.classList.add("black");
+        }
+        wrapper.appendChild(topLeft);
+        wrapper.appendChild(bottomRight);
+        return wrapper;
+      }
+      const img = document.createElement("img");
+      img.className = "card-image";
+      img.alt = cardLabel(card);
+      img.src = cardImagePath(card);
+      return img;
+    }
+
+    function getDeckCount() {
+      return getBoardConfig(hostState.boardMode).deckCount;
+    }
+
+    function updateSettingsVisibility() {
+      const inRoom = !!selfId;
+      const showHostControls = isHost;
+      const isGameMode = settingsMode === "game";
+      joinBox.classList.toggle("hidden", !isGameMode || showHostControls || inRoom || activeConnectionTab !== "join");
+      shareBox.classList.toggle("hidden", !isGameMode || !(showHostControls && inRoom && activeConnectionTab === "host"));
+      hostSettingsBox.classList.toggle("hidden", !isGameMode || !(showHostControls || !inRoom) || activeConnectionTab !== "host");
+      teamPickerBox.classList.toggle("hidden", !isGameMode || !inRoom || !localState || !localState.teamMode || localState.gameStarted);
+      playersAccordion.classList.toggle("hidden", !isGameMode || !inRoom);
+      lobbyAccordion.classList.toggle("hidden", !isGameMode || activeConnectionTab !== "host");
+      leaveRoomBtn.disabled = !inRoom;
+      leaveRoomBtn.classList.toggle("hidden", !inRoom);
+      leaveRoomBtnGame.disabled = !inRoom;
+      leaveRoomBtnGame.classList.toggle("hidden", !inRoom);
+      gameActionsRow.classList.toggle("hidden", !inRoom);
+      resetSessionBtn.classList.toggle("hidden", !isHost || !inRoom);
+      resetSessionBtnGame.classList.toggle("hidden", !isHost || !inRoom);
+      infoAccordion.classList.toggle("hidden", !inRoom && !isHost);
+      hostSetupBox.classList.toggle("hidden", !isGameMode || showHostControls || inRoom || activeConnectionTab !== "host");
+      if (saveSettingsBtn && (!isHost || !inRoom || hostState.gameStarted)) {
+        saveSettingsBtn.classList.add("hidden");
+      }
+      if (hostLocked) {
+        playerNameInput.disabled = true;
+        joinCodeInput.disabled = true;
+        if (joinTabBtn) {
+          joinTabBtn.classList.add("hidden");
+          joinTabBtn.disabled = true;
+        }
+        if (activeConnectionTab !== "host") {
+          setConnectionTab("host");
+        }
+      } else {
+        playerNameInput.disabled = false;
+        joinCodeInput.disabled = false;
+        if (joinTabBtn && settingsMode === "game") {
+          joinTabBtn.classList.remove("hidden");
+          joinTabBtn.disabled = false;
+        }
+      }
+    }
+
+    function setSettingsMode(mode) {
+      settingsMode = mode;
+      if (gameSettingsGroup) {
+        gameSettingsGroup.classList.toggle("hidden", mode !== "game");
+      }
+      if (infoSettingsGroup) {
+        infoSettingsGroup.classList.toggle("hidden", mode !== "info");
+      }
+      if (roomTabBar) {
+        roomTabBar.classList.toggle("hidden", mode !== "game");
+      }
+      if (hostTabBtn && joinTabBtn) {
+        const showTabs = mode === "game";
+        hostTabBtn.classList.toggle("hidden", !showTabs);
+        joinTabBtn.classList.toggle("hidden", !showTabs || hostLocked);
+      }
+      if (settingsTitle) {
+        settingsTitle.textContent = mode === "info" ? "Game info" : "Game settings";
+      }
+      updateSettingsVisibility();
+    }
+
+    function updateConnectionButtons() {
+      const nameReady = !!playerNameInput.value.trim();
+      hostBtn.disabled = hostLocked || !nameReady;
+      joinBtn.disabled = hostLocked || !nameReady || !joinCodeInput.value.trim();
+    }
+
+    function resetSession() {
+      if (isHost) {
+        sendAction({ type: "reset_game" });
+      }
+    }
+
+    function clearSavedData() {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(DISPLAY_KEY);
+      } catch {
+        // ignore storage errors
+      }
+      updateSessionUI(null);
+      playerNameInput.value = "";
+      cardDisplayMode = "auto";
+      cardDisplaySelect.value = "auto";
+      toast("Saved data cleared");
+      initPlaceholder();
+    }
+
+    function closeAccordion(accordion) {
+      if (!accordion) return;
+      accordion.classList.remove("open");
+      const icon = accordion.querySelector(".accordion-toggle span:last-child");
+      if (icon) icon.textContent = "▸";
+    }
+
+    function openAccordion(accordion) {
+      if (!accordion) return;
+      accordion.classList.add("open");
+      const icon = accordion.querySelector(".accordion-toggle span:last-child");
+      if (icon) icon.textContent = "▾";
+    }
+
+    function clearSessionKeepName() {
+      const name = playerNameInput.value;
+      clearSession();
+      updateSessionUI(null);
+      if (name) {
+        playerNameInput.value = name;
+      }
+    }
+
+    function buildLeaveSessionSnapshot() {
+      const existing = loadSession();
+      if (isHost) {
+        const hostToken = pendingHostToken || existing?.playerToken || ensureToken("host");
+        return {
+          role: "host",
+          playerName: pendingHostName || playerNameInput.value || "Host",
+          playerToken: hostToken,
+          hostId: selfId || pendingHostId || requestedHostId || null,
+          hostSnapshot: serializeHostState()
+        };
+      }
+      const clientToken = pendingJoinToken || existing?.playerToken || ensureToken("client");
+      return {
+        role: "client",
+        playerName: playerNameInput.value || "Player",
+        playerToken: clientToken,
+        joinCode: joinCodeInput.value.trim() || existing?.joinCode || ""
+      };
+    }
+
+    function markSettingsDirty() {
+      settingsDirty = true;
+      if (saveSettingsBtn) {
+        saveSettingsBtn.disabled = false;
+      }
+    }
+
+    function clearSettingsDirty() {
+      settingsDirty = false;
+      if (saveSettingsBtn) {
+        saveSettingsBtn.disabled = true;
+      }
+    }
+
+    function refreshHostPreview() {
+      if (!isHost) return;
+      renderState(buildStateFor(selfId));
+    }
+
+    function renderLobbyPreview() {
+      renderState({
+        boardLayout: hostState.boardLayout,
+        chips: hostState.chips,
+        players: [],
+        teamCount: hostState.teamCount,
+        teamMode: hostState.teamMode,
+        turnTimeLimit: hostState.turnTimeLimit,
+        timeLeft: hostState.turnTimeLimit ? hostState.turnTimeLimit : null,
+        roomCover: hostState.roomCover,
+        sequenceLength: hostState.sequenceLength,
+        sequencesToWin: hostState.sequencesToWin,
+        boardMode: hostState.boardMode,
+        gameStarted: false,
+        hasMoves: false,
+        turnPlayerId: null,
+        deckCount: 0,
+        yourHand: [],
+        handCounts: {},
+        sequencesCount: {},
+        gameOver: false,
+        winnerTeam: null,
+        log: [{ type: "text", text: "Connect to a room to begin." }]
+      });
+    }
+
+    function setConnectionTab(tab) {
+      const isHostTab = tab === "host";
+      activeConnectionTab = isHostTab ? "host" : "join";
+      if (hostTabBtn && joinTabBtn) {
+        hostTabBtn.classList.toggle("active", isHostTab);
+        joinTabBtn.classList.toggle("active", !isHostTab);
+        hostTabBtn.setAttribute("aria-selected", String(isHostTab));
+        joinTabBtn.setAttribute("aria-selected", String(!isHostTab));
+      }
+      connectionTabPanels.forEach(panel => {
+        panel.classList.toggle("hidden", panel.dataset.tab !== tab);
+      });
+      updateSettingsVisibility();
+    }
+
+    function canCloseSettings() {
+      return !!selfId;
+    }
+
+    function updateOverlayState() {
+      const anyOpen = gameSettingsPanel.classList.contains("open");
+      settingsOverlay.classList.toggle("open", anyOpen);
+    }
+
+    function toggleGameSettings(open) {
+      if (!open && !canCloseSettings()) return;
+      gameSettingsPanel.classList.toggle("open", open);
+      if (open) {
+        displayDropdown.classList.remove("open");
+      }
+      updateOverlayState();
+    }
+
+    function toggleDisplayDropdown(open) {
+      displayDropdown.classList.toggle("open", open);
+      if (open) {
+        gameSettingsPanel.classList.remove("open");
+        updateOverlayState();
+      }
+    }
+
+    function updateViewState(state) {
+      const active = !!state?.gameStarted;
+      const inRoom = state?.players && state.players.length > 0;
+      const showPreGame = !!selfId;
+      const mustStayOpen = !selfId;
+      const showPanels = active || showPreGame;
+      const showLog = !!state?.hasMoves;
+      boardPanel.classList.toggle("hidden", !showPanels);
+      logPanel.classList.toggle("hidden", !showPanels || !showLog);
+      handPanel.classList.toggle("hidden", !showPanels);
+      if (mustStayOpen) {
+        settingsForcedOpen = true;
+        toggleGameSettings(true);
+      } else if (settingsForcedOpen) {
+        settingsForcedOpen = false;
+      }
+    }
+
+    function renderTeamPicker(state) {
+      teamPicker.innerHTML = "";
+      if (!state.teamMode) return;
+      const myTeam = getMyTeam();
+      const counts = Array.from({ length: state.teamCount }, () => 0);
+      state.players.forEach(player => {
+        if (typeof player.team === "number" && player.team < state.teamCount) {
+          counts[player.team] += 1;
+        }
+      });
+      for (let i = 0; i < state.teamCount; i += 1) {
+        const btn = document.createElement("button");
+        btn.className = "secondary";
+        const suffix = myTeam === i ? " (you)" : "";
+        btn.textContent = `Join Team ${i + 1} (${counts[i]}/4)` + suffix;
+        btn.disabled = state.gameStarted || (counts[i] >= 4 && myTeam !== i);
+        btn.addEventListener("click", () => {
+          sendAction({ type: "choose_team", team: i });
+          toast(`Requested Team ${i + 1}`);
+        });
+        teamPicker.appendChild(btn);
+      }
+    }
+
+    function currentPlayer() {
+      if (!localState) return null;
+      return localState.players.find(p => p.id === localState.turnPlayerId);
+    }
+
+    function updateLobbyControls() {
+      const canEditSettings = !hostState.gameStarted && (!selfId || isHost);
+      const showHostActions = !hostState.gameStarted && (isHost || !selfId);
+      const tooManyForSolo = hostState.players.length > 3;
+      if (tooManyForSolo) {
+        hostState.teamMode = true;
+        teamModeToggle.value = "teams";
+      }
+      if (teamCountRow) {
+        teamCountRow.classList.toggle("hidden", !hostState.teamMode);
+      }
+      teamModeToggle.disabled = !canEditSettings || tooManyForSolo;
+      teamCountSelect.disabled = !canEditSettings || !hostState.teamMode;
+      sequenceLengthSelect.disabled = !canEditSettings;
+      sequencesToWinSelect.disabled = !canEditSettings;
+      boardModeSelect.disabled = !canEditSettings;
+      turnTimerSelect.disabled = !canEditSettings;
+      shuffleBoardToggle.disabled = !showHostActions;
+      if (shuffleBoardRow) {
+        shuffleBoardRow.classList.toggle("hidden", !showHostActions);
+      }
+      if (hostState.teamMode) {
+        if (hostState.teamCount > 4) {
+          hostState.teamCount = 4;
+        } else if (hostState.teamCount < 2) {
+          hostState.teamCount = 2;
+        }
+        teamCountSelect.value = String(hostState.teamCount);
+      }
+      if (saveSettingsBtn) {
+        saveSettingsBtn.disabled = !showHostActions || !settingsDirty;
+        saveSettingsBtn.classList.toggle("hidden", !showHostActions);
+      }
+    }
+
+    function updateGameControlButton() {
+      if (!gameControlBtn) return;
+      if (!selfId) {
+        gameControlBtn.classList.add("hidden");
+        return;
+      }
+      const gameStarted = localState?.gameStarted || hostState.gameStarted;
+      gameControlBtn.classList.remove("start-btn", "danger");
+      if (gameStarted) {
+        gameControlBtn.classList.remove("hidden");
+        gameControlBtn.textContent = "Leave game";
+        gameControlBtn.disabled = false;
+        gameControlBtn.dataset.action = "leave";
+        gameControlBtn.classList.add("danger");
+        return;
+      }
+      if (!isHost) {
+        gameControlBtn.classList.add("hidden");
+        return;
+      }
+      gameControlBtn.classList.remove("hidden");
+      gameControlBtn.textContent = "Start game";
+      gameControlBtn.disabled = hostState.players.length < 2;
+      gameControlBtn.dataset.action = "start";
+      gameControlBtn.classList.add("start-btn");
+    }
+
+    function renderBoard(state) {
+      boardEl.innerHTML = "";
+      const { rows, cols } = getBoardSize(state.boardLayout);
+      boardEl.classList.remove("expanded-12", "expanded-13");
+      if (cols === 12) boardEl.classList.add("expanded-12");
+      if (cols === 13) boardEl.classList.add("expanded-13");
+      const selection = getSelectedCard();
+      const possible = selection ? getPossiblePositions(selection.card) : [];
+      const isMyTurn = state.gameStarted && !state.gameOver && state.turnPlayerId === selfId;
+      boardEl.classList.toggle("can-play", isMyTurn && selection !== null && possible.length > 0);
+      for (let r = 0; r < rows; r += 1) {
+        for (let c = 0; c < cols; c += 1) {
+          const cell = document.createElement("div");
+          cell.className = "cell";
+          cell.dataset.row = r;
+          cell.dataset.col = c;
+          const layoutCell = state.boardLayout[r][c];
+          if (layoutCell.type === "corner") {
+            cell.classList.add("corner");
+            cell.textContent = "◯";
+          } else {
+            cell.appendChild(createCardContent(layoutCell.card));
+          }
+          const chip = state.chips[r][c];
+          if (chip.team !== null) {
+            cell.classList.add("has-chip");
+            const chipEl = document.createElement("div");
+            chipEl.className = `chip team-${chip.team % 4}`;
+            if (chip.inSequence) {
+              chipEl.classList.add("sequence");
+            }
+            cell.appendChild(chipEl);
+          }
+          if (selection && possible.some(pos => pos.r === r && pos.c === c)) {
+            cell.classList.add("possible");
+          }
+          boardEl.appendChild(cell);
+        }
+      }
+    }
+
+    function renderPlayers(state) {
+      playerListEl.innerHTML = "";
+      state.players.forEach(player => {
+        const row = document.createElement("div");
+        row.className = "player-row";
+        const name = document.createElement("div");
+        name.textContent = player.name + (player.id === selfId ? " (you)" : "");
+        const badge = document.createElement("span");
+        badge.className = `badge team-${player.team % 4}`;
+        badge.textContent = state.teamMode ? `Team ${player.team + 1}` : "Solo";
+        const count = document.createElement("div");
+        count.textContent = state.handCounts[player.id] ? `${state.handCounts[player.id]} cards` : "";
+        const controls = document.createElement("div");
+        controls.style.display = "flex";
+        controls.style.gap = "6px";
+        controls.style.alignItems = "center";
+        if (state.teamMode && !state.gameStarted) {
+          if (isHost) {
+            const select = document.createElement("select");
+            for (let i = 0; i < state.teamCount; i += 1) {
+              const opt = document.createElement("option");
+              opt.value = i;
+              opt.textContent = `Team ${i + 1}`;
+              if (player.team === i) opt.selected = true;
+              select.appendChild(opt);
+            }
+            select.disabled = state.gameStarted;
+            select.addEventListener("change", () => {
+              sendAction({ type: "choose_team", playerId: player.id, team: Number(select.value) });
+              toast(`Moved ${player.name} to Team ${Number(select.value) + 1}`);
+            });
+            controls.appendChild(select);
+          }
+        }
+        if (isHost && player.id !== selfId) {
+          const kickBtn = document.createElement("button");
+          kickBtn.className = "kick-btn";
+          kickBtn.textContent = "Kick";
+          kickBtn.title = `Remove ${player.name} from the room`;
+          kickBtn.addEventListener("click", () => {
+            if (confirm(`Kick ${player.name} from the room?`)) {
+              kickPlayer(player.id, player.name);
+            }
+          });
+          controls.appendChild(kickBtn);
+        }
+        row.append(name, badge, count, controls);
+        playerListEl.appendChild(row);
+      });
+    }
+
+    function renderHand(state) {
+      handEl.innerHTML = "";
+      const inRoom = state.players && state.players.length > 0;
+      const isWaiting = !state.gameStarted && (inRoom || (!!selfId && !isHost));
+      if (isWaiting) {
+        waitingBanner.textContent = "Waiting for host to start the game...";
+      }
+      waitingBanner.classList.toggle("hidden", !isWaiting);
+      if (!state.yourHand || state.yourHand.length === 0) return;
+      const isMyTurn = state.gameStarted && !state.gameOver && state.turnPlayerId === selfId;
+      state.yourHand.forEach((card, index) => {
+        const cardEl = document.createElement("div");
+        cardEl.className = "hand-card";
+        cardEl.dataset.index = index;
+        if (index === selectedCardIndex) {
+          cardEl.classList.add("selected");
+        }
+        cardEl.appendChild(createCardContent(card));
+        const isDead = !card.startsWith("J") && isDeadCard(card, state);
+        if (isDead) {
+          cardEl.classList.add("dead-card");
+          if (isMyTurn) {
+            const deadBtn = document.createElement("button");
+            deadBtn.className = "dead-card-btn";
+            deadBtn.textContent = "Discard";
+            deadBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              sendAction({ type: "dead_card", card });
+              selectedCardIndex = null;
+              renderState(localState);
+            });
+            cardEl.appendChild(deadBtn);
+          }
+        }
+        handEl.appendChild(cardEl);
+      });
+    }
+
+    function isDeadCard(card, state) {
+      if (!state.boardLayout || !state.chips) return false;
+      const { rows, cols } = getBoardSize(state.boardLayout);
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const layoutCell = state.boardLayout[r][c];
+          if (layoutCell.type === "corner") continue;
+          if (layoutCell.card === card && state.chips[r][c].team === null) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+
+    function renderLog(state) {
+      const lines = state.log.slice(-30).map(entry => {
+        if (typeof entry === "string") return entry;
+        if (entry.type === "dead") return `${entry.player} declared dead card: ${cardLabel(entry.card)}`;
+        if (entry.type === "play") return `${entry.player} plays ${cardLabel(entry.card)} at (${entry.row + 1}, ${entry.col + 1})`;
+        if (entry.type === "remove") return `${entry.player} removes chip at (${entry.row + 1}, ${entry.col + 1}) with ${cardLabel(entry.card)}`;
+        return entry.text || "";
+      });
+      logEl.textContent = lines.join("\n");
+      logEl.parentElement.scrollTop = logEl.parentElement.scrollHeight;
+      if (copyLogBtn) {
+        const hasContent = lines.join("").trim().length > 0;
+        copyLogBtn.classList.toggle("hidden", !hasContent);
+      }
+    }
+
+    function renderState(state) {
+      localState = state;
+      renderBoard(state);
+      renderPlayers(state);
+      renderTeamPicker(state);
+      renderHand(state);
+      renderLog(state);
+      updateViewState(state);
+      if (state.hasMoves) {
+        if (!logWasVisible) {
+          closeAccordion(logAccordion);
+          logWasVisible = true;
+        }
+      } else {
+        logWasVisible = false;
+      }
+      const boardMode = state.boardMode || "standard";
+      const config = getBoardConfig(boardMode);
+      const seqLength = state.sequenceLength || 5;
+      const seqToWin = state.sequencesToWin || 2;
+      deckStatusEl.querySelector("span").textContent = `Deck: ${state.deckCount}`;
+      deckStatusEl.querySelector(".tip").textContent = `Cards left to draw. Decks in play: ${config.deckCount}.`;
+      timerStatusEl.querySelector("span").textContent = state.turnTimeLimit
+        ? `Timer: ${state.timeLeft ?? state.turnTimeLimit}s`
+        : "Timer: Off";
+      timerStatusEl.classList.toggle("warning", !!state.turnTimeLimit && state.timeLeft !== null && state.timeLeft <= 5);
+      if (state.turnTimeLimit && state.timeLeft !== null) {
+        if (state.timeLeft <= 5 && state.timeLeft !== lastTimeLeft) {
+          if (state.turnPlayerId === selfId) {
+            toast(`Hurry up! ${state.timeLeft}s left`);
+          } else if (isHost) {
+            const active = currentPlayer();
+            toast(`${active ? active.name : "Player"}: ${state.timeLeft}s left`);
+          }
+        }
+        lastTimeLeft = state.timeLeft;
+      } else {
+        lastTimeLeft = null;
+      }
+      if (state.lastPlay && state.gameStarted) {
+        lastPlayedCardEl.classList.remove("hidden");
+        lastPlayedCardEl.innerHTML = "";
+        const cardPreview = document.createElement("div");
+        cardPreview.className = "card-preview";
+        cardPreview.appendChild(createCardContent(state.lastPlay.card));
+        const playInfo = document.createElement("div");
+        playInfo.className = "play-info";
+        playInfo.innerHTML = `<strong>${state.lastPlay.player}</strong><br>at (${state.lastPlay.row + 1}, ${state.lastPlay.col + 1})`;
+        lastPlayedCardEl.appendChild(cardPreview);
+        lastPlayedCardEl.appendChild(playInfo);
+      } else {
+        lastPlayedCardEl.classList.add("hidden");
+      }
+
+      const myPlayer = state.players.find(p => p.id === selfId);
+      if (myPlayer && state.gameStarted) {
+        yourNameStatusEl.classList.remove("hidden");
+        yourNameStatusEl.querySelector("span").textContent = `You: ${myPlayer.name}`;
+      } else {
+        yourNameStatusEl.classList.add("hidden");
+      }
+      const sequencesText = Object.keys(state.sequencesCount)
+        .filter(key => Number(key) < state.teamCount)
+        .map(key => {
+          if (!state.teamMode) {
+            const player = state.players[Number(key)];
+            return `${player ? player.name : `Player ${Number(key) + 1}`}: ${state.sequencesCount[key]}/${seqToWin}`;
+          }
+          return `Team ${Number(key) + 1}: ${state.sequencesCount[key]}/${seqToWin}`;
+        })
+        .join(" · ");
+      sequenceStatusEl.querySelector("span").textContent = sequencesText || "Sequences: --";
+      sequenceStatusEl.querySelector(".tip").textContent = `Sequences completed. Need ${seqToWin} to win.`;
+      infoTeamMode.textContent = state.teamMode ? "Teams" : "Free-for-all";
+      infoTeamCount.textContent = state.teamMode ? state.teamCount : state.players.length || "--";
+      infoTimer.textContent = state.turnTimeLimit ? `${state.turnTimeLimit}s` : "Off";
+      const boardLabels = {
+        "standard": "2 decks (10×10)",
+        "expanded-deck": "3 decks (10×10)",
+        "expanded-challenge": "3 decks (12×12)",
+        "expanded-classic": "3 decks (12×13)"
+      };
+      infoDecks.textContent = boardLabels[boardMode] || boardLabels["standard"];
+      infoSeqLen.textContent = `${seqLength} in a row`;
+      infoSeqWin.textContent = `${seqToWin} sequences`;
+      if (infoRoomStatus) {
+        infoRoomStatus.textContent = state.roomLocked ? "🔒 Locked" : "Open";
+        infoRoomStatus.style.color = state.roomLocked ? "#9a6b2a" : "inherit";
+      }
+
+      const turnPlayer = currentPlayer();
+      if (state.gameOver) {
+        if (state.teamMode) {
+          setStatus(turnStatusEl, `Team ${state.winnerTeam + 1} wins!`);
+        } else {
+          const winner = state.players[state.winnerTeam];
+          setStatus(turnStatusEl, `${winner ? winner.name : "Player"} wins!`);
+        }
+      } else if (turnPlayer) {
+        setStatus(turnStatusEl, `Turn: ${turnPlayer.name}`);
+      } else {
+        setStatus(turnStatusEl, "Waiting for game");
+      }
+
+      updateHintText();
+      updateSettingsVisibility();
+      if (isHost) {
+        updateLobbyControls();
+      }
+      updateGameControlButton();
+    }
+
+    function updateHintText() {
+      if (!localState || !localState.gameStarted) {
+        hintText.textContent = "";
+        return;
+      }
+      const selection = getSelectedCard();
+      if (!selection) {
+        hintText.textContent = "Select a card to see valid placements.";
+        return;
+      }
+      const possible = getPossiblePositions(selection.card);
+      if (ONE_EYED.has(selection.card)) {
+        hintText.textContent = `${possible.length} removable chips.`;
+        return;
+      }
+      if (TWO_EYED.has(selection.card)) {
+        hintText.textContent = `${possible.length} open spaces for a wild Jack.`;
+        return;
+      }
+      hintText.textContent = possible.length ? `${possible.length} valid placements.` : "Dead card: no open spaces.";
+    }
+
+    function getSelectedCard() {
+      if (!localState || selectedCardIndex === null || !localState.yourHand) return null;
+      return { card: localState.yourHand[selectedCardIndex], index: selectedCardIndex };
+    }
+
+    function getPossiblePositions(card) {
+      if (!localState || !localState.gameStarted) return [];
+      const { rows, cols } = getBoardSize(localState.boardLayout);
+      const positions = [];
+      if (TWO_EYED.has(card)) {
+        for (let r = 0; r < rows; r += 1) {
+          for (let c = 0; c < cols; c += 1) {
+            if (localState.boardLayout[r][c].type === "corner") continue;
+            if (localState.chips[r][c].team === null) {
+              positions.push({ r, c });
+            }
+          }
+        }
+        return positions;
+      }
+      if (ONE_EYED.has(card)) {
+        for (let r = 0; r < rows; r += 1) {
+          for (let c = 0; c < cols; c += 1) {
+            const chip = localState.chips[r][c];
+            if (chip.team !== null && chip.team !== getMyTeam() && !chip.inSequence) {
+              positions.push({ r, c });
+            }
+          }
+        }
+        return positions;
+      }
+      for (let r = 0; r < rows; r += 1) {
+        for (let c = 0; c < cols; c += 1) {
+          if (localState.boardLayout[r][c].type === "card" && localState.boardLayout[r][c].card === card) {
+            if (localState.chips[r][c].team === null) {
+              positions.push({ r, c });
+            }
+          }
+        }
+      }
+      return positions;
+    }
+
+    function getMyTeam() {
+      if (!localState) return null;
+      const player = localState.players.find(p => p.id === selfId);
+      return player ? player.team : null;
+    }
+
+    function sendAction(action) {
+      if (isHost) {
+        handleAction(selfId, action);
+      } else if (hostConn) {
+        hostConn.send({ type: "action", action });
+      }
+    }
+
+    function broadcastState() {
+      const stateForHost = buildStateFor(selfId);
+      renderState(stateForHost);
+      if (isHost) {
+        saveSession({
+          role: "host",
+          playerName: pendingHostName || playerNameInput.value || "Host",
+          playerToken: pendingHostToken,
+          hostId: selfId || pendingHostId || requestedHostId,
+          hostSnapshot: serializeHostState()
+        });
+      }
+      connections.forEach(conn => {
+        conn.send({ type: "state", payload: buildStateFor(conn.peer) });
+      });
+    }
+
+    function buildStateFor(playerId) {
+      const handCounts = {};
+      hostState.players.forEach(player => {
+        handCounts[player.id] = (hostState.hands[player.id] || []).length;
+      });
+      const sequencesCount = {};
+      for (let i = 0; i < hostState.teamCount; i += 1) {
+        sequencesCount[i] = hostState.sequencesByTeam[i]?.size || 0;
+      }
+      const timeLeft = hostState.turnEndsAt
+        ? Math.max(0, Math.ceil((hostState.turnEndsAt - Date.now()) / 1000))
+        : null;
+      return {
+        boardLayout: hostState.boardLayout,
+        chips: hostState.chips,
+        players: hostState.players,
+        teamCount: hostState.teamCount,
+        teamMode: hostState.teamMode,
+        turnTimeLimit: hostState.turnTimeLimit,
+        timeLeft,
+        sequenceLength: hostState.sequenceLength,
+        sequencesToWin: hostState.sequencesToWin,
+        boardMode: hostState.boardMode,
+        roomCover: hostState.roomCover,
+        gameStarted: hostState.gameStarted,
+        hasMoves: hostState.hasMoves,
+        turnPlayerId: hostState.players[hostState.turnIndex]?.id || null,
+        deckCount: hostState.deck.length,
+        yourHand: hostState.hands[playerId] || [],
+        handCounts,
+        sequencesCount,
+        gameOver: hostState.gameOver,
+        winnerTeam: hostState.winnerTeam,
+        log: hostState.log,
+        roomLocked: hostState.roomLocked,
+        lastPlay: hostState.lastPlay || null
+      };
+    }
+
+    function logHost(message, broadcast = true) {
+      const entry = typeof message === "string" ? { type: "text", text: message } : message;
+      hostState.log.push(entry);
+      if (broadcast) {
+        broadcastState();
+      }
+    }
+
+    function assignTeams() {
+      if (!hostState.teamMode) {
+        hostState.teamCount = hostState.players.length;
+        hostState.players.forEach((player, index) => {
+          player.team = index;
+        });
+      } else {
+        hostState.players.forEach(player => {
+          if (typeof player.team !== "number" || player.team >= hostState.teamCount) {
+            player.team = 0;
+          }
+        });
+      }
+      if (!hostState.gameStarted) {
+        hostState.sequencesByTeam = initSequences(hostState.teamCount);
+      }
+    }
+
+    function getTeamCounts() {
+      const counts = Array.from({ length: hostState.teamCount }, () => 0);
+      hostState.players.forEach(player => {
+        if (typeof player.team === "number" && player.team < hostState.teamCount) {
+          counts[player.team] += 1;
+        }
+      });
+      return counts;
+    }
+
+    function setPlayerTeam(playerId, team) {
+      const player = hostState.players.find(p => p.id === playerId);
+      if (!player) return;
+      if (!hostState.teamMode) return;
+      if (team < 0 || team >= hostState.teamCount) return;
+      const counts = getTeamCounts();
+      const currentTeam = typeof player.team === "number" ? player.team : null;
+      const nextCount = counts[team] + (currentTeam === team ? 0 : 1);
+      const currentCount = currentTeam !== null && currentTeam < counts.length ? counts[currentTeam] : 0;
+      if (team !== currentTeam && nextCount > 4) {
+        return;
+      }
+      if (currentTeam !== null && currentTeam < counts.length) {
+        counts[currentTeam] = Math.max(0, currentCount - 1);
+      }
+      player.team = team;
+    }
+
+    function teamDistributionValid() {
+      if (!hostState.teamMode) return true;
+      const counts = getTeamCounts();
+      const uniqueCounts = new Set(counts);
+      return uniqueCounts.size === 1;
+    }
+
+    function buildTeamTurnOrder() {
+      const buckets = Array.from({ length: hostState.teamCount }, () => []);
+      hostState.players.forEach(player => {
+        if (typeof player.team === "number" && player.team < buckets.length) {
+          buckets[player.team].push(player);
+        }
+      });
+      buckets.forEach((bucket, index) => {
+        buckets[index] = shuffle(bucket.slice());
+      });
+      const maxLen = Math.max(0, ...buckets.map(list => list.length));
+      const ordered = [];
+      for (let i = 0; i < maxLen; i += 1) {
+        for (let team = 0; team < buckets.length; team += 1) {
+          const member = buckets[team][i];
+          if (member) ordered.push(member);
+        }
+      }
+      if (ordered.length === hostState.players.length) {
+        hostState.players = ordered;
+      }
+    }
+
+    function resetGame() {
+      const config = getBoardConfig(hostState.boardMode);
+      hostState.gameStarted = false;
+      hostState.hasMoves = false;
+      hostState.deck = [];
+      hostState.hands = {};
+      hostState.boardLayout = createBoardLayout(hostState.boardMode);
+      hostState.chips = createEmptyChips(config.rows, config.cols);
+      hostState.sequencesByTeam = initSequences(hostState.teamCount);
+      hostState.turnIndex = 0;
+      hostState.gameOver = false;
+      hostState.winnerTeam = null;
+      hostState.turnEndsAt = null;
+      hostState.log = [{ type: "text", text: "Game reset. Ready for a new round." }];
+      hostState.lastPlay = null;
+      clearSettingsDirty();
+      broadcastState();
+    }
+
+    function startGame() {
+      assignTeams();
+      if (!hostState.teamMode && hostState.players.length > 3) {
+        hostState.teamMode = true;
+        toast("Switched to team mode (4+ players).");
+        assignTeams();
+      }
+      if (hostState.teamMode && hostState.teamCount > 4) {
+        logHost("No more than four teams are allowed.", false);
+        toast("Max 4 teams.");
+        broadcastState();
+        return;
+      }
+      if (hostState.teamMode && hostState.players.length > hostState.teamCount * 4) {
+        logHost("No more than four players per team.", false);
+        toast("Max 4 players per team.");
+        broadcastState();
+        return;
+      }
+      if (hostState.teamMode) {
+        const counts = getTeamCounts();
+        if (counts.some(count => count > 4)) {
+          logHost("No more than four players per team.", false);
+          toast("Max 4 players per team.");
+          broadcastState();
+          return;
+        }
+      }
+      if (hostState.teamMode && hostState.players.length % hostState.teamCount !== 0) {
+        logHost("Player count must be divisible by team count.", false);
+        toast("Teams must divide evenly before starting.");
+        broadcastState();
+        return;
+      }
+      if (!teamDistributionValid()) {
+        logHost("Teams must be evenly balanced before starting.", false);
+        toast("Balance teams before starting.");
+        broadcastState();
+        return;
+      }
+      const config = getBoardConfig(hostState.boardMode);
+      hostState.boardLayout = createBoardLayout(hostState.boardMode);
+      hostState.deck = createDeck(getDeckCount());
+      hostState.hands = {};
+      hostState.chips = createEmptyChips(config.rows, config.cols);
+      hostState.sequencesByTeam = initSequences(hostState.teamCount);
+      if (hostState.teamMode) {
+        buildTeamTurnOrder();
+      }
+      hostState.lastPlay = null;
+      hostState.turnIndex = 0;
+      hostState.gameOver = false;
+      hostState.winnerTeam = null;
+      const handSize = getHandSize(hostState.players.length);
+      hostState.players.forEach(player => {
+        hostState.hands[player.id] = hostState.deck.splice(0, handSize);
+      });
+      hostState.gameStarted = true;
+      hostState.hasMoves = false;
+      clearSettingsDirty();
+      if (!hostState.roomCover) {
+        hostState.roomCover = generateRoomCover();
+      }
+      setTurnTimer();
+      hostState.log = [{ type: "text", text: "Game started. Draw your strategy and claim sequences." }];
+      broadcastState();
+    }
+
+    function getHandSize(playerCount) {
+      if (playerCount <= 2) return 7;
+      if (playerCount === 3) return 6;
+      if (playerCount <= 4) return 6;
+      if (playerCount <= 6) return 5;
+      if (playerCount <= 8) return 4;
+      return 3;
+    }
+
+    function handleAction(playerId, action) {
+      if (action.type === "choose_team") {
+        const targetId = action.playerId || playerId;
+        setPlayerTeam(targetId, Number(action.team));
+        broadcastState();
+        return;
+      }
+      if (action.type === "reset_game") {
+        resetGame();
+        return;
+      }
+      if (!hostState.gameStarted || hostState.gameOver) return;
+      const current = hostState.players[hostState.turnIndex];
+      if (!current || current.id !== playerId) return;
+      const hand = hostState.hands[playerId] || [];
+      if (action.type === "dead_card") {
+        const index = hand.indexOf(action.card);
+        if (index === -1) return;
+        if (action.card.startsWith("J")) return;
+        if (!isDeadCardHost(action.card)) return;
+        hand.splice(index, 1);
+        drawCard(playerId);
+        hostState.hands[playerId] = hand;
+        hostState.hasMoves = true;
+        logHost({ type: "dead", player: current.name, card: action.card }, false);
+        broadcastState();
+        return;
+      }
+
+      if (action.type === "play_card") {
+        const { card, row, col } = action;
+        const index = hand.indexOf(card);
+        if (index === -1) return;
+        if (!isValidPlay(card, row, col, current.team)) return;
+        if (ONE_EYED.has(card)) {
+          hostState.chips[row][col].team = null;
+          hostState.chips[row][col].inSequence = false;
+          logHost({ type: "remove", player: current.name, card, row, col }, false);
+        } else {
+          hostState.chips[row][col].team = current.team;
+          hostState.chips[row][col].inSequence = false;
+          logHost({ type: "play", player: current.name, card, row, col }, false);
+        }
+        hostState.lastPlay = { player: current.name, card, row, col, isRemove: ONE_EYED.has(card) };
+        hand.splice(index, 1);
+        drawCard(playerId);
+        hostState.hands[playerId] = hand;
+        hostState.hasMoves = true;
+        evaluateSequences(current.team);
+        advanceTurn();
+        broadcastState();
+      }
+    }
+
+    function drawCard(playerId) {
+      if (hostState.deck.length === 0) return;
+      hostState.hands[playerId].push(hostState.deck.shift());
+    }
+
+    function advanceTurn() {
+      hostState.turnIndex = (hostState.turnIndex + 1) % hostState.players.length;
+      setTurnTimer();
+    }
+
+    function setTurnTimer() {
+      if (!hostState.turnTimeLimit || !hostState.gameStarted || hostState.gameOver) {
+        hostState.turnEndsAt = null;
+        return;
+      }
+      hostState.turnEndsAt = Date.now() + hostState.turnTimeLimit * 1000;
+    }
+
+    function getPossiblePositionsHost(card, team) {
+      const { rows, cols } = getBoardSize(hostState.boardLayout);
+      const positions = [];
+      if (TWO_EYED.has(card)) {
+        for (let r = 0; r < rows; r += 1) {
+          for (let c = 0; c < cols; c += 1) {
+            if (hostState.boardLayout[r][c].type === "corner") continue;
+            if (hostState.chips[r][c].team === null) {
+              positions.push({ r, c });
+            }
+          }
+        }
+        return positions;
+      }
+      if (ONE_EYED.has(card)) {
+        for (let r = 0; r < rows; r += 1) {
+          for (let c = 0; c < cols; c += 1) {
+            const chip = hostState.chips[r][c];
+            if (chip.team !== null && chip.team !== team && !chip.inSequence) {
+              positions.push({ r, c });
+            }
+          }
+        }
+        return positions;
+      }
+      for (let r = 0; r < rows; r += 1) {
+        for (let c = 0; c < cols; c += 1) {
+          if (hostState.boardLayout[r][c].type === "card" && hostState.boardLayout[r][c].card === card) {
+            if (hostState.chips[r][c].team === null) {
+              positions.push({ r, c });
+            }
+          }
+        }
+      }
+      return positions;
+    }
+
+    function autoPlayTimeout() {
+      if (!hostState.gameStarted || hostState.gameOver) return;
+      const current = hostState.players[hostState.turnIndex];
+      if (!current) return;
+      const hand = hostState.hands[current.id] || [];
+      const deadIndex = hand.findIndex(card => !card.startsWith("J") && isDeadCardHost(card));
+      if (deadIndex !== -1) {
+        const deadCard = hand.splice(deadIndex, 1)[0];
+        if (hostState.deck.length > 0) {
+          hand.push(hostState.deck.shift());
+        }
+        hostState.hands[current.id] = hand;
+        logHost(`${current.name} timed out. Discarded dead card ${cardLabel(deadCard)}.`, false);
+      }
+      const playable = hand
+        .map(card => ({ card, positions: getPossiblePositionsHost(card, current.team) }))
+        .filter(entry => entry.positions.length > 0);
+      if (playable.length === 0) {
+        logHost(`${current.name} timed out. No playable cards.`, false);
+        advanceTurn();
+        broadcastState();
+        return;
+      }
+      const choice = playable[Math.floor(Math.random() * playable.length)];
+      const cardIndex = hand.indexOf(choice.card);
+      if (cardIndex !== -1) {
+        hand.splice(cardIndex, 1);
+      }
+      const target = choice.positions[Math.floor(Math.random() * choice.positions.length)];
+      if (ONE_EYED.has(choice.card)) {
+        hostState.chips[target.r][target.c].team = null;
+        hostState.chips[target.r][target.c].inSequence = false;
+        logHost(`${current.name} timed out. Auto one-eyed Jack removed a chip.`, false);
+      } else {
+        hostState.chips[target.r][target.c].team = current.team;
+        hostState.chips[target.r][target.c].inSequence = false;
+        logHost(`${current.name} timed out. Auto-played ${cardLabel(choice.card)}.`, false);
+      }
+      if (hostState.deck.length > 0) {
+        hand.push(hostState.deck.shift());
+      }
+      hostState.hands[current.id] = hand;
+      hostState.hasMoves = true;
+      evaluateSequences(current.team);
+      advanceTurn();
+      broadcastState();
+    }
+
+    function isValidPlay(card, row, col, team) {
+      const { rows, cols } = getBoardSize(hostState.boardLayout);
+      if (row < 0 || row >= rows || col < 0 || col >= cols) return false;
+      if (hostState.boardLayout[row][col].type === "corner") return false;
+      const chip = hostState.chips[row][col];
+      if (ONE_EYED.has(card)) {
+        return chip.team !== null && chip.team !== team && !chip.inSequence;
+      }
+      if (chip.team !== null) return false;
+      if (TWO_EYED.has(card)) {
+        return true;
+      }
+      return hostState.boardLayout[row][col].card === card;
+    }
+
+    function isDeadCardHost(card) {
+      if (card.startsWith("J")) return false;
+      const { rows, cols } = getBoardSize(hostState.boardLayout);
+      let openCount = 0;
+      for (let r = 0; r < rows; r += 1) {
+        for (let c = 0; c < cols; c += 1) {
+          if (hostState.boardLayout[r][c].type === "card" && hostState.boardLayout[r][c].card === card) {
+            if (hostState.chips[r][c].team === null) {
+              openCount += 1;
+            }
+          }
+        }
+      }
+      return openCount === 0;
+    }
+
+    function evaluateSequences(team) {
+      const { rows, cols } = getBoardSize(hostState.boardLayout);
+      const length = hostState.sequenceLength || 5;
+      const directions = [
+        { dr: 0, dc: 1 },
+        { dr: 1, dc: 0 },
+        { dr: 1, dc: 1 },
+        { dr: 1, dc: -1 }
+      ];
+      const sequenceSet = hostState.sequencesByTeam[team];
+      directions.forEach(({ dr, dc }) => {
+        for (let r = 0; r < rows; r += 1) {
+          for (let c = 0; c < cols; c += 1) {
+            const cells = [];
+            for (let k = 0; k < length; k += 1) {
+              const rr = r + dr * k;
+              const cc = c + dc * k;
+              if (rr < 0 || rr >= rows || cc < 0 || cc >= cols) {
+                cells.length = 0;
+                break;
+              }
+              const layoutCell = hostState.boardLayout[rr][cc];
+              if (layoutCell.type === "corner") {
+                cells.push({ r: rr, c: cc, corner: true });
+              } else {
+                const chip = hostState.chips[rr][cc];
+                if (chip.team !== team) {
+                  cells.length = 0;
+                  break;
+                }
+                cells.push({ r: rr, c: cc, corner: false });
+              }
+            }
+            if (cells.length === length) {
+              const key = `${team}|${r},${c}|${dr},${dc}|${length}`;
+              if (!sequenceSet.has(key)) {
+                sequenceSet.add(key);
+                if (hostState.teamMode) {
+                  logHost(`Team ${team + 1} completes a sequence!`, false);
+                } else {
+                  const player = hostState.players[team];
+                  logHost(`${player ? player.name : "Player"} completes a sequence!`, false);
+                }
+              }
+            }
+          }
+        }
+      });
+      markSequences();
+      checkWin();
+    }
+
+    function markSequences() {
+      hostState.chips.forEach(row => row.forEach(cell => { cell.inSequence = false; }));
+      Object.entries(hostState.sequencesByTeam).forEach(([teamKey, sequences]) => {
+        sequences.forEach(key => {
+          const [team, start, dir, lenValue] = key.split("|");
+          const [r, c] = start.split(",").map(Number);
+          const [dr, dc] = dir.split(",").map(Number);
+          const length = Number(lenValue || 5);
+          for (let k = 0; k < length; k += 1) {
+            const rr = r + dr * k;
+            const cc = c + dc * k;
+            if (hostState.boardLayout[rr][cc].type === "corner") continue;
+            const chip = hostState.chips[rr][cc];
+            if (chip.team !== null && String(chip.team) === team) {
+              chip.inSequence = true;
+            }
+          }
+        });
+      });
+    }
+
+    function checkWin() {
+      const needed = hostState.sequencesToWin || 2;
+      for (let t = 0; t < hostState.teamCount; t += 1) {
+        if (hostState.sequencesByTeam[t].size >= needed) {
+          hostState.gameOver = true;
+          hostState.winnerTeam = t;
+          hostState.turnEndsAt = null;
+        }
+      }
+    }
+
+    function handleBoardClick(event) {
+      if (!localState || !localState.gameStarted || localState.gameOver) return;
+      const target = event.target.closest(".cell");
+      if (!target) return;
+      if (localState.turnPlayerId !== selfId) return;
+      const selection = getSelectedCard();
+      if (!selection) return;
+      const row = Number(target.dataset.row);
+      const col = Number(target.dataset.col);
+      sendAction({ type: "play_card", card: selection.card, row, col });
+      selectedCardIndex = null;
+      renderState(localState);
+    }
+
+    function handleHandClick(event) {
+      const target = event.target.closest(".hand-card");
+      if (!target) return;
+      selectedCardIndex = Number(target.dataset.index);
+      renderState(localState);
+    }
+
+    function connectPeer(preferredId = null) {
+      if (peer) peer.destroy();
+      requestedHostId = isHost ? preferredId : null;
+      peer = isHost && preferredId ? new Peer(preferredId) : new Peer();
+      peer.on("open", id => {
+        selfId = id;
+        if (!isHost && localState) {
+          renderState(localState);
+        }
+        if (isHost) {
+          setRoomCode(id);
+          pendingHostId = id;
+        }
+        fallbackHostIdInProgress = false;
+        // connection status pill removed
+        if (isHost) {
+          if (hostState.turnTimeLimit && !hostState.gameOver && hostState.gameStarted && !hostState.turnEndsAt) {
+            setTurnTimer();
+          }
+          replaceHostId(id);
+          assignTeams();
+          updateLobbyControls();
+          broadcastState();
+        } else if (pendingJoinCode) {
+          connectToHost(pendingJoinCode);
+          pendingJoinCode = null;
+        }
+      });
+      peer.on("disconnected", () => {
+        if (peer && !peer.destroyed) {
+          setTimeout(() => {
+            if (peer && !peer.destroyed) {
+              peer.reconnect();
+            }
+          }, 1000);
+        }
+      });
+      peer.on("error", (err) => {
+        if (err?.type === "unavailable-id" && isHost && requestedHostId && !fallbackHostIdInProgress) {
+          fallbackHostIdInProgress = true;
+          toast("Room code in use. Creating a new one.");
+          connectPeer(null);
+          return;
+        }
+        if (err?.type) {
+          toast(`Connection error (${err.type}). Try again.`);
+        } else {
+          toast("Connection error. Check your network.");
+        }
+      });
+
+      peer.on("connection", conn => {
+        if (!isHost) return;
+        connections.set(conn.peer, conn);
+        conn.on("data", data => {
+          handleIncoming(conn.peer, data);
+        });
+        conn.on("close", () => {
+          connections.delete(conn.peer);
+          const currentTurnId = hostState.players[hostState.turnIndex]?.id || null;
+          hostState.players = hostState.players.filter(p => p.id !== conn.peer);
+          delete hostState.hands[conn.peer];
+          if (hostState.players.length === 0) {
+            hostState.turnIndex = 0;
+            hostState.turnEndsAt = null;
+          } else if (hostState.gameStarted) {
+            const currentIndex = hostState.players.findIndex(p => p.id === currentTurnId);
+            if (currentIndex === -1) {
+              hostState.turnIndex = hostState.turnIndex % hostState.players.length;
+            } else {
+              hostState.turnIndex = (currentIndex + 1) % hostState.players.length;
+            }
+            setTurnTimer();
+          } else if (hostState.turnIndex >= hostState.players.length) {
+            hostState.turnIndex = 0;
+          }
+          assignTeams();
+          logHost(`Player ${conn.peer} left the room.`, false);
+          updateLobbyControls();
+          broadcastState();
+        });
+      });
+    }
+
+    function replaceHostId(newId) {
+      if (hostState.players.length === 0) {
+        hostState.players = [{ id: newId, name: pendingHostName || "Host", team: 0, token: pendingHostToken }];
+        hostState.hands = { [newId]: hostState.hands[newId] || [] };
+        return;
+      }
+      let hostIndex = hostState.players.findIndex(p => p.token === pendingHostToken);
+      if (hostIndex === -1) {
+        const oldId = pendingHostId || requestedHostId;
+        if (oldId) {
+          hostIndex = hostState.players.findIndex(p => p.id === oldId);
+        }
+      }
+      if (hostIndex === -1 && pendingHostName) {
+        hostIndex = hostState.players.findIndex(p => p.name === pendingHostName);
+      }
+      if (hostIndex === -1) {
+        hostState.players.unshift({ id: newId, name: pendingHostName || "Host", team: 0, token: pendingHostToken });
+        hostState.hands[newId] = hostState.hands[newId] || [];
+        return;
+      }
+      const oldId = hostState.players[hostIndex].id;
+      hostState.players[hostIndex].id = newId;
+      if (pendingHostToken) {
+        hostState.players[hostIndex].token = pendingHostToken;
+      }
+      if (hostState.hands[oldId]) {
+        hostState.hands[newId] = hostState.hands[oldId];
+        delete hostState.hands[oldId];
+      }
+    }
+
+    const kickedTokens = new Set();
+
+    function kickPlayer(playerId, playerName) {
+      if (!isHost) return;
+      const player = hostState.players.find(p => p.id === playerId);
+      if (!player) return;
+      if (player.token) {
+        kickedTokens.add(player.token);
+      }
+      const conn = connections.get(playerId);
+      if (conn) {
+        conn.send({ type: "kicked", reason: "You were kicked by the host." });
+        setTimeout(() => {
+          conn.close();
+        }, 100);
+      }
+      const currentTurnId = hostState.players[hostState.turnIndex]?.id || null;
+      hostState.players = hostState.players.filter(p => p.id !== playerId);
+      delete hostState.hands[playerId];
+      connections.delete(playerId);
+      if (hostState.players.length === 0) {
+        hostState.turnIndex = 0;
+        hostState.turnEndsAt = null;
+      } else if (hostState.gameStarted) {
+        const currentIndex = hostState.players.findIndex(p => p.id === currentTurnId);
+        if (currentIndex === -1) {
+          hostState.turnIndex = hostState.turnIndex % hostState.players.length;
+        } else {
+          hostState.turnIndex = currentIndex;
+        }
+        setTurnTimer();
+      } else if (hostState.turnIndex >= hostState.players.length) {
+        hostState.turnIndex = 0;
+      }
+      assignTeams();
+      logHost(`${playerName} was kicked from the room.`, false);
+      updateLobbyControls();
+      broadcastState();
+      toast(`Kicked ${playerName}`);
+    }
+
+    function handleIncoming(peerId, data) {
+      if (data.type === "join") {
+        const playerName = data.name || "Player";
+        const token = data.token;
+        if (kickedTokens.has(token)) {
+          const conn = connections.get(peerId);
+          if (conn) {
+            conn.send({ type: "kicked", reason: "You were kicked from this room." });
+            setTimeout(() => conn.close(), 100);
+          }
+          return;
+        }
+        const existingIndex = hostState.players.findIndex(p => p.token && p.token === token);
+        if (existingIndex !== -1) {
+          const oldId = hostState.players[existingIndex].id;
+          hostState.players[existingIndex].id = peerId;
+          if (hostState.hands[oldId]) {
+            hostState.hands[peerId] = hostState.hands[oldId];
+            delete hostState.hands[oldId];
+          }
+          logHost(`${playerName} rejoined the room.`, false);
+          broadcastState();
+          return;
+        }
+        if (hostState.roomLocked) {
+          const conn = connections.get(peerId);
+          if (conn) {
+            conn.send({ type: "room_locked", reason: "The room is locked. No new players allowed." });
+            setTimeout(() => conn.close(), 100);
+          }
+          return;
+        }
+        if (hostState.gameStarted) {
+          const conn = connections.get(peerId);
+          if (conn) {
+            conn.send({ type: "game_in_progress", reason: "Game already in progress." });
+            setTimeout(() => conn.close(), 100);
+          }
+          return;
+        }
+        hostState.players.push({ id: peerId, name: playerName, team: 0, token });
+        assignTeams();
+        logHost(`${playerName} joined the room.`, false);
+        updateLobbyControls();
+        broadcastState();
+        return;
+      }
+      if (data.type === "action") {
+        handleAction(peerId, data.action);
+      }
+    }
+
+    hostBtn.addEventListener("click", () => {
+      if (!playerNameInput.value.trim()) {
+        playerNameInput.value = "Host";
+      }
+      hostLocked = true;
+      isHost = true;
+      updateConnectionButtons();
+      updateSettingsVisibility();
+      closeAccordion(lobbyAccordion);
+      openAccordion(playersAccordion);
+      pendingHostName = playerNameInput.value || "Host";
+      pendingHostToken = ensureToken("host");
+      const session = loadSession();
+      pendingHostId = session?.hostId || pendingHostId;
+      if (!hostState.roomCover) {
+        hostState.roomCover = generateRoomCover();
+      }
+      hostState.teamMode = teamModeToggle.value === "teams";
+      hostState.teamCount = Number(teamCountSelect.value);
+      hostState.sequenceLength = Number(sequenceLengthSelect.value);
+      hostState.sequencesToWin = Number(sequencesToWinSelect.value);
+      hostState.boardMode = boardModeSelect.value;
+      hostState.turnTimeLimit = Number(turnTimerSelect.value);
+      const config = getBoardConfig(hostState.boardMode);
+      hostState.boardLayout = createBoardLayout(hostState.boardMode);
+      hostState.chips = createEmptyChips(config.rows, config.cols);
+      assignTeams();
+      saveSession({
+        role: "host",
+        playerName: pendingHostName,
+        playerToken: pendingHostToken,
+        hostId: pendingHostId,
+        hostSnapshot: serializeHostState()
+      });
+      fallbackHostIdInProgress = false;
+      connectPeer(pendingHostId);
+      updateGameControlButton();
+    });
+
+    joinBtn.addEventListener("click", () => {
+      if (!joinCodeInput.value.trim()) return;
+      if (!playerNameInput.value.trim()) {
+        playerNameInput.value = "Player";
+      }
+      hostLocked = false;
+      isHost = false;
+      const playerToken = ensureToken("client");
+      pendingJoinToken = playerToken;
+      pendingJoinName = playerNameInput.value || "Player";
+      connectPeer();
+      if (!peer || !peer.open) {
+        pendingJoinCode = joinCodeInput.value.trim();
+      } else {
+        connectToHost(joinCodeInput.value.trim());
+      }
+      saveSession({
+        role: "client",
+        playerName: playerNameInput.value || "Player",
+        playerToken,
+        joinCode: joinCodeInput.value.trim()
+      });
+      updateGameControlButton();
+    });
+
+    playerNameInput.addEventListener("input", () => {
+      updateConnectionButtons();
+    });
+
+    joinCodeInput.addEventListener("input", () => {
+      updateConnectionButtons();
+    });
+
+    if (toggleJoinCodeBtn) {
+      toggleJoinCodeBtn.addEventListener("click", () => {
+        const isHidden = joinCodeInput.type === "password";
+        joinCodeInput.type = isHidden ? "text" : "password";
+        toggleJoinCodeBtn.textContent = isHidden ? "Hide" : "Show";
+      });
+    }
+
+    teamCountSelect.addEventListener("change", () => {
+      if (hostState.gameStarted) return;
+      hostState.teamCount = Number(teamCountSelect.value);
+      lastTeamCount = hostState.teamCount;
+      assignTeams();
+      updateLobbyControls();
+      if (isHost) {
+        markSettingsDirty();
+        refreshHostPreview();
+      } else if (!selfId) {
+        renderLobbyPreview();
+      }
+    });
+
+    teamModeToggle.addEventListener("change", () => {
+      if (hostState.gameStarted) return;
+      const nextIsTeams = teamModeToggle.value === "teams";
+      if (!nextIsTeams) {
+        lastTeamCount = hostState.teamCount;
+      } else {
+        hostState.teamCount = Math.max(2, Math.min(4, lastTeamCount || 2));
+        teamCountSelect.value = String(hostState.teamCount);
+      }
+      hostState.teamMode = nextIsTeams;
+      assignTeams();
+      teamCountSelect.value = String(hostState.teamCount);
+      updateLobbyControls();
+      if (isHost) {
+        markSettingsDirty();
+        refreshHostPreview();
+      } else if (!selfId) {
+        renderLobbyPreview();
+      }
+    });
+
+    sequenceLengthSelect.addEventListener("change", () => {
+      if (hostState.gameStarted) return;
+      hostState.sequenceLength = Number(sequenceLengthSelect.value);
+      if (isHost) {
+        markSettingsDirty();
+        refreshHostPreview();
+      } else if (!selfId) {
+        renderLobbyPreview();
+      }
+    });
+
+    sequencesToWinSelect.addEventListener("change", () => {
+      if (hostState.gameStarted) return;
+      hostState.sequencesToWin = Number(sequencesToWinSelect.value);
+      if (isHost) {
+        markSettingsDirty();
+        refreshHostPreview();
+      } else if (!selfId) {
+        renderLobbyPreview();
+      }
+    });
+
+    boardModeSelect.addEventListener("change", () => {
+      if (hostState.gameStarted) return;
+      hostState.boardMode = boardModeSelect.value;
+      const config = getBoardConfig(hostState.boardMode);
+      hostState.boardLayout = createBoardLayout(hostState.boardMode);
+      hostState.chips = createEmptyChips(config.rows, config.cols);
+      if (isHost) {
+        markSettingsDirty();
+        refreshHostPreview();
+      } else if (!selfId) {
+        renderLobbyPreview();
+      }
+    });
+
+    turnTimerSelect.addEventListener("change", () => {
+      if (hostState.gameStarted) return;
+      hostState.turnTimeLimit = Number(turnTimerSelect.value);
+      if (isHost) {
+        markSettingsDirty();
+        refreshHostPreview();
+      } else if (!selfId) {
+        renderLobbyPreview();
+      }
+    });
+
+    cardDisplaySelect.addEventListener("change", () => {
+      cardDisplayMode = cardDisplaySelect.value;
+      saveCardDisplayMode(cardDisplayMode);
+      updateImagesModeClass();
+      if (localState) {
+        renderState(localState);
+      }
+    });
+
+    function updateImagesModeClass() {
+      const useSymbols = shouldUseSymbols();
+      document.body.classList.toggle("use-images", !useSymbols);
+      document.body.classList.toggle("use-symbols", useSymbols);
+    }
+
+    if (openGameSettingsBtn) {
+      openGameSettingsBtn.addEventListener("click", () => {
+        setSettingsMode("game");
+        toggleGameSettings(true);
+      });
+    }
+
+    if (openDisplaySettingsBtn) {
+      openDisplaySettingsBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        toggleDisplayDropdown(!displayDropdown.classList.contains("open"));
+      });
+    }
+
+    document.addEventListener("click", (e) => {
+      if (!displayDropdown.contains(e.target) && !openDisplaySettingsBtn.contains(e.target)) {
+        toggleDisplayDropdown(false);
+      }
+    });
+
+    openInfoBtn.addEventListener("click", () => {
+      setSettingsMode("info");
+      toggleGameSettings(true);
+      if (infoAccordion) {
+        infoAccordion.classList.add("open");
+        const icon = infoAccordion.querySelector(".accordion-toggle span:last-child");
+        if (icon) icon.textContent = "▾";
+      }
+    });
+
+    closeGameSettingsBtn.addEventListener("click", () => {
+      toggleGameSettings(false);
+    });
+
+    if (hostTabBtn) {
+      hostTabBtn.addEventListener("click", () => {
+        setConnectionTab("host");
+      });
+    }
+
+    if (joinTabBtn) {
+      joinTabBtn.addEventListener("click", () => {
+        setConnectionTab("join");
+      });
+    }
+
+    settingsOverlay.addEventListener("click", () => {
+      toggleGameSettings(false);
+      toggleDisplayDropdown(false);
+    });
+
+    if (confirmCancelBtn && confirmOkBtn && confirmOverlay) {
+      confirmCancelBtn.addEventListener("click", () => closeConfirm(false));
+      confirmOkBtn.addEventListener("click", () => closeConfirm(true));
+      confirmOverlay.addEventListener("click", (event) => {
+        if (event.target === confirmOverlay) {
+          closeConfirm(false);
+        }
+      });
+    }
+
+    document.querySelectorAll(".accordion-toggle").forEach(toggle => {
+      toggle.addEventListener("click", () => {
+        const parent = toggle.closest(".accordion");
+        parent.classList.toggle("open");
+        const icon = toggle.querySelector("span:last-child");
+        if (icon) {
+          icon.textContent = parent.classList.contains("open") ? "▾" : "▸";
+        }
+      });
+    });
+
+    document.querySelectorAll(".status-pill").forEach(pill => {
+      pill.addEventListener("click", (event) => {
+        event.stopPropagation();
+        document.querySelectorAll(".status-pill").forEach(item => {
+          if (item !== pill) item.classList.remove("show-tip");
+        });
+        pill.classList.toggle("show-tip");
+      });
+    });
+
+    document.addEventListener("click", (event) => {
+      if (event.target.closest(".status-pill")) return;
+      document.querySelectorAll(".status-pill").forEach(item => {
+        item.classList.remove("show-tip");
+      });
+    });
+
+    shuffleBoardToggle.addEventListener("change", () => {
+      if (!isHost || hostState.gameStarted) {
+        shuffleBoardToggle.checked = false;
+        return;
+      }
+      if (!shuffleBoardToggle.checked) return;
+      const config = getBoardConfig(hostState.boardMode);
+      hostState.boardLayout = createBoardLayout(hostState.boardMode, true);
+      hostState.chips = createEmptyChips(config.rows, config.cols);
+      logHost("Board shuffled.", false);
+      markSettingsDirty();
+      refreshHostPreview();
+      shuffleBoardToggle.checked = false;
+    });
+
+    function updateCodesHidden() {
+      updateCodeDisplay();
+    }
+
+    hideCodeToggle.addEventListener("change", () => {
+      codesHidden = hideCodeToggle.checked;
+      updateCodesHidden();
+      if (codesHidden) {
+        toast("Codes hidden for streaming");
+      }
+    });
+
+    lockRoomToggle.addEventListener("change", () => {
+      hostState.roomLocked = lockRoomToggle.checked;
+      roomLocked = hostState.roomLocked;
+      updateRoomLockedBadge();
+      if (hostState.roomLocked) {
+        toast("Room locked — no new players can join");
+        logHost("Room locked by host.", false);
+      } else {
+        toast("Room unlocked — players can join again");
+        logHost("Room unlocked by host.", false);
+      }
+      broadcastState();
+    });
+
+    function updateRoomLockedBadge() {
+      let badge = document.getElementById("roomLockedBadge");
+      if (hostState.roomLocked && isHost && selfId) {
+        if (!badge) {
+          badge = document.createElement("span");
+          badge.id = "roomLockedBadge";
+          badge.className = "room-locked-badge";
+          badge.textContent = "🔒 Locked";
+          const shareBoxEl = document.getElementById("shareBox");
+          if (shareBoxEl) {
+            shareBoxEl.insertBefore(badge, shareBoxEl.firstChild);
+          }
+        }
+      } else if (badge) {
+        badge.remove();
+      }
+    }
+
+    if (gameControlBtn) {
+      gameControlBtn.addEventListener("click", () => {
+        if (gameControlBtn.dataset.action === "start") {
+          if (!isHost || hostState.gameStarted) return;
+          startGame();
+        } else if (gameControlBtn.dataset.action === "leave") {
+          requestLeave();
+        }
+      });
+    }
+
+    copyCodeBtn.addEventListener("click", async () => {
+      await copyText(actualRoomCode);
+      toast("Room code copied");
+    });
+
+    copyLinkBtn.addEventListener("click", async () => {
+      await copyText(actualShareLink);
+      toast("Link copied");
+    });
+
+    copyLogBtn.addEventListener("click", async () => {
+      if (!logEl) return;
+      await copyText(logEl.textContent || "");
+      toast("Log copied");
+    });
+
+    if (saveSettingsBtn) {
+      saveSettingsBtn.addEventListener("click", () => {
+        if (!isHost || hostState.gameStarted) return;
+        clearSettingsDirty();
+        assignTeams();
+        logHost("Settings updated.");
+        toast("Settings saved");
+      });
+    }
+
+    if (clearDataBtn) {
+      clearDataBtn.addEventListener("click", () => {
+        clearSavedData();
+      });
+    }
+
+    function clearJoinParam() {
+      try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has("join")) {
+          url.searchParams.delete("join");
+          window.history.replaceState({}, "", url.toString());
+        }
+      } catch { }
+    }
+
+    function leaveRoom({ preserveSession = false } = {}) {
+      if (peer) peer.destroy();
+      if (preserveSession) {
+        saveSession(buildLeaveSessionSnapshot());
+      }
+      connections = new Map();
+      hostConn = null;
+      isHost = false;
+      hostLocked = false;
+      selfId = null;
+      localState = null;
+      hostState.boardMode = "standard";
+      hostState.boardLayout = createBoardLayout("standard");
+      hostState.chips = createEmptyChips(10, 10);
+      hostState.players = [];
+      hostState.hands = {};
+      hostState.gameStarted = false;
+      hostState.deck = [];
+      hostState.sequencesByTeam = initSequences(hostState.teamCount);
+      hostState.gameOver = false;
+      hostState.winnerTeam = null;
+      hostState.roomCover = null;
+      hostState.turnEndsAt = null;
+      hostState.log = [];
+      hostState.roomLocked = false;
+      hostState.lastPlay = null;
+      roomLocked = false;
+      codesHidden = false;
+      kickedTokens.clear();
+      hasShownJoinToast = false;
+      if (hideCodeToggle) hideCodeToggle.checked = false;
+      if (lockRoomToggle) lockRoomToggle.checked = false;
+      actualRoomCode = "";
+      actualShareLink = "";
+      updateCodeDisplay();
+      const badge = document.getElementById("roomLockedBadge");
+      if (badge) badge.remove();
+      if (!preserveSession) {
+        clearSessionKeepName();
+      } else {
+        updateSessionUI(loadSession());
+      }
+      clearJoinParam();
+      closeAccordion(lobbyAccordion);
+      closeAccordion(playersAccordion);
+      clearSettingsDirty();
+      initPlaceholder();
+      updateGameControlButton();
+    }
+
+    async function requestLeave() {
+      const ok = await openConfirm({
+        title: "Leave game?",
+        message: "You’ll exit the room and lose your current hand.",
+        confirmText: "Leave"
+      });
+      if (ok) {
+        leaveRoom({ preserveSession: true });
+      }
+    }
+
+    leaveRoomBtn.addEventListener("click", () => {
+      requestLeave();
+    });
+
+    leaveRoomBtnGame.addEventListener("click", () => {
+      requestLeave();
+    });
+
+    // Sessions auto-save during gameplay; no manual save button.
+
+    rejoinBtn.addEventListener("click", () => {
+      const session = loadSession();
+      if (!session || session.role !== "client") return;
+      hostLocked = false;
+      isHost = false;
+      if (session.playerName) {
+        playerNameInput.value = session.playerName;
+      }
+      if (session.joinCode) {
+        joinCodeInput.value = session.joinCode;
+      }
+      pendingJoinToken = session.playerToken || pendingJoinToken;
+      pendingJoinName = session.playerName || pendingJoinName;
+      if (session.playerToken) {
+        saveSession({ ...session, playerName: playerNameInput.value || session.playerName, joinCode: session.joinCode });
+      }
+      setConnectionTab("join");
+      toggleGameSettings(true);
+      updateConnectionButtons();
+      joinBtn.click();
+    });
+
+    rehostBtn.addEventListener("click", () => {
+      const session = loadSession();
+      if (!session || session.role !== "host") return;
+      if (session.playerName) {
+        playerNameInput.value = session.playerName;
+      }
+      restoreHostState(session.hostSnapshot);
+      clearSettingsDirty();
+      teamModeToggle.value = hostState.teamMode ? "teams" : "solo";
+      teamCountSelect.value = String(hostState.teamCount);
+      turnTimerSelect.value = String(hostState.turnTimeLimit || 0);
+      sequenceLengthSelect.value = String(hostState.sequenceLength);
+      sequencesToWinSelect.value = String(hostState.sequencesToWin);
+      boardModeSelect.value = hostState.boardMode;
+      lockRoomToggle.checked = hostState.roomLocked;
+      roomLocked = hostState.roomLocked;
+      pendingHostName = session.playerName || "Host";
+      pendingHostToken = session.playerToken || ensureToken("host");
+      pendingHostId = session.hostId || pendingHostId;
+      hostLocked = true;
+      isHost = true;
+      setSettingsMode("game");
+      updateSettingsVisibility();
+      updateLobbyControls();
+      fallbackHostIdInProgress = false;
+      connectPeer(pendingHostId);
+      closeAccordion(lobbyAccordion);
+      openAccordion(playersAccordion);
+      updateRoomLockedBadge();
+    });
+
+    resetSessionBtn.addEventListener("click", () => {
+      resetSession();
+      closeAccordion(lobbyAccordion);
+      closeAccordion(playersAccordion);
+    });
+
+    resetSessionBtnGame.addEventListener("click", () => {
+      resetSession();
+      closeAccordion(lobbyAccordion);
+      closeAccordion(playersAccordion);
+    });
+
+    function handleHostDisconnect() {
+      hostConn = null;
+      localState = null;
+      setStatus(turnStatusEl, "Host disconnected");
+      toast("Host disconnected. Waiting to rejoin.");
+      updateSessionUI(loadSession());
+      setConnectionTab("join");
+      toggleGameSettings(true);
+      renderState({
+        boardLayout: hostState.boardLayout,
+        chips: hostState.chips,
+        players: [],
+        teamCount: hostState.teamCount,
+        teamMode: hostState.teamMode,
+        turnTimeLimit: hostState.turnTimeLimit,
+        timeLeft: hostState.turnTimeLimit ? hostState.turnTimeLimit : null,
+        roomCover: hostState.roomCover,
+        sequenceLength: hostState.sequenceLength,
+        sequencesToWin: hostState.sequencesToWin,
+        boardMode: hostState.boardMode,
+        gameStarted: false,
+        hasMoves: false,
+        turnPlayerId: null,
+        deckCount: 0,
+        yourHand: [],
+        handCounts: {},
+        sequencesCount: {},
+        gameOver: false,
+        winnerTeam: null,
+        log: [{ type: "text", text: "Host disconnected. Waiting to rejoin." }]
+      });
+      updateGameControlButton();
+      updateSettingsVisibility();
+    }
+
+    function connectToHost(code) {
+      if (!peer || !code) return;
+      if (hostConn) {
+        hostConn.close();
+      }
+      hostConn = peer.connect(code);
+      hostConn.on("data", data => {
+        if (data.type === "state") {
+          const wasInRoom = !!(localState && localState.players && localState.players.length > 0);
+          renderState(data.payload);
+          const isNowInRoom = !!(data.payload.players && data.payload.players.length > 0);
+          if (!wasInRoom && isNowInRoom && !isHost) {
+            setSettingsMode("game");
+            playersAccordion.classList.remove("hidden");
+            openAccordion(playersAccordion);
+            closeAccordion(lobbyAccordion);
+            clearJoinParam();
+            if (!hasShownJoinToast) {
+              toast("Joined room");
+              hasShownJoinToast = true;
+            }
+            toggleGameSettings(false);
+          }
+        } else if (data.type === "kicked") {
+          toast(data.reason || "You were kicked from the room.");
+          handleHostDisconnect();
+          clearSessionKeepName();
+        } else if (data.type === "room_locked") {
+          toast(data.reason || "Room is locked.");
+          handleHostDisconnect();
+        } else if (data.type === "game_in_progress") {
+          toast(data.reason || "Game already in progress.");
+          handleHostDisconnect();
+        }
+      });
+      hostConn.on("open", () => {
+        hostConn.send({
+          type: "join",
+          name: pendingJoinName || playerNameInput.value || "Player",
+          token: pendingJoinToken || ensureToken("client")
+        });
+      });
+      hostConn.on("close", () => {
+        handleHostDisconnect();
+      });
+      hostConn.on("error", () => {
+        handleHostDisconnect();
+      });
+    }
+
+    setInterval(() => {
+      if (!isHost || !hostState.gameStarted || hostState.gameOver || !hostState.turnTimeLimit) return;
+      if (hostState.turnEndsAt && Date.now() >= hostState.turnEndsAt) {
+        autoPlayTimeout();
+      } else {
+        broadcastState();
+      }
+    }, 1000);
+
+    boardEl.addEventListener("click", handleBoardClick);
+    handEl.addEventListener("click", handleHandClick);
+
+    function initPlaceholder() {
+      cardDisplayMode = loadCardDisplayMode();
+      cardDisplaySelect.value = cardDisplayMode;
+      updateImagesModeClass();
+      hideCodeToggle.checked = true;
+      codesHidden = true;
+      updateCodesHidden();
+      setSettingsMode("game");
+      clearSettingsDirty();
+      toggleDisplayDropdown(false);
+      closeAccordion(logAccordion);
+      if (window.matchMedia("(max-width: 819px)").matches) {
+        logAccordion.classList.remove("open");
+      }
+      const session = loadSession();
+      updateSessionUI(session);
+      updateConnectionButtons();
+      if (session?.role === "client") {
+        setConnectionTab("join");
+      } else {
+        setConnectionTab("host");
+      }
+      if (session && session.role === "host" && session.hostSnapshot) {
+        restoreHostState(session.hostSnapshot);
+        pendingHostToken = session.playerToken || pendingHostToken;
+        pendingHostId = session.hostId || pendingHostId;
+      }
+      try {
+        const url = new URL(window.location.href);
+        const joinCode = url.searchParams.get("join");
+        if (joinCode) {
+          if (!joinCodeInput.value.trim()) {
+            joinCodeInput.value = joinCode;
+            setConnectionTab("join");
+            toggleGameSettings(true);
+            updateConnectionButtons();
+          }
+          clearJoinParam();
+        }
+      } catch {
+        // ignore invalid URL parsing
+      }
+      teamModeToggle.value = hostState.teamMode ? "teams" : "solo";
+      teamCountSelect.value = String(hostState.teamCount);
+      turnTimerSelect.value = String(hostState.turnTimeLimit || 0);
+      sequenceLengthSelect.value = String(hostState.sequenceLength);
+      sequencesToWinSelect.value = String(hostState.sequencesToWin);
+      boardModeSelect.value = hostState.boardMode;
+      updateLobbyControls();
+      renderState({
+        boardLayout: hostState.boardLayout,
+        chips: hostState.chips,
+        players: [],
+        teamCount: hostState.teamCount,
+        teamMode: hostState.teamMode,
+        turnTimeLimit: hostState.turnTimeLimit,
+        timeLeft: hostState.turnTimeLimit ? hostState.turnTimeLimit : null,
+        roomCover: hostState.roomCover,
+        sequenceLength: hostState.sequenceLength,
+        sequencesToWin: hostState.sequencesToWin,
+        boardMode: hostState.boardMode,
+        gameStarted: false,
+        hasMoves: false,
+        turnPlayerId: null,
+        deckCount: 0,
+        yourHand: [],
+        handCounts: {},
+        sequencesCount: {},
+        gameOver: false,
+        winnerTeam: null,
+        log: [{ type: "text", text: "Connect to a room to begin." }]
+      });
+    }
+
+    initPlaceholder();
+    window.addEventListener("resize", () => {
+      if (cardDisplayMode === "auto") {
+        updateImagesModeClass();
+        if (localState) {
+          renderState(localState);
+        }
+      }
+    });
+  </script>
+</body>
+
+</html>

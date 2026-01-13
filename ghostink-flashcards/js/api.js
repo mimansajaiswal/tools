@@ -95,7 +95,7 @@ export const API = {
     },
 
     async createPage(dbId, properties) {
-        return API.requestWithRetry('POST', '/pages', { parent: { data_source_id: dbId }, properties });
+        return API.requestWithRetry('POST', '/pages', { parent: { type: 'data_source_id', data_source_id: dbId }, properties });
     },
 
     async updatePage(pageId, properties) {
