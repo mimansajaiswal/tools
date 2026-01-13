@@ -222,6 +222,10 @@ export const createMediaFigure = (doc, { kind, src }, label, originalUrl) => {
         const expandHandler = (e) => {
             e.preventDefault();
             e.stopPropagation();
+            if (typeof GLightbox === 'undefined') {
+                console.warn('GLightbox not available; showing inline only');
+                return;
+            }
             const instance = GLightbox({ elements: [{ href: src, type: 'video', source: kind }] });
             tempLightboxInstances.push(instance);
             // Auto-destroy on close to prevent memory leaks
@@ -358,5 +362,5 @@ export const applyMediaEmbeds = (container) => {
     }
 
     // Refresh GLightbox to pick up new elements
-    if (lb) lb.reload();
+    if (lb && typeof lb.reload === 'function') lb.reload();
 };

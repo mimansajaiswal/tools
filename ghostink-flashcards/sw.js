@@ -273,11 +273,11 @@ self.addEventListener('fetch', (event) => {
         const fetchPromise = fetch(request).then((networkResponse) => {
           // Check if valid response before caching
           // Note: opaque responses (from no-cors CDN requests) can't be inspected for errors,
-          // but we only cache them if they exist. If the fetch succeeds, it's likely valid.
-          // For transparent responses, require status 200.
+          // but we cache them for trusted CDNs. For transparent responses, require status 200.
           const isValidTransparent = networkResponse.status === 200 &&
             (networkResponse.type === 'basic' || networkResponse.type === 'cors');
-          const cacheable = networkResponse && isValidTransparent;
+          const isOpaqueCdn = networkResponse.type === 'opaque' && isTrustedCdn;
+          const cacheable = networkResponse && (isValidTransparent || isOpaqueCdn);
 
           if (cacheable) {
             // Clone response before caching

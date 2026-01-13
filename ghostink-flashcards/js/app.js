@@ -87,19 +87,27 @@ import {
     stripUrlPunctuation
 } from './features/media.js';
 
-// Configure marked to open all links in new tab
-const renderer = new marked.Renderer();
-const originalLinkRenderer = renderer.link.bind(renderer);
-renderer.link = (href, title, text) => {
-    const html = originalLinkRenderer(href, title, text);
-    return html.replace('<a ', '<a target="_blank" rel="noopener noreferrer" ');
+// Configure marked to open all links in new tab (deferred until marked is available)
+let markedConfigured = false;
+const ensureMarkedConfigured = () => {
+    if (markedConfigured) return;
+    if (typeof marked === 'undefined') return;
+    const renderer = new marked.Renderer();
+    const originalLinkRenderer = renderer.link.bind(renderer);
+    renderer.link = (href, title, text) => {
+        const html = originalLinkRenderer(href, title, text);
+        return html.replace('<a ', '<a target="_blank" rel="noopener noreferrer" ');
+    };
+    marked.use({ renderer });
+    markedConfigured = true;
 };
-marked.use({ renderer });
 
 // Phase 5: Safe markdown parse wrapper - returns raw markdown on failure
 const safeMarkdownParse = (md) => {
     if (!md) return '';
     try {
+        ensureMarkedConfigured();
+        if (typeof marked === 'undefined') return escapeHtml(md);
         return marked.parse(md);
     } catch (e) {
         console.error('Markdown parse error:', e);
@@ -118,6 +126,7 @@ const safeHistoryReplace = (data, title, url) => {
 
 // Phase 17: Scoped lucide icon creation - avoid scanning whole document
 const createIconsInScope = (container) => {
+    if (typeof lucide === 'undefined') return;
     if (container && container.querySelectorAll) {
         lucide.createIcons({ nodes: container.querySelectorAll('[data-lucide]') });
     } else {
@@ -844,6 +853,11 @@ export const App = {
             if (restartBtn) restartBtn.onclick = () => this.restartWithAllCards();
             if (endBtn) endBtn.onclick = () => this.abandonSession();
         }, 0);
+
+        // Trigger sync for any pending reviews from this session
+        if (this.state.queue?.length > 0) {
+            this.requestAutoSyncSoon(500, 'session-complete');
+        }
     },
     restartWithAllCards() {
         const session = this.state.session;

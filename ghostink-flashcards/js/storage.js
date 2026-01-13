@@ -466,7 +466,6 @@ export const Storage = {
         if (!Array.isArray(session.skipped)) session.skipped = [];
         if (session.cardQueue.some(item => {
             if (!item || typeof item !== 'object') return true;
-            if (typeof item.id !== 'string' || !item.id) return true;
             if (typeof item.cardId !== 'string' || !item.cardId) return true;
             return false;
         })) return null;

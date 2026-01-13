@@ -64,7 +64,7 @@ export const API = {
         while (hasMore) {
             const body = { filter: { value: 'data_source', property: 'object' } };
             if (cursor) body.start_cursor = cursor;
-            const res = await API.request('POST', '/search', body);
+            const res = await API.requestWithRetry('POST', '/search', body);
             results.push(...res.results);
             hasMore = res.has_more;
             cursor = res.next_cursor;
