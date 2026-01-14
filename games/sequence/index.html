@@ -3999,6 +3999,7 @@
     }
 
     function leaveRoom({ preserveSession = false } = {}) {
+      cancelAutoReconnect();
       if (peer) peer.destroy();
       if (preserveSession) {
         saveSession(buildLeaveSessionSnapshot());
@@ -4138,7 +4139,7 @@
       hostConn = null;
       localState = null;
       setStatus(turnStatusEl, "Host disconnected");
-      toast("Host disconnected. Waiting to rejoin.");
+      toast("Host disconnected. Click 'Rejoin Room' when host is back.");
       updateSessionUI(loadSession());
       setConnectionTab("join");
       toggleGameSettings(true);
@@ -4163,10 +4164,56 @@
         sequencesCount: {},
         gameOver: false,
         winnerTeam: null,
-        log: [{ type: "text", text: "Host disconnected. Waiting to rejoin." }]
+        log: [{ type: "text", text: "Host disconnected. Your session is saved — click 'Rejoin Room' in the settings panel when the host is back online." }]
       });
       updateGameControlButton();
       updateSettingsVisibility();
+      scheduleAutoReconnect();
+    }
+
+    let reconnectAttempts = 0;
+    let reconnectTimer = null;
+    const MAX_RECONNECT_ATTEMPTS = 5;
+    const RECONNECT_INTERVAL = 5000;
+
+    function scheduleAutoReconnect() {
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      reconnectAttempts = 0;
+      attemptReconnect();
+    }
+
+    function attemptReconnect() {
+      if (isHost || hostConn) return;
+      const session = loadSession();
+      if (!session || session.role !== "client" || !session.joinCode) return;
+      if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+        toast("Auto-reconnect failed. Click 'Rejoin Room' to try manually.");
+        reconnectAttempts = 0;
+        return;
+      }
+      reconnectAttempts += 1;
+      toast(`Reconnecting... (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+      if (!peer || peer.destroyed) {
+        pendingJoinCode = session.joinCode;
+        pendingJoinToken = session.playerToken;
+        pendingJoinName = session.playerName || "Player";
+        connectPeer();
+      } else if (peer.open) {
+        connectToHost(session.joinCode);
+      }
+      reconnectTimer = setTimeout(() => {
+        if (!hostConn || !localState) {
+          attemptReconnect();
+        }
+      }, RECONNECT_INTERVAL);
+    }
+
+    function cancelAutoReconnect() {
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      reconnectAttempts = 0;
     }
 
     function connectToHost(code) {
@@ -4205,6 +4252,7 @@
         }
       });
       hostConn.on("open", () => {
+        cancelAutoReconnect();
         hostConn.send({
           type: "join",
           name: pendingJoinName || playerNameInput.value || "Player",
