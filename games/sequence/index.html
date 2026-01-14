@@ -247,16 +247,30 @@
     }
 
     .card-symbol .rank {
-      color: currentColor;
+      font-weight: 700;
       opacity: 1;
+    }
+
+    .card-symbol.red .rank {
+      color: #b54a4a;
+    }
+
+    .card-symbol.black .rank {
+      color: #2b1d16;
     }
 
     .card-symbol .suit-icon svg path {
       fill: currentColor;
-      fill-opacity: 0.8;
-      stroke: currentColor;
-      stroke-width: 1.6;
-      stroke-linejoin: round;
+      fill-opacity: 1;
+      stroke: none;
+    }
+
+    .card-symbol.red .suit-icon {
+      color: #b54a4a;
+    }
+
+    .card-symbol.black .suit-icon {
+      color: #2b1d16;
     }
 
     .divider {
@@ -342,18 +356,18 @@
 
     .board {
       display: grid;
-      grid-template-columns: repeat(10, 48px);
+      grid-template-columns: repeat(10, minmax(48px, 60px));
       gap: 6px;
       justify-content: center;
     }
 
     .board.expanded-12 {
-      grid-template-columns: repeat(12, 42px);
+      grid-template-columns: repeat(12, minmax(42px, 52px));
       gap: 5px;
     }
 
     .board.expanded-13 {
-      grid-template-columns: repeat(13, 38px);
+      grid-template-columns: repeat(13, minmax(38px, 48px));
       gap: 4px;
     }
 
@@ -426,7 +440,7 @@
     }
 
     .card-symbol.black {
-      color: rgba(191, 107, 34, 0.82);
+      color: #2b1d16;
     }
 
     .chip {
@@ -999,6 +1013,64 @@
       gap: 8px;
     }
 
+    .victory-banner {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .victory-banner.hidden {
+      display: none;
+    }
+
+    .victory-content {
+      background: linear-gradient(135deg, #fffaf3, #f6efe6);
+      border: 2px solid var(--border);
+      border-radius: 20px;
+      padding: 32px 48px;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      animation: rise 0.4s ease;
+    }
+
+    .victory-content h2 {
+      font-family: "Fraunces", serif;
+      font-size: 28px;
+      margin: 0 0 8px;
+      color: var(--ink);
+    }
+
+    .victory-content p {
+      font-size: 16px;
+      color: var(--muted);
+      margin: 0 0 20px;
+    }
+
+    .victory-content button {
+      padding: 12px 24px;
+      font-size: 14px;
+    }
+
+    .victory-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
     @media (min-width: 820px) {
       main {
         grid-template-columns: minmax(0, 1fr) 320px;
@@ -1074,28 +1146,28 @@
       }
 
       .board {
-        grid-template-columns: repeat(10, minmax(24px, 1fr));
+        grid-template-columns: repeat(10, minmax(32px, 1fr));
         gap: 3px;
       }
 
       .board.expanded-12 {
-        grid-template-columns: repeat(12, minmax(20px, 1fr));
+        grid-template-columns: repeat(12, minmax(28px, 1fr));
         gap: 2px;
       }
 
       .board.expanded-13 {
-        grid-template-columns: repeat(13, minmax(18px, 1fr));
+        grid-template-columns: repeat(13, minmax(26px, 1fr));
         gap: 2px;
       }
 
       .cell {
         border-radius: 2px;
-        font-size: 9px;
-        padding: 2px;
+        font-size: 10px;
+        padding: 3px;
       }
 
       .cell .card-symbol {
-        font-size: 8px;
+        font-size: 9px;
       }
 
       .cell .card-symbol.top-left {
@@ -1117,23 +1189,23 @@
       }
 
       .use-symbols .cell .card-symbol {
-        -webkit-text-stroke: 0.9px currentColor;
+        -webkit-text-stroke: 0;
         paint-order: stroke fill;
-        color: rgba(0, 0, 0, 0.58);
       }
 
       .use-symbols .cell .card-symbol.red {
-        color: rgba(181, 74, 74, 0.8);
-        -webkit-text-stroke-color: #b54a4a;
+        color: #b54a4a;
       }
 
       .use-symbols .cell .card-symbol.black {
-        color: rgba(0, 0, 0, 0.6);
-        -webkit-text-stroke-color: rgba(0, 0, 0, 0.75);
+        color: #2b1d16;
       }
 
       .card-symbol .suit-icon svg path {
-        stroke-width: 2.2;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 10;
+        stroke-linejoin: round;
       }
 
       .board-scroll {
@@ -1248,25 +1320,24 @@
   </header>
 
   <main>
-    <div class="status-row" style="margin-bottom: 10px;">
-      <div class="status-pill" id="deckStatus">
-        <span>Deck: 0</span>
-        <span class="tip">Cards left to draw. Decks in play shown in room info.</span>
-      </div>
-      <div class="status-pill" id="sequenceStatus">
-        <span>Sequences: --</span>
-        <span class="tip">Sequences completed per team or player. Rules set by host.</span>
-      </div>
-      <div class="status-pill" id="timerStatus">
-        <span>Timer: Off</span>
-        <span class="tip">Turn timer for the active player. Auto-play triggers on timeout.</span>
-      </div>
-    </div>
-
     <section class="board-panel" id="boardPanel">
       <div class="hand-header">
         <h2 class="panel-title">Board</h2>
         <div id="lastPlayedCard" class="last-played hidden"></div>
+      </div>
+      <div class="status-row" style="margin-bottom: 10px;">
+        <div class="status-pill" id="deckStatus">
+          <span>Deck: 0</span>
+          <span class="tip">Cards left to draw. Decks in play shown in room info.</span>
+        </div>
+        <div class="status-pill" id="sequenceStatus">
+          <span>Sequences: --</span>
+          <span class="tip">Sequences completed per team or player. Rules set by host.</span>
+        </div>
+        <div class="status-pill" id="timerStatus">
+          <span>Timer: Off</span>
+          <span class="tip">Turn timer for the active player. Auto-play triggers on timeout.</span>
+        </div>
       </div>
       <div class="board-scroll">
         <div id="board" class="board"></div>
@@ -1498,6 +1569,16 @@
     </div>
   </div>
   <div class="toast-container" id="toastContainer"></div>
+  <div class="victory-banner hidden" id="victoryBanner">
+    <div class="victory-content">
+      <h2 id="victoryTitle">Victory!</h2>
+      <p id="victoryMessage">Team wins the game!</p>
+      <div class="victory-actions">
+        <button id="downloadGameLogBtn" class="secondary">Download Game Log</button>
+        <button id="victoryCloseBtn" class="secondary">Close</button>
+      </div>
+    </div>
+  </div>
 
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <script>
@@ -1637,6 +1718,11 @@
     const lockRoomToggle = document.getElementById("lockRoomToggle");
     const waitingBanner = document.getElementById("waitingBanner");
     const toggleJoinCodeBtn = document.getElementById("toggleJoinCodeBtn");
+    const victoryBanner = document.getElementById("victoryBanner");
+    const victoryTitle = document.getElementById("victoryTitle");
+    const victoryMessage = document.getElementById("victoryMessage");
+    const victoryCloseBtn = document.getElementById("victoryCloseBtn");
+    const downloadGameLogBtn = document.getElementById("downloadGameLogBtn");
 
     let peer = null;
     let connections = new Map();
@@ -1664,6 +1750,8 @@
     let roomLocked = false;
     let codesHidden = false;
     let hasShownJoinToast = false;
+    let hasShownVictory = false;
+    let lastSequenceCounts = {};
 
     const STORAGE_KEY = "sequence-multiplayer-session";
     const DISPLAY_KEY = "sequence-card-display";
@@ -1691,7 +1779,8 @@
       winnerTeam: null,
       log: [],
       roomLocked: false,
-      lastPlay: null
+      lastPlay: null,
+      detailedLog: []
     };
     lastTeamCount = hostState.teamCount;
 
@@ -2040,7 +2129,8 @@
         winnerTeam: hostState.winnerTeam,
         log: hostState.log,
         roomLocked: hostState.roomLocked,
-        lastPlay: hostState.lastPlay || null
+        lastPlay: hostState.lastPlay || null,
+        detailedLog: hostState.detailedLog || []
       };
     }
 
@@ -2075,6 +2165,7 @@
       hostState.log = snapshot.log || [];
       hostState.roomLocked = !!snapshot.roomLocked;
       hostState.lastPlay = snapshot.lastPlay || null;
+      hostState.detailedLog = snapshot.detailedLog || [];
     }
 
     function updateSessionUI(session) {
@@ -2563,7 +2654,7 @@
             }
             cell.appendChild(chipEl);
           }
-          if (selection && possible.some(pos => pos.r === r && pos.c === c)) {
+          if (!state.gameOver && selection && possible.some(pos => pos.r === r && pos.c === c)) {
             cell.classList.add("possible");
           }
           boardEl.appendChild(cell);
@@ -2643,18 +2734,19 @@
         const isDead = !card.startsWith("J") && isDeadCard(card, state);
         if (isDead) {
           cardEl.classList.add("dead-card");
+          const deadBtn = document.createElement("button");
+          deadBtn.className = "dead-card-btn";
+          deadBtn.textContent = "Discard";
+          deadBtn.disabled = !isMyTurn;
           if (isMyTurn) {
-            const deadBtn = document.createElement("button");
-            deadBtn.className = "dead-card-btn";
-            deadBtn.textContent = "Discard";
             deadBtn.addEventListener("click", (e) => {
               e.stopPropagation();
               sendAction({ type: "dead_card", card });
               selectedCardIndex = null;
               renderState(localState);
             });
-            cardEl.appendChild(deadBtn);
           }
+          cardEl.appendChild(deadBtn);
         }
         handEl.appendChild(cardEl);
       });
@@ -2781,6 +2873,23 @@
         infoRoomStatus.style.color = state.roomLocked ? "#9a6b2a" : "inherit";
       }
 
+      if (state.gameStarted && state.sequencesCount) {
+        Object.keys(state.sequencesCount).forEach(key => {
+          const teamIdx = Number(key);
+          const currentCount = state.sequencesCount[key] || 0;
+          const prevCount = lastSequenceCounts[key] || 0;
+          if (currentCount > prevCount && prevCount !== undefined) {
+            if (state.teamMode) {
+              toast(`Team ${teamIdx + 1} completes a sequence!`);
+            } else {
+              const player = state.players[teamIdx];
+              toast(`${player ? player.name : "Player"} completes a sequence!`);
+            }
+          }
+        });
+        lastSequenceCounts = { ...state.sequencesCount };
+      }
+
       const turnPlayer = currentPlayer();
       if (state.gameOver) {
         if (state.teamMode) {
@@ -2788,6 +2897,19 @@
         } else {
           const winner = state.players[state.winnerTeam];
           setStatus(turnStatusEl, `${winner ? winner.name : "Player"} wins!`);
+        }
+        if (!hasShownVictory) {
+          hasShownVictory = true;
+          let winnerName;
+          if (state.teamMode) {
+            winnerName = `Team ${state.winnerTeam + 1}`;
+          } else {
+            const winner = state.players[state.winnerTeam];
+            winnerName = winner ? winner.name : "Player";
+          }
+          victoryTitle.textContent = "Victory!";
+          victoryMessage.textContent = `${winnerName} wins the game!`;
+          victoryBanner.classList.remove("hidden");
         }
       } else if (turnPlayer) {
         setStatus(turnStatusEl, `Turn: ${turnPlayer.name}`);
@@ -2934,7 +3056,8 @@
         winnerTeam: hostState.winnerTeam,
         log: hostState.log,
         roomLocked: hostState.roomLocked,
-        lastPlay: hostState.lastPlay || null
+        lastPlay: hostState.lastPlay || null,
+        detailedLog: hostState.gameOver ? hostState.detailedLog : null
       };
     }
 
@@ -3105,7 +3228,51 @@
         hostState.roomCover = generateRoomCover();
       }
       setTurnTimer();
-      hostState.log = [{ type: "text", text: "Game started. Draw your strategy and claim sequences." }];
+      const boardLabels = {
+        "standard": "2 decks (10×10)",
+        "expanded-deck": "3 decks (10×10)",
+        "expanded-challenge": "3 decks (12×12)",
+        "expanded-classic": "3 decks (12×13)"
+      };
+      const boardLabel = boardLabels[hostState.boardMode] || boardLabels["standard"];
+      const firstPlayer = hostState.players[0];
+      const playerTeamInfo = hostState.players.map(p => {
+        if (hostState.teamMode) {
+          return `${p.name} (Team ${p.team + 1})`;
+        }
+        return p.name;
+      }).join(", ");
+      const turnOrderInfo = hostState.players.map(p => p.name).join(" → ");
+      hostState.log = [
+        { type: "text", text: "=== Game Started ===" },
+        { type: "text", text: `Players: ${playerTeamInfo}` },
+        { type: "text", text: `Turn order: ${turnOrderInfo}` },
+        { type: "text", text: `Board: ${boardLabel}` },
+        { type: "text", text: `Sequence length: ${hostState.sequenceLength} in a row` },
+        { type: "text", text: `Sequences to win: ${hostState.sequencesToWin}` },
+        { type: "text", text: `First turn: ${firstPlayer ? firstPlayer.name : "Player 1"}` },
+        { type: "text", text: "===================" }
+      ];
+      const initialHands = {};
+      hostState.players.forEach(p => {
+        initialHands[p.name] = [...hostState.hands[p.id]];
+      });
+      const boardSnapshot = hostState.boardLayout.map(row =>
+        row.map(cell => cell.type === "corner" ? "CORNER" : cell.card)
+      );
+      hostState.detailedLog = [{
+        timestamp: new Date().toISOString(),
+        type: "game_start",
+        players: hostState.players.map(p => ({ name: p.name, team: p.team })),
+        teamMode: hostState.teamMode,
+        teamCount: hostState.teamCount,
+        boardMode: hostState.boardMode,
+        sequenceLength: hostState.sequenceLength,
+        sequencesToWin: hostState.sequencesToWin,
+        boardLayout: boardSnapshot,
+        initialHands: initialHands,
+        deckSize: hostState.deck.length
+      }];
       broadcastState();
     }
 
@@ -3152,14 +3319,37 @@
         const index = hand.indexOf(card);
         if (index === -1) return;
         if (!isValidPlay(card, row, col, current.team)) return;
+        const boardCard = hostState.boardLayout[row][col]?.card || null;
         if (ONE_EYED.has(card)) {
+          const removedTeam = hostState.chips[row][col].team;
           hostState.chips[row][col].team = null;
           hostState.chips[row][col].inSequence = false;
           logHost({ type: "remove", player: current.name, card, row, col }, false);
+          hostState.detailedLog.push({
+            timestamp: new Date().toISOString(),
+            type: "chip_removed",
+            player: current.name,
+            team: current.team,
+            card: card,
+            boardCard: boardCard,
+            row: row,
+            col: col,
+            removedFromTeam: removedTeam
+          });
         } else {
           hostState.chips[row][col].team = current.team;
           hostState.chips[row][col].inSequence = false;
           logHost({ type: "play", player: current.name, card, row, col }, false);
+          hostState.detailedLog.push({
+            timestamp: new Date().toISOString(),
+            type: "chip_placed",
+            player: current.name,
+            team: current.team,
+            card: card,
+            boardCard: boardCard,
+            row: row,
+            col: col
+          });
         }
         hostState.lastPlay = { player: current.name, card, row, col, isRemove: ONE_EYED.has(card) };
         hand.splice(index, 1);
@@ -3349,6 +3539,16 @@
                   const player = hostState.players[team];
                   logHost(`${player ? player.name : "Player"} completes a sequence!`, false);
                 }
+                hostState.detailedLog.push({
+                  timestamp: new Date().toISOString(),
+                  type: "sequence_completed",
+                  team: team,
+                  teamMode: hostState.teamMode,
+                  playerName: hostState.teamMode ? null : hostState.players[team]?.name,
+                  cells: cells.map(c => ({ row: c.r, col: c.c, isCorner: c.corner })),
+                  direction: { dr, dc },
+                  sequenceCount: sequenceSet.size
+                });
               }
             }
           }
@@ -3855,6 +4055,47 @@
         if (event.target === confirmOverlay) {
           closeConfirm(false);
         }
+      });
+    }
+
+    if (victoryCloseBtn) {
+      victoryCloseBtn.addEventListener("click", () => {
+        victoryBanner.classList.add("hidden");
+      });
+    }
+
+    if (downloadGameLogBtn) {
+      downloadGameLogBtn.addEventListener("click", () => {
+        if (!localState || !localState.gameOver) {
+          toast("Game log is only available after the game ends.");
+          return;
+        }
+        const detailedLog = localState.detailedLog || [];
+        const logData = {
+          exportedAt: new Date().toISOString(),
+          gameSettings: {
+            teamMode: localState.teamMode,
+            teamCount: localState.teamCount,
+            sequenceLength: localState.sequenceLength,
+            sequencesToWin: localState.sequencesToWin,
+            boardMode: localState.boardMode
+          },
+          winner: localState.teamMode 
+            ? `Team ${localState.winnerTeam + 1}` 
+            : localState.players[localState.winnerTeam]?.name || "Unknown",
+          players: localState.players.map(p => ({ name: p.name, team: p.team })),
+          detailedLog: detailedLog
+        };
+        const blob = new Blob([JSON.stringify(logData, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `sequence-game-log-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast("Game log downloaded!");
       });
     }
 
