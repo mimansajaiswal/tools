@@ -804,10 +804,16 @@
       align-items: center;
       gap: 8px;
       margin-bottom: 8px;
+      flex-wrap: wrap;
     }
 
     #boardPanel .hand-header {
       min-height: 46px;
+      justify-content: flex-end;
+    }
+
+    #boardPanel .hand-header .last-played {
+      margin-right: auto;
     }
 
     .cover-badge {
@@ -1202,10 +1208,17 @@
       }
 
       .card-symbol .suit-icon svg path {
-        fill: none;
         stroke: currentColor;
         stroke-width: 10;
         stroke-linejoin: round;
+      }
+
+      .card-symbol.red .suit-icon svg path {
+        fill: rgba(181, 74, 74, 0.2);
+      }
+
+      .card-symbol.black .suit-icon svg path {
+        fill: rgba(43, 29, 22, 0.2);
       }
 
       .board-scroll {
@@ -1274,7 +1287,7 @@
     </div>
     <div class="header-actions">
       <button id="gameControlBtn" class="game-control-btn hidden">Start game</button>
-      <button id="openInfoBtn" class="icon-btn" aria-label="Game info">
+      <button id="openInfoBtn" class="icon-btn" aria-label="Game info" title="View game rules and room info">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
           stroke-linejoin="round">
           <circle cx="12" cy="12" r="9"></circle>
@@ -1282,7 +1295,7 @@
           <path d="M12 7h.01"></path>
         </svg>
       </button>
-      <button id="openGameSettingsBtn" class="icon-btn" aria-label="Game settings">
+      <button id="openGameSettingsBtn" class="icon-btn" aria-label="Game settings" title="Game settings: host/join, teams, rules">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
           stroke-linejoin="round">
           <path d="M6 8h12a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4h-1l-2-3h-6l-2 3H6a4 4 0 0 1-4-4v-4a4 4 0 0 1 4-4z"></path>
@@ -1292,7 +1305,7 @@
         </svg>
       </button>
       <div class="display-dropdown-wrap">
-        <button id="openDisplaySettingsBtn" class="icon-btn" aria-label="Display settings">
+        <button id="openDisplaySettingsBtn" class="icon-btn" aria-label="Display settings" title="Display settings: card style, leave game">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
             stroke-linejoin="round">
             <circle cx="12" cy="12" r="3.5"></circle>
@@ -1321,22 +1334,21 @@
 
   <main>
     <section class="board-panel" id="boardPanel">
-      <div class="hand-header">
-        <h2 class="panel-title">Board</h2>
+      <div class="hand-header" style="margin-bottom: 10px;">
         <div id="lastPlayedCard" class="last-played hidden"></div>
-      </div>
-      <div class="status-row" style="margin-bottom: 10px;">
-        <div class="status-pill" id="deckStatus">
-          <span>Deck: 0</span>
-          <span class="tip">Cards left to draw. Decks in play shown in room info.</span>
-        </div>
-        <div class="status-pill" id="sequenceStatus">
-          <span>Sequences: --</span>
-          <span class="tip">Sequences completed per team or player. Rules set by host.</span>
-        </div>
-        <div class="status-pill" id="timerStatus">
-          <span>Timer: Off</span>
-          <span class="tip">Turn timer for the active player. Auto-play triggers on timeout.</span>
+        <div class="status-row">
+          <div class="status-pill" id="deckStatus">
+            <span>Deck: 0</span>
+            <span class="tip">Cards left to draw. Decks in play shown in room info.</span>
+          </div>
+          <div class="status-pill" id="sequenceStatus">
+            <span>Sequences: --</span>
+            <span class="tip">Sequences completed per team or player. Rules set by host.</span>
+          </div>
+          <div class="status-pill hidden" id="timerStatus">
+            <span>Timer: Off</span>
+            <span class="tip">Turn timer for the active player. Auto-play triggers on timeout.</span>
+          </div>
         </div>
       </div>
       <div class="board-scroll">
@@ -2805,10 +2817,11 @@
       const seqToWin = state.sequencesToWin || 2;
       deckStatusEl.querySelector("span").textContent = `Deck: ${state.deckCount}`;
       deckStatusEl.querySelector(".tip").textContent = `Cards left to draw. Decks in play: ${config.deckCount}.`;
-      timerStatusEl.querySelector("span").textContent = state.turnTimeLimit
-        ? `Timer: ${state.timeLeft ?? state.turnTimeLimit}s`
-        : "Timer: Off";
-      timerStatusEl.classList.toggle("warning", !!state.turnTimeLimit && state.timeLeft !== null && state.timeLeft <= 5);
+      timerStatusEl.classList.toggle("hidden", !state.turnTimeLimit);
+      if (state.turnTimeLimit) {
+        timerStatusEl.querySelector("span").textContent = `Timer: ${state.timeLeft ?? state.turnTimeLimit}s`;
+        timerStatusEl.classList.toggle("warning", state.timeLeft !== null && state.timeLeft <= 5);
+      }
       if (state.turnTimeLimit && state.timeLeft !== null) {
         if (state.timeLeft <= 5 && state.timeLeft !== lastTimeLeft) {
           if (state.turnPlayerId === selfId) {
