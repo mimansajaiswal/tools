@@ -520,6 +520,7 @@ export const NotionMapper = {
             parentCard: p['Parent Card']?.relation?.[0]?.id || null,
             subCards: (p['Sub Cards']?.relation || []).map(r => r.id),
             createdAt: page.created_time,
+            lastEditedAt: page.last_edited_time,
             // Store original Notion rich_text to preserve colors/equations on sync
             _notionRichText: {
                 name: p['Name']?.title || [],

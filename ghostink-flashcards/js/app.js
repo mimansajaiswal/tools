@@ -101,14 +101,15 @@ let markedConfigured = false;
 const ensureMarkedConfigured = () => {
     if (markedConfigured) return;
     if (typeof marked === 'undefined') return;
-    const renderer = new marked.Renderer();
-    const originalLinkRenderer = renderer.link.bind(renderer);
-    // marked v17+ passes an object { href, title, text, tokens } instead of separate args
-    renderer.link = (linkData) => {
-        const html = originalLinkRenderer(linkData);
-        return html.replace('<a ', '<a target="_blank" rel="noopener noreferrer" ');
-    };
-    marked.use({ renderer });
+    // marked v17+ uses extension-based renderer overrides
+    marked.use({
+        renderer: {
+            link({ href, title, text }) {
+                const titleAttr = title ? ` title="${title}"` : '';
+                return `<a href="${href}"${titleAttr} target="_blank" rel="noopener noreferrer">${text}</a>`;
+            }
+        }
+    });
     markedConfigured = true;
 };
 
@@ -1868,7 +1869,7 @@ export const App = {
                 const isSub = isSubItem(c);
                 const subCount = isParent ? this.state.cards.filter(sc => sc.parentCard === c.id).length : 0;
                 const hierarchyIcon = isParent 
-                    ? `<i data-lucide="layers" class="w-3 h-3 text-dull-purple/70" title="Parent (${subCount} sub-items)"></i>`
+                    ? `<span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-dull-purple/20 text-dull-purple text-[10px] font-medium" title="${subCount} sub-cards">${subCount}</span>`
                     : isSub 
                         ? `<i data-lucide="corner-down-right" class="w-3 h-3 text-earth-metal/50" title="Sub-item #${c.clozeIndexes || '?'}"></i>`
                         : '';
@@ -3604,6 +3605,12 @@ export const App = {
         if (!this.state.editingCard) this.state.cards.push(card);
         await Storage.put('cards', card);
         this.queueOp({ type: 'card-upsert', payload: card });
+        
+        // If this is a cloze parent, reconcile its sub-items immediately
+        if (isClozeParent(card)) {
+            await this.reconcileSingleParent(card);
+        }
+        
         this.closeCardModal();
         this.renderCards();
         toast('Card saved');
@@ -3864,17 +3871,62 @@ export const App = {
      */
     async reconcileClozeSubItems() {
         const clozeParents = this.state.cards.filter(c => isClozeParent(c));
-        console.log('[Cloze] Found', clozeParents.length, 'cloze parents');
+        if (clozeParents.length === 0) return; // Nothing to do
+        
+        // Also check queued sub-items that haven't been processed yet
+        const queuedSubItems = this.state.queue
+            .filter(op => op.type === 'card-upsert' && op.payload?.parentCard)
+            .map(op => op.payload);
+        
+        // Track which parents we've processed this run to avoid duplicate work
+        const processedParentIds = new Set();
         
         for (const parent of clozeParents) {
-            console.log('[Cloze] Processing parent:', parent.id, 'name:', parent.name?.substring(0, 80), 'clozeIndexes:', parent.clozeIndexes);
-            const existingSubs = this.state.cards.filter(c => c.parentCard === parent.id);
-            const { toCreate, toSuspend } = reconcileSubItems(parent, existingSubs);
-            console.log('[Cloze] toCreate:', toCreate, 'toSuspend:', toSuspend, 'existingSubs:', existingSubs.length);
+            // Skip if already processed (shouldn't happen, but defensive)
+            const parentKey = parent.notionId || parent.id;
+            if (processedParentIds.has(parentKey)) continue;
+            processedParentIds.add(parentKey);
             
-            // Create missing sub-items
+            // Skip if parent hasn't been edited since last reconcile
+            // (unless it has no sub-items yet)
+            const lastReconciled = parent._lastClozeReconcile;
+            const lastEdited = parent.lastEditedAt || parent.createdAt;
+            const hasExistingSubs = this.state.cards.some(c => 
+                c.parentCard === parentKey || c.parentCard === parent.id
+            );
+            if (lastReconciled && hasExistingSubs) {
+                // Compare timestamps - skip if not edited since last reconcile
+                if (lastEdited && new Date(lastEdited) <= new Date(lastReconciled)) {
+                    continue;
+                }
+            }
+            
+            // Match sub-items by parentCard referencing either id or notionId
+            const stableParentId = parent.notionId || parent.id;
+            const matchesParent = (c) => 
+                c.parentCard === parent.id || 
+                c.parentCard === stableParentId ||
+                (parent.notionId && c.parentCard === parent.notionId);
+            
+            const existingSubs = this.state.cards.filter(matchesParent);
+            const queuedSubs = queuedSubItems.filter(matchesParent);
+            // Combine existing and queued sub-items, avoiding duplicates by id
+            const existingIds = new Set(existingSubs.map(s => s.id));
+            const allSubs = [...existingSubs, ...queuedSubs.filter(s => !existingIds.has(s.id))];
+            
+            const { toCreate, toSuspend } = reconcileSubItems(parent, allSubs);
+            
+            // Skip if nothing to do for this parent
+            if (toCreate.length === 0 && toSuspend.length === 0) continue;
+            
+            // Create missing sub-items (use notionId as parentCard when available for stability)
             for (const idx of toCreate) {
+                // Double-check this index doesn't already exist (defensive against race conditions)
+                const alreadyExists = allSubs.some(s => parseInt(s.clozeIndexes, 10) === idx && !s.suspended);
+                if (alreadyExists) continue;
+                
                 const subItem = createSubItem(parent, idx, parent.deckId, () => this.makeTempId());
+                subItem.parentCard = stableParentId;
                 this.state.cards.push(subItem);
                 await Storage.put('cards', subItem);
                 this.queueOp({ type: 'card-upsert', payload: subItem });
@@ -3890,7 +3942,66 @@ export const App = {
                     this.queueOp({ type: 'card-upsert', payload: sub });
                 }
             }
+            
+            // Mark parent as reconciled (local-only field, not synced to Notion)
+            parent._lastClozeReconcile = new Date().toISOString();
+            await Storage.put('cards', parent);
         }
+    },
+    /**
+     * Reconcile sub-items for a single parent (called when saving a cloze card in app)
+     */
+    async reconcileSingleParent(parent) {
+        if (!isClozeParent(parent)) return;
+        
+        const stableParentId = parent.notionId || parent.id;
+        const matchesParent = (c) => 
+            c.parentCard === parent.id || 
+            c.parentCard === stableParentId ||
+            (parent.notionId && c.parentCard === parent.notionId);
+        
+        // Check existing cards and queued items
+        const existingSubs = this.state.cards.filter(matchesParent);
+        const queuedSubs = this.state.queue
+            .filter(op => op.type === 'card-upsert' && op.payload?.parentCard && matchesParent(op.payload))
+            .map(op => op.payload);
+        const existingIds = new Set(existingSubs.map(s => s.id));
+        const allSubs = [...existingSubs, ...queuedSubs.filter(s => !existingIds.has(s.id))];
+        
+        const { toCreate, toSuspend } = reconcileSubItems(parent, allSubs);
+        
+        // Skip if nothing to do
+        if (toCreate.length === 0 && toSuspend.length === 0) {
+            parent._lastClozeReconcile = new Date().toISOString();
+            await Storage.put('cards', parent);
+            return;
+        }
+        
+        // Create missing sub-items
+        for (const idx of toCreate) {
+            const alreadyExists = allSubs.some(s => parseInt(s.clozeIndexes, 10) === idx && !s.suspended);
+            if (alreadyExists) continue;
+            
+            const subItem = createSubItem(parent, idx, parent.deckId, () => this.makeTempId());
+            subItem.parentCard = stableParentId;
+            this.state.cards.push(subItem);
+            await Storage.put('cards', subItem);
+            this.queueOp({ type: 'card-upsert', payload: subItem });
+        }
+        
+        // Suspend removed sub-items
+        for (const subId of toSuspend) {
+            const sub = this.cardById(subId);
+            if (sub && !sub.suspended) {
+                sub.suspended = true;
+                sub.flag = 'Empty';
+                await Storage.put('cards', sub);
+                this.queueOp({ type: 'card-upsert', payload: sub });
+            }
+        }
+        
+        parent._lastClozeReconcile = new Date().toISOString();
+        await Storage.put('cards', parent);
     },
     async pushQueue() {
         const { deckSource, cardSource } = this.state.settings;
@@ -3960,6 +4071,11 @@ export const App = {
                         back: props['Back'].rich_text,
                         notes: props['Notes'].rich_text
                     };
+                    // For cloze parents, update lastClozeReconcile to prevent re-reconcile
+                    // after Notion updates last_edited_time from our push
+                    if (isClozeParent(op.payload)) {
+                        op.payload._lastClozeReconcile = new Date().toISOString();
+                    }
                     // Update local state
                     const cardIdx = this.state.cards.findIndex(c => c.notionId === op.payload.notionId || c.id === op.payload.id);
                     if (cardIdx >= 0) {
@@ -4303,10 +4419,12 @@ export const App = {
         if (f.leech && card.leech) return false;
         if (f.marked && !card.marked) return false;
         if (f.flag && (card.flag || '') !== f.flag) return false;
-        // Card hierarchy filter
+        // Card hierarchy filter - hide sub-items by default (only show when explicitly filtered)
         if (f.cardHierarchy === 'parents' && !isClozeParent(card)) return false;
         if (f.cardHierarchy === 'subitems' && !isSubItem(card)) return false;
         if (f.cardHierarchy === 'regular' && (isClozeParent(card) || isSubItem(card))) return false;
+        // Default: hide sub-items (show parents and regular cards)
+        if (!f.cardHierarchy && isSubItem(card)) return false;
         return true;
     },
     isDue(card) {

@@ -78,18 +78,24 @@ export const reconcileSubItems = (parent, existingSubItems) => {
         indices = parseClozeIndexesFromString(parent.clozeIndexes);
     }
     const existingByIndex = new Map();
+    const duplicatesToSuspend = [];
     
     for (const sub of existingSubItems) {
         // Parse the clozeIndexes field to get the index
         const idx = parseInt(sub.clozeIndexes, 10);
         if (idx > 0 && !sub.suspended) {
-            existingByIndex.set(idx, sub.id);
+            if (existingByIndex.has(idx)) {
+                // Duplicate found - mark for suspension
+                duplicatesToSuspend.push(sub.id);
+            } else {
+                existingByIndex.set(idx, sub.id);
+            }
         }
     }
     
     const toCreate = [];
     const toKeep = [];
-    const toSuspend = [];
+    const toSuspend = [...duplicatesToSuspend];
     
     // Indices that exist in parent text
     for (const idx of indices) {
@@ -103,12 +109,33 @@ export const reconcileSubItems = (parent, existingSubItems) => {
     // Sub-items that no longer match any index in parent
     for (const sub of existingSubItems) {
         const idx = parseInt(sub.clozeIndexes, 10);
-        if (!indices.has(idx) && !sub.suspended) {
+        if (!indices.has(idx) && !sub.suspended && !duplicatesToSuspend.includes(sub.id)) {
             toSuspend.push(sub.id);
         }
     }
     
     return { toCreate, toKeep, toSuspend };
+};
+
+/**
+ * Transform cloze text to only test one specific index.
+ * - The target cloze {{cN::answer}} becomes {{c1::answer}} (renumbered to c1)
+ * - Other clozes {{cX::answer}} are revealed as just "answer"
+ * @param {string} text - Original text with multiple clozes
+ * @param {number} targetIndex - The cloze index to test (1-based)
+ * @returns {string} Transformed text
+ */
+const transformClozeForSubItem = (text, targetIndex) => {
+    if (!text) return '';
+    return text.replace(/\{\{\s*c(\d+)::(.*?)\}\}/gi, (match, idx, content) => {
+        const clozeIdx = parseInt(idx, 10);
+        if (clozeIdx === targetIndex) {
+            // Keep this cloze but renumber to c1 for consistency
+            return `{{c1::${content}}}`;
+        }
+        // Reveal other clozes
+        return content;
+    });
 };
 
 /**
@@ -121,12 +148,15 @@ export const reconcileSubItems = (parent, existingSubItems) => {
  */
 export const createSubItem = (parent, clozeIndex, deckId, makeTempId) => {
     const now = new Date().toISOString();
+    // Transform name to only test the specific cloze index
+    const transformedName = transformClozeForSubItem(parent.name, clozeIndex);
+    const transformedBack = transformClozeForSubItem(parent.back || '', clozeIndex);
     return {
         id: makeTempId(),
         notionId: null,
         deckId,
-        name: parent.name,
-        back: parent.back || '',
+        name: transformedName,
+        back: transformedBack,
         type: 'Cloze',
         tags: [...(parent.tags || [])],
         notes: parent.notes || '',
