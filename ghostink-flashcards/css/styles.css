@@ -339,6 +339,13 @@ html[data-theme="dark"] .notion-color-red-background {
     display: none;
 }
 
+/* Cloze revealed style for sub-items (shows other cloze deletions that aren't being tested) */
+.cloze-revealed {
+    color: var(--dull-purple);
+    font-weight: 500;
+    opacity: 0.85;
+}
+
 /* Link styling in card content and notes */
 #cardFront a,
 #cardBack a,

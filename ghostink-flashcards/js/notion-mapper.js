@@ -517,6 +517,8 @@ export const NotionMapper = {
             ankiNoteType: p['Anki Note Type']?.select?.name || '',
             ankiFields: p['Anki Fields JSON']?.rich_text?.[0]?.plain_text || '',
             clozeIndexes: p['Cloze Indexes']?.rich_text?.[0]?.plain_text || '',
+            parentCard: p['Parent Card']?.relation?.[0]?.id || null,
+            subCards: (p['Sub Cards']?.relation || []).map(r => r.id),
             createdAt: page.created_time,
             // Store original Notion rich_text to preserve colors/equations on sync
             _notionRichText: {
@@ -586,7 +588,10 @@ export const NotionMapper = {
             'Anki GUID': card.ankiGuid ? { rich_text: [{ type: 'text', text: { content: card.ankiGuid } }] } : { rich_text: [] },
             'Anki Note Type': card.ankiNoteType ? { select: { name: card.ankiNoteType } } : { select: null },
             'Anki Fields JSON': card.ankiFields ? { rich_text: [{ type: 'text', text: { content: card.ankiFields } }] } : { rich_text: [] },
-            'Cloze Indexes': card.clozeIndexes ? { rich_text: [{ type: 'text', text: { content: card.clozeIndexes } }] } : { rich_text: [] }
+            'Cloze Indexes': card.clozeIndexes ? { rich_text: [{ type: 'text', text: { content: card.clozeIndexes } }] } : { rich_text: [] },
+            'Parent Card': card.parentCard 
+                ? { relation: [{ id: card.parentCard }] } 
+                : { relation: [] }
         };
 
         // Only include Deck if we can safely set it:

@@ -63,6 +63,15 @@ import {
 } from './notion-mapper.js';
 
 import {
+    parseClozeIndices,
+    isClozeParent,
+    isSubItem,
+    isSchedulable,
+    reconcileSubItems,
+    createSubItem
+} from './cloze-manager.js';
+
+import {
     toast,
     toastLong,
     toastHide,
@@ -190,7 +199,7 @@ export const App = {
         lastQueueWarnAt: null,
         selectedDeck: null,
         selectedCard: null,
-        filters: { again: false, hard: false, addedToday: false, tags: [], suspended: false, leech: false, marked: false, flag: '', studyDecks: [] },
+        filters: { again: false, hard: false, addedToday: false, tags: [], suspended: false, leech: false, marked: false, flag: '', cardHierarchy: '', studyDecks: [] },
         cardSearch: '',
         deckSearch: '',
         cardLimit: 50,
@@ -466,6 +475,7 @@ export const App = {
         const candidateCards = this.state.cards.filter(c =>
             selectedDeckIds.includes(c.deckId) &&
             this.passFilters(c) &&
+            isSchedulable(c) &&  // Exclude cloze parents - only sub-items are schedulable
             (includeNonDue || this.isDue(c))
         );
 
@@ -1002,6 +1012,9 @@ export const App = {
             suspended: false,
             leech: false,
             order: null,
+            parentCard: null,
+            subCards: [],
+            clozeIndexes: '',
             fsrs: { difficulty: 4, stability: 1, retrievability: 0.9, lastRating: null, lastReview: null, dueDate: now },
             sm2: { interval: 1, easeFactor: 2.5, repetitions: 0, dueDate: now },
             syncId: crypto.randomUUID(),
@@ -1061,6 +1074,11 @@ export const App = {
                     card.id = newId;
                     card.notionId = newId;
                     cardIdChanges.push({ oldId, value: card });
+                    changed = true;
+                }
+                // Update parentCard reference for sub-items
+                if (card.parentCard && cardIdMap[card.parentCard]) {
+                    card.parentCard = cardIdMap[card.parentCard];
                     changed = true;
                 }
             }
@@ -1291,6 +1309,7 @@ export const App = {
         el('#filterLeech').onchange = (e) => { this.state.filters.leech = e.target.checked; this.renderCards(); this.updateActiveFiltersCount(); };
         el('#filterMarked').onchange = (e) => { this.state.filters.marked = e.target.checked; this.renderCards(); this.updateActiveFiltersCount(); };
         el('#filterFlag').onchange = (e) => { this.state.filters.flag = e.target.value || ''; this.renderCards(); this.updateActiveFiltersCount(); };
+        el('#filterCardHierarchy')?.addEventListener('change', (e) => { this.state.filters.cardHierarchy = e.target.value || ''; this.renderCards(); this.updateActiveFiltersCount(); });
         // Toggle filters panel
         el('#toggleFilters').onclick = () => this.toggleFiltersPanel();
         el('#ankiImportInput').onchange = (e) => this.handleAnkiImport(e.target.files[0]);
@@ -1630,6 +1649,7 @@ export const App = {
         if (f.leech) count++;
         if (f.marked) count++;
         if (f.flag) count++;
+        if (f.cardHierarchy) count++;
         if (f.studyDecks && f.studyDecks.length > 0) count++;
         // Show reset button if any filters are active
         const resetBtn = el('#resetFilters');
@@ -1842,17 +1862,27 @@ export const App = {
                 // Get due date
                 const dueDate = c.fsrs?.dueDate || c.sm2?.dueDate;
                 const dueDisplay = dueDate ? new Date(dueDate).toLocaleDateString() : '—';
+                // Card hierarchy indicators
+                const isParent = isClozeParent(c);
+                const isSub = isSubItem(c);
+                const subCount = isParent ? this.state.cards.filter(sc => sc.parentCard === c.id).length : 0;
+                const hierarchyIcon = isParent 
+                    ? `<i data-lucide="layers" class="w-3 h-3 text-dull-purple/70" title="Parent (${subCount} sub-items)"></i>`
+                    : isSub 
+                        ? `<i data-lucide="corner-down-right" class="w-3 h-3 text-earth-metal/50" title="Sub-item #${c.clozeIndexes || '?'}"></i>`
+                        : '';
                 return `
                         <tr class="hover:bg-oatmeal/50 dark:hover:bg-white/5" data-card-id="${c.id}">
                             <td class="py-2 pr-2 text-charcoal">
                                 <div class="flex items-center gap-2">
+                                    ${hierarchyIcon}
                                     ${markIcon}
                                     ${flagDot}
                                     <div class="truncate max-w-[150px] sm:max-w-[250px] md:max-w-[350px] lg:max-w-[450px]">${nameText}</div>
                                 </div>
                             </td>
-                            <td class="py-2 pr-2 capitalize hidden sm:table-cell">${c.type}</td>
-                            <td class="py-2 pr-2 text-earth-metal/70 text-xs whitespace-nowrap">${dueDisplay}</td>
+                            <td class="py-2 pr-2 capitalize hidden sm:table-cell">${c.type}${isSub ? ` #${c.clozeIndexes || '?'}` : ''}</td>
+                            <td class="py-2 pr-2 text-earth-metal/70 text-xs whitespace-nowrap">${isParent ? '—' : dueDisplay}</td>
                             <td class="py-2 pr-2 hidden md:table-cell text-xs"><div class="flex gap-1 flex-wrap">${tagPills}${c.tags.length > 2 ? '<span class="text-earth-metal/50 dark:text-white/60">...</span>' : ''}</div></td>
                             <td class="py-2 flex gap-1">
                                 <button class="info-card-btn p-1 rounded hover:bg-dull-purple/20 text-earth-metal/60 relative" data-card-id="${c.id}" title="Review history">
@@ -3820,7 +3850,43 @@ export const App = {
 
         for (const d of mappedDecks) { upsertDeck(d); await Storage.put('decks', d); }
         for (const c of filteredCards) { upsertCard(c); await Storage.put('cards', c); }
+        
+        // Phase 3: Reconcile cloze sub-items after pulling cards
+        await this.reconcileClozeSubItems();
+        
         this.renderAll();
+    },
+    
+    /**
+     * Reconcile sub-items for all cloze parent cards.
+     * Creates missing sub-items and suspends removed ones.
+     */
+    async reconcileClozeSubItems() {
+        const clozeParents = this.state.cards.filter(c => isClozeParent(c));
+        
+        for (const parent of clozeParents) {
+            const existingSubs = this.state.cards.filter(c => c.parentCard === parent.id);
+            const { toCreate, toSuspend } = reconcileSubItems(parent, existingSubs);
+            
+            // Create missing sub-items
+            for (const idx of toCreate) {
+                const subItem = createSubItem(parent, idx, parent.deckId, () => this.makeTempId());
+                this.state.cards.push(subItem);
+                await Storage.put('cards', subItem);
+                this.queueOp({ type: 'card-upsert', payload: subItem });
+            }
+            
+            // Suspend sub-items for removed cloze indices
+            for (const subId of toSuspend) {
+                const sub = this.cardById(subId);
+                if (sub && !sub.suspended) {
+                    sub.suspended = true;
+                    sub.flag = 'Empty';
+                    await Storage.put('cards', sub);
+                    this.queueOp({ type: 'card-upsert', payload: sub });
+                }
+            }
+        }
     },
     async pushQueue() {
         const { deckSource, cardSource } = this.state.settings;
@@ -4233,6 +4299,10 @@ export const App = {
         if (f.leech && card.leech) return false;
         if (f.marked && !card.marked) return false;
         if (f.flag && (card.flag || '') !== f.flag) return false;
+        // Card hierarchy filter
+        if (f.cardHierarchy === 'parents' && !isClozeParent(card)) return false;
+        if (f.cardHierarchy === 'subitems' && !isSubItem(card)) return false;
+        if (f.cardHierarchy === 'regular' && (isClozeParent(card) || isSubItem(card))) return false;
         return true;
     },
     isDue(card) {
@@ -4337,14 +4407,25 @@ export const App = {
                 }
             }
 
+            // For sub-items, only hide the specific cloze index, reveal all others
+            const subItemIndex = isSubItem(card) ? parseInt(card.clozeIndexes, 10) : null;
+            
             // Bug 5 fix: Improved cloze regex to handle nested braces (e.g., code snippets)
             // Uses a non-greedy match with proper handling of nested content
             // Bug 3 fix (XSS): Escape user content before inserting into HTML
             const processed = prompt.replace(/\{\{c(\d+)::((?:[^{}]|\{(?!\{)|\}(?!\}))*?)(?:::((?:[^{}]|\{(?!\{)|\}(?!\}))*?))?\}\}/g, (match, num, answer, hint) => {
+                const clozeNum = parseInt(num, 10);
                 // The hint (if present) is the 3rd capture group after the optional :::
                 // Escape both hint and answer to prevent XSS attacks
                 const safeAnswer = escapeHtml(answer);
                 const safeHint = hint ? escapeHtml(hint) : null;
+                
+                // For sub-items: only hide the specific cloze index, reveal others
+                if (subItemIndex !== null && clozeNum !== subItemIndex) {
+                    // Show this cloze as revealed (not the one being tested)
+                    return `<span class="cloze-revealed">${safeAnswer}</span>`;
+                }
+                
                 const displayHint = safeHint ? `[${safeHint}]` : '[...]';
                 return `<span class="cloze-blank"><span class="cloze-placeholder">${displayHint}</span><span class="cloze-answer">${safeAnswer}</span></span>`;
             });
@@ -4627,7 +4708,7 @@ export const App = {
         return `${deckIds.length} decks`;
     },
     resetFilters() {
-        this.state.filters = { again: false, hard: false, addedToday: false, tags: [], suspended: false, leech: false, marked: false, flag: '', studyDecks: [] };
+        this.state.filters = { again: false, hard: false, addedToday: false, tags: [], suspended: false, leech: false, marked: false, flag: '', cardHierarchy: '', studyDecks: [] };
         el('#filterAgain').checked = false;
         el('#filterHard').checked = false;
         el('#filterAddedToday').checked = false;
@@ -4635,6 +4716,8 @@ export const App = {
         el('#filterLeech').checked = false;
         el('#filterMarked').checked = false;
         el('#filterFlag').value = '';
+        const hierarchySelect = el('#filterCardHierarchy');
+        if (hierarchySelect) hierarchySelect.value = '';
         this.renderStudyDeckSelection();
         this.renderTagFilter();
         this.renderStudy();
@@ -4843,17 +4926,48 @@ export const App = {
                 const back = fields[1] || '';
                 const isCloze = model?.type === 1;
                 const type = isCloze ? 'Cloze' : 'Front-Back';
-                const card = this.newCard(deckCache[deckId].id, front, isCloze ? back || front : back, type);
-                card.tags = (tags || '').trim().split(' ').filter(Boolean).map(t => ({ name: t.replace(/^\s*/, '').replace(/\s*$/, ''), color: 'default' }));
-                card.ankiGuid = guid;
-                if (guid) existingGuids.add(guid);
-                card.ankiNoteType = model?.name || '';
-                card.ankiFields = JSON.stringify(fields);
-                card.clozeIndexes = isCloze ? 'auto' : '';
-                this.state.cards.push(card);
-                await Storage.put('cards', card);
-                this.queueOp({ type: 'card-upsert', payload: card });
-                importedCount++;
+                
+                if (isCloze) {
+                    // Create parent card (no SRS scheduling - sub-items handle that)
+                    const parent = this.newCard(deckCache[deckId].id, front, back || front, 'Cloze');
+                    parent.tags = (tags || '').trim().split(' ').filter(Boolean).map(t => ({ name: t.replace(/^\s*/, '').replace(/\s*$/, ''), color: 'default' }));
+                    parent.ankiGuid = guid;
+                    if (guid) existingGuids.add(guid);
+                    parent.ankiNoteType = model?.name || '';
+                    parent.ankiFields = JSON.stringify(fields);
+                    parent.clozeIndexes = '';
+                    // Parent doesn't get scheduled - clear due dates
+                    parent.fsrs.dueDate = null;
+                    parent.sm2.dueDate = null;
+                    this.state.cards.push(parent);
+                    await Storage.put('cards', parent);
+                    this.queueOp({ type: 'card-upsert', payload: parent });
+                    importedCount++;
+                    
+                    // Create sub-items for each cloze index
+                    const clozeIndices = parseClozeIndices(front);
+                    for (const idx of clozeIndices) {
+                        const subItem = createSubItem(parent, idx, deckCache[deckId].id, () => this.makeTempId());
+                        // For Anki imports, sub-items start as new cards
+                        this.state.cards.push(subItem);
+                        await Storage.put('cards', subItem);
+                        this.queueOp({ type: 'card-upsert', payload: subItem });
+                        importedCount++;
+                    }
+                } else {
+                    // Regular front-back card
+                    const card = this.newCard(deckCache[deckId].id, front, back, type);
+                    card.tags = (tags || '').trim().split(' ').filter(Boolean).map(t => ({ name: t.replace(/^\s*/, '').replace(/\s*$/, ''), color: 'default' }));
+                    card.ankiGuid = guid;
+                    if (guid) existingGuids.add(guid);
+                    card.ankiNoteType = model?.name || '';
+                    card.ankiFields = JSON.stringify(fields);
+                    card.clozeIndexes = '';
+                    this.state.cards.push(card);
+                    await Storage.put('cards', card);
+                    this.queueOp({ type: 'card-upsert', payload: card });
+                    importedCount++;
+                }
 
                 // Update progress every 20 cards
                 if (i % 20 === 0) {
@@ -4964,39 +5078,60 @@ export const App = {
         const noteStmt = db.prepare("INSERT INTO notes VALUES (?,?,?,?,?,?,?,?,?,?,?)");
         const cardStmt = db.prepare("INSERT INTO cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
 
-        cards.forEach((card, idx) => {
-            const isCloze = (card.type || '').toLowerCase() === 'cloze';
-            const mid = isCloze ? modelClozeId : modelBasicId;
+        // Group sub-items by parent for cloze export
+        const parentGroups = new Map(); // parentId → subItems[]
+        const regularCards = [];
+        const exportedParentIds = new Set();
+
+        for (const card of cards) {
+            if (isSubItem(card)) {
+                const list = parentGroups.get(card.parentCard) || [];
+                list.push(card);
+                parentGroups.set(card.parentCard, list);
+            } else if (!isClozeParent(card)) {
+                regularCards.push(card);
+            }
+        }
+
+        // Export regular (non-cloze) cards
+        regularCards.forEach((card, idx) => {
+            const mid = modelBasicId;
             const nid = ++nidCounter;
 
-            const fields = isCloze ? [card.name, card.back] : [card.name, card.back];
+            const fields = [card.name, card.back];
             const flds = fields.join('\u001f');
             const tagStr = card.tags.length ? card.tags.map(t => t.name.trim()).join(' ') + ' ' : '';
             const sfld = fields[0];
             const csum = Math.abs(this.hash(flds)) >>> 0;
             noteStmt.run([nid, card.ankiGuid || crypto.randomUUID(), mid, now, 0, tagStr, flds, sfld, csum, 0, ""]);
 
-            let ordinals = [0];
-            if (isCloze) {
-                const matches = [...card.name.matchAll(/{{\s*c(\d+)::/g)];
-                if (matches.length > 0) {
-                    const indices = new Set(matches.map(m => parseInt(m[1], 10) - 1));
-                    ordinals = Array.from(indices).sort((a, b) => a - b);
-                }
-            }
-
-            ordinals.forEach((ord) => {
-                const cid = ++cidCounter;
-                // Export as new cards: type=0, queue=0, due=integer order
-                const type = 0;
-                const queue = 0;
-                const due = idx + 1; // Or some global counter, but idx is fine for new cards order
-                const ivl = 0;
-                const factor = 0;
-
-                cardStmt.run([cid, nid, deckId, ord, now, 0, type, queue, due, ivl, factor, 0, 0, 0, 0, 0, 0, ""]);
-            });
+            const cid = ++cidCounter;
+            cardStmt.run([cid, nid, deckId, 0, now, 0, 0, 0, idx + 1, 0, 0, 0, 0, 0, 0, 0, 0, ""]);
         });
+
+        // Export cloze parents with their sub-items
+        let clozeIdx = regularCards.length;
+        for (const [parentId, subs] of parentGroups) {
+            const parent = this.cardById(parentId);
+            if (!parent) continue;
+            
+            const mid = modelClozeId;
+            const nid = ++nidCounter;
+
+            const fields = [parent.name, parent.back];
+            const flds = fields.join('\u001f');
+            const tagStr = parent.tags.length ? parent.tags.map(t => t.name.trim()).join(' ') + ' ' : '';
+            const sfld = fields[0];
+            const csum = Math.abs(this.hash(flds)) >>> 0;
+            noteStmt.run([nid, parent.ankiGuid || crypto.randomUUID(), mid, now, 0, tagStr, flds, sfld, csum, 0, ""]);
+
+            // Create cards from sub-items (use sub.order as ordinal)
+            for (const sub of subs) {
+                const cid = ++cidCounter;
+                const ord = sub.order ?? (parseInt(sub.clozeIndexes, 10) - 1) ?? 0;
+                cardStmt.run([cid, nid, deckId, ord, now, 0, 0, 0, ++clozeIdx, 0, 0, 0, 0, 0, 0, 0, 0, ""]);
+            }
+        }
 
         return new Uint8Array(db.export());
     },
@@ -5544,7 +5679,9 @@ export const App = {
                     ['Updated In-App', 'checkbox'],
                     ['Review History', 'rich_text'],
                     ['Cloze Indexes', 'rich_text'],
-                    ['SRS State', 'rich_text']
+                    ['SRS State', 'rich_text'],
+                    ['Parent Card', 'relation'],
+                    ['Sub Cards', 'relation']
                 ];
                 const missing = required.filter(([n, k]) => !has(n, k));
                 if (missing.length) return false;
