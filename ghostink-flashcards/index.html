@@ -1100,11 +1100,11 @@
                                 <input id="settingWorkerUrl" type="text" placeholder="https://your-proxy.workers.dev"
                                     class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
                             </div>
-                            <div>
+                            <form autocomplete="off" onsubmit="return false;">
                                 <label class="text-xs text-earth-metal/70">Proxy token (optional)</label>
                                 <input id="settingProxyToken" type="password" placeholder="ALL_CORS_PROXY_MATCH_TOKEN"
                                     class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
-                            </div>
+                            </form>
                             <button id="verifyWorker"
                                 class="px-3 py-2 rounded-lg bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 w-full">Verify
                                 worker</button>
@@ -1130,12 +1130,12 @@
                                     (case-sensitive); extra properties are allowed.
                                 </div>
                             </div>
-                            <div>
+                            <form autocomplete="off" onsubmit="return false;">
                                 <label class="text-xs text-earth-metal/70">Notion integration secret (instead of
                                     OAuth)</label>
                                 <input id="settingAuthToken" type="password" placeholder="secret_..."
                                     class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed">
-                            </div>
+                            </form>
                             <button id="verifyAuth"
                                 class="px-3 py-2 rounded-lg bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 w-full disabled:opacity-60 disabled:cursor-not-allowed">Verify
                                 Notion token</button>
@@ -1241,8 +1241,10 @@
                                         placeholder="gpt-4o-mini / claude-3-haiku / gemini-1.5-flash"
                                         class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm">
                                 </div>
-                                <input id="aiKey" type="password" placeholder="API key (kept locally)"
-                                    class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
+                                <form autocomplete="off" onsubmit="return false;">
+                                    <input id="aiKey" type="password" placeholder="API key (kept locally)"
+                                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
+                                </form>
                                 <button id="verifyAi" data-tip="Requires internet"
                                     class="px-3 py-2 rounded-lg bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 w-full">Verify
                                     AI settings</button>
@@ -1276,8 +1278,10 @@
                                     <input id="sttModel" type="text" placeholder="whisper-1 / gemini-2.0-flash"
                                         class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm">
                                 </div>
-                                <input id="sttKey" type="password" placeholder="API key (required for cloud providers)"
-                                    class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
+                                <form autocomplete="off" onsubmit="return false;">
+                                    <input id="sttKey" type="password" placeholder="API key (required for cloud providers)"
+                                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
+                                </form>
                                 <div>
                                     <label class="text-xs text-earth-metal/70">Starter prompt (optional context)</label>
                                     <input id="sttPrompt" type="text" placeholder="e.g., Technical terms, names..."

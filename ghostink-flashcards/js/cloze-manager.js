@@ -49,13 +49,34 @@ export const isSchedulable = (card) => {
 };
 
 /**
+ * Parse cloze indexes from a comma-separated string like "1,2,3"
+ * @param {string} str - Comma-separated indexes
+ * @returns {Set<number>}
+ */
+const parseClozeIndexesFromString = (str) => {
+    if (!str) return new Set();
+    return new Set(
+        str.split(',')
+            .map(s => parseInt(s.trim(), 10))
+            .filter(n => n > 0 && !isNaN(n))
+    );
+};
+
+/**
  * Reconcile sub-items for a parent card
  * @param {Object} parent - Parent cloze card
  * @param {Array} existingSubItems - Array of existing sub-item cards for this parent
  * @returns {Object} { toCreate: number[], toKeep: string[], toSuspend: string[] }
  */
 export const reconcileSubItems = (parent, existingSubItems) => {
-    const indices = parseClozeIndices(parent.name);
+    // Try parsing from card text first, fallback to clozeIndexes property from Notion
+    let indices = parseClozeIndices(parent.name);
+    if (indices.size === 0 && parent.back) {
+        indices = parseClozeIndices(parent.back);
+    }
+    if (indices.size === 0 && parent.clozeIndexes) {
+        indices = parseClozeIndexesFromString(parent.clozeIndexes);
+    }
     const existingByIndex = new Map();
     
     for (const sub of existingSubItems) {

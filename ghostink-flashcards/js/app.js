@@ -103,8 +103,9 @@ const ensureMarkedConfigured = () => {
     if (typeof marked === 'undefined') return;
     const renderer = new marked.Renderer();
     const originalLinkRenderer = renderer.link.bind(renderer);
-    renderer.link = (href, title, text) => {
-        const html = originalLinkRenderer(href, title, text);
+    // marked v17+ passes an object { href, title, text, tokens } instead of separate args
+    renderer.link = (linkData) => {
+        const html = originalLinkRenderer(linkData);
         return html.replace('<a ', '<a target="_blank" rel="noopener noreferrer" ');
     };
     marked.use({ renderer });
@@ -3863,10 +3864,13 @@ export const App = {
      */
     async reconcileClozeSubItems() {
         const clozeParents = this.state.cards.filter(c => isClozeParent(c));
+        console.log('[Cloze] Found', clozeParents.length, 'cloze parents');
         
         for (const parent of clozeParents) {
+            console.log('[Cloze] Processing parent:', parent.id, 'name:', parent.name?.substring(0, 80), 'clozeIndexes:', parent.clozeIndexes);
             const existingSubs = this.state.cards.filter(c => c.parentCard === parent.id);
             const { toCreate, toSuspend } = reconcileSubItems(parent, existingSubs);
+            console.log('[Cloze] toCreate:', toCreate, 'toSuspend:', toSuspend, 'existingSubs:', existingSubs.length);
             
             // Create missing sub-items
             for (const idx of toCreate) {
