@@ -2366,17 +2366,17 @@ export const App = {
         return `<svg class="chart-svg" width="${svgWidth}" height="${height}" viewBox="0 0 ${svgWidth} ${height}" xmlns="http://www.w3.org/2000/svg">${parts}</svg>`;
     },
     buildDistributionBars(items) {
-        if (!items || items.length === 0) return '<p class="text-xs text-earth-metal/60">No data yet.</p>';
+        if (!items || items.length === 0) return '<p class="text-sm text-[color:var(--text-sub)]">No data yet.</p>';
         const max = Math.max(1, ...items.map(i => i.value));
         return `
-            <div class="space-y-2">
+            <div class="space-y-2.5">
                 ${items.map(item => `
-                    <div class="flex items-center gap-2 text-xs">
-                        <span class="w-16 text-earth-metal/70">${escapeHtml(item.label)}</span>
-                        <div class="flex-1 h-2 rounded-full bg-oatmeal-dark/30 overflow-hidden">
-                            <div class="h-full rounded-full" style="width:${(item.value / max) * 100}%; background:${item.color || 'rgba(145,127,179,0.65)'}"></div>
+                    <div class="flex items-center gap-3 text-sm">
+                        <span class="w-16 font-medium text-[color:var(--text-main)]">${escapeHtml(item.label)}</span>
+                        <div class="flex-1 analytics-bar-bg">
+                            <div class="analytics-bar-fill" style="width:${(item.value / max) * 100}%; background:${item.color || 'rgba(var(--dull-purple-rgb),0.65)'}"></div>
                         </div>
-                        <span class="w-10 text-right text-earth-metal/60">${item.value}</span>
+                        <span class="w-12 text-right text-[color:var(--text-sub)]">${item.value.toLocaleString()}</span>
                     </div>
                 `).join('')}
             </div>
@@ -2384,13 +2384,13 @@ export const App = {
     },
     buildPieChart(slices) {
         const total = slices.reduce((sum, s) => sum + s.value, 0);
-        const radius = 44;
-        const cx = 50;
-        const cy = 50;
+        const radius = 48;
+        const cx = 55;
+        const cy = 55;
         if (total <= 0) {
-            return `<svg width="100" height="100" viewBox="0 0 100 100" aria-hidden="true">
-                <circle cx="${cx}" cy="${cy}" r="${radius}" fill="rgba(145,127,179,0.12)"></circle>
-                <circle cx="${cx}" cy="${cy}" r="${radius * 0.6}" fill="var(--card-bg, #fff)"></circle>
+            return `<svg width="110" height="110" viewBox="0 0 110 110" aria-hidden="true">
+                <circle cx="${cx}" cy="${cy}" r="${radius}" fill="rgba(var(--dull-purple-rgb),0.12)"></circle>
+                <circle cx="${cx}" cy="${cy}" r="${radius * 0.55}" fill="var(--card-bg)"></circle>
             </svg>`;
         }
         let startAngle = -90;
@@ -2406,12 +2406,13 @@ export const App = {
                 'L', cx, cy,
                 'Z'
             ].join(' ');
-            const title = `${slice.label}: ${slice.value}`;
+            const pct = total > 0 ? Math.round((slice.value / total) * 100) : 0;
+            const title = `${slice.label}: ${slice.value} (${pct}%)`;
             startAngle = endAngle;
             return `<path d="${d}" fill="${slice.color}" aria-label="${escapeHtml(title)}"><title>${escapeHtml(title)}</title></path>`;
         }).join('');
-        const hole = `<circle cx="${cx}" cy="${cy}" r="${radius * 0.6}" fill="var(--card-bg, #fff)"></circle>`;
-        return `<svg width="100" height="100" viewBox="0 0 100 100" aria-hidden="true">${paths}${hole}</svg>`;
+        const hole = `<circle cx="${cx}" cy="${cy}" r="${radius * 0.55}" fill="var(--card-bg)"></circle>`;
+        return `<svg width="110" height="110" viewBox="0 0 110 110" aria-hidden="true">${paths}${hole}</svg>`;
     },
     polarToCartesian(cx, cy, r, angleDeg) {
         const rad = (angleDeg - 90) * Math.PI / 180.0;
@@ -2511,34 +2512,34 @@ export const App = {
         const todayEl = el('#analyticsToday');
         if (todayEl) {
             todayEl.innerHTML = `
-                <div class="flex flex-wrap gap-2">
-                    <span class="analytics-pill">Reviews: ${todayStats.count}</span>
-                    <span class="analytics-pill">Time: ${this.formatDuration(todayStats.ms)}</span>
-                    <span class="analytics-pill">Due now: ${dueToday}</span>
+                <div class="analytics-stat-value">${todayStats.count}</div>
+                <div class="flex flex-wrap gap-2 mt-2">
+                    <span class="analytics-pill">⏱️ ${this.formatDuration(todayStats.ms)}</span>
+                    <span class="analytics-pill">📋 ${dueToday} due</span>
                 </div>
             `;
         }
         const streakEl = el('#analyticsStreaks');
         if (streakEl) {
             streakEl.innerHTML = `
-                <div class="flex flex-wrap gap-2">
-                    <span class="analytics-pill">Current: ${streak} day${streak === 1 ? '' : 's'}</span>
-                    <span class="analytics-pill">Longest: ${longest} day${longest === 1 ? '' : 's'}</span>
-                    <span class="analytics-pill">Active days: ${dayMap.size}</span>
+                <div class="analytics-stat-value">${streak} <span class="text-base font-normal text-[color:var(--text-sub)]">day${streak === 1 ? '' : 's'}</span></div>
+                <div class="flex flex-wrap gap-2 mt-2">
+                    <span class="analytics-pill">🏆 Best: ${longest}</span>
+                    <span class="analytics-pill">📅 ${dayMap.size} active</span>
                 </div>
             `;
         }
         const retentionEl = el('#analyticsRetention');
         if (retentionEl) {
             retentionEl.innerHTML = `
-                <div class="flex flex-wrap gap-2">
-                    <span class="analytics-pill">Overall retention: ${retentionPct}%</span>
-                    <span class="analytics-pill">Total reviews: ${totalRatings}</span>
+                <div class="analytics-stat-value">${retentionPct}%</div>
+                <div class="flex flex-wrap gap-2 mt-2">
+                    <span class="analytics-pill">📊 ${totalRatings.toLocaleString()} reviews</span>
                 </div>
             `;
         }
         const streakBadge = el('#analyticsStreakBadge');
-        if (streakBadge) streakBadge.textContent = `${streak} day streak`;
+        if (streakBadge) streakBadge.textContent = `🔥 ${streak} day streak`;
 
         const rangeStart = this.startOfDay(new Date(now));
         rangeStart.setDate(rangeStart.getDate() - (rangeDays - 1));
@@ -2557,15 +2558,20 @@ export const App = {
         const countChart = el('#analyticsReviewCount');
         if (countChart) {
             countChart.innerHTML = this.buildSparkBars(rangeCounts, {
-                height: 90,
+                height: 100,
+                width: 7,
+                gap: 2,
+                color: 'rgb(120, 100, 160)',
                 titleFormatter: (val, i) => `${rangeDates[i]} • ${val} reviews`
             });
         }
         const timeChart = el('#analyticsReviewTime');
         if (timeChart) {
             timeChart.innerHTML = this.buildSparkBars(rangeMinutes, {
-                height: 90,
-                color: '#C1A7C9',
+                height: 100,
+                width: 7,
+                gap: 2,
+                color: 'rgb(167, 139, 250)',
                 titleFormatter: (val, i) => `${rangeDates[i]} • ${val} min`
             });
         }
@@ -2573,23 +2579,23 @@ export const App = {
         const answerBreakdown = el('#analyticsAnswerBreakdown');
         if (answerBreakdown) {
             const rows = [
-                { label: 'Again', key: 'again', color: '#f87171' },
-                { label: 'Hard', key: 'hard', color: '#fb923c' },
-                { label: 'Good', key: 'good', color: '#4ade80' },
-                { label: 'Easy', key: 'easy', color: '#60a5fa' }
+                { label: 'Again', key: 'again', color: 'rgb(248, 113, 113)', emoji: '🔴' },
+                { label: 'Hard', key: 'hard', color: 'rgb(251, 146, 60)', emoji: '🟠' },
+                { label: 'Good', key: 'good', color: 'rgb(74, 222, 128)', emoji: '🟢' },
+                { label: 'Easy', key: 'easy', color: 'rgb(96, 165, 250)', emoji: '🔵' }
             ];
             answerBreakdown.innerHTML = `
-                <div class="space-y-2 text-xs">
+                <div class="space-y-3">
                     ${rows.map(r => {
                         const count = ratings[r.key] || 0;
                         const pct = totalRatings ? Math.round((count / totalRatings) * 100) : 0;
                         return `
-                            <div class="flex items-center gap-2">
-                                <span class="w-12 text-earth-metal/70">${r.label}</span>
-                                <div class="flex-1 h-2 rounded-full bg-oatmeal-dark/30 overflow-hidden">
-                                    <div class="h-full rounded-full" style="width:${pct}%; background:${r.color}"></div>
+                            <div class="flex items-center gap-3">
+                                <span class="w-14 text-sm font-medium text-[color:var(--text-main)]">${r.label}</span>
+                                <div class="flex-1 analytics-bar-bg">
+                                    <div class="analytics-bar-fill" style="width:${pct}%; background:${r.color}"></div>
                                 </div>
-                                <span class="w-16 text-right text-earth-metal/60">${count} (${pct}%)</span>
+                                <span class="w-20 text-right text-sm text-[color:var(--text-sub)]">${count.toLocaleString()} <span class="text-xs">(${pct}%)</span></span>
                             </div>
                         `;
                     }).join('')}
@@ -2604,10 +2610,13 @@ export const App = {
         });
         const hourlyEl = el('#analyticsHourlyBreakdown');
         if (hourlyEl) {
+            const formatHour = (h) => h === 0 ? '12am' : h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`;
             hourlyEl.innerHTML = this.buildSparkBars(hourly, {
-                height: 90,
-                color: '#B08BBB',
-                titleFormatter: (val, i) => `${i}:00 • ${val} reviews`
+                height: 100,
+                width: 14,
+                gap: 4,
+                color: 'rgb(147, 130, 180)',
+                titleFormatter: (val, i) => `${formatHour(i)} • ${val} reviews`
             });
         }
 
@@ -2668,13 +2677,13 @@ export const App = {
         const easeEl = el('#analyticsEaseDifficulty');
         if (easeEl) {
             easeEl.innerHTML = `
-                <div class="space-y-4">
+                <div class="space-y-5">
                     <div>
-                        <p class="text-xs text-earth-metal/60 mb-2">SM-2 ease factor</p>
+                        <p class="text-xs font-medium text-[color:var(--text-sub)] mb-3">SM-2 ease factor</p>
                         ${this.buildDistributionBars(easeBuckets)}
                     </div>
                     <div>
-                        <p class="text-xs text-earth-metal/60 mb-2">FSRS difficulty</p>
+                        <p class="text-xs font-medium text-[color:var(--text-sub)] mb-3">FSRS difficulty</p>
                         ${this.buildDistributionBars(diffBuckets)}
                     </div>
                 </div>
@@ -2700,20 +2709,22 @@ export const App = {
             else cardCounts['Not due'] += 1;
         });
         const pieSlices = [
-            { label: 'New', value: cardCounts.New, color: '#c4b5fd' },
-            { label: 'Due', value: cardCounts.Due, color: '#fca5a5' },
-            { label: 'Not due', value: cardCounts['Not due'], color: '#93c5fd' },
-            { label: 'Suspended', value: cardCounts.Suspended, color: '#fcd34d' }
+            { label: 'New', value: cardCounts.New, color: 'rgb(167, 139, 250)' },
+            { label: 'Due', value: cardCounts.Due, color: 'rgb(248, 113, 113)' },
+            { label: 'Not due', value: cardCounts['Not due'], color: 'rgb(96, 165, 250)' },
+            { label: 'Suspended', value: cardCounts.Suspended, color: 'rgb(163, 163, 163)' }
         ];
+        const total = pieSlices.reduce((sum, s) => sum + s.value, 0);
         const cardCountsEl = el('#analyticsCardCounts');
         if (cardCountsEl) {
             cardCountsEl.innerHTML = `
                 <div class="analytics-pie">
                     ${this.buildPieChart(pieSlices)}
-                    <div class="analytics-legend">
-                        ${pieSlices.map(s => `
-                            <span><i class="analytics-dot" style="background:${s.color}"></i>${s.label}: ${s.value}</span>
-                        `).join('')}
+                    <div class="analytics-legend flex-col gap-2">
+                        ${pieSlices.map(s => {
+                            const pct = total > 0 ? Math.round((s.value / total) * 100) : 0;
+                            return `<span class="text-sm"><i class="analytics-dot" style="background:${s.color}"></i><span class="font-medium text-[color:var(--text-main)]">${s.label}</span> <span class="text-[color:var(--text-sub)]">${s.value.toLocaleString()} (${pct}%)</span></span>`;
+                        }).join('')}
                     </div>
                 </div>
             `;

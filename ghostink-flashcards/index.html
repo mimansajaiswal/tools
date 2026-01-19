@@ -749,107 +749,124 @@
                 </div>
 
                 <!-- ANALYTICS TAB -->
-                <div id="analyticsTab" class="tab-content hidden space-y-4 md:space-y-6">
-                    <article class="card rounded-2xl p-4 md:p-5 shadow-soft text-[color:var(--text-main)]">
-                        <div class="flex flex-wrap items-center justify-between gap-3">
+                <div id="analyticsTab" class="tab-content hidden space-y-4 md:space-y-5">
+                    <!-- Header with filters -->
+                    <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div>
-                                <h2 class="font-display text-base md:text-lg text-charcoal">Analytics</h2>
-                                <p class="text-xs text-earth-metal/70">Stats from review history. Time stats only apply
-                                    to reviews recorded after this update.</p>
+                                <h2 class="font-display text-base sm:text-lg md:text-xl text-[color:var(--text-main)]">Analytics</h2>
+                                <p class="text-xs sm:text-sm text-[color:var(--text-sub)] mt-0.5">Your learning progress and review patterns</p>
                             </div>
                             <div class="flex flex-wrap items-center gap-2">
                                 <select id="analyticsDeckSelect"
-                                    class="rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-xs">
+                                    class="rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] px-3 py-2 text-sm text-[color:var(--text-main)]">
                                     <option value="all">All decks</option>
                                 </select>
                                 <select id="analyticsRangeSelect"
-                                    class="rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-xs">
-                                    <option value="30">Last 30 days</option>
-                                    <option value="90" selected>Last 90 days</option>
-                                    <option value="180">Last 180 days</option>
-                                    <option value="365">Last 365 days</option>
+                                    class="rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] px-3 py-2 text-sm text-[color:var(--text-main)]">
+                                    <option value="7">Last week</option>
+                                    <option value="30">Last month</option>
+                                    <option value="90" selected>Last 3 months</option>
+                                    <option value="180">Last 6 months</option>
+                                    <option value="365">Last year</option>
                                 </select>
                             </div>
                         </div>
                     </article>
 
-                    <div class="grid md:grid-cols-3 gap-3">
-                        <article class="card rounded-2xl p-4 shadow-soft">
-                            <p class="text-[11px] uppercase tracking-wider text-earth-metal/60">Today</p>
-                            <div id="analyticsToday" class="mt-2 text-sm text-charcoal"></div>
+                    <!-- Quick stats row -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                            <p class="analytics-stat-label">Today</p>
+                            <div id="analyticsToday" class="mt-1"></div>
                         </article>
-                        <article class="card rounded-2xl p-4 shadow-soft">
-                            <p class="text-[11px] uppercase tracking-wider text-earth-metal/60">Streaks</p>
-                            <div id="analyticsStreaks" class="mt-2 text-sm text-charcoal"></div>
+                        <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                            <p class="analytics-stat-label">Streaks</p>
+                            <div id="analyticsStreaks" class="mt-1"></div>
                         </article>
-                        <article class="card rounded-2xl p-4 shadow-soft">
-                            <p class="text-[11px] uppercase tracking-wider text-earth-metal/60">Retention</p>
-                            <div id="analyticsRetention" class="mt-2 text-sm text-charcoal"></div>
+                        <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                            <p class="analytics-stat-label">Retention</p>
+                            <div id="analyticsRetention" class="mt-1"></div>
                         </article>
                     </div>
 
+                    <!-- Heatmap -->
                     <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
-                        <div class="flex items-center justify-between gap-2">
-                            <h3 class="font-display text-sm md:text-base text-charcoal">Review heatmap</h3>
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+                            <div>
+                                <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Activity heatmap</h3>
+                                <p class="text-xs text-[color:var(--text-sub)] mt-0.5">Daily review activity</p>
+                            </div>
                             <span id="analyticsStreakBadge"
-                                class="text-[11px] px-2 py-1 rounded-full bg-oatmeal text-earth-metal border border-oatmeal-dark/60"></span>
+                                class="self-start sm:self-auto text-xs px-3 py-1.5 rounded-full bg-[color:var(--surface-strong)] text-[color:var(--text-main)] border border-[color:var(--card-border)] font-medium"></span>
                         </div>
-                        <div class="mt-3">
-                            <div id="analyticsHeatmap" class="heatmap-grid"></div>
+                        <div id="analyticsHeatmap" class="heatmap-grid"></div>
+                        <div class="flex items-center justify-end mt-3">
                             <div class="heatmap-legend">
-                                <span class="text-[10px] text-earth-metal/60">Less</span>
+                                <span>Less</span>
                                 <span class="heatmap-swatch level-0"></span>
                                 <span class="heatmap-swatch level-1"></span>
                                 <span class="heatmap-swatch level-2"></span>
                                 <span class="heatmap-swatch level-3"></span>
                                 <span class="heatmap-swatch level-4"></span>
-                                <span class="text-[10px] text-earth-metal/60">More</span>
+                                <span>More</span>
                             </div>
                         </div>
                     </article>
 
-                    <div class="grid md:grid-cols-2 gap-3">
+                    <!-- Charts row -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                         <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
-                            <h3 class="font-display text-sm md:text-base text-charcoal">Review count</h3>
-                            <div id="analyticsReviewCount" class="chart-scroll mt-3"></div>
+                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Reviews per day</h3>
+                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Number of cards reviewed</p>
+                            <div id="analyticsReviewCount" class="chart-scroll"></div>
                         </article>
                         <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
-                            <h3 class="font-display text-sm md:text-base text-charcoal">Review time (minutes)</h3>
-                            <div id="analyticsReviewTime" class="chart-scroll mt-3"></div>
-                        </article>
-                    </div>
-
-                    <div class="grid md:grid-cols-2 gap-3">
-                        <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
-                            <h3 class="font-display text-sm md:text-base text-charcoal">Answer buttons breakdown</h3>
-                            <div id="analyticsAnswerBreakdown" class="mt-3"></div>
-                        </article>
-                        <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
-                            <h3 class="font-display text-sm md:text-base text-charcoal">Hourly breakdown</h3>
-                            <div id="analyticsHourlyBreakdown" class="chart-scroll mt-3"></div>
+                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Study time</h3>
+                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Minutes spent reviewing</p>
+                            <div id="analyticsReviewTime" class="chart-scroll"></div>
                         </article>
                     </div>
 
-                    <div class="grid md:grid-cols-2 gap-3">
+                    <!-- Breakdown row -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                         <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
-                            <h3 class="font-display text-sm md:text-base text-charcoal">Interval distribution</h3>
-                            <div id="analyticsIntervalDistribution" class="mt-3"></div>
+                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Answer breakdown</h3>
+                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">How you rated your recalls</p>
+                            <div id="analyticsAnswerBreakdown"></div>
                         </article>
                         <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
-                            <h3 class="font-display text-sm md:text-base text-charcoal">Ease / difficulty distribution
-                            </h3>
-                            <div id="analyticsEaseDifficulty" class="mt-3"></div>
+                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Study schedule</h3>
+                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Reviews by hour of day</p>
+                            <div id="analyticsHourlyBreakdown" class="chart-scroll"></div>
                         </article>
                     </div>
 
-                    <div class="grid md:grid-cols-2 gap-3">
+                    <!-- Distribution row -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                         <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
-                            <h3 class="font-display text-sm md:text-base text-charcoal">Card counts</h3>
-                            <div id="analyticsCardCounts" class="mt-3"></div>
+                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Interval distribution</h3>
+                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Card scheduling spread</p>
+                            <div id="analyticsIntervalDistribution"></div>
                         </article>
                         <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
-                            <h3 class="font-display text-sm md:text-base text-charcoal">True retention</h3>
-                            <div id="analyticsTrueRetention" class="mt-3"></div>
+                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Difficulty spread</h3>
+                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Card ease and difficulty factors</p>
+                            <div id="analyticsEaseDifficulty"></div>
+                        </article>
+                    </div>
+
+                    <!-- Summary row -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                        <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Card status</h3>
+                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Overview of your deck</p>
+                            <div id="analyticsCardCounts"></div>
+                        </article>
+                        <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">True retention</h3>
+                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Success rate by interval</p>
+                            <div id="analyticsTrueRetention"></div>
                         </article>
                     </div>
                 </div>
