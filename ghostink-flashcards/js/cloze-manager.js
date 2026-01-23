@@ -79,7 +79,7 @@ export const reconcileSubItems = (parent, existingSubItems) => {
     }
     const existingByIndex = new Map();
     const duplicatesToSuspend = [];
-    
+
     for (const sub of existingSubItems) {
         // Parse the clozeIndexes field to get the index
         const idx = parseInt(sub.clozeIndexes, 10);
@@ -92,11 +92,11 @@ export const reconcileSubItems = (parent, existingSubItems) => {
             }
         }
     }
-    
+
     const toCreate = [];
     const toKeep = [];
     const toSuspend = [...duplicatesToSuspend];
-    
+
     // Indices that exist in parent text
     for (const idx of indices) {
         if (existingByIndex.has(idx)) {
@@ -105,7 +105,7 @@ export const reconcileSubItems = (parent, existingSubItems) => {
             toCreate.push(idx);
         }
     }
-    
+
     // Sub-items that no longer match any index in parent
     for (const sub of existingSubItems) {
         const idx = parseInt(sub.clozeIndexes, 10);
@@ -113,7 +113,7 @@ export const reconcileSubItems = (parent, existingSubItems) => {
             toSuspend.push(sub.id);
         }
     }
-    
+
     return { toCreate, toKeep, toSuspend };
 };
 
@@ -168,13 +168,13 @@ export const createSubItem = (parent, clozeIndex, deckId, makeTempId) => {
         parentCard: parent.id,
         subCards: [],
         clozeIndexes: String(clozeIndex),
-        fsrs: { 
-            difficulty: initDifficulty(fsrsW, 'good'), 
-            stability: initStability(fsrsW, 'good'), 
-            retrievability: 0.9, 
-            lastRating: null, 
-            lastReview: null, 
-            dueDate: now 
+        fsrs: {
+            difficulty: initDifficulty(fsrsW, 'good'),
+            stability: initStability(fsrsW, 'good'),
+            retrievability: 0.9,
+            lastRating: null,
+            lastReview: null,
+            dueDate: now
         },
         sm2: { interval: 1, easeFactor: 2.5, repetitions: 0, dueDate: now },
         syncId: typeof crypto !== 'undefined' ? crypto.randomUUID() : Date.now().toString(),

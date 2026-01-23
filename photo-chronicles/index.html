@@ -188,15 +188,16 @@
 
         <!-- Mobile Nav Items (Only visible on small screens) -->
         <div class="md:hidden flex w-full justify-around items-center px-4">
-            <button onclick="App.openModal('settingsModal')" class="p-2 text-earth-metal hover:text-dull-purple" aria-label="Open settings">
+            <button onclick="App.openModal('settingsModal')" class="p-2 text-earth-metal hover:text-dull-purple"
+                aria-label="Open settings">
                 <i data-lucide="settings" class="w-6 h-6"></i>
             </button>
-            <button onclick="App.initNewEntry()"
-                aria-label="Add entry"
+            <button onclick="App.initNewEntry()" aria-label="Add entry"
                 class="p-3 -mt-6 bg-dull-purple text-white rounded-full shadow-lg border-4 border-oatmeal">
                 <i data-lucide="plus" class="w-6 h-6"></i>
             </button>
-            <button onclick="App.attemptNewDiary()" class="p-2 text-earth-metal hover:text-dull-purple" aria-label="Create new diary">
+            <button onclick="App.attemptNewDiary()" class="p-2 text-earth-metal hover:text-dull-purple"
+                aria-label="Create new diary">
                 <i data-lucide="book-plus" class="w-6 h-6"></i>
             </button>
         </div>
@@ -224,7 +225,8 @@
             class="h-16 border-b border-oatmeal-dark flex items-center justify-between px-4 md:px-6 bg-oatmeal/80 backdrop-blur-sm z-10 flex-shrink-0">
             <div class="flex items-center gap-3 overflow-hidden">
                 <!-- Mobile Diary Switcher Trigger -->
-                <button id="mobileDiaryToggleBtn" onclick="App.toggleMobileDiaryMenu(event)" aria-label="Toggle diary list"
+                <button id="mobileDiaryToggleBtn" onclick="App.toggleMobileDiaryMenu(event)"
+                    aria-label="Toggle diary list"
                     class="md:hidden bg-white border border-oatmeal-dark shadow-sm w-9 h-9 rounded-lg text-earth-metal hover:bg-white-linen transition-colors flex items-center justify-center mr-1">
                     <i data-lucide="library" class="w-4 h-4"></i>
                 </button>
@@ -634,8 +636,7 @@ async function handleRequest(request, env) {
             <i data-lucide="x" class="w-6 h-6"></i>
         </button>
 
-        <div id="entryLoadingOverlay"
-            class="absolute inset-0 bg-white/80 z-50 hidden items-center justify-center">
+        <div id="entryLoadingOverlay" class="absolute inset-0 bg-white/80 z-50 hidden items-center justify-center">
             <div class="flex flex-col items-center gap-3 text-earth-metal">
                 <div class="loader w-8 h-8 border-4 border-dull-purple border-t-transparent rounded-full"></div>
                 <span id="entryLoadingText" class="text-xs font-semibold tracking-wide uppercase">Processing...</span>
@@ -2442,7 +2443,7 @@ async function handleRequest(request, env) {
                     targetBtn.classList.remove('bg-white/20', 'hover:bg-white/10');
                     targetBtn.classList.add('bg-white', 'text-black');
                 }
-                
+
                 const segInd = document.getElementById('segmentIndicator');
                 if (mode > 1) {
                     segInd.classList.remove('hidden');
@@ -2950,7 +2951,7 @@ async function handleRequest(request, env) {
                 } else {
                     App.state.activeSegment = nextEmpty;
                     document.getElementById('segCurrent').innerText = App.state.activeSegment + 1;
-                    
+
                 }
             },
 
@@ -3030,7 +3031,7 @@ async function handleRequest(request, env) {
                 document.getElementById('takenPhotoUI').classList.remove('flex');
                 document.getElementById('cameraSection').classList.remove('hidden');
                 App.initCamera();
-                
+
                 document.getElementById('segCurrent').innerText = App.state.activeSegment + 1;
             },
 
@@ -3089,7 +3090,7 @@ async function handleRequest(request, env) {
                             if (nextEmpty !== -1) {
                                 App.state.activeSegment = nextEmpty;
                                 document.getElementById('segCurrent').innerText = App.state.activeSegment + 1;
-                                
+
                             }
                         }
                     }

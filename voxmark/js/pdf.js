@@ -1935,7 +1935,7 @@ async function runOcrOnVisiblePages() {
   let processed = 0;
   try {
     const worker = await Tesseract.createWorker("eng", 1, {
-      logger: () => {}
+      logger: () => { }
     });
     for (const pageData of visiblePages) {
       if (pageData.ocrSpans?.length) continue;

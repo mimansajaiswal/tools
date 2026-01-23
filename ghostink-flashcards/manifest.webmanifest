@@ -8,7 +8,10 @@
   "orientation": "portrait-primary",
   "background_color": "#F3F0E6",
   "theme_color": "#917FB3",
-  "categories": ["education", "productivity"],
+  "categories": [
+    "education",
+    "productivity"
+  ],
   "lang": "en",
   "icons": [
     {
