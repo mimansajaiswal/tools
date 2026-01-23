@@ -348,7 +348,7 @@
                                 Select a deck above</h2>
                             <div class="flex items-center gap-1 md:gap-2 shrink-0">
                                 <button id="resetAlgorithmBtn"
-                                    class="p-2 md:px-3 md:py-2 rounded-lg border border-red-300 text-red-600 text-sm hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20 flex items-center gap-2 hidden"
+                                    class="p-2 md:px-3 md:py-2 rounded-lg border border-[color:var(--danger-soft-text)] text-[color:var(--danger-soft-text)] text-sm hover:bg-[color:var(--danger-soft-bg)] flex items-center gap-2 hidden"
                                     data-tip="Reset algorithm parameters">
                                     <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
                                     <span class="hidden lg:inline">Reset Algorithm</span>
@@ -907,7 +907,7 @@
     <!-- Global loading overlay -->
     <div id="loadingOverlay"
         class="fixed inset-0 z-[130] bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center">
-        <div class="flex flex-col items-center gap-3 text-[color:var(--badge-text)] text-center px-6">
+        <div class="flex flex-col items-center gap-3 text-[color:var(--overlay-text)] text-center px-6">
             <div
                 class="h-12 w-12 border-4 border-[color:var(--overlay-track)] border-t-[color:var(--overlay-text)] rounded-full animate-spin">
             </div>
@@ -948,8 +948,8 @@
         class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50">
         <div class="card rounded-lg p-5 w-full max-w-md shadow-soft">
             <div class="flex items-center gap-3 mb-3">
-                <div class="p-2 rounded-full bg-red-100 dark:bg-red-900/40">
-                    <i data-lucide="alert-triangle" class="w-5 h-5 text-red-600"></i>
+                <div class="p-2 rounded-full bg-[color:var(--danger-soft-bg)]">
+                    <i data-lucide="alert-triangle" class="w-5 h-5 text-[color:var(--danger-soft-text)]"></i>
                 </div>
                 <h3 id="resetAlgorithmTitle" class="text-main font-display text-lg">Reset Algorithm Parameters</h3>
             </div>
@@ -975,8 +975,9 @@
                         <span id="resetProgressPercent">0%</span>
                     </div>
                     <div class="h-1.5 bg-surface-muted rounded-full overflow-hidden">
-                        <div id="resetProgressBar" class="h-full bg-red-500 transition-all duration-300"
-                            style="width: 0%"></div>
+                        <div id="resetProgressBar"
+                            class="h-full bg-[color:var(--danger-bg)] transition-all duration-300" style="width: 0%">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -984,7 +985,7 @@
                 <button id="cancelResetAlgorithm"
                     class="px-4 py-2 rounded-lg bg-surface border border-card text-main text-sm hover:bg-surface-strong">Cancel</button>
                 <button id="confirmResetAlgorithm"
-                    class="px-4 py-2 rounded-lg bg-red-600 text-[color:var(--badge-text)] text-sm hover:bg-red-700 flex items-center gap-2">
+                    class="px-4 py-2 rounded-lg bg-[color:var(--danger-bg)] text-[color:var(--danger-text)] text-sm hover:bg-[color:var(--danger-bg-hover)] flex items-center gap-2">
                     <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
                     Reset All Cards
                 </button>
@@ -1078,7 +1079,7 @@
                                 class="w-4 h-4 transition-transform group-open:rotate-90"></i>
                             <span>Worker Proxy</span>
                         </summary>
-                        <div class="space-y-4 pl-2 border-l-2 border-card/10 ml-1.5">
+                        <div class="space-y-4 pl-2 border-l-2 border-faint ml-1.5">
                             <div class="rounded-lg border border-card p-3 bg-surface ">
                                 <div class="flex items-center justify-between">
                                     <p class="font-semibold text-main text-sm">Configuration</p>
@@ -1117,7 +1118,7 @@
                                 class="w-4 h-4 transition-transform group-open:rotate-90"></i>
                             <span>Notion Integration</span>
                         </summary>
-                        <div class="space-y-4 pl-2 border-l-2 border-card/10 ml-1.5">
+                        <div class="space-y-4 pl-2 border-l-2 border-faint ml-1.5">
                             <div class="text-sm text-sub mb-2">
                                 Please duplicate this <a
                                     href="https://mimansajaiswal-embedded-dbs.notion.site/ghostink-template"

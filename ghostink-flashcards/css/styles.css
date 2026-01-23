@@ -8,8 +8,8 @@
     --linen-rgb: 252 250 246;
     --dull-purple-rgb: 128 110 150;
     --dull-purple-hover-rgb: 115 98 135;
-    --muted-pink-rgb: 195 160 170;
-    --muted-pink-hover-rgb: 180 145 155;
+    --muted-pink-rgb: 198 150 168;
+    --muted-pink-hover-rgb: 182 135 156;
 
     --oatmeal: rgb(var(--oatmeal-rgb));
     --oatmeal-dark: rgb(var(--oatmeal-dark-rgb));
@@ -34,9 +34,9 @@
     --border-faint: rgb(var(--earth-metal-rgb) / 0.08);
     --text-sub-strong-rgb: 68 64 60;
     --text-sub-rgb: 90 84 78;
-    --text-muted-rgb: 118 110 103;
-    --text-faint-rgb: 146 138 128;
-    --text-fainter-rgb: 168 160 150;
+    --text-muted-rgb: 110 104 98;
+    --text-faint-rgb: 132 124 116;
+    --text-fainter-rgb: 150 142 134;
     --text-main: var(--charcoal);
     --text-sub-strong: rgb(var(--text-sub-strong-rgb));
     --text-sub: rgb(var(--text-sub-rgb));
@@ -51,11 +51,17 @@
     --bg: rgb(246 243 236);
 
     --accent: var(--dull-purple);
-    --accent-soft: rgb(var(--dull-purple-rgb) / 0.26);
+    --accent-soft: color-mix(in srgb, var(--accent) 20%, var(--surface) 80%);
     --accent-hover: rgb(var(--dull-purple-hover-rgb));
     --accent-2: var(--muted-pink);
-    --accent-2-soft: rgb(var(--muted-pink-rgb) / 0.26);
+    --accent-2-soft: color-mix(in srgb, var(--accent-2) 20%, var(--surface) 80%);
     --accent-2-hover: rgb(var(--muted-pink-hover-rgb));
+
+    --danger-bg: #dc2626;
+    --danger-bg-hover: #b91c1c;
+    --danger-text: #fff7f5;
+    --danger-soft-bg: #fee2e2;
+    --danger-soft-text: #b91c1c;
 
     --rating-again-bg: #F9DCD9;
     --rating-again-text: #984F4A;
@@ -254,6 +260,13 @@ html[data-theme="dark"] body {
     --accent-hover: rgb(var(--dull-purple-hover-rgb));
     --accent-2: rgb(var(--muted-pink-rgb));
     --accent-2-hover: rgb(var(--muted-pink-hover-rgb));
+    --accent-soft: color-mix(in srgb, var(--accent) 22%, var(--surface) 78%);
+    --accent-2-soft: color-mix(in srgb, var(--accent-2) 22%, var(--surface) 78%);
+    --danger-bg: #7f1d1d;
+    --danger-bg-hover: #991b1b;
+    --danger-text: #fff5f5;
+    --danger-soft-bg: #2a1515;
+    --danger-soft-text: #fca5a5;
     --rating-again-bg: #984F4A;
     --rating-again-text: #F9DCD9;
     --rating-again-fill: #F9DCD9;
@@ -286,9 +299,9 @@ html[data-theme="dark"] body {
 
     /* Badge/pill colors - high contrast for dark mode */
     --badge-bg: rgb(var(--dull-purple-rgb));
-    --badge-text: rgb(var(--charcoal-rgb));
+    --badge-text: rgb(var(--linen-rgb));
     --badge-accent-bg: rgb(var(--muted-pink-rgb));
-    --badge-accent-text: rgb(var(--charcoal-rgb));
+    --badge-accent-text: rgb(var(--linen-rgb));
 }
 
 .rounded-sm {
