@@ -101,7 +101,7 @@
             class="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-5 md:px-10 pt-4 sm:pt-6 pb-3 sm:pb-4">
             <div class="flex items-center gap-2 sm:gap-3 min-w-0">
                 <div
-                    class="w-9 h-9 sm:w-12 sm:h-12 rounded-lg sm:rounded-2xl dash flex items-center justify-center shadow-soft shrink-0">
+                    class="w-9 h-9 sm:w-12 sm:h-12 rounded-lg dash flex items-center justify-center shrink-0 border border-[color:var(--card-border)]">
                     <i data-lucide="sparkles" class="w-5 h-5 sm:w-6 sm:h-6 text-dull-purple"></i>
                 </div>
                 <div class="min-w-0">
@@ -112,10 +112,10 @@
             </div>
             <div class="flex items-center gap-1 sm:gap-1.5 md:gap-2 shrink-0">
                 <div id="connectionBadge"
-                    class="px-2 py-1 rounded-full pill text-[10px] sm:text-xs bg-oatmeal border border-oatmeal-dark text-earth-metal hidden md:block">
+                    class="px-2.5 py-1 rounded text-[10px] sm:text-xs font-mono uppercase tracking-wide bg-[color:var(--surface-strong)] border border-[color:var(--card-border)] text-[color:var(--text-main)] hidden md:block">
                     Offline ready</div>
                 <!-- Desktop-only options -->
-                <div class="hidden sm:flex items-center gap-0.5 sm:gap-1 pill-toggle rounded-full px-1 sm:px-2 py-1">
+                <div class="hidden sm:flex items-center gap-0.5 sm:gap-1 pill-toggle rounded-md px-1 sm:px-2 py-1">
                     <button class="p-1 rounded-full theme-btn" data-theme="light" data-tip="Light theme"
                         aria-label="Light theme"><i data-lucide="sun" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i></button>
                     <button class="p-1 rounded-full theme-btn" data-theme="dark" data-tip="Dark theme"
@@ -123,7 +123,7 @@
                     <button class="p-1 rounded-full theme-btn" data-theme="system" data-tip="System theme"
                         aria-label="System theme"><i data-lucide="laptop" class="w-4 h-4"></i></button>
                 </div>
-                <div class="hidden md:flex items-center gap-1 pill-toggle rounded-full px-2 py-1">
+                <div class="hidden md:flex items-center gap-1 pill-toggle rounded-md px-2 py-1">
                     <button class="px-2 py-1 rounded-full font-btn text-xs" data-font="serif" data-tip="Serif font"
                         aria-label="Serif font">
                         <span class="font-swatch-serif inline-block">Aa</span>
@@ -134,11 +134,11 @@
                     </button>
                 </div>
                 <button id="openShortcuts"
-                    class="hidden sm:flex p-1.5 sm:p-2 rounded-full bg-white-linen border border-oatmeal-dark hover:border-dull-purple transition-all"
+                    class="hidden sm:flex p-1.5 sm:p-2 rounded-md bg-[color:var(--surface)] border border-[color:var(--card-border)] hover:bg-[color:var(--surface-strong)] transition-all"
                     title="Keyboard shortcuts" aria-label="Keyboard shortcuts">
                     <i data-lucide="keyboard" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
                 </button>
-                <div class="hidden sm:flex items-center gap-0.5 sm:gap-1 pill-toggle rounded-full px-1 sm:px-2 py-1">
+                <div class="hidden sm:flex items-center gap-0.5 sm:gap-1 pill-toggle rounded-md px-1 sm:px-2 py-1">
                     <button id="exportAnkiBtn" class="p-1 rounded-full" title="Export Anki" aria-label="Export to Anki">
                         <i data-lucide="download" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
                     </button>
@@ -150,17 +150,17 @@
                 </div>
                 <!-- Mobile more button -->
                 <button id="mobileMoreBtn"
-                    class="sm:hidden p-1.5 rounded-full bg-white-linen border border-oatmeal-dark" title="More options"
+                    class="sm:hidden p-1.5 rounded-md bg-[color:var(--surface)] border border-[color:var(--card-border)]" title="More options"
                     aria-label="More options">
                     <i data-lucide="more-horizontal" class="w-4 h-4"></i>
                 </button>
                 <button id="syncNowBtn"
-                    class="p-1.5 sm:p-2 rounded-full bg-dull-purple text-white hover:bg-dull-purple-hover transition-all"
+                    class="p-1.5 sm:p-2 rounded-md bg-[color:var(--badge-bg)] text-[color:var(--badge-text)] hover:opacity-80 transition-all"
                     data-tip="Sync now" title="Sync" aria-label="Sync with Notion">
                     <i data-lucide="refresh-ccw" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
                 </button>
                 <button id="openSettings"
-                    class="p-1.5 sm:p-2 rounded-full bg-white-linen border border-oatmeal-dark hover:border-dull-purple transition-all"
+                    class="p-1.5 sm:p-2 rounded-md bg-[color:var(--surface)] border border-[color:var(--card-border)] hover:bg-[color:var(--surface-strong)] transition-all"
                     data-tip="Settings" title="Settings" aria-label="Open settings">
                     <i data-lucide="settings" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
                 </button>
@@ -168,7 +168,7 @@
             <!-- Mobile expanded menu -->
             <div id="mobileMoreMenu"
                 class="hidden w-full pt-2 pb-1 border-t border-[color:var(--card-border)] mt-2 flex-wrap gap-2 sm:hidden">
-                <div class="flex items-center gap-1 pill-toggle rounded-full px-2 py-1">
+                <div class="flex items-center gap-1 pill-toggle rounded-md px-2 py-1">
                     <button class="p-1 rounded-full theme-btn" data-theme="light" aria-label="Light theme"><i
                             data-lucide="sun" class="w-4 h-4"></i></button>
                     <button class="p-1 rounded-full theme-btn" data-theme="dark" aria-label="Dark theme"><i
@@ -176,13 +176,13 @@
                     <button class="p-1 rounded-full theme-btn" data-theme="system" aria-label="System theme"><i
                             data-lucide="laptop" class="w-4 h-4"></i></button>
                 </div>
-                <div class="flex items-center gap-1 pill-toggle rounded-full px-2 py-1">
+                <div class="flex items-center gap-1 pill-toggle rounded-md px-2 py-1">
                     <button class="px-2 py-1 rounded-full font-btn text-xs" data-font="serif"
                         aria-label="Serif font"><span class="font-swatch-serif">Aa</span></button>
                     <button class="px-2 py-1 rounded-full font-btn text-xs" data-font="mono"
                         aria-label="Monospace font"><span class="font-swatch-mono">Aa</span></button>
                 </div>
-                <div class="flex items-center gap-1 pill-toggle rounded-full px-2 py-1">
+                <div class="flex items-center gap-1 pill-toggle rounded-md px-2 py-1">
                     <button id="exportAnkiBtnMobile" class="p-1 rounded-full" title="Export Anki"
                         aria-label="Export to Anki"><i data-lucide="download" class="w-4 h-4"></i></button>
                     <label class="p-1 rounded-full cursor-pointer" title="Import Anki" aria-label="Import from Anki">
@@ -206,7 +206,7 @@
 
         <main class="px-3 sm:px-5 md:px-10 pb-6 sm:pb-10 space-y-4 md:space-y-6">
             <div id="lockedOverlay"
-                class="rounded-2xl p-6 bg-[color:var(--surface-strong)] border border-[color:var(--card-border)] flex flex-col gap-5 max-w-3xl mx-auto mt-6 text-center hidden">
+                class="rounded-lg p-6 bg-[color:var(--surface-strong)] border border-[color:var(--card-border)] flex flex-col gap-5 max-w-3xl mx-auto mt-6 text-center hidden">
 
                 <!-- What is GhostInk Feature Card -->
                 <div
@@ -311,7 +311,7 @@
                 <!-- LIBRARY TAB -->
                 <div id="libraryTab" class="tab-content space-y-4 md:space-y-6 hidden">
                     <!-- Decks Section -->
-                    <article class="card rounded-2xl p-4 md:p-5 shadow-soft text-[color:var(--text-main)]">
+                    <article class="card rounded-lg p-4 md:p-5 shadow-soft text-[color:var(--text-main)]">
                         <div class="flex items-center justify-between gap-2">
                             <div class="min-w-0">
                                 <h2 class="font-display text-base md:text-lg text-charcoal">Decks</h2>
@@ -344,7 +344,7 @@
 
                     <!-- Selected Deck Bar + Cards Section -->
                     <article id="cardsSection"
-                        class="card rounded-2xl p-4 md:p-5 shadow-soft text-[color:var(--text-main)]">
+                        class="card rounded-lg p-4 md:p-5 shadow-soft text-[color:var(--text-main)]">
                         <div id="selectedDeckBar" class="flex items-center justify-between gap-2">
                             <h2 class="font-display text-base md:text-lg text-charcoal truncate" id="selectedDeckName">
                                 Select a deck above</h2>
@@ -400,7 +400,7 @@
                     <div class="max-w-2xl mx-auto space-y-4 md:space-y-6">
                         <!-- Session Active Bar (shown when session is active) -->
                         <div id="sessionActiveBar"
-                            class="hidden card rounded-2xl p-4 md:p-5 shadow-soft text-[color:var(--text-main)]">
+                            class="hidden card rounded-lg p-4 md:p-5 shadow-soft text-[color:var(--text-main)]">
                             <div class="flex items-center justify-between gap-3">
                                 <div class="flex items-center gap-2">
                                     <i data-lucide="book-open" class="w-5 h-5 text-dull-purple"></i>
@@ -424,7 +424,7 @@
 
                         <!-- Study Filters Card -->
                         <article id="studySettingsCard"
-                            class="card rounded-2xl p-4 md:p-5 shadow-soft text-[color:var(--text-main)]">
+                            class="card rounded-lg p-4 md:p-5 shadow-soft text-[color:var(--text-main)]">
                             <div class="flex items-center justify-between gap-2 mb-3 md:mb-4">
                                 <div class="flex items-center gap-2 min-w-0">
                                     <i data-lucide="settings-2" class="w-4 h-4 text-dull-purple shrink-0"></i>
@@ -570,7 +570,7 @@
                         </article>
                         <!-- Study Card -->
                         <article id="studyCardSection"
-                            class="card rounded-2xl p-4 md:p-5 shadow-soft text-[color:var(--text-main)] hidden">
+                            class="card rounded-lg p-4 md:p-5 shadow-soft text-[color:var(--text-main)] hidden">
                             <div class="flex items-center justify-between gap-2">
                                 <h2 class="font-display text-base md:text-lg text-charcoal">Study</h2>
                                 <div class="flex items-center gap-1">
@@ -761,7 +761,7 @@
                 <!-- ANALYTICS TAB -->
                 <div id="analyticsTab" class="tab-content hidden space-y-4 md:space-y-5">
                     <!-- Header with filters -->
-                    <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                    <article class="card rounded-lg p-4 md:p-5 shadow-soft">
                         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div>
                                 <h2 class="font-display text-base sm:text-lg md:text-xl text-[color:var(--text-main)]">Analytics</h2>
@@ -786,29 +786,29 @@
 
                     <!-- Quick stats row -->
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
                             <p class="analytics-stat-label">Today</p>
                             <div id="analyticsToday" class="mt-1"></div>
                         </article>
-                        <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
                             <p class="analytics-stat-label">Streaks</p>
                             <div id="analyticsStreaks" class="mt-1"></div>
                         </article>
-                        <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
                             <p class="analytics-stat-label">Retention</p>
                             <div id="analyticsRetention" class="mt-1"></div>
                         </article>
                     </div>
 
                     <!-- Heatmap -->
-                    <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                    <article class="card rounded-lg p-4 md:p-5 shadow-soft">
                         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
                             <div>
                                 <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Activity heatmap</h3>
                                 <p class="text-xs text-[color:var(--text-sub)] mt-0.5">Daily review activity</p>
                             </div>
                             <span id="analyticsStreakBadge"
-                                class="self-start sm:self-auto text-xs px-3 py-1.5 rounded-full bg-[color:var(--surface-strong)] text-[color:var(--text-main)] border border-[color:var(--card-border)] font-medium"></span>
+                                class="analytics-pill self-start sm:self-auto"></span>
                         </div>
                         <div id="analyticsHeatmap" class="heatmap-grid"></div>
                         <div class="flex items-center justify-end mt-3">
@@ -826,12 +826,12 @@
 
                     <!-- Charts row -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                        <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
                             <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Reviews per day</h3>
                             <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Number of cards reviewed</p>
                             <div id="analyticsReviewCount" class="chart-scroll"></div>
                         </article>
-                        <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
                             <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Study time</h3>
                             <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Minutes spent reviewing</p>
                             <div id="analyticsReviewTime" class="chart-scroll"></div>
@@ -840,12 +840,12 @@
 
                     <!-- Breakdown row -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                        <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
                             <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Answer breakdown</h3>
                             <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">How you rated your recalls</p>
                             <div id="analyticsAnswerBreakdown"></div>
                         </article>
-                        <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
                             <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Study schedule</h3>
                             <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Reviews by hour of day</p>
                             <div id="analyticsHourlyBreakdown" class="chart-scroll"></div>
@@ -854,12 +854,12 @@
 
                     <!-- Distribution row -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                        <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
                             <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Interval distribution</h3>
                             <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Card scheduling spread</p>
                             <div id="analyticsIntervalDistribution"></div>
                         </article>
-                        <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
                             <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Difficulty spread</h3>
                             <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Card ease and difficulty factors</p>
                             <div id="analyticsEaseDifficulty"></div>
@@ -868,12 +868,12 @@
 
                     <!-- Summary row -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                        <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
                             <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Card status</h3>
                             <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Overview of your deck</p>
                             <div id="analyticsCardCounts"></div>
                         </article>
-                        <article class="card rounded-2xl p-4 md:p-5 shadow-soft">
+                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
                             <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">True retention</h3>
                             <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Success rate by interval</p>
                             <div id="analyticsTrueRetention"></div>
@@ -895,10 +895,10 @@
     </div>
 
     <div id="toast" role="status" aria-live="polite"
-        class="fixed z-[110] bottom-6 right-6 px-4 py-3 rounded-lg bg-charcoal dark:bg-zinc-800 text-white text-sm shadow-soft hidden opacity-0 transition-opacity duration-300">
+        class="fixed z-[110] bottom-6 right-6 px-4 py-3 rounded-md bg-[color:var(--badge-bg)] text-[color:var(--badge-text)] text-sm font-medium hidden opacity-0 transition-opacity duration-300 border border-[color:var(--card-border)]">
     </div>
     <div id="tooltip"
-        class="fixed z-[120] px-2.5 py-1.5 rounded-lg text-xs bg-charcoal dark:bg-zinc-800 text-white shadow-soft pointer-events-none hidden">
+        class="fixed z-[120] px-2.5 py-1.5 rounded-md text-xs font-mono bg-[color:var(--badge-bg)] text-[color:var(--badge-text)] pointer-events-none hidden border border-[color:var(--card-border)]">
     </div>
 
     <!-- Global loading overlay -->
@@ -1088,7 +1088,7 @@
                                 <div class="flex items-center justify-between">
                                     <p class="font-semibold text-charcoal dark:text-white text-sm">Configuration</p>
                                     <button id="openWorkerHelp"
-                                        class="px-3 py-1.5 rounded-full bg-oatmeal text-earth-metal text-xs border border-oatmeal-dark/70 flex items-center gap-2">
+                                        class="px-3 py-1.5 rounded-md bg-[color:var(--surface-strong)] text-[color:var(--text-main)] text-xs border border-[color:var(--card-border)] flex items-center gap-2 hover:bg-[color:var(--surface)] transition-all">
                                         <i data-lucide="code" class="w-4 h-4"></i> Worker code
                                     </button>
                                 </div>
