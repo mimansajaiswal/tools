@@ -91,20 +91,23 @@ export const richToMarkdown = (arr = []) => {
         if (!rt) return '';
         const a = rt.annotations || {};
         let s = '';
-        if (rt.type === 'equation' && rt.equation?.expression) {
+        const isEquation = rt.type === 'equation' && rt.equation?.expression;
+        if (isEquation) {
             s = `<span class="notion-equation">${rt.equation.expression}</span>`;
         } else {
             const t = rt.plain_text || '';
             if (!t) return '';
-            if (rt.href) s = `[${t}](${rt.href})`; else s = t;
+            const link = rt.href || rt.text?.link?.url || null;
+            if (link) s = `[${t}](${link})`; else s = t;
             if (a.code) s = '`' + s + '`';
-            if (a.bold) s = '**' + s + '**';
-            if (a.italic) s = '*' + s + '*';
-            if (a.strikethrough) s = '~~' + s + '~~';
-            if (a.underline) s = '__' + s + '__';
-            if (a.color && a.color !== 'default') {
-                s = `<span class="notion-color-${a.color.replace('_', '-')}">${s}</span>`;
-            }
+        }
+        if (!s) return '';
+        if (a.bold) s = '**' + s + '**';
+        if (a.italic) s = '*' + s + '*';
+        if (a.strikethrough) s = '~~' + s + '~~';
+        if (a.underline) s = '__' + s + '__';
+        if (a.color && a.color !== 'default') {
+            s = `<span class="notion-color-${a.color.replace(/_/g, '-')}">${s}</span>`;
         }
         return s;
     }).join('');
@@ -154,8 +157,9 @@ export const markdownToNotionRichText = (markdown) => {
     }
 
     let doc;
+    let parser;
     try {
-        const parser = new DOMParser();
+        parser = new DOMParser();
         doc = parser.parseFromString(`<div id="__rtroot__">${html}</div>`, 'text/html');
     } catch (e) {
         console.error('DOMParser failed; falling back to plain text:', e);
@@ -180,8 +184,8 @@ export const markdownToNotionRichText = (markdown) => {
         try {
             const u = new URL(candidate);
             const proto = (u.protocol || '').toLowerCase();
-            // Only keep HTTPS links for Notion properties (everything else is dropped).
-            if (proto !== 'https:') return null;
+            // Keep only allowed protocols to avoid Notion 400s for invalid links.
+            if (!['https:', 'http:', 'mailto:', 'tel:'].includes(proto)) return null;
             return u.toString();
         } catch (_) {
             return null;
@@ -221,6 +225,41 @@ export const markdownToNotionRichText = (markdown) => {
         return out;
     };
 
+    const parseInlineMarkdown = (input) => {
+        const s = (input ?? '').toString();
+        if (!s) return '';
+        if (typeof marked === 'undefined') return s;
+        try {
+            if (typeof marked.parseInline === 'function') {
+                return marked.parseInline(s, { gfm: true, breaks: true });
+            }
+            const blockHtml = marked.parse(s, { gfm: true, breaks: true });
+            return blockHtml.replace(/^<p>/i, '').replace(/<\/p>\s*$/i, '');
+        } catch (e) {
+            console.error('marked.parseInline failed; using raw inline HTML:', e);
+            return s;
+        }
+    };
+
+    const walkInlineHtml = (rawHtml, state) => {
+        const html = parseInlineMarkdown(rawHtml);
+        if (!html) return;
+        let inlineDoc;
+        try {
+            inlineDoc = parser.parseFromString(`<div id="__rtinline__">${html}</div>`, 'text/html');
+        } catch (e) {
+            console.error('Inline DOMParser failed; falling back to plain text:', e);
+            pushText(rawHtml.replace(/<[^>]+>/g, ''), state?.annotations, state?.link);
+            return;
+        }
+        const inlineRoot = inlineDoc.getElementById('__rtinline__');
+        if (!inlineRoot) {
+            pushText(rawHtml.replace(/<[^>]+>/g, ''), state?.annotations, state?.link);
+            return;
+        }
+        for (const child of Array.from(inlineRoot.childNodes)) walk(child, state);
+    };
+
     const walk = (node, state) => {
         if (!node) return;
         const curAnn = state?.annotations || null;
@@ -232,7 +271,8 @@ export const markdownToNotionRichText = (markdown) => {
             const val = node.nodeValue || '';
             // Marked inserts formatting whitespace/newlines between block elements.
             // We generate our own newlines for blocks, so ignore whitespace-only nodes to avoid double newlines.
-            if (!val || /^\s+$/.test(val)) return;
+            if (!val) return;
+            if (/^\s+$/.test(val) && /[\r\n]/.test(val)) return;
             pushText(val, curAnn, curLink);
             return;
         }
@@ -259,7 +299,11 @@ export const markdownToNotionRichText = (markdown) => {
         // Notion equation span
         if (tag === 'SPAN' && el.classList && el.classList.contains('notion-equation')) {
             const expr = (el.textContent || '').trim();
-            if (expr) runs.push({ type: 'equation', equation: { expression: expr } });
+            if (expr) {
+                const eq = { type: 'equation', equation: { expression: expr } };
+                if (curAnn && Object.keys(curAnn).length) eq.annotations = curAnn;
+                runs.push(eq);
+            }
             return;
         }
 
@@ -269,7 +313,7 @@ export const markdownToNotionRichText = (markdown) => {
             if (colorClass) {
                 const color = normalizeColor(colorClass);
                 const nextState = { ...state, annotations: mergeAnn(curAnn, { color }) };
-                for (const child of Array.from(el.childNodes)) walk(child, nextState);
+                walkInlineHtml(el.innerHTML || '', nextState);
                 return;
             }
         }
@@ -287,7 +331,7 @@ export const markdownToNotionRichText = (markdown) => {
         }
         if (tag === 'U') {
             const nextState = { ...state, annotations: mergeAnn(curAnn, { underline: true }) };
-            for (const child of Array.from(el.childNodes)) walk(child, nextState);
+            walkInlineHtml(el.innerHTML || '', nextState);
             return;
         }
         if (tag === 'DEL' || tag === 'S') {
