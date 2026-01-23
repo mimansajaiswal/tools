@@ -46,7 +46,8 @@ pet-tracker/
 ### Phase 2: Connection & Settings ✅ COMPLETE
 - [x] Cloudflare Worker proxy code modal
 - [x] Worker URL configuration
-- [x] Notion OAuth flow (popup auth, token exchange via worker)
+- [x] Notion OAuth flow (redirect-based via centralized OAuth handler)
+- [x] Multi-app OAuth redirect handling (uses `from` param for return URL)
 - [x] Manual token authentication
 - [x] Database/data source selection (scan + mapping UI)
 - [x] Schema verification (property display)
@@ -349,3 +350,34 @@ pet-tracker/
 **Remaining Items:**
 - Google Calendar OAuth sync (one-way push)
 - Accessibility improvements
+
+---
+
+### Session 6 - Multi-App OAuth Redirect Pattern
+**Date:** 2026-01-23
+
+**Completed:**
+- Refactored Notion OAuth to use redirect-based flow (matching PhotoChronicles pattern)
+  - Removed popup-based OAuth in favor of redirect-based approach
+  - Uses centralized OAuth handler at `notion-oauth-handler.mimansa-jaiswal.workers.dev`
+  - Added `from` parameter support for multi-app hosting on same domain
+  - Handler redirects back to originating app with `accessToken` query param
+- Updated js/app.js:
+  - Added `startNotionOAuth()` function with redirect flow
+  - Added `handleOAuthReturn()` to detect and store OAuth token from URL
+  - OAuth return handling in init() flow
+- Updated js/api.js:
+  - Removed popup-based `startOAuth()` function
+  - Added `getOAuthReturnUrl()` helper
+- Simplified OAuth UI in index.html:
+  - Removed OAuth Client ID field (handled by centralized handler)
+  - Simplified OAuth button and description
+- Updated specsheet.md:
+  - Added section 13.2.1 documenting multi-app OAuth redirect handling
+
+**Files Modified:**
+- js/app.js (OAuth redirect flow, handleOAuthReturn)
+- js/api.js (removed popup OAuth, added getOAuthReturnUrl)
+- index.html (simplified OAuth section)
+- specsheet.md (added 13.2.1 Multi-App OAuth Redirect Handling)
+- specsheet-implementation-tracker.md

@@ -47,6 +47,9 @@ const App = {
         // Initialize Lucide icons
         if (window.lucide) lucide.createIcons();
 
+        // Handle OAuth return (check for accessToken in URL)
+        const oauthReturned = App.handleOAuthReturn();
+
         // Check onboarding status
         if (!PetTracker.Settings.isOnboardingDone() || !PetTracker.Settings.isConnected()) {
             App.showOnboarding();
@@ -641,6 +644,55 @@ const App = {
         } catch (e) {
             console.error('[App] PWA install error:', e);
         }
+    },
+
+    /**
+     * Start Notion OAuth flow using centralized OAuth handler
+     * Uses redirect-based flow with return URL for multi-app support on same domain
+     */
+    startNotionOAuth: () => {
+        const workerUrl = document.getElementById('settingsWorkerUrl')?.value?.trim();
+        const proxyToken = document.getElementById('settingsProxyToken')?.value?.trim();
+
+        if (!workerUrl) {
+            PetTracker.UI.toast('Please enter Worker URL first', 'error');
+            return;
+        }
+
+        // Save current settings before redirect
+        PetTracker.Settings.set({ workerUrl, proxyToken });
+
+        // Build return URL with full path so OAuth handler knows where to redirect
+        const returnUrl = encodeURIComponent(new URL('index.html', window.location.href).toString());
+
+        // Redirect to centralized OAuth handler with return URL
+        window.location.href = `https://notion-oauth-handler.mimansa-jaiswal.workers.dev/auth/login?from=${returnUrl}`;
+    },
+
+    /**
+     * Handle OAuth return - check for accessToken in URL params
+     */
+    handleOAuthReturn: () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const newAuth = urlParams.get('accessToken');
+
+        if (newAuth) {
+            PetTracker.Settings.set({ notionToken: newAuth });
+
+            // Clean URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+
+            PetTracker.UI.toast('Connected to Notion!', 'success');
+
+            // Trigger data source scan if worker URL is configured
+            const settings = PetTracker.Settings.get();
+            if (settings.workerUrl) {
+                setTimeout(() => App.scanDataSources(), 500);
+            }
+
+            return true;
+        }
+        return false;
     }
 };
 

@@ -396,6 +396,15 @@ The prompt must be assembled at runtime with the user's actual configuration:
 - Instructions included: create Worker, paste code, deploy, optionally set `ALL_CORS_PROXY_MATCH_TOKEN` secret, copy Worker URL.
 - Same worker pattern as PhotoChronicles (CORS proxy with optional token auth).
 
+### 13.2.1 Multi-App OAuth Redirect Handling
+- Multiple Notion-connected apps are hosted on the same domain.
+- A **centralized OAuth handler** (`notion-oauth-handler.mimansa-jaiswal.workers.dev`) handles all Notion OAuth flows.
+- OAuth flow uses **redirect-based** approach (not popup) for reliable return handling.
+- Each app passes a `from` parameter with its full return URL (e.g., `?from=https://domain.com/pet-tracker/index.html`).
+- After successful authorization, the handler redirects back to the originating app with `?accessToken=...` in the URL.
+- The app checks for `accessToken` in URL params on init and saves it to settings.
+- URL is cleaned (accessToken removed) after token is stored to prevent token exposure in browser history.
+
 ### 13.3 Multi-User Model
 - Multi-user is achieved by **sharing the Notion database** with other users.
 - Each user connects individually with their own OAuth token or integration.

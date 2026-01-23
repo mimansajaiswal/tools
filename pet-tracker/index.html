@@ -63,8 +63,14 @@
 <body
     class="bg-white-linen text-charcoal font-sans min-h-screen flex flex-col md:flex-row overflow-hidden selection:bg-dull-purple selection:text-white-linen">
 
+    <!-- Skip Link -->
+    <a href="#mainContent"
+        class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[110] focus:bg-charcoal focus:text-white-linen focus:px-4 focus:py-2 focus:font-mono focus:text-xs focus:uppercase">
+        Skip to main content
+    </a>
+
     <!-- Toast Container -->
-    <div id="toastContainer"
+    <div id="toastContainer" role="status" aria-live="polite" aria-atomic="true"
         class="fixed top-4 right-4 z-[100] flex flex-col gap-2 w-full max-w-xs pointer-events-none"></div>
 
     <!-- Sidebar (Desktop) -->
@@ -88,35 +94,35 @@
         </div>
 
         <!-- Navigation -->
-        <nav class="flex-1 p-3 space-y-1 overflow-y-auto">
-            <button data-nav="dashboard"
+        <nav role="navigation" aria-label="Main navigation" class="flex-1 p-3 space-y-1 overflow-y-auto">
+            <button data-nav="dashboard" aria-current="page"
                 class="w-full flex items-center gap-3 px-3 py-2 text-left text-dull-purple hover:bg-oatmeal/30 transition-fast">
-                <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+                <i data-lucide="layout-dashboard" class="w-5 h-5" aria-hidden="true"></i>
                 <span class="font-mono text-xs uppercase">Dashboard</span>
             </button>
             <button data-nav="calendar"
                 class="w-full flex items-center gap-3 px-3 py-2 text-left text-earth-metal hover:bg-oatmeal/30 transition-fast">
-                <i data-lucide="calendar" class="w-5 h-5"></i>
+                <i data-lucide="calendar" class="w-5 h-5" aria-hidden="true"></i>
                 <span class="font-mono text-xs uppercase">Calendar</span>
             </button>
             <button data-nav="upcoming"
                 class="w-full flex items-center gap-3 px-3 py-2 text-left text-earth-metal hover:bg-oatmeal/30 transition-fast">
-                <i data-lucide="clock" class="w-5 h-5"></i>
+                <i data-lucide="clock" class="w-5 h-5" aria-hidden="true"></i>
                 <span class="font-mono text-xs uppercase">Upcoming</span>
             </button>
             <button data-nav="analytics"
                 class="w-full flex items-center gap-3 px-3 py-2 text-left text-earth-metal hover:bg-oatmeal/30 transition-fast">
-                <i data-lucide="bar-chart-3" class="w-5 h-5"></i>
+                <i data-lucide="bar-chart-3" class="w-5 h-5" aria-hidden="true"></i>
                 <span class="font-mono text-xs uppercase">Analytics</span>
             </button>
             <button data-nav="pets"
                 class="w-full flex items-center gap-3 px-3 py-2 text-left text-earth-metal hover:bg-oatmeal/30 transition-fast">
-                <i data-lucide="paw-print" class="w-5 h-5"></i>
+                <i data-lucide="paw-print" class="w-5 h-5" aria-hidden="true"></i>
                 <span class="font-mono text-xs uppercase">Pets</span>
             </button>
             <button data-nav="contacts"
                 class="w-full flex items-center gap-3 px-3 py-2 text-left text-earth-metal hover:bg-oatmeal/30 transition-fast">
-                <i data-lucide="users" class="w-5 h-5"></i>
+                <i data-lucide="users" class="w-5 h-5" aria-hidden="true"></i>
                 <span class="font-mono text-xs uppercase">Contacts</span>
             </button>
         </nav>
@@ -292,6 +298,7 @@
                 <button data-tab-group="settings" data-tab="database" class="tab-nav">Database</button>
                 <button data-tab-group="settings" data-tab="ai" class="tab-nav">AI Config</button>
                 <button data-tab-group="settings" data-tab="todoist" class="tab-nav">Todoist</button>
+                <button data-tab-group="settings" data-tab="gcal" class="tab-nav">Calendar</button>
                 <button data-tab-group="settings" data-tab="danger" class="tab-nav">Danger Zone</button>
             </div>
 
@@ -314,20 +321,13 @@
 
                     <!-- OAuth Section -->
                     <div class="border border-oatmeal p-4 space-y-3">
-                        <span class="font-mono text-xs uppercase text-earth-metal">Notion OAuth (Public
-                            Integrations)</span>
-                        <div>
-                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">OAuth Client
-                                ID</label>
-                            <input type="text" id="settingsOAuthClientId" class="input-field"
-                                placeholder="Your Notion OAuth client ID">
-                        </div>
+                        <span class="font-mono text-xs uppercase text-earth-metal">Notion OAuth (Recommended)</span>
                         <button onclick="App.startNotionOAuth()"
-                            class="btn-primary px-4 py-2 font-mono text-xs uppercase">
-                            <i data-lucide="external-link" class="w-4 h-4 inline mr-2"></i>Connect with Notion
+                            class="btn-primary w-full px-4 py-2 font-mono text-xs uppercase flex items-center justify-center gap-2">
+                            <i data-lucide="zap" class="w-4 h-4"></i>Connect with Notion
                         </button>
-                        <p class="text-xs text-earth-metal">For public integrations. Opens Notion auth in new window.
-                        </p>
+                        <p class="text-xs text-earth-metal">Securely connect via Notion's OAuth. Redirects to Notion
+                            for authorization.</p>
                     </div>
 
                     <!-- Divider -->
@@ -460,6 +460,58 @@
                         <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Todoist API Token</label>
                         <input type="password" id="settingsTodoistToken" class="input-field"
                             placeholder="Your Todoist token">
+                    </div>
+                </div>
+
+                <!-- Google Calendar Tab -->
+                <div data-tab-panel="settings" data-panel="gcal" class="hidden space-y-4">
+                    <div class="flex items-center gap-3">
+                        <input type="checkbox" id="settingsGcalEnabled" class="w-4 h-4">
+                        <label for="settingsGcalEnabled" class="font-mono text-xs uppercase text-charcoal">Enable
+                            Google Calendar Sync</label>
+                    </div>
+
+                    <!-- OAuth Section -->
+                    <div class="border border-oatmeal p-4 space-y-3">
+                        <span class="font-mono text-xs uppercase text-earth-metal">Google Account</span>
+                        <div id="gcalConnectionStatus" class="text-sm text-earth-metal">
+                            Not connected
+                        </div>
+                        <button onclick="App.startGoogleOAuth()"
+                            class="btn-primary w-full px-4 py-2 font-mono text-xs uppercase flex items-center justify-center gap-2">
+                            <i data-lucide="calendar" class="w-4 h-4"></i>Connect with Google
+                        </button>
+                        <p class="text-xs text-earth-metal">Securely connect via Google OAuth to sync events to your
+                            calendar.</p>
+                    </div>
+
+                    <!-- Calendar Selection -->
+                    <div id="gcalCalendarSelect" class="hidden">
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Target Calendar</label>
+                        <select id="settingsGcalCalendarId" class="select-field">
+                            <option value="">Select a calendar...</option>
+                        </select>
+                        <p class="text-xs text-earth-metal mt-1">Events will be pushed to this calendar</p>
+                    </div>
+
+                    <!-- Sync Mode -->
+                    <div>
+                        <span class="font-mono text-xs uppercase text-earth-metal block mb-2">Sync Mode</span>
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="radio" name="gcalSyncMode" value="push" checked class="w-4 h-4">
+                            <div>
+                                <span class="text-sm text-charcoal font-medium">One-way push</span>
+                                <p class="text-xs text-earth-metal">Push pet events to Google Calendar</p>
+                            </div>
+                        </label>
+                    </div>
+
+                    <!-- Disconnect Button -->
+                    <div id="gcalDisconnectSection" class="hidden">
+                        <button onclick="App.disconnectGoogleCalendar()"
+                            class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
+                            <i data-lucide="unlink" class="w-4 h-4 inline mr-2"></i>Disconnect Google Calendar
+                        </button>
                     </div>
                 </div>
 

@@ -146,66 +146,12 @@ const API = {
     },
 
     /**
-     * Start Notion OAuth flow
-     * Opens popup window for Notion authorization
+     * Build OAuth return URL for centralized handler
+     * The centralized OAuth handler at notion-oauth-handler.mimansa-jaiswal.workers.dev
+     * uses a 'from' parameter to redirect back to the correct app after auth
      */
-    startOAuth: () => {
-        const settings = PetTracker.Settings.get();
-        const { workerUrl, oauthClientId } = settings;
-
-        if (!workerUrl) throw new Error('Worker URL not configured');
-        if (!oauthClientId) throw new Error('OAuth Client ID not configured');
-
-        const cleanWorkerUrl = workerUrl.trim().replace(/\/$/, '');
-        const redirectUri = `${cleanWorkerUrl}/oauth/callback`;
-
-        const authUrl = new URL('https://api.notion.com/v1/oauth/authorize');
-        authUrl.searchParams.set('client_id', oauthClientId.trim());
-        authUrl.searchParams.set('redirect_uri', redirectUri);
-        authUrl.searchParams.set('response_type', 'code');
-        authUrl.searchParams.set('owner', 'user');
-
-        const width = 600;
-        const height = 700;
-        const left = (window.innerWidth - width) / 2 + window.screenX;
-        const top = (window.innerHeight - height) / 2 + window.screenY;
-
-        const popup = window.open(
-            authUrl.toString(),
-            'NotionOAuth',
-            `width=${width},height=${height},left=${left},top=${top},scrollbars=yes`
-        );
-
-        return new Promise((resolve, reject) => {
-            const handleMessage = (event) => {
-                if (event.origin !== new URL(cleanWorkerUrl).origin) return;
-
-                window.removeEventListener('message', handleMessage);
-
-                if (event.data?.type === 'NOTION_OAUTH_SUCCESS') {
-                    resolve(event.data.token);
-                } else if (event.data?.type === 'NOTION_OAUTH_ERROR') {
-                    reject(new Error(event.data.error || 'OAuth failed'));
-                }
-            };
-
-            window.addEventListener('message', handleMessage);
-
-            const checkClosed = setInterval(() => {
-                if (popup?.closed) {
-                    clearInterval(checkClosed);
-                    window.removeEventListener('message', handleMessage);
-                    reject(new Error('OAuth window closed'));
-                }
-            }, 500);
-
-            setTimeout(() => {
-                clearInterval(checkClosed);
-                window.removeEventListener('message', handleMessage);
-                if (!popup?.closed) popup?.close();
-                reject(new Error('OAuth timeout'));
-            }, 300000);
-        });
+    getOAuthReturnUrl: () => {
+        return new URL('index.html', window.location.href).toString();
     }
 };
 
