@@ -95,22 +95,21 @@
     <link rel="stylesheet" href="css/styles.css">
 </head>
 
-<body class="text-earth-metal font-sans min-h-[100dvh] preinit" data-theme="light" data-font="serif">
+<body class="text-main font-sans min-h-[100dvh] preinit" data-theme="light" data-font="serif">
     <div class="min-h-[100dvh] flex flex-col">
         <header
             class="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-5 md:px-10 pt-4 sm:pt-6 pb-3 sm:pb-4">
             <div class="flex items-center gap-2 sm:gap-3 min-w-0">
-                <div
-                    class="w-9 h-9 sm:w-12 sm:h-12 rounded-lg dash flex items-center justify-center shrink-0 border border-[color:var(--card-border)]">
-                    <i data-lucide="sparkles" class="w-5 h-5 sm:w-6 sm:h-6 text-dull-purple"></i>
+                <div class="w-9 h-9 sm:w-12 sm:h-12 rounded-lg dash flex items-center justify-center shrink-0">
+                    <img src="icons/icon-512.png" alt="GhostInk" class="w-8 h-8 sm:w-10 sm:h-10 object-contain">
                 </div>
                 <div class="min-w-0">
-                    <h1 class="font-display text-lg sm:text-2xl text-charcoal tracking-tight truncate">GhostInk</h1>
-                    <p class="text-xs sm:text-sm text-earth-metal/70 hidden sm:block">AI-enabled flashcards stored in
-                        Notion</p>
+                    <h1 class="font-display text-lg sm:text-2xl text-accent tracking-tight truncate">GhostInk</h1>
+                    <p class="text-xs sm:text-sm text-accent-2 hidden sm:block">AI-assisted spaced repetition
+                        for flashcards stored in Notion</p>
                 </div>
             </div>
-            <div class="flex items-center gap-1 sm:gap-1.5 md:gap-2 shrink-0">
+            <div class="flex items-center gap-1 sm:gap-1.5 md:gap-2 shrink-0 header-actions">
                 <div id="connectionBadge"
                     class="px-2.5 py-1 rounded text-[10px] sm:text-xs font-mono uppercase tracking-wide bg-[color:var(--surface-strong)] border border-[color:var(--card-border)] text-[color:var(--text-main)] hidden md:block">
                     Offline ready</div>
@@ -135,14 +134,15 @@
                 </div>
                 <button id="openShortcuts"
                     class="hidden sm:flex p-1.5 sm:p-2 rounded-md bg-[color:var(--surface)] border border-[color:var(--card-border)] hover:bg-[color:var(--surface-strong)] transition-all"
-                    title="Keyboard shortcuts" aria-label="Keyboard shortcuts">
+                    data-tip="Keyboard shortcuts" aria-label="Keyboard shortcuts">
                     <i data-lucide="keyboard" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
                 </button>
                 <div class="hidden sm:flex items-center gap-0.5 sm:gap-1 pill-toggle rounded-md px-1 sm:px-2 py-1">
-                    <button id="exportAnkiBtn" class="p-1 rounded-full" title="Export Anki" aria-label="Export to Anki">
+                    <button id="exportAnkiBtn" class="p-1 rounded-full" data-tip="Export Anki"
+                        aria-label="Export to Anki">
                         <i data-lucide="download" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
                     </button>
-                    <label class="p-1 rounded-full cursor-pointer" title="Import Anki" aria-label="Import from Anki">
+                    <label class="p-1 rounded-full cursor-pointer" data-tip="Import Anki" aria-label="Import from Anki">
                         <i data-lucide="upload-cloud" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
                         <input aria-label="Import .apkg" id="ankiImportInput" type="file" accept=".apkg,.json"
                             class="hidden">
@@ -150,18 +150,18 @@
                 </div>
                 <!-- Mobile more button -->
                 <button id="mobileMoreBtn"
-                    class="sm:hidden p-1.5 rounded-md bg-[color:var(--surface)] border border-[color:var(--card-border)]" title="More options"
-                    aria-label="More options">
+                    class="sm:hidden p-1.5 rounded-md bg-[color:var(--surface)] border border-[color:var(--card-border)]"
+                    data-tip="More options" aria-label="More options">
                     <i data-lucide="more-horizontal" class="w-4 h-4"></i>
                 </button>
                 <button id="syncNowBtn"
                     class="p-1.5 sm:p-2 rounded-md bg-[color:var(--badge-bg)] text-[color:var(--badge-text)] hover:opacity-80 transition-all"
-                    data-tip="Sync now" title="Sync" aria-label="Sync with Notion">
+                    data-tip="Sync now" aria-label="Sync with Notion">
                     <i data-lucide="refresh-ccw" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
                 </button>
                 <button id="openSettings"
                     class="p-1.5 sm:p-2 rounded-md bg-[color:var(--surface)] border border-[color:var(--card-border)] hover:bg-[color:var(--surface-strong)] transition-all"
-                    data-tip="Settings" title="Settings" aria-label="Open settings">
+                    data-tip="Settings" aria-label="Open settings">
                     <i data-lucide="settings" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
                 </button>
             </div>
@@ -183,14 +183,14 @@
                         aria-label="Monospace font"><span class="font-swatch-mono">Aa</span></button>
                 </div>
                 <div class="flex items-center gap-1 pill-toggle rounded-md px-2 py-1">
-                    <button id="exportAnkiBtnMobile" class="p-1 rounded-full" title="Export Anki"
+                    <button id="exportAnkiBtnMobile" class="p-1 rounded-full" data-tip="Export Anki"
                         aria-label="Export to Anki"><i data-lucide="download" class="w-4 h-4"></i></button>
-                    <label class="p-1 rounded-full cursor-pointer" title="Import Anki" aria-label="Import from Anki">
+                    <label class="p-1 rounded-full cursor-pointer" data-tip="Import Anki" aria-label="Import from Anki">
                         <i data-lucide="upload-cloud" class="w-4 h-4"></i>
                         <input aria-label="Import .apkg" id="ankiImportInputMobile" type="file" accept=".apkg,.json"
                             class="hidden">
                     </label>
-                    <button id="openShortcutsMobile" class="p-1 rounded-full" title="Keyboard shortcuts"
+                    <button id="openShortcutsMobile" class="p-1 rounded-full" data-tip="Keyboard shortcuts"
                         aria-label="Keyboard shortcuts"><i data-lucide="keyboard" class="w-4 h-4"></i></button>
                 </div>
             </div>
@@ -211,47 +211,46 @@
                 <!-- What is GhostInk Feature Card -->
                 <div
                     class="rounded-lg bg-[color:var(--surface)] border border-[color:var(--card-border)] p-4 text-left">
-                    <div class="flex items-center gap-2 text-dull-purple font-semibold mb-3">
+                    <div class="flex items-center gap-2 text-accent font-semibold mb-3">
                         <i data-lucide="info" class="w-4 h-4"></i>
                         <span class="text-sm">Features</span>
                     </div>
                     <div class="max-h-44 overflow-y-auto scroll-minimal pr-1">
-                        <div
-                            class="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-xs text-earth-metal/70 dark:text-white/60">
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-xs text-sub ">
                             <div class="flex items-center gap-2">
-                                <i data-lucide="eye" class="w-3.5 h-3.5 text-dull-purple shrink-0"></i>
+                                <i data-lucide="eye" class="w-3.5 h-3.5 text-accent shrink-0"></i>
                                 <span>Reveal mode</span>
                             </div>
                             <div class="flex items-center gap-2">
-                                <i data-lucide="bot" class="w-3.5 h-3.5 text-dull-purple shrink-0"></i>
+                                <i data-lucide="bot" class="w-3.5 h-3.5 text-accent shrink-0"></i>
                                 <span>AI answer judging</span>
                             </div>
                             <div class="flex items-center gap-2">
-                                <i data-lucide="brain" class="w-3.5 h-3.5 text-dull-purple shrink-0"></i>
+                                <i data-lucide="brain" class="w-3.5 h-3.5 text-accent shrink-0"></i>
                                 <span>SM-2 & FSRS v6</span>
                             </div>
                             <div class="flex items-center gap-2">
-                                <i data-lucide="mic" class="w-3.5 h-3.5 text-dull-purple shrink-0"></i>
+                                <i data-lucide="mic" class="w-3.5 h-3.5 text-accent shrink-0"></i>
                                 <span>Voice input</span>
                             </div>
                             <div class="flex items-center gap-2">
-                                <i data-lucide="layers" class="w-3.5 h-3.5 text-dull-purple shrink-0"></i>
+                                <i data-lucide="layers" class="w-3.5 h-3.5 text-accent shrink-0"></i>
                                 <span>Front-back & Cloze</span>
                             </div>
                             <div class="flex items-center gap-2">
-                                <i data-lucide="image" class="w-3.5 h-3.5 text-dull-purple shrink-0"></i>
+                                <i data-lucide="image" class="w-3.5 h-3.5 text-accent shrink-0"></i>
                                 <span>Media & LaTeX</span>
                             </div>
                             <div class="flex items-center gap-2">
-                                <i data-lucide="download" class="w-3.5 h-3.5 text-dull-purple shrink-0"></i>
+                                <i data-lucide="download" class="w-3.5 h-3.5 text-accent shrink-0"></i>
                                 <span>Anki import/export</span>
                             </div>
                             <div class="flex items-center gap-2">
-                                <i data-lucide="keyboard" class="w-3.5 h-3.5 text-dull-purple shrink-0"></i>
+                                <i data-lucide="keyboard" class="w-3.5 h-3.5 text-accent shrink-0"></i>
                                 <span>Keyboard shortcuts</span>
                             </div>
                             <div class="flex items-center gap-2">
-                                <i data-lucide="wifi-off" class="w-3.5 h-3.5 text-dull-purple shrink-0"></i>
+                                <i data-lucide="wifi-off" class="w-3.5 h-3.5 text-accent shrink-0"></i>
                                 <span>Offline PWA</span>
                             </div>
                         </div>
@@ -259,19 +258,18 @@
                 </div>
 
                 <div class="space-y-3">
-                    <p class="font-display text-xl text-charcoal leading-tight">AI-enabled flashcards stored in Notion
-                    </p>
-                    <p class="text-sm text-earth-metal/70 leading-relaxed">
+                    <p class="font-display text-xl text-main leading-tight">AI-assisted spaced repetition for
+                        flashcards stored in Notion</p>
+                    <p class="text-sm text-sub leading-relaxed">
                         Your cards live in Notion where you can see and edit them. Reveal answers like Anki, or
                         type/speak your answer and let AI check it against the ground truth.
                     </p>
-                    <p class="text-[11px] text-earth-metal/60 dark:text-white/60">
-                        Built by <a class="underline text-dull-purple dark:text-dull-purple"
-                            href="https://mimansajaiswal.github.io" target="_blank" rel="noopener noreferrer">Mimansa
-                            Jaiswal</a> · In the <a class="underline text-dull-purple dark:text-dull-purple"
+                    <p class="text-[11px] text-muted ">
+                        Built by <a class="underline text-accent " href="https://mimansajaiswal.github.io"
+                            target="_blank" rel="noopener noreferrer">Mimansa
+                            Jaiswal</a> · In the <a class="underline text-accent "
                             href="https://mimansajaiswal.github.io/tools/" target="_blank"
-                            rel="noopener noreferrer">Tools Made with LLMs</a> · Code: <a
-                            class="underline text-dull-purple dark:text-dull-purple"
+                            rel="noopener noreferrer">Tools Made with LLMs</a> · Code: <a class="underline text-accent "
                             href="https://github.com/mimansajaiswal/tools/tree/main/ghostink-flashcards" target="_blank"
                             rel="noopener noreferrer">ghostink-flashcards</a>
                     </p>
@@ -279,29 +277,29 @@
                 <div class="grid md:grid-cols-3 gap-3 text-sm text-left">
                     <div
                         class="rounded-lg bg-[color:var(--surface)] border border-[color:var(--card-border)] p-3 space-y-1">
-                        <div class="flex items-center gap-2 text-dull-purple font-semibold"><i data-lucide="copy"
+                        <div class="flex items-center gap-2 text-accent font-semibold"><i data-lucide="copy"
                                 class="w-4 h-4"></i>1. Template</div>
-                        <p class="text-earth-metal/70">Duplicate this <a
+                        <p class="text-sub">Duplicate this <a
                                 href="https://mimansajaiswal-embedded-dbs.notion.site/ghostink-template" target="_blank"
-                                rel="noopener noreferrer" class="underline text-dull-purple">Notion template</a>. Custom
+                                rel="noopener noreferrer" class="underline text-accent">Notion template</a>. Custom
                             DBs must match property names/options exactly (case-sensitive).</p>
                     </div>
                     <div
                         class="rounded-lg bg-[color:var(--surface)] border border-[color:var(--card-border)] p-3 space-y-1">
-                        <div class="flex items-center gap-2 text-dull-purple font-semibold"><i data-lucide="link"
+                        <div class="flex items-center gap-2 text-accent font-semibold"><i data-lucide="link"
                                 class="w-4 h-4"></i>2. Connect</div>
-                        <p class="text-earth-metal/70">Add worker URL, Notion token, and select your new databases.</p>
+                        <p class="text-sub">Add worker URL, Notion token, and select your new databases.</p>
                     </div>
                     <div
                         class="rounded-lg bg-[color:var(--surface)] border border-[color:var(--card-border)] p-3 space-y-1">
-                        <div class="flex items-center gap-2 text-dull-purple font-semibold"><i data-lucide="wand-2"
+                        <div class="flex items-center gap-2 text-accent font-semibold"><i data-lucide="wand-2"
                                 class="w-4 h-4"></i>3. Study</div>
-                        <p class="text-earth-metal/70">Sync and start reviewing flashcards.</p>
+                        <p class="text-sub">Sync and start reviewing flashcards.</p>
                     </div>
                 </div>
                 <div class="flex justify-center">
                     <button id="lockedOpenSettings"
-                        class="px-5 py-3 rounded-lg bg-dull-purple text-white text-sm hover:bg-dull-purple-hover transition-all flex items-center gap-2 whitespace-nowrap shadow-soft">
+                        class="px-5 py-3 rounded-lg bg-[color:var(--accent)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--accent-hover)] transition-all flex items-center gap-2 whitespace-nowrap shadow-soft">
                         <i data-lucide="settings" class="w-4 h-4"></i><span>Open settings</span>
                     </button>
                 </div>
@@ -314,19 +312,19 @@
                     <article class="card rounded-lg p-4 md:p-5 shadow-soft text-[color:var(--text-main)]">
                         <div class="flex items-center justify-between gap-2">
                             <div class="min-w-0">
-                                <h2 class="font-display text-base md:text-lg text-charcoal">Decks</h2>
-                                <p class="text-xs md:text-sm text-earth-metal/70 hidden sm:block">Click to select a deck
+                                <h2 class="font-display text-base md:text-lg text-main">Decks</h2>
+                                <p class="text-xs md:text-sm text-sub hidden sm:block">Click to select a deck
                                     and view its cards.</p>
                             </div>
                             <div class="flex items-center gap-2 shrink-0">
                                 <button id="refreshDecksBtn"
-                                    class="p-2 rounded-lg border border-oatmeal-dark/60 text-earth-metal hover:bg-oatmeal dark:hover:bg-white/5 flex items-center gap-2"
-                                    data-tooltip="Sync with Notion">
+                                    class="p-2 rounded-lg border border-card text-main hover:bg-surface-strong flex items-center gap-2"
+                                    data-tip="Sync with Notion">
                                     <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                                 </button>
                                 <button id="newDeckBtn"
-                                    class="p-2 md:px-3 md:py-2 rounded-lg bg-charcoal dark:bg-white/10 dark:border-white/10 dark:border text-white text-sm hover:bg-earth-metal dark:hover:bg-white/20 flex items-center gap-2"
-                                    data-tooltip="New deck">
+                                    class="p-2 md:px-3 md:py-2 rounded-lg bg-[color:var(--badge-bg)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--badge-bg-hover)] flex items-center gap-2"
+                                    data-tip="New deck">
                                     <i data-lucide="plus" class="w-4 h-4"></i>
                                     <span class="hidden md:inline">New deck</span>
                                 </button>
@@ -335,7 +333,7 @@
                         <!-- Deck search -->
                         <div class="mt-3">
                             <input id="libraryDeckSearch" type="text" placeholder="Search decks..." maxlength="100"
-                                class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dull-purple/40">
+                                class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dull-purple/40">
                         </div>
                         <div id="deckGrid"
                             class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-3 mt-3 max-h-[400px] sm:max-h-[400px] md:max-h-[240px] lg:max-h-[240px] overflow-y-auto scroll-minimal p-1">
@@ -346,18 +344,18 @@
                     <article id="cardsSection"
                         class="card rounded-lg p-4 md:p-5 shadow-soft text-[color:var(--text-main)]">
                         <div id="selectedDeckBar" class="flex items-center justify-between gap-2">
-                            <h2 class="font-display text-base md:text-lg text-charcoal truncate" id="selectedDeckName">
+                            <h2 class="font-display text-base md:text-lg text-main truncate" id="selectedDeckName">
                                 Select a deck above</h2>
                             <div class="flex items-center gap-1 md:gap-2 shrink-0">
                                 <button id="resetAlgorithmBtn"
                                     class="p-2 md:px-3 md:py-2 rounded-lg border border-red-300 text-red-600 text-sm hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20 flex items-center gap-2 hidden"
-                                    data-tooltip="Reset algorithm parameters">
+                                    data-tip="Reset algorithm parameters">
                                     <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
                                     <span class="hidden lg:inline">Reset Algorithm</span>
                                 </button>
                                 <button id="newCardBtn"
-                                    class="p-2 md:px-3 md:py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-dull-purple-hover transition-all flex items-center gap-2 hidden"
-                                    data-tooltip="New card">
+                                    class="p-2 md:px-3 md:py-2 rounded-lg bg-[color:var(--accent)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--accent-hover)] transition-all flex items-center gap-2 hidden"
+                                    data-tip="New card">
                                     <i data-lucide="plus-circle" class="w-4 h-4"></i>
                                     <span class="hidden md:inline">New card</span>
                                 </button>
@@ -369,13 +367,13 @@
                             <div class="mb-3">
                                 <input id="cardSearchInput" type="text" placeholder="Search cards by name..."
                                     maxlength="200"
-                                    class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dull-purple/40">
+                                    class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dull-purple/40">
                             </div>
                             <div id="cardsContainer"
                                 class="max-h-[350px] md:max-h-[400px] overflow-y-auto scroll-minimal">
                                 <table class="w-full text-xs md:text-sm">
-                                    <thead class="text-earth-metal/60 sticky top-0 bg-[color:var(--card-bg)] z-10">
-                                        <tr class="border-b border-oatmeal-dark/70">
+                                    <thead class="text-muted sticky top-0 bg-[color:var(--card-bg)] z-10">
+                                        <tr class="border-b border-card">
                                             <th class="py-2 text-left">Name</th>
                                             <th class="py-2 text-left hidden sm:table-cell">Type</th>
                                             <th class="py-2 text-left">Due</th>
@@ -387,7 +385,7 @@
                                 </table>
                             </div>
                             <div id="noCardsMessage"
-                                class="text-center py-6 md:py-8 text-earth-metal/60 text-xs md:text-sm hidden">
+                                class="text-center py-6 md:py-8 text-muted text-xs md:text-sm hidden">
                                 No cards in this deck yet. Click "New card" to add one.
                             </div>
                         </div>
@@ -403,21 +401,21 @@
                             class="hidden card rounded-lg p-4 md:p-5 shadow-soft text-[color:var(--text-main)]">
                             <div class="flex items-center justify-between gap-3">
                                 <div class="flex items-center gap-2">
-                                    <i data-lucide="book-open" class="w-5 h-5 text-dull-purple"></i>
+                                    <i data-lucide="book-open" class="w-5 h-5 text-accent"></i>
                                     <span id="sessionProgressText"
-                                        class="text-sm md:text-base text-charcoal font-medium">Session: 0/0</span>
+                                        class="text-sm md:text-base text-main font-medium">Session: 0/0</span>
                                 </div>
                                 <div id="previewBadge"
-                                    class="hidden text-[11px] px-2 py-1 rounded-lg bg-amber-100 text-amber-800 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-100 dark:border-amber-600/60">
+                                    class="hidden text-[11px] px-2 py-1 rounded-lg bg-accent-soft text-accent border border-[color:var(--accent)]/60">
                                     Preview mode: no scheduling changes
                                 </div>
                                 <button id="abandonSessionBtn"
-                                    class="flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg text-xs md:text-sm text-earth-metal/70 hover:text-muted-pink hover:bg-muted-pink/10 border border-oatmeal-dark/60 transition whitespace-nowrap">
+                                    class="flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg text-xs md:text-sm text-sub hover:text-accent-2 hover:bg-accent-2-soft border border-card transition whitespace-nowrap">
                                     <i data-lucide="square" class="w-3 h-3"></i>
                                     <span class="hidden md:inline">Stop Session</span>
                                     <span class="md:hidden">Stop</span>
                                     <kbd id="stopSessionHotkey"
-                                        class="hidden md:inline text-[10px] ml-1 px-1.5 py-0.5 rounded bg-dull-purple/10 text-dull-purple font-medium"></kbd>
+                                        class="hidden md:inline text-[10px] ml-1 px-1.5 py-0.5 rounded bg-accent-soft text-accent font-medium"></kbd>
                                 </button>
                             </div>
                         </div>
@@ -427,32 +425,32 @@
                             class="card rounded-lg p-4 md:p-5 shadow-soft text-[color:var(--text-main)]">
                             <div class="flex items-center justify-between gap-2 mb-3 md:mb-4">
                                 <div class="flex items-center gap-2 min-w-0">
-                                    <i data-lucide="settings-2" class="w-4 h-4 text-dull-purple shrink-0"></i>
-                                    <h2 class="font-display text-base md:text-lg text-charcoal truncate">Study Mode
+                                    <i data-lucide="settings-2" class="w-4 h-4 text-accent shrink-0"></i>
+                                    <h2 class="font-display text-base md:text-lg text-main truncate">Study Mode
                                         Settings</h2>
                                 </div>
                                 <button id="resetFilters"
-                                    class="text-xs text-dull-purple hover:underline hidden">Reset</button>
+                                    class="text-xs text-accent hover:underline hidden">Reset</button>
                             </div>
 
                             <!-- Always visible: Decks + Mode -->
                             <div class="space-y-3">
                                 <div>
-                                    <label class="text-xs text-earth-metal/70 block mb-2">Study from decks</label>
+                                    <label class="text-xs text-sub block mb-2">Study from decks</label>
                                     <div class="relative">
                                         <input id="deckSearchInput" type="text" placeholder="Search decks..."
                                             maxlength="100"
-                                            class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dull-purple/40">
+                                            class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dull-purple/40">
                                         <div id="deckDropdown"
-                                            class="hidden absolute left-0 right-0 z-50 w-full mt-1 max-h-48 overflow-y-auto rounded-lg border border-oatmeal-dark/60 bg-[color:var(--card-bg)] shadow-lg">
+                                            class="hidden absolute left-0 right-0 z-50 w-full mt-1 max-h-48 overflow-y-auto rounded-lg border border-card bg-[color:var(--card-bg)] shadow-lg">
                                         </div>
                                     </div>
                                     <div id="selectedDecksDisplay" class="flex flex-wrap gap-1.5 mt-2"></div>
                                 </div>
                                 <div>
-                                    <label class="text-xs text-earth-metal/70 block mb-2">Revision mode</label>
+                                    <label class="text-xs text-sub block mb-2">Revision mode</label>
                                     <select id="revisionMode"
-                                        class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
+                                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm">
                                         <option value="manual">Reveal</option>
                                         <option value="ai">AI</option>
                                     </select>
@@ -460,18 +458,18 @@
                                 <!-- Session controls -->
                                 <div id="sessionControls" class="pt-3">
                                     <button id="startSessionBtn"
-                                        class="w-full px-4 py-2.5 rounded-lg bg-dull-purple text-white text-sm hover:bg-dull-purple-hover transition-all transition flex items-center justify-center gap-2">
+                                        class="w-full px-4 py-2.5 rounded-lg bg-[color:var(--accent)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--accent-hover)] transition-all transition flex items-center justify-center gap-2">
                                         <i data-lucide="play" class="w-4 h-4"></i>
                                         <span>Start Study Session</span>
                                         <kbd id="startSessionHotkey"
-                                            class="hidden md:inline-block text-[10px] px-1.5 py-0.5 rounded bg-white/20 font-medium ml-1 font-sans"></kbd>
+                                            class="hidden md:inline-block text-[10px] px-1.5 py-0.5 rounded bg-surface-muted font-medium ml-1 font-sans"></kbd>
                                     </button>
                                 </div>
                             </div>
 
                             <!-- More options divider -->
                             <button id="toggleFilters"
-                                class="w-full flex items-center justify-center gap-2 mt-4 py-2 text-xs text-earth-metal/60 hover:text-earth-metal transition-colors">
+                                class="w-full flex items-center justify-center gap-2 mt-4 py-2 text-xs text-muted hover:text-main transition-colors">
                                 <span class="flex-1 h-px bg-[color:var(--card-border)]"></span>
                                 <span class="flex items-center gap-1">
                                     <span id="moreOptionsText">More options</span>
@@ -485,9 +483,9 @@
                                 <div class="grid grid-cols-2 gap-2 md:gap-3 text-xs md:text-sm">
                                     <!-- Card selection mode -->
                                     <div class="col-span-2">
-                                        <label class="text-xs text-earth-metal/70 block mb-2">Practice cards</label>
+                                        <label class="text-xs text-sub block mb-2">Practice cards</label>
                                         <select id="cardSelectionMode"
-                                            class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
+                                            class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm">
                                             <option value="due">Due cards only</option>
                                             <option value="all">All cards</option>
                                             <option value="cram">Cram (no scheduling)</option>
@@ -499,7 +497,7 @@
                                                 checked>
                                             <span>No scheduling changes (preview mode)</span>
                                         </label>
-                                        <p class="text-[11px] text-earth-metal/50 dark:text-white/60 mt-1">When on,
+                                        <p class="text-[11px] text-faint mt-1">When on,
                                             ratings won’t update
                                             due dates or algorithms.</p>
                                     </div>
@@ -516,13 +514,13 @@
                                         <span>Added today</span>
                                     </label>
                                     <div class="col-span-2">
-                                        <label class="text-xs text-earth-metal/70">Tags</label>
+                                        <label class="text-xs text-sub">Tags</label>
                                         <div class="relative">
                                             <input id="filterTagSearch" type="text" placeholder="Search tags"
                                                 maxlength="100"
-                                                class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
+                                                class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm">
                                             <div id="filterTagDropdown"
-                                                class="hidden absolute left-0 right-0 z-40 mt-1 max-h-44 overflow-y-auto rounded-lg border border-oatmeal-dark/60 bg-[color:var(--card-bg)] shadow-lg">
+                                                class="hidden absolute left-0 right-0 z-40 mt-1 max-h-44 overflow-y-auto rounded-lg border border-card bg-[color:var(--card-bg)] shadow-lg">
                                             </div>
                                         </div>
                                         <div id="filterTagSelected" class="flex flex-wrap gap-1.5 mt-2"></div>
@@ -540,9 +538,9 @@
                                         <span>Only marked</span>
                                     </label>
                                     <div class="col-span-2">
-                                        <label class="text-xs text-earth-metal/70">Card hierarchy</label>
+                                        <label class="text-xs text-sub">Card hierarchy</label>
                                         <select id="filterCardHierarchy"
-                                            class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
+                                            class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm">
                                             <option value="">All cards</option>
                                             <option value="parents">Cloze parents only</option>
                                             <option value="subitems">Sub-items only</option>
@@ -550,9 +548,9 @@
                                         </select>
                                     </div>
                                     <div class="col-span-2">
-                                        <label class="text-xs text-earth-metal/70">Flag</label>
+                                        <label class="text-xs text-sub">Flag</label>
                                         <select id="filterFlag"
-                                            class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
+                                            class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm">
                                             <option value="">All flags</option>
                                             <option value="Red">Red</option>
                                             <option value="Orange">Orange</option>
@@ -563,7 +561,7 @@
                                         </select>
                                     </div>
                                     <button id="resetFiltersMobile"
-                                        class="col-span-2 sm:hidden text-xs text-dull-purple hover:underline text-center py-2">Reset
+                                        class="col-span-2 sm:hidden text-xs text-accent hover:underline text-center py-2">Reset
                                         all filters</button>
                                 </div>
                             </div>
@@ -572,25 +570,23 @@
                         <article id="studyCardSection"
                             class="card rounded-lg p-4 md:p-5 shadow-soft text-[color:var(--text-main)] hidden">
                             <div class="flex items-center justify-between gap-2">
-                                <h2 class="font-display text-base md:text-lg text-charcoal">Study</h2>
+                                <h2 class="font-display text-base md:text-lg text-main">Study</h2>
                                 <div class="flex items-center gap-1">
-                                    <button id="markCardBtn"
-                                        class="p-1.5 rounded-lg hover:bg-oatmeal text-earth-metal/60"
+                                    <button id="markCardBtn" class="p-1.5 rounded-lg hover:bg-surface-strong text-muted"
                                         title="Mark card (M)">
                                         <i data-lucide="star" class="w-4 h-4"></i>
                                     </button>
-                                    <button id="flagCardBtn"
-                                        class="p-1.5 rounded-lg hover:bg-oatmeal text-earth-metal/60"
+                                    <button id="flagCardBtn" class="p-1.5 rounded-lg hover:bg-surface-strong text-muted"
                                         title="Flag card (F)">
                                         <i data-lucide="flag" class="w-4 h-4"></i>
                                     </button>
                                     <button id="addNoteBlock"
-                                        class="p-1.5 rounded-lg hover:bg-oatmeal text-dull-purple hidden"
+                                        class="p-1.5 rounded-lg hover:bg-surface-strong text-accent hidden"
                                         title="Add note to page">
                                         <i data-lucide="file-plus" class="w-4 h-4"></i>
                                     </button>
                                     <button id="copyCardContent"
-                                        class="p-1.5 rounded-lg hover:bg-oatmeal text-dull-purple hidden"
+                                        class="p-1.5 rounded-lg hover:bg-surface-strong text-accent hidden"
                                         title="Copy card content">
                                         <i data-lucide="clipboard" class="w-4 h-4"></i>
                                     </button>
@@ -606,10 +602,10 @@
                                 </div>
                                 <div class="space-y-2">
                                     <button id="revealBtn"
-                                        class="relative px-3 py-2.5 w-full rounded-lg bg-charcoal dark:bg-white/10 dark:border-white/10 dark:border text-white text-sm hover:bg-earth-metal dark:hover:bg-white/20">
+                                        class="relative px-3 py-2.5 w-full rounded-lg bg-[color:var(--badge-bg)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--badge-bg-hover)] ">
                                         Reveal
                                         <kbd
-                                            class="hidden md:inline-block absolute right-3 top-1/2 -translate-y-1/2 text-[10px] px-1.5 py-0.5 rounded bg-white/20 font-medium">␣</kbd>
+                                            class="hidden md:inline-block absolute right-3 top-1/2 -translate-y-1/2 text-[10px] px-1.5 py-0.5 rounded bg-surface-muted font-medium">␣</kbd>
                                     </button>
                                     <div id="aiControls" class="hidden space-y-2">
                                         <textarea id="aiAnswer" rows="3" placeholder="Type your answer..."
@@ -620,16 +616,16 @@
                                                 title="Record">
                                                 <i data-lucide="mic" class="w-4 h-4"></i>
                                                 <kbd id="micHotkey"
-                                                    class="hidden md:inline-block absolute right-2 top-1/2 -translate-y-1/2 text-[10px] px-1 py-0.5 rounded bg-white/20 text-earth-metal/60"></kbd>
+                                                    class="hidden md:inline-block absolute right-2 top-1/2 -translate-y-1/2 text-[10px] px-1 py-0.5 rounded bg-surface-muted text-muted"></kbd>
                                             </button>
                                             <button id="aiSubmit"
-                                                class="px-3 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-dull-purple-hover transition-all flex-1">
+                                                class="px-3 py-2 rounded-lg bg-[color:var(--accent)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--accent-hover)] transition-all flex-1">
                                                 Send <kbd id="aiSendHotkey"
-                                                    class="hidden md:inline-block text-[10px] px-1.5 py-0.5 rounded bg-white/20 font-medium ml-1 font-sans"></kbd>
+                                                    class="hidden md:inline-block text-[10px] px-1.5 py-0.5 rounded bg-surface-muted font-medium ml-1 font-sans"></kbd>
                                             </button>
                                         </div>
                                         <div id="aiFeedback"
-                                            class="md-content hidden text-sm text-earth-metal/80 dark:text-white/70 bg-[var(--surface)] dark:bg-white/5 border border-oatmeal-dark/40 dark:border-white/10 rounded-lg p-2">
+                                            class="md-content hidden text-sm text-sub-strong bg-[var(--surface)] border border-weak rounded-lg p-2">
                                         </div>
                                     </div>
                                 </div>
@@ -640,41 +636,41 @@
                                 <div id="studyControls">
                                     <div class="grid grid-cols-4 gap-1 md:gap-2">
                                         <button data-rate="Again" aria-label="Rate as Again (1)"
-                                            class="rate-btn relative px-1 md:px-2 py-2 rounded-lg bg-red-100 border border-red-300 text-red-700 text-[10px] md:text-xs hover:bg-red-200 dark:bg-red-900/30 dark:border-red-700 dark:text-red-200 dark:hover:bg-red-900/50 flex items-center justify-center gap-1">
+                                            class="rate-btn relative px-1 md:px-2 py-2 rounded-lg text-[10px] md:text-xs flex items-center justify-center gap-1">
                                             <i data-lucide="refresh-cw" class="w-3 h-3"></i>
                                             <span>Again</span>
                                             <kbd
-                                                class="hidden md:flex absolute -top-1.5 -right-1.5 w-4 h-4 items-center justify-center text-[8px] rounded bg-red-600 text-white font-medium shadow-sm">1</kbd>
+                                                class="hidden md:flex absolute -top-1.5 -right-1.5 w-4 h-4 items-center justify-center text-[8px] rounded bg-[color:var(--rating-again-bg)] text-[color:var(--rating-again-text)] font-medium shadow-sm">1</kbd>
                                         </button>
                                         <button data-rate="Hard" aria-label="Rate as Hard (2)"
-                                            class="rate-btn relative px-1 md:px-2 py-2 rounded-lg bg-orange-100 border border-orange-300 text-orange-700 text-[10px] md:text-xs hover:bg-orange-200 dark:bg-orange-900/30 dark:border-orange-700 dark:text-orange-200 dark:hover:bg-orange-900/50 flex items-center justify-center gap-1">
+                                            class="rate-btn relative px-1 md:px-2 py-2 rounded-lg text-[10px] md:text-xs flex items-center justify-center gap-1">
                                             <i data-lucide="alert-triangle" class="w-3 h-3"></i>
                                             <span>Hard</span>
                                             <kbd
-                                                class="hidden md:flex absolute -top-1.5 -right-1.5 w-4 h-4 items-center justify-center text-[8px] rounded bg-orange-500 text-white font-medium shadow-sm">2</kbd>
+                                                class="hidden md:flex absolute -top-1.5 -right-1.5 w-4 h-4 items-center justify-center text-[8px] rounded bg-[color:var(--rating-hard-bg)] text-[color:var(--rating-hard-text)] font-medium shadow-sm">2</kbd>
                                         </button>
                                         <button data-rate="Good" aria-label="Rate as Good (3)"
-                                            class="rate-btn relative px-1 md:px-2 py-2 rounded-lg bg-green-100 border border-green-300 text-green-700 text-[10px] md:text-xs hover:bg-green-200 dark:bg-green-900/30 dark:border-green-700 dark:text-green-200 dark:hover:bg-green-900/50 flex items-center justify-center gap-1">
+                                            class="rate-btn relative px-1 md:px-2 py-2 rounded-lg text-[10px] md:text-xs flex items-center justify-center gap-1">
                                             <i data-lucide="thumbs-up" class="w-3 h-3"></i>
                                             <span>Good</span>
                                             <kbd
-                                                class="hidden md:flex absolute -top-1.5 -right-1.5 w-4 h-4 items-center justify-center text-[8px] rounded bg-green-600 text-white font-medium shadow-sm">3</kbd>
+                                                class="hidden md:flex absolute -top-1.5 -right-1.5 w-4 h-4 items-center justify-center text-[8px] rounded bg-[color:var(--rating-good-bg)] text-[color:var(--rating-good-text)] font-medium shadow-sm">3</kbd>
                                         </button>
                                         <button data-rate="Easy" aria-label="Rate as Easy (4)"
-                                            class="rate-btn relative px-1 md:px-2 py-2 rounded-lg bg-blue-100 border border-blue-300 text-blue-700 text-[10px] md:text-xs hover:bg-blue-200 dark:bg-blue-900/30 dark:border-blue-700 dark:text-blue-200 dark:hover:bg-blue-900/50 flex items-center justify-center gap-1">
+                                            class="rate-btn relative px-1 md:px-2 py-2 rounded-lg text-[10px] md:text-xs flex items-center justify-center gap-1">
                                             <i data-lucide="zap" class="w-3 h-3"></i>
                                             <span>Easy</span>
                                             <kbd
-                                                class="hidden md:flex absolute -top-1.5 -right-1.5 w-4 h-4 items-center justify-center text-[8px] rounded bg-blue-600 text-white font-medium shadow-sm">4</kbd>
+                                                class="hidden md:flex absolute -top-1.5 -right-1.5 w-4 h-4 items-center justify-center text-[8px] rounded bg-[color:var(--rating-easy-bg)] text-[color:var(--rating-easy-text)] font-medium shadow-sm">4</kbd>
                                         </button>
                                     </div>
-                                    <div class="text-[10px] md:text-[11px] text-earth-metal/70 flex justify-end mt-2">
+                                    <div class="text-[10px] md:text-[11px] text-sub flex justify-end mt-2">
                                         <button id="skipCard"
-                                            class="px-2 py-1 rounded-lg border border-oatmeal-dark/50 text-dull-purple hover:bg-dull-purple/10 shrink-0 flex items-center gap-1">
+                                            class="px-2 py-1 rounded-lg border border-weak text-accent hover:bg-accent-soft shrink-0 flex items-center gap-1">
                                             <i data-lucide="square-slash" class="w-3 h-3"></i>
                                             <span>Skip</span>
                                             <kbd id="skipHotkey"
-                                                class="hidden md:inline text-[9px] ml-0.5 px-1 py-0.5 rounded bg-dull-purple/10 text-dull-purple font-medium">S</kbd>
+                                                class="hidden md:inline text-[9px] ml-0.5 px-1 py-0.5 rounded bg-accent-soft text-accent font-medium">S</kbd>
                                         </button>
                                     </div>
                                 </div>
@@ -741,15 +737,15 @@
                         <div id="notesSection"
                             class="rounded-lg border border-[color:var(--card-border)] p-3 md:p-4 bg-[color:var(--card-bg)] hidden">
                             <div class="flex items-center justify-between mb-2 md:mb-3">
-                                <span class="font-semibold text-charcoal text-sm md:text-base">Notes</span>
-                                <button id="editNotesBtn" class="p-1.5 rounded-lg hover:bg-oatmeal text-dull-purple"
+                                <span class="font-semibold text-main text-sm md:text-base">Notes</span>
+                                <button id="editNotesBtn" class="p-1.5 rounded-lg hover:bg-surface-strong text-accent"
                                     title="Edit notes">
                                     <i data-lucide="edit-2" class="w-4 h-4"></i>
                                 </button>
                             </div>
                             <div id="notesPreview"
                                 class="md-content prose prose-sm max-h-60 md:max-h-80 overflow-y-auto text-xs md:text-sm text-[color:var(--text-main)] scroll-minimal">
-                                <p class="text-earth-metal/60 text-xs md:text-sm">No notes for this card</p>
+                                <p class="text-muted text-xs md:text-sm">No notes for this card</p>
                             </div>
                         </div>
 
@@ -764,8 +760,10 @@
                     <article class="card rounded-lg p-4 md:p-5 shadow-soft">
                         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div>
-                                <h2 class="font-display text-base sm:text-lg md:text-xl text-[color:var(--text-main)]">Analytics</h2>
-                                <p class="text-xs sm:text-sm text-[color:var(--text-sub)] mt-0.5">Your learning progress and review patterns</p>
+                                <h2 class="font-display text-base sm:text-lg md:text-xl text-[color:var(--text-main)]">
+                                    Analytics</h2>
+                                <p class="text-xs sm:text-sm text-[color:var(--text-sub)] mt-0.5">Your learning progress
+                                    and review patterns</p>
                             </div>
                             <div class="flex flex-wrap items-center gap-2">
                                 <select id="analyticsDeckSelect"
@@ -804,11 +802,11 @@
                     <article class="card rounded-lg p-4 md:p-5 shadow-soft">
                         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
                             <div>
-                                <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Activity heatmap</h3>
+                                <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Activity
+                                    heatmap</h3>
                                 <p class="text-xs text-[color:var(--text-sub)] mt-0.5">Daily review activity</p>
                             </div>
-                            <span id="analyticsStreakBadge"
-                                class="analytics-pill self-start sm:self-auto"></span>
+                            <span id="analyticsStreakBadge" class="analytics-pill self-start sm:self-auto"></span>
                         </div>
                         <div id="analyticsHeatmap" class="heatmap-grid"></div>
                         <div class="flex items-center justify-end mt-3">
@@ -827,7 +825,8 @@
                     <!-- Charts row -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                         <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Reviews per day</h3>
+                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Reviews per day
+                            </h3>
                             <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Number of cards reviewed</p>
                             <div id="analyticsReviewCount" class="chart-scroll"></div>
                         </article>
@@ -841,12 +840,14 @@
                     <!-- Breakdown row -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                         <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Answer breakdown</h3>
+                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Answer breakdown
+                            </h3>
                             <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">How you rated your recalls</p>
                             <div id="analyticsAnswerBreakdown"></div>
                         </article>
                         <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Study schedule</h3>
+                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Study schedule
+                            </h3>
                             <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Reviews by hour of day</p>
                             <div id="analyticsHourlyBreakdown" class="chart-scroll"></div>
                         </article>
@@ -855,13 +856,16 @@
                     <!-- Distribution row -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                         <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Interval distribution</h3>
+                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Interval
+                                distribution</h3>
                             <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Card scheduling spread</p>
                             <div id="analyticsIntervalDistribution"></div>
                         </article>
                         <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Difficulty spread</h3>
-                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Card ease and difficulty factors</p>
+                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Difficulty
+                                spread</h3>
+                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Card ease and difficulty factors
+                            </p>
                             <div id="analyticsEaseDifficulty"></div>
                         </article>
                     </div>
@@ -874,7 +878,8 @@
                             <div id="analyticsCardCounts"></div>
                         </article>
                         <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">True retention</h3>
+                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">True retention
+                            </h3>
                             <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Success rate by interval</p>
                             <div id="analyticsTrueRetention"></div>
                         </article>
@@ -882,13 +887,11 @@
                 </div>
             </section>
         </main>
-        <footer id="footerAttribution"
-            class="hidden px-3 sm:px-5 md:px-10 pb-4 text-[11px] text-earth-metal/60 dark:text-white/60 text-center">
-            Built by <a class="underline text-dull-purple dark:text-dull-purple" href="https://mimansajaiswal.github.io"
-                target="_blank" rel="noopener noreferrer">Mimansa Jaiswal</a> · In the <a
-                class="underline text-dull-purple dark:text-dull-purple" href="https://mimansajaiswal.github.io/tools/"
-                target="_blank" rel="noopener noreferrer">Tools Made with LLMs</a> · Code: <a
-                class="underline text-dull-purple dark:text-dull-purple"
+        <footer id="footerAttribution" class="hidden px-3 sm:px-5 md:px-10 pb-4 text-[11px] text-muted text-center">
+            Built by <a class="underline text-accent " href="https://mimansajaiswal.github.io" target="_blank"
+                rel="noopener noreferrer">Mimansa Jaiswal</a> · In the <a class="underline text-accent "
+                href="https://mimansajaiswal.github.io/tools/" target="_blank" rel="noopener noreferrer">Tools Made with
+                LLMs</a> · Code: <a class="underline text-accent "
                 href="https://github.com/mimansajaiswal/tools/tree/main/ghostink-flashcards" target="_blank"
                 rel="noopener noreferrer">ghostink-flashcards</a>
         </footer>
@@ -903,71 +906,75 @@
 
     <!-- Global loading overlay -->
     <div id="loadingOverlay"
-        class="fixed inset-0 z-[130] bg-black/40 backdrop-blur-sm hidden items-center justify-center">
-        <div class="flex flex-col items-center gap-3 text-white text-center px-6">
-            <div class="h-12 w-12 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
+        class="fixed inset-0 z-[130] bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center">
+        <div class="flex flex-col items-center gap-3 text-[color:var(--badge-text)] text-center px-6">
+            <div
+                class="h-12 w-12 border-4 border-[color:var(--overlay-track)] border-t-[color:var(--overlay-text)] rounded-full animate-spin">
+            </div>
             <p id="loadingMessage" class="text-sm font-medium">Loading...</p>
-            <p class="text-xs text-white/80" id="loadingSubtext">Preparing your decks and cards.</p>
+            <p class="text-xs text-[color:var(--overlay-text-muted)]" id="loadingSubtext">Preparing your decks and
+                cards.</p>
             <div id="loadingProgressWrap" class="w-full max-w-xs hidden">
-                <div class="w-full h-2 bg-white/20 rounded-full overflow-hidden">
-                    <div id="loadingProgressBar" class="h-2 bg-dull-purple w-0 transition-all duration-300"></div>
+                <div class="w-full h-2 bg-surface-muted rounded-full overflow-hidden">
+                    <div id="loadingProgressBar" class="h-2 bg-[color:var(--accent)] w-0 transition-all duration-300">
+                    </div>
                 </div>
-                <p id="loadingProgressText" class="text-[11px] text-white/80 mt-1">0%</p>
+                <p id="loadingProgressText" class="text-[11px] text-[color:var(--overlay-text-muted)] mt-1">0%</p>
             </div>
             <button id="loadingCancelBtn"
-                class="hidden mt-2 px-4 py-2 text-xs bg-white/10 hover:bg-white/20 rounded-lg transition-colors">
+                class="hidden mt-2 px-4 py-2 text-xs bg-surface-muted hover:bg-surface-muted rounded-lg transition-colors">
                 Cancel
             </button>
         </div>
     </div>
 
     <div id="confirmModal" role="dialog" aria-modal="true" aria-labelledby="confirmModalTitle"
-        class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4">
-        <div class="card rounded-2xl p-5 w-full max-w-sm shadow-soft">
-            <p id="confirmModalTitle" class="text-charcoal dark:text-white font-display text-lg mb-2">Confirm delete</p>
-            <p class="text-sm text-earth-metal/70 dark:text-white/70">This removes it locally and syncs deletion to
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="card rounded-lg p-5 w-full max-w-sm shadow-soft">
+            <p id="confirmModalTitle" class="text-main font-display text-lg mb-2">Confirm delete</p>
+            <p class="text-sm text-sub ">This removes it locally and syncs deletion to
                 Notion.</p>
             <div class="flex justify-end gap-2 mt-4">
                 <button id="cancelDelete"
-                    class="px-3 py-2 rounded-lg bg-white-linen border border-oatmeal-dark/70 text-earth-metal dark:text-white text-sm dark:bg-zinc-800 dark:border-white/10 dark:hover:bg-zinc-700">Cancel</button>
+                    class="px-3 py-2 rounded-lg bg-surface border border-card text-main text-sm hover:bg-[color:var(--control-hover)]">Cancel</button>
                 <button id="confirmDelete"
-                    class="px-3 py-2 rounded-lg bg-muted-pink text-white text-sm hover:bg-muted-pink-hover transition-all">Delete</button>
+                    class="px-3 py-2 rounded-lg bg-[color:var(--accent-2)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--accent-2-hover)] transition-all">Delete</button>
             </div>
         </div>
     </div>
 
     <!-- Reset Algorithm Confirmation Modal -->
     <div id="resetAlgorithmModal" role="dialog" aria-modal="true" aria-labelledby="resetAlgorithmTitle"
-        class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
-        <div class="card rounded-2xl p-5 w-full max-w-md shadow-soft">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="card rounded-lg p-5 w-full max-w-md shadow-soft">
             <div class="flex items-center gap-3 mb-3">
                 <div class="p-2 rounded-full bg-red-100 dark:bg-red-900/40">
                     <i data-lucide="alert-triangle" class="w-5 h-5 text-red-600"></i>
                 </div>
-                <h3 id="resetAlgorithmTitle" class="text-charcoal font-display text-lg">Reset Algorithm Parameters</h3>
+                <h3 id="resetAlgorithmTitle" class="text-main font-display text-lg">Reset Algorithm Parameters</h3>
             </div>
-            <div class="space-y-3 text-sm text-earth-metal/80 dark:text-white/75">
+            <div class="space-y-3 text-sm text-sub-strong ">
                 <p>This will reset <strong>all spaced repetition data</strong> for every card in <span
-                        id="resetDeckName" class="font-semibold text-charcoal">this deck</span>:</p>
-                <ul class="list-disc list-inside space-y-1 text-earth-metal/70 ml-2">
+                        id="resetDeckName" class="font-semibold text-main">this deck</span>:</p>
+                <ul class="list-disc list-inside space-y-1 text-sub ml-2">
                     <li>Due dates will be cleared</li>
                     <li>Ease factors, intervals, and stability will reset</li>
                     <li>Review history will be preserved</li>
                     <li>Cards will appear as new again</li>
                 </ul>
                 <div
-                    class="p-3 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-900/30 dark:border-amber-600/60 flex items-start gap-2">
-                    <i data-lucide="cloud-upload" class="w-4 h-4 text-amber-600 mt-0.5 shrink-0"></i>
-                    <p class="text-amber-800 dark:text-amber-100 text-xs">These changes will be synced to Notion. This
+                    class="p-3 rounded-lg bg-accent-2-soft border border-[color:var(--accent-2)]/60 flex items-start gap-2">
+                    <i data-lucide="cloud-upload" class="w-4 h-4 text-accent-2 mt-0.5 shrink-0"></i>
+                    <p class="text-sub text-xs">These changes will be synced to Notion. This
                         action cannot be
                         undone.</p>
                 </div>
                 <div id="resetProgressContainer" class="hidden mt-4 space-y-1">
-                    <div class="flex justify-between text-xs text-earth-metal/70 dark:text-white/70">
+                    <div class="flex justify-between text-xs text-sub ">
                         <span id="resetProgressText">Resetting...</span>
                         <span id="resetProgressPercent">0%</span>
                     </div>
-                    <div class="h-1.5 bg-oatmeal-dark/30 dark:bg-white/10 rounded-full overflow-hidden">
+                    <div class="h-1.5 bg-surface-muted rounded-full overflow-hidden">
                         <div id="resetProgressBar" class="h-full bg-red-500 transition-all duration-300"
                             style="width: 0%"></div>
                     </div>
@@ -975,9 +982,9 @@
             </div>
             <div class="flex justify-end gap-2 mt-5">
                 <button id="cancelResetAlgorithm"
-                    class="px-4 py-2 rounded-lg bg-white-linen border border-oatmeal-dark/70 text-earth-metal text-sm hover:bg-oatmeal">Cancel</button>
+                    class="px-4 py-2 rounded-lg bg-surface border border-card text-main text-sm hover:bg-surface-strong">Cancel</button>
                 <button id="confirmResetAlgorithm"
-                    class="px-4 py-2 rounded-lg bg-red-600 text-white text-sm hover:bg-red-700 flex items-center gap-2">
+                    class="px-4 py-2 rounded-lg bg-red-600 text-[color:var(--badge-text)] text-sm hover:bg-red-700 flex items-center gap-2">
                     <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
                     Reset All Cards
                 </button>
@@ -987,43 +994,40 @@
 
     <!-- Settings -->
     <div id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"
-        class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4">
-        <div id="settingsCard" class="card rounded-2xl p-5 w-full max-w-3xl shadow-soft max-h-[90vh] overflow-y-auto">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4">
+        <div id="settingsCard" class="card rounded-lg p-5 w-full max-w-3xl shadow-soft max-h-[90vh] overflow-y-auto">
             <div class="sticky top-[-20px] pt-[20px] -mt-[20px] z-20 bg-[color:var(--surface)] pb-2 space-y-3">
                 <div class="flex items-center justify-between">
-                    <h3 id="settingsTitle" class="font-display text-lg text-charcoal">Settings</h3>
+                    <h3 id="settingsTitle" class="font-display text-lg text-main">Settings</h3>
                     <div class="flex items-center gap-2">
                         <button id="saveSettings"
-                            class="px-3 py-1.5 rounded-lg bg-dull-purple text-white text-sm hover:bg-dull-purple-hover transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-dull-purple">Save</button>
-                        <button id="closeSettings" aria-label="Close settings"
-                            class="text-earth-metal/60 hover:text-charcoal"><i data-lucide="x"
-                                class="w-5 h-5"></i></button>
+                            class="px-3 py-1.5 rounded-lg bg-[color:var(--accent)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--accent-hover)] transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-[color:var(--accent)]">Save</button>
+                        <button id="closeSettings" aria-label="Close settings" class="text-muted hover:text-main"><i
+                                data-lucide="x" class="w-5 h-5"></i></button>
                     </div>
                 </div>
                 <!-- Combined Sticky Header: Status + Vault -->
                 <div class="space-y-3">
                     <!-- Status bar -->
-                    <div
-                        class="rounded-lg border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-[color:var(--surface-strong)]">
+                    <div class="rounded-lg border border-card p-3 bg-[color:var(--surface-strong)]">
                         <div class="flex items-center justify-between mb-2">
                             <div class="flex items-center gap-2">
-                                <i data-lucide="shield-check"
-                                    class="w-4 h-4 text-dull-purple dark:text-dull-purple"></i>
-                                <p class="font-semibold text-charcoal dark:text-white text-sm">Status</p>
+                                <i data-lucide="shield-check" class="w-4 h-4 text-accent "></i>
+                                <p class="font-semibold text-main text-sm">Status</p>
                             </div>
                             <div id="q2syncIndicator"
-                                class="hidden items-center gap-1.5 px-2 py-0.5 rounded bg-dull-purple/10 border border-dull-purple/20">
+                                class="hidden items-center gap-1.5 px-2 py-0.5 rounded bg-accent-soft border border-[color:var(--accent)]/20">
                                 <span class="relative flex h-1.5 w-1.5">
                                     <span
                                         class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[color:var(--dull-purple)] opacity-75"></span>
                                     <span
                                         class="relative inline-flex rounded-full h-1.5 w-1.5 bg-[color:var(--dull-purple)]"></span>
                                 </span>
-                                <span class="font-mono text-[10px] font-medium text-dull-purple"><span
+                                <span class="font-mono text-[10px] font-medium text-accent"><span
                                         id="q2syncCount">0</span> items in q2sync</span>
                             </div>
                         </div>
-                        <div class="flex flex-wrap gap-4 text-xs text-earth-metal/80 dark:text-white/70">
+                        <div class="flex flex-wrap gap-4 text-xs text-sub-strong ">
                             <span id="statusWorker">Worker: missing</span>
                             <span id="statusAuth">Auth: missing</span>
                             <span id="statusSources">Sources: missing</span>
@@ -1031,42 +1035,34 @@
                     </div>
                     <!-- Offline vault (shown only when setup) -->
                     <div id="vaultStatusSection" class="hidden">
-                        <div
-                            class="rounded-lg border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-white-linen dark:bg-white/5">
+                        <div class="rounded-lg border border-card p-3 bg-surface ">
                             <div class="flex items-center gap-2">
-                                <i data-lucide="database" class="w-4 h-4 text-dull-purple dark:text-dull-purple"></i>
-                                <p class="font-semibold text-charcoal dark:text-white text-sm">Offline vault</p>
+                                <i data-lucide="database" class="w-4 h-4 text-accent "></i>
+                                <p class="font-semibold text-main text-sm">Offline vault</p>
                             </div>
                             <div class="mt-3 grid grid-cols-2 gap-3 text-sm">
-                                <div class="rounded-lg bg-oatmeal dark:bg-white/10 p-3">
-                                    <p
-                                        class="text-earth-metal/60 dark:text-white/60 text-[10px] uppercase tracking-wider font-semibold">
+                                <div class="rounded-lg bg-surface-strong p-3">
+                                    <p class="text-muted text-[10px] uppercase tracking-wider font-semibold">
                                         Decks cached</p>
-                                    <p id="deckCount" class="text-xl font-semibold text-charcoal dark:text-white">0</p>
+                                    <p id="deckCount" class="text-xl font-semibold text-main ">0</p>
                                 </div>
-                                <div class="rounded-lg bg-oatmeal dark:bg-white/10 p-3">
-                                    <p
-                                        class="text-earth-metal/60 dark:text-white/60 text-[10px] uppercase tracking-wider font-semibold">
+                                <div class="rounded-lg bg-surface-strong p-3">
+                                    <p class="text-muted text-[10px] uppercase tracking-wider font-semibold">
                                         Cards cached</p>
-                                    <p id="cardCount" class="text-xl font-semibold text-charcoal dark:text-white">0</p>
+                                    <p id="cardCount" class="text-xl font-semibold text-main ">0</p>
                                 </div>
-                                <div
-                                    class="rounded-lg bg-white-linen dark:bg-white/10 p-3 border border-oatmeal-dark/40">
-                                    <p
-                                        class="text-earth-metal/60 dark:text-white/60 text-[10px] uppercase tracking-wider font-semibold">
+                                <div class="rounded-lg bg-surface p-3 border border-weak">
+                                    <p class="text-muted text-[10px] uppercase tracking-wider font-semibold">
                                         Pending sync</p>
-                                    <p id="queueCount" class="text-xl font-semibold text-charcoal dark:text-white">0</p>
+                                    <p id="queueCount" class="text-xl font-semibold text-main ">0</p>
                                 </div>
-                                <div
-                                    class="rounded-lg bg-white-linen dark:bg-white/10 p-3 border border-oatmeal-dark/40">
-                                    <p
-                                        class="text-earth-metal/60 dark:text-white/60 text-[10px] uppercase tracking-wider font-semibold">
+                                <div class="rounded-lg bg-surface p-3 border border-weak">
+                                    <p class="text-muted text-[10px] uppercase tracking-wider font-semibold">
                                         Last sync</p>
-                                    <p id="lastSync"
-                                        class="text-sm font-semibold text-charcoal dark:text-white truncate mt-1">—</p>
+                                    <p id="lastSync" class="text-sm font-semibold text-main truncate mt-1">—</p>
                                 </div>
                             </div>
-                            <p class="mt-3 text-[10px] text-earth-metal/60 dark:text-white/60">IndexedDB holds all
+                            <p class="mt-3 text-[10px] text-muted ">IndexedDB holds all
                                 decks/cards/FSRS/notes for offline-first use.</p>
                         </div>
                     </div>
@@ -1077,36 +1073,38 @@
                     <!-- Worker Proxy Accordion -->
                     <details id="workerSettingsDetails" class="group" open>
                         <summary
-                            class="flex items-center gap-2 font-display text-base text-charcoal dark:text-white cursor-pointer select-none py-1 mb-2 hover:text-dull-purple transition-colors list-none outline-none">
+                            class="flex items-center gap-2 font-display text-base text-main cursor-pointer select-none py-1 mb-2 hover:text-accent transition-colors list-none outline-none">
                             <i data-lucide="chevron-right"
                                 class="w-4 h-4 transition-transform group-open:rotate-90"></i>
                             <span>Worker Proxy</span>
                         </summary>
-                        <div class="space-y-4 pl-2 border-l-2 border-oatmeal-dark/10 dark:border-white/5 ml-1.5">
-                            <div
-                                class="rounded-lg border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-white-linen dark:bg-white/5">
+                        <div class="space-y-4 pl-2 border-l-2 border-card/10 ml-1.5">
+                            <div class="rounded-lg border border-card p-3 bg-surface ">
                                 <div class="flex items-center justify-between">
-                                    <p class="font-semibold text-charcoal dark:text-white text-sm">Configuration</p>
+                                    <p class="font-semibold text-main text-sm">Configuration</p>
                                     <button id="openWorkerHelp"
                                         class="px-3 py-1.5 rounded-md bg-[color:var(--surface-strong)] text-[color:var(--text-main)] text-xs border border-[color:var(--card-border)] flex items-center gap-2 hover:bg-[color:var(--surface)] transition-all">
                                         <i data-lucide="code" class="w-4 h-4"></i> Worker code
                                     </button>
                                 </div>
-                                <p class="text-xs text-earth-metal/70 dark:text-white/70 mt-1">Add Cloudflare Worker URL
+                                <p class="text-xs text-sub mt-1">Add Cloudflare Worker URL
                                     even if you plan to sign in with Notion.</p>
                             </div>
                             <div>
-                                <label class="text-xs text-earth-metal/70">Cloudflare Worker URL</label>
+                                <label class="text-xs text-sub">Cloudflare Worker URL</label>
                                 <input id="settingWorkerUrl" type="text" placeholder="https://your-proxy.workers.dev"
-                                    class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
+                                    class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2">
                             </div>
                             <form autocomplete="off" onsubmit="return false;">
-                                <label class="text-xs text-earth-metal/70">Proxy token (optional)</label>
-                                <input id="settingProxyToken" type="password" autocomplete="new-password" placeholder="ALL_CORS_PROXY_MATCH_TOKEN"
-                                    class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
+                                <input type="text" name="username" autocomplete="username" class="sr-only" tabindex="-1"
+                                    aria-hidden="true">
+                                <label class="text-xs text-sub">Proxy token (optional)</label>
+                                <input id="settingProxyToken" type="password" autocomplete="new-password"
+                                    placeholder="ALL_CORS_PROXY_MATCH_TOKEN"
+                                    class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2">
                             </form>
                             <button id="verifyWorker"
-                                class="px-3 py-2 rounded-lg bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 w-full">Verify
+                                class="px-3 py-2 rounded-lg bg-surface-strong text-main text-sm border border-card w-full">Verify
                                 worker</button>
                         </div>
                     </details>
@@ -1114,81 +1112,84 @@
                     <!-- Notion Integration Accordion -->
                     <details id="notionSettingsDetails" class="group" open>
                         <summary
-                            class="flex items-center gap-2 font-display text-base text-charcoal dark:text-white cursor-pointer select-none py-1 mb-2 hover:text-dull-purple transition-colors list-none outline-none">
+                            class="flex items-center gap-2 font-display text-base text-main cursor-pointer select-none py-1 mb-2 hover:text-accent transition-colors list-none outline-none">
                             <i data-lucide="chevron-right"
                                 class="w-4 h-4 transition-transform group-open:rotate-90"></i>
                             <span>Notion Integration</span>
                         </summary>
-                        <div class="space-y-4 pl-2 border-l-2 border-oatmeal-dark/10 dark:border-white/5 ml-1.5">
-                            <div class="text-sm text-earth-metal/70 dark:text-white/70 mb-2">
+                        <div class="space-y-4 pl-2 border-l-2 border-card/10 ml-1.5">
+                            <div class="text-sm text-sub mb-2">
                                 Please duplicate this <a
                                     href="https://mimansajaiswal-embedded-dbs.notion.site/ghostink-template"
                                     target="_blank" rel="noopener noreferrer"
-                                    class="text-dull-purple hover:underline font-medium inline-flex items-center gap-0.5 align-baseline">Template</a><br>
-                                <div class="text-xs text-earth-metal/40 dark:text-white/40 mb-2">
+                                    class="text-accent hover:underline font-medium inline-flex items-center gap-0.5 align-baseline">Template</a><br>
+                                <div class="text-xs text-fainter mb-2">
                                     If using custom, ensure all property names and options match exactly
                                     (case-sensitive); extra properties are allowed.
                                 </div>
                             </div>
                             <form autocomplete="off" onsubmit="return false;">
-                                <label class="text-xs text-earth-metal/70">Notion integration secret (instead of
+                                <input type="text" name="username" autocomplete="username" class="sr-only" tabindex="-1"
+                                    aria-hidden="true">
+                                <label class="text-xs text-sub">Notion integration secret (instead of
                                     OAuth)</label>
-                                <input id="settingAuthToken" type="password" autocomplete="new-password" placeholder="secret_..."
-                                    class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed">
+                                <input id="settingAuthToken" type="password" autocomplete="new-password"
+                                    placeholder="secret_..."
+                                    class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed">
                             </form>
                             <button id="verifyAuth"
-                                class="px-3 py-2 rounded-lg bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 w-full disabled:opacity-60 disabled:cursor-not-allowed">Verify
+                                class="px-3 py-2 rounded-lg bg-surface-strong text-main text-sm border border-card w-full disabled:opacity-60 disabled:cursor-not-allowed">Verify
                                 Notion token</button>
                             <button id="oauthBtn"
-                                class="w-full px-3 py-2 rounded-lg border border-dull-purple text-dull-purple text-sm hover:bg-oatmeal flex items-center gap-2 justify-center disabled:opacity-60 disabled:cursor-not-allowed">
+                                class="w-full px-3 py-2 rounded-lg border border-[color:var(--accent)] text-accent text-sm hover:bg-surface-strong flex items-center gap-2 justify-center disabled:opacity-60 disabled:cursor-not-allowed">
                                 <i data-lucide="log-in" class="w-4 h-4"></i>Sign in with Notion
                             </button>
                             <div>
-                                <label class="text-xs text-earth-metal/60">Decks source</label>
+                                <label class="text-xs text-muted">Decks source</label>
                                 <select id="deckSourceSelect" disabled
-                                    class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"></select>
+                                    class="w-full rounded-lg border border-card bg-[var(--surface)] px-2 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"></select>
                             </div>
                             <div>
-                                <label class="text-xs text-earth-metal/60">Cards source</label>
+                                <label class="text-xs text-muted">Cards source</label>
                                 <select id="cardSourceSelect" disabled
-                                    class="w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"></select>
+                                    class="w-full rounded-lg border border-card bg-[var(--surface)] px-2 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"></select>
                             </div>
                             <div class="flex gap-2">
                                 <button id="scanSources" disabled
-                                    class="w-1/3 px-3 py-2 rounded-lg bg-charcoal dark:bg-white/10 dark:border-white/10 dark:border text-white text-sm hover:bg-earth-metal dark:hover:bg-white/20 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-charcoal">Scan</button>
+                                    class="w-1/3 px-3 py-2 rounded-lg bg-[color:var(--badge-bg)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--badge-bg-hover)] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-[color:var(--badge-bg)]">Scan</button>
                                 <button id="saveSourcesChoice" disabled
-                                    class="w-2/3 px-3 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-dull-purple-hover transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                                    class="w-2/3 px-3 py-2 rounded-lg bg-[color:var(--accent)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--accent-hover)] transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                                     <i data-lucide="save" class="w-4 h-4"></i> Save selection
                                 </button>
                             </div>
-                            <div class="w-full h-2 bg-oatmeal dark:bg-white/10 rounded-full overflow-hidden">
-                                <div id="syncProgress" class="h-2 bg-dull-purple w-0 transition-all duration-500"></div>
+                            <div class="w-full h-2 bg-surface-strong rounded-full overflow-hidden">
+                                <div id="syncProgress"
+                                    class="h-2 bg-[color:var(--accent)] w-0 transition-all duration-500"></div>
                             </div>
                         </div>
                     </details>
                 </div>
                 <div class="space-y-4">
-                    <div
-                        class="sm:hidden rounded-lg border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-white-linen dark:bg-white/5">
+                    <div class="sm:hidden rounded-lg border border-card p-3 bg-surface ">
                         <div class="flex items-center justify-between gap-2 mb-2">
                             <div class="flex items-center gap-2">
-                                <i data-lucide="smartphone" class="w-4 h-4 text-dull-purple dark:text-dull-purple"></i>
-                                <p class="font-semibold text-charcoal dark:text-white">Mobile layout</p>
+                                <i data-lucide="smartphone" class="w-4 h-4 text-accent "></i>
+                                <p class="font-semibold text-main ">Mobile layout</p>
                             </div>
                         </div>
-                        <p class="text-[11px] text-earth-metal/60 dark:text-white/60">Choose where the study
+                        <p class="text-[11px] text-muted ">Choose where the study
                             joystick/action cluster should appear on mobile screens.</p>
                         <div class="mt-3 space-y-2">
-                            <label class="flex items-center gap-2 text-xs text-earth-metal/70 dark:text-white/70">
+                            <label class="flex items-center gap-2 text-xs text-sub ">
                                 <input id="fabEnabledToggle" type="checkbox" class="accent-dull-purple" checked>
                                 <span>Enable mobile FAB controls</span>
                             </label>
                             <div id="fabPosControls" class="space-y-2">
-                                <label class="text-xs text-earth-metal/70 dark:text-white/70">FAB position
+                                <label class="text-xs text-sub ">FAB position
                                     (grid)</label>
                                 <div class="flex items-center gap-2">
                                     <select id="fabPosCellSelect"
-                                        class="flex-1 rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm">
+                                        class="flex-1 rounded-lg border border-card bg-[var(--surface)] px-2 py-2 text-sm">
                                         <option value="1">1</option>
                                         <option value="2">2</option>
                                         <option value="3">3</option>
@@ -1205,29 +1206,27 @@
                                         <option value="14">14</option>
                                         <option value="15">15</option>
                                     </select>
-                                    <span
-                                        class="text-[10px] text-earth-metal/60 dark:text-white/60 whitespace-nowrap">3×5
+                                    <span class="text-[10px] text-muted whitespace-nowrap">3×5
                                         + border</span>
                                 </div>
                                 <pre id="fabGridAscii"
-                                    class="font-mono text-[8px] leading-[1.05] text-earth-metal/60 dark:text-white/60 bg-oatmeal/60 dark:bg-white/10 border border-oatmeal-dark/40 dark:border-white/10 rounded-lg p-2 overflow-hidden whitespace-pre"></pre>
-                                <p class="text-[10px] text-earth-metal/60 dark:text-white/60">Pick a number from the
+                                    class="font-mono text-[8px] leading-[1.05] text-muted bg-surface-muted border border-weak rounded-lg p-2 overflow-hidden whitespace-pre"></pre>
+                                <p class="text-[10px] text-muted ">Pick a number from the
                                     grid
                                     (1 = top-left, 15 = bottom-right). Applies on screens ≤ 640px wide.</p>
                             </div>
                         </div>
                     </div>
-                    <div
-                        class="rounded-lg border border-oatmeal-dark/60 dark:border-white/10 p-3 bg-white-linen dark:bg-white/5">
+                    <div class="rounded-lg border border-card p-3 bg-surface ">
                         <div class="flex items-center gap-2 mb-2">
-                            <i data-lucide="bot" class="w-4 h-4 text-dull-purple dark:text-dull-purple"></i>
-                            <p class="font-semibold text-charcoal dark:text-white">AI judge settings</p>
+                            <i data-lucide="bot" class="w-4 h-4 text-accent "></i>
+                            <p class="font-semibold text-main ">AI judge settings</p>
                         </div>
                         <div class="space-y-2">
                             <div>
-                                <label class="text-xs text-earth-metal/70">Provider</label>
+                                <label class="text-xs text-sub">Provider</label>
                                 <select id="aiProvider"
-                                    class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm">
+                                    class="w-full rounded-lg border border-card bg-[var(--surface)] px-2 py-2 text-sm">
                                     <option value="">Disabled</option>
                                     <option value="openai">OpenAI</option>
                                     <option value="anthropic">Claude</option>
@@ -1236,35 +1235,38 @@
                             </div>
                             <div id="aiProviderFields" class="space-y-2 hidden">
                                 <div>
-                                    <label class="text-xs text-earth-metal/70">Model</label>
+                                    <label class="text-xs text-sub">Model</label>
                                     <input id="aiModel" type="text"
                                         placeholder="gpt-4o-mini / claude-3-haiku / gemini-1.5-flash"
-                                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm">
+                                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-2 py-2 text-sm">
                                 </div>
                                 <form autocomplete="off" onsubmit="return false;">
-                                    <input id="aiKey" type="password" autocomplete="new-password" placeholder="API key (kept locally)"
-                                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
+                                    <input type="text" name="username" autocomplete="username" class="sr-only"
+                                        tabindex="-1" aria-hidden="true">
+                                    <input id="aiKey" type="password" autocomplete="new-password"
+                                        placeholder="API key (kept locally)"
+                                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm">
                                 </form>
                                 <button id="verifyAi" data-tip="Requires internet"
-                                    class="px-3 py-2 rounded-lg bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 w-full">Verify
+                                    class="px-3 py-2 rounded-lg bg-surface-strong text-main text-sm border border-card w-full">Verify
                                     AI settings</button>
-                                <p class="text-[11px] text-earth-metal/60">Keys stay on-device (localStorage). AI
+                                <p class="text-[11px] text-muted">Keys stay on-device (localStorage). AI
                                     judging
                                     only runs if verified.</p>
                             </div>
                         </div>
                     </div>
                     <!-- Speech-to-Text Settings (only shown when AI mode is enabled) -->
-                    <div id="sttSettings" class="rounded-lg border border-oatmeal-dark/60 p-3 bg-white-linen hidden">
+                    <div id="sttSettings" class="rounded-lg border border-card p-3 bg-surface hidden">
                         <div class="flex items-center gap-2 mb-2">
-                            <i data-lucide="mic" class="w-4 h-4 text-dull-purple"></i>
-                            <p class="font-semibold text-charcoal">Speech-to-text</p>
+                            <i data-lucide="mic" class="w-4 h-4 text-accent"></i>
+                            <p class="font-semibold text-main">Speech-to-text</p>
                         </div>
                         <div class="space-y-2">
                             <div>
-                                <label class="text-xs text-earth-metal/70">Provider</label>
+                                <label class="text-xs text-sub">Provider</label>
                                 <select id="sttProvider"
-                                    class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm">
+                                    class="w-full rounded-lg border border-card bg-[var(--surface)] px-2 py-2 text-sm">
                                     <option value="">Disabled</option>
                                     <option value="browser">Browser</option>
                                     <option value="openai">OpenAI Whisper</option>
@@ -1274,26 +1276,29 @@
                             </div>
                             <div id="sttProviderFields" class="space-y-2 hidden">
                                 <div>
-                                    <label class="text-xs text-earth-metal/70">Model</label>
+                                    <label class="text-xs text-sub">Model</label>
                                     <input id="sttModel" type="text" placeholder="whisper-1 / gemini-2.0-flash"
-                                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-2 py-2 text-sm">
+                                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-2 py-2 text-sm">
                                 </div>
                                 <form autocomplete="off" onsubmit="return false;">
-                                    <input id="sttKey" type="password" autocomplete="new-password" placeholder="API key (required for cloud providers)"
-                                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
+                                    <input type="text" name="username" autocomplete="username" class="sr-only"
+                                        tabindex="-1" aria-hidden="true">
+                                    <input id="sttKey" type="password" autocomplete="new-password"
+                                        placeholder="API key (required for cloud providers)"
+                                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm">
                                 </form>
                                 <div>
-                                    <label class="text-xs text-earth-metal/70">Starter prompt (optional context)</label>
+                                    <label class="text-xs text-sub">Starter prompt (optional context)</label>
                                     <input id="sttPrompt" type="text" placeholder="e.g., Technical terms, names..."
-                                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm mt-1">
+                                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm mt-1">
                                 </div>
                                 <button id="verifyStt" data-tip="Requires internet"
-                                    class="px-3 py-2 rounded-lg bg-oatmeal text-earth-metal text-sm border border-oatmeal-dark/70 w-full">Verify
+                                    class="px-3 py-2 rounded-lg bg-surface-strong text-main text-sm border border-card w-full">Verify
                                     STT settings</button>
                             </div>
-                            <p class="text-[11px] text-earth-metal/60">Browser uses free built-in speech recognition.
+                            <p class="text-[11px] text-muted">Browser uses free built-in speech recognition.
                                 Cloud providers offer better accuracy.</p>
-                            <p class="text-[10px] text-earth-metal/50 dark:text-white/50 mt-1">
+                            <p class="text-[10px] text-faint mt-1">
                                 <i data-lucide="info" class="w-3 h-3 inline-block align-text-bottom mr-0.5"></i>
                                 Browser STT requires Chrome/Edge. Safari/Firefox have limited support.
                             </p>
@@ -1301,9 +1306,9 @@
                     </div>
                 </div>
                 <!-- Danger Zone spanning both columns -->
-                <div class="md:col-span-2 mt-4 border-t border-oatmeal-dark/40 dark:border-white/10 pt-4">
+                <div class="md:col-span-2 mt-4 border-t border-weak pt-4">
                     <button id="toggleDangerZone"
-                        class="w-full flex items-center justify-between text-sm text-muted-pink dark:text-muted-pink/80 hover:text-muted-pink/80 transition">
+                        class="w-full flex items-center justify-between text-sm text-accent-2 hover:text-accent-2 transition">
                         <span class="flex items-center gap-2">
                             <i data-lucide="alert-triangle" class="w-4 h-4"></i>
                             <span>Danger Zone</span>
@@ -1311,13 +1316,13 @@
                         <i data-lucide="chevron-down" id="dangerZoneChevron" class="w-4 h-4 transition-transform"></i>
                     </button>
                     <div id="dangerZoneContent"
-                        class="hidden mt-3 p-3 rounded-lg bg-muted-pink/10 border border-muted-pink/30 dark:bg-muted-pink/15 dark:border-muted-pink/40">
-                        <p class="text-xs text-earth-metal/70 dark:text-white/70 mb-3">This will permanently delete
+                        class="hidden mt-3 p-3 rounded-lg bg-accent-2-soft border border-[color:var(--accent-2)]">
+                        <p class="text-xs text-sub mb-3">This will permanently delete
                             all GhostInk data
                             including decks, cards, settings, and session data. Data synced to Notion will not be
                             affected.</p>
                         <button id="resetApp"
-                            class="px-3 py-2 rounded-lg bg-muted-pink text-white text-sm hover:bg-muted-pink-hover transition-all w-full">Reset
+                            class="px-3 py-2 rounded-lg bg-[color:var(--accent-2)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--accent-2-hover)] transition-all w-full">Reset
                             GhostInk</button>
                     </div>
                 </div>
@@ -1326,17 +1331,18 @@
     </div>
 
     <!-- Worker helper -->
-    <div id="workerHelpModal" class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4">
-        <div class="card rounded-2xl p-5 w-full max-w-3xl shadow-soft h-[80vh] flex flex-col">
+    <div id="workerHelpModal"
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="card rounded-lg p-5 w-full max-w-3xl shadow-soft h-[80vh] flex flex-col">
             <div class="flex items-center justify-between mb-3">
-                <h3 class="font-display text-lg text-charcoal">Cloudflare Worker proxy</h3>
-                <button id="closeWorkerHelp" class="text-earth-metal/60 hover:text-charcoal"><i data-lucide="x"
+                <h3 class="font-display text-lg text-main">Cloudflare Worker proxy</h3>
+                <button id="closeWorkerHelp" class="text-muted hover:text-main"><i data-lucide="x"
                         class="w-5 h-5"></i></button>
             </div>
-            <div class="flex-1 overflow-y-auto space-y-3 text-sm text-earth-metal">
+            <div class="flex-1 overflow-y-auto space-y-3 text-sm text-main">
                 <p>Deploy this Worker to bypass CORS and forward Notion requests.</p>
                 <ol class="list-decimal pl-6 space-y-2">
-                    <li>Open <a class="text-dull-purple underline" href="https://workers.cloudflare.com/"
+                    <li>Open <a class="text-accent underline" href="https://workers.cloudflare.com/"
                             target="_blank">Cloudflare Workers</a> and create a new Worker.</li>
                     <li>Replace its contents with the code below, save, and deploy.</li>
                     <li>(Optional) Add variable <code>ALL_CORS_PROXY_MATCH_TOKEN</code> to require a token.</li>
@@ -1344,74 +1350,74 @@
                 </ol>
                 <div class="relative">
                     <button id="copyWorkerCode"
-                        class="absolute top-2 right-2 bg-white/80 hover:bg-white px-2 py-1 rounded text-xs shadow text-charcoal font-bold dark:bg-white/10 dark:hover:bg-white/20 dark:text-white">Copy</button>
+                        class="absolute top-2 right-2 bg-surface hover:bg-white px-2 py-1 rounded text-xs shadow text-main font-bold ">Copy</button>
                     <pre id="workerCodeBlock"
-                        class="bg-charcoal text-white-linen p-4 rounded text-xs font-mono overflow-x-auto">
+                        class="bg-[color:var(--badge-bg)] text-[color:var(--badge-text)] p-4 rounded text-xs font-mono overflow-x-auto">
 export default {
-  async fetch(request, env) {
-      return await handleRequest(request, env);
-  },
+ async fetch(request, env) {
+ return await handleRequest(request, env);
+ },
 };
 
 function getCorsHeaders(request) {
-  return {
-      "Access-Control-Allow-Origin": request.headers.get("Origin") || "*",
-      "Access-Control-Allow-Methods": "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization, Notion-Version",
-  };
+ return {
+ "Access-Control-Allow-Origin": request.headers.get("Origin") || "*",
+ "Access-Control-Allow-Methods": "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS",
+ "Access-Control-Allow-Headers": "Content-Type, Authorization, Notion-Version",
+ };
 }
 
 function handleOptions(request) {
-  return new Response(null, {
-      headers: getCorsHeaders(request),
-  });
+ return new Response(null, {
+ headers: getCorsHeaders(request),
+ });
 }
 
 function withCors(request, response) {
-  const corsHeaders = getCorsHeaders(request);
-  const newResponse = new Response(response.body, response);
-  for (const [key, value] of Object.entries(corsHeaders)) {
-      newResponse.headers.set(key, value);
-  }
-  newResponse.headers.append("Vary", "Origin");
-  return newResponse;
+ const corsHeaders = getCorsHeaders(request);
+ const newResponse = new Response(response.body, response);
+ for (const [key, value] of Object.entries(corsHeaders)) {
+ newResponse.headers.set(key, value);
+ }
+ newResponse.headers.append("Vary", "Origin");
+ return newResponse;
 }
 
 async function handleRequest(request, env) {
-  if (request.method === "OPTIONS") {
-      return handleOptions(request);
-  }
+ if (request.method === "OPTIONS") {
+ return handleOptions(request);
+ }
 
-  const url = new URL(request.url);
-  const requiredToken = (env.ALL_CORS_PROXY_MATCH_TOKEN || "").trim();
+ const url = new URL(request.url);
+ const requiredToken = (env.ALL_CORS_PROXY_MATCH_TOKEN || "").trim();
 
-  if (requiredToken !== "") {
-      const providedToken = url.searchParams.get("token");
-      if (providedToken !== requiredToken) {
-          return withCors(request, new Response("Unauthorized", { status: 403 }));
-      }
-      url.searchParams.delete("token");
-  }
+ if (requiredToken !== "") {
+ const providedToken = url.searchParams.get("token");
+ if (providedToken !== requiredToken) {
+ return withCors(request, new Response("Unauthorized", { status: 403 }));
+ }
+ url.searchParams.delete("token");
+ }
 
-  const targetUrlParam = url.searchParams.get("url");
-  if (!targetUrlParam) {
-      return withCors(request, new Response("Missing url parameter", { status: 400 }));
-  }
+ const targetUrlParam = url.searchParams.get("url");
+ if (!targetUrlParam) {
+ return withCors(request, new Response("Missing url parameter", { status: 400 }));
+ }
 
-  let targetUrl;
-  try {
-      targetUrl = new URL(targetUrlParam).toString();
-  } catch (err) {
-      return withCors(request, new Response("Invalid target URL", { status: 400 }));
-  }
+ let targetUrl;
+ try {
+ targetUrl = new URL(targetUrlParam).toString();
+ } catch (err) {
+ return withCors(request, new Response("Invalid target URL", { status: 400 }));
+ }
 
-  const modifiedRequest = new Request(targetUrl, request);
-  modifiedRequest.headers.set("Origin", new URL(targetUrl).origin);
+ const modifiedRequest = new Request(targetUrl, request);
+ modifiedRequest.headers.set("Origin", new URL(targetUrl).origin);
 
-  const response = await fetch(modifiedRequest);
-  return withCors(request, response);
+ const response = await fetch(modifiedRequest);
+ return withCors(request, response);
 }
-                    </pre>
+ </pre>
                 </div>
             </div>
         </div>
@@ -1419,47 +1425,45 @@ async function handleRequest(request, env) {
 
     <!-- Deck modal -->
     <div id="deckModal" role="dialog" aria-modal="true" aria-labelledby="deckModalTitle"
-        class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4">
-        <div class="card rounded-2xl p-5 w-full max-w-md shadow-soft max-h-[90vh] overflow-y-auto">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4">
+        <div class="card rounded-lg p-5 w-full max-w-md shadow-soft max-h-[90vh] overflow-y-auto">
             <div class="flex items-center justify-between mb-3">
-                <h3 class="font-display text-lg text-charcoal" id="deckModalTitle">New deck</h3>
-                <button id="closeDeckModal" aria-label="Close deck modal"
-                    class="text-earth-metal/60 hover:text-charcoal"><i data-lucide="x" class="w-5 h-5"></i></button>
+                <h3 class="font-display text-lg text-main" id="deckModalTitle">New deck</h3>
+                <button id="closeDeckModal" aria-label="Close deck modal" class="text-muted hover:text-main"><i
+                        data-lucide="x" class="w-5 h-5"></i></button>
             </div>
             <div class="space-y-3 text-sm">
                 <input id="deckNameInput" type="text" placeholder="Deck name" maxlength="200"
-                    class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
+                    class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2">
                 <div>
-                    <label class="text-xs text-earth-metal/70">Algorithm</label>
+                    <label class="text-xs text-sub">Algorithm</label>
                     <select id="deckAlgoInput"
-                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
+                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2">
                         <option>SM-2</option>
                         <option>FSRS</option>
                     </select>
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="text-xs text-earth-metal/70">Daily review limit</label>
+                        <label class="text-xs text-sub">Daily review limit</label>
                         <input id="deckReviewLimit" type="number"
-                            class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"
-                            value="50">
+                            class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2" value="50">
                     </div>
                     <div>
-                        <label class="text-xs text-earth-metal/70">New card limit</label>
+                        <label class="text-xs text-sub">New card limit</label>
                         <input id="deckNewLimit" type="number"
-                            class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"
-                            value="20">
+                            class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2" value="20">
                     </div>
                 </div>
                 <div class="space-y-2">
-                    <label class="text-xs text-earth-metal/70">Order mode</label>
+                    <label class="text-xs text-sub">Order mode</label>
                     <select id="deckOrderMode"
-                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
+                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2">
                         <option value="none">None (shuffle)</option>
                         <option value="created">Created Time</option>
                         <option value="property">Order Property</option>
                     </select>
-                    <p class="text-[11px] text-earth-metal/60">Created time sorts by insertion time; Order property
+                    <p class="text-[11px] text-muted">Created time sorts by insertion time; Order property
                         sorts by each card’s “Order” number.</p>
                 </div>
                 <label class="flex items-center gap-2 text-sm">
@@ -1467,132 +1471,129 @@ async function handleRequest(request, env) {
                     <span>Reverse mode enabled</span>
                 </label>
                 <div>
-                    <label class="text-xs text-earth-metal/70">AI revision prompt (optional)</label>
+                    <label class="text-xs text-sub">AI revision prompt (optional)</label>
                     <textarea id="deckPromptInput" rows="3"
-                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"
+                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2"
                         placeholder="Use {{question}} {{answer}} {{user}} placeholders"></textarea>
-                    <div class="flex flex-wrap gap-2 mt-2 text-[11px] text-earth-metal/60 dark:text-white/70">
-                        <span
-                            class="px-2 py-1 rounded-lg bg-oatmeal-dark/50 dark:bg-white/10 italic text-dull-purple dark:text-dull-purple">{{question}}</span>
-                        <span
-                            class="px-2 py-1 rounded-lg bg-oatmeal-dark/50 dark:bg-white/10 italic text-dull-purple dark:text-dull-purple">{{answer}}</span>
-                        <span
-                            class="px-2 py-1 rounded-lg bg-oatmeal-dark/50 dark:bg-white/10 italic text-dull-purple dark:text-dull-purple">{{user}}</span>
+                    <div class="flex flex-wrap gap-2 mt-2 text-[11px] text-muted ">
+                        <span class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{question}}</span>
+                        <span class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{answer}}</span>
+                        <span class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{user}}</span>
                     </div>
-                    <p class="mt-2 text-[11px] text-earth-metal/70 dark:text-white/70">Variables replace question,
+                    <p class="mt-2 text-[11px] text-sub ">Variables replace question,
                         correct answer, and learner answer.</p>
                 </div>
                 <div>
-                    <label class="text-xs text-earth-metal/70">SRS config (JSON)</label>
+                    <label class="text-xs text-sub">SRS config (JSON)</label>
                     <textarea id="deckSrsConfigInput" rows="6"
-                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-xs font-mono"
+                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-xs font-mono"
                         placeholder='{"learningSteps":["1m","10m"],"relearningSteps":["10m"],"graduatingInterval":"1d","easyInterval":"4d","easyDays":["Sat","Sun"],"fsrs":{"retention":0.9,"weights":[...]}}'></textarea>
-                    <p class="mt-2 text-[10px] text-earth-metal/60">Self-healing: invalid or missing fields fall back
+                    <p class="mt-2 text-[10px] text-muted">Self-healing: invalid or missing fields fall back
                         to defaults. Learning steps apply to SM-2 only.</p>
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div class="col-span-2">
-                        <label class="text-xs text-earth-metal/70">Learning steps (SM-2)</label>
+                        <label class="text-xs text-sub">Learning steps (SM-2)</label>
                         <input id="deckLearningSteps" type="text" placeholder="1m,10m"
-                            class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-xs font-mono">
+                            class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-xs font-mono">
                     </div>
                     <div class="col-span-2">
-                        <label class="text-xs text-earth-metal/70">Relearning steps (SM-2)</label>
+                        <label class="text-xs text-sub">Relearning steps (SM-2)</label>
                         <input id="deckRelearningSteps" type="text" placeholder="10m"
-                            class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-xs font-mono">
+                            class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-xs font-mono">
                     </div>
                     <div>
-                        <label class="text-xs text-earth-metal/70">Graduating interval</label>
+                        <label class="text-xs text-sub">Graduating interval</label>
                         <input id="deckGraduatingInterval" type="text" placeholder="1d"
-                            class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-xs font-mono">
+                            class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-xs font-mono">
                     </div>
                     <div>
-                        <label class="text-xs text-earth-metal/70">Easy interval</label>
+                        <label class="text-xs text-sub">Easy interval</label>
                         <input id="deckEasyInterval" type="text" placeholder="4d"
-                            class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-xs font-mono">
+                            class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-xs font-mono">
                     </div>
                     <div class="col-span-2">
-                        <label class="text-xs text-earth-metal/70">Easy days</label>
+                        <label class="text-xs text-sub">Easy days</label>
                         <input id="deckEasyDays" type="text" placeholder="Sat,Sun"
-                            class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-xs font-mono">
+                            class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-xs font-mono">
                     </div>
                 </div>
                 <div id="fsrsParamsField" class="hidden">
                     <div class="grid grid-cols-2 gap-3 items-end">
                         <div>
-                            <label class="text-xs text-earth-metal/70">FSRS desired retention</label>
+                            <label class="text-xs text-sub">FSRS desired retention</label>
                             <input id="deckFsrsDesiredRetention" type="number" step="0.01" min="0.01" max="0.99"
-                                class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-xs font-mono"
+                                class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-xs font-mono"
                                 placeholder="0.90">
                         </div>
                     </div>
-                    <label class="text-xs text-earth-metal/70 mt-2 block">FSRS v6 weights (21 numbers)</label>
+                    <label class="text-xs text-sub mt-2 block">FSRS v6 weights (21 numbers)</label>
                     <textarea id="deckFsrsParams" rows="2"
-                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-xs font-mono"
+                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-xs font-mono"
                         placeholder="0.212, 1.2931, ..."></textarea>
                     <div class="flex items-center justify-between gap-2 mt-2">
                         <button id="optimizeFsrsBtn"
-                            class="px-3 py-2 rounded-lg border border-earth-metal/40 text-earth-metal text-xs hover:bg-oatmeal/50 dark:hover:bg-white/10">
+                            class="px-3 py-2 rounded-lg border border-weak text-main text-xs hover:bg-surface-muted ">
                             Optimize FSRS weights
                         </button>
-                        <span class="text-[10px] text-earth-metal/60">Uses this deck’s review history</span>
+                        <span class="text-[10px] text-muted">Uses this deck’s review history</span>
                     </div>
-                    <p class="text-[10px] text-earth-metal/60 mt-1">Leave retention empty to use 0.90. Leave weights
+                    <p class="text-[10px] text-muted mt-1">Leave retention empty to use 0.90. Leave weights
                         empty to use defaults. These sync via the Notion “SRS Config” property.</p>
                 </div>
             </div>
             <div class="flex justify-end gap-2 mt-4">
                 <button id="archiveDeckBtn"
-                    class="px-3 py-2 rounded-lg border border-earth-metal/40 text-earth-metal text-sm hidden">Archive
+                    class="px-3 py-2 rounded-lg border border-weak text-main text-sm hidden">Archive
                     deck</button>
                 <button id="saveDeckBtn"
-                    class="px-4 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-dull-purple-hover transition-all">Save</button>
+                    class="px-4 py-2 rounded-lg bg-[color:var(--accent)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--accent-hover)] transition-all">Save</button>
             </div>
         </div>
     </div>
 
     <!-- Card modal -->
     <div id="cardModal" role="dialog" aria-modal="true" aria-labelledby="cardModalTitle"
-        class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
-        <div class="card rounded-2xl p-5 w-full max-w-2xl shadow-soft max-h-[90vh] overflow-y-auto">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="card rounded-lg p-5 w-full max-w-2xl shadow-soft max-h-[90vh] overflow-y-auto">
             <div class="flex items-center justify-between mb-3">
-                <h3 class="font-display text-lg text-charcoal" id="cardModalTitle">New card</h3>
-                <button id="closeCardModal" aria-label="Close card modal"
-                    class="text-earth-metal/60 hover:text-charcoal"><i data-lucide="x" class="w-5 h-5"></i></button>
+                <h3 class="font-display text-lg text-main" id="cardModalTitle">New card</h3>
+                <button id="closeCardModal" aria-label="Close card modal" class="text-muted hover:text-main"><i
+                        data-lucide="x" class="w-5 h-5"></i></button>
             </div>
-            <p class="text-[10px] text-earth-metal/50 dark:text-white/60 mb-2">Editing Name, Back, or Notes will remove
+            <p class="text-[10px] text-faint mb-2">Editing Name, Back, or Notes will remove
                 Notion text colors
                 and highlights on sync</p>
-                <div class="grid md:grid-cols-2 gap-4 text-sm">
+            <div class="grid md:grid-cols-2 gap-4 text-sm">
                 <div class="space-y-2">
-                    <label class="text-xs text-earth-metal/70">Deck</label>
+                    <label class="text-xs text-sub">Deck</label>
                     <select id="cardDeckInput"
-                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"></select>
+                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2"></select>
                 </div>
                 <div class="space-y-2">
-                    <label class="text-xs text-earth-metal/70">Card type</label>
+                    <label class="text-xs text-sub">Card type</label>
                     <select id="cardTypeInput"
-                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
+                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2">
                         <option value="Front-Back">Front / Back</option>
                         <option value="Cloze">Cloze</option>
                     </select>
                 </div>
                 <div class="md:col-span-2 space-y-2">
-                    <label class="text-xs text-earth-metal/70">Name</label>
+                    <label class="text-xs text-sub">Name</label>
                     <textarea id="cardNameInput" rows="3"
-                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"></textarea>
+                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2"></textarea>
                 </div>
                 <div class="space-y-2">
-                    <label class="text-xs text-earth-metal/70">Marked</label>
+                    <label class="text-xs text-sub">Marked</label>
                     <label class="flex items-center gap-2 text-sm">
                         <input id="cardMarkedInput" type="checkbox" class="accent-dull-purple">
                         <span>Starred</span>
                     </label>
                 </div>
                 <div class="space-y-2">
-                    <label class="text-xs text-earth-metal/70">Flag</label>
+                    <label class="text-xs text-sub">Flag</label>
                     <select id="cardFlagInput"
-                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
+                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm">
                         <option value="">None</option>
                         <option value="Red">Red</option>
                         <option value="Orange">Orange</option>
@@ -1603,39 +1604,39 @@ async function handleRequest(request, env) {
                     </select>
                 </div>
                 <div id="cardBackSection" class="md:col-span-2 space-y-2">
-                    <label class="text-xs text-earth-metal/70">Back</label>
+                    <label class="text-xs text-sub">Back</label>
                     <textarea id="cardBackInput" rows="4"
-                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"></textarea>
+                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2"></textarea>
                 </div>
                 <div class="md:col-span-2 space-y-2">
-                    <label class="text-xs text-earth-metal/70">Notes (markdown)</label>
+                    <label class="text-xs text-sub">Notes (markdown)</label>
                     <textarea id="cardNotesInput" rows="3" placeholder="Add notes for this card..."
-                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2"></textarea>
+                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2"></textarea>
                 </div>
                 <div class="space-y-2">
                     <div class="flex items-center justify-between">
-                        <label class="text-xs text-earth-metal/70">Tags</label>
-                        <button id="refreshTagOptionsBtn" class="p-1 rounded-lg hover:bg-oatmeal text-dull-purple"
+                        <label class="text-xs text-sub">Tags</label>
+                        <button id="refreshTagOptionsBtn" class="p-1 rounded-lg hover:bg-surface-strong text-accent"
                             title="Refresh tags from Notion">
                             <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                         </button>
                     </div>
                     <div class="relative">
                         <input id="cardTagSearch" type="text" placeholder="Search or add tag" maxlength="100"
-                            class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm">
+                            class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm">
                         <div id="cardTagDropdown"
-                            class="hidden absolute left-0 right-0 z-40 mt-1 max-h-44 overflow-y-auto rounded-lg border border-oatmeal-dark/60 bg-[color:var(--card-bg)] shadow-lg">
+                            class="hidden absolute left-0 right-0 z-40 mt-1 max-h-44 overflow-y-auto rounded-lg border border-card bg-[color:var(--card-bg)] shadow-lg">
                         </div>
                     </div>
                     <div id="cardTagSelected" class="flex flex-wrap gap-1.5 mt-1"></div>
                 </div>
                 <div class="space-y-2">
-                    <label class="text-xs text-earth-metal/70">Order</label>
+                    <label class="text-xs text-sub">Order</label>
                     <input id="cardOrderInput" type="number" placeholder="Optional number"
-                        class="w-full rounded-lg border border-oatmeal-dark/70 bg-[var(--surface)] dark:bg-white/5 px-3 py-2">
+                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2">
                 </div>
                 <div class="space-y-2">
-                    <label class="text-xs text-earth-metal/70">Suspended / Leech</label>
+                    <label class="text-xs text-sub">Suspended / Leech</label>
                     <div class="grid grid-cols-2 gap-2">
                         <label class="flex items-center gap-2"><input id="cardSuspendedInput" type="checkbox"
                                 class="accent-dull-purple"> Suspended</label>
@@ -1647,59 +1648,72 @@ async function handleRequest(request, env) {
             <!-- Review History Section (shown when editing existing card) -->
             <div id="cardReviewHistorySection" class="mt-4 hidden">
                 <details class="group">
-                    <summary class="text-xs text-earth-metal/70 cursor-pointer select-none flex items-center gap-1">
+                    <summary class="text-xs text-sub cursor-pointer select-none flex items-center gap-1">
                         <i data-lucide="chevron-right" class="w-3 h-3 group-open:rotate-90 transition-transform"></i>
                         Review History (<span id="cardReviewHistoryCount">0</span>)
                     </summary>
                     <div id="cardReviewHistoryTable"
-                        class="mt-2 max-h-40 overflow-y-auto border border-charcoal/10 rounded-lg"></div>
+                        class="mt-2 max-h-40 overflow-y-auto border border-weak rounded-lg"></div>
                 </details>
             </div>
             <div class="flex justify-end gap-2 mt-4">
                 <button id="deleteCardBtn"
-                    class="px-3 py-2 rounded-lg border border-muted-pink text-muted-pink text-sm hidden">Delete
+                    class="px-3 py-2 rounded-lg border border-[color:var(--accent-2)] text-accent-2 text-sm hidden">Delete
                     card</button>
                 <button id="saveCardBtn"
-                    class="px-4 py-2 rounded-lg bg-charcoal dark:bg-white/10 dark:border-white/10 dark:border text-white text-sm hover:bg-earth-metal dark:hover:bg-white/20">Save</button>
+                    class="px-4 py-2 rounded-lg bg-[color:var(--badge-bg)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--badge-bg-hover)] ">Save</button>
             </div>
         </div>
     </div>
 
     <!-- Shortcuts modal -->
     <div id="shortcutsModal" role="dialog" aria-modal="true" aria-labelledby="shortcutsModalTitle"
-        class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
-        <div class="card rounded-2xl p-5 w-full max-w-lg shadow-soft max-h-[90vh] overflow-y-auto">
-            <div class="flex items-center justify-between mb-3">
-                <h3 class="font-display text-lg text-charcoal" id="shortcutsModalTitle">Keyboard shortcuts</h3>
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="card rounded-lg p-5 w-full max-w-2xl shadow-soft max-h-[90vh] overflow-y-auto shortcuts-card">
+            <div class="shortcuts-header">
+                <div>
+                    <h3 class="font-display text-lg text-[color:var(--text-main)]" id="shortcutsModalTitle">Keyboard
+                        shortcuts</h3>
+                    <p class="text-xs text-[color:var(--text-sub)]">Quick actions by mode</p>
+                </div>
                 <button id="closeShortcutsModal" aria-label="Close shortcuts"
-                    class="text-earth-metal/60 hover:text-charcoal"><i data-lucide="x" class="w-5 h-5"></i></button>
+                    class="p-1.5 rounded-sm border border-[color:var(--card-border)] text-[color:var(--text-sub)] hover:text-[color:var(--text-main)] hover:bg-[color:var(--surface-strong)]">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
             </div>
-            <div class="space-y-3 text-sm">
-                <div class="rounded-lg border border-oatmeal-dark/60 p-3 bg-[color:var(--surface)]">
-                    <p class="text-xs text-earth-metal/60 mb-2 uppercase tracking-wider font-semibold">Study</p>
-                    <div class="grid grid-cols-2 gap-2 text-xs">
-                        <div class="flex items-center justify-between"><span>Reveal</span><kbd>Space</kbd></div>
-                        <div class="flex items-center justify-between"><span>Skip</span><kbd>S</kbd></div>
-                        <div class="flex items-center justify-between"><span>Again / Hard / Good / Easy</span><kbd>1–4</kbd></div>
-                        <div class="flex items-center justify-between"><span>Mark</span><kbd>M</kbd></div>
-                        <div class="flex items-center justify-between"><span>Flag (cycle)</span><kbd>F</kbd></div>
-                        <div class="flex items-center justify-between"><span>Clear flag</span><kbd>Shift + F</kbd></div>
+            <div class="shortcuts-grid">
+                <div class="shortcuts-section">
+                    <p class="shortcuts-section-title">Study</p>
+                    <div class="shortcuts-list">
+                        <div class="shortcut-row"><span>Reveal</span><kbd class="shortcut-key">Space</kbd></div>
+                        <div class="shortcut-row"><span>Skip</span><kbd class="shortcut-key">S</kbd></div>
+                        <div class="shortcut-row"><span>Again / Hard / Good / Easy</span><kbd
+                                class="shortcut-key">1–4</kbd></div>
+                        <div class="shortcut-row"><span>Mark</span><kbd class="shortcut-key">M</kbd></div>
+                        <div class="shortcut-row"><span>Flag (cycle)</span><kbd class="shortcut-key">F</kbd></div>
+                        <div class="shortcut-row"><span>Clear flag</span><kbd class="shortcut-key">Shift + F</kbd></div>
                     </div>
                 </div>
-                <div class="rounded-lg border border-oatmeal-dark/60 p-3 bg-[color:var(--surface)]">
-                    <p class="text-xs text-earth-metal/60 mb-2 uppercase tracking-wider font-semibold">Sessions</p>
-                    <div class="grid grid-cols-2 gap-2 text-xs">
-                        <div class="flex items-center justify-between"><span>Start session</span><kbd id="shortcutsStartSession">⌘/Ctrl + Enter</kbd></div>
-                        <div class="flex items-center justify-between"><span>Stop session</span><kbd id="shortcutsStopSession">⌘/Ctrl + .</kbd></div>
-                        <div class="flex items-center justify-between"><span>Undo rating</span><kbd id="shortcutsUndo">⌘/Ctrl + Z</kbd></div>
+                <div class="shortcuts-section">
+                    <p class="shortcuts-section-title">Sessions</p>
+                    <div class="shortcuts-list">
+                        <div class="shortcut-row"><span>Start session</span><kbd class="shortcut-key"
+                                id="shortcutsStartSession">⌘/Ctrl + Enter</kbd></div>
+                        <div class="shortcut-row"><span>Stop session</span><kbd class="shortcut-key"
+                                id="shortcutsStopSession">⌘/Ctrl + .</kbd></div>
+                        <div class="shortcut-row"><span>Undo rating</span><kbd class="shortcut-key"
+                                id="shortcutsUndo">⌘/Ctrl + Z</kbd></div>
                     </div>
                 </div>
-                <div class="rounded-lg border border-oatmeal-dark/60 p-3 bg-[color:var(--surface)]">
-                    <p class="text-xs text-earth-metal/60 mb-2 uppercase tracking-wider font-semibold">AI mode</p>
-                    <div class="grid grid-cols-2 gap-2 text-xs">
-                        <div class="flex items-center justify-between"><span>Send answer</span><kbd id="shortcutsSend">⌘/Ctrl + Enter</kbd></div>
-                        <div class="flex items-center justify-between"><span>Toggle mic</span><kbd id="shortcutsMic">⌘/Ctrl + E</kbd></div>
-                        <div class="flex items-center justify-between"><span>Skip (AI)</span><kbd>Alt + Shift + S</kbd></div>
+                <div class="shortcuts-section shortcuts-section-wide">
+                    <p class="shortcuts-section-title">AI mode</p>
+                    <div class="shortcuts-list">
+                        <div class="shortcut-row"><span>Send answer</span><kbd class="shortcut-key"
+                                id="shortcutsSend">⌘/Ctrl + Enter</kbd></div>
+                        <div class="shortcut-row"><span>Toggle mic</span><kbd class="shortcut-key"
+                                id="shortcutsMic">⌘/Ctrl + E</kbd></div>
+                        <div class="shortcut-row"><span>Skip (AI)</span><kbd class="shortcut-key">Alt + Shift + S</kbd>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1708,20 +1722,20 @@ async function handleRequest(request, env) {
 
     <!-- AI Settings Required Modal -->
     <div id="aiSettingsRequiredModal"
-        class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50">
         <div
-            class="card rounded-2xl p-5 w-full max-w-md shadow-soft text-center space-y-4 bg-[color:var(--card-bg)] border border-[color:var(--card-border)]">
-            <div class="w-12 h-12 rounded-full bg-dull-purple/20 flex items-center justify-center mx-auto">
-                <i data-lucide="bot" class="w-6 h-6 text-dull-purple"></i>
+            class="card rounded-lg p-5 w-full max-w-md shadow-soft text-center space-y-4 bg-[color:var(--card-bg)] border border-[color:var(--card-border)]">
+            <div class="w-12 h-12 rounded-full bg-accent-soft flex items-center justify-center mx-auto">
+                <i data-lucide="bot" class="w-6 h-6 text-accent"></i>
             </div>
-            <h3 id="aiSettingsModalTitle" class="font-display text-lg text-charcoal dark:text-white">AI not available
+            <h3 id="aiSettingsModalTitle" class="font-display text-lg text-main ">AI not available
             </h3>
-            <p id="aiSettingsModalBody" class="text-sm text-earth-metal/70 dark:text-white/70"></p>
+            <p id="aiSettingsModalBody" class="text-sm text-sub "></p>
             <div id="aiSettingsModalActions" class="flex gap-2 justify-center">
                 <button id="closeAiSettingsModal"
-                    class="px-4 py-2 rounded-lg border border-oatmeal-dark text-earth-metal dark:text-white dark:border-white/10 text-sm">Close</button>
+                    class="px-4 py-2 rounded-lg border border-card text-main text-sm">Close</button>
                 <button id="openSettingsFromAiModal"
-                    class="px-4 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-dull-purple-hover transition-all">Open
+                    class="px-4 py-2 rounded-lg bg-[color:var(--accent)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--accent-hover)] transition-all">Open
                     Settings</button>
             </div>
         </div>
@@ -1729,27 +1743,27 @@ async function handleRequest(request, env) {
 
     <!-- Notes Edit Modal -->
     <div id="notesModal" role="dialog" aria-modal="true" aria-labelledby="notesModalTitle"
-        class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
-        <div class="card rounded-2xl p-5 w-full max-w-lg shadow-soft space-y-4 max-h-[90vh] flex flex-col">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="card rounded-lg p-5 w-full max-w-lg shadow-soft space-y-4 max-h-[90vh] flex flex-col">
             <div class="flex items-center justify-between">
-                <h3 id="notesModalTitle" class="font-display text-lg text-charcoal">Edit Notes</h3>
+                <h3 id="notesModalTitle" class="font-display text-lg text-main">Edit Notes</h3>
                 <button id="closeNotesModal" aria-label="Close notes modal"
-                    class="p-1.5 rounded-lg hover:bg-oatmeal text-earth-metal">
+                    class="p-1.5 rounded-lg hover:bg-surface-strong text-main">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
-            <p class="text-xs text-earth-metal/70 dark:text-white/70">Write notes in Markdown format. They will be
+            <p class="text-xs text-sub ">Write notes in Markdown format. They will be
                 synced to Notion.</p>
             <textarea id="notesArea" rows="12"
-                class="flex-1 w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-dull-purple/40"
+                class="flex-1 w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-dull-purple/40"
                 placeholder="Add notes for this card..."></textarea>
             <div class="flex items-center justify-between">
-                <span id="noteStatus" class="text-xs text-earth-metal/60"></span>
+                <span id="noteStatus" class="text-xs text-muted"></span>
                 <div class="flex gap-2">
                     <button id="cancelNotesBtn"
-                        class="px-4 py-2 rounded-lg border border-oatmeal-dark text-earth-metal text-sm">Cancel</button>
+                        class="px-4 py-2 rounded-lg border border-card text-main text-sm">Cancel</button>
                     <button id="saveNotesBtn"
-                        class="px-4 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-dull-purple-hover transition-all">Save</button>
+                        class="px-4 py-2 rounded-lg bg-[color:var(--accent)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--accent-hover)] transition-all">Save</button>
                 </div>
             </div>
         </div>
@@ -1757,58 +1771,57 @@ async function handleRequest(request, env) {
 
     <!-- Reset Confirmation Modal -->
     <div id="resetConfirmModal"
-        class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
-        <div class="card rounded-2xl p-5 w-full max-w-sm shadow-soft">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="card rounded-lg p-5 w-full max-w-sm shadow-soft">
             <div class="flex items-center gap-3 mb-3">
-                <div class="p-2 rounded-full bg-muted-pink/20">
-                    <i data-lucide="alert-triangle" class="w-5 h-5 text-muted-pink"></i>
+                <div class="p-2 rounded-full bg-[color:var(--accent-2)]/20">
+                    <i data-lucide="alert-triangle" class="w-5 h-5 text-accent-2"></i>
                 </div>
-                <h3 class="font-display text-lg text-charcoal">Reset GhostInk?</h3>
+                <h3 class="font-display text-lg text-main">Reset GhostInk?</h3>
             </div>
-            <p class="text-sm text-earth-metal/70 dark:text-white/70 mb-4">This will permanently delete all local data
+            <p class="text-sm text-sub mb-4">This will permanently delete all local data
                 including decks,
                 cards, settings, and study session. This cannot be undone.</p>
             <div class="flex justify-end gap-2">
                 <button id="cancelReset"
-                    class="px-4 py-2 rounded-lg border border-oatmeal-dark text-earth-metal dark:text-white dark:border-white/10 dark:hover:bg-zinc-800 text-sm">Cancel</button>
+                    class="px-4 py-2 rounded-lg border border-card text-main hover:bg-[color:var(--control-hover)] text-sm">Cancel</button>
                 <button id="confirmReset"
-                    class="px-4 py-2 rounded-lg bg-muted-pink text-white text-sm hover:bg-muted-pink-hover transition-all">Reset</button>
+                    class="px-4 py-2 rounded-lg bg-[color:var(--accent-2)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--accent-2-hover)] transition-all">Reset</button>
             </div>
         </div>
     </div>
 
     <!-- Add Block Note Modal -->
     <div id="addBlockModal"
-        class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
-        <div class="card rounded-2xl p-5 w-full max-w-lg shadow-soft space-y-4 max-h-[90vh] flex flex-col">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="card rounded-lg p-5 w-full max-w-lg shadow-soft space-y-4 max-h-[90vh] flex flex-col">
             <div class="flex items-center justify-between">
-                <h3 class="font-display text-lg text-charcoal">Add Note to Page</h3>
-                <button id="closeAddBlockModal" class="p-1.5 rounded-lg hover:bg-oatmeal text-earth-metal">
+                <h3 class="font-display text-lg text-main">Add Note to Page</h3>
+                <button id="closeAddBlockModal" class="p-1.5 rounded-lg hover:bg-surface-strong text-main">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
-            <p class="text-xs text-earth-metal/70 dark:text-white/70">This will be appended as a new paragraph on the
+            <p class="text-xs text-sub ">This will be appended as a new paragraph on the
                 Notion page with a
                 timestamp.</p>
             <textarea id="blockNoteArea" rows="8"
-                class="flex-1 w-full rounded-lg border border-oatmeal-dark/60 bg-[var(--surface)] dark:bg-white/5 px-3 py-2 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-dull-purple/40"
+                class="flex-1 w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-dull-purple/40"
                 placeholder="Write in Markdown..."></textarea>
-            <div
-                class="rounded-lg border border-[color:var(--card-border)] p-3 bg-[color:var(--surface)] dark:bg-white/5">
+            <div class="rounded-lg border border-[color:var(--card-border)] p-3 bg-[color:var(--surface)] ">
                 <div class="flex items-center justify-between mb-2">
-                    <span class="text-xs font-semibold text-charcoal dark:text-white">Preview</span>
-                    <span class="text-[11px] text-earth-metal/60 dark:text-white/60">Timestamp added on save</span>
+                    <span class="text-xs font-semibold text-main ">Preview</span>
+                    <span class="text-[11px] text-muted ">Timestamp added on save</span>
                 </div>
                 <div id="blockNotePreview"
                     class="md-content text-xs text-[color:var(--text-main)] max-h-40 overflow-y-auto scroll-minimal">
-                    <p class="text-earth-metal/50 dark:text-white/60">Type a note to preview media embeds.</p>
+                    <p class="text-faint ">Type a note to preview media embeds.</p>
                 </div>
             </div>
             <div class="flex items-center justify-end gap-2">
                 <button id="cancelAddBlockBtn"
-                    class="px-4 py-2 rounded-lg border border-oatmeal-dark text-earth-metal text-sm">Cancel</button>
+                    class="px-4 py-2 rounded-lg border border-card text-main text-sm">Cancel</button>
                 <button id="saveAddBlockBtn"
-                    class="px-4 py-2 rounded-lg bg-dull-purple text-white text-sm hover:bg-dull-purple-hover transition-all">Add
+                    class="px-4 py-2 rounded-lg bg-[color:var(--accent)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--accent-hover)] transition-all">Add
                     to
                     Page</button>
             </div>
