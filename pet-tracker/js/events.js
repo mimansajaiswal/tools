@@ -143,13 +143,13 @@ const Events = {
      */
     toggleStamp: async (petId, eventTypeId, date) => {
         const dateStr = date.slice(0, 10);
-        
+
         // Find existing stamp for this pet/type/date
         const existing = await PetTracker.DB.query(
             PetTracker.STORES.EVENTS,
             e => e.petIds?.includes(petId) &&
-                 e.eventTypeId === eventTypeId &&
-                 e.startDate?.slice(0, 10) === dateStr
+                e.eventTypeId === eventTypeId &&
+                e.startDate?.slice(0, 10) === dateStr
         );
 
         if (existing.length > 0) {
@@ -176,7 +176,7 @@ const Events = {
      */
     getStamps: async (petId, eventTypeId, startDate, endDate) => {
         const events = await Events.getForDateRange(startDate, endDate);
-        return events.filter(e => 
+        return events.filter(e =>
             e.petIds?.includes(petId) && e.eventTypeId === eventTypeId
         );
     },
@@ -211,7 +211,7 @@ const Events = {
         if (event.startDate) {
             const dateInput = document.getElementById('addEventDate');
             const timeInput = document.getElementById('addEventTime');
-            
+
             if (event.startDate.includes('T')) {
                 dateInput.value = event.startDate.slice(0, 10);
                 timeInput.value = event.startDate.slice(11, 16);
@@ -262,7 +262,7 @@ const Events = {
     renderStampCard: (pet, eventType, stamps = []) => {
         const today = new Date();
         const days = [];
-        
+
         // Last 7 days
         for (let i = 6; i >= 0; i--) {
             const date = new Date(today);
@@ -280,11 +280,11 @@ const Events = {
                 </div>
                 <div class="flex gap-2">
                     ${days.map(date => {
-                        const dateStr = date.toISOString().slice(0, 10);
-                        const isStamped = stampDates.has(dateStr);
-                        const isToday = dateStr === today.toISOString().slice(0, 10);
+            const dateStr = date.toISOString().slice(0, 10);
+            const isStamped = stampDates.has(dateStr);
+            const isToday = dateStr === today.toISOString().slice(0, 10);
 
-                        return `
+            return `
                             <button class="stamp-day ${isStamped ? 'stamp-day-active' : ''} ${isToday ? 'stamp-day-today' : ''}"
                                     onclick="Events.handleStampClick('${pet.id}', '${eventType.id}', '${dateStr}')"
                                     data-long-press="Events.showStampNotes"
@@ -295,7 +295,7 @@ const Events = {
                                 ${date.getDate()}
                             </button>
                         `;
-                    }).join('')}
+        }).join('')}
                 </div>
             </div>
         `;
@@ -307,7 +307,7 @@ const Events = {
     _stampDebounce: {},
     handleStampClick: async (petId, eventTypeId, dateStr) => {
         const key = `${petId}-${eventTypeId}-${dateStr}`;
-        
+
         // Debounce rapid clicks
         if (Events._stampDebounce[key]) {
             clearTimeout(Events._stampDebounce[key]);
@@ -315,10 +315,10 @@ const Events = {
 
         Events._stampDebounce[key] = setTimeout(async () => {
             delete Events._stampDebounce[key];
-            
+
             const created = await Events.toggleStamp(petId, eventTypeId, dateStr);
             PetTracker.UI.toast(created ? 'Stamped' : 'Removed', 'success', 1500);
-            
+
             // Refresh the stamp card if visible
             if (typeof Pets !== 'undefined') {
                 Pets.showDetail?.(petId);
@@ -334,8 +334,8 @@ const Events = {
         const existing = await PetTracker.DB.query(
             PetTracker.STORES.EVENTS,
             e => e.petIds?.includes(petId) &&
-                 e.eventTypeId === eventTypeId &&
-                 e.startDate?.slice(0, 10) === dateStr
+                e.eventTypeId === eventTypeId &&
+                e.startDate?.slice(0, 10) === dateStr
         );
 
         if (existing.length > 0) {

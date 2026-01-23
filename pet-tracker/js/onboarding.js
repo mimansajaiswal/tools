@@ -110,7 +110,7 @@ const Onboarding = {
                     return false;
                 }
                 return true;
-            
+
             case 4:
                 const petName = document.getElementById('onboardingPetName')?.value?.trim();
                 if (!petName) {
@@ -118,7 +118,7 @@ const Onboarding = {
                     return false;
                 }
                 return true;
-            
+
             default:
                 return true;
         }
@@ -134,7 +134,7 @@ const Onboarding = {
                 const proxyToken = document.getElementById('onboardingProxyToken')?.value;
                 PetTracker.Settings.set({ workerUrl, proxyToken });
                 break;
-            
+
             case 3:
                 const notionToken = document.getElementById('onboardingNotionToken')?.value;
                 const databaseId = document.getElementById('onboardingDatabaseId')?.value;
@@ -178,7 +178,7 @@ const Onboarding = {
 
             // Mark onboarding complete
             PetTracker.Settings.setOnboardingDone(true);
-            
+
             PetTracker.UI.hideLoading();
             PetTracker.UI.toast('Setup complete!', 'success');
             PetTracker.UI.closeModal('onboardingModal');
@@ -243,7 +243,7 @@ const Onboarding = {
     createSampleData: async () => {
         // Create default event types
         await Care.createDefaultEventTypes();
-        
+
         // Create default scales
         await Care.createDefaultScales();
 

@@ -193,14 +193,14 @@ const App = {
             App.state.pets = await PetTracker.DB.getAll(PetTracker.STORES.PETS);
             App.state.eventTypes = await PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES);
             App.state.activePetId = PetTracker.Settings.getActivePet();
-            
+
             // Create default event types if none exist
             if (App.state.eventTypes.length === 0) {
                 await Care.createDefaultEventTypes();
                 await Care.createDefaultScales();
                 App.state.eventTypes = await PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES);
             }
-            
+
             console.log(`[App] Loaded ${App.state.pets.length} pets, ${App.state.eventTypes.length} event types`);
         } catch (e) {
             console.error('[App] Error loading data:', e);
@@ -237,7 +237,7 @@ const App = {
         const petSelect = document.getElementById('addEventPet');
         if (petSelect) {
             const activePet = prefill.pet || App.state.activePetId;
-            petSelect.innerHTML = App.state.pets.map(p => 
+            petSelect.innerHTML = App.state.pets.map(p =>
                 `<option value="${p.id}" ${p.id === activePet ? 'selected' : ''}>${p.name}</option>`
             ).join('');
             if (App.state.pets.length === 0) {
@@ -249,7 +249,7 @@ const App = {
         const typeSelect = document.getElementById('addEventType');
         if (typeSelect) {
             typeSelect.innerHTML = '<option value="">Select type...</option>' +
-                App.state.eventTypes.map(t => 
+                App.state.eventTypes.map(t =>
                     `<option value="${t.id}" ${t.id === prefill.type ? 'selected' : ''}>${t.name}</option>`
                 ).join('');
         }
@@ -317,7 +317,7 @@ const App = {
             App.clearAttachments();
             PetTracker.UI.closeModal('addEventModal');
             form.dataset.editId = '';
-            
+
             // Refresh views
             App.renderDashboard();
             if (typeof Calendar !== 'undefined') Calendar.render?.();
@@ -376,11 +376,11 @@ const App = {
         container.innerHTML = previews.map((p, idx) => `
             <div class="relative group">
                 ${p.previewUrl
-                    ? `<img src="${p.previewUrl}" alt="${PetTracker.UI.escapeHtml(p.name)}" class="w-16 h-16 object-cover border border-oatmeal">`
-                    : `<div class="w-16 h-16 bg-oatmeal flex items-center justify-center border border-earth-metal">
+                ? `<img src="${p.previewUrl}" alt="${PetTracker.UI.escapeHtml(p.name)}" class="w-16 h-16 object-cover border border-oatmeal">`
+                : `<div class="w-16 h-16 bg-oatmeal flex items-center justify-center border border-earth-metal">
                         <i data-lucide="file" class="w-6 h-6 text-earth-metal"></i>
                        </div>`
-                }
+            }
                 ${p.type === 'video' ? '<span class="absolute bottom-1 left-1 bg-charcoal text-white-linen text-[8px] px-1 font-mono">VIDEO</span>' : ''}
                 <button type="button" onclick="App.removeAttachment(${idx})" class="absolute -top-1 -right-1 w-5 h-5 bg-muted-pink text-charcoal flex items-center justify-center text-xs hover:bg-opacity-80">×</button>
             </div>
@@ -593,10 +593,10 @@ const App = {
     showPetDetail: (petId) => {
         const pet = App.state.pets.find(p => p.id === petId);
         if (!pet) return;
-        
+
         PetTracker.Settings.setActivePet(petId);
         App.state.activePetId = petId;
-        
+
         // For now, just show a toast
         PetTracker.UI.toast(`Viewing ${pet.name}`, 'info');
     },
@@ -635,7 +635,7 @@ const App = {
             const { outcome } = await App.state.deferredPrompt.userChoice;
             console.log('[App] PWA install outcome:', outcome);
             App.state.deferredPrompt = null;
-            
+
             const installBtn = document.getElementById('installPwaBtn');
             if (installBtn) installBtn.classList.add('hidden');
         } catch (e) {

@@ -244,9 +244,9 @@ const Contacts = {
                                     <span class="text-dull-purple">(${byRole[role].length})</span>
                                 </h3>
                                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    ${byRole[role].map(contact => Contacts.renderCard(contact, { 
-                                        showActions: true 
-                                    })).join('')}
+                                    ${byRole[role].map(contact => Contacts.renderCard(contact, {
+            showActions: true
+        })).join('')}
                                 </div>
                             </div>
                         `).join('')}

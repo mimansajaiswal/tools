@@ -75,7 +75,7 @@ const API = {
         if (filter) body.filter = filter;
         if (sorts) body.sorts = sorts;
         if (startCursor) body.start_cursor = startCursor;
-        
+
         return API.request('POST', `/databases/${dataSourceId}/query`, body);
     },
 
@@ -88,7 +88,7 @@ const API = {
             properties
         };
         if (children.length > 0) body.children = children;
-        
+
         return API.request('POST', '/pages', body);
     },
 
@@ -179,9 +179,9 @@ const API = {
         return new Promise((resolve, reject) => {
             const handleMessage = (event) => {
                 if (event.origin !== new URL(cleanWorkerUrl).origin) return;
-                
+
                 window.removeEventListener('message', handleMessage);
-                
+
                 if (event.data?.type === 'NOTION_OAUTH_SUCCESS') {
                     resolve(event.data.token);
                 } else if (event.data?.type === 'NOTION_OAUTH_ERROR') {

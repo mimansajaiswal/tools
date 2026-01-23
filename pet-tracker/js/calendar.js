@@ -118,7 +118,7 @@ const Calendar = {
         const { currentDate } = Calendar.state;
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth();
-        
+
         const firstDay = new Date(year, month, 1);
         const lastDay = new Date(year, month + 1, 0);
         const startOffset = firstDay.getDay();
@@ -176,35 +176,35 @@ const Calendar = {
                 <!-- Weeks -->
                 <div class="grid grid-cols-7 gap-1">
                     ${weeks.map(week => week.map(day => {
-                        if (day === null) {
-                            return `<div class="calendar-day calendar-day-empty"></div>`;
-                        }
+            if (day === null) {
+                return `<div class="calendar-day calendar-day-empty"></div>`;
+            }
 
-                        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                        const isToday = dateStr === todayStr;
-                        const dayEvents = eventsByDate[dateStr] || [];
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const isToday = dateStr === todayStr;
+            const dayEvents = eventsByDate[dateStr] || [];
 
-                        return `
+            return `
                             <div class="calendar-day ${isToday ? 'calendar-day-today' : ''}" 
                                  onclick="Calendar.selectDate('${dateStr}')">
                                 <div class="calendar-day-number ${isToday ? 'bg-dull-purple text-white-linen' : ''}">${day}</div>
                                 <div class="calendar-day-events">
                                     ${dayEvents.slice(0, 3).map(event => {
-                                        const pet = App.state.pets.find(p => p.id === event.petIds?.[0]);
-                                        const color = pet?.color || '#8b7b8e';
-                                        return `
+                const pet = App.state.pets.find(p => p.id === event.petIds?.[0]);
+                const color = pet?.color || '#8b7b8e';
+                return `
                                             <div class="calendar-event" style="background-color: ${color}20; border-left: 3px solid ${color};">
                                                 ${PetTracker.UI.escapeHtml(event.title || 'Event')}
                                             </div>
                                         `;
-                                    }).join('')}
+            }).join('')}
                                     ${dayEvents.length > 3 ? `
                                         <div class="text-xs text-earth-metal">+${dayEvents.length - 3} more</div>
                                     ` : ''}
                                 </div>
                             </div>
                         `;
-                    }).join('')).join('')}
+        }).join('')).join('')}
                 </div>
             </div>
         `;
@@ -242,11 +242,11 @@ const Calendar = {
             <div class="calendar-week">
                 <div class="grid grid-cols-7 gap-2">
                     ${days.map(date => {
-                        const dateStr = date.toISOString().slice(0, 10);
-                        const isToday = dateStr === todayStr;
-                        const dayEvents = eventsByDate[dateStr] || [];
+            const dateStr = date.toISOString().slice(0, 10);
+            const isToday = dateStr === todayStr;
+            const dayEvents = eventsByDate[dateStr] || [];
 
-                        return `
+            return `
                             <div class="calendar-week-day ${isToday ? 'border-dull-purple' : 'border-oatmeal'} border p-3">
                                 <div class="flex items-center justify-between mb-3">
                                     <span class="font-mono text-xs uppercase text-earth-metal">
@@ -260,9 +260,9 @@ const Calendar = {
                                     ${dayEvents.length === 0 ? `
                                         <p class="text-xs text-earth-metal">No events</p>
                                     ` : dayEvents.map(event => {
-                                        const pet = App.state.pets.find(p => p.id === event.petIds?.[0]);
-                                        const color = pet?.color || '#8b7b8e';
-                                        return `
+                const pet = App.state.pets.find(p => p.id === event.petIds?.[0]);
+                const color = pet?.color || '#8b7b8e';
+                return `
                                             <div class="calendar-event-week p-2 cursor-pointer" 
                                                  style="border-left: 3px solid ${color};"
                                                  onclick="Calendar.showEventDetail('${event.id}')">
@@ -276,11 +276,11 @@ const Calendar = {
                                                 ` : ''}
                                             </div>
                                         `;
-                                    }).join('')}
+            }).join('')}
                                 </div>
                             </div>
                         `;
-                    }).join('')}
+        }).join('')}
                 </div>
             </div>
         `;
@@ -291,7 +291,7 @@ const Calendar = {
      */
     renderAgendaView: (events) => {
         // Sort events by date
-        const sorted = [...events].sort((a, b) => 
+        const sorted = [...events].sort((a, b) =>
             new Date(a.startDate) - new Date(b.startDate)
         );
 
@@ -315,10 +315,10 @@ const Calendar = {
         return `
             <div class="calendar-agenda space-y-4">
                 ${dates.map(dateStr => {
-                    const isToday = dateStr === today;
-                    const date = new Date(dateStr + 'T00:00:00');
+            const isToday = dateStr === today;
+            const date = new Date(dateStr + 'T00:00:00');
 
-                    return `
+            return `
                         <div class="agenda-day">
                             <div class="flex items-center gap-3 mb-3">
                                 <span class="font-serif text-xl ${isToday ? 'text-dull-purple' : 'text-charcoal'}">
@@ -336,10 +336,10 @@ const Calendar = {
                             </div>
                             <div class="space-y-2 ml-8">
                                 ${grouped[dateStr].map(event => {
-                                    const pet = App.state.pets.find(p => p.id === event.petIds?.[0]);
-                                    const color = pet?.color || '#8b7b8e';
+                const pet = App.state.pets.find(p => p.id === event.petIds?.[0]);
+                const color = pet?.color || '#8b7b8e';
 
-                                    return `
+                return `
                                         <div class="card p-3 flex items-center gap-3 cursor-pointer hover:border-dull-purple"
                                              onclick="Calendar.showEventDetail('${event.id}')"
                                              style="border-left: 3px solid ${color};">
@@ -360,11 +360,11 @@ const Calendar = {
                                             </span>
                                         </div>
                                     `;
-                                }).join('')}
+            }).join('')}
                             </div>
                         </div>
                     `;
-                }).join('')}
+        }).join('')}
             </div>
         `;
     },
@@ -400,7 +400,7 @@ const Calendar = {
         const { petIds, eventTypeIds, tags } = Calendar.state.filters;
 
         if (petIds.length > 0) {
-            events = events.filter(e => 
+            events = events.filter(e =>
                 e.petIds?.some(id => petIds.includes(id))
             );
         }
@@ -410,7 +410,7 @@ const Calendar = {
         }
 
         if (tags.length > 0) {
-            events = events.filter(e => 
+            events = events.filter(e =>
                 e.tags?.some(t => tags.includes(t))
             );
         }

@@ -128,7 +128,7 @@ const Pets = {
      */
     getWeightEventTypeId: () => {
         const eventTypes = App.state.eventTypes || [];
-        const weightType = eventTypes.find(t => 
+        const weightType = eventTypes.find(t =>
             t.name?.toLowerCase().includes('weight') || t.category === 'Weight'
         );
         return weightType?.id || null;
@@ -145,7 +145,7 @@ const Pets = {
             PetTracker.STORES.EVENTS,
             e => e.petIds?.includes(petId) && e.eventTypeId === weightTypeId && e.value !== null
         );
-        
+
         events.sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
         return events.slice(0, limit);
     },
@@ -163,18 +163,18 @@ const Pets = {
      */
     generateWeightSparkline: (weights, width = 80, height = 20) => {
         if (!weights || weights.length < 2) return '';
-        
+
         const values = weights.slice().reverse().map(w => w.value);
         const min = Math.min(...values);
         const max = Math.max(...values);
         const range = max - min || 1;
-        
+
         const points = values.map((v, i) => {
             const x = (i / (values.length - 1)) * width;
             const y = height - ((v - min) / range) * (height - 4) - 2;
             return `${x},${y}`;
         }).join(' ');
-        
+
         return `<svg width="${width}" height="${height}" class="inline-block align-middle">
             <polyline fill="none" stroke="#8b7b8e" stroke-width="1.5" points="${points}"/>
         </svg>`;
@@ -193,10 +193,10 @@ const Pets = {
                  ${onClick ? `onclick="${onClick}('${pet.id}')"` : ''}>
                 <div class="flex items-center gap-3">
                     <div class="w-14 h-14 bg-oatmeal flex items-center justify-center flex-shrink-0 overflow-hidden">
-                        ${pet.photo?.[0]?.url 
-                            ? `<img src="${pet.photo[0].url}" alt="${PetTracker.UI.escapeHtml(pet.name)}" class="w-full h-full object-cover">`
-                            : `<i data-lucide="paw-print" class="w-7 h-7 text-earth-metal"></i>`
-                        }
+                        ${pet.photo?.[0]?.url
+                ? `<img src="${pet.photo[0].url}" alt="${PetTracker.UI.escapeHtml(pet.name)}" class="w-full h-full object-cover">`
+                : `<i data-lucide="paw-print" class="w-7 h-7 text-earth-metal"></i>`
+            }
                     </div>
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-2">
@@ -246,10 +246,10 @@ const Pets = {
                     ${PetTracker.UI.emptyState('paw-print', 'No pets yet', 'Add your first pet to get started')}
                 ` : `
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        ${pets.map(pet => Pets.renderCard(pet, { 
-                            showActions: true, 
-                            onClick: 'Pets.showDetail' 
-                        })).join('')}
+                        ${pets.map(pet => Pets.renderCard(pet, {
+            showActions: true,
+            onClick: 'Pets.showDetail'
+        })).join('')}
                     </div>
                 `}
             </div>
@@ -328,7 +328,7 @@ const Pets = {
             }
 
             PetTracker.UI.closeModal('addPetModal');
-            
+
             // Refresh
             await App.loadData();
             Pets.renderList();
@@ -360,14 +360,14 @@ const Pets = {
         // Get weight history using proper weight type
         const weightEvents = await Pets.getWeightHistory(id, 10);
         const latestWeight = weightEvents[0]?.value || null;
-        
+
         // Check if weight is out of target range
         let weightAlert = '';
         if (latestWeight !== null && (pet.targetWeightMin || pet.targetWeightMax)) {
             const isBelow = pet.targetWeightMin && latestWeight < pet.targetWeightMin;
             const isAbove = pet.targetWeightMax && latestWeight > pet.targetWeightMax;
             if (isBelow || isAbove) {
-                const msg = isBelow 
+                const msg = isBelow
                     ? `Weight is below target minimum (${pet.targetWeightMin} ${pet.weightUnit || 'lb'})`
                     : `Weight is above target maximum (${pet.targetWeightMax} ${pet.weightUnit || 'lb'})`;
                 weightAlert = `
@@ -397,10 +397,10 @@ const Pets = {
                 <div class="card p-6">
                     <div class="flex flex-col md:flex-row gap-6">
                         <div class="w-32 h-32 bg-oatmeal flex items-center justify-center flex-shrink-0 overflow-hidden">
-                            ${pet.photo?.[0]?.url 
-                                ? `<img src="${pet.photo[0].url}" alt="${PetTracker.UI.escapeHtml(pet.name)}" class="w-full h-full object-cover">`
-                                : `<i data-lucide="paw-print" class="w-16 h-16 text-earth-metal"></i>`
-                            }
+                            ${pet.photo?.[0]?.url
+                ? `<img src="${pet.photo[0].url}" alt="${PetTracker.UI.escapeHtml(pet.name)}" class="w-full h-full object-cover">`
+                : `<i data-lucide="paw-print" class="w-16 h-16 text-earth-metal"></i>`
+            }
                         </div>
                         <div class="flex-1">
                             <div class="flex items-center gap-3 mb-2">

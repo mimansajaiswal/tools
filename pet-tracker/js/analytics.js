@@ -142,7 +142,7 @@ const Analytics = {
         if (!canvas || !statsContainer) return;
 
         // Get weight event type
-        const weightType = App.state.eventTypes.find(t => 
+        const weightType = App.state.eventTypes.find(t =>
             t.name.toLowerCase().includes('weight') || t.category === 'Weight'
         );
 
@@ -387,16 +387,16 @@ const Analytics = {
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
         const stats = filteredPlans.map(plan => {
-            const planEvents = events.filter(e => 
+            const planEvents = events.filter(e =>
                 e.careItemId === plan.careItemId &&
                 new Date(e.startDate) >= thirtyDaysAgo
             );
 
             // Calculate expected occurrences based on interval
             const intervalDays = plan.intervalUnit === 'Days' ? plan.intervalValue :
-                                plan.intervalUnit === 'Weeks' ? plan.intervalValue * 7 :
-                                plan.intervalUnit === 'Months' ? plan.intervalValue * 30 : plan.intervalValue;
-            
+                plan.intervalUnit === 'Weeks' ? plan.intervalValue * 7 :
+                    plan.intervalUnit === 'Months' ? plan.intervalValue * 30 : plan.intervalValue;
+
             const expectedCount = Math.floor(30 / intervalDays);
             const actualCount = planEvents.filter(e => e.status === 'Completed').length;
             const adherence = expectedCount > 0 ? Math.min(100, (actualCount / expectedCount) * 100) : 100;
@@ -452,7 +452,7 @@ const Analytics = {
         });
 
         const ctx = canvas.getContext('2d');
-        const labels = Array.from({ length: 24 }, (_, i) => 
+        const labels = Array.from({ length: 24 }, (_, i) =>
             i === 0 ? '12am' : i < 12 ? `${i}am` : i === 12 ? '12pm' : `${i - 12}pm`
         );
 

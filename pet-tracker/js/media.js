@@ -16,7 +16,7 @@ const Media = {
      */
     processImage: async (file) => {
         const img = await Media.loadImage(file);
-        
+
         // Create upload version (webp, quality 0.8, max 2560px)
         const uploadBlob = await Media.resizeAndConvert(
             img,
@@ -105,7 +105,7 @@ const Media = {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                const posterBlob = await new Promise(r => 
+                const posterBlob = await new Promise(r =>
                     canvas.toBlob(r, 'image/webp', Media.PREVIEW_QUALITY)
                 );
 
@@ -255,11 +255,11 @@ const Media = {
                         result.warning = 'Video is large. Consider trimming before upload.';
                     }
                 } else {
-                    result = { 
-                        type: 'other', 
-                        originalName: file.name, 
+                    result = {
+                        type: 'other',
+                        originalName: file.name,
                         originalSize: file.size,
-                        file 
+                        file
                     };
                 }
 
@@ -286,18 +286,18 @@ const Media = {
      */
     uploadToNotion: async (blob, filename) => {
         const settings = PetTracker.Settings.get();
-        
+
         // Check size limit
         const isPaid = settings.uploadCapMb > 5;
         const check = Media.checkFileSize(blob, isPaid);
-        
+
         if (!check.ok) {
             throw new Error(`File exceeds ${check.limitMb}MB limit`);
         }
 
         // Get upload URL from Notion
         const uploadInfo = await PetTracker.API.getFileUploadUrl(filename, blob.type);
-        
+
         if (!uploadInfo.upload_url) {
             throw new Error('Failed to get upload URL');
         }

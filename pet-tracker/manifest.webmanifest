@@ -32,10 +32,17 @@
       "files": [
         {
           "name": "media",
-          "accept": ["image/*", "video/*"]
+          "accept": [
+            "image/*",
+            "video/*"
+          ]
         }
       ]
     }
   },
-  "categories": ["health", "lifestyle", "utilities"]
+  "categories": [
+    "health",
+    "lifestyle",
+    "utilities"
+  ]
 }

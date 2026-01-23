@@ -29,7 +29,7 @@ self.addEventListener('fetch', (event) => {
     if (event.request.method !== 'GET') return;
 
     const url = new URL(event.request.url);
-    
+
     // Skip caching for API calls
     if (url.hostname !== location.hostname) {
         return;
@@ -59,7 +59,7 @@ self.addEventListener('fetch', (event) => {
             (async () => {
                 const formData = await event.request.formData();
                 const files = formData.getAll('media');
-                
+
                 // Store shared files temporarily
                 if (files.length > 0) {
                     const client = await self.clients.get(event.resultingClientId);
@@ -70,7 +70,7 @@ self.addEventListener('fetch', (event) => {
                         });
                     }
                 }
-                
+
                 return Response.redirect('./index.html?share=true', 303);
             })()
         );

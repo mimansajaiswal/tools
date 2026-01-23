@@ -42,18 +42,18 @@ const CalendarExport = {
 
         const pet = App.state.pets.find(p => p.id === event.petIds?.[0]);
         const eventType = App.state.eventTypes.find(t => t.id === event.eventTypeId);
-        
-        const summary = pet 
+
+        const summary = pet
             ? `[${pet.name}] ${event.title || eventType?.name || 'Event'}`
             : event.title || eventType?.name || 'Event';
 
         const uid = `${event.id}@pettracker`;
         const now = CalendarExport.formatICSDate(new Date());
-        
+
         // Parse start date
         const hasTime = event.startDate.includes('T');
         const startDate = new Date(event.startDate);
-        
+
         // Build description
         const descParts = [];
         if (pet) descParts.push(`Pet: ${pet.name}`);
@@ -103,7 +103,7 @@ const CalendarExport = {
         }
 
         lines.push(`SUMMARY:${CalendarExport.escapeICS(summary)}`);
-        
+
         if (description) {
             lines.push(`DESCRIPTION:${CalendarExport.escapeICS(description)}`);
         }
@@ -188,7 +188,7 @@ const CalendarExport = {
      */
     exportDateRange: async (startDate, endDate, filters = {}) => {
         let events = await PetTracker.DB.getAll(PetTracker.STORES.EVENTS);
-        
+
         // Filter by date range
         events = events.filter(e => {
             if (!e.startDate) return false;
@@ -198,13 +198,13 @@ const CalendarExport = {
 
         // Apply filters
         if (filters.petIds?.length > 0) {
-            events = events.filter(e => 
+            events = events.filter(e =>
                 e.petIds?.some(id => filters.petIds.includes(id))
             );
         }
 
         if (filters.eventTypeIds?.length > 0) {
-            events = events.filter(e => 
+            events = events.filter(e =>
                 filters.eventTypeIds.includes(e.eventTypeId)
             );
         }
@@ -234,7 +234,7 @@ const CalendarExport = {
         let events = await PetTracker.DB.getAll(PetTracker.STORES.EVENTS);
 
         if (filters.petIds?.length > 0) {
-            events = events.filter(e => 
+            events = events.filter(e =>
                 e.petIds?.some(id => filters.petIds.includes(id))
             );
         }
@@ -260,14 +260,14 @@ const CalendarExport = {
 
         const pet = App.state.pets.find(p => p.id === event.petIds?.[0]);
         const eventType = App.state.eventTypes.find(t => t.id === event.eventTypeId);
-        
-        const title = pet 
+
+        const title = pet
             ? `[${pet.name}] ${event.title || eventType?.name || 'Event'}`
             : event.title || eventType?.name || 'Event';
 
         const hasTime = event.startDate.includes('T');
         const startDate = new Date(event.startDate);
-        
+
         let endDate;
         if (event.endDate) {
             endDate = new Date(event.endDate);
@@ -421,7 +421,7 @@ const CalendarExport = {
     executeExport: async () => {
         const exportType = document.getElementById('exportType')?.value;
         const petFilter = document.getElementById('exportPetFilter')?.value;
-        
+
         const filters = {};
         if (petFilter) {
             filters.petIds = [petFilter];
@@ -430,7 +430,7 @@ const CalendarExport = {
         if (exportType === 'range') {
             const startDate = document.getElementById('exportStartDate')?.value;
             const endDate = document.getElementById('exportEndDate')?.value;
-            
+
             if (!startDate || !endDate) {
                 PetTracker.UI.toast('Please select date range', 'error');
                 return;

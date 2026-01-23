@@ -90,7 +90,7 @@ const Care = {
      */
     calculateNextDue: (plan) => {
         const now = new Date();
-        
+
         if (plan.scheduleType === 'One-off') {
             return plan.anchorDate;
         }
@@ -136,9 +136,9 @@ const Care = {
         // Find last completed event for this care plan
         const events = await PetTracker.DB.query(
             PetTracker.STORES.EVENTS,
-            e => e.careItemId === plan.careItemId && 
-                 e.status === 'Completed' &&
-                 plan.petIds.some(id => e.petIds?.includes(id))
+            e => e.careItemId === plan.careItemId &&
+                e.status === 'Completed' &&
+                plan.petIds.some(id => e.petIds?.includes(id))
         );
 
         if (events.length === 0) {
@@ -173,7 +173,7 @@ const Care = {
      * Get upcoming items from care plans
      */
     getUpcoming: async (options = {}) => {
-        const { 
+        const {
             horizon = 30, // days
             petIds = [],
             categories = []
@@ -291,32 +291,32 @@ const Care = {
                 ` : `
                     <div class="space-y-3">
                         ${upcoming.map(item => {
-                            const pets = item.petIds.map(id => App.state.pets.find(p => p.id === id)).filter(Boolean);
-                            const dueDate = new Date(item.dueDate);
-                            const today = new Date();
-                            today.setHours(0, 0, 0, 0);
-                            
-                            const diffDays = Math.floor((dueDate - today) / (1000 * 60 * 60 * 24));
-                            let dueLabel = '';
-                            if (diffDays < 0) {
-                                dueLabel = `${Math.abs(diffDays)} days overdue`;
-                            } else if (diffDays === 0) {
-                                dueLabel = 'Due today';
-                            } else if (diffDays === 1) {
-                                dueLabel = 'Due tomorrow';
-                            } else {
-                                dueLabel = `Due in ${diffDays} days`;
-                            }
+            const pets = item.petIds.map(id => App.state.pets.find(p => p.id === id)).filter(Boolean);
+            const dueDate = new Date(item.dueDate);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
 
-                            const categoryIcon = {
-                                'Medication': 'pill',
-                                'Vaccine': 'syringe',
-                                'Vet Visit': 'stethoscope',
-                                'Habit': 'repeat',
-                                'Other': 'calendar'
-                            }[item.category] || 'calendar';
+            const diffDays = Math.floor((dueDate - today) / (1000 * 60 * 60 * 24));
+            let dueLabel = '';
+            if (diffDays < 0) {
+                dueLabel = `${Math.abs(diffDays)} days overdue`;
+            } else if (diffDays === 0) {
+                dueLabel = 'Due today';
+            } else if (diffDays === 1) {
+                dueLabel = 'Due tomorrow';
+            } else {
+                dueLabel = `Due in ${diffDays} days`;
+            }
 
-                            return `
+            const categoryIcon = {
+                'Medication': 'pill',
+                'Vaccine': 'syringe',
+                'Vet Visit': 'stethoscope',
+                'Habit': 'repeat',
+                'Other': 'calendar'
+            }[item.category] || 'calendar';
+
+            return `
                                 <div class="card p-4 ${item.isOverdue ? 'border-muted-pink' : ''}">
                                     <div class="flex items-start gap-4">
                                         <div class="w-10 h-10 bg-oatmeal flex items-center justify-center flex-shrink-0">
@@ -348,7 +348,7 @@ const Care = {
                                     </div>
                                 </div>
                             `;
-                        }).join('')}
+        }).join('')}
                     </div>
                 `}
 
@@ -372,7 +372,7 @@ const Care = {
         if (!plan) return;
 
         // Create completed event
-        const careItem = plan.careItemId 
+        const careItem = plan.careItemId
             ? await PetTracker.DB.get(PetTracker.STORES.CARE_ITEMS, plan.careItemId)
             : null;
 

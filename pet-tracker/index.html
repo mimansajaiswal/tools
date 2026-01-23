@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -23,7 +24,9 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
     <!-- Fonts: Playfair Display (serif), Inter (sans), JetBrains Mono (mono) -->
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
 
     <!-- Tailwind Config -->
     <script>
@@ -57,10 +60,12 @@
     <link rel="stylesheet" href="./css/styles.css">
 </head>
 
-<body class="bg-white-linen text-charcoal font-sans min-h-screen flex flex-col md:flex-row overflow-hidden selection:bg-dull-purple selection:text-white-linen">
+<body
+    class="bg-white-linen text-charcoal font-sans min-h-screen flex flex-col md:flex-row overflow-hidden selection:bg-dull-purple selection:text-white-linen">
 
     <!-- Toast Container -->
-    <div id="toastContainer" class="fixed top-4 right-4 z-[100] flex flex-col gap-2 w-full max-w-xs pointer-events-none"></div>
+    <div id="toastContainer"
+        class="fixed top-4 right-4 z-[100] flex flex-col gap-2 w-full max-w-xs pointer-events-none"></div>
 
     <!-- Sidebar (Desktop) -->
     <aside class="hidden md:flex md:w-64 h-screen flex-col border-r border-oatmeal bg-white-linen flex-shrink-0">
@@ -84,27 +89,33 @@
 
         <!-- Navigation -->
         <nav class="flex-1 p-3 space-y-1 overflow-y-auto">
-            <button data-nav="dashboard" class="w-full flex items-center gap-3 px-3 py-2 text-left text-dull-purple hover:bg-oatmeal/30 transition-fast">
+            <button data-nav="dashboard"
+                class="w-full flex items-center gap-3 px-3 py-2 text-left text-dull-purple hover:bg-oatmeal/30 transition-fast">
                 <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
                 <span class="font-mono text-xs uppercase">Dashboard</span>
             </button>
-            <button data-nav="calendar" class="w-full flex items-center gap-3 px-3 py-2 text-left text-earth-metal hover:bg-oatmeal/30 transition-fast">
+            <button data-nav="calendar"
+                class="w-full flex items-center gap-3 px-3 py-2 text-left text-earth-metal hover:bg-oatmeal/30 transition-fast">
                 <i data-lucide="calendar" class="w-5 h-5"></i>
                 <span class="font-mono text-xs uppercase">Calendar</span>
             </button>
-            <button data-nav="upcoming" class="w-full flex items-center gap-3 px-3 py-2 text-left text-earth-metal hover:bg-oatmeal/30 transition-fast">
+            <button data-nav="upcoming"
+                class="w-full flex items-center gap-3 px-3 py-2 text-left text-earth-metal hover:bg-oatmeal/30 transition-fast">
                 <i data-lucide="clock" class="w-5 h-5"></i>
                 <span class="font-mono text-xs uppercase">Upcoming</span>
             </button>
-            <button data-nav="analytics" class="w-full flex items-center gap-3 px-3 py-2 text-left text-earth-metal hover:bg-oatmeal/30 transition-fast">
+            <button data-nav="analytics"
+                class="w-full flex items-center gap-3 px-3 py-2 text-left text-earth-metal hover:bg-oatmeal/30 transition-fast">
                 <i data-lucide="bar-chart-3" class="w-5 h-5"></i>
                 <span class="font-mono text-xs uppercase">Analytics</span>
             </button>
-            <button data-nav="pets" class="w-full flex items-center gap-3 px-3 py-2 text-left text-earth-metal hover:bg-oatmeal/30 transition-fast">
+            <button data-nav="pets"
+                class="w-full flex items-center gap-3 px-3 py-2 text-left text-earth-metal hover:bg-oatmeal/30 transition-fast">
                 <i data-lucide="paw-print" class="w-5 h-5"></i>
                 <span class="font-mono text-xs uppercase">Pets</span>
             </button>
-            <button data-nav="contacts" class="w-full flex items-center gap-3 px-3 py-2 text-left text-earth-metal hover:bg-oatmeal/30 transition-fast">
+            <button data-nav="contacts"
+                class="w-full flex items-center gap-3 px-3 py-2 text-left text-earth-metal hover:bg-oatmeal/30 transition-fast">
                 <i data-lucide="users" class="w-5 h-5"></i>
                 <span class="font-mono text-xs uppercase">Contacts</span>
             </button>
@@ -112,19 +123,23 @@
 
         <!-- Sidebar Footer -->
         <div class="p-3 border-t border-oatmeal space-y-1">
-            <button onclick="App.openAddModal()" class="w-full flex items-center gap-3 px-3 py-2 text-dull-purple hover:bg-oatmeal/30 transition-fast">
+            <button onclick="App.openAddModal()"
+                class="w-full flex items-center gap-3 px-3 py-2 text-dull-purple hover:bg-oatmeal/30 transition-fast">
                 <i data-lucide="plus-circle" class="w-5 h-5"></i>
                 <span class="font-mono text-xs uppercase">Add Event</span>
             </button>
-            <button onclick="AI.openModal()" class="w-full flex items-center gap-3 px-3 py-2 text-earth-metal hover:bg-oatmeal/30 transition-fast">
+            <button onclick="AI.openModal()"
+                class="w-full flex items-center gap-3 px-3 py-2 text-earth-metal hover:bg-oatmeal/30 transition-fast">
                 <i data-lucide="sparkles" class="w-5 h-5"></i>
                 <span class="font-mono text-xs uppercase">AI Quick Add</span>
             </button>
-            <button id="installPwaBtn" onclick="App.promptInstall()" class="hidden w-full flex items-center gap-3 px-3 py-2 text-dull-purple hover:bg-oatmeal/30 transition-fast">
+            <button id="installPwaBtn" onclick="App.promptInstall()"
+                class="hidden w-full flex items-center gap-3 px-3 py-2 text-dull-purple hover:bg-oatmeal/30 transition-fast">
                 <i data-lucide="download" class="w-5 h-5"></i>
                 <span class="font-mono text-xs uppercase">Install App</span>
             </button>
-            <button onclick="App.openSettings()" class="w-full flex items-center gap-3 px-3 py-2 text-earth-metal hover:bg-oatmeal/30 transition-fast">
+            <button onclick="App.openSettings()"
+                class="w-full flex items-center gap-3 px-3 py-2 text-earth-metal hover:bg-oatmeal/30 transition-fast">
                 <i data-lucide="settings" class="w-5 h-5"></i>
                 <span class="font-mono text-xs uppercase">Settings</span>
             </button>
@@ -134,20 +149,23 @@
     <!-- Main Content -->
     <main class="flex-1 flex flex-col min-h-0 h-screen">
         <!-- Header -->
-        <header class="h-14 md:h-16 border-b border-oatmeal flex items-center justify-between px-4 bg-white-linen flex-shrink-0">
+        <header
+            class="h-14 md:h-16 border-b border-oatmeal flex items-center justify-between px-4 bg-white-linen flex-shrink-0">
             <div class="flex items-center gap-3">
                 <!-- Mobile menu toggle -->
                 <button class="md:hidden p-2 -ml-2 text-earth-metal" onclick="App.toggleMobileMenu()">
                     <i data-lucide="menu" class="w-5 h-5"></i>
                 </button>
                 <h2 id="headerTitle" class="font-serif text-xl text-charcoal">Dashboard</h2>
-                <span id="syncStatus" class="hidden text-[10px] font-mono uppercase px-2 py-1 bg-oatmeal text-earth-metal flex items-center gap-1">
+                <span id="syncStatus"
+                    class="hidden text-[10px] font-mono uppercase px-2 py-1 bg-oatmeal text-earth-metal flex items-center gap-1">
                     <span class="w-2 h-2 rounded-full bg-earth-metal"></span>
                     <span>Offline</span>
                 </span>
             </div>
             <div class="flex items-center gap-2">
-                <button onclick="PetTracker.Sync?.run()" title="Sync" class="p-2 text-earth-metal hover:text-dull-purple transition-fast">
+                <button onclick="PetTracker.Sync?.run()" title="Sync"
+                    class="p-2 text-earth-metal hover:text-dull-purple transition-fast">
                     <i data-lucide="refresh-cw" class="w-5 h-5"></i>
                 </button>
                 <!-- Mobile Add Button -->
@@ -168,7 +186,8 @@
         </div>
 
         <!-- Bottom Nav (Mobile) -->
-        <nav class="md:hidden h-16 border-t border-oatmeal flex items-center justify-around bg-white-linen flex-shrink-0">
+        <nav
+            class="md:hidden h-16 border-t border-oatmeal flex items-center justify-around bg-white-linen flex-shrink-0">
             <button data-nav="dashboard" class="flex flex-col items-center gap-1 p-2 text-dull-purple">
                 <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
                 <span class="font-mono text-[9px] uppercase">Home</span>
@@ -229,21 +248,25 @@
                 </div>
                 <div>
                     <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Notes</label>
-                    <textarea id="addEventNotes" class="input-field h-24 resize-none" placeholder="Additional notes..."></textarea>
+                    <textarea id="addEventNotes" class="input-field h-24 resize-none"
+                        placeholder="Additional notes..."></textarea>
                 </div>
                 <div>
                     <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Attachments</label>
                     <div id="attachmentPreviewContainer" class="hidden flex flex-wrap gap-2 mb-3"></div>
                     <div class="border border-dashed border-oatmeal p-4 text-center">
-                        <input type="file" id="addEventFiles" class="hidden" multiple accept="image/*,video/*" onchange="App.handleFileInputChange(this)">
-                        <button type="button" onclick="document.getElementById('addEventFiles').click()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
+                        <input type="file" id="addEventFiles" class="hidden" multiple accept="image/*,video/*"
+                            onchange="App.handleFileInputChange(this)">
+                        <button type="button" onclick="document.getElementById('addEventFiles').click()"
+                            class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
                             <i data-lucide="upload" class="w-4 h-4 inline mr-2"></i>Choose Files
                         </button>
                         <p class="text-xs text-earth-metal mt-2">Or use camera on mobile</p>
                     </div>
                 </div>
                 <div class="flex gap-3 justify-end pt-4 border-t border-oatmeal">
-                    <button type="button" onclick="App.confirmCloseAddModal()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Cancel</button>
+                    <button type="button" onclick="App.confirmCloseAddModal()"
+                        class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Cancel</button>
                     <button type="submit" class="btn-primary px-4 py-2 font-mono text-xs uppercase">Save Event</button>
                 </div>
             </form>
@@ -253,10 +276,12 @@
     <!-- Settings Modal -->
     <div id="settingsModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
         <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
-        <div class="relative bg-white-linen border border-oatmeal w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col z-10">
+        <div
+            class="relative bg-white-linen border border-oatmeal w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col z-10">
             <div class="border-b border-oatmeal p-4 flex items-center justify-between flex-shrink-0">
                 <span class="section-header">Settings</span>
-                <button onclick="PetTracker.UI.closeModal('settingsModal')" class="p-1 text-earth-metal hover:text-charcoal">
+                <button onclick="PetTracker.UI.closeModal('settingsModal')"
+                    class="p-1 text-earth-metal hover:text-charcoal">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
@@ -274,26 +299,35 @@
                 <!-- Connection Tab -->
                 <div data-tab-panel="settings" data-panel="connection" class="space-y-4">
                     <div>
-                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Cloudflare Worker URL *</label>
-                        <input type="url" id="settingsWorkerUrl" class="input-field" placeholder="https://your-worker.workers.dev">
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Cloudflare Worker URL
+                            *</label>
+                        <input type="url" id="settingsWorkerUrl" class="input-field"
+                            placeholder="https://your-worker.workers.dev">
                         <p class="text-xs text-earth-metal mt-1">Your CORS proxy worker URL</p>
                     </div>
                     <div>
-                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Proxy Token (optional)</label>
-                        <input type="password" id="settingsProxyToken" class="input-field" placeholder="Optional auth token">
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Proxy Token
+                            (optional)</label>
+                        <input type="password" id="settingsProxyToken" class="input-field"
+                            placeholder="Optional auth token">
                     </div>
 
                     <!-- OAuth Section -->
                     <div class="border border-oatmeal p-4 space-y-3">
-                        <span class="font-mono text-xs uppercase text-earth-metal">Notion OAuth (Public Integrations)</span>
+                        <span class="font-mono text-xs uppercase text-earth-metal">Notion OAuth (Public
+                            Integrations)</span>
                         <div>
-                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">OAuth Client ID</label>
-                            <input type="text" id="settingsOAuthClientId" class="input-field" placeholder="Your Notion OAuth client ID">
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">OAuth Client
+                                ID</label>
+                            <input type="text" id="settingsOAuthClientId" class="input-field"
+                                placeholder="Your Notion OAuth client ID">
                         </div>
-                        <button onclick="App.startNotionOAuth()" class="btn-primary px-4 py-2 font-mono text-xs uppercase">
+                        <button onclick="App.startNotionOAuth()"
+                            class="btn-primary px-4 py-2 font-mono text-xs uppercase">
                             <i data-lucide="external-link" class="w-4 h-4 inline mr-2"></i>Connect with Notion
                         </button>
-                        <p class="text-xs text-earth-metal">For public integrations. Opens Notion auth in new window.</p>
+                        <p class="text-xs text-earth-metal">For public integrations. Opens Notion auth in new window.
+                        </p>
                     </div>
 
                     <!-- Divider -->
@@ -305,19 +339,24 @@
 
                     <!-- Manual Token Section -->
                     <div class="border border-oatmeal p-4 space-y-3">
-                        <span class="font-mono text-xs uppercase text-earth-metal">Manual Token (Internal Integrations)</span>
+                        <span class="font-mono text-xs uppercase text-earth-metal">Manual Token (Internal
+                            Integrations)</span>
                         <div>
-                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Notion Integration Token</label>
-                            <input type="password" id="settingsNotionToken" class="input-field" placeholder="secret_...">
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Notion Integration
+                                Token</label>
+                            <input type="password" id="settingsNotionToken" class="input-field"
+                                placeholder="secret_...">
                             <p class="text-xs text-earth-metal mt-1">From your Notion integration settings</p>
                         </div>
                     </div>
 
                     <div class="flex flex-wrap gap-3">
-                        <button onclick="App.testConnection()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
+                        <button onclick="App.testConnection()"
+                            class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
                             <i data-lucide="plug" class="w-4 h-4 inline mr-2"></i>Test Connection
                         </button>
-                        <button onclick="App.showWorkerCode()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
+                        <button onclick="App.showWorkerCode()"
+                            class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
                             <i data-lucide="code" class="w-4 h-4 inline mr-2"></i>View Worker Code
                         </button>
                     </div>
@@ -328,12 +367,15 @@
                     <div>
                         <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Database ID *</label>
                         <div class="flex gap-2">
-                            <input type="text" id="settingsDatabaseId" class="input-field flex-1" placeholder="Notion database ID">
-                            <button onclick="App.scanDataSources()" class="btn-secondary px-3 py-2 font-mono text-xs uppercase">
+                            <input type="text" id="settingsDatabaseId" class="input-field flex-1"
+                                placeholder="Notion database ID">
+                            <button onclick="App.scanDataSources()"
+                                class="btn-secondary px-3 py-2 font-mono text-xs uppercase">
                                 <i data-lucide="scan" class="w-4 h-4"></i>
                             </button>
                         </div>
-                        <p class="text-xs text-earth-metal mt-1">Enter database ID and click scan to detect data sources</p>
+                        <p class="text-xs text-earth-metal mt-1">Enter database ID and click scan to detect data sources
+                        </p>
                     </div>
 
                     <div id="dataSourceMapping" class="space-y-3 hidden">
@@ -344,31 +386,38 @@
                                 <select id="dsMapPets" class="select-field text-sm"></select>
                             </div>
                             <div>
-                                <label class="font-mono text-[10px] uppercase text-earth-metal block mb-1">Events</label>
+                                <label
+                                    class="font-mono text-[10px] uppercase text-earth-metal block mb-1">Events</label>
                                 <select id="dsMapEvents" class="select-field text-sm"></select>
                             </div>
                             <div>
-                                <label class="font-mono text-[10px] uppercase text-earth-metal block mb-1">Event Types</label>
+                                <label class="font-mono text-[10px] uppercase text-earth-metal block mb-1">Event
+                                    Types</label>
                                 <select id="dsMapEventTypes" class="select-field text-sm"></select>
                             </div>
                             <div>
-                                <label class="font-mono text-[10px] uppercase text-earth-metal block mb-1">Care Items</label>
+                                <label class="font-mono text-[10px] uppercase text-earth-metal block mb-1">Care
+                                    Items</label>
                                 <select id="dsMapCareItems" class="select-field text-sm"></select>
                             </div>
                             <div>
-                                <label class="font-mono text-[10px] uppercase text-earth-metal block mb-1">Care Plans</label>
+                                <label class="font-mono text-[10px] uppercase text-earth-metal block mb-1">Care
+                                    Plans</label>
                                 <select id="dsMapCarePlans" class="select-field text-sm"></select>
                             </div>
                             <div>
-                                <label class="font-mono text-[10px] uppercase text-earth-metal block mb-1">Contacts</label>
+                                <label
+                                    class="font-mono text-[10px] uppercase text-earth-metal block mb-1">Contacts</label>
                                 <select id="dsMapContacts" class="select-field text-sm"></select>
                             </div>
                             <div>
-                                <label class="font-mono text-[10px] uppercase text-earth-metal block mb-1">Scales</label>
+                                <label
+                                    class="font-mono text-[10px] uppercase text-earth-metal block mb-1">Scales</label>
                                 <select id="dsMapScales" class="select-field text-sm"></select>
                             </div>
                             <div>
-                                <label class="font-mono text-[10px] uppercase text-earth-metal block mb-1">Scale Levels</label>
+                                <label class="font-mono text-[10px] uppercase text-earth-metal block mb-1">Scale
+                                    Levels</label>
                                 <select id="dsMapScaleLevels" class="select-field text-sm"></select>
                             </div>
                         </div>
@@ -404,11 +453,13 @@
                 <div data-tab-panel="settings" data-panel="todoist" class="hidden space-y-4">
                     <div class="flex items-center gap-3">
                         <input type="checkbox" id="settingsTodoistEnabled" class="w-4 h-4">
-                        <label for="settingsTodoistEnabled" class="font-mono text-xs uppercase text-charcoal">Enable Todoist Integration</label>
+                        <label for="settingsTodoistEnabled" class="font-mono text-xs uppercase text-charcoal">Enable
+                            Todoist Integration</label>
                     </div>
                     <div>
                         <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Todoist API Token</label>
-                        <input type="password" id="settingsTodoistToken" class="input-field" placeholder="Your Todoist token">
+                        <input type="password" id="settingsTodoistToken" class="input-field"
+                            placeholder="Your Todoist token">
                     </div>
                 </div>
 
@@ -416,7 +467,8 @@
                 <div data-tab-panel="settings" data-panel="danger" class="hidden space-y-4">
                     <div class="border border-muted-pink p-4 bg-muted-pink/10">
                         <h4 class="font-mono text-xs uppercase text-charcoal mb-2">Reset Application</h4>
-                        <p class="text-sm text-earth-metal mb-4">This will delete all local data including settings, cached pets, events, and media. Data already synced to Notion will not be affected.</p>
+                        <p class="text-sm text-earth-metal mb-4">This will delete all local data including settings,
+                            cached pets, events, and media. Data already synced to Notion will not be affected.</p>
                         <button onclick="App.confirmReset()" class="btn-danger px-4 py-2 font-mono text-xs uppercase">
                             <i data-lucide="trash-2" class="w-4 h-4 inline mr-2"></i>Reset App
                         </button>
@@ -425,8 +477,10 @@
             </div>
 
             <div class="border-t border-oatmeal p-4 flex justify-end gap-3 flex-shrink-0">
-                <button onclick="PetTracker.UI.closeModal('settingsModal')" class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Cancel</button>
-                <button onclick="App.saveSettings()" class="btn-primary px-4 py-2 font-mono text-xs uppercase">Save Settings</button>
+                <button onclick="PetTracker.UI.closeModal('settingsModal')"
+                    class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Cancel</button>
+                <button onclick="App.saveSettings()" class="btn-primary px-4 py-2 font-mono text-xs uppercase">Save
+                    Settings</button>
             </div>
         </div>
     </div>
@@ -434,7 +488,8 @@
     <!-- Onboarding Modal (Multi-step Wizard) -->
     <div id="onboardingModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
         <div class="absolute inset-0 modal-overlay"></div>
-        <div class="relative bg-white-linen border border-oatmeal w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col z-10">
+        <div
+            class="relative bg-white-linen border border-oatmeal w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col z-10">
             <div class="p-4 border-b border-oatmeal flex-shrink-0">
                 <div class="flex items-center justify-between">
                     <span class="section-header">Setup Wizard</span>
@@ -446,7 +501,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <div class="flex-1 overflow-y-auto p-6">
                 <!-- Step 1: Welcome -->
                 <div id="onboardingStep1" class="onboarding-step">
@@ -455,7 +510,8 @@
                             <i data-lucide="heart-pulse" class="w-8 h-8 text-white-linen"></i>
                         </div>
                         <h2 class="font-serif text-2xl text-charcoal mb-2">Welcome to Pet Tracker</h2>
-                        <p class="text-earth-metal">Track your pet's health, medications, and appointments with Notion as your backend.</p>
+                        <p class="text-earth-metal">Track your pet's health, medications, and appointments with Notion
+                            as your backend.</p>
                     </div>
                     <div class="space-y-4">
                         <div class="flex items-start gap-3">
@@ -486,17 +542,21 @@
                 <div id="onboardingStep2" class="onboarding-step hidden">
                     <h3 class="font-serif text-xl text-charcoal mb-4">Cloudflare Worker Setup</h3>
                     <p class="text-earth-metal text-sm mb-4">Deploy a CORS proxy to enable API calls from this app.</p>
-                    
+
                     <div class="space-y-4">
                         <div>
                             <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Worker URL *</label>
-                            <input type="url" id="onboardingWorkerUrl" class="input-field" placeholder="https://your-worker.workers.dev">
+                            <input type="url" id="onboardingWorkerUrl" class="input-field"
+                                placeholder="https://your-worker.workers.dev">
                         </div>
                         <div>
-                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Proxy Token (optional)</label>
-                            <input type="text" id="onboardingProxyToken" class="input-field" placeholder="Your worker secret token">
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Proxy Token
+                                (optional)</label>
+                            <input type="text" id="onboardingProxyToken" class="input-field"
+                                placeholder="Your worker secret token">
                         </div>
-                        <button type="button" onclick="App.showWorkerCode()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase w-full">
+                        <button type="button" onclick="App.showWorkerCode()"
+                            class="btn-secondary px-4 py-2 font-mono text-xs uppercase w-full">
                             <i data-lucide="code" class="w-4 h-4 inline mr-2"></i>View Worker Code
                         </button>
                     </div>
@@ -505,23 +565,29 @@
                 <!-- Step 3: Notion Connection -->
                 <div id="onboardingStep3" class="onboarding-step hidden">
                     <h3 class="font-serif text-xl text-charcoal mb-4">Connect to Notion</h3>
-                    <p class="text-earth-metal text-sm mb-4">Create an internal integration in Notion and paste your token here.</p>
-                    
+                    <p class="text-earth-metal text-sm mb-4">Create an internal integration in Notion and paste your
+                        token here.</p>
+
                     <div class="space-y-4">
                         <div>
-                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Notion Integration Token *</label>
-                            <input type="password" id="onboardingNotionToken" class="input-field" placeholder="secret_...">
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Notion Integration
+                                Token *</label>
+                            <input type="password" id="onboardingNotionToken" class="input-field"
+                                placeholder="secret_...">
                             <p class="text-xs text-earth-metal mt-1">
-                                <a href="https://www.notion.so/my-integrations" target="_blank" class="text-dull-purple underline">Create integration</a> 
+                                <a href="https://www.notion.so/my-integrations" target="_blank"
+                                    class="text-dull-purple underline">Create integration</a>
                                 and share your database with it.
                             </p>
                         </div>
                         <div>
                             <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Database ID</label>
-                            <input type="text" id="onboardingDatabaseId" class="input-field" placeholder="32-character ID from database URL">
+                            <input type="text" id="onboardingDatabaseId" class="input-field"
+                                placeholder="32-character ID from database URL">
                             <p class="text-xs text-earth-metal mt-1">Optional - configure later in settings.</p>
                         </div>
-                        <button type="button" onclick="Onboarding.testConnection()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase w-full">
+                        <button type="button" onclick="Onboarding.testConnection()"
+                            class="btn-secondary px-4 py-2 font-mono text-xs uppercase w-full">
                             <i data-lucide="wifi" class="w-4 h-4 inline mr-2"></i>Test Connection
                         </button>
                         <div id="onboardingConnectionStatus" class="hidden"></div>
@@ -531,12 +597,14 @@
                 <!-- Step 4: First Pet & Sample Data -->
                 <div id="onboardingStep4" class="onboarding-step hidden">
                     <h3 class="font-serif text-xl text-charcoal mb-4">Add Your First Pet</h3>
-                    <p class="text-earth-metal text-sm mb-4">Let's add your pet to get started. You can add more later.</p>
-                    
+                    <p class="text-earth-metal text-sm mb-4">Let's add your pet to get started. You can add more later.
+                    </p>
+
                     <div class="space-y-4">
                         <div>
                             <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Pet Name *</label>
-                            <input type="text" id="onboardingPetName" class="input-field" placeholder="e.g., Luna, Max, Bella">
+                            <input type="text" id="onboardingPetName" class="input-field"
+                                placeholder="e.g., Luna, Max, Bella">
                         </div>
                         <div class="grid grid-cols-2 gap-4">
                             <div>
@@ -556,29 +624,32 @@
                                 <input type="color" id="onboardingPetColor" class="input-field h-10" value="#8b7b8e">
                             </div>
                         </div>
-                        
+
                         <div class="border border-oatmeal p-4 bg-oatmeal/10">
                             <label class="flex items-center gap-3 cursor-pointer">
                                 <input type="checkbox" id="onboardingCreateSample" checked class="w-4 h-4">
                                 <div>
                                     <span class="text-sm text-charcoal font-medium">Create sample data</span>
-                                    <p class="text-xs text-earth-metal">Add example event types, scales, and care items to explore the app</p>
+                                    <p class="text-xs text-earth-metal">Add example event types, scales, and care items
+                                        to explore the app</p>
                                 </div>
                             </label>
                         </div>
                     </div>
                 </div>
             </div>
-            
+
             <div class="border-t border-oatmeal p-4 flex justify-between flex-shrink-0">
-                <button id="onboardingBack" onclick="Onboarding.prevStep()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase hidden">
+                <button id="onboardingBack" onclick="Onboarding.prevStep()"
+                    class="btn-secondary px-4 py-2 font-mono text-xs uppercase hidden">
                     <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>Back
                 </button>
                 <div class="flex gap-3 ml-auto">
                     <button onclick="Onboarding.skip()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
                         Skip Setup
                     </button>
-                    <button id="onboardingNext" onclick="Onboarding.nextStep()" class="btn-primary px-4 py-2 font-mono text-xs uppercase">
+                    <button id="onboardingNext" onclick="Onboarding.nextStep()"
+                        class="btn-primary px-4 py-2 font-mono text-xs uppercase">
                         Next<i data-lucide="arrow-right" class="w-4 h-4 inline ml-1"></i>
                     </button>
                 </div>
@@ -592,7 +663,8 @@
         <div class="relative bg-white-linen border border-oatmeal w-full max-w-lg max-h-[90vh] overflow-y-auto z-10">
             <div class="sticky top-0 bg-white-linen border-b border-oatmeal p-4 flex items-center justify-between">
                 <span class="section-header">Add Pet</span>
-                <button onclick="PetTracker.UI.closeModal('addPetModal')" class="p-1 text-earth-metal hover:text-charcoal">
+                <button onclick="PetTracker.UI.closeModal('addPetModal')"
+                    class="p-1 text-earth-metal hover:text-charcoal">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
@@ -643,10 +715,12 @@
                 </div>
                 <div>
                     <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Notes</label>
-                    <textarea id="addPetNotes" class="input-field h-20 resize-none" placeholder="Additional notes..."></textarea>
+                    <textarea id="addPetNotes" class="input-field h-20 resize-none"
+                        placeholder="Additional notes..."></textarea>
                 </div>
                 <div class="flex gap-3 justify-end pt-4 border-t border-oatmeal">
-                    <button type="button" onclick="PetTracker.UI.closeModal('addPetModal')" class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Cancel</button>
+                    <button type="button" onclick="PetTracker.UI.closeModal('addPetModal')"
+                        class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Cancel</button>
                     <button type="submit" class="btn-primary px-4 py-2 font-mono text-xs uppercase">Save Pet</button>
                 </div>
             </form>
@@ -656,16 +730,19 @@
     <!-- Worker Code Modal -->
     <div id="workerCodeModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
         <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
-        <div class="relative bg-white-linen border border-oatmeal w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col z-10">
+        <div
+            class="relative bg-white-linen border border-oatmeal w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col z-10">
             <div class="border-b border-oatmeal p-4 flex items-center justify-between flex-shrink-0">
                 <span class="section-header">Cloudflare Worker Code</span>
-                <button onclick="PetTracker.UI.closeModal('workerCodeModal')" class="p-1 text-earth-metal hover:text-charcoal">
+                <button onclick="PetTracker.UI.closeModal('workerCodeModal')"
+                    class="p-1 text-earth-metal hover:text-charcoal">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
             <div class="flex-1 overflow-y-auto p-4">
                 <div class="mb-4">
-                    <p class="text-sm text-earth-metal mb-2">Deploy this code as a Cloudflare Worker to proxy API requests:</p>
+                    <p class="text-sm text-earth-metal mb-2">Deploy this code as a Cloudflare Worker to proxy API
+                        requests:</p>
                     <ol class="text-xs text-earth-metal list-decimal list-inside space-y-1">
                         <li>Go to Cloudflare Dashboard → Workers & Pages</li>
                         <li>Create a new Worker</li>
@@ -675,8 +752,10 @@
                     </ol>
                 </div>
                 <div class="relative">
-                    <pre id="workerCodeBlock" class="bg-charcoal text-white-linen p-4 text-xs font-mono overflow-x-auto whitespace-pre"></pre>
-                    <button onclick="App.copyWorkerCode()" class="absolute top-2 right-2 btn-accent px-3 py-1 font-mono text-xs uppercase">
+                    <pre id="workerCodeBlock"
+                        class="bg-charcoal text-white-linen p-4 text-xs font-mono overflow-x-auto whitespace-pre"></pre>
+                    <button onclick="App.copyWorkerCode()"
+                        class="absolute top-2 right-2 btn-accent px-3 py-1 font-mono text-xs uppercase">
                         <i data-lucide="copy" class="w-3 h-3 inline mr-1"></i>Copy
                     </button>
                 </div>
@@ -687,10 +766,12 @@
     <!-- AI Entry Modal -->
     <div id="aiEntryModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
         <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
-        <div class="relative bg-white-linen border border-oatmeal w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col z-10">
+        <div
+            class="relative bg-white-linen border border-oatmeal w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col z-10">
             <div class="border-b border-oatmeal p-4 flex items-center justify-between flex-shrink-0">
                 <span class="section-header">AI Quick Add</span>
-                <button onclick="PetTracker.UI.closeModal('aiEntryModal')" class="p-1 text-earth-metal hover:text-charcoal">
+                <button onclick="PetTracker.UI.closeModal('aiEntryModal')"
+                    class="p-1 text-earth-metal hover:text-charcoal">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
@@ -698,12 +779,11 @@
                 <!-- Input Area -->
                 <div>
                     <label class="font-mono text-xs uppercase text-earth-metal block mb-2">Type or Dictate</label>
-                    <textarea 
-                        id="aiInputText" 
-                        class="input-field h-32 resize-none" 
+                    <textarea id="aiInputText" class="input-field h-32 resize-none"
                         placeholder="e.g., Luna threw up this morning, gave Max his heartworm meds yesterday at 8am..."
                         oninput="AI.onInputChange(this.value)"></textarea>
-                    <p class="text-xs text-earth-metal mt-1">AI will parse automatically after 5 seconds of inactivity</p>
+                    <p class="text-xs text-earth-metal mt-1">AI will parse automatically after 5 seconds of inactivity
+                    </p>
                 </div>
 
                 <!-- Parse Button -->
@@ -727,7 +807,8 @@
                 </div>
             </div>
             <div class="border-t border-oatmeal p-4 flex justify-end gap-3 flex-shrink-0">
-                <button onclick="AI.reset(); PetTracker.UI.closeModal('aiEntryModal')" class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
+                <button onclick="AI.reset(); PetTracker.UI.closeModal('aiEntryModal')"
+                    class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
                     Cancel
                 </button>
                 <button onclick="AI.saveAll()" class="btn-primary px-4 py-2 font-mono text-xs uppercase">
@@ -743,7 +824,8 @@
         <div class="relative bg-white-linen border border-oatmeal w-full max-w-lg max-h-[90vh] overflow-y-auto z-10">
             <div class="sticky top-0 bg-white-linen border-b border-oatmeal p-4 flex items-center justify-between">
                 <span id="contactModalTitle" class="section-header">Add Contact</span>
-                <button onclick="PetTracker.UI.closeModal('contactModal')" class="p-1 text-earth-metal hover:text-charcoal">
+                <button onclick="PetTracker.UI.closeModal('contactModal')"
+                    class="p-1 text-earth-metal hover:text-charcoal">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
@@ -780,15 +862,19 @@
                 </div>
                 <div>
                     <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Notes</label>
-                    <textarea id="contactNotes" class="input-field h-20 resize-none" placeholder="Additional notes..."></textarea>
+                    <textarea id="contactNotes" class="input-field h-20 resize-none"
+                        placeholder="Additional notes..."></textarea>
                 </div>
                 <div>
                     <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Related Pets</label>
-                    <div id="contactPetCheckboxes" class="space-y-2 max-h-32 overflow-y-auto border border-oatmeal p-2"></div>
+                    <div id="contactPetCheckboxes" class="space-y-2 max-h-32 overflow-y-auto border border-oatmeal p-2">
+                    </div>
                 </div>
                 <div class="flex gap-3 justify-end pt-4 border-t border-oatmeal">
-                    <button type="button" onclick="PetTracker.UI.closeModal('contactModal')" class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Cancel</button>
-                    <button type="submit" class="btn-primary px-4 py-2 font-mono text-xs uppercase">Save Contact</button>
+                    <button type="button" onclick="PetTracker.UI.closeModal('contactModal')"
+                        class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Cancel</button>
+                    <button type="submit" class="btn-primary px-4 py-2 font-mono text-xs uppercase">Save
+                        Contact</button>
                 </div>
             </form>
         </div>
@@ -960,7 +1046,7 @@ export default {
             // Save worker URL and client ID first
             const workerUrl = document.getElementById('settingsWorkerUrl')?.value || '';
             const oauthClientId = document.getElementById('settingsOAuthClientId')?.value || '';
-            
+
             if (!workerUrl) {
                 PetTracker.UI.toast('Enter Worker URL first', 'error');
                 return;
@@ -979,12 +1065,12 @@ export default {
             try {
                 PetTracker.UI.showLoading('Connecting to Notion...');
                 const token = await PetTracker.API.startOAuth();
-                
+
                 // Save the token
                 document.getElementById('settingsNotionToken').value = token;
                 settings.notionToken = token;
                 PetTracker.Settings.set(settings);
-                
+
                 PetTracker.UI.hideLoading();
                 PetTracker.UI.toast('Connected to Notion!', 'success');
             } catch (e) {
@@ -1086,4 +1172,5 @@ export default {
         });
     </script>
 </body>
+
 </html>

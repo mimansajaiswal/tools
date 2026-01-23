@@ -56,9 +56,9 @@ ${careItems.map(c => `- "${c.name}" (Type: ${c.type})`).join('\n') || '- No care
 
 ## Severity Scales
 ${scales.map(s => {
-    const levels = scaleLevels.filter(l => l.scaleId === s.id).sort((a, b) => a.order - b.order);
-    return `- "${s.name}": ${levels.map(l => l.name).join(', ')}`;
-}).join('\n') || '- No scales configured'}
+            const levels = scaleLevels.filter(l => l.scaleId === s.id).sort((a, b) => a.order - b.order);
+            return `- "${s.name}": ${levels.map(l => l.name).join(', ')}`;
+        }).join('\n') || '- No scales configured'}
 
 ## Instructions
 1. Parse the input into one or more event entries
@@ -238,7 +238,7 @@ Parse the following input:`;
         try {
             // Try to extract JSON from response
             let json = text;
-            
+
             // Handle markdown code blocks
             const codeMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
             if (codeMatch) {
@@ -294,14 +294,14 @@ Parse the following input:`;
 
         try {
             const result = await AI.callProvider(AI.state.inputText);
-            
+
             // Merge with existing entries, preserving edited ones
             result.entries.forEach((entry, index) => {
                 entry._id = `ai_${Date.now()}_${index}`;
                 entry._isNew = true;
 
                 // Check if we already have a similar entry that was edited
-                const existingIndex = AI.state.entries.findIndex(e => 
+                const existingIndex = AI.state.entries.findIndex(e =>
                     !AI.state.editedEntries.has(e._id) &&
                     e.petName === entry.petName &&
                     e.eventType === entry.eventType &&
@@ -364,7 +364,7 @@ Parse the following input:`;
         for (const entry of toSave) {
             try {
                 // Resolve pet
-                const pet = pets.find(p => 
+                const pet = pets.find(p =>
                     p.name.toLowerCase() === entry.petName?.toLowerCase()
                 );
                 if (!pet) {
@@ -373,12 +373,12 @@ Parse the following input:`;
                 }
 
                 // Resolve event type
-                const eventType = eventTypes.find(t => 
+                const eventType = eventTypes.find(t =>
                     t.name.toLowerCase() === entry.eventType?.toLowerCase()
                 );
 
                 // Resolve care item
-                const careItem = careItems.find(c => 
+                const careItem = careItems.find(c =>
                     c.name.toLowerCase() === entry.careItem?.toLowerCase()
                 );
 

@@ -49,7 +49,7 @@ const Sync = {
 
         try {
             console.log('[Sync] Starting sync cycle...');
-            
+
             // 1. Push local changes
             await Sync.pushLocalChanges();
 
@@ -58,10 +58,10 @@ const Sync = {
 
             // 3. Update last sync time
             PetTracker.Settings.setLastSync();
-            
+
             console.log('[Sync] Sync complete');
             PetTracker.UI.toast('Synced', 'success', 2000);
-            
+
             // Refresh UI
             if (PetTracker.App) {
                 await PetTracker.App.loadData();
@@ -90,12 +90,12 @@ const Sync = {
                 await PetTracker.SyncQueue.complete(op.id);
             } catch (e) {
                 console.error(`[Sync] Operation ${op.id} failed:`, e);
-                
+
                 if (e.isRateLimit) {
                     // Wait and retry later
                     await new Promise(r => setTimeout(r, (e.retryAfter || 1) * 1000));
                 }
-                
+
                 await PetTracker.SyncQueue.fail(op.id, e.message);
             }
         }
@@ -117,7 +117,7 @@ const Sync = {
             case 'create': {
                 const properties = Sync.toNotionProperties(store, data);
                 const result = await PetTracker.API.createPage(dataSourceId, properties);
-                
+
                 // Update local record with Notion ID
                 const record = await PetTracker.DB.get(PetTracker.STORES[store.toUpperCase()], recordId);
                 if (record) {
@@ -135,7 +135,7 @@ const Sync = {
                 }
                 const properties = Sync.toNotionProperties(store, data);
                 await PetTracker.API.updatePage(record.notionId, properties);
-                
+
                 record.synced = true;
                 await PetTracker.DB.put(PetTracker.STORES[store.toUpperCase()], record);
                 break;
@@ -157,7 +157,7 @@ const Sync = {
      */
     pullRemoteUpdates: async () => {
         const settings = PetTracker.Settings.get();
-        
+
         // Pull each data source
         const sources = [
             { store: 'pets', storeKey: 'PETS' },
@@ -192,7 +192,7 @@ const Sync = {
 
         while (hasMore) {
             await Sync.waitForRateLimit();
-            
+
             const result = await PetTracker.API.queryDatabase(
                 dataSourceId,
                 null,
@@ -215,10 +215,10 @@ const Sync = {
     reconcileRecord: async (store, storeKey, page) => {
         const notionId = page.id;
         const storeName = PetTracker.STORES[storeKey];
-        
+
         // Check if we have this record locally
         const local = await PetTracker.DB.getByNotionId(storeName, notionId);
-        
+
         // Convert from Notion format
         const remote = Sync.fromNotionPage(store, page);
         remote.notionId = notionId;
@@ -260,7 +260,7 @@ const Sync = {
      */
     toNotionProperties: (store, data) => {
         const P = PetTracker.NotionProps;
-        
+
         switch (store) {
             case 'pets':
                 return {

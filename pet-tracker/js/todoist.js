@@ -19,7 +19,7 @@ const Todoist = {
      */
     request: async (method, endpoint, body = null) => {
         const settings = PetTracker.Settings.get();
-        
+
         if (!settings.todoistToken) {
             throw new Error('Todoist token not configured');
         }
@@ -127,9 +127,9 @@ const Todoist = {
                 // Check if task already exists
                 const events = await PetTracker.DB.query(
                     PetTracker.STORES.EVENTS,
-                    e => e.todoistTaskId && 
-                         e.careItemId === plan.careItemId &&
-                         e.status === 'Planned'
+                    e => e.todoistTaskId &&
+                        e.careItemId === plan.careItemId &&
+                        e.status === 'Planned'
                 );
 
                 if (events.length > 0) {
