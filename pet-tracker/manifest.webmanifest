@@ -1,0 +1,41 @@
+{
+  "name": "Pet Tracker",
+  "short_name": "Pet Tracker",
+  "description": "Offline-first pet health tracker with Notion backend",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f8f6f3",
+  "theme_color": "#2d2926",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "share_target": {
+    "action": "./index.html",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "media",
+          "accept": ["image/*", "video/*"]
+        }
+      ]
+    }
+  },
+  "categories": ["health", "lifestyle", "utilities"]
+}
