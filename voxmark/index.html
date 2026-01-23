@@ -1,431 +1,432 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>VoxMark - Voice PDF Annotation</title>
-    <meta name="theme-color" content="#7b6d8d" />
-    <link rel="manifest" href="./manifest.json" />
-    <link rel="icon" href="./assets/icon-192.svg" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Manrope:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <link
-      rel="stylesheet"
-      href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css"
-    />
 
-    <link rel="stylesheet" href="./styles/main.css" />
-  </head>
-  <body>
-    <div class="app">
-      <header class="topbar">
-        <div class="topbar-left">
-          <button class="btn icon secondary" id="toggleSidebar" title="Toggle navigation">
-            <i class="ph ph-sidebar"></i>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VoxMark - Voice PDF Annotation</title>
+  <meta name="theme-color" content="#7b6d8d" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" href="./assets/icon-192.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Manrope:wght@400;500;600;700&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css" />
+
+  <link rel="stylesheet" href="./styles/main.css" />
+</head>
+
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="btn icon secondary" id="toggleSidebar" title="Toggle navigation">
+          <i class="ph ph-sidebar"></i>
+        </button>
+        <button class="btn icon secondary theme-toggle" id="themeToggle" title="Theme: System"
+          aria-label="Theme: system">
+          <i class="ph ph-desktop" id="themeToggleIcon"></i>
+        </button>
+        <div class="brand compact">
+          <h1>VoxMark</h1>
+        </div>
+        <input class="file-input" type="file" id="pdfInput" accept="application/pdf" multiple />
+        <div class="pdf-switcher">
+          <button class="btn secondary" id="pdfMenuToggle" aria-haspopup="true" aria-expanded="false">
+            <i class="ph ph-file-pdf"></i>
+            <span class="pdf-label" id="activePdfLabel">No PDF</span>
+            <i class="ph ph-caret-down"></i>
           </button>
-          <button class="btn icon secondary theme-toggle" id="themeToggle" title="Theme: System" aria-label="Theme: system">
-            <i class="ph ph-desktop" id="themeToggleIcon"></i>
-          </button>
-          <div class="brand compact">
-            <h1>VoxMark</h1>
-          </div>
-          <input class="file-input" type="file" id="pdfInput" accept="application/pdf" multiple />
-          <div class="pdf-switcher">
-            <button class="btn secondary" id="pdfMenuToggle" aria-haspopup="true" aria-expanded="false">
-              <i class="ph ph-file-pdf"></i>
-              <span class="pdf-label" id="activePdfLabel">No PDF</span>
-              <i class="ph ph-caret-down"></i>
-            </button>
-            <div class="pdf-menu" id="pdfMenu">
-              <div class="pdf-menu-header">
-                <span>Loaded PDFs</span>
-                <button class="btn accent small" id="uploadPdf">
-                  <i class="ph ph-plus-circle"></i>
-                  <span class="label">Add PDFs</span>
-                </button>
-              </div>
-              <div class="pdf-list" id="pdfList"></div>
+          <div class="pdf-menu" id="pdfMenu">
+            <div class="pdf-menu-header">
+              <span>Loaded PDFs</span>
+              <button class="btn accent small" id="uploadPdf">
+                <i class="ph ph-plus-circle"></i>
+                <span class="label">Add PDFs</span>
+              </button>
             </div>
+            <div class="pdf-list" id="pdfList"></div>
           </div>
-          <button class="btn icon secondary" id="overflowToggle" title="More options" aria-haspopup="true" aria-expanded="false">
-            <i class="ph ph-faders-horizontal"></i>
+        </div>
+        <button class="btn icon secondary" id="overflowToggle" title="More options" aria-haspopup="true"
+          aria-expanded="false">
+          <i class="ph ph-faders-horizontal"></i>
+        </button>
+      </div>
+      <div class="topbar-center">
+      </div>
+      <div class="topbar-right">
+        <div class="zoom-indicator">
+          <input id="zoomInput" type="text" inputmode="decimal" value="100" aria-label="Zoom level" />
+          <span class="zoom-suffix">%</span>
+        </div>
+        <div class="page-jump" aria-label="Page navigation">
+          <label class="sr-only" for="pageJumpInput">Go to page</label>
+          <input type="number" id="pageJumpInput" min="1" inputmode="numeric" />
+          <span class="page-jump-total" id="pageJumpTotal">/ 0</span>
+          <button class="btn secondary small" id="pageJumpGo" aria-label="Go to page">
+            <i class="ph ph-arrow-right"></i>
+            <span class="label">Go</span>
           </button>
         </div>
-        <div class="topbar-center">
+        <div class="search-bar">
+          <label class="sr-only" for="searchInput">Search in document</label>
+          <i class="ph ph-magnifying-glass"></i>
+          <input type="text" id="searchInput" placeholder="Search in document" />
+          <button class="btn icon ghost small" id="searchClear" aria-label="Clear search">
+            <i class="ph ph-x"></i>
+          </button>
+          <button class="btn secondary small" id="searchGo" aria-label="Find">
+            <i class="ph ph-arrow-right"></i>
+            <span class="label">Find</span>
+          </button>
+          <button class="btn icon ghost small" id="searchPrev" aria-label="Previous match">
+            <i class="ph ph-caret-up"></i>
+          </button>
+          <button class="btn icon ghost small" id="searchNext" aria-label="Next match">
+            <i class="ph ph-caret-down"></i>
+          </button>
         </div>
-        <div class="topbar-right">
-          <div class="zoom-indicator">
-            <input id="zoomInput" type="text" inputmode="decimal" value="100" aria-label="Zoom level" />
-            <span class="zoom-suffix">%</span>
+        <button class="btn icon secondary" id="searchToggle" title="Search" aria-expanded="false" aria-label="Search">
+          <i class="ph ph-magnifying-glass"></i>
+        </button>
+        <div class="status-pill">
+          <div class="status-dot" id="connectionDot"></div>
+          <i class="ph ph-wifi-high" id="connectionIcon"></i>
+          <span id="connectionLabel" class="sr-only">Online</span>
+          <div class="queue-indicator" id="queueIndicator" role="status" aria-live="polite" aria-atomic="true">
+            <i class="ph ph-stack"></i>
+            <span class="queue-count">0</span>
           </div>
-          <div class="page-jump" aria-label="Page navigation">
-            <label class="sr-only" for="pageJumpInput">Go to page</label>
-            <input type="number" id="pageJumpInput" min="1" inputmode="numeric" />
-            <span class="page-jump-total" id="pageJumpTotal">/ 0</span>
-            <button class="btn secondary small" id="pageJumpGo" aria-label="Go to page">
-              <i class="ph ph-arrow-right"></i>
-              <span class="label">Go</span>
+        </div>
+        <div class="overflow-menu" id="overflowMenu">
+          <button class="menu-item" id="queueToggle">
+            <i class="ph ph-stack"></i>
+            Queue
+          </button>
+          <button class="menu-item" id="settingsToggle">
+            <i class="ph ph-gear-six"></i>
+            Settings
+          </button>
+          <button class="menu-item" id="logsToggle">
+            <i class="ph ph-clipboard-text"></i>
+            System Logs
+            <span class="menu-count" id="logsCount">0</span>
+          </button>
+          <button class="menu-item" id="processBatchMenu">
+            <i class="ph ph-play-circle"></i>
+            Process Queue
+          </button>
+          <div class="menu-divider"></div>
+          <button class="menu-item" id="downloadSingle">
+            <i class="ph ph-download-simple"></i>
+            Download Active PDF
+          </button>
+          <button class="menu-item" id="downloadMerged">
+            <i class="ph ph-stack-simple"></i>
+            Download Merged PDF
+          </button>
+          <button class="menu-item" id="downloadZip">
+            <i class="ph ph-file-zip"></i>
+            Download All (ZIP)
+          </button>
+          <div class="menu-divider"></div>
+          <button class="menu-item danger" id="resetSession">
+            <i class="ph ph-broom"></i>
+            Reset Session
+          </button>
+          <button class="menu-item danger" id="resetApp">
+            <i class="ph ph-skull"></i>
+            Reset App
+          </button>
+        </div>
+      </div>
+    </header>
+    <div class="search-scrim" id="searchScrim"></div>
+
+    <aside class="sidebar nav-sidebar">
+      <div class="sidebar-header">
+        <h2>Navigation</h2>
+      </div>
+      <div class="nav-tabs">
+        <button class="tab active" id="outlineTab">
+          <i class="ph ph-list-bullets"></i>
+          Outline
+        </button>
+        <button class="tab" id="thumbTab">
+          <i class="ph ph-grid-four"></i>
+          Thumbnails
+        </button>
+      </div>
+      <div class="nav-content">
+        <div class="nav-panel outline-panel active" id="outlinePanel">
+          <div class="outline-list" id="outlineList"></div>
+        </div>
+        <div class="nav-panel thumb-panel" id="thumbPanel">
+          <div class="thumb-list" id="thumbnailList"></div>
+        </div>
+      </div>
+      <div class="section-title">Search Results</div>
+      <div class="search-results" id="searchResults"></div>
+    </aside>
+    <div class="sidebar-scrim" id="sidebarScrim"></div>
+
+    <main class="main">
+      <div class="viewer-toolbar">
+        <div class="toolbar-left">
+          <div class="tool-group">
+            <button class="btn secondary" id="tapFocusButton" title="Tap Focus" aria-label="Tap focus">
+              <i class="ph ph-target"></i>
+              <span class="label">Tap Focus</span>
+            </button>
+            <button class="btn secondary" id="toggleAdjust" aria-label="Adjust annotations">
+              <i class="ph ph-cursor-click"></i>
+              <span class="label">Adjust</span>
+            </button>
+            <button class="btn ghost hidden" id="commitAdjust" aria-label="Commit adjustments">
+              <i class="ph ph-check-circle"></i>
+              <span class="label">Commit</span>
             </button>
           </div>
-          <div class="search-bar">
-            <label class="sr-only" for="searchInput">Search in document</label>
-            <i class="ph ph-magnifying-glass"></i>
-            <input type="text" id="searchInput" placeholder="Search in document" />
-            <button class="btn icon ghost small" id="searchClear" aria-label="Clear search">
+          <div class="mode-group" role="group" aria-label="Processing mode">
+            <button class="btn secondary" id="modeRealtime" aria-pressed="true">
+              <i class="ph ph-clock"></i>
+              <span class="label">Real-time</span>
+            </button>
+            <button class="btn secondary" id="modeBatch" aria-pressed="false">
+              <i class="ph ph-rows-plus-bottom"></i>
+              <span class="label">Batch</span>
+            </button>
+            <button class="btn secondary hidden" id="processBatch" aria-label="Process queue">
+              <i class="ph ph-queue"></i>
+              <span class="label">Process</span>
+            </button>
+          </div>
+        </div>
+        <div class="toolbar-right">
+          <div id="progressLabel" class="queue-indicator hidden">Processing 0 of 0</div>
+          <button class="mic" id="micButton" title="Start/Stop Recording">
+            <i class="ph ph-microphone"></i>
+          </button>
+        </div>
+      </div>
+      <div class="viewer-area" id="viewerArea">
+        <div class="empty-state" id="emptyState">
+          <div>
+            <i class="ph ph-file-arrow-up"></i>
+            <p>Drop PDFs here or use “Add PDFs” to begin annotating.</p>
+          </div>
+        </div>
+      </div>
+      <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+      </div>
+      <div class="jump-back" id="jumpBack" role="dialog" aria-live="polite" aria-label="Return to previous location">
+        <div class="jump-back-card">
+          <div class="jump-back-text" id="jumpBackText">Jumped to linked page.</div>
+          <div class="jump-back-actions">
+            <button class="btn secondary" id="jumpBackReturn">Go back</button>
+            <button class="btn icon ghost" id="jumpBackClose" aria-label="Dismiss">
               <i class="ph ph-x"></i>
             </button>
-            <button class="btn secondary small" id="searchGo" aria-label="Find">
-              <i class="ph ph-arrow-right"></i>
-              <span class="label">Find</span>
-            </button>
-            <button class="btn icon ghost small" id="searchPrev" aria-label="Previous match">
-              <i class="ph ph-caret-up"></i>
-            </button>
-            <button class="btn icon ghost small" id="searchNext" aria-label="Next match">
-              <i class="ph ph-caret-down"></i>
-            </button>
-          </div>
-          <button class="btn icon secondary" id="searchToggle" title="Search" aria-expanded="false" aria-label="Search">
-            <i class="ph ph-magnifying-glass"></i>
-          </button>
-          <div class="status-pill">
-            <div class="status-dot" id="connectionDot"></div>
-            <i class="ph ph-wifi-high" id="connectionIcon"></i>
-            <span id="connectionLabel" class="sr-only">Online</span>
-            <div class="queue-indicator" id="queueIndicator" role="status" aria-live="polite" aria-atomic="true">
-              <i class="ph ph-stack"></i>
-              <span class="queue-count">0</span>
-            </div>
-          </div>
-          <div class="overflow-menu" id="overflowMenu">
-            <button class="menu-item" id="queueToggle">
-              <i class="ph ph-stack"></i>
-              Queue
-            </button>
-            <button class="menu-item" id="settingsToggle">
-              <i class="ph ph-gear-six"></i>
-              Settings
-            </button>
-            <button class="menu-item" id="logsToggle">
-              <i class="ph ph-clipboard-text"></i>
-              System Logs
-              <span class="menu-count" id="logsCount">0</span>
-            </button>
-            <button class="menu-item" id="processBatchMenu">
-              <i class="ph ph-play-circle"></i>
-              Process Queue
-            </button>
-            <div class="menu-divider"></div>
-            <button class="menu-item" id="downloadSingle">
-              <i class="ph ph-download-simple"></i>
-              Download Active PDF
-            </button>
-            <button class="menu-item" id="downloadMerged">
-              <i class="ph ph-stack-simple"></i>
-              Download Merged PDF
-            </button>
-            <button class="menu-item" id="downloadZip">
-              <i class="ph ph-file-zip"></i>
-              Download All (ZIP)
-            </button>
-            <div class="menu-divider"></div>
-            <button class="menu-item danger" id="resetSession">
-              <i class="ph ph-broom"></i>
-              Reset Session
-            </button>
-            <button class="menu-item danger" id="resetApp">
-              <i class="ph ph-skull"></i>
-              Reset App
-            </button>
           </div>
         </div>
-      </header>
-      <div class="search-scrim" id="searchScrim"></div>
-
-      <aside class="sidebar nav-sidebar">
-        <div class="sidebar-header">
-          <h2>Navigation</h2>
-        </div>
-        <div class="nav-tabs">
-          <button class="tab active" id="outlineTab">
-            <i class="ph ph-list-bullets"></i>
-            Outline
-          </button>
-          <button class="tab" id="thumbTab">
-            <i class="ph ph-grid-four"></i>
-            Thumbnails
-          </button>
-        </div>
-        <div class="nav-content">
-          <div class="nav-panel outline-panel active" id="outlinePanel">
-            <div class="outline-list" id="outlineList"></div>
-          </div>
-          <div class="nav-panel thumb-panel" id="thumbPanel">
-            <div class="thumb-list" id="thumbnailList"></div>
-          </div>
-        </div>
-        <div class="section-title">Search Results</div>
-        <div class="search-results" id="searchResults"></div>
-      </aside>
-      <div class="sidebar-scrim" id="sidebarScrim"></div>
-
-      <main class="main">
-        <div class="viewer-toolbar">
-          <div class="toolbar-left">
-            <div class="tool-group">
-              <button class="btn secondary" id="tapFocusButton" title="Tap Focus" aria-label="Tap focus">
-                <i class="ph ph-target"></i>
-                <span class="label">Tap Focus</span>
-              </button>
-              <button class="btn secondary" id="toggleAdjust" aria-label="Adjust annotations">
-                <i class="ph ph-cursor-click"></i>
-                <span class="label">Adjust</span>
-              </button>
-              <button class="btn ghost hidden" id="commitAdjust" aria-label="Commit adjustments">
-                <i class="ph ph-check-circle"></i>
-                <span class="label">Commit</span>
-              </button>
-            </div>
-            <div class="mode-group" role="group" aria-label="Processing mode">
-              <button class="btn secondary" id="modeRealtime" aria-pressed="true">
-                <i class="ph ph-clock"></i>
-                <span class="label">Real-time</span>
-              </button>
-              <button class="btn secondary" id="modeBatch" aria-pressed="false">
-                <i class="ph ph-rows-plus-bottom"></i>
-                <span class="label">Batch</span>
-              </button>
-              <button class="btn secondary hidden" id="processBatch" aria-label="Process queue">
-                <i class="ph ph-queue"></i>
-                <span class="label">Process</span>
-              </button>
-            </div>
-          </div>
-          <div class="toolbar-right">
-            <div id="progressLabel" class="queue-indicator hidden">Processing 0 of 0</div>
-            <button class="mic" id="micButton" title="Start/Stop Recording">
-              <i class="ph ph-microphone"></i>
-            </button>
-          </div>
-        </div>
-        <div class="viewer-area" id="viewerArea">
-          <div class="empty-state" id="emptyState">
-            <div>
-              <i class="ph ph-file-arrow-up"></i>
-              <p>Drop PDFs here or use “Add PDFs” to begin annotating.</p>
-            </div>
-          </div>
-        </div>
-        <div class="loading-overlay" id="loadingOverlay">
-          <div class="spinner"></div>
-        </div>
-        <div class="jump-back" id="jumpBack" role="dialog" aria-live="polite" aria-label="Return to previous location">
-          <div class="jump-back-card">
-            <div class="jump-back-text" id="jumpBackText">Jumped to linked page.</div>
-            <div class="jump-back-actions">
-              <button class="btn secondary" id="jumpBackReturn">Go back</button>
-              <button class="btn icon ghost" id="jumpBackClose" aria-label="Dismiss">
-                <i class="ph ph-x"></i>
-              </button>
-            </div>
-          </div>
-        </div>
-        <div class="adjust-toolbar" id="adjustToolbar">
-          <button class="btn secondary" id="snapToText">
-            <i class="ph ph-magnet"></i>
-            Snap to Text
-          </button>
-          <button class="btn secondary" id="freeBox">
-            <i class="ph ph-square"></i>
-            Free BBox
-          </button>
-        </div>
-        <div class="settings-scrim" id="settingsScrim"></div>
-        <div class="settings-panel" id="settingsPanel" role="dialog" aria-label="Settings" tabindex="-1">
-          <h3>Theme</h3>
-          <div class="field">
-            <label>Appearance</label>
-            <button class="btn secondary theme-toggle" id="themeTogglePanel" type="button">
-              <i class="ph ph-desktop" id="themeTogglePanelIcon"></i>
-              <span class="theme-label" id="themeTogglePanelLabel">System</span>
-            </button>
-          </div>
-          <div class="field">
-            <label>Invert PDF in dark mode</label>
-            <div class="segmented">
-              <label><input type="checkbox" id="invertPdfToggle" /> Enable PDF inversion</label>
-            </div>
-          </div>
-          <h3>Speech-to-Text</h3>
-          <div class="field">
-            <label>Provider</label>
-            <select id="sttProviderSelect">
-              <option value="native">Browser Native</option>
-              <option value="openai">OpenAI Whisper</option>
-              <option value="anthropic">Anthropic</option>
-              <option value="gemini">Google Gemini</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>STT Model</label>
-            <input type="text" id="sttModel" placeholder="whisper-1" />
-          </div>
-          <form class="inline-form" autocomplete="on">
-            <div class="field">
-              <label>STT API Key</label>
-              <input type="password" id="sttKey" name="sttKey" placeholder="Enter API key" />
-            </div>
-          </form>
-          <div class="field">
-            <label>STT Prompt (online providers)</label>
-            <textarea id="sttPrompt" placeholder="Guide transcription with context..."></textarea>
-          </div>
-
-          <h3>AI Processing</h3>
-          <div class="field">
-            <label>Provider</label>
-            <select id="aiProvider">
-              <option value="openai">OpenAI</option>
-              <option value="anthropic">Anthropic</option>
-              <option value="gemini">Google Gemini</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Model</label>
-            <input type="text" id="aiModel" placeholder="gpt-4o-mini" />
-          </div>
-          <form class="inline-form" autocomplete="on">
-            <div class="field">
-              <label>API Key</label>
-              <input type="password" id="aiKey" name="aiKey" placeholder="Enter API key" />
-            </div>
-          </form>
-          <div class="field">
-            <label>Custom Prompt</label>
-            <textarea id="customPrompt" placeholder="Add your own instructions for annotation processing"></textarea>
-          </div>
-          <div class="field">
-            <label>Annotation Color Palette</label>
-            <div class="palette-editor">
-              <div class="palette-list" id="paletteList"></div>
-              <div class="palette-actions">
-                <button class="btn secondary small" id="paletteAdd" type="button">
-                  <i class="ph ph-plus"></i>
-                  Add
-                </button>
-                <button class="btn secondary small" id="paletteSaveDefault" type="button">
-                  <i class="ph ph-floppy-disk"></i>
-                  Save
-                </button>
-                <button class="btn ghost small" id="paletteRestoreDefault" type="button">
-                  <i class="ph ph-arrow-counter-clockwise"></i>
-                  Reset
-                </button>
-              </div>
-            </div>
-          </div>
-          <div class="field">
-            <label>Mock AI</label>
-            <div class="segmented">
-              <label><input type="checkbox" id="mockToggle" /> Enable mock AI responses</label>
-            </div>
-          </div>
-          <h3>OCR (Beta)</h3>
-          <div class="field">
-            <label>Enable OCR for scanned pages</label>
-            <div class="segmented">
-              <label><input type="checkbox" id="ocrToggle" /> Enable OCR</label>
-            </div>
-          </div>
-          <div class="field">
-            <button class="btn secondary" id="ocrRun" type="button">
-              <i class="ph ph-sparkle"></i>
-              Run OCR on Visible Pages
-            </button>
-          </div>
-          <div class="settings-actions">
-            <button class="btn accent" id="saveSettings" type="button">
-              <i class="ph ph-floppy-disk"></i>
-              Save Settings
-            </button>
-            <button class="btn secondary" id="clearOffline" type="button">
-              <i class="ph ph-trash"></i>
-              Clear All Offline Data
-            </button>
-          </div>
-          <div id="storageUsage" class="field">IndexedDB: 0 MB</div>
-          <div class="danger-zone">
-            <strong>Danger Zone</strong>
-            <button class="btn danger" id="resetSessionPanel" type="button">
-              <i class="ph ph-warning-circle"></i>
-              Reset Session Data
-            </button>
-            <button class="btn danger" id="resetAppPanel" type="button">
-              <i class="ph ph-skull"></i>
-              Reset App (incl. settings)
-            </button>
-          </div>
-        </div>
-        <div class="logs-scrim" id="logsScrim"></div>
-        <div class="logs-panel" id="logsPanel" role="dialog" aria-label="System logs" tabindex="-1">
-          <div class="logs-header">
-            <h3>System Logs</h3>
-            <div class="logs-actions">
-              <button class="btn secondary small" id="logsClear" title="Clear logs">Clear Logs</button>
-              <button class="btn icon secondary" id="logsClose" title="Close logs">
-                <i class="ph ph-x"></i>
-              </button>
-            </div>
-          </div>
-          <div class="logs-meta" id="logsMeta">Session logs</div>
-          <div class="logs-list" id="logsList"></div>
-        </div>
-        <div class="queue-scrim" id="queueScrim"></div>
-        <div class="queue-panel" id="queuePanel" role="dialog" aria-label="Queue" tabindex="-1">
-          <div class="queue-header">
-            <h3>Queue</h3>
-            <div class="queue-actions">
-              <button class="btn secondary small" id="queueRetryAll" title="Retry failed">Retry Failed</button>
-              <button class="btn icon secondary" id="queueClose" title="Close queue">
-                <i class="ph ph-x"></i>
-              </button>
-            </div>
-          </div>
-          <div class="queue-meta" id="queueMeta">Queue is empty.</div>
-          <div class="queue-list" id="queueList"></div>
-        </div>
-      </main>
-    </div>
-
-    <div class="toast-container" id="toastContainer"></div>
-    <div class="modal-overlay" id="modalOverlay">
-      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-        <h4 id="modalTitle">Modal</h4>
-        <div id="modalBody"></div>
-        <div class="modal-actions" id="modalActions"></div>
       </div>
-    </div>
+      <div class="adjust-toolbar" id="adjustToolbar">
+        <button class="btn secondary" id="snapToText">
+          <i class="ph ph-magnet"></i>
+          Snap to Text
+        </button>
+        <button class="btn secondary" id="freeBox">
+          <i class="ph ph-square"></i>
+          Free BBox
+        </button>
+      </div>
+      <div class="settings-scrim" id="settingsScrim"></div>
+      <div class="settings-panel" id="settingsPanel" role="dialog" aria-label="Settings" tabindex="-1">
+        <h3>Theme</h3>
+        <div class="field">
+          <label>Appearance</label>
+          <button class="btn secondary theme-toggle" id="themeTogglePanel" type="button">
+            <i class="ph ph-desktop" id="themeTogglePanelIcon"></i>
+            <span class="theme-label" id="themeTogglePanelLabel">System</span>
+          </button>
+        </div>
+        <div class="field">
+          <label>Invert PDF in dark mode</label>
+          <div class="segmented">
+            <label><input type="checkbox" id="invertPdfToggle" /> Enable PDF inversion</label>
+          </div>
+        </div>
+        <h3>Speech-to-Text</h3>
+        <div class="field">
+          <label>Provider</label>
+          <select id="sttProviderSelect">
+            <option value="native">Browser Native</option>
+            <option value="openai">OpenAI Whisper</option>
+            <option value="anthropic">Anthropic</option>
+            <option value="gemini">Google Gemini</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>STT Model</label>
+          <input type="text" id="sttModel" placeholder="whisper-1" />
+        </div>
+        <form class="inline-form" autocomplete="on">
+          <div class="field">
+            <label>STT API Key</label>
+            <input type="password" id="sttKey" name="sttKey" placeholder="Enter API key" />
+          </div>
+        </form>
+        <div class="field">
+          <label>STT Prompt (online providers)</label>
+          <textarea id="sttPrompt" placeholder="Guide transcription with context..."></textarea>
+        </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script src="./js/core.js"></script>
-    <script src="./js/ui.js"></script>
-    <script src="./js/settings.js"></script>
-    <script src="./js/storage.js"></script>
-    <script src="./js/pdf.js"></script>
-    <script src="./js/annotations.js"></script>
-    <script src="./js/ai.js"></script>
-    <script src="./js/batch.js"></script>
-    <script src="./js/stt.js"></script>
-    <script src="./js/export.js"></script>
-    <script src="./js/interactions.js"></script>
-    <script src="./js/pwa.js"></script>
-    <script src="./js/app.js"></script>
-  </body>
+        <h3>AI Processing</h3>
+        <div class="field">
+          <label>Provider</label>
+          <select id="aiProvider">
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic</option>
+            <option value="gemini">Google Gemini</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Model</label>
+          <input type="text" id="aiModel" placeholder="gpt-4o-mini" />
+        </div>
+        <form class="inline-form" autocomplete="on">
+          <div class="field">
+            <label>API Key</label>
+            <input type="password" id="aiKey" name="aiKey" placeholder="Enter API key" />
+          </div>
+        </form>
+        <div class="field">
+          <label>Custom Prompt</label>
+          <textarea id="customPrompt" placeholder="Add your own instructions for annotation processing"></textarea>
+        </div>
+        <div class="field">
+          <label>Annotation Color Palette</label>
+          <div class="palette-editor">
+            <div class="palette-list" id="paletteList"></div>
+            <div class="palette-actions">
+              <button class="btn secondary small" id="paletteAdd" type="button">
+                <i class="ph ph-plus"></i>
+                Add
+              </button>
+              <button class="btn secondary small" id="paletteSaveDefault" type="button">
+                <i class="ph ph-floppy-disk"></i>
+                Save
+              </button>
+              <button class="btn ghost small" id="paletteRestoreDefault" type="button">
+                <i class="ph ph-arrow-counter-clockwise"></i>
+                Reset
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label>Mock AI</label>
+          <div class="segmented">
+            <label><input type="checkbox" id="mockToggle" /> Enable mock AI responses</label>
+          </div>
+        </div>
+        <h3>OCR (Beta)</h3>
+        <div class="field">
+          <label>Enable OCR for scanned pages</label>
+          <div class="segmented">
+            <label><input type="checkbox" id="ocrToggle" /> Enable OCR</label>
+          </div>
+        </div>
+        <div class="field">
+          <button class="btn secondary" id="ocrRun" type="button">
+            <i class="ph ph-sparkle"></i>
+            Run OCR on Visible Pages
+          </button>
+        </div>
+        <div class="settings-actions">
+          <button class="btn accent" id="saveSettings" type="button">
+            <i class="ph ph-floppy-disk"></i>
+            Save Settings
+          </button>
+          <button class="btn secondary" id="clearOffline" type="button">
+            <i class="ph ph-trash"></i>
+            Clear All Offline Data
+          </button>
+        </div>
+        <div id="storageUsage" class="field">IndexedDB: 0 MB</div>
+        <div class="danger-zone">
+          <strong>Danger Zone</strong>
+          <button class="btn danger" id="resetSessionPanel" type="button">
+            <i class="ph ph-warning-circle"></i>
+            Reset Session Data
+          </button>
+          <button class="btn danger" id="resetAppPanel" type="button">
+            <i class="ph ph-skull"></i>
+            Reset App (incl. settings)
+          </button>
+        </div>
+      </div>
+      <div class="logs-scrim" id="logsScrim"></div>
+      <div class="logs-panel" id="logsPanel" role="dialog" aria-label="System logs" tabindex="-1">
+        <div class="logs-header">
+          <h3>System Logs</h3>
+          <div class="logs-actions">
+            <button class="btn secondary small" id="logsClear" title="Clear logs">Clear Logs</button>
+            <button class="btn icon secondary" id="logsClose" title="Close logs">
+              <i class="ph ph-x"></i>
+            </button>
+          </div>
+        </div>
+        <div class="logs-meta" id="logsMeta">Session logs</div>
+        <div class="logs-list" id="logsList"></div>
+      </div>
+      <div class="queue-scrim" id="queueScrim"></div>
+      <div class="queue-panel" id="queuePanel" role="dialog" aria-label="Queue" tabindex="-1">
+        <div class="queue-header">
+          <h3>Queue</h3>
+          <div class="queue-actions">
+            <button class="btn secondary small" id="queueRetryAll" title="Retry failed">Retry Failed</button>
+            <button class="btn icon secondary" id="queueClose" title="Close queue">
+              <i class="ph ph-x"></i>
+            </button>
+          </div>
+        </div>
+        <div class="queue-meta" id="queueMeta">Queue is empty.</div>
+        <div class="queue-list" id="queueList"></div>
+      </div>
+    </main>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+  <div class="modal-overlay" id="modalOverlay">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <h4 id="modalTitle">Modal</h4>
+      <div id="modalBody"></div>
+      <div class="modal-actions" id="modalActions"></div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="./js/core.js"></script>
+  <script src="./js/ui.js"></script>
+  <script src="./js/settings.js"></script>
+  <script src="./js/storage.js"></script>
+  <script src="./js/pdf.js"></script>
+  <script src="./js/annotations.js"></script>
+  <script src="./js/ai.js"></script>
+  <script src="./js/batch.js"></script>
+  <script src="./js/stt.js"></script>
+  <script src="./js/export.js"></script>
+  <script src="./js/interactions.js"></script>
+  <script src="./js/pwa.js"></script>
+  <script src="./js/app.js"></script>
+</body>
+
 </html>

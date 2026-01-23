@@ -171,9 +171,9 @@ async function resolveTarget(annotation, pdfState, session) {
   if (!pageData) return null;
   const target = annotation.target || {};
 
-  const figureHint = extractFigureReference(annotation.comment) || 
-                     extractFigureReference(target.text?.exact) ||
-                     extractFigureReference(target.text?.quote);
+  const figureHint = extractFigureReference(annotation.comment) ||
+    extractFigureReference(target.text?.exact) ||
+    extractFigureReference(target.text?.quote);
   const hintText = figureHint ? `${figureHint.type} ${figureHint.number}` : null;
 
   if (target.mode === "tapFocus" && session?.taps?.length) {
@@ -599,9 +599,9 @@ function hexToRgb(hex) {
   const expanded =
     value.length === 3
       ? value
-          .split("")
-          .map((ch) => ch + ch)
-          .join("")
+        .split("")
+        .map((ch) => ch + ch)
+        .join("")
       : value;
   const int = parseInt(expanded, 16);
   if (Number.isNaN(int)) return null;
@@ -616,14 +616,14 @@ function normalizeAnnotationColor(value) {
   const color = (value || "").toString().trim().toLowerCase();
   const paletteKeys = palette.map((entry) => entry.key);
   if (paletteKeys.includes(color)) return color;
-  const fuzzyMatch = paletteKeys.find((key) => 
+  const fuzzyMatch = paletteKeys.find((key) =>
     key.includes(color) || color.includes(key) ||
     levenshteinDistance(key, color) <= 2
   );
   if (fuzzyMatch) return fuzzyMatch;
   const defaults = ["yellow", "blue", "red", "green", "purple", "pink"];
   if (defaults.includes(color)) return color;
-  const defaultFuzzy = defaults.find((d) => 
+  const defaultFuzzy = defaults.find((d) =>
     d.includes(color) || color.includes(d) ||
     levenshteinDistance(d, color) <= 2
   );

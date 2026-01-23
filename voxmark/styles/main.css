@@ -565,6 +565,7 @@ header {
   white-space: nowrap;
   border: 0;
 }
+
 .theme-toggle {
   display: inline-flex;
   align-items: center;
@@ -1204,12 +1205,12 @@ header {
   overflow: hidden;
 }
 
-.viewer-area.pinching > * {
+.viewer-area.pinching>* {
   will-change: transform;
   transition: none;
 }
 
-.viewer-area:not(.pinching) > [data-id] {
+.viewer-area:not(.pinching)>[data-id] {
   transition: transform 0.12s ease-out;
 }
 
@@ -1760,9 +1761,11 @@ html.pdf-invert .search-hit-box {
   0% {
     box-shadow: 0 0 0 0 var(--recording-pulse);
   }
+
   70% {
     box-shadow: 0 0 0 16px var(--recording-pulse-end);
   }
+
   100% {
     box-shadow: 0 0 0 0 var(--recording-pulse-end);
   }
@@ -2014,6 +2017,7 @@ html.pdf-invert .search-hit-box {
     opacity: 0;
     transform: translateY(6px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -2147,8 +2151,15 @@ html.pdf-invert .search-hit-box {
 }
 
 @keyframes toastPulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.05);
+  }
 }
 
 .shortcuts-list {
@@ -2180,6 +2191,7 @@ html.pdf-invert .search-hit-box {
     opacity: 0;
     transform: translateY(6px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -2191,6 +2203,7 @@ html.pdf-invert .search-hit-box {
     opacity: 0;
     transform: translateY(-6px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -2202,10 +2215,12 @@ html.pdf-invert .search-hit-box {
     transform: translate(-50%, -50%) scale(1);
     opacity: 1;
   }
+
   60% {
     transform: translate(-50%, -50%) scale(1.1);
     opacity: 0.9;
   }
+
   100% {
     transform: translate(-50%, -50%) scale(0.9);
     opacity: 0;

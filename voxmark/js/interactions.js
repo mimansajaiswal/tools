@@ -606,74 +606,74 @@ function bindInteractions() {
   elements.viewerArea.addEventListener(
     "touchstart",
     (event) => {
-    if (event.touches.length === 1) {
-      if (touchState?.type === "pinch") {
-        debouncedCommitPinch();
-        return;
-      }
-      const touch = event.touches[0];
-      touchState = {
-        type: "swipe",
-        startX: touch.clientX,
-        startY: touch.clientY,
-        startTime: Date.now(),
-        moved: false,
-        tapFocus: null
-      };
-      if (state.settings.tapFocus && !state.adjustMode) {
-        const pageDiv = event.target.closest(".page");
-        if (pageDiv) {
-          const rect = pageDiv.getBoundingClientRect();
-          touchState.tapFocus = {
-            pageDiv,
-            x: touch.clientX - rect.left,
-            y: touch.clientY - rect.top,
-            time: touchState.startTime,
-            clientX: touch.clientX,
-            clientY: touch.clientY
-          };
+      if (event.touches.length === 1) {
+        if (touchState?.type === "pinch") {
+          debouncedCommitPinch();
+          return;
+        }
+        const touch = event.touches[0];
+        touchState = {
+          type: "swipe",
+          startX: touch.clientX,
+          startY: touch.clientY,
+          startTime: Date.now(),
+          moved: false,
+          tapFocus: null
+        };
+        if (state.settings.tapFocus && !state.adjustMode) {
+          const pageDiv = event.target.closest(".page");
+          if (pageDiv) {
+            const rect = pageDiv.getBoundingClientRect();
+            touchState.tapFocus = {
+              pageDiv,
+              x: touch.clientX - rect.left,
+              y: touch.clientY - rect.top,
+              time: touchState.startTime,
+              clientX: touch.clientX,
+              clientY: touch.clientY
+            };
+          }
+        }
+      } else if (event.touches.length === 2) {
+        if (commitPinchTimeout) {
+          clearTimeout(commitPinchTimeout);
+          commitPinchTimeout = null;
+        }
+        const [t1, t2] = event.touches;
+        const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+        const pdfState = getActivePdf();
+        if (pdfState) pdfState.autoFit = false;
+        state.isPinching = true;
+        event.preventDefault();
+        elements.viewerArea.style.touchAction = "none";
+        elements.viewerArea.classList.add("pinching");
+        const viewerRect = elements.viewerArea.getBoundingClientRect();
+        const centerX = (t1.clientX + t2.clientX) / 2;
+        const centerY = (t1.clientY + t2.clientY) / 2;
+        const originViewport = {
+          x: centerX - viewerRect.left,
+          y: centerY - viewerRect.top
+        };
+        const originContainer = {
+          x: elements.viewerArea.scrollLeft + originViewport.x,
+          y: elements.viewerArea.scrollTop + originViewport.y
+        };
+        touchState = {
+          type: "pinch",
+          startDistance: Math.max(1, dist),
+          lastDistance: dist,
+          startScale: pdfState?.scale || 1.15,
+          previewScale: pdfState?.scale || 1.15,
+          origin: originContainer,
+          originViewport,
+          velocity: 0,
+          lastTime: performance.now(),
+          raf: null
+        };
+        if (pdfState) {
+          setPreviewScale(pdfState, touchState.previewScale, touchState.origin);
         }
       }
-    } else if (event.touches.length === 2) {
-      if (commitPinchTimeout) {
-        clearTimeout(commitPinchTimeout);
-        commitPinchTimeout = null;
-      }
-      const [t1, t2] = event.touches;
-      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
-      const pdfState = getActivePdf();
-      if (pdfState) pdfState.autoFit = false;
-      state.isPinching = true;
-      event.preventDefault();
-      elements.viewerArea.style.touchAction = "none";
-      elements.viewerArea.classList.add("pinching");
-      const viewerRect = elements.viewerArea.getBoundingClientRect();
-      const centerX = (t1.clientX + t2.clientX) / 2;
-      const centerY = (t1.clientY + t2.clientY) / 2;
-      const originViewport = {
-        x: centerX - viewerRect.left,
-        y: centerY - viewerRect.top
-      };
-      const originContainer = {
-        x: elements.viewerArea.scrollLeft + originViewport.x,
-        y: elements.viewerArea.scrollTop + originViewport.y
-      };
-      touchState = {
-        type: "pinch",
-        startDistance: Math.max(1, dist),
-        lastDistance: dist,
-        startScale: pdfState?.scale || 1.15,
-        previewScale: pdfState?.scale || 1.15,
-        origin: originContainer,
-        originViewport,
-        velocity: 0,
-        lastTime: performance.now(),
-        raf: null
-      };
-      if (pdfState) {
-        setPreviewScale(pdfState, touchState.previewScale, touchState.origin);
-      }
-    }
     },
     { passive: false }
   );

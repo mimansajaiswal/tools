@@ -1319,40 +1319,100 @@ body.offline-mode::after {
 }
 
 /* Heatmap levels - Light mode using muted pink/purple gradient */
-.heatmap-cell.level-0 { background: rgba(var(--charcoal-rgb), 0.04); border: 1px solid rgba(var(--charcoal-rgb), 0.08); }
-.heatmap-cell.level-1 { background: rgba(var(--muted-pink-rgb), 0.25); }
-.heatmap-cell.level-2 { background: rgba(var(--muted-pink-rgb), 0.45); }
-.heatmap-cell.level-3 { background: rgba(var(--dull-purple-rgb), 0.55); }
-.heatmap-cell.level-4 { background: rgba(var(--dull-purple-rgb), 0.85); }
+.heatmap-cell.level-0 {
+    background: rgba(var(--charcoal-rgb), 0.04);
+    border: 1px solid rgba(var(--charcoal-rgb), 0.08);
+}
 
-.heatmap-swatch.level-0 { background: rgba(var(--charcoal-rgb), 0.04); border: 1px solid rgba(var(--charcoal-rgb), 0.08); }
-.heatmap-swatch.level-1 { background: rgba(var(--muted-pink-rgb), 0.25); }
-.heatmap-swatch.level-2 { background: rgba(var(--muted-pink-rgb), 0.45); }
-.heatmap-swatch.level-3 { background: rgba(var(--dull-purple-rgb), 0.55); }
-.heatmap-swatch.level-4 { background: rgba(var(--dull-purple-rgb), 0.85); }
+.heatmap-cell.level-1 {
+    background: rgba(var(--muted-pink-rgb), 0.25);
+}
+
+.heatmap-cell.level-2 {
+    background: rgba(var(--muted-pink-rgb), 0.45);
+}
+
+.heatmap-cell.level-3 {
+    background: rgba(var(--dull-purple-rgb), 0.55);
+}
+
+.heatmap-cell.level-4 {
+    background: rgba(var(--dull-purple-rgb), 0.85);
+}
+
+.heatmap-swatch.level-0 {
+    background: rgba(var(--charcoal-rgb), 0.04);
+    border: 1px solid rgba(var(--charcoal-rgb), 0.08);
+}
+
+.heatmap-swatch.level-1 {
+    background: rgba(var(--muted-pink-rgb), 0.25);
+}
+
+.heatmap-swatch.level-2 {
+    background: rgba(var(--muted-pink-rgb), 0.45);
+}
+
+.heatmap-swatch.level-3 {
+    background: rgba(var(--dull-purple-rgb), 0.55);
+}
+
+.heatmap-swatch.level-4 {
+    background: rgba(var(--dull-purple-rgb), 0.85);
+}
 
 /* Heatmap levels - Dark mode */
 body[data-theme="dark"] .heatmap-cell.level-0,
-html[data-theme="dark"] .heatmap-cell.level-0 { background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); }
+html[data-theme="dark"] .heatmap-cell.level-0 {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 body[data-theme="dark"] .heatmap-cell.level-1,
-html[data-theme="dark"] .heatmap-cell.level-1 { background: rgba(var(--muted-pink-rgb), 0.30); }
+html[data-theme="dark"] .heatmap-cell.level-1 {
+    background: rgba(var(--muted-pink-rgb), 0.30);
+}
+
 body[data-theme="dark"] .heatmap-cell.level-2,
-html[data-theme="dark"] .heatmap-cell.level-2 { background: rgba(var(--muted-pink-rgb), 0.50); }
+html[data-theme="dark"] .heatmap-cell.level-2 {
+    background: rgba(var(--muted-pink-rgb), 0.50);
+}
+
 body[data-theme="dark"] .heatmap-cell.level-3,
-html[data-theme="dark"] .heatmap-cell.level-3 { background: rgba(var(--dull-purple-rgb), 0.65); }
+html[data-theme="dark"] .heatmap-cell.level-3 {
+    background: rgba(var(--dull-purple-rgb), 0.65);
+}
+
 body[data-theme="dark"] .heatmap-cell.level-4,
-html[data-theme="dark"] .heatmap-cell.level-4 { background: rgba(var(--dull-purple-rgb), 0.90); }
+html[data-theme="dark"] .heatmap-cell.level-4 {
+    background: rgba(var(--dull-purple-rgb), 0.90);
+}
 
 body[data-theme="dark"] .heatmap-swatch.level-0,
-html[data-theme="dark"] .heatmap-swatch.level-0 { background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); }
+html[data-theme="dark"] .heatmap-swatch.level-0 {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 body[data-theme="dark"] .heatmap-swatch.level-1,
-html[data-theme="dark"] .heatmap-swatch.level-1 { background: rgba(var(--muted-pink-rgb), 0.30); }
+html[data-theme="dark"] .heatmap-swatch.level-1 {
+    background: rgba(var(--muted-pink-rgb), 0.30);
+}
+
 body[data-theme="dark"] .heatmap-swatch.level-2,
-html[data-theme="dark"] .heatmap-swatch.level-2 { background: rgba(var(--muted-pink-rgb), 0.50); }
+html[data-theme="dark"] .heatmap-swatch.level-2 {
+    background: rgba(var(--muted-pink-rgb), 0.50);
+}
+
 body[data-theme="dark"] .heatmap-swatch.level-3,
-html[data-theme="dark"] .heatmap-swatch.level-3 { background: rgba(var(--dull-purple-rgb), 0.65); }
+html[data-theme="dark"] .heatmap-swatch.level-3 {
+    background: rgba(var(--dull-purple-rgb), 0.65);
+}
+
 body[data-theme="dark"] .heatmap-swatch.level-4,
-html[data-theme="dark"] .heatmap-swatch.level-4 { background: rgba(var(--dull-purple-rgb), 0.90); }
+html[data-theme="dark"] .heatmap-swatch.level-4 {
+    background: rgba(var(--dull-purple-rgb), 0.90);
+}
 
 .heatmap-legend {
     display: flex;
@@ -1577,22 +1637,56 @@ html[data-theme="dark"] .rate-btn:hover {
     border: 1px solid var(--card-border);
 }
 
-.flag-red { background: #F9DCD9; }
-.flag-orange { background: #F4DDD0; }
-.flag-yellow { background: #F3E3C2; }
-.flag-green { background: #DBE6DD; }
-.flag-blue { background: #D2E3F8; }
-.flag-purple { background: #E8DDF3; }
+.flag-red {
+    background: #F9DCD9;
+}
+
+.flag-orange {
+    background: #F4DDD0;
+}
+
+.flag-yellow {
+    background: #F3E3C2;
+}
+
+.flag-green {
+    background: #DBE6DD;
+}
+
+.flag-blue {
+    background: #D2E3F8;
+}
+
+.flag-purple {
+    background: #E8DDF3;
+}
 
 body[data-theme="dark"] .flag-red,
-html[data-theme="dark"] .flag-red { background: #984F4A; }
+html[data-theme="dark"] .flag-red {
+    background: #984F4A;
+}
+
 body[data-theme="dark"] .flag-orange,
-html[data-theme="dark"] .flag-orange { background: #8F5937; }
+html[data-theme="dark"] .flag-orange {
+    background: #8F5937;
+}
+
 body[data-theme="dark"] .flag-yellow,
-html[data-theme="dark"] .flag-yellow { background: #896B31; }
+html[data-theme="dark"] .flag-yellow {
+    background: #896B31;
+}
+
 body[data-theme="dark"] .flag-green,
-html[data-theme="dark"] .flag-green { background: #416F53; }
+html[data-theme="dark"] .flag-green {
+    background: #416F53;
+}
+
 body[data-theme="dark"] .flag-blue,
-html[data-theme="dark"] .flag-blue { background: #3D6592; }
+html[data-theme="dark"] .flag-blue {
+    background: #3D6592;
+}
+
 body[data-theme="dark"] .flag-purple,
-html[data-theme="dark"] .flag-purple { background: #6E5482; }
+html[data-theme="dark"] .flag-purple {
+    background: #6E5482;
+}
