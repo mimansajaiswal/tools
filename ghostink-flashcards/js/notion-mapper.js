@@ -590,8 +590,8 @@ export const NotionMapper = {
             'Anki Note Type': card.ankiNoteType ? { select: { name: card.ankiNoteType } } : { select: null },
             'Anki Fields JSON': card.ankiFields ? { rich_text: [{ type: 'text', text: { content: card.ankiFields } }] } : { rich_text: [] },
             'Cloze Indexes': card.clozeIndexes ? { rich_text: [{ type: 'text', text: { content: card.clozeIndexes } }] } : { rich_text: [] },
-            'Parent Card': card.parentCard 
-                ? { relation: [{ id: card.parentCard }] } 
+            'Parent Card': card.parentCard
+                ? { relation: [{ id: card.parentCard }] }
                 : { relation: [] }
         };
 

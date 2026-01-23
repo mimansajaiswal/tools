@@ -122,7 +122,7 @@ const safeMarkdownParse = (md) => {
         return marked.parse(md);
     } catch (e) {
         console.error('Markdown parse error:', e);
-        return md;  // Return raw markdown on failure
+        return md; // Return raw markdown on failure
     }
 };
 
@@ -225,13 +225,13 @@ export const App = {
         answerRevealedAt: null,
         aiLocked: false,
         lockAiUntilNextCard: false,
-        activeMicButton: null,  // 'inline' | 'fab'
+        activeMicButton: null, // 'inline' | 'fab'
         micPermissionPromise: null,
         cardReversed: false,
         studyNonDue: false,
-        session: null,  // Active study session (loaded from localStorage)
-        sessionReversed: null,  // Pre-computed reverse decision from session
-        lastRating: null,  // For undo feature: { cardId, sm2, fsrs, history, rating, sessionIndex }
+        session: null, // Active study session (loaded from localStorage)
+        sessionReversed: null, // Pre-computed reverse decision from session
+        lastRating: null, // For undo feature: { cardId, sm2, fsrs, history, rating, sessionIndex }
         undoToastTimeout: null,
         tagOptions: [],
         tagSelection: [],
@@ -262,7 +262,7 @@ export const App = {
         if (!this.state.tagOptions || this.state.tagOptions.length === 0) {
             this.state.tagOptions = this.buildLocalTagOptions();
         }
-        await this.loadSession();  // Load any active study session (async for IndexedDB)
+        await this.loadSession(); // Load any active study session (async for IndexedDB)
         this.captureOAuth();
         this.bind();
         this.seedIfEmpty();
@@ -416,12 +416,12 @@ export const App = {
         // Reset all
         buttons.forEach(btn => {
             if (!btn) return;
-            btn.classList.remove('ring', 'ring-dull-purple', 'ring-offset-2', 'animate-pulse', 'bg-dull-purple/20');
+            btn.classList.remove('ring', 'ring-dull-purple', 'ring-offset-2', 'animate-pulse', 'bg-accent-soft');
         });
         if (!listening) return;
         const target = this.state.activeMicButton === 'fab' ? fabMic : micBtn || fabMic;
         if (!target) return;
-        target.classList.add('ring', 'ring-dull-purple', 'ring-offset-2', 'animate-pulse', 'bg-dull-purple/20');
+        target.classList.add('ring', 'ring-dull-purple', 'ring-offset-2', 'animate-pulse', 'bg-accent-soft');
     },
     setAiControlsLocked(locked) {
         if (!locked && this.state.lockAiUntilNextCard && !this.state.answerRevealed) {
@@ -477,7 +477,7 @@ export const App = {
         const candidateCards = this.state.cards.filter(c =>
             selectedDeckIds.includes(c.deckId) &&
             this.passFilters(c) &&
-            isSchedulable(c) &&  // Exclude cloze parents - only sub-items are schedulable
+            isSchedulable(c) && // Exclude cloze parents - only sub-items are schedulable
             (includeNonDue || this.isDue(c))
         );
 
@@ -809,50 +809,50 @@ export const App = {
 
         // Build rating distribution bar with aligned numbers
         const ratingBar = totalRatings > 0 ? `
-                    <div class="flex w-full h-2 rounded-full overflow-hidden bg-oatmeal-dark/30 dark:bg-white/10 mt-2">
-                        ${ratings.Again > 0 ? `<div class="bg-red-400 dark:bg-red-700" style="width: ${againPct}%"></div>` : ''}
-                        ${ratings.Hard > 0 ? `<div class="bg-orange-400 dark:bg-orange-700" style="width: ${hardPct}%"></div>` : ''}
-                        ${ratings.Good > 0 ? `<div class="bg-green-400 dark:bg-green-700" style="width: ${goodPct}%"></div>` : ''}
-                        ${ratings.Easy > 0 ? `<div class="bg-blue-400 dark:bg-blue-700" style="width: ${easyPct}%"></div>` : ''}
-                    </div>
-                    <div class="flex w-full text-[10px] mt-1">
-                        ${ratings.Again > 0 ? `<span class="text-red-500 dark:text-red-200 text-center" style="width: ${againPct}%">${ratings.Again}</span>` : ''}
-                        ${ratings.Hard > 0 ? `<span class="text-orange-500 dark:text-orange-200 text-center" style="width: ${hardPct}%">${ratings.Hard}</span>` : ''}
-                        ${ratings.Good > 0 ? `<span class="text-green-500 dark:text-green-200 text-center" style="width: ${goodPct}%">${ratings.Good}</span>` : ''}
-                        ${ratings.Easy > 0 ? `<span class="text-blue-500 dark:text-blue-200 text-center" style="width: ${easyPct}%">${ratings.Easy}</span>` : ''}
-                    </div>
-                ` : '';
+ <div class="flex w-full h-2 rounded-full overflow-hidden bg-surface-muted mt-2">
+ ${ratings.Again > 0 ? `<div style="width: ${againPct}%; background: var(--rating-again-fill);"></div>` : ''}
+ ${ratings.Hard > 0 ? `<div style="width: ${hardPct}%; background: var(--rating-hard-fill);"></div>` : ''}
+ ${ratings.Good > 0 ? `<div style="width: ${goodPct}%; background: var(--rating-good-fill);"></div>` : ''}
+ ${ratings.Easy > 0 ? `<div style="width: ${easyPct}%; background: var(--rating-easy-fill);"></div>` : ''}
+ </div>
+ <div class="flex w-full text-[10px] mt-1">
+ ${ratings.Again > 0 ? `<span class="rating-text-again text-center" style="width: ${againPct}%">${ratings.Again}</span>` : ''}
+ ${ratings.Hard > 0 ? `<span class="rating-text-hard text-center" style="width: ${hardPct}%">${ratings.Hard}</span>` : ''}
+ ${ratings.Good > 0 ? `<span class="rating-text-good text-center" style="width: ${goodPct}%">${ratings.Good}</span>` : ''}
+ ${ratings.Easy > 0 ? `<span class="rating-text-easy text-center" style="width: ${easyPct}%">${ratings.Easy}</span>` : ''}
+ </div>
+ ` : '';
 
         el('#studyDeckLabel').textContent = 'Session Complete';
         el('#cardFront').innerHTML = `
-                    <div class="text-center py-4 md:py-6">
-                        <h3 class="font-display text-base md:text-lg text-charcoal mb-1">Session Complete</h3>
-                        <p class="text-earth-metal/60 text-xs md:text-sm">
-                            ${completedCount} card${completedCount !== 1 ? 's' : ''} reviewed${skippedCount > 0 ? `, ${skippedCount} skipped` : ''}
-                        </p>
-                        <p class="text-earth-metal/50 dark:text-white/60 text-[10px] md:text-xs mb-3">
-                            ${durationMins > 0 ? `${durationMins} min` : '<1 min'} · ${cardsPerMin} cards/min
-                        </p>
-                        <div class="max-w-[200px] mx-auto mb-4">
-                            ${ratingBar}
-                        </div>
-                        <div class="flex flex-col gap-3 items-center">
-                            <div class="flex flex-col items-center">
-                                <button id="restartAllCardsBtn" class="px-4 py-2 bg-dull-purple text-white rounded-lg text-sm hover:bg-dull-purple/90 transition">
-                                    Restart
-                                </button>
-                                <label class="flex items-center gap-2 text-[11px] text-earth-metal/70 mt-2">
-                                    <input id="restartNoScheduleChanges" type="checkbox" class="accent-dull-purple" checked>
-                                    <span>No scheduling changes</span>
-                                </label>
-                                <p class="text-[10px] md:text-xs text-earth-metal/50 dark:text-white/60 mt-1">Restart with all cards in selected decks</p>
-                            </div>
-                            <button id="endSessionBtn" class="px-4 py-2 border border-oatmeal-dark/60 text-earth-metal/70 rounded-lg text-sm hover:bg-oatmeal/50 transition">
-                                End Session
-                            </button>
-                        </div>
-                    </div>
-                `;
+ <div class="text-center py-4 md:py-6">
+ <h3 class="font-display text-base md:text-lg text-main mb-1">Session Complete</h3>
+ <p class="text-muted text-xs md:text-sm">
+ ${completedCount} card${completedCount !== 1 ? 's' : ''} reviewed${skippedCount > 0 ? `, ${skippedCount} skipped` : ''}
+ </p>
+ <p class="text-faint text-[10px] md:text-xs mb-3">
+ ${durationMins > 0 ? `${durationMins} min` : '<1 min'} · ${cardsPerMin} cards/min
+ </p>
+ <div class="max-w-[200px] mx-auto mb-4">
+ ${ratingBar}
+ </div>
+ <div class="flex flex-col gap-3 items-center">
+ <div class="flex flex-col items-center">
+ <button id="restartAllCardsBtn" class="px-4 py-2 bg-[color:var(--accent)] text-[color:var(--badge-text)] rounded-lg text-sm hover:bg-[color:var(--accent)]/90 transition">
+ Restart
+ </button>
+ <label class="flex items-center gap-2 text-[11px] text-sub mt-2">
+ <input id="restartNoScheduleChanges" type="checkbox" class="accent-dull-purple" checked>
+ <span>No scheduling changes</span>
+ </label>
+ <p class="text-[10px] md:text-xs text-faint mt-1">Restart with all cards in selected decks</p>
+ </div>
+ <button id="endSessionBtn" class="px-4 py-2 border border-card text-sub rounded-lg text-sm hover:bg-surface-muted transition">
+ End Session
+ </button>
+ </div>
+ </div>
+ `;
         el('#cardBack').innerHTML = '';
         el('#cardBack').classList.add('hidden');
         this.state.selectedCard = null;
@@ -1683,8 +1683,10 @@ export const App = {
     },
     renderGate() {
         const ready = this.isReady();
+        const tabBar = el('#tabBar');
         el('#mainContent').style.display = ready ? 'block' : 'none';
         el('#lockedOverlay').classList.toggle('hidden', ready);
+        if (tabBar) tabBar.classList.toggle('hidden', !ready);
         const oauth = el('#oauthBtn');
         const verifyAuthBtn = el('#verifyAuth');
         const tokenInput = el('#settingAuthToken');
@@ -1704,7 +1706,7 @@ export const App = {
 
         const q2count = (this.state.queue || []).length;
         const pendingSpan = q2count > 0
-            ? ` <span class="ml-1 font-mono text-[10px] sm:text-[11px] text-dull-purple/80 dark:text-dull-purple/90">(${q2count})</span>`
+            ? ` <span class="ml-1 font-mono text-[10px] sm:text-[11px] text-accent ">(${q2count})</span>`
             : '';
         const q2ind = el('#q2syncIndicator');
         const q2val = el('#q2syncCount');
@@ -1718,17 +1720,18 @@ export const App = {
         const staleMinutes = ageMs > 0 ? Math.floor(ageMs / 60000) : 0;
         const errorMsg = this.state.lastQueueError?.message || '';
         const errorAt = this.state.lastQueueError?.at ? new Date(this.state.lastQueueError.at).toLocaleString() : '';
-        badge.title = '';
+        badge.removeAttribute('title');
+        badge.dataset.tip = '';
         if (q2count > 0) {
             const parts = [];
             if (staleMinutes >= 2) parts.push(`Queue unchanged for ~${staleMinutes} min`);
             if (errorMsg) parts.push(`Last sync error${errorAt ? ` (${errorAt})` : ''}: ${errorMsg}`);
-            if (parts.length) badge.title = parts.join('\n');
+            if (parts.length) badge.dataset.tip = parts.join(' | ');
         }
 
         if (!online) {
             badge.innerHTML = `Offline${pendingSpan}`;
-            badge.className = 'px-3 py-1 rounded-full pill text-xs bg-oatmeal border border-oatmeal-dark text-earth-metal';
+            badge.className = 'px-3 py-1 rounded-full pill text-xs bg-surface-strong border border-card text-main';
             this.updateSyncButtonState();
             return;
         }
@@ -1745,8 +1748,8 @@ export const App = {
             badge.innerHTML = q2count > 0 ? `Online${pendingSpan}` : 'Online · Notion ready';
         }
         badge.className = ready
-            ? 'px-3 py-1 rounded-full pill text-xs bg-white-linen border border-oatmeal-dark text-earth-metal'
-            : 'px-3 py-1 rounded-full pill text-xs bg-oatmeal border border-oatmeal-dark text-earth-metal';
+            ? 'px-3 py-1 rounded-full pill text-xs bg-surface border border-card text-main'
+            : 'px-3 py-1 rounded-full pill text-xs bg-surface-strong border border-card text-main';
         this.updateSyncButtonState();
     },
     renderDecks() {
@@ -1759,37 +1762,37 @@ export const App = {
             decks = decks.filter(d => d.name.toLowerCase().includes(searchQuery));
         }
         if (decks.length === 0) {
-            grid.innerHTML = `<p class="text-earth-metal/60 text-sm col-span-full text-center py-4">${searchQuery ? 'No decks match your search.' : 'No decks yet. Click "New deck" to create one.'}</p>`;
+            grid.innerHTML = `<p class="text-muted text-sm col-span-full text-center py-4">${searchQuery ? 'No decks match your search.' : 'No decks yet. Click "New deck" to create one.'}</p>`;
             return;
         }
         grid.innerHTML = decks.map(d => {
             const isSelected = d.id === selectedId;
             const selectedClass = isSelected ? 'ring-2 ring-dull-purple' : '';
             return `
-                    <article class="rounded-2xl border border-[color:var(--card-border)] p-3 bg-[color:var(--surface)] text-[color:var(--text-main)] flex flex-col gap-2 hover:bg-[color:var(--surface-strong)] transition cursor-pointer ${selectedClass}" data-deck-id="${d.id}">
-                        <div class="flex items-center justify-between">
-                            <p class="font-semibold text-[color:var(--text-main)] truncate flex-1">${escapeHtml(d.name)}</p>
-                            <div class="flex items-center gap-1.5">
-                                <button class="edit-deck-btn p-1 rounded hover:bg-dull-purple/20 text-dull-purple" data-deck-id="${d.id}" title="Edit deck">
-                                    <i data-lucide="edit-2" class="w-3.5 h-3.5 pointer-events-none"></i>
-                                </button>
-                                <span class="text-[11px] px-2 py-1 rounded-full bg-[color:var(--surface-strong)] text-[color:var(--text-main)] border border-[color:var(--card-border)]">${d.algorithm}</span>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-3 text-xs text-[color:var(--text-sub)]">
-                            <span>${this.cardsForDeck(d.id).filter(c => this.isDue(c)).length} due</span>
-                            <span>${this.cardsForDeck(d.id).length} cards</span>
-                        </div>
-                        <div class="flex items-center gap-2 text-[11px] text-[color:var(--text-sub)]">
-                            <i data-lucide="refresh-cw" class="w-3 h-3"></i>
-                            <span>Reverse ${d.reverse ? 'on' : 'off'}</span>
-                        </div>
-                        <div class="flex items-center gap-2 text-[11px] text-[color:var(--text-sub)]">
-                            <i data-lucide="list-ordered" class="w-3 h-3"></i>
-                            <span>Order: ${(d.orderMode === 'created' && 'Created Time') || (d.orderMode === 'property' && 'Order Property') || 'None'}</span>
-                        </div>
-                    </article>
-                `}).join('');
+ <article class="rounded-2xl border border-[color:var(--card-border)] p-3 bg-[color:var(--surface)] text-[color:var(--text-main)] flex flex-col gap-2 hover:bg-[color:var(--surface-strong)] transition cursor-pointer ${selectedClass}" data-deck-id="${d.id}">
+ <div class="flex items-center justify-between">
+ <p class="font-semibold text-[color:var(--text-main)] truncate flex-1">${escapeHtml(d.name)}</p>
+ <div class="flex items-center gap-1.5">
+ <button class="edit-deck-btn p-1 rounded hover:bg-accent-soft text-accent" data-deck-id="${d.id}" title="Edit deck">
+ <i data-lucide="edit-2" class="w-3.5 h-3.5 pointer-events-none"></i>
+ </button>
+ <span class="tag-pill text-[11px] px-2 py-1 rounded-full bg-[color:var(--surface-strong)] text-[color:var(--text-main)] border border-[color:var(--card-border)]">${d.algorithm}</span>
+ </div>
+ </div>
+ <div class="flex items-center gap-3 text-xs text-[color:var(--text-sub)]">
+ <span>${this.cardsForDeck(d.id).filter(c => this.isDue(c)).length} due</span>
+ <span>${this.cardsForDeck(d.id).length} cards</span>
+ </div>
+ <div class="flex items-center gap-2 text-[11px] text-[color:var(--text-sub)]">
+ <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+ <span>Reverse ${d.reverse ? 'on' : 'off'}</span>
+ </div>
+ <div class="flex items-center gap-2 text-[11px] text-[color:var(--text-sub)]">
+ <i data-lucide="list-ordered" class="w-3 h-3"></i>
+ <span>Order: ${(d.orderMode === 'created' && 'Created Time') || (d.orderMode === 'property' && 'Order Property') || 'None'}</span>
+ </div>
+ </article>
+ `}).join('');
         createIconsInScope(grid);
     },
     renderCards() {
@@ -1859,7 +1862,7 @@ export const App = {
                 const nameText = escapeHtml(plainName.slice(0, 50));
                 const flagClass = c.flag ? this.getFlagClass(c.flag) : '';
                 const flagDot = c.flag ? `<span class="flag-dot ${flagClass}" title="${escapeHtml(c.flag)}"></span>` : '';
-                const markIcon = c.marked ? `<i data-lucide="star" class="w-3 h-3 text-dull-purple" title="Marked"></i>` : '';
+                const markIcon = c.marked ? `<i data-lucide="star" class="w-3 h-3 text-accent" title="Marked"></i>` : '';
                 const tagPills = c.tags.slice(0, 2).map(t => `<span class="notion-color-${t.color.replace('_', '-')}-background px-1.5 py-0.5 rounded text-[10px]">${escapeHtml(t.name)}</span>`).join(' ');
                 // Get due date
                 const dueDate = c.fsrs?.dueDate || c.sm2?.dueDate;
@@ -1868,45 +1871,45 @@ export const App = {
                 const isParent = isClozeParent(c);
                 const isSub = isSubItem(c);
                 const subCount = isParent ? this.state.cards.filter(sc => sc.parentCard === c.id).length : 0;
-                const hierarchyIcon = isParent 
-                    ? `<span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-dull-purple/20 text-dull-purple text-[10px] font-medium" title="${subCount} sub-cards">${subCount}</span>`
-                    : isSub 
-                        ? `<i data-lucide="corner-down-right" class="w-3 h-3 text-earth-metal/50" title="Sub-item #${c.clozeIndexes || '?'}"></i>`
+                const hierarchyIcon = isParent
+                    ? `<span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-accent-soft text-accent text-[10px] font-medium" title="${subCount} sub-cards">${subCount}</span>`
+                    : isSub
+                        ? `<i data-lucide="corner-down-right" class="w-3 h-3 text-faint" title="Sub-item #${c.clozeIndexes || '?'}"></i>`
                         : '';
                 return `
-                        <tr class="hover:bg-oatmeal/50 dark:hover:bg-white/5" data-card-id="${c.id}">
-                            <td class="py-2 pr-2 text-charcoal">
-                                <div class="flex items-center gap-2">
-                                    ${hierarchyIcon}
-                                    ${markIcon}
-                                    ${flagDot}
-                                    <div class="truncate max-w-[150px] sm:max-w-[250px] md:max-w-[350px] lg:max-w-[450px]">${nameText}</div>
-                                </div>
-                            </td>
-                            <td class="py-2 pr-2 capitalize hidden sm:table-cell">${c.type}${isSub ? ` #${c.clozeIndexes || '?'}` : ''}</td>
-                            <td class="py-2 pr-2 text-earth-metal/70 text-xs whitespace-nowrap">${isParent ? '—' : dueDisplay}</td>
-                            <td class="py-2 pr-2 hidden md:table-cell text-xs"><div class="flex gap-1 flex-wrap">${tagPills}${c.tags.length > 2 ? '<span class="text-earth-metal/50 dark:text-white/60">...</span>' : ''}</div></td>
-                            <td class="py-2 flex gap-1">
-                                <button class="info-card-btn p-1 rounded hover:bg-dull-purple/20 text-earth-metal/60 relative" data-card-id="${c.id}" title="Review history">
-                                    <i data-lucide="info" class="w-4 h-4 pointer-events-none"></i>
-                                </button>
-                                <button class="edit-card-btn p-1 rounded hover:bg-dull-purple/20 text-dull-purple" data-card-id="${c.id}" title="Edit card">
-                                    <i data-lucide="edit-2" class="w-4 h-4 pointer-events-none"></i>
-                                </button>
-                            </td>
-                        </tr>`;
+ <tr class="hover:bg-surface-muted " data-card-id="${c.id}">
+ <td class="py-2 pr-2 text-main">
+ <div class="flex items-center gap-2">
+ ${hierarchyIcon}
+ ${markIcon}
+ ${flagDot}
+ <div class="truncate max-w-[150px] sm:max-w-[250px] md:max-w-[350px] lg:max-w-[450px]">${nameText}</div>
+ </div>
+ </td>
+ <td class="py-2 pr-2 capitalize hidden sm:table-cell">${c.type}${isSub ? ` #${c.clozeIndexes || '?'}` : ''}</td>
+ <td class="py-2 pr-2 text-sub text-xs whitespace-nowrap">${isParent ? '—' : dueDisplay}</td>
+ <td class="py-2 pr-2 hidden md:table-cell text-xs"><div class="flex gap-1 flex-wrap">${tagPills}${c.tags.length > 2 ? '<span class="text-faint ">...</span>' : ''}</div></td>
+ <td class="py-2 flex gap-1">
+ <button class="info-card-btn p-1 rounded hover:bg-accent-soft text-muted relative" data-card-id="${c.id}" title="Review history">
+ <i data-lucide="info" class="w-4 h-4 pointer-events-none"></i>
+ </button>
+ <button class="edit-card-btn p-1 rounded hover:bg-accent-soft text-accent" data-card-id="${c.id}" title="Edit card">
+ <i data-lucide="edit-2" class="w-4 h-4 pointer-events-none"></i>
+ </button>
+ </td>
+ </tr>`;
             }).join('');
 
             if (hasMore) {
                 tbody.innerHTML += `
-                         <tr id="cardListSentinel">
-                            <td colspan="5" class="py-3 text-center">
-                                <button id="showMoreCardsBtn" class="text-xs text-dull-purple hover:underline bg-oatmeal/50 dark:bg-white/10 px-4 py-2 rounded-lg">
-                                    Show ${Math.min(remainingCount, this.state.cardLimitStep || 50)} more cards (${remainingCount} remaining)
-                                </button>
-                            </td>
-                         </tr>
-                         `;
+ <tr id="cardListSentinel">
+ <td colspan="5" class="py-3 text-center">
+ <button id="showMoreCardsBtn" class="text-xs text-accent hover:underline bg-surface-muted px-4 py-2 rounded-lg">
+ Show ${Math.min(remainingCount, this.state.cardLimitStep || 50)} more cards (${remainingCount} remaining)
+ </button>
+ </td>
+ </tr>
+ `;
                 // Phase 15: IntersectionObserver for infinite scroll with cleanup
                 setTimeout(() => {
                     const btn = el('#showMoreCardsBtn');
@@ -1983,11 +1986,11 @@ export const App = {
         if (!session && this.state.decks.length === 0) {
             el('#studyDeckLabel').textContent = 'No decks yet';
             el('#cardFront').innerHTML = `
-                <div class="text-center py-4">
-                    <p class="text-earth-metal/70 text-sm mb-2">No decks found.</p>
-                    <p class="text-earth-metal/60 text-xs">Create a deck to start studying.</p>
-                </div>
-            `;
+ <div class="text-center py-4">
+ <p class="text-sub text-sm mb-2">No decks found.</p>
+ <p class="text-muted text-xs">Create a deck to start studying.</p>
+ </div>
+ `;
             el('#cardBack').innerHTML = '';
             el('#cardBack').classList.add('hidden');
             el('#aiControls').classList.add('hidden');
@@ -2015,14 +2018,14 @@ export const App = {
             // No due cards but there are non-due cards available (only show when no session)
             el('#studyDeckLabel').textContent = 'No cards due';
             el('#cardFront').innerHTML = `
-                        <div class="text-center py-4">
-                            <p class="text-earth-metal/70 text-sm mb-3">No cards are due for review right now.</p>
-                            <p class="text-earth-metal/60 text-xs mb-4">${nonDueCards.length} card${nonDueCards.length === 1 ? '' : 's'} available for extra practice.</p>
-                            <button id="studyNonDueBtn" class="px-4 py-2 bg-dull-purple text-white rounded-lg text-sm hover:bg-dull-purple/90 transition">
-                                Practice non-due cards
-                            </button>
-                        </div>
-                    `;
+ <div class="text-center py-4">
+ <p class="text-sub text-sm mb-3">No cards are due for review right now.</p>
+ <p class="text-muted text-xs mb-4">${nonDueCards.length} card${nonDueCards.length === 1 ? '' : 's'} available for extra practice.</p>
+ <button id="studyNonDueBtn" class="px-4 py-2 bg-[color:var(--accent)] text-[color:var(--badge-text)] rounded-lg text-sm hover:bg-[color:var(--accent)]/90 transition">
+ Practice non-due cards
+ </button>
+ </div>
+ `;
             el('#cardBack').innerHTML = '';
             el('#cardBack').classList.add('hidden');
             el('#aiControls').classList.add('hidden');
@@ -2041,7 +2044,7 @@ export const App = {
         el('#studyDeckLabel').textContent = deck ? deck.name : 'Choose a deck';
         // Clear cardFront before setting new content to force fresh DOM
         el('#cardFront').innerHTML = '';
-        const front = card ? this.renderCardFront(card, deck) : '<p class="text-earth-metal/70 text-sm">No card selected</p>';
+        const front = card ? this.renderCardFront(card, deck) : '<p class="text-sub text-sm">No card selected</p>';
         el('#cardFront').innerHTML = front;
         applyMediaEmbeds(el('#cardFront'));
         // Show opposite side based on whether card was reversed
@@ -2108,7 +2111,7 @@ export const App = {
     },
     renderNotes() {
         const notes = this.state.selectedCard?.notes ?? '';
-        el('#notesPreview').innerHTML = notes ? safeMarkdownParse(notes) : '<p class="text-earth-metal/60 text-sm">No notes for this card</p>';
+        el('#notesPreview').innerHTML = notes ? safeMarkdownParse(notes) : '<p class="text-muted text-sm">No notes for this card</p>';
         applyMediaEmbeds(el('#notesPreview'));
         this.renderMath(el('#notesPreview'));
     },
@@ -2135,12 +2138,12 @@ export const App = {
         dropdown.innerHTML = options.length
             ? options.map(name => {
                 const isSelected = selected.has(name);
-                return `<button class="tag-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 ${isSelected ? 'bg-dull-purple/10 border-lime-200' : 'hover:bg-oatmeal/60'}" data-tag="${encodeDataAttr(name)}">
-                            <span class="flex-1">${escapeHtml(name)}</span>
-                            ${isSelected ? '<span class="text-[11px] text-dull-purple">Selected</span>' : ''}
-                        </button>`;
+                return `<button class="tag-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 ${isSelected ? 'bg-accent-soft border-lime-200' : 'hover:bg-surface-muted'}" data-tag="${encodeDataAttr(name)}">
+ <span class="flex-1">${escapeHtml(name)}</span>
+ ${isSelected ? '<span class="text-[11px] text-accent">Selected</span>' : ''}
+ </button>`;
             }).join('')
-            : `<div class="px-3 py-2 text-sm text-earth-metal/60 dark:text-white/60">No tags found</div>`;
+            : `<div class="px-3 py-2 text-sm text-muted ">No tags found</div>`;
 
         dropdown.querySelectorAll('.tag-option').forEach(btn => {
             btn.onclick = () => {
@@ -2155,12 +2158,12 @@ export const App = {
 
         selectedWrap.innerHTML = selected.size
             ? Array.from(selected).map(tag => `
-                        <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-oatmeal text-earth-metal text-xs border border-oatmeal-dark/60">
-                            ${escapeHtml(tag)}
-                            <button class="remove-tag text-earth-metal/70" data-tag="${encodeDataAttr(tag)}">&times;</button>
-                        </span>
-                    `).join('')
-            : '<span class="text-earth-metal/50 dark:text-white/60 text-xs">All tags included</span>';
+ <span class="tag-pill inline-flex items-center gap-1 px-2 py-1 rounded-full bg-surface-strong text-main text-xs border border-card">
+ ${escapeHtml(tag)}
+ <button class="remove-tag text-sub" data-tag="${encodeDataAttr(tag)}">&times;</button>
+ </span>
+ `).join('')
+            : '<span class="text-faint text-xs">All tags included</span>';
 
         selectedWrap.querySelectorAll('.remove-tag').forEach(btn => {
             btn.onclick = () => {
@@ -2267,13 +2270,13 @@ export const App = {
         const markBtn = el('#markCardBtn');
         const flagBtn = el('#flagCardBtn');
         if (markBtn) {
-            markBtn.classList.toggle('text-dull-purple', !!card?.marked);
-            markBtn.classList.toggle('text-earth-metal/60', !card?.marked);
+            markBtn.classList.toggle('text-accent', !!card?.marked);
+            markBtn.classList.toggle('text-muted', !card?.marked);
         }
         if (flagBtn) {
             flagBtn.dataset.flag = card?.flag || '';
-            flagBtn.classList.toggle('text-dull-purple', !!card?.flag);
-            flagBtn.classList.toggle('text-earth-metal/60', !card?.flag);
+            flagBtn.classList.toggle('text-accent', !!card?.flag);
+            flagBtn.classList.toggle('text-muted', !card?.flag);
         }
     },
     openFlagPicker(anchor) {
@@ -2283,13 +2286,13 @@ export const App = {
         if (existing) existing.remove();
         const flags = this.getFlagOrder().filter(f => f);
         const popover = document.createElement('div');
-        popover.className = 'flag-picker-popover fixed z-50 bg-oatmeal dark:bg-zinc-800 border border-charcoal/20 dark:border-white/10 rounded-lg shadow-lg p-2 flex gap-2';
+        popover.className = 'flag-picker-popover fixed z-50 bg-[color:var(--surface)] border border-[color:var(--card-border)] rounded-lg shadow-lg p-2 flex gap-2';
         popover.innerHTML = `
-            <button class="flag-choice px-2 py-1 text-xs rounded-lg border border-oatmeal-dark/60" data-flag="">None</button>
-            ${flags.map(f => `<button class="flag-choice px-2 py-1 text-xs rounded-lg border border-oatmeal-dark/60 flex items-center gap-2" data-flag="${f}">
-                <span class="flag-dot ${this.getFlagClass(f)}"></span>${f}
-            </button>`).join('')}
-        `;
+ <button class="flag-choice px-2 py-1 text-xs rounded-lg border border-card" data-flag="">None</button>
+ ${flags.map(f => `<button class="flag-choice px-2 py-1 text-xs rounded-lg border border-card flex items-center gap-2" data-flag="${f}">
+ <span class="flag-dot ${this.getFlagClass(f)}"></span>${f}
+ </button>`).join('')}
+ `;
         document.body.appendChild(popover);
         const rect = anchor.getBoundingClientRect();
         popover.style.left = `${Math.min(window.innerWidth - popover.offsetWidth - 8, rect.right - popover.offsetWidth)}px`;
@@ -2385,7 +2388,7 @@ export const App = {
         const height = opts.height || 80;
         const width = opts.width || 6;
         const gap = opts.gap ?? 2;
-        const color = opts.color || '#917FB3';
+        const color = opts.color || 'var(--chart-accent)';
         const max = Math.max(1, ...values);
         const svgWidth = values.length * (width + gap);
         const parts = values.map((val, i) => {
@@ -2393,7 +2396,7 @@ export const App = {
             const x = i * (width + gap);
             const y = height - h;
             const title = opts.titleFormatter ? opts.titleFormatter(val, i) : `${val}`;
-            return `<g><title>${escapeHtml(String(title))}</title><rect x="${x}" y="${y}" width="${width}" height="${Math.max(h, 1)}" rx="2" fill="${color}"></rect></g>`;
+            return `<g><title>${escapeHtml(String(title))}</title><rect x="${x}" y="${y}" width="${width}" height="${Math.max(h, 1)}" rx="1" fill="${color}"></rect></g>`;
         }).join('');
         return `<svg class="chart-svg" width="${svgWidth}" height="${height}" viewBox="0 0 ${svgWidth} ${height}" xmlns="http://www.w3.org/2000/svg">${parts}</svg>`;
     },
@@ -2401,18 +2404,18 @@ export const App = {
         if (!items || items.length === 0) return '<p class="text-sm text-[color:var(--text-sub)]">No data yet.</p>';
         const max = Math.max(1, ...items.map(i => i.value));
         return `
-            <div class="space-y-2.5">
-                ${items.map(item => `
-                    <div class="flex items-center gap-3 text-sm">
-                        <span class="w-16 font-medium text-[color:var(--text-main)]">${escapeHtml(item.label)}</span>
-                        <div class="flex-1 analytics-bar-bg">
-                            <div class="analytics-bar-fill" style="width:${(item.value / max) * 100}%; background:${item.color || 'rgba(var(--dull-purple-rgb),0.65)'}"></div>
-                        </div>
-                        <span class="w-12 text-right text-[color:var(--text-sub)]">${item.value.toLocaleString()}</span>
-                    </div>
-                `).join('')}
-            </div>
-        `;
+ <div class="space-y-2.5">
+ ${items.map(item => `
+ <div class="flex items-center gap-3 text-sm">
+ <span class="w-16 font-medium text-[color:var(--text-main)]">${escapeHtml(item.label)}</span>
+ <div class="flex-1 analytics-bar-bg">
+ <div class="analytics-bar-fill" style="width:${(item.value / max) * 100}%; background:${item.color || 'rgba(var(--dull-purple-rgb),0.65)'}"></div>
+ </div>
+ <span class="w-12 text-right text-[color:var(--text-sub)]">${item.value.toLocaleString()}</span>
+ </div>
+ `).join('')}
+ </div>
+ `;
     },
     buildPieChart(slices) {
         const total = slices.reduce((sum, s) => sum + s.value, 0);
@@ -2421,9 +2424,9 @@ export const App = {
         const cy = 55;
         if (total <= 0) {
             return `<svg width="110" height="110" viewBox="0 0 110 110" aria-hidden="true">
-                <circle cx="${cx}" cy="${cy}" r="${radius}" fill="rgba(var(--dull-purple-rgb),0.12)"></circle>
-                <circle cx="${cx}" cy="${cy}" r="${radius * 0.55}" fill="var(--card-bg)"></circle>
-            </svg>`;
+ <circle cx="${cx}" cy="${cy}" r="${radius}" fill="rgba(var(--dull-purple-rgb),0.12)"></circle>
+ <circle cx="${cx}" cy="${cy}" r="${radius * 0.55}" fill="var(--card-bg)"></circle>
+ </svg>`;
         }
         let startAngle = -90;
         const paths = slices.map(slice => {
@@ -2544,31 +2547,31 @@ export const App = {
         const todayEl = el('#analyticsToday');
         if (todayEl) {
             todayEl.innerHTML = `
-                <div class="analytics-stat-value">${todayStats.count}</div>
-                <div class="flex flex-wrap gap-2 mt-2">
-                    <span class="analytics-pill">⏱️ ${this.formatDuration(todayStats.ms)}</span>
-                    <span class="analytics-pill">📋 ${dueToday} due</span>
-                </div>
-            `;
+ <div class="analytics-stat-value">${todayStats.count}</div>
+ <div class="flex flex-wrap gap-2 mt-2">
+ <span class="analytics-pill">⏱️ ${this.formatDuration(todayStats.ms)}</span>
+ <span class="analytics-pill">📋 ${dueToday} due</span>
+ </div>
+ `;
         }
         const streakEl = el('#analyticsStreaks');
         if (streakEl) {
             streakEl.innerHTML = `
-                <div class="analytics-stat-value">${streak} <span class="text-base font-normal text-[color:var(--text-sub)]">day${streak === 1 ? '' : 's'}</span></div>
-                <div class="flex flex-wrap gap-2 mt-2">
-                    <span class="analytics-pill">🏆 Best: ${longest}</span>
-                    <span class="analytics-pill">📅 ${dayMap.size} active</span>
-                </div>
-            `;
+ <div class="analytics-stat-value">${streak} <span class="text-base font-normal text-[color:var(--text-sub)]">day${streak === 1 ? '' : 's'}</span></div>
+ <div class="flex flex-wrap gap-2 mt-2">
+ <span class="analytics-pill">🏆 Best: ${longest}</span>
+ <span class="analytics-pill">📅 ${dayMap.size} active</span>
+ </div>
+ `;
         }
         const retentionEl = el('#analyticsRetention');
         if (retentionEl) {
             retentionEl.innerHTML = `
-                <div class="analytics-stat-value">${retentionPct}%</div>
-                <div class="flex flex-wrap gap-2 mt-2">
-                    <span class="analytics-pill">📊 ${totalRatings.toLocaleString()} reviews</span>
-                </div>
-            `;
+ <div class="analytics-stat-value">${retentionPct}%</div>
+ <div class="flex flex-wrap gap-2 mt-2">
+ <span class="analytics-pill">📊 ${totalRatings.toLocaleString()} reviews</span>
+ </div>
+ `;
         }
         const streakBadge = el('#analyticsStreakBadge');
         if (streakBadge) streakBadge.textContent = `🔥 ${streak} day streak`;
@@ -2593,7 +2596,7 @@ export const App = {
                 height: 100,
                 width: 7,
                 gap: 2,
-                color: 'rgb(120, 100, 160)',
+                color: 'var(--chart-accent)',
                 titleFormatter: (val, i) => `${rangeDates[i]} • ${val} reviews`
             });
         }
@@ -2603,7 +2606,7 @@ export const App = {
                 height: 100,
                 width: 7,
                 gap: 2,
-                color: 'rgb(167, 139, 250)',
+                color: 'var(--chart-accent-2)',
                 titleFormatter: (val, i) => `${rangeDates[i]} • ${val} min`
             });
         }
@@ -2611,28 +2614,28 @@ export const App = {
         const answerBreakdown = el('#analyticsAnswerBreakdown');
         if (answerBreakdown) {
             const rows = [
-                { label: 'Again', key: 'again', color: 'rgb(248, 113, 113)', emoji: '🔴' },
-                { label: 'Hard', key: 'hard', color: 'rgb(251, 146, 60)', emoji: '🟠' },
-                { label: 'Good', key: 'good', color: 'rgb(74, 222, 128)', emoji: '🟢' },
-                { label: 'Easy', key: 'easy', color: 'rgb(96, 165, 250)', emoji: '🔵' }
+                { label: 'Again', key: 'again', color: 'var(--rating-again-fill)', emoji: '🔴' },
+                { label: 'Hard', key: 'hard', color: 'var(--rating-hard-fill)', emoji: '🟠' },
+                { label: 'Good', key: 'good', color: 'var(--rating-good-fill)', emoji: '🟢' },
+                { label: 'Easy', key: 'easy', color: 'var(--rating-easy-fill)', emoji: '🔵' }
             ];
             answerBreakdown.innerHTML = `
-                <div class="space-y-3">
-                    ${rows.map(r => {
-                        const count = ratings[r.key] || 0;
-                        const pct = totalRatings ? Math.round((count / totalRatings) * 100) : 0;
-                        return `
-                            <div class="flex items-center gap-3">
-                                <span class="w-14 text-sm font-medium text-[color:var(--text-main)]">${r.label}</span>
-                                <div class="flex-1 analytics-bar-bg">
-                                    <div class="analytics-bar-fill" style="width:${pct}%; background:${r.color}"></div>
-                                </div>
-                                <span class="w-20 text-right text-sm text-[color:var(--text-sub)]">${count.toLocaleString()} <span class="text-xs">(${pct}%)</span></span>
-                            </div>
-                        `;
-                    }).join('')}
-                </div>
-            `;
+ <div class="space-y-3">
+ ${rows.map(r => {
+                const count = ratings[r.key] || 0;
+                const pct = totalRatings ? Math.round((count / totalRatings) * 100) : 0;
+                return `
+ <div class="flex items-center gap-3">
+ <span class="w-14 text-sm font-medium text-[color:var(--text-main)]">${r.label}</span>
+ <div class="flex-1 analytics-bar-bg">
+ <div class="analytics-bar-fill" style="width:${pct}%; background:${r.color}"></div>
+ </div>
+ <span class="w-20 text-right text-sm text-[color:var(--text-sub)]">${count.toLocaleString()} <span class="text-xs">(${pct}%)</span></span>
+ </div>
+ `;
+            }).join('')}
+ </div>
+ `;
         }
 
         const hourly = new Array(24).fill(0);
@@ -2647,7 +2650,7 @@ export const App = {
                 height: 100,
                 width: 14,
                 gap: 4,
-                color: 'rgb(147, 130, 180)',
+                color: 'var(--chart-accent)',
                 titleFormatter: (val, i) => `${formatHour(i)} • ${val} reviews`
             });
         }
@@ -2709,17 +2712,17 @@ export const App = {
         const easeEl = el('#analyticsEaseDifficulty');
         if (easeEl) {
             easeEl.innerHTML = `
-                <div class="space-y-5">
-                    <div>
-                        <p class="text-xs font-medium text-[color:var(--text-sub)] mb-3">SM-2 ease factor</p>
-                        ${this.buildDistributionBars(easeBuckets)}
-                    </div>
-                    <div>
-                        <p class="text-xs font-medium text-[color:var(--text-sub)] mb-3">FSRS difficulty</p>
-                        ${this.buildDistributionBars(diffBuckets)}
-                    </div>
-                </div>
-            `;
+ <div class="space-y-5">
+ <div>
+ <p class="text-xs font-medium text-[color:var(--text-sub)] mb-3">SM-2 ease factor</p>
+ ${this.buildDistributionBars(easeBuckets)}
+ </div>
+ <div>
+ <p class="text-xs font-medium text-[color:var(--text-sub)] mb-3">FSRS difficulty</p>
+ ${this.buildDistributionBars(diffBuckets)}
+ </div>
+ </div>
+ `;
         }
 
         const cardCounts = {
@@ -2741,25 +2744,25 @@ export const App = {
             else cardCounts['Not due'] += 1;
         });
         const pieSlices = [
-            { label: 'New', value: cardCounts.New, color: 'rgb(167, 139, 250)' },
-            { label: 'Due', value: cardCounts.Due, color: 'rgb(248, 113, 113)' },
-            { label: 'Not due', value: cardCounts['Not due'], color: 'rgb(96, 165, 250)' },
-            { label: 'Suspended', value: cardCounts.Suspended, color: 'rgb(163, 163, 163)' }
+            { label: 'New', value: cardCounts.New, color: 'var(--muted-pink)' },
+            { label: 'Due', value: cardCounts.Due, color: 'var(--dull-purple)' },
+            { label: 'Not due', value: cardCounts['Not due'], color: 'var(--earth-metal)' },
+            { label: 'Suspended', value: cardCounts.Suspended, color: 'rgba(var(--earth-metal-rgb), 0.4)' }
         ];
         const total = pieSlices.reduce((sum, s) => sum + s.value, 0);
         const cardCountsEl = el('#analyticsCardCounts');
         if (cardCountsEl) {
             cardCountsEl.innerHTML = `
-                <div class="analytics-pie">
-                    ${this.buildPieChart(pieSlices)}
-                    <div class="analytics-legend flex-col gap-2">
-                        ${pieSlices.map(s => {
-                            const pct = total > 0 ? Math.round((s.value / total) * 100) : 0;
-                            return `<span class="text-sm"><i class="analytics-dot" style="background:${s.color}"></i><span class="font-medium text-[color:var(--text-main)]">${s.label}</span> <span class="text-[color:var(--text-sub)]">${s.value.toLocaleString()} (${pct}%)</span></span>`;
-                        }).join('')}
-                    </div>
-                </div>
-            `;
+ <div class="analytics-pie">
+ ${this.buildPieChart(pieSlices)}
+ <div class="analytics-legend flex-col gap-2">
+ ${pieSlices.map(s => {
+                const pct = total > 0 ? Math.round((s.value / total) * 100) : 0;
+                return `<span class="text-sm"><i class="analytics-dot" style="background:${s.color}"></i><span class="font-medium text-[color:var(--text-main)]">${s.label}</span> <span class="text-[color:var(--text-sub)]">${s.value.toLocaleString()} (${pct}%)</span></span>`;
+            }).join('')}
+ </div>
+ </div>
+ `;
         }
 
         const bins = [
@@ -2795,26 +2798,26 @@ export const App = {
         const retentionTable = el('#analyticsTrueRetention');
         if (retentionTable) {
             retentionTable.innerHTML = `
-                <table class="analytics-table">
-                    <thead>
-                        <tr>
-                            <th>Interval</th>
-                            <th>Reviews</th>
-                            <th>Retention</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${retentionRows.map(r => {
-                            const pct = r.total ? Math.round((r.success / r.total) * 100) : 0;
-                            return `<tr>
-                                <td>${r.label}</td>
-                                <td>${r.total}</td>
-                                <td>${r.total ? `${pct}%` : '—'}</td>
-                            </tr>`;
-                        }).join('')}
-                    </tbody>
-                </table>
-            `;
+ <table class="analytics-table">
+ <thead>
+ <tr>
+ <th>Interval</th>
+ <th>Reviews</th>
+ <th>Retention</th>
+ </tr>
+ </thead>
+ <tbody>
+ ${retentionRows.map(r => {
+                const pct = r.total ? Math.round((r.success / r.total) * 100) : 0;
+                return `<tr>
+ <td>${r.label}</td>
+ <td>${r.total}</td>
+ <td>${r.total ? `${pct}%` : '—'}</td>
+ </tr>`;
+            }).join('')}
+ </tbody>
+ </table>
+ `;
         }
 
         const heatmapEl = el('#analyticsHeatmap');
@@ -2876,15 +2879,15 @@ export const App = {
         const canAdd = query && !allOptions.some(opt => opt.name.toLowerCase() === query);
 
         dropdown.innerHTML = `
-                    ${canAdd ? `<button class="tag-add-option w-full text-left px-3 py-2 text-sm text-dull-purple hover:bg-dull-purple/10" data-add="${encodeDataAttr(input.value.trim())}">+ Add "${escapeHtml(input.value.trim())}"</button>` : ''}
-                    ${options.map(opt => {
+ ${canAdd ? `<button class="tag-add-option w-full text-left px-3 py-2 text-sm text-accent hover:bg-accent-soft" data-add="${encodeDataAttr(input.value.trim())}">+ Add "${escapeHtml(input.value.trim())}"</button>` : ''}
+ ${options.map(opt => {
             const active = selected.has(opt.name);
-            return `<button class="tag-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 ${active ? 'bg-dull-purple/10 border-lime-200' : 'hover:bg-oatmeal/60'}" data-tag="${encodeDataAttr(opt.name)}">
-                            <span class="flex-1">${escapeHtml(opt.name)}</span>
-                            ${active ? '<span class="text-[11px] text-dull-purple">Selected</span>' : ''}
-                        </button>`;
+            return `<button class="tag-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 ${active ? 'bg-accent-soft border-lime-200' : 'hover:bg-surface-muted'}" data-tag="${encodeDataAttr(opt.name)}">
+ <span class="flex-1">${escapeHtml(opt.name)}</span>
+ ${active ? '<span class="text-[11px] text-accent">Selected</span>' : ''}
+ </button>`;
         }).join('')}
-                `;
+ `;
 
         dropdown.querySelectorAll('.tag-option').forEach(btn => {
             btn.onclick = () => {
@@ -2904,12 +2907,12 @@ export const App = {
 
         selectedWrap.innerHTML = selected.size
             ? Array.from(selected).map(tag => `
-                        <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-oatmeal text-earth-metal text-xs border border-oatmeal-dark/60">
-                            ${escapeHtml(tag)}
-                            <button class="remove-tag text-earth-metal/70" data-tag="${encodeDataAttr(tag)}">&times;</button>
-                        </span>
-                    `).join('')
-            : '<span class="text-earth-metal/50 dark:text-white/60 text-xs">No tags selected</span>';
+ <span class="tag-pill inline-flex items-center gap-1 px-2 py-1 rounded-full bg-surface-strong text-main text-xs border border-card">
+ ${escapeHtml(tag)}
+ <button class="remove-tag text-sub" data-tag="${encodeDataAttr(tag)}">&times;</button>
+ </span>
+ `).join('')
+            : '<span class="text-faint text-xs">No tags selected</span>';
 
         selectedWrap.querySelectorAll('.remove-tag').forEach(btn => {
             btn.onclick = () => {
@@ -2967,7 +2970,7 @@ export const App = {
         const startBtn = el('#startSessionBtn');
         if (this.state.decks.length === 0) {
             dropdown.classList.add('hidden');
-            display.innerHTML = '<span class="text-earth-metal/60 text-xs">No decks yet — create one in the Library tab.</span>';
+            display.innerHTML = '<span class="text-muted text-xs">No decks yet — create one in the Library tab.</span>';
             input.value = '';
             input.disabled = true;
             if (startBtn) {
@@ -2991,32 +2994,32 @@ export const App = {
         dropdown.innerHTML = filtered.map(d => {
             const isSelected = selected.includes(d.id);
             const dueCount = this.cardsForDeck(d.id).filter(c => this.isDue(c)).length;
-            return `<div class="deck-option flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-oatmeal/50 ${isSelected ? 'bg-dull-purple/10' : ''}" data-deck-id="${d.id}">
-                        <span class="flex items-center gap-2">
-                            ${isSelected ? '<i data-lucide="check" class="w-3 h-3 text-dull-purple"></i>' : '<span class="w-3"></span>'}
-                            <span class="text-sm">${escapeHtml(d.name)}</span>
-                        </span>
-                        <span class="text-xs text-earth-metal/60">${dueCount} due</span>
-                    </div>`;
+            return `<div class="deck-option flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-surface-muted ${isSelected ? 'bg-accent-soft' : ''}" data-deck-id="${d.id}">
+ <span class="flex items-center gap-2">
+ ${isSelected ? '<i data-lucide="check" class="w-3 h-3 text-accent"></i>' : '<span class="w-3"></span>'}
+ <span class="text-sm">${escapeHtml(d.name)}</span>
+ </span>
+ <span class="text-xs text-muted">${dueCount} due</span>
+ </div>`;
         }).join('');
         if (filtered.length === 0) {
-            dropdown.innerHTML = '<div class="px-3 py-2 text-sm text-earth-metal/60 dark:text-white/60 italic">No decks found</div>';
+            dropdown.innerHTML = '<div class="px-3 py-2 text-sm text-muted italic">No decks found</div>';
         }
 
         // Render selected deck pills
         display.innerHTML = selected.map(id => {
             const d = this.deckById(id);
             if (!d) return '';
-            return `<span class="selected-deck-pill inline-flex items-center gap-1 px-2 py-1 rounded-full bg-dull-purple text-white text-xs" data-deck-id="${id}">
-                        ${escapeHtml(d.name)}
-                        <button class="remove-deck-btn hover:bg-white/20 rounded-full p-0.5" data-deck-id="${id}">
-                            <i data-lucide="x" class="w-3 h-3 pointer-events-none"></i>
-                        </button>
-                    </span>`;
+            return `<span class="selected-deck-pill inline-flex items-center gap-1 px-2 py-1 rounded-full bg-[color:var(--accent)] text-[color:var(--badge-text)] text-xs" data-deck-id="${id}">
+ ${escapeHtml(d.name)}
+ <button class="remove-deck-btn hover:bg-surface-muted rounded-full p-0.5" data-deck-id="${id}">
+ <i data-lucide="x" class="w-3 h-3 pointer-events-none"></i>
+ </button>
+ </span>`;
         }).join('');
         if (selected.length === 0) {
             const totalDue = this.state.cards.filter(c => this.isDue(c)).length;
-            display.innerHTML = `<span class="text-dull-purple/80 text-xs italic">All decks (${totalDue} due)</span>`;
+            display.innerHTML = `<span class="text-accent text-xs italic">All decks (${totalDue} due)</span>`;
         }
         lucide.createIcons();
     },
@@ -3539,23 +3542,23 @@ export const App = {
         const history = card.reviewHistory;
         countEl.textContent = history.length;
 
-        const ratingColors = { again: 'text-red-500', hard: 'text-orange-500', good: 'text-green-500', easy: 'text-blue-500' };
+        const ratingColors = { again: 'rating-text-again', hard: 'rating-text-hard', good: 'rating-text-good', easy: 'rating-text-easy' };
         // Show all reviews (most recent first)
         const sortedHistory = [...history].reverse();
         tableEl.innerHTML = `
-                    <table class="w-full text-xs">
-                        <thead class="sticky top-0 bg-oatmeal dark:bg-white/5"><tr class="text-earth-metal/50 dark:text-white/60 border-b border-charcoal/10"><th class="text-left py-1.5 px-2">Rating</th><th class="text-left py-1.5 px-2">Date</th><th class="text-left py-1.5 px-2">Time</th></tr></thead>
-                        <tbody>
-                            ${sortedHistory.map(h => `
-                                <tr class="border-b border-charcoal/5 last:border-0">
-                                    <td class="py-1 px-2 capitalize ${ratingColors[h.rating] || ''}">${h.rating}</td>
-                                    <td class="py-1 px-2 text-earth-metal/70">${new Date(h.at).toLocaleDateString()}</td>
-                                    <td class="py-1 px-2 text-earth-metal/70">${new Date(h.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                `;
+ <table class="w-full text-xs">
+ <thead class="sticky top-0 bg-surface-strong "><tr class="text-faint border-b border-weak"><th class="text-left py-1.5 px-2">Rating</th><th class="text-left py-1.5 px-2">Date</th><th class="text-left py-1.5 px-2">Time</th></tr></thead>
+ <tbody>
+ ${sortedHistory.map(h => `
+ <tr class="border-b border-faint last:border-0">
+ <td class="py-1 px-2 capitalize ${ratingColors[h.rating] || ''}">${h.rating}</td>
+ <td class="py-1 px-2 text-sub">${new Date(h.at).toLocaleDateString()}</td>
+ <td class="py-1 px-2 text-sub">${new Date(h.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+ </tr>
+ `).join('')}
+ </tbody>
+ </table>
+ `;
     },
     updateCardBackVisibility() {
         const isCloze = el('#cardTypeInput').value === 'Cloze';
@@ -3605,12 +3608,12 @@ export const App = {
         if (!this.state.editingCard) this.state.cards.push(card);
         await Storage.put('cards', card);
         this.queueOp({ type: 'card-upsert', payload: card });
-        
+
         // If this is a cloze parent, reconcile its sub-items immediately
         if (isClozeParent(card)) {
             await this.reconcileSingleParent(card);
         }
-        
+
         this.closeCardModal();
         this.renderCards();
         toast('Card saved');
@@ -3858,40 +3861,40 @@ export const App = {
 
         for (const d of mappedDecks) { upsertDeck(d); await Storage.put('decks', d); }
         for (const c of filteredCards) { upsertCard(c); await Storage.put('cards', c); }
-        
+
         // Phase 3: Reconcile cloze sub-items after pulling cards
         await this.reconcileClozeSubItems();
-        
+
         this.renderAll();
     },
-    
+
     /**
-     * Reconcile sub-items for all cloze parent cards.
-     * Creates missing sub-items and suspends removed ones.
-     */
+    * Reconcile sub-items for all cloze parent cards.
+    * Creates missing sub-items and suspends removed ones.
+    */
     async reconcileClozeSubItems() {
         const clozeParents = this.state.cards.filter(c => isClozeParent(c));
         if (clozeParents.length === 0) return; // Nothing to do
-        
+
         // Also check queued sub-items that haven't been processed yet
         const queuedSubItems = this.state.queue
             .filter(op => op.type === 'card-upsert' && op.payload?.parentCard)
             .map(op => op.payload);
-        
+
         // Track which parents we've processed this run to avoid duplicate work
         const processedParentIds = new Set();
-        
+
         for (const parent of clozeParents) {
             // Skip if already processed (shouldn't happen, but defensive)
             const parentKey = parent.notionId || parent.id;
             if (processedParentIds.has(parentKey)) continue;
             processedParentIds.add(parentKey);
-            
+
             // Skip if parent hasn't been edited since last reconcile
             // (unless it has no sub-items yet)
             const lastReconciled = parent._lastClozeReconcile;
             const lastEdited = parent.lastEditedAt || parent.createdAt;
-            const hasExistingSubs = this.state.cards.some(c => 
+            const hasExistingSubs = this.state.cards.some(c =>
                 c.parentCard === parentKey || c.parentCard === parent.id
             );
             if (lastReconciled && hasExistingSubs) {
@@ -3900,38 +3903,38 @@ export const App = {
                     continue;
                 }
             }
-            
+
             // Match sub-items by parentCard referencing either id or notionId
             const stableParentId = parent.notionId || parent.id;
-            const matchesParent = (c) => 
-                c.parentCard === parent.id || 
+            const matchesParent = (c) =>
+                c.parentCard === parent.id ||
                 c.parentCard === stableParentId ||
                 (parent.notionId && c.parentCard === parent.notionId);
-            
+
             const existingSubs = this.state.cards.filter(matchesParent);
             const queuedSubs = queuedSubItems.filter(matchesParent);
             // Combine existing and queued sub-items, avoiding duplicates by id
             const existingIds = new Set(existingSubs.map(s => s.id));
             const allSubs = [...existingSubs, ...queuedSubs.filter(s => !existingIds.has(s.id))];
-            
+
             const { toCreate, toSuspend } = reconcileSubItems(parent, allSubs);
-            
+
             // Skip if nothing to do for this parent
             if (toCreate.length === 0 && toSuspend.length === 0) continue;
-            
+
             // Create missing sub-items (use notionId as parentCard when available for stability)
             for (const idx of toCreate) {
                 // Double-check this index doesn't already exist (defensive against race conditions)
                 const alreadyExists = allSubs.some(s => parseInt(s.clozeIndexes, 10) === idx && !s.suspended);
                 if (alreadyExists) continue;
-                
+
                 const subItem = createSubItem(parent, idx, parent.deckId, () => this.makeTempId());
                 subItem.parentCard = stableParentId;
                 this.state.cards.push(subItem);
                 await Storage.put('cards', subItem);
                 this.queueOp({ type: 'card-upsert', payload: subItem });
             }
-            
+
             // Suspend sub-items for removed cloze indices
             for (const subId of toSuspend) {
                 const sub = this.cardById(subId);
@@ -3942,24 +3945,24 @@ export const App = {
                     this.queueOp({ type: 'card-upsert', payload: sub });
                 }
             }
-            
+
             // Mark parent as reconciled (local-only field, not synced to Notion)
             parent._lastClozeReconcile = new Date().toISOString();
             await Storage.put('cards', parent);
         }
     },
     /**
-     * Reconcile sub-items for a single parent (called when saving a cloze card in app)
-     */
+    * Reconcile sub-items for a single parent (called when saving a cloze card in app)
+    */
     async reconcileSingleParent(parent) {
         if (!isClozeParent(parent)) return;
-        
+
         const stableParentId = parent.notionId || parent.id;
-        const matchesParent = (c) => 
-            c.parentCard === parent.id || 
+        const matchesParent = (c) =>
+            c.parentCard === parent.id ||
             c.parentCard === stableParentId ||
             (parent.notionId && c.parentCard === parent.notionId);
-        
+
         // Check existing cards and queued items
         const existingSubs = this.state.cards.filter(matchesParent);
         const queuedSubs = this.state.queue
@@ -3967,28 +3970,28 @@ export const App = {
             .map(op => op.payload);
         const existingIds = new Set(existingSubs.map(s => s.id));
         const allSubs = [...existingSubs, ...queuedSubs.filter(s => !existingIds.has(s.id))];
-        
+
         const { toCreate, toSuspend } = reconcileSubItems(parent, allSubs);
-        
+
         // Skip if nothing to do
         if (toCreate.length === 0 && toSuspend.length === 0) {
             parent._lastClozeReconcile = new Date().toISOString();
             await Storage.put('cards', parent);
             return;
         }
-        
+
         // Create missing sub-items
         for (const idx of toCreate) {
             const alreadyExists = allSubs.some(s => parseInt(s.clozeIndexes, 10) === idx && !s.suspended);
             if (alreadyExists) continue;
-            
+
             const subItem = createSubItem(parent, idx, parent.deckId, () => this.makeTempId());
             subItem.parentCard = stableParentId;
             this.state.cards.push(subItem);
             await Storage.put('cards', subItem);
             this.queueOp({ type: 'card-upsert', payload: subItem });
         }
-        
+
         // Suspend removed sub-items
         for (const subId of toSuspend) {
             const sub = this.cardById(subId);
@@ -3999,7 +4002,7 @@ export const App = {
                 this.queueOp({ type: 'card-upsert', payload: sub });
             }
         }
-        
+
         parent._lastClozeReconcile = new Date().toISOString();
         await Storage.put('cards', parent);
     },
@@ -4340,41 +4343,41 @@ export const App = {
         if (!card) return;
 
         const history = card.reviewHistory || [];
-        const ratingColors = { again: 'text-red-500', hard: 'text-orange-500', good: 'text-green-500', easy: 'text-blue-500' };
+        const ratingColors = { again: 'rating-text-again', hard: 'rating-text-hard', good: 'rating-text-good', easy: 'rating-text-easy' };
 
         // Create popover content
         let content;
         if (history.length === 0) {
-            content = '<p class="text-earth-metal/50 dark:text-white/60 text-center py-2">No reviews yet</p>';
+            content = '<p class="text-faint text-center py-2">No reviews yet</p>';
         } else {
             // Show last 10 reviews (most recent first)
             const recentHistory = [...history].reverse().slice(0, 10);
             content = `
-                        <table class="w-full text-xs">
-                            <thead><tr class="text-earth-metal/50 dark:text-white/60 border-b border-charcoal/10 dark:border-white/10"><th class="text-left py-1">Rating</th><th class="text-left py-1">Date</th></tr></thead>
-                            <tbody>
-                                ${recentHistory.map(h => `
-                                    <tr class="border-b border-charcoal/5 dark:border-white/5 last:border-0">
-                                        <td class="py-1 capitalize ${ratingColors[h.rating] || ''}">${escapeHtml(String(h.rating || ''))}</td>
-                                        <td class="py-1 text-earth-metal/70 dark:text-white/70">${new Date(h.at).toLocaleDateString()} ${new Date(h.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                        ${history.length > 10 ? `<p class="text-earth-metal/50 dark:text-white/60 text-xs text-center mt-1">+${history.length - 10} more</p>` : ''}
-                    `;
+ <table class="w-full text-xs">
+ <thead><tr class="text-faint border-b border-weak "><th class="text-left py-1">Rating</th><th class="text-left py-1">Date</th></tr></thead>
+ <tbody>
+ ${recentHistory.map(h => `
+ <tr class="border-b border-faint last:border-0">
+ <td class="py-1 capitalize ${ratingColors[h.rating] || ''}">${escapeHtml(String(h.rating || ''))}</td>
+ <td class="py-1 text-sub ">${new Date(h.at).toLocaleDateString()} ${new Date(h.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+ </tr>
+ `).join('')}
+ </tbody>
+ </table>
+ ${history.length > 10 ? `<p class="text-faint text-xs text-center mt-1">+${history.length - 10} more</p>` : ''}
+ `;
         }
 
         // Create and position popover
         const popover = document.createElement('div');
-        popover.className = 'review-history-popover fixed z-50 bg-oatmeal dark:bg-zinc-800 border border-charcoal/20 dark:border-white/10 rounded-lg shadow-lg p-3 min-w-[200px] max-w-[280px]';
+        popover.className = 'review-history-popover fixed z-50 bg-[color:var(--surface)] border border-[color:var(--card-border)] rounded-lg shadow-lg p-3 min-w-[200px] max-w-[280px]';
         popover.innerHTML = `
-                    <div class="flex justify-between items-center mb-2">
-                        <span class="font-medium text-sm text-charcoal dark:text-white">Review History</span>
-                        <button class="close-popover text-earth-metal/50 dark:text-white/60 hover:text-earth-metal dark:hover:text-white p-0.5"><i data-lucide="x" class="w-4 h-4"></i></button>
-                    </div>
-                    ${content}
-                `;
+ <div class="flex justify-between items-center mb-2">
+ <span class="font-medium text-sm text-main ">Review History</span>
+ <button class="close-popover text-faint hover:text-main p-0.5"><i data-lucide="x" class="w-4 h-4"></i></button>
+ </div>
+ ${content}
+ `;
 
         // Position popover near button
         document.body.appendChild(popover);
@@ -4531,7 +4534,7 @@ export const App = {
 
             // For sub-items, only hide the specific cloze index, reveal all others
             const subItemIndex = isSubItem(card) ? parseInt(card.clozeIndexes, 10) : null;
-            
+
             // Bug 5 fix: Improved cloze regex to handle nested braces (e.g., code snippets)
             // Uses a non-greedy match with proper handling of nested content
             // Bug 3 fix (XSS): Escape user content before inserting into HTML
@@ -4541,13 +4544,13 @@ export const App = {
                 // Escape both hint and answer to prevent XSS attacks
                 const safeAnswer = escapeHtml(answer);
                 const safeHint = hint ? escapeHtml(hint) : null;
-                
+
                 // For sub-items: only hide the specific cloze index, reveal others
                 if (subItemIndex !== null && clozeNum !== subItemIndex) {
                     // Show this cloze as revealed (not the one being tested)
                     return `<span class="cloze-revealed">${safeAnswer}</span>`;
                 }
-                
+
                 const displayHint = safeHint ? `[${safeHint}]` : '[...]';
                 return `<span class="cloze-blank"><span class="cloze-placeholder">${displayHint}</span><span class="cloze-answer">${safeAnswer}</span></span>`;
             });
@@ -4651,7 +4654,7 @@ export const App = {
             if (alg === 'SM-2') {
                 handledLearning = this.applySm2Learning(card, ratingKey, deck);
                 if (!handledLearning) {
-                    card.sm2 = SRS.sm2(card, ratingKey);  // SM-2 is default
+                    card.sm2 = SRS.sm2(card, ratingKey); // SM-2 is default
                     card.sm2.dueDate = this.adjustDueDateForEasyDays(card.sm2.dueDate, srsConfig.easyDays);
                 }
             } else {
@@ -4859,7 +4862,7 @@ export const App = {
         await Storage.put('cards', card);
         this.queueOp({ type: 'card-upsert', payload: card });
         el('#noteStatus').textContent = 'Saved';
-        el('#notesPreview').innerHTML = card.notes ? safeMarkdownParse(card.notes) : '<p class="text-earth-metal/60 text-sm">No notes yet.</p>';
+        el('#notesPreview').innerHTML = card.notes ? safeMarkdownParse(card.notes) : '<p class="text-muted text-sm">No notes yet.</p>';
         applyMediaEmbeds(el('#notesPreview'));
         this.renderMath(el('#notesPreview'));
         this.closeModal('notesModal');
@@ -4879,7 +4882,7 @@ export const App = {
         if (!area || !preview) return;
         const md = (area.value || '').trim();
         if (!md) {
-            preview.innerHTML = '<p class="text-earth-metal/50 dark:text-white/60">Type a note to preview media embeds.</p>';
+            preview.innerHTML = '<p class="text-faint ">Type a note to preview media embeds.</p>';
             return;
         }
         preview.innerHTML = safeMarkdownParse(md);
@@ -5048,7 +5051,7 @@ export const App = {
                 const back = fields[1] || '';
                 const isCloze = model?.type === 1;
                 const type = isCloze ? 'Cloze' : 'Front-Back';
-                
+
                 if (isCloze) {
                     // Create parent card (no SRS scheduling - sub-items handle that)
                     const parent = this.newCard(deckCache[deckId].id, front, back || front, 'Cloze');
@@ -5065,7 +5068,7 @@ export const App = {
                     await Storage.put('cards', parent);
                     this.queueOp({ type: 'card-upsert', payload: parent });
                     importedCount++;
-                    
+
                     // Create sub-items for each cloze index
                     const clozeIndices = parseClozeIndices(front);
                     for (const idx of clozeIndices) {
@@ -5236,7 +5239,7 @@ export const App = {
         for (const [parentId, subs] of parentGroups) {
             const parent = this.cardById(parentId);
             if (!parent) continue;
-            
+
             const mid = modelClozeId;
             const nid = ++nidCounter;
 
@@ -5977,16 +5980,16 @@ export const App = {
                 for (let c = 0; c < cols; c++) {
                     const label = pad2(cell);
                     if (cell === activeCell) {
-                        rowArr.push(`<span class="text-dull-purple font-semibold">${label}</span>`);
+                        rowArr.push(`<span class="text-accent font-semibold">${label}</span>`);
                     } else {
                         rowArr.push(label);
                     }
                     cell++;
                 }
-                rowStr += rowArr.join('  ') + '│ │ ';
+                rowStr += rowArr.join(' ') + '│ │ ';
                 out += rowStr + '\n';
                 if (r < rows - 1) {
-                    out += ' │ │          │ │ \n';
+                    out += ' │ │ │ │ \n';
                 }
             }
             out += ' │ └──────────┘ │ \n';
