@@ -453,7 +453,157 @@ const CalendarExport = {
     }
 };
 
+/**
+ * Google Calendar API Integration
+ * Handles one-way push sync to Google Calendar
+ */
+const GoogleCalendar = {
+    /**
+     * Push a single event to Google Calendar
+     * @param {Object} event - Pet Tracker event object
+     * @returns {Promise<string|null>} Google Calendar event ID or null on failure
+     */
+    pushEvent: async (event) => {
+        const settings = PetTracker.Settings.get();
+        if (!settings.gcalEnabled || !settings.gcalAccessToken || !settings.gcalCalendarId) {
+            return null;
+        }
+
+        const gcalEvent = GoogleCalendar.convertToGcalEvent(event);
+        if (!gcalEvent) return null;
+
+        try {
+            const calendarId = encodeURIComponent(settings.gcalCalendarId);
+            const url = `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`;
+            
+            // Check if event already has a Google Calendar ID (update vs create)
+            const method = event.googleCalendarEventId ? 'PUT' : 'POST';
+            const apiUrl = event.googleCalendarEventId 
+                ? `${url}/${encodeURIComponent(event.googleCalendarEventId)}`
+                : url;
+
+            const response = await fetch(`${settings.workerUrl}?url=${encodeURIComponent(apiUrl)}${settings.proxyToken ? '&token=' + settings.proxyToken : ''}`, {
+                method,
+                headers: {
+                    'Authorization': `Bearer ${settings.gcalAccessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(gcalEvent)
+            });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                console.error('[GoogleCalendar] Push failed:', errData);
+                return null;
+            }
+
+            const data = await response.json();
+            return data.id;
+        } catch (e) {
+            console.error('[GoogleCalendar] Push error:', e);
+            return null;
+        }
+    },
+
+    /**
+     * Delete an event from Google Calendar
+     * @param {string} googleEventId - Google Calendar event ID
+     */
+    deleteEvent: async (googleEventId) => {
+        const settings = PetTracker.Settings.get();
+        if (!settings.gcalEnabled || !settings.gcalAccessToken || !settings.gcalCalendarId || !googleEventId) {
+            return false;
+        }
+
+        try {
+            const calendarId = encodeURIComponent(settings.gcalCalendarId);
+            const url = `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodeURIComponent(googleEventId)}`;
+
+            const response = await fetch(`${settings.workerUrl}?url=${encodeURIComponent(url)}${settings.proxyToken ? '&token=' + settings.proxyToken : ''}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${settings.gcalAccessToken}` }
+            });
+
+            return response.ok || response.status === 404;
+        } catch (e) {
+            console.error('[GoogleCalendar] Delete error:', e);
+            return false;
+        }
+    },
+
+    /**
+     * Convert Pet Tracker event to Google Calendar event format
+     */
+    convertToGcalEvent: (event) => {
+        if (!event.startDate) return null;
+
+        const pet = App.state.pets.find(p => p.id === event.petIds?.[0]);
+        const eventType = App.state.eventTypes.find(t => t.id === event.eventTypeId);
+
+        const summary = pet
+            ? `[${pet.name}] ${event.title || eventType?.name || 'Event'}`
+            : event.title || eventType?.name || 'Event';
+
+        const descParts = [];
+        if (pet) descParts.push(`Pet: ${pet.name}`);
+        if (eventType) descParts.push(`Type: ${eventType.name}`);
+        if (event.status) descParts.push(`Status: ${event.status}`);
+        if (event.value !== null && event.value !== undefined) {
+            descParts.push(`Value: ${event.value}${event.unit ? ' ' + event.unit : ''}`);
+        }
+        if (event.notes) descParts.push(`Notes: ${event.notes}`);
+
+        const hasTime = event.startDate.includes('T');
+        const gcalEvent = {
+            summary,
+            description: descParts.join('\n'),
+            source: { title: 'Pet Tracker', url: window.location.origin }
+        };
+
+        if (hasTime) {
+            gcalEvent.start = { dateTime: event.startDate };
+            if (event.endDate) {
+                gcalEvent.end = { dateTime: event.endDate };
+            } else if (event.durationMinutes) {
+                const endDate = new Date(new Date(event.startDate).getTime() + event.durationMinutes * 60000);
+                gcalEvent.end = { dateTime: endDate.toISOString() };
+            } else {
+                const endDate = new Date(new Date(event.startDate).getTime() + 3600000);
+                gcalEvent.end = { dateTime: endDate.toISOString() };
+            }
+        } else {
+            const startDate = event.startDate.slice(0, 10);
+            gcalEvent.start = { date: startDate };
+            if (event.endDate) {
+                const endDate = new Date(event.endDate);
+                endDate.setDate(endDate.getDate() + 1);
+                gcalEvent.end = { date: endDate.toISOString().slice(0, 10) };
+            } else {
+                const nextDay = new Date(event.startDate);
+                nextDay.setDate(nextDay.getDate() + 1);
+                gcalEvent.end = { date: nextDay.toISOString().slice(0, 10) };
+            }
+        }
+
+        return gcalEvent;
+    },
+
+    /**
+     * Sync event to Google Calendar and store the Google event ID
+     */
+    syncEvent: async (event) => {
+        const googleEventId = await GoogleCalendar.pushEvent(event);
+        if (googleEventId && googleEventId !== event.googleCalendarEventId) {
+            event.googleCalendarEventId = googleEventId;
+            await PetTracker.DB.put(PetTracker.STORES.EVENTS, event);
+        }
+        return googleEventId;
+    }
+};
+
 // Export
 window.PetTracker = window.PetTracker || {};
 window.PetTracker.CalendarExport = CalendarExport;
+window.PetTracker.GoogleCalendar = GoogleCalendar;
 window.CalendarExport = CalendarExport;
+window.GoogleCalendar = GoogleCalendar;

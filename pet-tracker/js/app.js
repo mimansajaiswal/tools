@@ -670,29 +670,44 @@ const App = {
     },
 
     /**
-     * Handle OAuth return - check for accessToken in URL params
+     * Handle OAuth return - check for accessToken or gcalAccessToken in URL params
      */
     handleOAuthReturn: () => {
         const urlParams = new URLSearchParams(window.location.search);
-        const newAuth = urlParams.get('accessToken');
+        const notionToken = urlParams.get('accessToken');
+        const gcalToken = urlParams.get('gcalAccessToken');
+        const gcalEmail = urlParams.get('gcalEmail');
 
-        if (newAuth) {
-            PetTracker.Settings.set({ notionToken: newAuth });
+        let handled = false;
 
-            // Clean URL
-            window.history.replaceState({}, document.title, window.location.pathname);
-
+        if (notionToken) {
+            PetTracker.Settings.set({ notionToken });
             PetTracker.UI.toast('Connected to Notion!', 'success');
 
-            // Trigger data source scan if worker URL is configured
             const settings = PetTracker.Settings.get();
             if (settings.workerUrl) {
                 setTimeout(() => App.scanDataSources(), 500);
             }
-
-            return true;
+            handled = true;
         }
-        return false;
+
+        if (gcalToken) {
+            const gcalSettings = { gcalAccessToken: gcalToken, gcalEnabled: true };
+            if (gcalEmail) gcalSettings.gcalUserEmail = gcalEmail;
+            PetTracker.Settings.set(gcalSettings);
+            PetTracker.UI.toast('Connected to Google Calendar!', 'success');
+
+            setTimeout(() => {
+                if (typeof App.updateGcalUI === 'function') App.updateGcalUI();
+            }, 100);
+            handled = true;
+        }
+
+        if (handled) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
+        return handled;
     }
 };
 

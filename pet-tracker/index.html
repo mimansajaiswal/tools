@@ -1087,11 +1087,81 @@ export default {
                 aiModel: document.getElementById('settingsAiModel')?.value || 'gpt-4o-mini',
                 aiApiKey: document.getElementById('settingsAiApiKey')?.value || '',
                 todoistEnabled: document.getElementById('settingsTodoistEnabled')?.checked || false,
-                todoistToken: document.getElementById('settingsTodoistToken')?.value || ''
+                todoistToken: document.getElementById('settingsTodoistToken')?.value || '',
+                gcalEnabled: document.getElementById('settingsGcalEnabled')?.checked || false,
+                gcalCalendarId: document.getElementById('settingsGcalCalendarId')?.value || ''
             };
             PetTracker.Settings.set(settings);
             PetTracker.UI.toast('Settings saved', 'success');
             PetTracker.UI.closeModal('settingsModal');
+        };
+
+        // Google Calendar OAuth - redirect-based flow
+        App.startGoogleOAuth = () => {
+            const workerUrl = document.getElementById('settingsWorkerUrl')?.value?.trim();
+            if (!workerUrl) {
+                PetTracker.UI.toast('Please enter Worker URL first in Connection tab', 'error');
+                return;
+            }
+            PetTracker.Settings.set({ workerUrl });
+            const returnUrl = encodeURIComponent(new URL('index.html', window.location.href).toString());
+            window.location.href = `https://notion-oauth-handler.mimansa-jaiswal.workers.dev/google/auth?from=${returnUrl}`;
+        };
+
+        // Disconnect Google Calendar
+        App.disconnectGoogleCalendar = () => {
+            if (!confirm('Disconnect Google Calendar?')) return;
+            const settings = PetTracker.Settings.get();
+            delete settings.gcalAccessToken;
+            delete settings.gcalRefreshToken;
+            delete settings.gcalUserEmail;
+            settings.gcalEnabled = false;
+            settings.gcalCalendarId = '';
+            PetTracker.Settings.set(settings);
+            App.updateGcalUI();
+            PetTracker.UI.toast('Google Calendar disconnected', 'success');
+        };
+
+        // Update Google Calendar UI based on connection status
+        App.updateGcalUI = () => {
+            const settings = PetTracker.Settings.get();
+            const statusEl = document.getElementById('gcalConnectionStatus');
+            const calendarSelectDiv = document.getElementById('gcalCalendarSelect');
+            const disconnectDiv = document.getElementById('gcalDisconnectSection');
+
+            if (settings.gcalAccessToken) {
+                if (statusEl) statusEl.innerHTML = `<span class="text-dull-purple">Connected</span>${settings.gcalUserEmail ? ` as ${settings.gcalUserEmail}` : ''}`;
+                if (calendarSelectDiv) calendarSelectDiv.classList.remove('hidden');
+                if (disconnectDiv) disconnectDiv.classList.remove('hidden');
+                App.loadGoogleCalendars();
+            } else {
+                if (statusEl) statusEl.textContent = 'Not connected';
+                if (calendarSelectDiv) calendarSelectDiv.classList.add('hidden');
+                if (disconnectDiv) disconnectDiv.classList.add('hidden');
+            }
+        };
+
+        // Load user's Google Calendars
+        App.loadGoogleCalendars = async () => {
+            const settings = PetTracker.Settings.get();
+            if (!settings.gcalAccessToken || !settings.workerUrl) return;
+
+            try {
+                const response = await fetch(`${settings.workerUrl}?url=${encodeURIComponent('https://www.googleapis.com/calendar/v3/users/me/calendarList')}${settings.proxyToken ? '&token=' + settings.proxyToken : ''}`, {
+                    headers: { 'Authorization': `Bearer ${settings.gcalAccessToken}` }
+                });
+
+                if (!response.ok) throw new Error('Failed to fetch calendars');
+                const data = await response.json();
+
+                const select = document.getElementById('settingsGcalCalendarId');
+                if (select && data.items) {
+                    select.innerHTML = '<option value="">Select a calendar...</option>' +
+                        data.items.map(cal => `<option value="${cal.id}" ${cal.id === settings.gcalCalendarId ? 'selected' : ''}>${PetTracker.UI.escapeHtml(cal.summary)}</option>`).join('');
+                }
+            } catch (e) {
+                console.warn('[App] Failed to load Google calendars:', e);
+            }
         };
 
         App.startNotionOAuth = async () => {
@@ -1220,6 +1290,10 @@ export default {
                 document.getElementById('settingsAiApiKey').value = s.aiApiKey || '';
                 document.getElementById('settingsTodoistEnabled').checked = s.todoistEnabled || false;
                 document.getElementById('settingsTodoistToken').value = s.todoistToken || '';
+                document.getElementById('settingsGcalEnabled').checked = s.gcalEnabled || false;
+                document.getElementById('settingsGcalCalendarId').value = s.gcalCalendarId || '';
+                // Update Google Calendar UI
+                setTimeout(() => App.updateGcalUI(), 100);
             }
         });
     </script>
