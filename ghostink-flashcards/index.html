@@ -384,6 +384,22 @@
                                     maxlength="200"
                                     class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dull-purple/40">
                             </div>
+                            <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                                <div class="flex flex-wrap items-center gap-3 text-xs text-[color:var(--text-sub)]">
+                                    <label class="flex items-center gap-2">
+                                        <input id="filterSuspended" type="checkbox" class="accent-dull-purple">
+                                        <span>Hide suspended</span>
+                                    </label>
+                                    <label class="flex items-center gap-2">
+                                        <input id="filterLeech" type="checkbox" class="accent-dull-purple">
+                                        <span>Hide leeches</span>
+                                    </label>
+                                </div>
+                                <div id="unsuspendAllWrap" class="hidden">
+                                    <button id="unsuspendAllBtn" class="text-xs text-accent hover:underline">Unsuspend
+                                        all</button>
+                                </div>
+                            </div>
                             <div id="cardsContainer"
                                 class="max-h-[350px] md:max-h-[400px] overflow-y-auto scroll-minimal">
                                 <table class="w-full text-xs md:text-sm">
@@ -541,27 +557,9 @@
                                         <div id="filterTagSelected" class="flex flex-wrap gap-1.5 mt-2"></div>
                                     </div>
                                     <label class="flex items-center gap-2">
-                                        <input id="filterSuspended" type="checkbox" class="accent-dull-purple">
-                                        <span>Hide suspended</span>
-                                    </label>
-                                    <label class="flex items-center gap-2">
-                                        <input id="filterLeech" type="checkbox" class="accent-dull-purple">
-                                        <span>Hide leeches</span>
-                                    </label>
-                                    <label class="flex items-center gap-2">
                                         <input id="filterMarked" type="checkbox" class="accent-dull-purple">
                                         <span>Only marked</span>
                                     </label>
-                                    <div class="col-span-2">
-                                        <label class="text-xs text-sub">Card hierarchy</label>
-                                        <select id="filterCardHierarchy"
-                                            class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm">
-                                            <option value="">All cards</option>
-                                            <option value="parents">Cloze parents only</option>
-                                            <option value="subitems">Sub-items only</option>
-                                            <option value="regular">Regular cards only</option>
-                                        </select>
-                                    </div>
                                     <div class="col-span-2">
                                         <div class="flex items-center justify-between">
                                             <label class="text-xs text-sub">Flag</label>
@@ -859,6 +857,10 @@
                                         </div>
                                     </div>
                                 </div>
+                                <label class="flex items-center gap-2 text-xs text-[color:var(--text-sub)]">
+                                    <input id="analyticsIncludeSuspended" type="checkbox" class="accent-dull-purple">
+                                    <span>Include suspended</span>
+                                </label>
                             </div>
                         </div>
                     </article>

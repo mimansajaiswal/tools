@@ -204,7 +204,7 @@ export const App = {
         dyContextProcessing: false,
         selectedDeck: null,
         selectedCard: null,
-        filters: { again: false, hard: false, addedToday: false, tags: [], suspended: false, leech: false, marked: false, flag: [], cardHierarchy: '', studyDecks: [] },
+        filters: { again: false, hard: false, addedToday: false, tags: [], suspended: false, leech: false, marked: false, flag: [], studyDecks: [] },
         cardSearch: '',
         deckSearch: '',
         cardLimit: 50,
@@ -213,6 +213,7 @@ export const App = {
         analyticsYear: 'all',
         analyticsDecks: [],
         analyticsHeatmapMetric: 'count',
+        analyticsIncludeSuspended: true,
         reverse: false,
         lastSync: null,
         lastPull: null,
@@ -492,7 +493,7 @@ export const App = {
 
         const candidateCards = this.state.cards.filter(c =>
             selectedDeckIds.includes(c.deckId) &&
-            this.passFilters(c) &&
+            this.passFilters(c, { context: 'study' }) &&
             isSchedulable(c) && // Exclude cloze parents - only sub-items are schedulable
             (includeNonDue || this.isDue(c))
         );
@@ -666,7 +667,7 @@ export const App = {
                 toast('No cards in selected decks');
             } else {
                 // Check if there are non-due cards available for practice
-                const allCardsInDecks = this.state.cards.filter(c => deckIds.includes(c.deckId) && this.passFilters(c));
+                const allCardsInDecks = this.state.cards.filter(c => deckIds.includes(c.deckId) && this.passFilters(c, { context: 'study' }) && isSchedulable(c));
                 const nonDueCount = allCardsInDecks.filter(c => !this.isDue(c)).length;
 
                 if (nonDueCount > 0) {
@@ -720,6 +721,13 @@ export const App = {
             const queueItem = session.cardQueue[session.currentIndex];
             const card = this.cardById(queueItem.cardId);
             if (card) {
+                if (card.suspended || card.leech) {
+                    console.warn(`Skipping suspended/leech card in session: ${queueItem.cardId}`);
+                    session.skipped.push(queueItem.cardId);
+                    session.currentIndex++;
+                    this.saveSessionDebounced();
+                    continue;
+                }
                 return {
                     card: card,
                     reversed: queueItem.reversed
@@ -994,6 +1002,29 @@ export const App = {
         if (lpush) this.state.lastPush = lpush.value;
         const tagMeta = meta.find(m => m.key === 'tagOptions');
         if (tagMeta && Array.isArray(tagMeta.value)) this.state.tagOptions = tagMeta.value;
+        const filterPrefs = meta.find(m => m.key === 'filterPrefs')?.value;
+        if (filterPrefs && typeof filterPrefs === 'object') {
+            const libraryPrefs = filterPrefs.library || {};
+            const analyticsPrefs = filterPrefs.analytics || {};
+            if (typeof libraryPrefs.hideSuspended === 'boolean') this.state.filters.suspended = libraryPrefs.hideSuspended;
+            if (typeof libraryPrefs.hideLeech === 'boolean') this.state.filters.leech = libraryPrefs.hideLeech;
+            if (typeof analyticsPrefs.includeSuspended === 'boolean') this.state.analyticsIncludeSuspended = analyticsPrefs.includeSuspended;
+        }
+        const leechFixes = this.state.cards.filter(c => c.leech && !c.suspended);
+        if (leechFixes.length > 0) {
+            leechFixes.forEach(card => {
+                card.suspended = true;
+            });
+            try {
+                await Storage.putMany('cards', leechFixes);
+            } catch (e) {
+                console.error('Failed to persist leech suspensions, retrying individually:', e);
+                for (const card of leechFixes) {
+                    await Storage.put('cards', card).catch(err => console.error('Leech suspend save failed:', err));
+                }
+            }
+            leechFixes.forEach(card => this.queueOp({ type: 'card-upsert', payload: card }));
+        }
     },
     async seedIfEmpty() {
         return;
@@ -1371,6 +1402,14 @@ export const App = {
                 if (yearMenu) yearMenu.classList.remove('is-open');
             });
         }
+        const analyticsIncludeSuspended = el('#analyticsIncludeSuspended');
+        if (analyticsIncludeSuspended) {
+            analyticsIncludeSuspended.onchange = (e) => {
+                this.state.analyticsIncludeSuspended = e.target.checked;
+                this.persistFilterPrefs();
+                this.renderAnalytics();
+            };
+        }
         // Phase 14: Debounce search inputs for better performance
         const debouncedCardSearch = debounce((val) => {
             this.state.cardSearch = val;
@@ -1414,8 +1453,18 @@ export const App = {
             filterTagDropdown.onmouseenter = () => filterTagDropdown.classList.remove('hidden');
             filterTagDropdown.onmouseleave = () => filterTagDropdown.classList.add('hidden');
         }
-        el('#filterSuspended').onchange = (e) => { this.state.filters.suspended = e.target.checked; this.renderCards(); this.updateActiveFiltersCount(); };
-        el('#filterLeech').onchange = (e) => { this.state.filters.leech = e.target.checked; this.renderCards(); this.updateActiveFiltersCount(); };
+        el('#filterSuspended').onchange = (e) => {
+            this.state.filters.suspended = e.target.checked;
+            this.persistFilterPrefs();
+            this.renderCards();
+            this.updateActiveFiltersCount();
+        };
+        el('#filterLeech').onchange = (e) => {
+            this.state.filters.leech = e.target.checked;
+            this.persistFilterPrefs();
+            this.renderCards();
+            this.updateActiveFiltersCount();
+        };
         el('#filterMarked').onchange = (e) => { this.state.filters.marked = e.target.checked; this.renderCards(); this.updateActiveFiltersCount(); };
         const filterFlagSwatches = el('#filterFlagSwatches');
         if (filterFlagSwatches) {
@@ -1442,7 +1491,8 @@ export const App = {
                 this.updateActiveFiltersCount();
             };
         }
-        el('#filterCardHierarchy')?.addEventListener('change', (e) => { this.state.filters.cardHierarchy = e.target.value || ''; this.renderCards(); this.updateActiveFiltersCount(); });
+        const unsuspendAllBtn = el('#unsuspendAllBtn');
+        if (unsuspendAllBtn) unsuspendAllBtn.onclick = () => this.unsuspendAllSelectedDeck();
         // Toggle filters panel
         el('#toggleFilters').onclick = () => this.toggleFiltersPanel();
         el('#ankiImportInput').onchange = (e) => this.handleAnkiImport(e.target.files[0]);
@@ -1465,6 +1515,7 @@ export const App = {
         if (importMobile) importMobile.onchange = (e) => this.handleAnkiImport(e.target.files[0]);
         this.initMobileFab();
         this.bindDeckSearch();
+        this.applyFilterPrefsToUi();
         // Keyboard shortcuts for study
         // Use capture to ensure we can intercept combo hotkeys even when textarea is focused.
         document.addEventListener('keydown', (e) => {
@@ -1779,17 +1830,34 @@ export const App = {
         if (f.hard) count++;
         if (f.addedToday) count++;
         if (f.tags && f.tags.length > 0) count++;
-        if (f.suspended) count++;
-        if (f.leech) count++;
         if (f.marked) count++;
         if (Array.isArray(f.flag) ? f.flag.length > 0 : !!f.flag) count++;
-        if (f.cardHierarchy) count++;
         if (f.studyDecks && f.studyDecks.length > 0) count++;
         // Show reset button if any filters are active
         const resetBtn = el('#resetFilters');
         if (resetBtn) {
             resetBtn.classList.toggle('hidden', count === 0);
         }
+    },
+    persistFilterPrefs() {
+        const prefs = {
+            library: {
+                hideSuspended: !!this.state.filters.suspended,
+                hideLeech: !!this.state.filters.leech
+            },
+            analytics: {
+                includeSuspended: this.state.analyticsIncludeSuspended !== false
+            }
+        };
+        Storage.setMeta('filterPrefs', prefs).catch(e => console.debug('Storage setMeta filterPrefs failed:', e));
+    },
+    applyFilterPrefsToUi() {
+        const filterSuspended = el('#filterSuspended');
+        const filterLeech = el('#filterLeech');
+        if (filterSuspended) filterSuspended.checked = !!this.state.filters.suspended;
+        if (filterLeech) filterLeech.checked = !!this.state.filters.leech;
+        const analyticsIncludeSuspended = el('#analyticsIncludeSuspended');
+        if (analyticsIncludeSuspended) analyticsIncludeSuspended.checked = this.state.analyticsIncludeSuspended !== false;
     },
     // Render selected deck bar
     renderSelectedDeckBar() {
@@ -1889,6 +1957,15 @@ export const App = {
         const theme = document.body.getAttribute('data-theme') || 'light';
         const selectedId = this.state.selectedDeck?.id;
         const searchQuery = (this.state.deckSearch || '').toLowerCase().trim();
+        const deckStats = new Map();
+        for (const card of this.state.cards) {
+            if (!deckStats.has(card.deckId)) deckStats.set(card.deckId, { total: 0, due: 0 });
+            const stats = deckStats.get(card.deckId);
+            stats.total += 1;
+            if (isSchedulable(card) && !card.suspended && !card.leech && this.isDue(card)) {
+                stats.due += 1;
+            }
+        }
         let decks = this.state.decks;
         if (searchQuery) {
             decks = decks.filter(d => d.name.toLowerCase().includes(searchQuery));
@@ -1900,6 +1977,7 @@ export const App = {
         grid.innerHTML = decks.map(d => {
             const isSelected = d.id === selectedId;
             const selectedClass = isSelected ? 'ring-2 ring-dull-purple' : '';
+            const stats = deckStats.get(d.id) || { total: 0, due: 0 };
             return `
  <article class="rounded-2xl border border-[color:var(--card-border)] p-3 bg-[color:var(--surface)] text-[color:var(--text-main)] flex flex-col gap-2 hover:bg-[color:var(--surface-strong)] transition cursor-pointer ${selectedClass}" data-deck-id="${d.id}">
  <div class="flex items-center justify-between">
@@ -1912,8 +1990,8 @@ export const App = {
  </div>
  </div>
  <div class="flex items-center gap-3 text-xs text-[color:var(--text-sub)]">
- <span>${this.cardsForDeck(d.id).filter(c => this.isDue(c)).length} due</span>
- <span>${this.cardsForDeck(d.id).length} cards</span>
+ <span>${stats.due} due</span>
+ <span>${stats.total} cards</span>
  </div>
  <div class="flex items-center gap-2 text-[11px] text-[color:var(--text-sub)]">
  <i data-lucide="refresh-cw" class="w-3 h-3"></i>
@@ -1946,12 +2024,29 @@ export const App = {
                 noCardsMsg.textContent = 'Select a deck above to view its cards';
                 noCardsMsg.classList.remove('hidden');
             }
+            const unsuspendWrap = el('#unsuspendAllWrap');
+            if (unsuspendWrap) unsuspendWrap.classList.add('hidden');
             this.updateCounts();
             return;
         }
 
-        let cards = this.cardsForDeck(this.state.selectedDeck.id);
-        cards = cards.filter(c => this.passFilters(c));
+        const deckCards = this.cardsForDeck(this.state.selectedDeck.id);
+        let suspendedCount = 0;
+        deckCards.forEach(c => {
+            if (c.suspended || c.leech) suspendedCount += 1;
+        });
+        const unsuspendWrap = el('#unsuspendAllWrap');
+        const unsuspendBtn = el('#unsuspendAllBtn');
+        if (unsuspendWrap && unsuspendBtn) {
+            if (suspendedCount > 0) {
+                unsuspendWrap.classList.remove('hidden');
+                unsuspendBtn.textContent = `Unsuspend all (${suspendedCount})`;
+            } else {
+                unsuspendWrap.classList.add('hidden');
+            }
+        }
+
+        let cards = deckCards.filter(c => this.passFilters(c, { context: 'library' }));
 
         // Sort by due date (overdue/upcoming first, new cards at end)
         cards.sort((a, b) => {
@@ -1995,6 +2090,8 @@ export const App = {
                 const flagColorClass = c.flag ? this.getFlagColorClass(c.flag) : '';
                 const flagIcon = c.flag ? `<i data-lucide="flag" class="w-3 h-3 ${flagColorClass} flag-icon-filled" title="${escapeHtml(c.flag)}"></i>` : '';
                 const markIcon = c.marked ? `<i data-lucide="star" class="w-3 h-3 text-accent fill-current" title="Marked"></i>` : '';
+                const suspendedIcon = c.suspended ? `<i data-lucide="ban" class="w-3 h-3 text-[color:var(--danger-soft-text)]" title="Suspended"></i>` : '';
+                const leechIcon = c.leech ? `<i data-lucide="bug" class="w-3 h-3 text-[color:var(--danger-soft-text)]" title="Leech"></i>` : '';
                 const tagPills = c.tags.slice(0, 2).map(t => `<span class="notion-color-${t.color.replace('_', '-')}-background px-1.5 py-0.5 rounded text-[10px]">${escapeHtml(t.name)}</span>`).join(' ');
                 // Get due date
                 const dueDate = c.fsrs?.dueDate || c.sm2?.dueDate;
@@ -2002,7 +2099,7 @@ export const App = {
                 // Card hierarchy indicators
                 const isParent = isClozeParent(c);
                 const isSub = isSubItem(c);
-                const subCount = isParent ? this.state.cards.filter(sc => sc.parentCard === c.id).length : 0;
+                const subCount = isParent ? (Array.isArray(c.subCards) ? c.subCards.length : 0) : 0;
                 const hierarchyIcon = isParent
                     ? `<span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-accent-soft text-accent text-[10px] font-medium" title="${subCount} sub-cards">${subCount}</span>`
                     : isSub
@@ -2015,6 +2112,8 @@ export const App = {
  ${hierarchyIcon}
  ${markIcon}
  ${flagIcon}
+ ${suspendedIcon}
+ ${leechIcon}
  <div class="truncate max-w-[150px] sm:max-w-[250px] md:max-w-[350px] lg:max-w-[450px]">${nameText}</div>
  </div>
  </td>
@@ -2143,8 +2242,8 @@ export const App = {
         const allCards = hasSelectedDecks
             ? this.state.cards.filter(c => f.studyDecks.includes(c.deckId))
             : this.state.cards;
-        const dueCards = allCards.filter(c => this.passFilters(c) && this.isDue(c));
-        const nonDueCards = allCards.filter(c => this.passFilters(c) && !this.isDue(c));
+        const dueCards = allCards.filter(c => this.passFilters(c, { context: 'study' }) && isSchedulable(c) && this.isDue(c));
+        const nonDueCards = allCards.filter(c => this.passFilters(c, { context: 'study' }) && isSchedulable(c) && !this.isDue(c));
 
         if (!card && hasSelectedDecks && nonDueCards.length > 0 && !session) {
             // No due cards but there are non-due cards available (only show when no session)
@@ -2399,6 +2498,37 @@ export const App = {
         this.queueOp({ type: 'card-upsert', payload: card });
         this.updateMarkFlagButtons(card);
         this.renderCards();
+    },
+    async unsuspendAllSelectedDeck() {
+        const deck = this.state.selectedDeck;
+        if (!deck) {
+            toast('Select a deck first');
+            return;
+        }
+        const deckCards = this.cardsForDeck(deck.id);
+        const targets = deckCards.filter(c => c.suspended || c.leech);
+        if (targets.length === 0) {
+            toast('No suspended cards in this deck');
+            return;
+        }
+        targets.forEach(card => {
+            card.suspended = false;
+            if (card.leech) card.leech = false;
+        });
+        try {
+            await Storage.putMany('cards', targets);
+        } catch (e) {
+            console.error('Bulk unsuspend failed, retrying individually:', e);
+            for (const card of targets) {
+                await Storage.put('cards', card).catch(err => console.error('Unsuspend save failed:', err));
+            }
+        }
+        targets.forEach(card => this.queueOp({ type: 'card-upsert', payload: card }));
+        this.renderCards();
+        this.renderDecks();
+        this.renderStudyDeckSelection();
+        this.renderStudy();
+        toast(`Unsuspended ${targets.length} card${targets.length === 1 ? '' : 's'}`);
     },
     async setFlagForSelected(flag) {
         const card = this.state.selectedCard;
@@ -2845,9 +2975,15 @@ export const App = {
                 btn.classList.toggle('text-main', true);
             });
         }
-        const cards = allSelected
+        const includeSuspended = this.state.analyticsIncludeSuspended !== false;
+        const includeSuspendedToggle = el('#analyticsIncludeSuspended');
+        if (includeSuspendedToggle) includeSuspendedToggle.checked = includeSuspended;
+        const baseCards = allSelected
             ? this.state.cards
             : this.state.cards.filter(c => selectedSet.has(c.deckId));
+        const cards = includeSuspended
+            ? baseCards
+            : baseCards.filter(c => !c.suspended && !c.leech);
 
         const events = [];
         cards.forEach(card => {
@@ -2898,7 +3034,7 @@ export const App = {
         const now = new Date();
         const todayKey = this.formatDateKey(now);
         const todayStats = dayMap.get(todayKey) || { count: 0, ms: 0 };
-        const dueToday = cards.filter(c => !c.suspended && this.isDue(c)).length;
+        const dueToday = cards.filter(c => isSchedulable(c) && this.isDue(c)).length;
 
         const ratings = { again: 0, hard: 0, good: 0, easy: 0 };
         events.forEach(e => {
@@ -3162,7 +3298,7 @@ export const App = {
             Suspended: 0
         };
         cards.forEach(card => {
-            if (card.suspended) {
+            if (card.suspended || card.leech) {
                 cardCounts.Suspended += 1;
                 return;
             }
@@ -3177,7 +3313,7 @@ export const App = {
             { label: 'New', value: cardCounts.New, color: 'var(--muted-pink)' },
             { label: 'Due', value: cardCounts.Due, color: 'var(--dull-purple)' },
             { label: 'Not due', value: cardCounts['Not due'], color: 'var(--earth-metal)' },
-            { label: 'Suspended', value: cardCounts.Suspended, color: 'rgb(var(--earth-metal-rgb) / 0.4)' }
+            ...(includeSuspended ? [{ label: 'Suspended', value: cardCounts.Suspended, color: 'rgb(var(--earth-metal-rgb) / 0.4)' }] : [])
         ];
         const total = pieSlices.reduce((sum, s) => sum + s.value, 0);
         const cardCountsEl = el('#analyticsCardCounts');
@@ -3566,6 +3702,16 @@ export const App = {
             startBtn.classList.remove('opacity-60', 'cursor-not-allowed');
         }
 
+        const dueCounts = new Map();
+        let totalDue = 0;
+        for (const card of this.state.cards) {
+            if (!this.passFilters(card, { context: 'study' })) continue;
+            if (!isSchedulable(card)) continue;
+            if (!this.isDue(card)) continue;
+            dueCounts.set(card.deckId, (dueCounts.get(card.deckId) || 0) + 1);
+            totalDue += 1;
+        }
+
         const selected = this.state.filters.studyDecks || [];
         const query = (input.value || '').toLowerCase();
 
@@ -3573,7 +3719,7 @@ export const App = {
         const filtered = this.state.decks.filter(d => d.name.toLowerCase().includes(query));
         dropdown.innerHTML = filtered.map(d => {
             const isSelected = selected.includes(d.id);
-            const dueCount = this.cardsForDeck(d.id).filter(c => this.isDue(c)).length;
+            const dueCount = dueCounts.get(d.id) || 0;
             return `<div class="deck-option flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-surface-muted ${isSelected ? 'bg-accent-soft' : ''}" data-deck-id="${d.id}">
  <span class="flex items-center gap-2">
  ${isSelected ? '<i data-lucide="check" class="w-3 h-3 text-accent"></i>' : '<span class="w-3"></span>'}
@@ -3598,7 +3744,6 @@ export const App = {
  </span>`;
         }).join('');
         if (selected.length === 0) {
-            const totalDue = this.state.cards.filter(c => this.isDue(c)).length;
             display.innerHTML = `<span class="text-accent text-xs italic">All decks (${totalDue} due)</span>`;
         }
         lucide.createIcons();
@@ -4100,6 +4245,16 @@ export const App = {
         el('#cardOrderInput').value = (typeof card?.order === 'number') ? card.order : '';
         el('#cardSuspendedInput').checked = card?.suspended ?? false;
         el('#cardLeechInput').checked = card?.leech ?? false;
+        const suspendedInput = el('#cardSuspendedInput');
+        const leechInput = el('#cardLeechInput');
+        if (suspendedInput && leechInput) {
+            suspendedInput.onchange = () => {
+                if (!suspendedInput.checked) leechInput.checked = false;
+            };
+            leechInput.onchange = () => {
+                if (leechInput.checked) suspendedInput.checked = true;
+            };
+        }
         el('#cardMarkedInput').checked = card?.marked ?? false;
         el('#cardFlagInput').value = card?.flag || '';
         const flagSwatches = el('#cardFlagSwatches');
@@ -4197,8 +4352,16 @@ export const App = {
         card.order = orderVal === '' ? null : Number(orderVal);
         card.marked = el('#cardMarkedInput').checked;
         card.flag = el('#cardFlagInput').value || '';
-        card.suspended = el('#cardSuspendedInput').checked;
-        card.leech = el('#cardLeechInput').checked;
+        const suspendedChecked = el('#cardSuspendedInput').checked;
+        const leechChecked = el('#cardLeechInput').checked;
+        if (!suspendedChecked && leechChecked) {
+            // Unsuspending always clears leech.
+            card.suspended = false;
+            card.leech = false;
+        } else {
+            card.leech = leechChecked;
+            card.suspended = suspendedChecked || leechChecked;
+        }
         // Only set updatedInApp if name/back/notes changed (affects rich_text preservation)
         // Note: Editing Name, Back, or Notes will cause text colors and highlights to be lost on sync
         if (card.name !== oldName || card.back !== oldBack || card.notes !== oldNotes) {
@@ -5356,8 +5519,20 @@ export const App = {
         };
         setTimeout(() => document.addEventListener('click', closeOnClickOutside), 0);
     },
-    passFilters(card) {
+    passFilters(card, opts = {}) {
         const f = this.state.filters;
+        const context = opts.context || 'library';
+        if (context === 'study') {
+            if (card.suspended || card.leech) return false;
+            const typeKey = (card.type || '').toLowerCase();
+            const isFrontBack = typeKey.includes('front');
+            if (!isSubItem(card) && !isFrontBack) return false;
+        } else {
+            if (f.suspended && card.suspended) return false;
+            if (f.leech && card.leech) return false;
+            // Hide sub-items by default in library (no toggle)
+            if (isSubItem(card)) return false;
+        }
         const now = new Date();
         const deck = this.deckById(card.deckId);
         const alg = deck?.algorithm || 'SM-2';
@@ -5366,17 +5541,9 @@ export const App = {
         if (f.hard && !['again', 'hard'].includes(lastRating)) return false;
         if (f.addedToday && card.createdAt && new Date(card.createdAt).toDateString() !== now.toDateString()) return false;
         if (f.tags.length && !f.tags.some(t => card.tags.some(ct => ct.name === t))) return false;
-        if (f.suspended && card.suspended) return false;
-        if (f.leech && card.leech) return false;
         if (f.marked && !card.marked) return false;
         const flagFilter = Array.isArray(f.flag) ? f.flag : (f.flag ? [f.flag] : []);
         if (flagFilter.length > 0 && !flagFilter.includes(card.flag || '')) return false;
-        // Card hierarchy filter - hide sub-items by default (only show when explicitly filtered)
-        if (f.cardHierarchy === 'parents' && !isClozeParent(card)) return false;
-        if (f.cardHierarchy === 'subitems' && !isSubItem(card)) return false;
-        if (f.cardHierarchy === 'regular' && (isClozeParent(card) || isSubItem(card))) return false;
-        // Default: hide sub-items (show parents and regular cards)
-        if (!f.cardHierarchy && isSubItem(card)) return false;
         return true;
     },
     isDue(card) {
@@ -5795,17 +5962,18 @@ export const App = {
         return `${deckIds.length} decks`;
     },
     resetFilters() {
-        this.state.filters = { again: false, hard: false, addedToday: false, tags: [], suspended: false, leech: false, marked: false, flag: [], cardHierarchy: '', studyDecks: [] };
+        const { suspended, leech } = this.state.filters;
+        this.state.filters = { again: false, hard: false, addedToday: false, tags: [], suspended, leech, marked: false, flag: [], studyDecks: [] };
         el('#filterAgain').checked = false;
         el('#filterHard').checked = false;
         el('#filterAddedToday').checked = false;
-        el('#filterSuspended').checked = false;
-        el('#filterLeech').checked = false;
+        const filterSuspended = el('#filterSuspended');
+        const filterLeech = el('#filterLeech');
+        if (filterSuspended) filterSuspended.checked = !!suspended;
+        if (filterLeech) filterLeech.checked = !!leech;
         el('#filterMarked').checked = false;
         const filterFlagSwatches = el('#filterFlagSwatches');
         if (filterFlagSwatches) this.updateFlagSwatchMulti(filterFlagSwatches, []);
-        const hierarchySelect = el('#filterCardHierarchy');
-        if (hierarchySelect) hierarchySelect.value = '';
         this.renderStudyDeckSelection();
         this.renderTagFilter();
         this.renderStudy();
