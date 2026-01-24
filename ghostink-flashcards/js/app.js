@@ -204,7 +204,8 @@ export const App = {
         dyContextProcessing: false,
         selectedDeck: null,
         selectedCard: null,
-        filters: { again: false, hard: false, addedToday: false, tags: [], suspended: false, leech: false, marked: false, flag: [], studyDecks: [] },
+        // Library filters: suspended/leech true by default (auto-hide)
+        filters: { again: false, hard: false, addedToday: false, tags: [], suspended: true, leech: true, marked: false, flag: [], studyDecks: [] },
         cardSearch: '',
         deckSearch: '',
         cardLimit: 50,
@@ -754,6 +755,16 @@ export const App = {
 
         const queueItem = session.cardQueue[session.currentIndex];
         if (queueItem) {
+            // Check for pending saves (e.g. from Mark/Flag in preview/cram/study) that weren't saved by rate()
+            // This catches "Skip" actions where data was modified
+            const card = this.cardById(queueItem.cardId);
+            if (card && card._pendingSave) {
+                delete card._pendingSave;
+                Storage.put('cards', card).then(() => {
+                    this.queueOp({ type: 'card-upsert', payload: card });
+                }).catch(e => console.error('Failed to save skipped card:', e));
+            }
+
             if (wasSkipped) {
                 session.skipped.push(queueItem.cardId);
             } else {
@@ -1768,7 +1779,7 @@ export const App = {
         this.renderStatus();
         this.renderSelectedDeckBar();
         this.updateActiveFiltersCount();
-        lucide.createIcons();
+        createIconsInScope(document.body);
         this.loadAISettings();
         // Show/hide STT settings based on whether AI is verified
         const isAiVerified = this.state.settings?.aiVerified;
@@ -1810,7 +1821,7 @@ export const App = {
         if (btnEl) btnEl.classList.add('active');
         this.state.activeTab = tab;
         if (tab === 'analytics') this.renderAnalytics();
-        lucide.createIcons();
+        if (tabEl) createIconsInScope(tabEl);
     },
     // Toggle filters panel
     toggleFiltersPanel() {
@@ -1961,7 +1972,17 @@ export const App = {
         for (const card of this.state.cards) {
             if (!deckStats.has(card.deckId)) deckStats.set(card.deckId, { total: 0, due: 0 });
             const stats = deckStats.get(card.deckId);
-            stats.total += 1;
+
+            // Count total cards (exclude cloze parents, only count actually studyable cards)
+            // Fix: Also exclude suspended cards from total count
+            if (isSchedulable(card) && !card.suspended) {
+                stats.total += 1;
+            }
+
+            // Count due cards:
+            // 1. Must be schedulable (isSchedulable checks !isClozeParent)
+            // 2. Must not be suspended or leech
+            // 3. Must be due (isDue checks date)
             if (isSchedulable(card) && !card.suspended && !card.leech && this.isDue(card)) {
                 stats.due += 1;
             }
@@ -2494,9 +2515,14 @@ export const App = {
         const card = this.state.selectedCard;
         if (!card) return;
         card.marked = !card.marked;
+        this.updateMarkFlagButtons(card);
+        // Defer persistence if in a session (will be saved on rate/skip)
+        if (this.state.session) {
+            card._pendingSave = true;
+            return;
+        }
         await Storage.put('cards', card);
         this.queueOp({ type: 'card-upsert', payload: card });
-        this.updateMarkFlagButtons(card);
         this.renderCards();
     },
     async unsuspendAllSelectedDeck() {
@@ -2534,9 +2560,14 @@ export const App = {
         const card = this.state.selectedCard;
         if (!card) return;
         card.flag = flag || '';
+        this.updateMarkFlagButtons(card);
+        // Defer persistence if in a session (will be saved on rate/skip)
+        if (this.state.session) {
+            card._pendingSave = true;
+            return;
+        }
         await Storage.put('cards', card);
         this.queueOp({ type: 'card-upsert', payload: card });
-        this.updateMarkFlagButtons(card);
         this.renderCards();
     },
     updateMarkFlagButtons(card) {
@@ -2885,17 +2916,34 @@ export const App = {
         return !lastReview && !hasHistory && reps === 0 && !isLearning;
     },
     renderAnalytics() {
-        const container = el('#analyticsTab');
-        if (!container) return;
-        const deckBtn = el('#analyticsDeckBtn');
-        const deckMenu = el('#analyticsDeckMenu');
         const deckLabel = el('#analyticsDeckLabel');
+        const deckMenu = el('#analyticsDeckMenu');
+        const selectedSet = new Set(this.state.analyticsDecks || []);
+        const allSelected = selectedSet.size === 0;
         const deckIds = this.state.decks.map(d => d.id);
-        const rawSelection = Array.isArray(this.state.analyticsDecks) ? this.state.analyticsDecks : [];
-        const normalizedSelection = rawSelection.filter(id => deckIds.includes(id));
-        if (normalizedSelection.length !== rawSelection.length) this.state.analyticsDecks = normalizedSelection;
-        const selectedSet = new Set(normalizedSelection);
-        const allSelected = selectedSet.size === 0 || selectedSet.size === deckIds.length;
+
+        // Phase 16: Memoization for analytics calculation
+        const currentCacheKey = JSON.stringify({
+            lastSync: this.state.lastSync,
+            cardsLen: this.state.cards.length,
+            filters: {
+                range: this.state.analyticsRange,
+                year: this.state.analyticsYear,
+                decks: this.state.analyticsDecks,
+                suspended: this.state.analyticsIncludeSuspended
+            }
+        });
+
+        if (this.state.analyticsCache && this.state.analyticsCache.key === currentCacheKey) {
+            // Restore from cache if DOM elements are empty (e.g. tab switch)
+            if (!el('#analyticsToday').hasChildNodes()) {
+                this._applyAnalyticsData(this.state.analyticsCache.data);
+            }
+            // Update simple UI labels that might need refresh even if data is cached
+            this._updateAnalyticsLabels(deckLabel, deckMenu, selectedSet, allSelected, deckIds);
+            return;
+        }
+
         if (deckLabel) {
             if (allSelected) deckLabel.textContent = 'All decks';
             else if (selectedSet.size === 1) {
@@ -3802,6 +3850,81 @@ export const App = {
             }
         };
     },
+    highlightVariables(el, allowedVars = []) {
+        if (!el) return;
+
+        // Save cursor position
+        const getCaretIndex = (element) => {
+            let position = 0;
+            const isSupported = typeof window.getSelection !== "undefined";
+            if (isSupported) {
+                const selection = window.getSelection();
+                if (selection.rangeCount !== 0) {
+                    const range = window.getSelection().getRangeAt(0);
+                    const preCaretRange = range.cloneRange();
+                    preCaretRange.selectNodeContents(element);
+                    preCaretRange.setEnd(range.endContainer, range.endOffset);
+                    position = preCaretRange.toString().length;
+                }
+            }
+            return position;
+        };
+
+        const setCaretIndex = (element, index) => {
+            let charIndex = 0, range = document.createRange();
+            range.setStart(element, 0);
+            range.collapse(true);
+            let nodeStack = [element], node, found = false, stop = false;
+
+            while (!stop && (node = nodeStack.pop())) {
+                if (node.nodeType === 3) {
+                    const nextCharIndex = charIndex + node.length;
+                    if (!found && index >= charIndex && index <= nextCharIndex) {
+                        range.setStart(node, index - charIndex);
+                        range.collapse(true);
+                        found = true;
+                    }
+                    charIndex = nextCharIndex;
+                } else {
+                    let i = node.childNodes.length;
+                    while (i--) {
+                        nodeStack.push(node.childNodes[i]);
+                    }
+                }
+            }
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+        };
+
+        const caret = getCaretIndex(el);
+        const text = el.innerText;
+
+        // Highlight logic - only match allowed variables
+        let html = text;
+        if (allowedVars.length > 0) {
+            // Escape vars for regex just in case (though these are known safe strings)
+            const pattern = new RegExp(`\\{\\{(${allowedVars.join('|')})\\}\\}`, 'g');
+            html = text.replace(pattern, '<span class="text-accent bg-accent-soft rounded px-0.5">{{$1}}</span>');
+        }
+
+        // Only update if changed (prevents loop/jitter if no change)
+        if (el.innerHTML !== html) {
+            el.innerHTML = html;
+            try {
+                setCaretIndex(el, caret);
+            } catch (e) {
+                // Fallback: move to end
+                const range = document.createRange();
+                range.selectNodeContents(el);
+                range.collapse(false);
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+            }
+        }
+    },
+
     openDeckModal(deck) {
         if (!this.isReady()) { this.openSettings(); return; }
         this.state.editingDeck = deck || null;
@@ -3813,17 +3936,32 @@ export const App = {
         el('#deckNewLimit').value = deck?.newLimit ?? 20;
         el('#deckOrderMode').value = deck?.orderMode ?? 'none';
         el('#deckReverseInput').checked = deck?.reverse ?? false;
-        el('#deckPromptInput').value = deck?.aiPrompt ?? DEFAULT_AI_PROMPT;
+
+        const promptInput = el('#deckPromptInput');
+        const revVars = ['question', 'answer', 'user'];
+        // Use innerText for contenteditable
+        if (promptInput) {
+            promptInput.innerText = deck?.aiPrompt ?? DEFAULT_AI_PROMPT;
+            this.highlightVariables(promptInput, revVars);
+            promptInput.oninput = debounce(() => this.highlightVariables(promptInput, revVars), 300);
+        }
+
         const dyEnabled = el('#deckDynamicContextInput');
         const dyFields = el('#dyContextFields');
         const dyPromptInput = el('#deckDyPromptInput');
+        const dyVars = ['root_front', 'root_back', 'prev_front', 'prev_back', 'tags', 'card_type'];
         if (dyEnabled) dyEnabled.checked = !!deck?.dynamicContext;
-        if (dyPromptInput) dyPromptInput.value = deck?.dyAiPrompt ?? '';
+        if (dyPromptInput) {
+            dyPromptInput.innerText = deck?.dyAiPrompt ?? '';
+            this.highlightVariables(dyPromptInput, dyVars);
+            dyPromptInput.oninput = debounce(() => this.highlightVariables(dyPromptInput, dyVars), 300);
+        }
         const toggleDyContextFields = () => {
             if (!dyFields || !dyEnabled) return;
             dyFields.classList.toggle('hidden', !dyEnabled.checked);
-            if (dyEnabled.checked && dyPromptInput && !(dyPromptInput.value || '').trim()) {
-                dyPromptInput.value = DEFAULT_DYCONTEXT_PROMPT;
+            if (dyEnabled.checked && dyPromptInput && !(dyPromptInput.innerText || '').trim()) {
+                dyPromptInput.innerText = DEFAULT_DYCONTEXT_PROMPT;
+                this.highlightVariables(dyPromptInput, dyVars);
             }
         };
         if (dyEnabled) dyEnabled.onchange = toggleDyContextFields;
@@ -4021,9 +4159,9 @@ export const App = {
         d.newLimit = Number(el('#deckNewLimit').value) || 20;
         d.orderMode = el('#deckOrderMode').value || 'none';
         d.reverse = el('#deckReverseInput').checked;
-        d.aiPrompt = el('#deckPromptInput').value || '';
+        d.aiPrompt = el('#deckPromptInput')?.innerText || '';
         d.dynamicContext = !!el('#deckDynamicContextInput')?.checked;
-        const rawDyPrompt = (el('#deckDyPromptInput')?.value || '').trim();
+        const rawDyPrompt = (el('#deckDyPromptInput')?.innerText || '').trim();
         d.dyAiPrompt = d.dynamicContext
             ? (rawDyPrompt || DEFAULT_DYCONTEXT_PROMPT)
             : rawDyPrompt;
@@ -4377,14 +4515,10 @@ export const App = {
         if (!this.state.editingCard) this.state.cards.push(card);
         await Storage.put('cards', card);
         this.queueOp({ type: 'card-upsert', payload: card });
-
-        // If this is a cloze parent, reconcile its sub-items immediately
-        if (isClozeParent(card)) {
-            await this.reconcileSingleParent(card);
-        }
-
-        this.closeCardModal();
         this.renderCards();
+        this.renderDecks(); // Refresh stats (due counts, etc.)
+        this.renderStudyDeckSelection();
+        this.closeCardModal();
         toast('Card saved');
     },
     async deleteCardFromModal() {
@@ -4410,8 +4544,12 @@ export const App = {
             if (loadingMsg && !el('#loadingOverlay').classList.contains('hidden')) {
                 loadingMsg.textContent = 'Pushing local changes...';
             }
-            await this.pushQueue();
+            const pushResult = await this.pushQueue();
             el('#syncProgress').style.width = '50%';
+
+            if (pushResult.failedCount > 0) {
+                toast(`Push completed with ${pushResult.failedCount} errors. Some items may not be synced.`);
+            }
 
             // Then pull to get updates
             if (loadingMsg && !el('#loadingOverlay').classList.contains('hidden')) {
@@ -4425,12 +4563,16 @@ export const App = {
             }
             const nowIso = new Date().toISOString();
             this.state.lastPull = nowIso;
-            this.state.lastPush = nowIso;
-            this.state.lastSync = nowIso;
+            if (pushResult.success) {
+                this.state.lastPush = nowIso;
+                this.state.lastSync = nowIso;
+                await Storage.put('meta', { key: 'lastPush', value: nowIso });
+                await Storage.put('meta', { key: 'lastSync', value: nowIso });
+                toast('Synced with Notion');
+            } else {
+                toast('Synced with warnings (check status)');
+            }
             await Storage.put('meta', { key: 'lastPull', value: nowIso });
-            await Storage.put('meta', { key: 'lastPush', value: nowIso });
-            await Storage.put('meta', { key: 'lastSync', value: nowIso });
-            toast('Synced with Notion');
         } catch (e) {
             console.error('Sync failed', e);
             toast('Sync failed – check your internet connection or Notion settings');
@@ -4664,8 +4806,11 @@ export const App = {
             }
         };
 
-        for (const d of mappedDecks) { upsertDeck(d); await Storage.put('decks', d); }
-        for (const c of filteredCards) { upsertCard(c); await Storage.put('cards', c); }
+        for (const d of mappedDecks) upsertDeck(d);
+        for (const c of filteredCards) upsertCard(c);
+
+        if (mappedDecks.length > 0) await Storage.putMany('decks', mappedDecks);
+        if (filteredCards.length > 0) await Storage.putMany('cards', filteredCards);
 
         // Phase 3: Reconcile cloze sub-items after pulling cards
         await this.reconcileClozeSubItems();
@@ -4951,6 +5096,7 @@ export const App = {
         el('#queueCount').textContent = String(this.state.queue.length);
         await Storage.setMeta('queue', this.state.queue);
         this.renderConnection();
+        return { success: failed.length === 0, failedCount: failed.length };
     },
     queueOp(op, reason = 'generic') {
         op.reason = reason;
@@ -5094,13 +5240,16 @@ export const App = {
         this.state.dyContextProcessing = true;
         const remaining = [];
         try {
+            // Hoist map creation outside the loop for O(n) instead of O(n*m)
+            const prevMap = this.getDyContextPrevMap();
+
             for (const job of queue) {
                 const deck = this.deckById(job.deckId);
                 const prevCard = this.cardById(job.prevId);
                 if (!deck || !prevCard || !deck.dynamicContext) continue;
                 const dyConfig = this.getDyContextConfig(deck);
                 if (!dyConfig) { continue; }
-                const prevMap = this.getDyContextPrevMap();
+
                 if (prevMap.has(job.prevId)) continue;
                 if (prevCard.dyPrevCard) {
                     const prevInChain = this.cardById(prevCard.dyPrevCard);
@@ -5378,9 +5527,11 @@ export const App = {
             let didWork = false;
             // Always push first to avoid overwriting local changes with stale Notion data
             if (canPushNow) {
-                await this.pushQueue();
-                this.state.lastPush = new Date().toISOString();
-                await Storage.put('meta', { key: 'lastPush', value: this.state.lastPush });
+                const pushResult = await this.pushQueue();
+                if (pushResult.success) {
+                    this.state.lastPush = new Date().toISOString();
+                    await Storage.put('meta', { key: 'lastPush', value: this.state.lastPush });
+                }
                 didWork = true;
             }
             // Only pull when the queue is empty after any push attempt.
@@ -5522,29 +5673,42 @@ export const App = {
     passFilters(card, opts = {}) {
         const f = this.state.filters;
         const context = opts.context || 'library';
+
         if (context === 'study') {
+            // Study Mode: Strict rules
+            // 1. MUST NOT be suspended or leech (hard rule)
             if (card.suspended || card.leech) return false;
+
+            // 2. Filter by card type (unless sub-item)
             const typeKey = (card.type || '').toLowerCase();
             const isFrontBack = typeKey.includes('front');
             if (!isSubItem(card) && !isFrontBack) return false;
+
+            // 3. Apply Study-specific filters
+            const now = new Date();
+            const deck = this.deckById(card.deckId);
+            const alg = deck?.algorithm || 'SM-2';
+            const lastRating = (alg === 'FSRS' ? card.fsrs?.lastRating : card.sm2?.lastRating) || card.fsrs?.lastRating || card.sm2?.lastRating;
+
+            if (f.again && lastRating !== 'again') return false;
+            if (f.hard && !['again', 'hard'].includes(lastRating)) return false;
+            if (f.addedToday && card.createdAt && new Date(card.createdAt).toDateString() !== now.toDateString()) return false;
+            if (f.tags.length && !f.tags.some(t => card.tags.some(ct => ct.name === t))) return false;
+            if (f.marked && !card.marked) return false;
+            const flagFilter = Array.isArray(f.flag) ? f.flag : (f.flag ? [f.flag] : []);
+            if (flagFilter.length > 0 && !flagFilter.includes(card.flag || '')) return false;
+
+            return true;
         } else {
-            if (f.suspended && card.suspended) return false;
-            if (f.leech && card.leech) return false;
-            // Hide sub-items by default in library (no toggle)
+            // Library Mode: Only respect Library-specific controls
+            // Ignore 'again', 'hard', 'tags', 'flag' etc. set in Study tab
+            if (f.suspended && card.suspended) return false; // "Hide suspended" checked
+            if (f.leech && card.leech) return false;       // "Hide leeches" checked
+            // Hide sub-items by default in library (no toggle available yet)
             if (isSubItem(card)) return false;
+
+            return true;
         }
-        const now = new Date();
-        const deck = this.deckById(card.deckId);
-        const alg = deck?.algorithm || 'SM-2';
-        const lastRating = (alg === 'FSRS' ? card.fsrs?.lastRating : card.sm2?.lastRating) || card.fsrs?.lastRating || card.sm2?.lastRating;
-        if (f.again && lastRating !== 'again') return false;
-        if (f.hard && !['again', 'hard'].includes(lastRating)) return false;
-        if (f.addedToday && card.createdAt && new Date(card.createdAt).toDateString() !== now.toDateString()) return false;
-        if (f.tags.length && !f.tags.some(t => card.tags.some(ct => ct.name === t))) return false;
-        if (f.marked && !card.marked) return false;
-        const flagFilter = Array.isArray(f.flag) ? f.flag : (f.flag ? [f.flag] : []);
-        if (flagFilter.length > 0 && !flagFilter.includes(card.flag || '')) return false;
-        return true;
     },
     isDue(card) {
         const deck = this.deckById(card.deckId);
@@ -5750,76 +5914,151 @@ export const App = {
         const previewMode = !!this.state.session?.noScheduleChanges;
 
         // Bug 2 Fix: Wrap all state modifications in try-catch to ensure consistency
+
         try {
+
             if (previewMode) {
+
                 // Track rating in session statistics (only after confirming we will advance)
+
                 if (this.state.session && this.state.session.ratingCounts) {
+
                     this.state.session.ratingCounts[ratingLabel] = (this.state.session.ratingCounts[ratingLabel] || 0) + 1;
+
                 }
-                const now = new Date();
-                const nowMs = now.getTime();
-                const startMs = this.state.answerRevealedAt || this.state.cardShownAt || nowMs;
-                let durationMs = Math.max(0, nowMs - startMs);
-                durationMs = Math.min(durationMs, 10 * 60 * 1000);
-                card.reviewHistory.push({ rating: ratingKey, at: now.toISOString(), ms: durationMs });
-                await Storage.put('cards', card);
-                this.queueOp({ type: 'card-upsert', payload: card }, 'rating');
+
+
+
+                // If marks/flags were changed (deferred), save them now even in preview mode.
+
+                // We do NOT change scheduling/history, just the card properties.
+
+                if (card._pendingSave) {
+
+                    delete card._pendingSave;
+
+                    await Storage.put('cards', card);
+
+                    this.queueOp({ type: 'card-upsert', payload: card }, 'rating');
+
+                }
+
+
+
                 this.state.lastRating = null;
+
                 this.setRatingEnabled(false);
+
                 this.advanceSession(false);
+
                 toast('Preview mode: scheduling unchanged');
+
                 return;
+
             }
+
+
 
             const deck = this.deckById(card.deckId);
+
             const alg = deck?.algorithm || 'SM-2';
+
             const srsConfig = parseSrsConfig(deck?.srsConfig || null, alg);
+
             let handledLearning = false;
+
             if (alg === 'SM-2') {
+
                 handledLearning = this.applySm2Learning(card, ratingKey, deck);
+
                 if (!handledLearning) {
+
                     card.sm2 = SRS.sm2(card, ratingKey); // SM-2 is default
+
                     card.sm2.dueDate = this.adjustDueDateForEasyDays(card.sm2.dueDate, srsConfig.easyDays);
+
                 }
+
             } else {
+
                 card.fsrs = SRS.fsrs(card, ratingKey, srsConfig.fsrs?.weights, srsConfig.fsrs?.retention);
+
                 card.fsrs.dueDate = this.adjustDueDateForEasyDays(card.fsrs.dueDate, srsConfig.easyDays);
+
             }
+
             card.fsrs = card.fsrs || {};
+
             if (alg === 'FSRS') card.fsrs.lastRating = ratingKey;
+
             else {
+
                 card.sm2 = card.sm2 || {};
+
                 card.sm2.lastRating = ratingKey;
+
             }
+
             let learning = parseSrsState(card.srsState || null).learning;
+
             if (alg === 'SM-2' && !handledLearning) {
+
                 learning.state = 'review';
+
                 learning.step = 0;
+
                 learning.due = null;
+
             }
+
             if (alg === 'FSRS') {
+
                 learning.state = 'review';
+
                 learning.step = 0;
+
                 learning.due = null;
+
             }
+
             if (ratingKey === 'again' && !handledLearning) {
+
                 learning.lapses = (learning.lapses || 0) + 1;
+
             }
+
             if (!card.leech && (learning.lapses || 0) >= DEFAULT_LEECH_LAPSE_THRESHOLD) {
+
                 card.leech = true;
+
                 card.suspended = true;
+
                 toast(`Leech detected (lapses: ${learning.lapses}) — auto-suspended`);
+
             }
+
             card.srsState = this.buildSrsState(card, learning);
+
             const now = new Date();
+
             const nowMs = now.getTime();
+
             const startMs = this.state.answerRevealedAt || this.state.cardShownAt || nowMs;
+
             let durationMs = Math.max(0, nowMs - startMs);
+
             durationMs = Math.min(durationMs, 10 * 60 * 1000);
+
             card.reviewHistory.push({ rating: ratingKey, at: now.toISOString(), ms: durationMs });
 
+
+
             // Persist to storage first - if this fails, we haven't modified session state yet
+
+            delete card._pendingSave; // Clear any pending flag since we are saving now
+
             await Storage.put('cards', card);
+
             this.queueOp({ type: 'card-upsert', payload: card }, 'rating');
 
             // DyContext generation (non-blocking)
@@ -7475,7 +7714,28 @@ export const App = {
             this.updateMobileFab();
             // Provide user-friendly error messages
             const msg = e?.message || 'Unknown error';
-            if (msg.includes('401') || msg.includes('403')) {
+            if (msg.includes('Switch to Reveal mode')) {
+                // Create toast with action button
+                const t = el('#toast');
+                t.innerHTML = `AI timed out. <button id="switchToRevealBtn" class="underline font-bold ml-1">Switch to Reveal mode?</button>`;
+                t.classList.remove('hidden', 'opacity-0');
+                // Auto hide after 5s
+                setTimeout(() => {
+                    t.classList.add('opacity-0');
+                    setTimeout(() => t.classList.add('hidden'), 300);
+                }, 5000);
+
+                const switchBtn = el('#switchToRevealBtn');
+                if (switchBtn) {
+                    switchBtn.onclick = () => {
+                        el('#revisionMode').value = 'manual';
+                        el('#aiControls').classList.add('hidden');
+                        this.state.aiLocked = false;
+                        this.updateMobileFab();
+                        toast('Switched to Reveal mode');
+                    };
+                }
+            } else if (msg.includes('401') || msg.includes('403')) {
                 toast('AI API key invalid or expired');
             } else if (msg.includes('429')) {
                 toast('AI rate limited - try again in a moment');
@@ -7504,15 +7764,48 @@ export const App = {
             }
         };
 
+        const fetchWithTimeout = async (url, options, timeoutMs = 15000) => {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+                const res = await fetch(url, { ...options, signal: controller.signal });
+                clearTimeout(timeout);
+                return res;
+            } catch (e) {
+                clearTimeout(timeout);
+                throw e;
+            }
+        };
+
+        const attemptFetch = async (url, options) => {
+            let lastErr;
+            for (let i = 0; i < 3; i++) {
+                try {
+                    const res = await fetchWithTimeout(url, options);
+                    if (res.status === 429 || res.status >= 500) {
+                        lastErr = new Error(`Request failed ${res.status}`);
+                        await sleep(1000 * (i + 1));
+                        continue;
+                    }
+                    return res;
+                } catch (e) {
+                    lastErr = e;
+                    if (e.name === 'AbortError') throw new Error('Request timed out. Switch to Reveal mode?');
+                    await sleep(1000);
+                }
+            }
+            throw lastErr;
+        };
+
         if (provider === 'anthropic') {
-            const resp = await fetch('https://api.anthropic.com/v1/messages', {
+            const resp = await attemptFetch('https://api.anthropic.com/v1/messages', {
                 method: 'POST',
                 headers: {
                     'content-type': 'application/json',
                     'x-api-key': key,
                     'anthropic-version': '2023-06-01'
                 },
-                body: JSON.stringify({ model, max_tokens: 256, messages: [{ role: 'user', content: prompt }] })
+                body: JSON.stringify({ model, max_tokens: 1024, messages: [{ role: 'user', content: prompt }] })
             });
             if (!resp.ok) throw new Error('Claude returned ' + resp.status);
             const json = await safeParseJson(resp, 'Claude');
@@ -7520,7 +7813,7 @@ export const App = {
         }
         if (provider === 'gemini') {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
-            const resp = await fetch(url, {
+            const resp = await attemptFetch(url, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
@@ -7529,10 +7822,10 @@ export const App = {
             const json = await safeParseJson(resp, 'Gemini');
             return json.candidates?.[0]?.content?.parts?.map(p => p.text).join('\n') || 'No response';
         }
-        const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+        const resp = await attemptFetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: { 'content-type': 'application/json', 'authorization': 'Bearer ' + key },
-            body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], max_tokens: 256 })
+            body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], max_tokens: 1024 })
         });
         if (!resp.ok) throw new Error('OpenAI returned ' + resp.status);
         const json = await safeParseJson(resp, 'OpenAI');
@@ -7707,15 +8000,22 @@ export const App = {
         // Guard against KaTeX not being loaded yet (async CDN load)
         if (!container) return;
         if (typeof katex === 'undefined') {
-            // KaTeX not loaded yet, wait for it and retry
+            // KaTeX not loaded yet, wait for it using a shared poller
+            if (this._katexPolling) return; // Already polling globally
+            this._katexPolling = true;
+            let attempts = 0;
             const checkInterval = setInterval(() => {
+                attempts++;
                 if (typeof katex !== 'undefined') {
                     clearInterval(checkInterval);
-                    this.renderMath(container);
+                    this._katexPolling = false;
+                    // Re-render everything that might have math
+                    this.renderMath(document.body);
+                } else if (attempts > 50) { // Give up after 5s
+                    clearInterval(checkInterval);
+                    this._katexPolling = false;
                 }
             }, 100);
-            // Stop checking after 5 seconds to avoid infinite loop
-            setTimeout(() => clearInterval(checkInterval), 5000);
             return;
         }
         container.querySelectorAll('.notion-equation').forEach(span => {
@@ -8017,6 +8317,7 @@ export const App = {
             this.state.cards = this.state.cards.filter(c => c.id !== target.id);
             this.queueOp({ type: 'card-delete', payload: { id: target.id, notionId: target.notionId } });
             this.renderCards();
+            this.renderDecks(); // Refresh stats
             toast('Card deleted');
         }
         this.pendingDelete = null;

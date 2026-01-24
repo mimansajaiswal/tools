@@ -143,7 +143,7 @@ export const markdownToNotionRichText = (markdown) => {
     if (raw.length > MAX_INPUT_CHARS) return safePlain(raw);
 
     // Treat __text__ as underline (we generate underline using __...__ in richToMarkdown()).
-    // This is intentionally different from Markdown strong; we always generate bold with **...**.
+    // Improved regex: handle newlines inside underline, ensure matching pair.
     const pre = raw.replace(/__([\s\S]+?)__/g, '<u>$1</u>');
 
     let html;

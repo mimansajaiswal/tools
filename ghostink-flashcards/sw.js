@@ -26,6 +26,17 @@ const CACHE_CATEGORIES = {
   FONTS: 'fonts'
 };
 
+const isTrustedCdn = (url) => {
+  return [
+    'cdn.jsdelivr.net',
+    'unpkg.com',
+    'cdnjs.cloudflare.com',
+    'fonts.googleapis.com',
+    'fonts.gstatic.com',
+    'cdn.tailwindcss.com'
+  ].some(domain => url.includes(domain));
+};
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     (async () => {
@@ -102,7 +113,7 @@ self.addEventListener('install', (event) => {
             } catch {
               response = await fetchWithTimeout(url, { mode: 'no-cors' }, 8000);
             }
-            if (response && response.ok && response.type !== 'opaque') {
+            if (response && (response.ok || (response.type === 'opaque' && isTrustedCdn(url)))) {
               await cache.put(new Request(url), response);
             }
           } catch (e) {

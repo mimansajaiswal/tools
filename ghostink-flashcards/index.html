@@ -1028,7 +1028,7 @@
     </div>
 
     <div id="confirmModal" role="dialog" aria-modal="true" aria-labelledby="confirmModalTitle"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[200]">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[210]">
         <div class="card rounded-lg p-5 w-full max-w-sm shadow-soft">
             <p id="confirmModalTitle" class="modal-title font-display text-lg mb-2">Confirm delete</p>
             <p class="text-sm text-sub ">This removes it locally and syncs deletion to
@@ -1044,7 +1044,7 @@
 
     <!-- Reset Algorithm Confirmation Modal -->
     <div id="resetAlgorithmModal" role="dialog" aria-modal="true" aria-labelledby="resetAlgorithmTitle"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50 z-[200]">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[210]">
         <div class="card rounded-lg p-5 w-full max-w-md shadow-soft">
             <div class="flex items-center gap-3 mb-3">
                 <div class="p-2 rounded-full bg-[color:var(--danger-soft-bg)]">
@@ -1480,7 +1480,7 @@
 
     <!-- Worker helper -->
     <div id="workerHelpModal"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[200]">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[210]">
         <div class="card rounded-lg p-5 w-full max-w-3xl shadow-soft h-[80vh] flex flex-col">
             <div class="flex items-center justify-between mb-3">
                 <h3 class="modal-title font-display text-lg">Cloudflare Worker proxy</h3>
@@ -1627,9 +1627,9 @@ async function handleRequest(request, env) {
                 </label>
                 <div>
                     <label class="text-xs text-sub">AI revision prompt (optional)</label>
-                    <textarea id="deckPromptInput" rows="3"
-                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2"
-                        placeholder="Use {{question}} {{answer}} {{user}} placeholders"></textarea>
+                    <div id="deckPromptInput" contenteditable="true"
+                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 min-h-[3.5rem] max-h-48 overflow-y-auto whitespace-pre-wrap font-mono text-sm focus:outline-none focus:ring-2 focus:ring-dull-purple/40 scroll-minimal"
+                        role="textbox" aria-multiline="true"></div>
                     <div class="flex flex-wrap gap-2 mt-2 text-[11px] text-muted ">
                         <span class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{question}}</span>
                         <span class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{answer}}</span>
@@ -1645,9 +1645,9 @@ async function handleRequest(request, env) {
                 <div id="dyContextFields" class="space-y-2 hidden">
                     <div>
                         <label class="text-xs text-sub">Dynamic Context AI prompt (optional)</label>
-                        <textarea id="deckDyPromptInput" rows="4"
-                            class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2"
-                            placeholder="Use {{root_front}} {{prev_front}} {{card_type}} placeholders"></textarea>
+                        <div id="deckDyPromptInput" contenteditable="true"
+                            class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 min-h-[3.5rem] max-h-48 overflow-y-auto whitespace-pre-wrap font-mono text-sm focus:outline-none focus:ring-2 focus:ring-dull-purple/40 scroll-minimal"
+                            role="textbox" aria-multiline="true"></div>
                         <div class="flex flex-wrap gap-2 mt-2 text-[11px] text-muted">
                             <span
                                 class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{root_front}}</span>
@@ -1913,7 +1913,7 @@ async function handleRequest(request, env) {
 
     <!-- AI Settings Required Modal -->
     <div id="aiSettingsRequiredModal"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50 z-[200]">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50 z-[210]">
         <div
             class="card rounded-lg p-5 w-full max-w-md shadow-soft text-center space-y-4 bg-[color:var(--card-bg)] border border-[color:var(--card-border)]">
             <div class="w-12 h-12 rounded-full bg-accent-soft flex items-center justify-center mx-auto">
@@ -1934,7 +1934,7 @@ async function handleRequest(request, env) {
 
     <!-- Notes Edit Modal -->
     <div id="notesModal" role="dialog" aria-modal="true" aria-labelledby="notesModalTitle"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50 z-[200]">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50 z-[210]">
         <div class="card rounded-lg p-5 w-full max-w-lg shadow-soft space-y-4 max-h-[90vh] flex flex-col">
             <div class="flex items-center justify-between">
                 <h3 id="notesModalTitle" class="modal-title font-display text-lg">Edit Notes</h3>
@@ -1962,7 +1962,7 @@ async function handleRequest(request, env) {
 
     <!-- Reset Confirmation Modal -->
     <div id="resetConfirmModal"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50 z-[200]">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[210]">
         <div class="card rounded-lg p-5 w-full max-w-sm shadow-soft">
             <div class="flex items-center gap-3 mb-3">
                 <div class="p-2 rounded-full bg-[color:var(--accent-2)]/20">
@@ -1984,7 +1984,7 @@ async function handleRequest(request, env) {
 
     <!-- Add Block Note Modal -->
     <div id="addBlockModal"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50 z-[200]">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50 z-[210]">
         <div class="card rounded-lg p-5 w-full max-w-lg shadow-soft space-y-4 max-h-[90vh] flex flex-col">
             <div class="flex items-center justify-between">
                 <h3 class="modal-title font-display text-lg">Add Note to Page</h3>
