@@ -249,6 +249,10 @@
                                 <span>Front-back & Cloze</span>
                             </div>
                             <div class="flex items-center gap-2">
+                                <i data-lucide="sparkles" class="w-3.5 h-3.5 text-accent shrink-0"></i>
+                                <span>Dynamic Context variants</span>
+                            </div>
+                            <div class="flex items-center gap-2">
                                 <i data-lucide="image" class="w-3.5 h-3.5 text-accent shrink-0"></i>
                                 <span>Media & LaTeX</span>
                             </div>
@@ -272,8 +276,8 @@
                     <p class="font-display text-lg sm:text-xl text-main leading-tight">AI-assisted spaced repetition for
                         flashcards stored in Notion</p>
                     <p class="text-xs sm:text-sm text-sub leading-relaxed">
-                        Your cards live in Notion where you can see and edit them. Reveal answers like Anki, or
-                        type/speak your answer and let AI check it against the ground truth.
+                        Your cards live in Notion where you can see and edit them. Review like Anki, optionally get AI
+                        judging for your answers, and generate fresh Dynamic Context variants as you advance.
                     </p>
                     <p class="text-[11px] text-muted ">
                         Built by <a class="underline text-accent " href="https://mimansajaiswal.github.io"
@@ -305,7 +309,7 @@
                         class="rounded-lg bg-[color:var(--surface)] border border-[color:var(--card-border)] p-3 space-y-1">
                         <div class="flex items-center gap-2 text-accent font-semibold"><i data-lucide="wand-2"
                                 class="w-4 h-4"></i>3. Study</div>
-                        <p class="text-sub">Sync and start reviewing flashcards.</p>
+                        <p class="text-sub">Sync, review, and unlock Dynamic Context variants as you progress.</p>
                     </div>
                 </div>
                 <div class="flex justify-center">
@@ -1314,10 +1318,11 @@
                         </div>
                     </div>
                     <div class="rounded-lg border border-card p-3 bg-surface ">
-                        <div class="flex items-center gap-2 mb-2">
+                        <div class="flex items-center gap-2">
                             <i data-lucide="bot" class="w-4 h-4 text-accent "></i>
-                            <p class="font-semibold text-main ">AI judge settings</p>
+                            <p class="font-semibold text-main ">AI Judge</p>
                         </div>
+                        <p class="text-[11px] text-sub mb-2">Checks your answer against the card.</p>
                         <div class="space-y-2">
                             <div>
                                 <label class="text-xs text-sub">Provider</label>
@@ -1345,10 +1350,55 @@
                                 </form>
                                 <button id="verifyAi" data-tip="Requires internet"
                                     class="px-3 py-2 rounded-lg bg-surface-strong text-main text-sm border border-card w-full">Verify
-                                    AI settings</button>
+                                    API keys</button>
                                 <p class="text-[11px] text-muted">Keys stay on-device (localStorage). AI
                                     judging
                                     only runs if verified.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="rounded-lg border border-card p-3 bg-surface ">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="sparkles" class="w-4 h-4 text-accent "></i>
+                            <p class="font-semibold text-main ">Dynamic Context Variants</p>
+                        </div>
+                        <p class="text-[11px] text-sub mb-2">Generates harder variants from your last card.</p>
+                        <div class="space-y-2">
+                            <div id="dyUseJudgeAiRow">
+                                <label class="flex items-center gap-2 text-xs text-sub">
+                                    <input id="dyUseJudgeAi" type="checkbox" class="accent-dull-purple">
+                                    <span>Use AI judge settings</span>
+                                </label>
+                            </div>
+                            <div id="dyProviderFields" class="space-y-2 hidden">
+                                <div>
+                                    <label class="text-xs text-sub">Provider</label>
+                                    <select id="dyProvider"
+                                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-2 py-2 text-sm">
+                                        <option value="">Disabled</option>
+                                        <option value="openai">OpenAI</option>
+                                        <option value="anthropic">Claude</option>
+                                        <option value="gemini">Gemini</option>
+                                    </select>
+                                </div>
+                                <div id="dyProviderDetailFields" class="space-y-2 hidden">
+                                    <div>
+                                        <label class="text-xs text-sub">Model</label>
+                                        <input id="dyModel" type="text"
+                                            placeholder="gpt-4o-mini / claude-3-haiku / gemini-1.5-flash"
+                                            class="w-full rounded-lg border border-card bg-[var(--surface)] px-2 py-2 text-sm">
+                                    </div>
+                                    <form autocomplete="off" onsubmit="return false;">
+                                        <input type="text" name="username" autocomplete="username" class="sr-only"
+                                            tabindex="-1" aria-hidden="true">
+                                        <input id="dyKey" type="password" autocomplete="new-password"
+                                            placeholder="API key (kept locally)"
+                                            class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm">
+                                    </form>
+                                    <button id="verifyDyContextAi" data-tip="Requires internet"
+                                        class="px-3 py-2 rounded-lg bg-surface-strong text-main text-sm border border-card w-full">Verify
+                                        API keys</button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1390,7 +1440,7 @@
                                 </div>
                                 <button id="verifyStt" data-tip="Requires internet"
                                     class="px-3 py-2 rounded-lg bg-surface-strong text-main text-sm border border-card w-full">Verify
-                                    STT settings</button>
+                                    API keys</button>
                             </div>
                             <p class="text-[11px] text-muted">Browser uses free built-in speech recognition.
                                 Cloud providers offer better accuracy.</p>
@@ -1585,6 +1635,30 @@ async function handleRequest(request, env) {
                     </div>
                     <p class="mt-2 text-[11px] text-sub ">Variables replace question,
                         correct answer, and learner answer.</p>
+                </div>
+                <label class="flex items-center gap-2 text-sm">
+                    <input id="deckDynamicContextInput" type="checkbox" class="accent-dull-purple">
+                    <span>Dynamic Context?</span>
+                </label>
+                <div id="dyContextFields" class="space-y-2 hidden">
+                    <div>
+                        <label class="text-xs text-sub">Dynamic Context AI prompt (optional)</label>
+                        <textarea id="deckDyPromptInput" rows="4"
+                            class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2"
+                            placeholder="Use {{root_front}} {{prev_front}} {{card_type}} placeholders"></textarea>
+                        <div class="flex flex-wrap gap-2 mt-2 text-[11px] text-muted">
+                            <span
+                                class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{root_front}}</span>
+                            <span class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{root_back}}</span>
+                            <span
+                                class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{prev_front}}</span>
+                            <span class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{prev_back}}</span>
+                            <span class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{tags}}</span>
+                            <span class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{card_type}}</span>
+                        </div>
+                        <p class="mt-2 text-[11px] text-sub">Variables replace root/previous text, tags, and card type.
+                        </p>
+                    </div>
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div class="col-span-2">

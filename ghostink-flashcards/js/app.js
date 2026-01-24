@@ -14,6 +14,7 @@ import {
     ratingsMap,
     DEFAULT_LEECH_LAPSE_THRESHOLD,
     DEFAULT_AI_PROMPT,
+    DEFAULT_DYCONTEXT_PROMPT,
     parseSrsConfig,
     parseSrsState,
     el,
@@ -199,6 +200,8 @@ export const App = {
         lastQueueError: null,
         queueLastChangedAt: null,
         lastQueueWarnAt: null,
+        dyContextQueue: [],
+        dyContextProcessing: false,
         selectedDeck: null,
         selectedCard: null,
         filters: { again: false, hard: false, addedToday: false, tags: [], suspended: false, leech: false, marked: false, flag: [], cardHierarchy: '', studyDecks: [] },
@@ -284,6 +287,7 @@ export const App = {
         }
         Tooltip.bind();
         this.startAutoSync();
+        this.processDyContextQueue();
         hideLoading();
     },
     async loadSession() {
@@ -934,6 +938,10 @@ export const App = {
                 algorithm,
                 orderMode: d.orderMode || (d.ordered ? 'created' : 'none') || 'none',
                 aiPrompt: d.aiPrompt || DEFAULT_AI_PROMPT,
+                dynamicContext: !!d.dynamicContext,
+                dyAiPrompt: ((d.dyAiPrompt || '').trim())
+                    ? (d.dyAiPrompt || '')
+                    : (d.dynamicContext ? DEFAULT_DYCONTEXT_PROMPT : ''),
                 srsConfig: parseSrsConfig(d.srsConfig || d.srsConfigRaw || null, algorithm)
             };
         });
@@ -976,6 +984,7 @@ export const App = {
         this.state.queue = (await Storage.getMeta('queue')) || [];
         this.state.lastQueueError = (await Storage.getMeta('lastQueueError')) || null;
         this.state.queueLastChangedAt = (await Storage.getMeta('queueLastChangedAt')) || null;
+        this.state.dyContextQueue = (await Storage.getMeta('dyContextQueue')) || [];
         const meta = await Storage.getAll('meta');
         const last = meta.find(m => m.key === 'lastSync');
         if (last) this.state.lastSync = last.value;
@@ -1010,6 +1019,8 @@ export const App = {
             aiProvider: '',
             aiModel: '',
             aiKey: '',
+            dynamicContext: false,
+            dyAiPrompt: '',
             orderMode: 'none',
             srsConfig: parseSrsConfig(null, algorithm)
         };
@@ -1033,6 +1044,8 @@ export const App = {
             parentCard: null,
             subCards: [],
             clozeIndexes: '',
+            dyRootCard: null,
+            dyPrevCard: null,
             fsrs: { difficulty: 4, stability: 1, retrievability: 0.9, lastRating: null, lastReview: null, dueDate: now },
             sm2: { interval: 1, easeFactor: 2.5, repetitions: 0, dueDate: now },
             syncId: crypto.randomUUID(),
@@ -1099,6 +1112,14 @@ export const App = {
                     card.parentCard = cardIdMap[card.parentCard];
                     changed = true;
                 }
+                if (card.dyRootCard && cardIdMap[card.dyRootCard]) {
+                    card.dyRootCard = cardIdMap[card.dyRootCard];
+                    changed = true;
+                }
+                if (card.dyPrevCard && cardIdMap[card.dyPrevCard]) {
+                    card.dyPrevCard = cardIdMap[card.dyPrevCard];
+                    changed = true;
+                }
             }
             if (changed && !cardIdChanges.find(c => c.value === card)) {
                 cardUpdates.push(card);
@@ -1153,6 +1174,15 @@ export const App = {
                 }
             }
         }
+        if (Array.isArray(this.state.dyContextQueue)) {
+            this.state.dyContextQueue = this.state.dyContextQueue.map(j => {
+                const next = { ...j };
+                if (hasDeckMap && deckIdMap[next.deckId]) next.deckId = deckIdMap[next.deckId];
+                if (hasCardMap && cardIdMap[next.prevId]) next.prevId = cardIdMap[next.prevId];
+                if (hasCardMap && cardIdMap[next.rootId]) next.rootId = cardIdMap[next.rootId];
+                return next;
+            });
+        }
 
         // Persist updates
         if (deckChanges.length > 0) {
@@ -1168,6 +1198,7 @@ export const App = {
             this.saveSession();
         }
         await Storage.setMeta('queue', this.state.queue);
+        await Storage.setMeta('dyContextQueue', this.state.dyContextQueue);
     },
     bind() {
         el('#syncNowBtn').onclick = () => this.syncNow();
@@ -1645,6 +1676,7 @@ export const App = {
         el('#saveNotesBtn').onclick = () => this.saveNotes();
         el('#notesModal').addEventListener('click', (e) => { if (e.target === el('#notesModal')) this.closeModal('notesModal'); });
         el('#verifyAi').onclick = () => this.verifyAiSettings();
+        el('#verifyDyContextAi').onclick = () => this.verifyDyContextSettings();
         el('#verifyStt').onclick = () => this.verifySttSettings();
         el('#aiSubmit').onclick = () => this.submitToAI();
         el('#aiAnswer').oninput = (e) => {
@@ -3637,6 +3669,20 @@ export const App = {
         el('#deckOrderMode').value = deck?.orderMode ?? 'none';
         el('#deckReverseInput').checked = deck?.reverse ?? false;
         el('#deckPromptInput').value = deck?.aiPrompt ?? DEFAULT_AI_PROMPT;
+        const dyEnabled = el('#deckDynamicContextInput');
+        const dyFields = el('#dyContextFields');
+        const dyPromptInput = el('#deckDyPromptInput');
+        if (dyEnabled) dyEnabled.checked = !!deck?.dynamicContext;
+        if (dyPromptInput) dyPromptInput.value = deck?.dyAiPrompt ?? '';
+        const toggleDyContextFields = () => {
+            if (!dyFields || !dyEnabled) return;
+            dyFields.classList.toggle('hidden', !dyEnabled.checked);
+            if (dyEnabled.checked && dyPromptInput && !(dyPromptInput.value || '').trim()) {
+                dyPromptInput.value = DEFAULT_DYCONTEXT_PROMPT;
+            }
+        };
+        if (dyEnabled) dyEnabled.onchange = toggleDyContextFields;
+        toggleDyContextFields();
 
         const srsConfig = parseSrsConfig(deck?.srsConfig || null, algo);
         const learningStepsInput = el('#deckLearningSteps');
@@ -3822,6 +3868,7 @@ export const App = {
         el('#deckModal').classList.remove('flex');
     },
     async saveDeckFromModal() {
+        const wasDynamic = this.state.editingDeck?.dynamicContext === true;
         const d = this.state.editingDeck || this.newDeck('', 'SM-2');
         d.name = el('#deckNameInput').value || d.name || 'Untitled deck';
         d.algorithm = el('#deckAlgoInput').value || 'SM-2';
@@ -3830,6 +3877,11 @@ export const App = {
         d.orderMode = el('#deckOrderMode').value || 'none';
         d.reverse = el('#deckReverseInput').checked;
         d.aiPrompt = el('#deckPromptInput').value || '';
+        d.dynamicContext = !!el('#deckDynamicContextInput')?.checked;
+        const rawDyPrompt = (el('#deckDyPromptInput')?.value || '').trim();
+        d.dyAiPrompt = d.dynamicContext
+            ? (rawDyPrompt || DEFAULT_DYCONTEXT_PROMPT)
+            : rawDyPrompt;
 
         const srsConfig = parseSrsConfig(d.srsConfig || null, d.algorithm);
 
@@ -3873,6 +3925,9 @@ export const App = {
         d.updatedInApp = true;
         await Storage.put('decks', d);
         this.queueOp({ type: 'deck-upsert', payload: d });
+        if (d.dynamicContext && !wasDynamic) {
+            await this.normalizeDyContextRootsForDeck(d.id);
+        }
         this.closeDeckModal();
         this.renderDecks();
         this.renderStudy();
@@ -4230,6 +4285,8 @@ export const App = {
         const { deckSource, cardSource } = this.state.settings;
         if (!deckSource || !cardSource) return;
         const since = this.state.lastPull;
+        const firstSync = !since;
+        const localDeckMap = new Map(this.state.decks.map(d => [d.notionId || d.id, d]));
 
         // Deck visibility:
         // - Custom deck property "Archived?" means "hide deck + cards from app".
@@ -4262,6 +4319,14 @@ export const App = {
         const mappedDecks = deckPages
             .filter(p => !p?.archived && !isHiddenDeck(p))
             .map(d => NotionMapper.deckFrom(d));
+        const decksToNormalize = new Set();
+        for (const d of mappedDecks) {
+            if (!d.dynamicContext) continue;
+            const local = localDeckMap.get(d.notionId || d.id);
+            if (firstSync || !local || !local.dynamicContext) {
+                decksToNormalize.add(d.notionId || d.id);
+            }
+        }
         const invalidDeckConfigs = mappedDecks.filter(d => d.srsConfigError);
         if (invalidDeckConfigs.length > 0) {
             toast(`Invalid SRS Config in ${invalidDeckConfigs.length} deck${invalidDeckConfigs.length === 1 ? '' : 's'} — healed to defaults`);
@@ -4282,6 +4347,17 @@ export const App = {
         if (mismatchedDeckConfigs.length > 0) {
             toast(`SRS Config mismatched in ${mismatchedDeckConfigs.length} deck${mismatchedDeckConfigs.length === 1 ? '' : 's'} — fixing format`);
             mismatchedDeckConfigs.forEach(d => {
+                d.updatedInApp = true;
+                this.queueOp({ type: 'deck-upsert', payload: d });
+            });
+        }
+        const missingDyPrompts = mappedDecks.filter(d =>
+            d.dynamicContext && !(d.dyAiPromptRaw || '').trim()
+        );
+        if (missingDyPrompts.length > 0) {
+            toast(`Missing DyContext AI Prompt in ${missingDyPrompts.length} deck${missingDyPrompts.length === 1 ? '' : 's'} — writing defaults`);
+            missingDyPrompts.forEach(d => {
+                d.dyAiPrompt = DEFAULT_DYCONTEXT_PROMPT;
                 d.updatedInApp = true;
                 this.queueOp({ type: 'deck-upsert', payload: d });
             });
@@ -4314,7 +4390,6 @@ export const App = {
                 this.queueOp({ type: 'card-upsert', payload: c });
             });
         }
-
         // If we have new decks, fetch their cards separately (they may not have been edited recently)
         if (since && newDeckIds.length > 0) {
             for (const deckId of newDeckIds) {
@@ -4431,6 +4506,15 @@ export const App = {
 
         // Phase 3: Reconcile cloze sub-items after pulling cards
         await this.reconcileClozeSubItems();
+        if (decksToNormalize.size > 0) {
+            let normalized = 0;
+            for (const deckId of decksToNormalize) {
+                normalized += await this.normalizeDyContextRootsForDeck(deckId);
+            }
+            if (normalized > 0) {
+                toast(`Normalized DyContext roots for ${normalized} card${normalized === 1 ? '' : 's'}`);
+            }
+        }
 
         this.renderAll();
     },
@@ -4749,6 +4833,299 @@ export const App = {
             refreshBtn.classList.toggle('opacity-70', refreshBtn.disabled);
         }
     },
+    applyTemplateVars(tpl, vars) {
+        let out = String(tpl || '');
+        for (const [key, value] of Object.entries(vars || {})) {
+            out = out.split(`{{${key}}}`).join(String(value ?? ''));
+        }
+        return out;
+    },
+    getDyContextConfig(deck) {
+        if (!deck || !deck.dynamicContext) return null;
+        const useJudge = this.state.settings.dyUseJudgeAi === true;
+        if (useJudge) {
+            if (!this.state.settings.aiVerified) return null;
+        } else {
+            if (!this.state.settings.dyVerified) return null;
+        }
+        const provider = useJudge ? (this.state.settings.aiProvider || '') : (this.state.settings.dyProvider || '');
+        const model = useJudge ? (this.state.settings.aiModel || '') : (this.state.settings.dyModel || '');
+        const key = useJudge ? (this.state.settings.aiKey || '') : (this.state.settings.dyKey || '');
+        if (!provider || !model || !key) return null;
+        const prompt = (deck.dyAiPrompt || '').trim() || DEFAULT_DYCONTEXT_PROMPT;
+        return { provider, model, key, prompt };
+    },
+    getDyContextPrevMap() {
+        const map = new Map();
+        for (const c of (this.state.cards || [])) {
+            if (c?.dyPrevCard) map.set(c.dyPrevCard, c.id);
+        }
+        return map;
+    },
+    getDyContextCardContent(card) {
+        if (!card) return { front: '', back: '' };
+        const type = (card.type || '').toLowerCase();
+        if (type === 'cloze') {
+            const hasClozeInName = /\{\{c\d+::.+?\}\}/i.test(card.name || '');
+            const hasClozeInBack = /\{\{c\d+::.+?\}\}/i.test(card.back || '');
+            if (!hasClozeInName && hasClozeInBack) {
+                return { front: card.back || '', back: card.name || '' };
+            }
+        }
+        return { front: card.name || '', back: card.back || '' };
+    },
+    async ensureDyContextRoot(card) {
+        if (!card || card.dyRootCard) return card?.dyRootCard || null;
+        card.dyRootCard = card.id;
+        card.updatedInApp = true;
+        await Storage.put('cards', card);
+        this.queueOp({ type: 'card-upsert', payload: card });
+        return card.dyRootCard;
+    },
+    async normalizeDyContextRootsForDeck(deckId) {
+        if (!deckId) return 0;
+        const updates = [];
+        for (const card of (this.state.cards || [])) {
+            if (card.deckId !== deckId) continue;
+            if (isSubItem(card)) continue;
+            if (card.dyRootCard || card.dyPrevCard) continue;
+            card.dyRootCard = card.id;
+            card.updatedInApp = true;
+            updates.push(card);
+        }
+        if (updates.length === 0) return 0;
+        await Promise.all(updates.map(c => Storage.put('cards', c)));
+        updates.forEach(c => this.queueOp({ type: 'card-upsert', payload: c }));
+        return updates.length;
+    },
+    parseDyContextJson(raw) {
+        if (!raw || typeof raw !== 'string') return null;
+        let text = raw.trim();
+        if (text.startsWith('```')) {
+            text = text.replace(/^```[a-z]*\s*/i, '').replace(/```$/i, '').trim();
+        }
+        try {
+            return JSON.parse(text);
+        } catch (_) {
+            const first = text.indexOf('{');
+            const last = text.lastIndexOf('}');
+            if (first >= 0 && last > first) {
+                const slice = text.slice(first, last + 1);
+                try { return JSON.parse(slice); } catch { return null; }
+            }
+            return null;
+        }
+    },
+    async enqueueDyContextJob(job) {
+        if (!job?.prevId) return;
+        const deduped = (this.state.dyContextQueue || []).filter(j => j.prevId !== job.prevId);
+        deduped.push(job);
+        this.state.dyContextQueue = deduped;
+        await Storage.setMeta('dyContextQueue', this.state.dyContextQueue);
+    },
+    async processDyContextQueue() {
+        if (this.state.dyContextProcessing) return;
+        if (!navigator.onLine) return;
+        const queue = this.state.dyContextQueue || [];
+        if (queue.length === 0) return;
+        this.state.dyContextProcessing = true;
+        const remaining = [];
+        try {
+            for (const job of queue) {
+                const deck = this.deckById(job.deckId);
+                const prevCard = this.cardById(job.prevId);
+                if (!deck || !prevCard || !deck.dynamicContext) continue;
+                const dyConfig = this.getDyContextConfig(deck);
+                if (!dyConfig) { continue; }
+                const prevMap = this.getDyContextPrevMap();
+                if (prevMap.has(job.prevId)) continue;
+                if (prevCard.dyPrevCard) {
+                    const prevInChain = this.cardById(prevCard.dyPrevCard);
+                    if (!this.isDyContextGoodEasy(prevInChain, deck)) { remaining.push(job); continue; }
+                }
+                if (job.includeSubCards && !this.allClozeSubsGoodEasy(prevCard, deck)) {
+                    remaining.push(job);
+                    continue;
+                }
+                const rootCard = this.cardById(job.rootId) || prevCard;
+                try {
+                    await this.generateDyContextVariant(prevCard, rootCard, deck, dyConfig, { includeSubCards: !!job.includeSubCards });
+                } catch (e) {
+                    const retryCount = (job.retryCount || 0) + 1;
+                    if (retryCount <= 5) {
+                        remaining.push({ ...job, retryCount });
+                    } else {
+                        toast(`DyContext job dropped after 5 attempts: ${e?.message || 'error'}`);
+                    }
+                }
+            }
+        } finally {
+            this.state.dyContextQueue = remaining;
+            await Storage.setMeta('dyContextQueue', this.state.dyContextQueue);
+            this.state.dyContextProcessing = false;
+        }
+    },
+    hasDyContextChild(prevId, prevMap = null) {
+        if (!prevId) return false;
+        const map = prevMap || this.getDyContextPrevMap();
+        return map.has(prevId);
+    },
+    getLastRatingFor(card, deck) {
+        const alg = deck?.algorithm || 'SM-2';
+        return (alg === 'FSRS' ? card.fsrs?.lastRating : card.sm2?.lastRating) || card.fsrs?.lastRating || card.sm2?.lastRating || null;
+    },
+    isDyContextGoodEasy(card, deck) {
+        if (!card) return false;
+        if (isClozeParent(card)) {
+            return this.allClozeSubsGoodEasy(card, deck);
+        }
+        const r = this.getLastRatingFor(card, deck);
+        return r === 'good' || r === 'easy';
+    },
+    allClozeSubsGoodEasy(parent, deck) {
+        if (!parent) return false;
+        const parentKey = parent.notionId || parent.id;
+        const matchesParent = (c) =>
+            c.parentCard === parent.id ||
+            c.parentCard === parentKey ||
+            (parent.notionId && c.parentCard === parent.notionId);
+        const subs = (this.state.cards || []).filter(matchesParent);
+        if (subs.length === 0) return false;
+        return subs.every(s => {
+            if (s.suspended) return false;
+            const r = this.getLastRatingFor(s, deck);
+            return r === 'good' || r === 'easy';
+        });
+    },
+    buildDyContextPrompt(promptTemplate, rootCard, prevCard) {
+        const root = this.getDyContextCardContent(rootCard);
+        const prev = this.getDyContextCardContent(prevCard);
+        const tags = (prevCard?.tags || []).map(t => t?.name).filter(Boolean).join(', ');
+        return this.applyTemplateVars(promptTemplate, {
+            root_front: root.front || '',
+            root_back: root.back || '',
+            prev_front: prev.front || '',
+            prev_back: prev.back || '',
+            tags,
+            card_type: prevCard?.type || ''
+        });
+    },
+    async retireDyContextVariants(rootId, keepIds = [], includeSubCards = false) {
+        if (!rootId) return;
+        const keep = new Set(keepIds || []);
+        const candidates = (this.state.cards || []).filter(c => c.id === rootId || c.dyRootCard === rootId);
+        for (const c of candidates) {
+            if (keep.has(c.id)) continue;
+            if (!c.suspended) {
+                c.suspended = true;
+                await Storage.put('cards', c);
+                this.queueOp({ type: 'card-upsert', payload: c });
+            }
+            if (includeSubCards && isClozeParent(c)) {
+                const parentKey = c.notionId || c.id;
+                const matchesParent = (sc) =>
+                    sc.parentCard === c.id ||
+                    sc.parentCard === parentKey ||
+                    (c.notionId && sc.parentCard === c.notionId);
+                const subs = (this.state.cards || []).filter(matchesParent);
+                for (const sub of subs) {
+                    if (!sub.suspended) {
+                        sub.suspended = true;
+                        await Storage.put('cards', sub);
+                        this.queueOp({ type: 'card-upsert', payload: sub });
+                    }
+                }
+            }
+        }
+    },
+    async generateDyContextVariant(prevCard, rootCard, deck, dyConfig, { includeSubCards = false } = {}) {
+        if (!prevCard || !deck || !dyConfig) return;
+        const prompt = this.buildDyContextPrompt(dyConfig.prompt, rootCard, prevCard);
+        const raw = await this.callAI(dyConfig.provider, dyConfig.model, prompt, dyConfig.key);
+        const parsed = this.parseDyContextJson(raw);
+        if (!parsed || typeof parsed.front !== 'string') {
+            throw new Error('DyContext AI returned invalid JSON');
+        }
+        const front = parsed.front.trim();
+        const back = typeof parsed.back === 'string' ? parsed.back.trim() : '';
+        const notes = typeof parsed.notes === 'string' ? parsed.notes.trim() : '';
+        if (!front) {
+            throw new Error('DyContext AI returned empty front');
+        }
+        if ((prevCard.type || '').toLowerCase() === 'cloze' && !/\{\{c\d+::.+?\}\}/i.test(front)) {
+            throw new Error('DyContext AI returned invalid cloze front');
+        }
+        const newCard = this.newCard(prevCard.deckId, front, back, prevCard.type || 'Front-Back');
+        newCard.notes = notes;
+        newCard.tags = (prevCard.tags || []).map(t => ({ name: t.name, color: t.color || 'default' }));
+        if (typeof prevCard.order === 'number') newCard.order = prevCard.order;
+        newCard.dyRootCard = rootCard?.id || prevCard.dyRootCard || prevCard.id;
+        newCard.dyPrevCard = prevCard.id;
+
+        this.state.cards.push(newCard);
+        await Storage.put('cards', newCard);
+        this.queueOp({ type: 'card-upsert', payload: newCard });
+
+        if ((newCard.type || '').toLowerCase() === 'cloze') {
+            await this.reconcileSingleParent(newCard);
+        }
+
+        await this.retireDyContextVariants(newCard.dyRootCard, [prevCard.id, newCard.id], includeSubCards);
+    },
+    async maybeGenerateDyContext(card, ratingKey) {
+        if (!card || !ratingKey) return;
+        if (!['good', 'easy'].includes(ratingKey)) return;
+        const previewMode = !!this.state.session?.noScheduleChanges;
+        if (previewMode) return;
+        const deck = this.deckById(card.deckId);
+        if (!deck || !deck.dynamicContext) return;
+
+        let prevCard = card;
+        let includeSubCards = false;
+        if (isSubItem(card)) {
+            const parent = this.cardById(card.parentCard);
+            if (!parent) return;
+            prevCard = parent;
+            includeSubCards = true;
+            if (!this.allClozeSubsGoodEasy(parent, deck)) return;
+        } else if (isClozeParent(card)) {
+            includeSubCards = true;
+            if (!this.allClozeSubsGoodEasy(card, deck)) return;
+        }
+
+        const prevMap = this.getDyContextPrevMap();
+        if (this.hasDyContextChild(prevCard.id, prevMap)) return;
+
+        const dyConfig = this.getDyContextConfig(deck);
+        if (!dyConfig) return;
+
+        const rootId = prevCard.dyRootCard || prevCard.id;
+        const rootCard = this.cardById(rootId) || prevCard;
+        if (!prevCard.dyRootCard) {
+            await this.ensureDyContextRoot(prevCard);
+        }
+
+        if (prevCard.dyPrevCard) {
+            const prevInChain = this.cardById(prevCard.dyPrevCard);
+            if (!this.isDyContextGoodEasy(prevInChain, deck)) return;
+        }
+
+        if (!navigator.onLine) {
+            await this.enqueueDyContextJob({
+                id: crypto.randomUUID(),
+                deckId: deck.id,
+                prevId: prevCard.id,
+                rootId: rootId,
+                includeSubCards,
+                createdAt: new Date().toISOString(),
+                retryCount: 0
+            });
+            return;
+        }
+
+        this.generateDyContextVariant(prevCard, rootCard, deck, dyConfig, { includeSubCards })
+            .catch(e => console.error('DyContext generation failed', e));
+    },
     async manualSync() {
         if (!navigator.onLine) {
             toast('Offline: sync will run when you are online');
@@ -4871,6 +5248,7 @@ export const App = {
         document.body.classList.remove('offline-mode');
         toast('Back online');
         this.renderConnection();
+        this.processDyContextQueue();
         this.requestAutoSyncSoon(250);
     },
     handleOffline() {
@@ -5276,6 +5654,11 @@ export const App = {
             // Persist to storage first - if this fails, we haven't modified session state yet
             await Storage.put('cards', card);
             this.queueOp({ type: 'card-upsert', payload: card }, 'rating');
+
+            // DyContext generation (non-blocking)
+            this.maybeGenerateDyContext(card, ratingKey).catch(e => {
+                console.error('DyContext generation error:', e);
+            });
 
             // Bug 2 Fix: Only update session statistics AFTER successful storage
             if (this.state.session && this.state.session.ratingCounts) {
@@ -5907,6 +6290,10 @@ export const App = {
         const prevAiProvider = this.state.settings.aiProvider || '';
         const prevAiModel = this.state.settings.aiModel || '';
         const prevAiKey = this.state.settings.aiKey || '';
+        const prevDyUseJudge = this.state.settings.dyUseJudgeAi === true;
+        const prevDyProvider = this.state.settings.dyProvider || '';
+        const prevDyModel = this.state.settings.dyModel || '';
+        const prevDyKey = this.state.settings.dyKey || '';
         this.state.settings.workerUrl = el('#settingWorkerUrl').value.trim();
         this.state.settings.proxyToken = el('#settingProxyToken').value.trim();
         if (this.state.settings.workerUrl !== prevWorkerUrl || this.state.settings.proxyToken !== prevProxyToken) {
@@ -5937,6 +6324,23 @@ export const App = {
         const aiChanged = (aiProvider || '') !== prevAiProvider || (aiModel || '') !== prevAiModel || aiKeyChanged;
         if (!aiProvider || aiChanged) {
             this.state.settings.aiVerified = false;
+        }
+        // Save DyContext AI settings (separate from judge)
+        const dyUseJudgeAi = el('#dyUseJudgeAi')?.checked ?? true;
+        const dyProvider = (el('#dyProvider')?.value || '').trim();
+        const dyModel = (el('#dyModel')?.value || '').trim();
+        const dyKey = (el('#dyKey')?.value || '').trim();
+        this.state.settings.dyUseJudgeAi = dyUseJudgeAi;
+        this.state.settings.dyProvider = dyProvider;
+        this.state.settings.dyModel = dyModel;
+        this.state.settings.dyKey = dyKey;
+        const dyKeyChanged = !!(dyKey !== prevDyKey);
+        const dyChanged = dyUseJudgeAi !== prevDyUseJudge
+            || (dyProvider || '') !== prevDyProvider
+            || (dyModel || '') !== prevDyModel
+            || dyKeyChanged;
+        if (dyUseJudgeAi || dyChanged || !dyProvider || !dyModel || !dyKey) {
+            this.state.settings.dyVerified = false;
         }
 
         // Save STT settings
@@ -6088,6 +6492,7 @@ export const App = {
                 Storage.setSettings(this.state.settings);
                 // Show STT settings now that AI is verified
                 el('#sttSettings')?.classList.remove('hidden');
+                this.updateDyContextSettingsUI();
                 toast('AI settings verified');
             } else {
                 throw new Error(`API returned ${res.status}`);
@@ -6097,7 +6502,52 @@ export const App = {
             Storage.setSettings(this.state.settings);
             // Hide STT settings since AI is not verified
             el('#sttSettings')?.classList.add('hidden');
+            this.updateDyContextSettingsUI();
             toast('AI verification failed: ' + e.message);
+        } finally {
+            hideLoading();
+        }
+    },
+    async verifyDyContextSettings() {
+        if (!navigator.onLine) {
+            toast('Offline: connect to verify Dynamic Context AI settings');
+            return;
+        }
+        const provider = el('#dyProvider')?.value || '';
+        const model = el('#dyModel')?.value?.trim() || '';
+        const key = el('#dyKey')?.value?.trim() || '';
+        if (!provider) return toast('Select a provider for Dynamic Context');
+        if (!model) return toast('Enter a model name for Dynamic Context');
+        if (!key) return toast('Enter an API key for Dynamic Context');
+        try {
+            showLoading('Verifying Dynamic Context AI...', 'Testing connection to AI provider.');
+            let endpoint, headers, body;
+            if (provider === 'openai') {
+                endpoint = 'https://api.openai.com/v1/models';
+                headers = { 'Authorization': `Bearer ${key}` };
+            } else if (provider === 'anthropic') {
+                endpoint = 'https://api.anthropic.com/v1/messages';
+                headers = { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' };
+                body = JSON.stringify({ model, max_tokens: 1, messages: [{ role: 'user', content: 'Hi' }] });
+            } else if (provider === 'gemini') {
+                endpoint = `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`;
+                headers = {};
+            }
+            const res = await fetch(endpoint, { method: body ? 'POST' : 'GET', headers, body });
+            if (res.ok || res.status === 400) {
+                this.state.settings.dyProvider = provider;
+                this.state.settings.dyModel = model;
+                this.state.settings.dyKey = key;
+                this.state.settings.dyVerified = true;
+                Storage.setSettings(this.state.settings);
+                toast('Dynamic Context AI settings verified');
+            } else {
+                throw new Error(`API returned ${res.status}`);
+            }
+        } catch (e) {
+            this.state.settings.dyVerified = false;
+            Storage.setSettings(this.state.settings);
+            toast('Dynamic Context AI verification failed: ' + e.message);
         } finally {
             hideLoading();
         }
@@ -6357,6 +6807,8 @@ export const App = {
                     ['Daily Review Limit', 'number'],
                     ['New Card Limit', 'number'],
                     ['Reverse Mode Enabled', 'checkbox'],
+                    ['Dynamic Context?', 'checkbox'],
+                    ['DyContext AI Prompt', 'rich_text'],
                     ['Created In-App', 'checkbox'],
                     ['Archived?', 'checkbox'],
                     ['SRS Config', 'rich_text']
@@ -6386,7 +6838,9 @@ export const App = {
                     ['Cloze Indexes', 'rich_text'],
                     ['SRS State', 'rich_text'],
                     ['Cloze Parent Card', 'relation'],
-                    ['Cloze Sub Cards', 'relation']
+                    ['Cloze Sub Cards', 'relation'],
+                    ['DyContext Root Card', 'relation'],
+                    ['DyContext Previous Card', 'relation']
                 ];
                 const missing = required.filter(([n, k]) => !has(n, k));
                 if (missing.length) return false;
@@ -6419,7 +6873,7 @@ export const App = {
         if (tokenInput) tokenInput.disabled = blockAuth;
 
         // Disable AI/STT verification buttons when offline
-        ['verifyAi', 'verifyStt'].forEach(id => {
+        ['verifyAi', 'verifyDyContextAi', 'verifyStt'].forEach(id => {
             const btn = el('#' + id);
             if (!btn) return;
             btn.disabled = !online;
@@ -6632,6 +7086,13 @@ export const App = {
         if (s.aiProvider) el('#aiProvider').value = s.aiProvider;
         if (s.aiModel) el('#aiModel').value = s.aiModel;
         if (s.aiKey) el('#aiKey').value = s.aiKey;
+        const dyUseJudgeAi = s.dyUseJudgeAi === true;
+        const dyUseJudgeEl = el('#dyUseJudgeAi');
+        if (dyUseJudgeEl) dyUseJudgeEl.checked = dyUseJudgeAi;
+        if (s.dyProvider) el('#dyProvider').value = s.dyProvider;
+        if (s.dyModel) el('#dyModel').value = s.dyModel;
+        if (s.dyKey) el('#dyKey').value = s.dyKey;
+        this.state.settings.dyVerified = s.dyVerified || false;
 
         // Load STT settings
         if (s.sttProvider) el('#sttProvider').value = s.sttProvider;
@@ -6648,6 +7109,7 @@ export const App = {
         this.updateSkipHotkeyLabel(el('#revisionMode')?.value === 'ai');
         // Toggle provider field visibility based on current selection
         this.toggleAiProviderFields();
+        this.updateDyContextSettingsUI();
         this.toggleSttProviderFields();
         // On file:// we still need to proactively ask once to enable mic; HTTPS will reuse prior grant
         if (location.protocol === 'file:' && s.sttProvider && s.sttPermissionWarmed) {
@@ -6655,6 +7117,10 @@ export const App = {
         }
         // Add change listeners for provider dropdowns
         el('#aiProvider').onchange = () => this.toggleAiProviderFields();
+        const dyUseToggle = el('#dyUseJudgeAi');
+        if (dyUseToggle) dyUseToggle.onchange = () => this.updateDyContextSettingsUI();
+        const dyProvider = el('#dyProvider');
+        if (dyProvider) dyProvider.onchange = () => this.updateDyContextSettingsUI();
         el('#sttProvider').onchange = () => {
             this.toggleSttProviderFields();
             const provider = el('#sttProvider')?.value || '';
@@ -6718,6 +7184,29 @@ export const App = {
                 fields.classList.add('hidden');
             }
         }
+    },
+    updateDyContextSettingsUI() {
+        const useRow = el('#dyUseJudgeAiRow');
+        const useToggle = el('#dyUseJudgeAi');
+        const fields = el('#dyProviderFields');
+        const detailFields = el('#dyProviderDetailFields');
+        const providerSelect = el('#dyProvider');
+        const help = el('#dyProviderHelp');
+        const aiVerified = !!this.state.settings.aiVerified;
+        if (useRow) useRow.classList.toggle('hidden', !aiVerified);
+        if (!aiVerified) {
+            if (useToggle) useToggle.checked = false;
+            if (this.state.settings.dyUseJudgeAi !== false) {
+                this.state.settings.dyUseJudgeAi = false;
+                Storage.setSettings(this.state.settings);
+            }
+        }
+        const useJudge = aiVerified && (useToggle?.checked ?? false);
+        if (fields) fields.classList.toggle('hidden', useJudge);
+        const provider = (providerSelect?.value || '').trim();
+        const showDetails = !!provider && !useJudge;
+        if (detailFields) detailFields.classList.toggle('hidden', !showDetails);
+        if (help) help.classList.toggle('hidden', !provider);
     },
     toggleSttProviderFields() {
         const provider = el('#sttProvider').value;
