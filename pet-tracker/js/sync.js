@@ -7,10 +7,132 @@
 const Sync = {
     isRunning: false,
     lastError: null,
+    intervalId: null,
+    pendingCount: 0,
 
     // Rate limiting: ~3 requests/second
     rateLimitMs: 350,
     lastRequestTime: 0,
+
+    // Background sync interval (2 minutes)
+    syncIntervalMs: 2 * 60 * 1000,
+
+    /**
+     * Initialize background sync
+     */
+    init: () => {
+        // Start periodic sync
+        Sync.startPeriodicSync();
+
+        // Sync on visibility change (resume when app becomes visible)
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && navigator.onLine) {
+                console.log('[Sync] App visible, triggering sync');
+                Sync.run();
+            }
+        });
+
+        // Sync when coming back online
+        window.addEventListener('online', () => {
+            console.log('[Sync] Back online, triggering sync');
+            Sync.run();
+        });
+
+        // Initial sync if online
+        if (navigator.onLine && PetTracker.Settings.isConnected()) {
+            setTimeout(() => Sync.run(), 1000);
+        }
+
+        // Update pending count on init
+        Sync.updatePendingCount();
+    },
+
+    /**
+     * Start periodic background sync
+     */
+    startPeriodicSync: () => {
+        if (Sync.intervalId) {
+            clearInterval(Sync.intervalId);
+        }
+
+        Sync.intervalId = setInterval(() => {
+            if (navigator.onLine && document.visibilityState === 'visible' && PetTracker.Settings.isConnected()) {
+                console.log('[Sync] Periodic sync triggered');
+                Sync.run();
+            }
+        }, Sync.syncIntervalMs);
+
+        console.log('[Sync] Periodic sync started (every 2 min)');
+    },
+
+    /**
+     * Stop periodic sync
+     */
+    stopPeriodicSync: () => {
+        if (Sync.intervalId) {
+            clearInterval(Sync.intervalId);
+            Sync.intervalId = null;
+            console.log('[Sync] Periodic sync stopped');
+        }
+    },
+
+    /**
+     * Update pending count and UI
+     */
+    updatePendingCount: async () => {
+        const pending = await PetTracker.SyncQueue.getPending();
+        Sync.pendingCount = pending.length;
+        Sync.updateSyncUI();
+    },
+
+    /**
+     * Update sync status UI
+     */
+    updateSyncUI: () => {
+        const indicator = document.getElementById('syncStatusIndicator');
+        const badge = document.getElementById('syncPendingBadge');
+        const lastSyncEl = document.getElementById('lastSyncTime');
+        const syncBtn = document.getElementById('manualSyncBtn');
+
+        if (badge) {
+            if (Sync.pendingCount > 0) {
+                badge.textContent = Sync.pendingCount;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
+        if (indicator) {
+            if (Sync.isRunning) {
+                indicator.innerHTML = '<i data-lucide="refresh-cw" class="w-4 h-4 animate-spin"></i>';
+                indicator.title = 'Syncing...';
+            } else if (!navigator.onLine) {
+                indicator.innerHTML = '<i data-lucide="cloud-off" class="w-4 h-4"></i>';
+                indicator.title = 'Offline';
+            } else if (Sync.pendingCount > 0) {
+                indicator.innerHTML = '<i data-lucide="cloud" class="w-4 h-4 text-muted-pink"></i>';
+                indicator.title = `${Sync.pendingCount} pending changes`;
+            } else {
+                indicator.innerHTML = '<i data-lucide="cloud" class="w-4 h-4 text-dull-purple"></i>';
+                indicator.title = 'Synced';
+            }
+            if (window.lucide) lucide.createIcons();
+        }
+
+        if (lastSyncEl) {
+            const lastSync = PetTracker.Settings.getLastSync();
+            if (lastSync) {
+                lastSyncEl.textContent = `Last sync: ${PetTracker.UI.formatRelative(lastSync)}`;
+            } else {
+                lastSyncEl.textContent = 'Never synced';
+            }
+        }
+
+        if (syncBtn) {
+            syncBtn.disabled = Sync.isRunning || !navigator.onLine;
+        }
+    },
 
     /**
      * Wait for rate limit
@@ -27,7 +149,7 @@ const Sync = {
     /**
      * Run full sync cycle
      */
-    run: async () => {
+    run: async (showToast = false) => {
         if (Sync.isRunning) {
             console.log('[Sync] Already running, skipping');
             return;
@@ -46,6 +168,7 @@ const Sync = {
 
         Sync.isRunning = true;
         Sync.lastError = null;
+        Sync.updateSyncUI();
 
         try {
             console.log('[Sync] Starting sync cycle...');
@@ -60,20 +183,37 @@ const Sync = {
             PetTracker.Settings.setLastSync();
 
             console.log('[Sync] Sync complete');
-            PetTracker.UI.toast('Synced', 'success', 2000);
+            
+            // Only show toast for manual sync
+            if (showToast) {
+                PetTracker.UI.toast('Synced', 'success', 2000);
+            }
 
             // Refresh UI
             if (PetTracker.App) {
                 await PetTracker.App.loadData();
-                PetTracker.App.renderDashboard();
+                // Only re-render if on dashboard to avoid disrupting user
+                if (PetTracker.App.state.currentView === 'dashboard') {
+                    PetTracker.App.renderDashboard();
+                }
             }
         } catch (e) {
             console.error('[Sync] Error:', e);
             Sync.lastError = e;
-            PetTracker.UI.toast(`Sync failed: ${e.message}`, 'error');
+            if (showToast) {
+                PetTracker.UI.toast(`Sync failed: ${e.message}`, 'error');
+            }
         } finally {
             Sync.isRunning = false;
+            await Sync.updatePendingCount();
         }
+    },
+
+    /**
+     * Manual sync (triggered by user)
+     */
+    manualSync: async () => {
+        await Sync.run(true);
     },
 
     /**

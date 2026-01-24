@@ -5,7 +5,7 @@
  */
 
 const DB_NAME = 'PetTracker_DB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const LS_PREFIX = 'pettracker_';
 
 // IndexedDB Store Names
@@ -20,7 +20,8 @@ const STORES = {
     CONTACTS: 'contacts',
     SYNC_QUEUE: 'syncQueue',
     MEDIA: 'media',
-    MEDIA_META: 'mediaMeta'
+    MEDIA_META: 'mediaMeta',
+    AI_QUEUE: 'aiQueue'
 };
 
 // Media cache limit (~200MB)
@@ -80,6 +81,13 @@ const DB = {
                     const metaStore = db.createObjectStore(STORES.MEDIA_META, { keyPath: 'id' });
                     metaStore.createIndex('lastAccessed', 'lastAccessed', { unique: false });
                     metaStore.createIndex('size', 'size', { unique: false });
+                }
+
+                // AI Queue store (for offline/later processing)
+                if (!db.objectStoreNames.contains(STORES.AI_QUEUE)) {
+                    const aiStore = db.createObjectStore(STORES.AI_QUEUE, { keyPath: 'id' });
+                    aiStore.createIndex('status', 'status', { unique: false });
+                    aiStore.createIndex('createdAt', 'createdAt', { unique: false });
                 }
             };
         });
@@ -214,6 +222,60 @@ const SyncQueue = {
             item.status = 'pending';
             await DB.put(STORES.SYNC_QUEUE, item);
         }
+    }
+};
+
+/**
+ * AI Queue Manager (for offline/later processing)
+ */
+const AIQueue = {
+    add: async (text) => {
+        const queueItem = {
+            id: generateId(),
+            text,
+            status: 'pending',
+            createdAt: new Date().toISOString(),
+            error: null
+        };
+        return DB.put(STORES.AI_QUEUE, queueItem);
+    },
+
+    getPending: async () => {
+        return DB.query(STORES.AI_QUEUE, item => item.status === 'pending');
+    },
+
+    getAll: async () => {
+        return DB.getAll(STORES.AI_QUEUE);
+    },
+
+    get: async (id) => {
+        return DB.get(STORES.AI_QUEUE, id);
+    },
+
+    updateStatus: async (id, status, error = null) => {
+        const item = await DB.get(STORES.AI_QUEUE, id);
+        if (item) {
+            item.status = status;
+            item.error = error;
+            item.processedAt = status !== 'pending' ? new Date().toISOString() : null;
+            return DB.put(STORES.AI_QUEUE, item);
+        }
+    },
+
+    delete: async (id) => {
+        return DB.delete(STORES.AI_QUEUE, id);
+    },
+
+    clearCompleted: async () => {
+        const completed = await DB.query(STORES.AI_QUEUE, item => item.status === 'completed');
+        for (const item of completed) {
+            await DB.delete(STORES.AI_QUEUE, item.id);
+        }
+    },
+
+    getPendingCount: async () => {
+        const pending = await AIQueue.getPending();
+        return pending.length;
     }
 };
 
@@ -409,6 +471,6 @@ function generateId() {
 // Export
 window.PetTracker = window.PetTracker || {};
 Object.assign(window.PetTracker, {
-    DB, STORES, SyncQueue, MediaStore, Settings, generateId, resetApp,
+    DB, STORES, SyncQueue, AIQueue, MediaStore, Settings, generateId, resetApp,
     DB_NAME, LS_PREFIX
 });

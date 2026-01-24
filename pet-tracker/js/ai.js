@@ -11,7 +11,9 @@ const AI = {
         entries: [],
         editedEntries: new Set(),
         deletedEntries: new Set(),
-        parseTimer: null
+        parseTimer: null,
+        queueCount: 0,
+        processingQueueId: null
     },
 
     /**
@@ -522,16 +524,191 @@ Parse the following input:`;
     /**
      * Open AI entry modal
      */
-    openModal: () => {
-        if (!AI.isConfigured()) {
-            PetTracker.UI.toast('Configure AI provider in Settings first', 'error');
-            App.openSettings();
+    openModal: async () => {
+        AI.reset();
+        await AI.updateQueueCount();
+        AI.renderEntries();
+        AI.renderQueueIndicator();
+        PetTracker.UI.openModal('aiEntryModal');
+    },
+
+    /**
+     * Queue text for later processing (works offline)
+     */
+    queueForLater: async () => {
+        const text = AI.state.inputText.trim();
+        if (!text) {
+            PetTracker.UI.toast('Enter some text to queue', 'error');
             return;
         }
 
-        AI.reset();
+        try {
+            await PetTracker.AIQueue.add(text);
+            await AI.updateQueueCount();
+            AI.state.inputText = '';
+            const input = document.getElementById('aiInputText');
+            if (input) input.value = '';
+            AI.renderQueueIndicator();
+            PetTracker.UI.toast('Added to queue for later processing', 'success');
+        } catch (e) {
+            console.error('[AI] Queue error:', e);
+            PetTracker.UI.toast('Failed to queue: ' + e.message, 'error');
+        }
+    },
+
+    /**
+     * Update queue count
+     */
+    updateQueueCount: async () => {
+        AI.state.queueCount = await PetTracker.AIQueue.getPendingCount();
+    },
+
+    /**
+     * Render queue indicator badge
+     */
+    renderQueueIndicator: () => {
+        const badge = document.getElementById('aiQueueBadge');
+        if (badge) {
+            if (AI.state.queueCount > 0) {
+                badge.textContent = AI.state.queueCount;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+    },
+
+    /**
+     * Process all pending queue items
+     */
+    processQueue: async () => {
+        if (!AI.isConfigured()) {
+            PetTracker.UI.toast('Configure AI provider in Settings first', 'error');
+            return;
+        }
+
+        if (!navigator.onLine) {
+            PetTracker.UI.toast('Cannot process queue while offline', 'warning');
+            return;
+        }
+
+        const pending = await PetTracker.AIQueue.getPending();
+        if (pending.length === 0) {
+            PetTracker.UI.toast('No items in queue', 'info');
+            return;
+        }
+
+        AI.state.isProcessing = true;
         AI.renderEntries();
-        PetTracker.UI.openModal('aiEntryModal');
+
+        let processed = 0;
+        let failed = 0;
+
+        for (const item of pending) {
+            try {
+                AI.state.processingQueueId = item.id;
+                const result = await AI.callProvider(item.text);
+
+                result.entries.forEach((entry, index) => {
+                    entry._id = `ai_${Date.now()}_${index}`;
+                    entry._isNew = true;
+                    entry._fromQueue = item.id;
+                    AI.state.entries.push(entry);
+                });
+
+                await PetTracker.AIQueue.updateStatus(item.id, 'completed');
+                processed++;
+
+                if (result.warnings.length > 0) {
+                    result.warnings.forEach(w => PetTracker.UI.toast(w, 'warning'));
+                }
+                if (result.missing.length > 0) {
+                    PetTracker.UI.toast(`Unknown: ${result.missing.join(', ')}`, 'warning');
+                }
+            } catch (e) {
+                console.error('[AI] Queue item error:', e);
+                await PetTracker.AIQueue.updateStatus(item.id, 'failed', e.message);
+                failed++;
+            }
+        }
+
+        AI.state.isProcessing = false;
+        AI.state.processingQueueId = null;
+        await AI.updateQueueCount();
+        AI.renderEntries();
+        AI.renderQueueIndicator();
+
+        if (processed > 0) {
+            PetTracker.UI.toast(`Processed ${processed} queued items`, 'success');
+        }
+        if (failed > 0) {
+            PetTracker.UI.toast(`${failed} items failed`, 'error');
+        }
+    },
+
+    /**
+     * View and manage queue
+     */
+    showQueueModal: async () => {
+        const items = await PetTracker.AIQueue.getAll();
+        const container = document.getElementById('aiQueueList');
+        if (!container) return;
+
+        if (items.length === 0) {
+            container.innerHTML = '<p class="text-earth-metal text-sm py-4">No items in queue.</p>';
+        } else {
+            container.innerHTML = items.map(item => {
+                const statusColor = item.status === 'pending' ? 'bg-oatmeal' :
+                    item.status === 'completed' ? 'bg-dull-purple/20' : 'bg-muted-pink/30';
+                const statusLabel = item.status.toUpperCase();
+                return `
+                    <div class="card p-3 ${statusColor}" data-queue-id="${item.id}">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm text-charcoal line-clamp-2">${PetTracker.UI.escapeHtml(item.text)}</p>
+                                <p class="meta-row text-[10px] mt-1">
+                                    <span class="badge text-[8px] ${item.status === 'failed' ? 'badge-pink' : ''}">${statusLabel}</span>
+                                    <span class="meta-separator">//</span>
+                                    <span>${new Date(item.createdAt).toLocaleString()}</span>
+                                </p>
+                                ${item.error ? `<p class="text-xs text-muted-pink mt-1">${PetTracker.UI.escapeHtml(item.error)}</p>` : ''}
+                            </div>
+                            <button onclick="AI.deleteQueueItem('${item.id}')" class="p-1 text-earth-metal hover:text-muted-pink flex-shrink-0">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        if (window.lucide) lucide.createIcons();
+        PetTracker.UI.openModal('aiQueueModal');
+    },
+
+    /**
+     * Delete a queue item
+     */
+    deleteQueueItem: async (id) => {
+        await PetTracker.AIQueue.delete(id);
+        await AI.updateQueueCount();
+        AI.renderQueueIndicator();
+        AI.showQueueModal();
+        PetTracker.UI.toast('Item removed from queue', 'success');
+    },
+
+    /**
+     * Retry failed queue items
+     */
+    retryFailed: async () => {
+        const failed = await PetTracker.AIQueue.getAll();
+        for (const item of failed.filter(i => i.status === 'failed')) {
+            await PetTracker.AIQueue.updateStatus(item.id, 'pending', null);
+        }
+        await AI.updateQueueCount();
+        AI.renderQueueIndicator();
+        AI.showQueueModal();
+        PetTracker.UI.toast('Failed items reset to pending', 'success');
     }
 };
 

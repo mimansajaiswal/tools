@@ -475,10 +475,10 @@ const GoogleCalendar = {
         try {
             const calendarId = encodeURIComponent(settings.gcalCalendarId);
             const url = `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`;
-            
+
             // Check if event already has a Google Calendar ID (update vs create)
             const method = event.googleCalendarEventId ? 'PUT' : 'POST';
-            const apiUrl = event.googleCalendarEventId 
+            const apiUrl = event.googleCalendarEventId
                 ? `${url}/${encodeURIComponent(event.googleCalendarEventId)}`
                 : url;
 

@@ -516,3 +516,115 @@ textarea:focus-visible {
 .transition-fast {
     transition: all 0.1s ease;
 }
+
+/* ========== ACCESSIBILITY ========== */
+
+/* Screen reader only - visually hidden but accessible */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Skip link for keyboard navigation */
+.skip-link {
+    position: absolute;
+    top: -40px;
+    left: 0;
+    background: #2d2926;
+    color: #f8f6f3;
+    padding: 8px 16px;
+    z-index: 200;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    text-transform: uppercase;
+}
+
+.skip-link:focus {
+    top: 0;
+}
+
+/* Enhanced focus styles */
+a:focus-visible,
+[tabindex]:focus-visible {
+    outline: 2px solid #8b7b8e;
+    outline-offset: 2px;
+}
+
+/* Focus within for containers */
+.focus-within-visible:focus-within {
+    outline: 2px solid #8b7b8e;
+    outline-offset: 2px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+
+    .btn-primary,
+    .badge-dark,
+    .section-header {
+        border: 2px solid currentColor;
+    }
+
+    .input-field,
+    .select-field {
+        border-width: 2px;
+    }
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+
+    .toast-enter,
+    .toast-exit,
+    .animate-slide-up {
+        animation: none !important;
+    }
+
+    .loader {
+        animation: none;
+        border-style: dashed;
+    }
+}
+
+/* Modal focus trap indicator */
+[role="dialog"]:focus {
+    outline: none;
+}
+
+/* Ensure interactive elements have adequate touch target */
+@media (pointer: coarse) {
+
+    button,
+    [role="button"],
+    input[type="checkbox"],
+    input[type="radio"],
+    .stamp-day,
+    .calendar-day {
+        min-height: 44px;
+        min-width: 44px;
+    }
+}
+
+/* Line clamp utilities */
+.line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}

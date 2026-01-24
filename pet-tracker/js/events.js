@@ -43,6 +43,11 @@ const Events = {
             data: event
         });
 
+        // Update sync UI
+        if (PetTracker.Sync?.updatePendingCount) {
+            PetTracker.Sync.updatePendingCount();
+        }
+
         return event;
     },
 
@@ -68,6 +73,11 @@ const Events = {
             data: updated
         });
 
+        // Update sync UI
+        if (PetTracker.Sync?.updatePendingCount) {
+            PetTracker.Sync.updatePendingCount();
+        }
+
         return updated;
     },
 
@@ -86,6 +96,11 @@ const Events = {
         });
 
         await PetTracker.DB.delete(PetTracker.STORES.EVENTS, id);
+
+        // Update sync UI
+        if (PetTracker.Sync?.updatePendingCount) {
+            PetTracker.Sync.updatePendingCount();
+        }
     },
 
     /**

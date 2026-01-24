@@ -170,10 +170,22 @@
                 </span>
             </div>
             <div class="flex items-center gap-2">
-                <button onclick="PetTracker.Sync?.run()" title="Sync"
-                    class="p-2 text-earth-metal hover:text-dull-purple transition-fast">
-                    <i data-lucide="refresh-cw" class="w-5 h-5"></i>
-                </button>
+                <!-- Sync Status Indicator -->
+                <div class="relative">
+                    <button id="manualSyncBtn" onclick="PetTracker.Sync?.manualSync()" title="Sync now"
+                        class="p-2 text-earth-metal hover:text-dull-purple transition-fast">
+                        <span id="syncStatusIndicator">
+                            <i data-lucide="cloud" class="w-5 h-5"></i>
+                        </span>
+                    </button>
+                    <span id="syncPendingBadge"
+                        class="hidden absolute -top-1 -right-1 bg-muted-pink text-white-linen text-[9px] font-mono min-w-[16px] h-4 flex items-center justify-center px-1">
+                        0
+                    </span>
+                </div>
+                <span id="lastSyncTime" class="hidden md:inline text-[10px] font-mono text-earth-metal">
+                    Never synced
+                </span>
                 <!-- Mobile Add Button -->
                 <button onclick="App.openAddModal()" class="md:hidden p-2 text-dull-purple">
                     <i data-lucide="plus" class="w-5 h-5"></i>
@@ -220,7 +232,8 @@
     <!-- ========== MODALS ========== -->
 
     <!-- Add Event Modal -->
-    <div id="addEventModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
+    <div id="addEventModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
+        aria-modal="true" aria-labelledby="addEventModalTitle">
         <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
         <div class="relative bg-white-linen border border-oatmeal w-full max-w-lg max-h-[90vh] overflow-y-auto z-10">
             <div class="sticky top-0 bg-white-linen border-b border-oatmeal p-4 flex items-center justify-between">
@@ -280,7 +293,8 @@
     </div>
 
     <!-- Settings Modal -->
-    <div id="settingsModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
+    <div id="settingsModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
+        aria-modal="true" aria-labelledby="settingsModalTitle">
         <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
         <div
             class="relative bg-white-linen border border-oatmeal w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col z-10">
@@ -538,7 +552,8 @@
     </div>
 
     <!-- Onboarding Modal (Multi-step Wizard) -->
-    <div id="onboardingModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
+    <div id="onboardingModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
+        aria-modal="true" aria-labelledby="onboardingModalTitle">
         <div class="absolute inset-0 modal-overlay"></div>
         <div
             class="relative bg-white-linen border border-oatmeal w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col z-10">
@@ -710,7 +725,8 @@
     </div>
 
     <!-- Add Pet Modal -->
-    <div id="addPetModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
+    <div id="addPetModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
+        aria-modal="true" aria-labelledby="addPetModalTitle">
         <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
         <div class="relative bg-white-linen border border-oatmeal w-full max-w-lg max-h-[90vh] overflow-y-auto z-10">
             <div class="sticky top-0 bg-white-linen border-b border-oatmeal p-4 flex items-center justify-between">
@@ -780,7 +796,8 @@
     </div>
 
     <!-- Worker Code Modal -->
-    <div id="workerCodeModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
+    <div id="workerCodeModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
+        aria-modal="true" aria-labelledby="workerCodeModalTitle">
         <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
         <div
             class="relative bg-white-linen border border-oatmeal w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col z-10">
@@ -816,12 +833,19 @@
     </div>
 
     <!-- AI Entry Modal -->
-    <div id="aiEntryModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
+    <div id="aiEntryModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
+        aria-modal="true" aria-labelledby="aiEntryModalTitle">
         <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
         <div
             class="relative bg-white-linen border border-oatmeal w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col z-10">
             <div class="border-b border-oatmeal p-4 flex items-center justify-between flex-shrink-0">
-                <span class="section-header">AI Quick Add</span>
+                <div class="flex items-center gap-3">
+                    <span class="section-header">AI Quick Add</span>
+                    <button onclick="AI.showQueueModal()" class="relative p-1 text-earth-metal hover:text-dull-purple" title="View Queue">
+                        <i data-lucide="list-todo" class="w-5 h-5"></i>
+                        <span id="aiQueueBadge" class="hidden absolute -top-1 -right-1 w-5 h-5 bg-dull-purple text-white-linen text-[10px] font-mono flex items-center justify-center">0</span>
+                    </button>
+                </div>
                 <button onclick="PetTracker.UI.closeModal('aiEntryModal')"
                     class="p-1 text-earth-metal hover:text-charcoal">
                     <i data-lucide="x" class="w-5 h-5"></i>
@@ -834,17 +858,19 @@
                     <textarea id="aiInputText" class="input-field h-32 resize-none"
                         placeholder="e.g., Luna threw up this morning, gave Max his heartworm meds yesterday at 8am..."
                         oninput="AI.onInputChange(this.value)"></textarea>
-                    <p class="text-xs text-earth-metal mt-1">AI will parse automatically after 5 seconds of inactivity
-                    </p>
+                    <p class="text-xs text-earth-metal mt-1">AI will parse automatically after 5 seconds of inactivity. Offline? Queue for later.</p>
                 </div>
 
-                <!-- Parse Button -->
-                <div class="flex gap-2">
+                <!-- Action Buttons -->
+                <div class="flex flex-wrap gap-2">
                     <button onclick="AI.parse()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
                         <i data-lucide="sparkles" class="w-4 h-4 inline mr-2"></i>Parse Now
                     </button>
-                    <button onclick="AI.resumeParsing()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
-                        <i data-lucide="refresh-cw" class="w-4 h-4 inline mr-2"></i>Re-parse
+                    <button onclick="AI.queueForLater()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase" title="Save for later when offline or busy">
+                        <i data-lucide="clock" class="w-4 h-4 inline mr-2"></i>Queue for Later
+                    </button>
+                    <button onclick="AI.processQueue()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase" title="Process all pending queued items">
+                        <i data-lucide="play" class="w-4 h-4 inline mr-2"></i>Process Queue
                     </button>
                 </div>
 
@@ -870,8 +896,40 @@
         </div>
     </div>
 
+    <!-- AI Queue Modal -->
+    <div id="aiQueueModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
+        aria-modal="true" aria-labelledby="aiQueueModalTitle">
+        <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
+        <div class="relative bg-white-linen border border-oatmeal w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col z-10">
+            <div class="border-b border-oatmeal p-4 flex items-center justify-between flex-shrink-0">
+                <span id="aiQueueModalTitle" class="section-header">AI Queue</span>
+                <button onclick="PetTracker.UI.closeModal('aiQueueModal')" class="p-1 text-earth-metal hover:text-charcoal">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-4">
+                <p class="text-xs text-earth-metal mb-4">Items queued for later AI processing. Process when online and ready.</p>
+                <div id="aiQueueList" class="space-y-2">
+                    <p class="text-earth-metal text-sm py-4">No items in queue.</p>
+                </div>
+            </div>
+            <div class="border-t border-oatmeal p-4 flex justify-between gap-3 flex-shrink-0">
+                <button onclick="AI.retryFailed()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
+                    <i data-lucide="rotate-ccw" class="w-4 h-4 inline mr-2"></i>Retry Failed
+                </button>
+                <div class="flex gap-2">
+                    <button onclick="PetTracker.UI.closeModal('aiQueueModal')" class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Close</button>
+                    <button onclick="PetTracker.UI.closeModal('aiQueueModal'); AI.processQueue()" class="btn-primary px-4 py-2 font-mono text-xs uppercase">
+                        <i data-lucide="play" class="w-4 h-4 inline mr-2"></i>Process All
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Add/Edit Contact Modal -->
-    <div id="contactModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
+    <div id="contactModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
+        aria-modal="true" aria-labelledby="contactModalTitle">
         <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
         <div class="relative bg-white-linen border border-oatmeal w-full max-w-lg max-h-[90vh] overflow-y-auto z-10">
             <div class="sticky top-0 bg-white-linen border-b border-oatmeal p-4 flex items-center justify-between">
@@ -1197,7 +1255,7 @@ export default {
                 PetTracker.UI.toast('Connected to Notion!', 'success');
             } catch (e) {
                 PetTracker.UI.hideLoading();
-                PetTracker.UI.toast(\`OAuth failed: \${e.message}\`, 'error');
+                PetTracker.UI.toast(`OAuth failed: ${e.message}`, 'error');
             }
         };
 
@@ -1209,10 +1267,10 @@ export default {
                 PetTracker.UI.showLoading('Testing connection...');
                 const user = await PetTracker.API.verifyConnection();
                 PetTracker.UI.hideLoading();
-                PetTracker.UI.toast(\`Connected as \${user.name || user.id}\`, 'success');
+                PetTracker.UI.toast(`Connected as ${user.name || user.id}`, 'success');
             } catch (e) {
                 PetTracker.UI.hideLoading();
-                PetTracker.UI.toast(\`Connection failed: \${e.message}\`, 'error');
+                PetTracker.UI.toast(`Connection failed: ${e.message}`, 'error');
             }
         };
 
@@ -1227,7 +1285,7 @@ export default {
                 PetTracker.UI.showLoading('Scanning data sources...');
                 
                 // Query database to get properties
-                const db = await PetTracker.API.request(\`/v1/databases/\${dbId}\`);
+                const db = await PetTracker.API.request(`/v1/databases/${dbId}`);
                 
                 // For multi-source containers, we query to find distinct sources
                 // For now, we show the database properties and let user map
@@ -1246,7 +1304,7 @@ export default {
                     const selects = ['dsMapPets', 'dsMapEvents', 'dsMapEventTypes', 'dsMapCareItems', 
                                      'dsMapCarePlans', 'dsMapContacts', 'dsMapScales', 'dsMapScaleLevels'];
                     const optionsHtml = '<option value="">-- Select --</option>' + 
-                        propNames.map(p => \`<option value="\${p}">\${p}</option>\`).join('');
+                        propNames.map(p => `<option value="${p}">${p}</option>`).join('');
                     
                     selects.forEach(id => {
                         const el = document.getElementById(id);
@@ -1259,20 +1317,20 @@ export default {
                     schemaDiv.classList.remove('hidden');
                     schemaList.innerHTML = propNames.slice(0, 10).map(name => {
                         const prop = properties[name];
-                        return \`<div class="flex items-center justify-between text-xs py-1 border-b border-oatmeal">
-                            <span class="font-mono text-charcoal">\${name}</span>
-                            <span class="text-earth-metal">\${prop.type}</span>
-                        </div>\`;
-                    }).join('') + (propNames.length > 10 ? \`<p class="text-xs text-earth-metal mt-1">+ \${propNames.length - 10} more...</p>\` : '');
+                        return `<div class="flex items-center justify-between text-xs py-1 border-b border-oatmeal">
+                            <span class="font-mono text-charcoal">${name}</span>
+                            <span class="text-earth-metal">${prop.type}</span>
+                        </div>`;
+                    }).join('') + (propNames.length > 10 ? `<p class="text-xs text-earth-metal mt-1">+ ${propNames.length - 10} more...</p>` : '');
                 }
 
                 PetTracker.UI.hideLoading();
-                PetTracker.UI.toast(\`Found \${propNames.length} properties\`, 'success');
+                PetTracker.UI.toast(`Found ${propNames.length} properties`, 'success');
                 if (window.lucide) lucide.createIcons();
                 
             } catch (e) {
                 PetTracker.UI.hideLoading();
-                PetTracker.UI.toast(\`Scan failed: \${e.message}\`, 'error');
+                PetTracker.UI.toast(`Scan failed: ${e.message}`, 'error');
             }
         };
 

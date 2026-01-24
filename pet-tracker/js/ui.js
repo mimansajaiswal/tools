@@ -36,12 +36,22 @@ const UI = {
     openModal: (modalId) => {
         const modal = document.getElementById(modalId);
         if (modal) {
+            // Store the currently focused element for restoration
+            UI.lastFocusedElement = document.activeElement;
+
             modal.classList.remove('hidden');
             modal.classList.add('flex');
             document.body.style.overflow = 'hidden';
+
+            // Focus first focusable element or the modal itself
             setTimeout(() => {
-                const firstInput = modal.querySelector('input:not([type="hidden"]), select, textarea');
-                if (firstInput) firstInput.focus();
+                const firstInput = modal.querySelector('input:not([type="hidden"]), select, textarea, button');
+                if (firstInput) {
+                    firstInput.focus();
+                } else {
+                    modal.setAttribute('tabindex', '-1');
+                    modal.focus();
+                }
             }, 100);
         }
     },
@@ -55,6 +65,12 @@ const UI = {
             modal.classList.add('hidden');
             modal.classList.remove('flex');
             document.body.style.overflow = '';
+
+            // Restore focus to the element that opened the modal
+            if (UI.lastFocusedElement && typeof UI.lastFocusedElement.focus === 'function') {
+                UI.lastFocusedElement.focus();
+                UI.lastFocusedElement = null;
+            }
         }
     },
 
@@ -74,7 +90,56 @@ const UI = {
                 }
             });
         });
+
+        // Global keyboard handler for modals
+        document.addEventListener('keydown', UI.handleModalKeydown);
     },
+
+    /**
+     * Handle keyboard events for modals (Escape to close, Tab for focus trap)
+     */
+    handleModalKeydown: (e) => {
+        // Find any open modal
+        const openModal = document.querySelector('[role="dialog"]:not(.hidden)');
+        if (!openModal) return;
+
+        const modalId = openModal.id;
+
+        // Escape key closes modal
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            if (modalId === 'addEventModal' && typeof App !== 'undefined') {
+                App.confirmCloseAddModal();
+            } else {
+                UI.closeModal(modalId);
+            }
+            return;
+        }
+
+        // Tab key - trap focus within modal
+        if (e.key === 'Tab') {
+            const focusable = openModal.querySelectorAll(
+                'button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            );
+            if (focusable.length === 0) return;
+
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+
+            if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault();
+                last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault();
+                first.focus();
+            }
+        }
+    },
+
+    /**
+     * Store element that opened modal for focus restoration
+     */
+    lastFocusedElement: null,
 
     /**
      * Switch tabs

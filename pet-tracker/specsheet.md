@@ -309,13 +309,52 @@ One Notion database container named `Pet Tracker` with multiple data sources. Al
 - Task title format: `[PetName] Care Item Name` (e.g., `[Luna] Rabies vaccine`).
 
 ## 11) Offline-First Sync Behavior
-- IndexedDB is local source of truth.
-- Sync order: push local queue -> pull Notion -> reconcile.
-- **Conflict resolution**: Last write wins (no manual merge UI). Users sharing a database are responsible for coordination.
-- **Deletion**: If deleted remotely while edited locally, deletion wins (last action wins).
-- Rate limiting: enforce ~3 requests/second; handle 429 responses with `Retry-After` header and exponential backoff.
-- Deletion propagation: track local and Notion page IDs; sync deletions bidirectionally.
-- Events include both local UUID and Notion page ID for synchronization.
+
+### 11.1 Core Principles
+- IndexedDB is local source of truth; app works fully offline.
+- All data is stored locally first, then synced to Notion when online.
+- Users can view, create, edit, and delete entries while offline.
+- App automatically syncs in background when connectivity is restored.
+
+### 11.2 Sync Queue
+- All create/update/delete operations are added to a local sync queue.
+- Queue persists in IndexedDB and survives app restarts.
+- When online, queue is processed automatically in background.
+- Failed operations are retried with exponential backoff.
+
+### 11.3 Background Sync
+- **Auto-sync on app init**: When app loads and is online, sync runs automatically.
+- **Periodic sync**: Background sync runs every 2 minutes when online and app is visible.
+- **Sync on reconnect**: When connectivity is restored, sync triggers immediately.
+- **Manual sync**: User can trigger sync via UI button at any time.
+- **Visibility-aware**: Sync pauses when app is in background; resumes when visible.
+
+### 11.4 Bidirectional Sync
+- **Push local changes**: Local queue is pushed to Notion first.
+- **Pull remote updates**: After push, pull all Notion changes to detect remote edits.
+- **Reconcile**: Merge remote changes with local data using last-write-wins.
+- If someone adds/edits in Notion directly, changes appear in app on next sync.
+
+### 11.5 Conflict Resolution
+- **Last write wins**: No manual merge UI; most recent edit (by timestamp) wins.
+- **Deletion wins**: If deleted remotely while edited locally, deletion wins.
+- Users sharing a database are responsible for coordination.
+
+### 11.6 Rate Limiting
+- Enforce ~3 requests/second (350ms between requests).
+- Handle 429 responses with `Retry-After` header and exponential backoff.
+- Sync indicator shows progress during long sync operations.
+
+### 11.7 Sync Status UI
+- **Sync indicator**: Shows pending count, last sync time, and sync-in-progress state.
+- **Visual feedback**: Badge shows number of unsynced changes.
+- **Toast notifications**: Notify user of sync success/failure.
+
+### 11.8 AI Entries vs Normal Entries
+- **Normal entries**: Synced automatically in background when online.
+- **AI entries**: Require manual processing (user must review extractions before saving).
+- AI queue is separate from sync queue; processed only when user initiates.
+- Once AI entries are confirmed and saved, they become normal entries and sync automatically.
 
 ## 12) AI Auto-Entry (BYOK, Provider-Agnostic)
 
@@ -377,6 +416,19 @@ The prompt must be assembled at runtime with the user's actual configuration:
 - Each event should only reference one pet.
 - If pet cannot be determined from input: default to user's **primary pet** if set, otherwise leave `petName` blank and add to `missing` array.
 - Never auto-create entries for all active pets when ambiguous.
+
+### 12.6 AI Queue for Offline/Later Processing
+- Users may not have internet or may want to queue text for later AI processing.
+- **"Queue for Later"** button in AI modal saves input text to IndexedDB queue without processing.
+- Queue is stored in `PetTracker_DB` with store `aiQueue`.
+- Each queued item contains: `id`, `text`, `createdAt`, `status` (pending/processing/completed/failed).
+- When online and AI is configured, queued items can be processed:
+  - Automatically on app init (optional, user-configurable)
+  - Manually via "Process Queue" button in AI modal
+- **Queue indicator** shows count of pending items in AI modal header.
+- Processed items create entries that still require user confirmation before saving.
+- Failed items remain in queue with error message for retry.
+- Queue works fully offline: text is stored locally and processed when conditions are met.
 
 ## 13) Settings & Connection Flow
 

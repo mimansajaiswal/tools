@@ -63,13 +63,19 @@ const App = {
             App.state.isOnline = true;
             App.updateSyncStatus();
             PetTracker.UI.toast('Back online', 'success');
+            // Sync.run() is called by Sync.init() listener
         });
 
         window.addEventListener('offline', () => {
             App.state.isOnline = false;
             App.updateSyncStatus();
-            PetTracker.UI.toast('You are offline', 'warning');
+            PetTracker.UI.toast('You are offline - changes will sync when back online', 'warning');
         });
+
+        // Initialize background sync engine
+        if (PetTracker.Sync) {
+            PetTracker.Sync.init();
+        }
 
         // Handle share target
         if (window.location.search.includes('share=true')) {

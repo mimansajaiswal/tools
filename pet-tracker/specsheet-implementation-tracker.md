@@ -87,6 +87,11 @@ pet-tracker/
 - [x] Last-write-wins conflict resolution
 - [x] Rate limiting (3 req/s, 429 handling)
 - [x] Deletion sync
+- [x] Background auto-sync (on init, periodic every 2 min, on reconnect)
+- [x] Visibility-aware sync (pauses when app in background)
+- [x] Sync status indicator (pending count, last sync time, in-progress state)
+- [x] Manual sync button
+- [x] Full offline support (view, create, edit, delete while offline)
 
 ### Phase 7: Todoist Integration ✅ COMPLETE
 - [x] Token auth (js/todoist.js)
@@ -103,17 +108,18 @@ pet-tracker/
 - [x] Save All functionality
 - [x] Support for OpenAI, Anthropic, Google, and custom endpoints
 - [x] Edited entries frozen from re-parsing
+- [x] AI Queue for offline/later processing (Queue for Later button, queue indicator, Process Queue)
 
-### Phase 9: Calendar Export & Google Calendar ✅ PARTIAL
+### Phase 9: Calendar Export & Google Calendar ✅ COMPLETE
 - [x] ICS file generation (js/calendar-export.js)
 - [x] Single event export
 - [x] Date range / filtered export
 - [x] "Add to Calendar" button on event detail drawer
 - [x] Google Calendar URL generation (manual add)
-- [ ] Google Calendar OAuth (via worker proxy)
-- [ ] Google Calendar settings UI (target calendar selection)
-- [ ] One-way push sync to Google Calendar
-- [ ] Google Calendar event ID storage on Events
+- [x] Google Calendar OAuth (via worker proxy) - redirect-based flow
+- [x] Google Calendar settings UI (target calendar selection)
+- [x] One-way push sync to Google Calendar (GoogleCalendar.pushEvent/syncEvent)
+- [x] Google Calendar event ID storage on Events (googleCalendarEventId field)
 
 ### Phase 10: Analytics ✅ COMPLETE
 - [x] Correlation view with time windows (6h, 12h, 24h, 48h, 7d)
@@ -122,12 +128,12 @@ pet-tracker/
 - [x] Time-of-day heatmaps
 - [x] Care adherence statistics
 
-### Phase 11: Polish ✅ MOSTLY COMPLETE
+### Phase 11: Polish ✅ COMPLETE
 - [x] Share-sheet intake (PWA) - manifest + service worker + app handling
 - [x] First-run onboarding wizard (multi-step, js/onboarding.js)
 - [x] Sample data creation (event types, scales, care items)
 - [x] PWA install prompt (beforeinstallprompt handling, install button)
-- [ ] Accessibility improvements
+- [x] Accessibility improvements (ARIA, focus trap, keyboard nav, reduced motion)
 
 ---
 
@@ -381,3 +387,115 @@ pet-tracker/
 - index.html (simplified OAuth section)
 - specsheet.md (added 13.2.1 Multi-App OAuth Redirect Handling)
 - specsheet-implementation-tracker.md
+
+---
+
+### Session 7 - Google Calendar & Accessibility
+**Date:** 2026-01-24
+
+**Completed:**
+- Implemented Google Calendar OAuth integration (Phase 9)
+  - Added Google Calendar settings tab with OAuth connection UI
+  - OAuth uses redirect-based flow via centralized handler
+  - Target calendar selection dropdown (populated from Google API)
+  - Sync mode selector (one-way push)
+  - Disconnect functionality
+- Added GoogleCalendar API module in js/calendar-export.js
+  - `pushEvent()` - create/update events in Google Calendar
+  - `deleteEvent()` - remove events from Google Calendar
+  - `convertToGcalEvent()` - convert Pet Tracker event to Google format
+  - `syncEvent()` - push event and store Google event ID
+- Updated OAuth return handling to support both Notion and Google Calendar tokens
+- Updated settings save/load to include Google Calendar config
+- Implemented comprehensive accessibility improvements (Phase 11)
+  - Added ARIA roles to all modals (`role="dialog"`, `aria-modal`, `aria-labelledby`)
+  - Added toast container as ARIA live region
+  - Skip link for keyboard navigation (already present)
+  - Focus trap for modals (Tab key cycles within modal)
+  - Escape key closes modals
+  - Focus restoration when modal closes
+  - Reduced motion media query support
+  - High contrast mode support
+  - Enhanced focus-visible styles
+  - Screen reader only (.sr-only) utility class
+  - Adequate touch targets for mobile
+
+**Files Modified:**
+- js/calendar-export.js (added GoogleCalendar object with push/sync)
+- js/app.js (Google Calendar OAuth handling in handleOAuthReturn)
+- js/ui.js (keyboard handling, focus trap, focus restoration)
+- css/styles.css (accessibility styles: sr-only, skip-link, reduced motion)
+- index.html (ARIA attributes on modals, Google Calendar settings, settings load/save)
+- specsheet-implementation-tracker.md
+
+**All Phases Now Complete:**
+- Phase 1-11: ✅ COMPLETE
+
+---
+
+### Session 8 - AI Queue for Offline/Later Processing
+**Date:** 2026-01-24
+
+**Completed:**
+- Fixed syntax errors in index.html (escaped backticks in template literals)
+- Added AI Queue feature for offline/later processing:
+  - Added `AI_QUEUE` store to IndexedDB (storage.js, bumped DB_VERSION to 2)
+  - Added `AIQueue` manager with add/getPending/updateStatus/delete/clearCompleted methods
+  - Added queue functionality to AI module (ai.js):
+    - `queueForLater()` - saves text to queue without processing
+    - `processQueue()` - processes all pending items when online
+    - `showQueueModal()` - view and manage queued items
+    - `deleteQueueItem()` - remove items from queue
+    - `retryFailed()` - reset failed items to pending
+  - Updated AI modal with queue UI:
+    - Queue badge showing pending count
+    - "Queue for Later" button
+    - "Process Queue" button
+  - Added AI Queue modal for managing queued items
+- Updated specsheet.md with section 12.6 documenting AI Queue feature
+
+**Files Modified:**
+- js/storage.js (added AI_QUEUE store, AIQueue manager, bumped DB_VERSION)
+- js/ai.js (added queue methods: queueForLater, processQueue, showQueueModal, etc.)
+- index.html (fixed backtick syntax errors, added queue UI to AI modal, added AI Queue modal)
+- specsheet.md (added section 12.6 AI Queue for Offline/Later Processing)
+- specsheet-implementation-tracker.md
+
+---
+
+### Session 9 - Full Offline Support & Background Sync
+**Date:** 2026-01-24
+
+**Completed:**
+- Expanded offline-first sync documentation in specsheet.md (section 11):
+  - Section 11.1: Core principles (app works fully offline)
+  - Section 11.2: Sync queue (persists in IndexedDB)
+  - Section 11.3: Background sync (auto on init, periodic every 2 min, on reconnect)
+  - Section 11.4: Bidirectional sync (push/pull/reconcile)
+  - Section 11.5: Conflict resolution (last write wins)
+  - Section 11.6: Rate limiting (350ms between requests)
+  - Section 11.7: Sync status UI (pending count, last sync time)
+  - Section 11.8: AI entries vs normal entries (AI requires manual processing)
+- Enhanced sync engine (js/sync.js):
+  - Added `Sync.init()` for initializing background sync
+  - Added periodic sync (every 2 minutes when online and visible)
+  - Added visibility-aware sync (triggers when app becomes visible)
+  - Added sync on reconnect (triggers when coming back online)
+  - Added `Sync.updatePendingCount()` and `Sync.updateSyncUI()` for UI updates
+  - Added `Sync.manualSync()` for user-triggered sync with toast feedback
+  - Modified `Sync.run()` to update UI during sync and reduce toast noise
+- Updated app.js to initialize sync engine on app start
+- Updated index.html header with enhanced sync UI:
+  - Sync status indicator (cloud icon with states: synced/pending/offline/syncing)
+  - Pending changes badge (shows count of unsynced items)
+  - Last sync time display
+  - Manual sync button
+- Users can now view, create, edit, and delete entries while fully offline
+- Changes are queued locally and synced automatically when online
+
+**Files Modified:**
+- specsheet.md (expanded section 11 with detailed offline-first sync behavior)
+- specsheet-implementation-tracker.md (updated Phase 6, added session log)
+- js/sync.js (added init, periodic sync, visibility sync, UI updates)
+- js/app.js (initialize Sync.init(), improved offline toast message)
+- index.html (enhanced sync indicator UI in header)

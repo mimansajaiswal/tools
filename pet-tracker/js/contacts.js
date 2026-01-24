@@ -73,6 +73,11 @@ const Contacts = {
             data: contact
         });
 
+        // Update sync UI
+        if (PetTracker.Sync?.updatePendingCount) {
+            PetTracker.Sync.updatePendingCount();
+        }
+
         return contact;
     },
 
@@ -98,6 +103,11 @@ const Contacts = {
             data: updated
         });
 
+        // Update sync UI
+        if (PetTracker.Sync?.updatePendingCount) {
+            PetTracker.Sync.updatePendingCount();
+        }
+
         return updated;
     },
 
@@ -116,6 +126,11 @@ const Contacts = {
         });
 
         await PetTracker.DB.delete(PetTracker.STORES.CONTACTS, id);
+
+        // Update sync UI
+        if (PetTracker.Sync?.updatePendingCount) {
+            PetTracker.Sync.updatePendingCount();
+        }
     },
 
     /**

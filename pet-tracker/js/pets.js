@@ -41,6 +41,11 @@ const Pets = {
             data: pet
         });
 
+        // Update sync UI
+        if (PetTracker.Sync?.updatePendingCount) {
+            PetTracker.Sync.updatePendingCount();
+        }
+
         return pet;
     },
 
@@ -66,6 +71,11 @@ const Pets = {
             data: updated
         });
 
+        // Update sync UI
+        if (PetTracker.Sync?.updatePendingCount) {
+            PetTracker.Sync.updatePendingCount();
+        }
+
         return updated;
     },
 
@@ -84,6 +94,11 @@ const Pets = {
         });
 
         await PetTracker.DB.delete(PetTracker.STORES.PETS, id);
+
+        // Update sync UI
+        if (PetTracker.Sync?.updatePendingCount) {
+            PetTracker.Sync.updatePendingCount();
+        }
     },
 
     /**
