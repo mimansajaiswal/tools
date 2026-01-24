@@ -201,11 +201,15 @@ export const App = {
         lastQueueWarnAt: null,
         selectedDeck: null,
         selectedCard: null,
-        filters: { again: false, hard: false, addedToday: false, tags: [], suspended: false, leech: false, marked: false, flag: '', cardHierarchy: '', studyDecks: [] },
+        filters: { again: false, hard: false, addedToday: false, tags: [], suspended: false, leech: false, marked: false, flag: [], cardHierarchy: '', studyDecks: [] },
         cardSearch: '',
         deckSearch: '',
         cardLimit: 50,
         cardLimitStep: 50,
+        analyticsRange: '90',
+        analyticsYear: 'all',
+        analyticsDecks: [],
+        analyticsHeatmapMetric: 'count',
         reverse: false,
         lastSync: null,
         lastPull: null,
@@ -306,7 +310,15 @@ export const App = {
     setSyncButtonSpinning(on) {
         const btn = el('#syncNowBtn');
         if (!btn) return;
-        const icon = btn.querySelector('i');
+        const icon = btn.querySelector('svg, i');
+        btn.disabled = on || !navigator.onLine || this.state.syncing;
+        btn.classList.toggle('opacity-70', btn.disabled);
+        if (icon) icon.classList.toggle('animate-spin', on);
+    },
+    setRefreshDecksSpinning(on) {
+        const btn = el('#refreshDecksBtn');
+        if (!btn) return;
+        const icon = btn.querySelector('svg, i');
         btn.disabled = on || !navigator.onLine || this.state.syncing;
         btn.classList.toggle('opacity-70', btn.disabled);
         if (icon) icon.classList.toggle('animate-spin', on);
@@ -915,12 +927,16 @@ export const App = {
         }
     },
     async loadFromDB() {
-        this.state.decks = (await Storage.getAll('decks')).map(d => ({
-            ...d,
-            orderMode: d.orderMode || (d.ordered ? 'created' : 'none') || 'none',
-            aiPrompt: d.aiPrompt || DEFAULT_AI_PROMPT,
-            srsConfig: parseSrsConfig(d.srsConfig || d.srsConfigRaw || null, d.algorithm || 'SM-2')
-        }));
+        this.state.decks = (await Storage.getAll('decks')).map(d => {
+            const algorithm = (d.algorithm || '').toUpperCase() === 'FSRS' ? 'FSRS' : 'SM-2';
+            return {
+                ...d,
+                algorithm,
+                orderMode: d.orderMode || (d.ordered ? 'created' : 'none') || 'none',
+                aiPrompt: d.aiPrompt || DEFAULT_AI_PROMPT,
+                srsConfig: parseSrsConfig(d.srsConfig || d.srsConfigRaw || null, algorithm)
+            };
+        });
         this.state.cards = (await Storage.getAll('cards')).map(c => {
             const srsState = parseSrsState(c.srsState || null);
             if (srsState.learning.state === 'new' && ((c.reviewHistory || []).length > 0 || c.fsrs?.lastReview || c.sm2?.lastReview)) {
@@ -1171,6 +1187,7 @@ export const App = {
         el('#refreshDecksBtn').onclick = () => this.manualSync();
         el('#closeDeckModal').onclick = () => this.closeDeckModal();
         el('#saveDeckBtn').onclick = () => this.saveDeckFromModal();
+        el('#saveDeckTopBtn')?.addEventListener('click', () => this.saveDeckFromModal());
         el('#archiveDeckBtn').onclick = () => this.archiveDeckFromModal();
         el('#deckAlgoInput').onchange = (e) => {
             const isFsrs = e.target.value === 'FSRS';
@@ -1183,6 +1200,7 @@ export const App = {
         el('#resetAlgorithmModal').addEventListener('click', (e) => { if (e.target === el('#resetAlgorithmModal')) this.closeModal('resetAlgorithmModal'); });
         el('#closeCardModal').onclick = () => this.closeCardModal();
         el('#saveCardBtn').onclick = () => this.saveCardFromModal();
+        el('#saveCardTopBtn')?.addEventListener('click', () => this.saveCardFromModal());
         el('#cardTypeInput').onchange = () => this.updateCardBackVisibility();
         el('#deleteCardBtn').onclick = () => this.deleteCardFromModal();
         const cardSelectionMode = el('#cardSelectionMode');
@@ -1262,10 +1280,66 @@ export const App = {
         if (markBtn) markBtn.onclick = () => this.toggleMarkForSelected();
         const flagBtn = el('#flagCardBtn');
         if (flagBtn) flagBtn.onclick = (e) => this.openFlagPicker(e.currentTarget);
-        const analyticsDeckSelect = el('#analyticsDeckSelect');
-        if (analyticsDeckSelect) analyticsDeckSelect.onchange = () => this.renderAnalytics();
-        const analyticsRangeSelect = el('#analyticsRangeSelect');
-        if (analyticsRangeSelect) analyticsRangeSelect.onchange = () => this.renderAnalytics();
+        const analyticsDeckBtn = el('#analyticsDeckBtn');
+        const analyticsDeckMenu = el('#analyticsDeckMenu');
+        if (analyticsDeckBtn && analyticsDeckMenu) {
+            analyticsDeckBtn.onclick = (e) => {
+                e.stopPropagation();
+                analyticsDeckMenu.classList.toggle('hidden');
+            };
+            document.addEventListener('click', (e) => {
+                if (analyticsDeckMenu.classList.contains('hidden')) return;
+                if (analyticsDeckBtn.contains(e.target) || analyticsDeckMenu.contains(e.target)) return;
+                analyticsDeckMenu.classList.add('hidden');
+            });
+        }
+        const heatmapMetricReviews = el('#heatmapMetricReviews');
+        const heatmapMetricRating = el('#heatmapMetricRating');
+        if (heatmapMetricReviews) {
+            heatmapMetricReviews.onclick = () => {
+                this.state.analyticsHeatmapMetric = 'count';
+                this.renderAnalytics();
+            };
+        }
+        if (heatmapMetricRating) {
+            heatmapMetricRating.onclick = () => {
+                this.state.analyticsHeatmapMetric = 'rating';
+                this.renderAnalytics();
+            };
+        }
+        const heatmapDownloadBtn = el('#heatmapDownloadBtn');
+        if (heatmapDownloadBtn) {
+            heatmapDownloadBtn.onclick = () => this.downloadHeatmapPng();
+        }
+        const rangeBtn = el('#analyticsRangeBtn');
+        const rangeMenu = el('#analyticsRangeMenu');
+        const yearMenu = el('#analyticsYearMenu');
+        if (rangeBtn && rangeMenu) {
+            rangeBtn.onclick = (e) => {
+                e.stopPropagation();
+                rangeMenu.classList.toggle('hidden');
+            };
+            rangeMenu.onclick = (e) => {
+                const btn = e.target.closest('[data-range]');
+                if (!btn) return;
+                const range = btn.dataset.range || '';
+                if (range === 'by-year') {
+                    if (yearMenu) yearMenu.classList.toggle('is-open');
+                    return;
+                }
+                this.state.analyticsRange = range || '90';
+                if (range !== 'year') this.state.analyticsYear = 'all';
+                rangeMenu.classList.add('hidden');
+                if (yearMenu) yearMenu.classList.remove('is-open');
+                this.renderAnalytics();
+            };
+            document.addEventListener('click', (e) => {
+                if (rangeMenu.classList.contains('hidden')) return;
+                if (rangeBtn.contains(e.target) || rangeMenu.contains(e.target)) return;
+                rangeMenu.classList.add('hidden');
+                if (yearMenu) yearMenu.classList.remove('is-open');
+            });
+        }
         // Phase 14: Debounce search inputs for better performance
         const debouncedCardSearch = debounce((val) => {
             this.state.cardSearch = val;
@@ -1285,6 +1359,8 @@ export const App = {
         el('#resetFilters').onclick = () => this.resetFilters();
         const resetMobile = el('#resetFiltersMobile');
         if (resetMobile) resetMobile.onclick = () => this.resetFilters();
+        const resetAll = el('#resetFiltersAll');
+        if (resetAll) resetAll.onclick = () => this.resetFilters();
         const filterTagInput = el('#filterTagSearch');
         const filterTagDropdown = el('#filterTagDropdown');
         if (filterTagInput) {
@@ -1310,7 +1386,31 @@ export const App = {
         el('#filterSuspended').onchange = (e) => { this.state.filters.suspended = e.target.checked; this.renderCards(); this.updateActiveFiltersCount(); };
         el('#filterLeech').onchange = (e) => { this.state.filters.leech = e.target.checked; this.renderCards(); this.updateActiveFiltersCount(); };
         el('#filterMarked').onchange = (e) => { this.state.filters.marked = e.target.checked; this.renderCards(); this.updateActiveFiltersCount(); };
-        el('#filterFlag').onchange = (e) => { this.state.filters.flag = e.target.value || ''; this.renderCards(); this.updateActiveFiltersCount(); };
+        const filterFlagSwatches = el('#filterFlagSwatches');
+        if (filterFlagSwatches) {
+            const normalizeFlags = (val) => Array.isArray(val) ? val : (val ? [val] : []);
+            this.updateFlagSwatchMulti(filterFlagSwatches, normalizeFlags(this.state.filters.flag));
+            filterFlagSwatches.onclick = (e) => {
+                const btn = e.target.closest('[data-flag]');
+                if (!btn) return;
+                const flag = btn.dataset.flag || '';
+                const current = new Set(normalizeFlags(this.state.filters.flag));
+                if (current.has(flag)) current.delete(flag); else current.add(flag);
+                this.state.filters.flag = Array.from(current);
+                this.updateFlagSwatchMulti(filterFlagSwatches, this.state.filters.flag);
+                this.renderCards();
+                this.updateActiveFiltersCount();
+            };
+        }
+        const filterFlagClear = el('#filterFlagClear');
+        if (filterFlagClear) {
+            filterFlagClear.onclick = () => {
+                this.state.filters.flag = [];
+                if (filterFlagSwatches) this.updateFlagSwatchMulti(filterFlagSwatches, []);
+                this.renderCards();
+                this.updateActiveFiltersCount();
+            };
+        }
         el('#filterCardHierarchy')?.addEventListener('change', (e) => { this.state.filters.cardHierarchy = e.target.value || ''; this.renderCards(); this.updateActiveFiltersCount(); });
         // Toggle filters panel
         el('#toggleFilters').onclick = () => this.toggleFiltersPanel();
@@ -1650,7 +1750,7 @@ export const App = {
         if (f.suspended) count++;
         if (f.leech) count++;
         if (f.marked) count++;
-        if (f.flag) count++;
+        if (Array.isArray(f.flag) ? f.flag.length > 0 : !!f.flag) count++;
         if (f.cardHierarchy) count++;
         if (f.studyDecks && f.studyDecks.length > 0) count++;
         // Show reset button if any filters are active
@@ -1860,9 +1960,9 @@ export const App = {
                 // Strip HTML tags and cloze syntax for display, then escape for safety
                 const plainName = (c.name || '').replace(/<[^>]*>/g, '').replace(/\{\{c\d+::(.*?)\}\}/g, '$1');
                 const nameText = escapeHtml(plainName.slice(0, 50));
-                const flagClass = c.flag ? this.getFlagClass(c.flag) : '';
-                const flagDot = c.flag ? `<span class="flag-dot ${flagClass}" title="${escapeHtml(c.flag)}"></span>` : '';
-                const markIcon = c.marked ? `<i data-lucide="star" class="w-3 h-3 text-accent" title="Marked"></i>` : '';
+                const flagColorClass = c.flag ? this.getFlagColorClass(c.flag) : '';
+                const flagIcon = c.flag ? `<i data-lucide="flag" class="w-3 h-3 ${flagColorClass} flag-icon-filled" title="${escapeHtml(c.flag)}"></i>` : '';
+                const markIcon = c.marked ? `<i data-lucide="star" class="w-3 h-3 text-accent fill-current" title="Marked"></i>` : '';
                 const tagPills = c.tags.slice(0, 2).map(t => `<span class="notion-color-${t.color.replace('_', '-')}-background px-1.5 py-0.5 rounded text-[10px]">${escapeHtml(t.name)}</span>`).join(' ');
                 // Get due date
                 const dueDate = c.fsrs?.dueDate || c.sm2?.dueDate;
@@ -1882,7 +1982,7 @@ export const App = {
  <div class="flex items-center gap-2">
  ${hierarchyIcon}
  ${markIcon}
- ${flagDot}
+ ${flagIcon}
  <div class="truncate max-w-[150px] sm:max-w-[250px] md:max-w-[350px] lg:max-w-[450px]">${nameText}</div>
  </div>
  </td>
@@ -2176,12 +2276,12 @@ export const App = {
         });
     },
     formatDuration(ms) {
-        if (!Number.isFinite(ms) || ms <= 0) return '0m';
+        if (!Number.isFinite(ms) || ms <= 0) return '0 sec';
         const totalSec = Math.round(ms / 1000);
         const mins = Math.floor(totalSec / 60);
         const secs = totalSec % 60;
-        if (mins <= 0) return `${secs}s`;
-        return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+        if (mins <= 0) return `${secs} sec`;
+        return secs > 0 ? `${mins} min ${secs} sec` : `${mins} min`;
     },
     parseDurationToMs(token) {
         if (!token) return null;
@@ -2248,6 +2348,17 @@ export const App = {
             purple: 'flag-purple'
         }[key] || '';
     },
+    getFlagColorClass(flag) {
+        const key = (flag || '').toLowerCase();
+        return {
+            red: 'flag-color-red',
+            orange: 'flag-color-orange',
+            yellow: 'flag-color-yellow',
+            green: 'flag-color-green',
+            blue: 'flag-color-blue',
+            purple: 'flag-color-purple'
+        }[key] || '';
+    },
     async toggleMarkForSelected() {
         const card = this.state.selectedCard;
         if (!card) return;
@@ -2272,32 +2383,65 @@ export const App = {
         if (markBtn) {
             markBtn.classList.toggle('text-accent', !!card?.marked);
             markBtn.classList.toggle('text-muted', !card?.marked);
+            markBtn.classList.toggle('is-marked', !!card?.marked);
+            markBtn.setAttribute('aria-pressed', !!card?.marked);
         }
         if (flagBtn) {
+            const flag = card?.flag || '';
+            const flagColorClass = this.getFlagColorClass(flag);
+            const flagColorClasses = ['flag-color-red', 'flag-color-orange', 'flag-color-yellow', 'flag-color-green', 'flag-color-blue', 'flag-color-purple'];
             flagBtn.dataset.flag = card?.flag || '';
-            flagBtn.classList.toggle('text-accent', !!card?.flag);
-            flagBtn.classList.toggle('text-muted', !card?.flag);
+            flagBtn.classList.remove('text-accent');
+            flagBtn.classList.remove(...flagColorClasses);
+            flagBtn.classList.toggle('is-flagged', !!flag);
+            flagBtn.classList.toggle('text-muted', !flag);
+            if (flagColorClass) flagBtn.classList.add(flagColorClass);
+            flagBtn.setAttribute('aria-pressed', !!flag);
         }
+    },
+    updateFlagSwatchSelection(container, flag) {
+        if (!container) return;
+        const current = flag || '';
+        container.querySelectorAll('[data-flag]').forEach(btn => {
+            const val = btn.dataset.flag || '';
+            const isSelected = val === current;
+            btn.classList.toggle('is-selected', isSelected);
+            btn.setAttribute('aria-pressed', isSelected);
+        });
+    },
+    updateFlagSwatchMulti(container, flags) {
+        if (!container) return;
+        const selected = new Set(Array.isArray(flags) ? flags : (flags ? [flags] : []));
+        container.querySelectorAll('[data-flag]').forEach(btn => {
+            const val = btn.dataset.flag || '';
+            const isSelected = selected.has(val);
+            btn.classList.toggle('is-selected', isSelected);
+            btn.setAttribute('aria-pressed', isSelected);
+        });
     },
     openFlagPicker(anchor) {
         const card = this.state.selectedCard;
         if (!card || !anchor) return;
         const existing = document.querySelector('.flag-picker-popover');
         if (existing) existing.remove();
-        const flags = this.getFlagOrder().filter(f => f);
+        const flags = this.getFlagOrder();
         const popover = document.createElement('div');
         popover.className = 'flag-picker-popover fixed z-50 bg-[color:var(--surface)] border border-[color:var(--card-border)] rounded-lg shadow-lg p-2 flex gap-2';
-        popover.innerHTML = `
- <button class="flag-choice px-2 py-1 text-xs rounded-lg border border-card" data-flag="">None</button>
- ${flags.map(f => `<button class="flag-choice px-2 py-1 text-xs rounded-lg border border-card flex items-center gap-2" data-flag="${f}">
- <span class="flag-dot ${this.getFlagClass(f)}"></span>${f}
- </button>`).join('')}
- `;
+        popover.innerHTML = flags.map(f => {
+            const label = f || 'None';
+            const swatchClass = f ? this.getFlagClass(f) : 'is-none';
+            const selected = (card.flag || '') === (f || '') ? ' is-selected' : '';
+            return `
+ <button type="button" class="flag-swatch-btn${selected}" data-flag="${f || ''}" aria-label="${label}">
+ <span class="flag-swatch ${swatchClass}"></span>
+ </button>`;
+        }).join('');
         document.body.appendChild(popover);
+        this.updateFlagSwatchSelection(popover, card.flag || '');
         const rect = anchor.getBoundingClientRect();
         popover.style.left = `${Math.min(window.innerWidth - popover.offsetWidth - 8, rect.right - popover.offsetWidth)}px`;
         popover.style.top = `${rect.bottom + 6}px`;
-        popover.querySelectorAll('.flag-choice').forEach(btn => {
+        popover.querySelectorAll('.flag-swatch-btn').forEach(btn => {
             btn.onclick = async () => {
                 const flag = btn.dataset.flag || '';
                 await this.setFlagForSelected(flag);
@@ -2400,6 +2544,54 @@ export const App = {
         }).join('');
         return `<svg class="chart-svg" width="${svgWidth}" height="${height}" viewBox="0 0 ${svgWidth} ${height}" xmlns="http://www.w3.org/2000/svg">${parts}</svg>`;
     },
+    formatShortDateLabel(dateStr, includeYear = false) {
+        const d = new Date(dateStr);
+        if (!Number.isFinite(d.getTime())) return '';
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const label = `${months[d.getMonth()]} ${d.getDate()}`;
+        return includeYear ? `${label}, ${d.getFullYear()}` : label;
+    },
+    buildChartAxis(labels) {
+        if (!labels || labels.length === 0) return '';
+        return `<div class="chart-axis">${labels.map(label => `<span>${escapeHtml(label)}</span>`).join('')}</div>`;
+    },
+    formatChartValue(value, { unit = '', isTime = false } = {}) {
+        const num = Number.isFinite(value) ? value : 0;
+        const decimals = isTime && num < 10 ? 1 : 0;
+        const formatted = num.toLocaleString(undefined, { maximumFractionDigits: decimals, minimumFractionDigits: 0 });
+        return unit ? `${formatted}${unit}` : formatted;
+    },
+    buildChartTopValues(values, { unit = '', isTime = false } = {}) {
+        if (!values || values.length === 0) return '';
+        const clean = values.map(v => Number.isFinite(v) ? v : 0);
+        const sorted = [...clean].sort((a, b) => a - b);
+        const min = sorted[0] ?? 0;
+        const max = sorted[sorted.length - 1] ?? 0;
+        const avg = clean.reduce((sum, v) => sum + v, 0) / clean.length;
+        const mid = Math.floor(sorted.length / 2);
+        const median = sorted.length % 2 === 0
+            ? (sorted[mid - 1] + sorted[mid]) / 2
+            : sorted[mid];
+        return `<div class="chart-top-values">
+ <span>Min ${escapeHtml(this.formatChartValue(min, { unit, isTime }))}</span>
+ <span>Med ${escapeHtml(this.formatChartValue(median, { unit, isTime }))}</span>
+ <span>Avg ${escapeHtml(this.formatChartValue(avg, { unit, isTime }))}</span>
+ <span>Max ${escapeHtml(this.formatChartValue(max, { unit, isTime }))}</span>
+ </div>`;
+    },
+    buildDateAxisLabels(dates) {
+        if (!dates || dates.length === 0) return '';
+        const first = dates[0];
+        const last = dates[dates.length - 1];
+        const mid = dates[Math.floor(dates.length / 2)] || first;
+        const includeYear = new Date(first).getFullYear() !== new Date(last).getFullYear();
+        const labels = [
+            this.formatShortDateLabel(first, includeYear),
+            this.formatShortDateLabel(mid, includeYear),
+            this.formatShortDateLabel(last, includeYear)
+        ];
+        return this.buildChartAxis(labels);
+    },
     buildDistributionBars(items) {
         if (!items || items.length === 0) return '<p class="text-sm text-[color:var(--text-sub)]">No data yet.</p>';
         const max = Math.max(1, ...items.map(i => i.value));
@@ -2409,7 +2601,7 @@ export const App = {
  <div class="flex items-center gap-3 text-sm">
  <span class="w-16 font-medium text-[color:var(--text-main)]">${escapeHtml(item.label)}</span>
  <div class="flex-1 analytics-bar-bg">
- <div class="analytics-bar-fill" style="width:${(item.value / max) * 100}%; background:${item.color || 'rgba(var(--dull-purple-rgb),0.65)'}"></div>
+ <div class="analytics-bar-fill" style="width:${(item.value / max) * 100}%;${item.color ? ` background:${item.color};` : ''}"></div>
  </div>
  <span class="w-12 text-right text-[color:var(--text-sub)]">${item.value.toLocaleString()}</span>
  </div>
@@ -2424,7 +2616,7 @@ export const App = {
         const cy = 55;
         if (total <= 0) {
             return `<svg width="110" height="110" viewBox="0 0 110 110" aria-hidden="true">
- <circle cx="${cx}" cy="${cy}" r="${radius}" fill="rgba(var(--dull-purple-rgb),0.12)"></circle>
+ <circle cx="${cx}" cy="${cy}" r="${radius}" fill="rgb(var(--dull-purple-rgb) / 0.12)"></circle>
  <circle cx="${cx}" cy="${cy}" r="${radius * 0.55}" fill="var(--card-bg)"></circle>
  </svg>`;
         }
@@ -2449,6 +2641,75 @@ export const App = {
         const hole = `<circle cx="${cx}" cy="${cy}" r="${radius * 0.55}" fill="var(--card-bg)"></circle>`;
         return `<svg width="110" height="110" viewBox="0 0 110 110" aria-hidden="true">${paths}${hole}</svg>`;
     },
+    async downloadHeatmapPng() {
+        const heatmap = el('#analyticsHeatmap');
+        if (!heatmap) return;
+        if (typeof html2canvas === 'undefined') {
+            toast('Heatmap download unavailable');
+            return;
+        }
+        const card = heatmap.closest('.card');
+        const downloadBtn = el('#heatmapDownloadBtn');
+        const grids = Array.from(heatmap.querySelectorAll('.heatmap-grid'));
+        const prevStyles = grids.map(grid => ({
+            node: grid,
+            overflow: grid.style.overflow,
+            width: grid.style.width
+        }));
+        const prevHeatmap = {
+            width: heatmap.style.width
+        };
+        const prevCard = card ? {
+            width: card.style.width,
+            maxWidth: card.style.maxWidth,
+            overflow: card.style.overflow
+        } : null;
+        const prevDownloadVisibility = downloadBtn ? downloadBtn.style.visibility : '';
+        grids.forEach(grid => {
+            grid.scrollLeft = 0;
+            grid.style.overflow = 'visible';
+            grid.style.width = `${grid.scrollWidth}px`;
+        });
+        const widestGrid = grids.reduce((max, grid) => Math.max(max, grid.scrollWidth || 0), heatmap.clientWidth);
+        if (widestGrid > 0) heatmap.style.width = `${widestGrid}px`;
+        if (card) {
+            card.style.overflow = 'visible';
+            card.style.maxWidth = 'none';
+            const cardWidth = Math.max(card.scrollWidth, widestGrid);
+            card.style.width = `${cardWidth}px`;
+        }
+        if (downloadBtn) downloadBtn.style.visibility = 'hidden';
+
+        await new Promise(resolve => requestAnimationFrame(resolve));
+
+        const target = card || heatmap;
+        const bgColor = target ? getComputedStyle(target).backgroundColor : getComputedStyle(document.body).backgroundColor;
+        try {
+            const canvas = await html2canvas(target, {
+                backgroundColor: bgColor || '#ffffff',
+                scale: window.devicePixelRatio || 2
+            });
+            const link = document.createElement('a');
+            link.download = `activity-heatmap-${new Date().toISOString().slice(0, 10)}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        } catch (err) {
+            console.error('Heatmap download failed', err);
+            toast('Heatmap download failed');
+        } finally {
+            prevStyles.forEach(({ node, overflow, width }) => {
+                node.style.overflow = overflow;
+                node.style.width = width;
+            });
+            heatmap.style.width = prevHeatmap.width;
+            if (card && prevCard) {
+                card.style.width = prevCard.width;
+                card.style.maxWidth = prevCard.maxWidth;
+                card.style.overflow = prevCard.overflow;
+            }
+            if (downloadBtn) downloadBtn.style.visibility = prevDownloadVisibility;
+        }
+    },
     polarToCartesian(cx, cy, r, angleDeg) {
         const rad = (angleDeg - 90) * Math.PI / 180.0;
         return { x: cx + (r * Math.cos(rad)), y: cy + (r * Math.sin(rad)) };
@@ -2464,34 +2725,129 @@ export const App = {
     renderAnalytics() {
         const container = el('#analyticsTab');
         if (!container) return;
-        const deckSelect = el('#analyticsDeckSelect');
-        const rangeSelect = el('#analyticsRangeSelect');
-        const currentDeck = deckSelect ? deckSelect.value : 'all';
-        if (deckSelect) {
-            const opts = ['all', ...this.state.decks.map(d => d.id)];
-            deckSelect.innerHTML = [
-                `<option value="all">All decks</option>`,
-                ...this.state.decks.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`)
-            ].join('');
-            deckSelect.value = opts.includes(currentDeck) ? currentDeck : 'all';
+        const deckBtn = el('#analyticsDeckBtn');
+        const deckMenu = el('#analyticsDeckMenu');
+        const deckLabel = el('#analyticsDeckLabel');
+        const deckIds = this.state.decks.map(d => d.id);
+        const rawSelection = Array.isArray(this.state.analyticsDecks) ? this.state.analyticsDecks : [];
+        const normalizedSelection = rawSelection.filter(id => deckIds.includes(id));
+        if (normalizedSelection.length !== rawSelection.length) this.state.analyticsDecks = normalizedSelection;
+        const selectedSet = new Set(normalizedSelection);
+        const allSelected = selectedSet.size === 0 || selectedSet.size === deckIds.length;
+        if (deckLabel) {
+            if (allSelected) deckLabel.textContent = 'All decks';
+            else if (selectedSet.size === 1) {
+                const onlyId = Array.from(selectedSet)[0];
+                deckLabel.textContent = this.deckById(onlyId)?.name || '1 deck';
+            } else {
+                deckLabel.textContent = `${selectedSet.size} decks`;
+            }
         }
-        const selectedDeckId = deckSelect ? deckSelect.value : 'all';
-        const rangeDays = Number(rangeSelect?.value || 90);
-        const cards = selectedDeckId === 'all'
+        if (deckMenu) {
+            const allCheck = allSelected ? '<i data-lucide="check" class="w-3 h-3 text-accent"></i>' : '<span class="w-3 h-3"></span>';
+            const deckRows = this.state.decks.length
+                ? this.state.decks.map(d => {
+                    const active = selectedSet.has(d.id);
+                    return `
+ <button type="button" class="analytics-menu-option w-full text-left px-3 py-2 text-sm rounded-md inline-flex items-center justify-between ${active ? 'bg-surface-muted' : 'hover:bg-surface-muted'}" data-deck="${d.id}">
+ <span class="truncate">${escapeHtml(d.name)}</span>
+ ${active ? '<i data-lucide="check" class="w-3 h-3 text-accent"></i>' : '<span class="w-3 h-3"></span>'}
+ </button>
+ `;
+                }).join('')
+                : '<div class="px-3 py-2 text-xs text-[color:var(--text-sub)]">No decks yet.</div>';
+            deckMenu.innerHTML = `
+ <button type="button" class="analytics-menu-option w-full text-left px-3 py-2 text-sm rounded-md inline-flex items-center justify-between ${allSelected ? 'bg-surface-muted' : 'hover:bg-surface-muted'}" data-deck="all">
+ <span>No filter (all decks)</span>
+ ${allCheck}
+ </button>
+ ${this.state.decks.length ? '<div class="h-px bg-[color:var(--card-border)] my-1"></div>' : ''}
+ ${deckRows}
+ `;
+            deckMenu.querySelectorAll('[data-deck]').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    const deckId = btn.dataset.deck || '';
+                    if (deckId === 'all') {
+                        this.state.analyticsDecks = [];
+                        this.renderAnalytics();
+                        deckMenu.classList.remove('hidden');
+                        return;
+                    }
+                    const next = new Set(this.state.analyticsDecks || []);
+                    if (next.has(deckId)) next.delete(deckId);
+                    else next.add(deckId);
+                    if (next.size === deckIds.length) next.clear();
+                    this.state.analyticsDecks = Array.from(next);
+                    this.renderAnalytics();
+                    deckMenu.classList.remove('hidden');
+                };
+            });
+        }
+        let rangeMode = this.state.analyticsRange || '90';
+        if (rangeMode !== 'year') this.state.analyticsYear = 'all';
+        const rangeLabels = {
+            all: 'All time',
+            '7': 'Last week',
+            '30': 'Last month',
+            '90': 'Last 3 months',
+            '180': 'Last 6 months',
+            '365': 'Last year',
+            'this-year': 'This year',
+            year: 'Year'
+        };
+        const rangeLabelEl = el('#analyticsRangeLabel');
+        if (rangeLabelEl) {
+            if (rangeMode === 'year' && this.state.analyticsYear && this.state.analyticsYear !== 'all') {
+                rangeLabelEl.textContent = `Year • ${this.state.analyticsYear}`;
+            } else {
+                rangeLabelEl.textContent = rangeLabels[rangeMode] || 'Last 3 months';
+            }
+        }
+        const rangeMenu = el('#analyticsRangeMenu');
+        if (rangeMenu) {
+            rangeMenu.querySelectorAll('[data-range]').forEach(btn => {
+                const rangeKey = btn.dataset.range || '';
+                const isActive = rangeKey === rangeMode || (rangeKey === 'by-year' && rangeMode === 'year');
+                btn.classList.toggle('bg-surface-muted', isActive);
+                btn.classList.toggle('text-main', true);
+            });
+        }
+        const cards = allSelected
             ? this.state.cards
-            : this.state.cards.filter(c => c.deckId === selectedDeckId);
+            : this.state.cards.filter(c => selectedSet.has(c.deckId));
 
         const events = [];
         cards.forEach(card => {
-            (card.reviewHistory || []).forEach(h => {
-                const at = new Date(h.at);
-                if (!Number.isFinite(at.getTime())) return;
-                events.push({
-                    rating: normalizeRating(h.rating) || h.rating,
-                    at,
-                    ms: Number.isFinite(h.ms) ? Math.max(0, h.ms) : 0
+            const history = Array.isArray(card.reviewHistory) ? card.reviewHistory : [];
+            if (history.length > 0) {
+                history.forEach(h => {
+                    const at = new Date(h.at);
+                    if (!Number.isFinite(at.getTime())) return;
+                    const normalized = normalizeRating(h.rating) || h.rating;
+                    const ratingValue = ratingsMap[normalized] ? ratingsMap[normalized] : ratingsMap.good;
+                    events.push({
+                        rating: normalized,
+                        ratingValue,
+                        at,
+                        ms: Number.isFinite(h.ms) ? Math.max(0, h.ms) : 0
+                    });
                 });
-            });
+                return;
+            }
+            const fallbackReview = card.fsrs?.lastReview || card.sm2?.lastReview || null;
+            if (fallbackReview) {
+                const at = new Date(fallbackReview);
+                if (!Number.isFinite(at.getTime())) return;
+                const normalized = normalizeRating(card.fsrs?.lastRating || card.sm2?.lastRating) || 'good';
+                const ratingValue = ratingsMap[normalized] ? ratingsMap[normalized] : ratingsMap.good;
+                events.push({
+                    rating: normalized,
+                    ratingValue,
+                    at,
+                    ms: 0
+                });
+            }
         });
         events.sort((a, b) => a.at - b.at);
 
@@ -2499,10 +2855,12 @@ export const App = {
         events.forEach(e => {
             const key = this.formatDateKey(e.at);
             if (!key) return;
-            if (!dayMap.has(key)) dayMap.set(key, { count: 0, ms: 0 });
+            if (!dayMap.has(key)) dayMap.set(key, { count: 0, ms: 0, ratingSum: 0, ratingCount: 0 });
             const entry = dayMap.get(key);
             entry.count += 1;
             entry.ms += e.ms || 0;
+            entry.ratingSum += e.ratingValue || 0;
+            entry.ratingCount += 1;
         });
 
         const now = new Date();
@@ -2524,10 +2882,16 @@ export const App = {
             return dayMap.get(key)?.count || 0;
         };
         let streak = 0;
-        let cursor = this.startOfDay(now);
-        while (getCountForDate(cursor) > 0) {
-            streak += 1;
-            cursor.setDate(cursor.getDate() - 1);
+        if (events.length > 0) {
+            const lastActive = this.startOfDay(events[events.length - 1].at);
+            const gapDays = Math.floor((this.startOfDay(now) - lastActive) / 86400000);
+            if (gapDays <= 1) {
+                let cursor = new Date(lastActive);
+                while (getCountForDate(cursor) > 0) {
+                    streak += 1;
+                    cursor.setDate(cursor.getDate() - 1);
+                }
+            }
         }
         let longest = 0;
         let current = 0;
@@ -2549,8 +2913,8 @@ export const App = {
             todayEl.innerHTML = `
  <div class="analytics-stat-value">${todayStats.count}</div>
  <div class="flex flex-wrap gap-2 mt-2">
- <span class="analytics-pill">⏱️ ${this.formatDuration(todayStats.ms)}</span>
- <span class="analytics-pill">📋 ${dueToday} due</span>
+ <span class="analytics-pill"><i data-lucide="clock" class="w-3 h-3"></i><span class="analytics-pill-value">${this.formatDuration(todayStats.ms)}</span></span>
+ <span class="analytics-pill"><i data-lucide="calendar" class="w-3 h-3"></i>${dueToday} due</span>
  </div>
  `;
         }
@@ -2559,8 +2923,8 @@ export const App = {
             streakEl.innerHTML = `
  <div class="analytics-stat-value">${streak} <span class="text-base font-normal text-[color:var(--text-sub)]">day${streak === 1 ? '' : 's'}</span></div>
  <div class="flex flex-wrap gap-2 mt-2">
- <span class="analytics-pill">🏆 Best: ${longest}</span>
- <span class="analytics-pill">📅 ${dayMap.size} active</span>
+ <span class="analytics-pill"><i data-lucide="trophy" class="w-3 h-3"></i>Best: ${longest}</span>
+ <span class="analytics-pill"><i data-lucide="activity" class="w-3 h-3"></i>${dayMap.size} active</span>
  </div>
  `;
         }
@@ -2569,55 +2933,82 @@ export const App = {
             retentionEl.innerHTML = `
  <div class="analytics-stat-value">${retentionPct}%</div>
  <div class="flex flex-wrap gap-2 mt-2">
- <span class="analytics-pill">📊 ${totalRatings.toLocaleString()} reviews</span>
+ <span class="analytics-pill"><i data-lucide="bar-chart-3" class="w-3 h-3"></i>${totalRatings.toLocaleString()} reviews</span>
  </div>
  `;
         }
         const streakBadge = el('#analyticsStreakBadge');
-        if (streakBadge) streakBadge.textContent = `🔥 ${streak} day streak`;
+        if (streakBadge) streakBadge.innerHTML = `<i data-lucide="flame" class="w-3 h-3"></i>${streak} day streak`;
 
-        const rangeStart = this.startOfDay(new Date(now));
-        rangeStart.setDate(rangeStart.getDate() - (rangeDays - 1));
+        let rangeStart = this.startOfDay(new Date(now));
+        let rangeEnd = this.startOfDay(new Date(now));
+        if (rangeMode === 'this-year') {
+            rangeStart = new Date(now.getFullYear(), 0, 1);
+        } else if (rangeMode === 'year' && this.state.analyticsYear && this.state.analyticsYear !== 'all') {
+            const yearNum = Number(this.state.analyticsYear);
+            if (Number.isFinite(yearNum)) {
+                rangeStart = new Date(yearNum, 0, 1);
+                rangeEnd = new Date(yearNum, 11, 31);
+                if (yearNum === now.getFullYear()) rangeEnd = this.startOfDay(now);
+            }
+        } else if (rangeMode === 'all') {
+            rangeStart = events.length ? this.startOfDay(events[0].at) : this.startOfDay(now);
+        } else {
+            const rangeDays = Number(rangeMode || 90);
+            rangeStart.setDate(rangeStart.getDate() - (rangeDays - 1));
+        }
         const rangeDates = [];
         const rangeCounts = [];
         const rangeMinutes = [];
         const tempDate = new Date(rangeStart);
-        while (tempDate <= this.startOfDay(now)) {
+        while (tempDate <= rangeEnd) {
             const key = this.formatDateKey(tempDate);
             const dayStat = dayMap.get(key) || { count: 0, ms: 0 };
             rangeDates.push(key);
             rangeCounts.push(dayStat.count);
-            rangeMinutes.push(Math.round((dayStat.ms || 0) / 60000));
+            rangeMinutes.push((dayStat.ms || 0) / 60000);
             tempDate.setDate(tempDate.getDate() + 1);
         }
         const countChart = el('#analyticsReviewCount');
         if (countChart) {
-            countChart.innerHTML = this.buildSparkBars(rangeCounts, {
+            const axis = this.buildDateAxisLabels(rangeDates);
+            const top = this.buildChartTopValues(rangeCounts);
+            countChart.innerHTML = `<div class="chart-wrap">
+ ${top}
+ ${this.buildSparkBars(rangeCounts, {
                 height: 100,
                 width: 7,
                 gap: 2,
                 color: 'var(--chart-accent)',
                 titleFormatter: (val, i) => `${rangeDates[i]} • ${val} reviews`
-            });
+            })}
+ ${axis}
+ </div>`;
         }
         const timeChart = el('#analyticsReviewTime');
         if (timeChart) {
-            timeChart.innerHTML = this.buildSparkBars(rangeMinutes, {
+            const axis = this.buildDateAxisLabels(rangeDates);
+            const top = this.buildChartTopValues(rangeMinutes, { unit: 'm', isTime: true });
+            timeChart.innerHTML = `<div class="chart-wrap">
+ ${top}
+ ${this.buildSparkBars(rangeMinutes, {
                 height: 100,
                 width: 7,
                 gap: 2,
                 color: 'var(--chart-accent-2)',
-                titleFormatter: (val, i) => `${rangeDates[i]} • ${val} min`
-            });
+                titleFormatter: (_, i) => `${rangeDates[i]} • ${this.formatDuration(dayMap.get(rangeDates[i])?.ms || 0)}`
+            })}
+ ${axis}
+ </div>`;
         }
 
         const answerBreakdown = el('#analyticsAnswerBreakdown');
         if (answerBreakdown) {
             const rows = [
-                { label: 'Again', key: 'again', color: 'var(--rating-again-fill)', emoji: '🔴' },
-                { label: 'Hard', key: 'hard', color: 'var(--rating-hard-fill)', emoji: '🟠' },
-                { label: 'Good', key: 'good', color: 'var(--rating-good-fill)', emoji: '🟢' },
-                { label: 'Easy', key: 'easy', color: 'var(--rating-easy-fill)', emoji: '🔵' }
+                { label: 'Again', key: 'again', color: 'var(--rating-again-fill)' },
+                { label: 'Hard', key: 'hard', color: 'var(--rating-hard-fill)' },
+                { label: 'Good', key: 'good', color: 'var(--rating-good-fill)' },
+                { label: 'Easy', key: 'easy', color: 'var(--rating-easy-fill)' }
             ];
             answerBreakdown.innerHTML = `
  <div class="space-y-3">
@@ -2646,13 +3037,18 @@ export const App = {
         const hourlyEl = el('#analyticsHourlyBreakdown');
         if (hourlyEl) {
             const formatHour = (h) => h === 0 ? '12am' : h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`;
-            hourlyEl.innerHTML = this.buildSparkBars(hourly, {
+            const axis = this.buildChartAxis(['12a', '6a', '12p', '6p', '11p']);
+            hourlyEl.innerHTML = `<div class="chart-wrap">
+ ${this.buildChartTopValues(hourly)}
+ ${this.buildSparkBars(hourly, {
                 height: 100,
                 width: 14,
                 gap: 4,
                 color: 'var(--chart-accent)',
                 titleFormatter: (val, i) => `${formatHour(i)} • ${val} reviews`
-            });
+            })}
+ ${axis}
+ </div>`;
         }
 
         const intervalBuckets = [
@@ -2698,12 +3094,14 @@ export const App = {
             { label: '9-10', min: 9, max: 10, value: 0 }
         ];
         cards.forEach(card => {
-            if (card.sm2?.easeFactor) {
+            const deck = this.deckById(card.deckId);
+            const alg = deck?.algorithm || 'SM-2';
+            if (alg === 'SM-2' && card.sm2?.easeFactor) {
                 const ease = card.sm2.easeFactor;
                 const bucket = easeBuckets.find(b => ease >= b.min && ease <= b.max);
                 if (bucket) bucket.value += 1;
             }
-            if (card.fsrs?.difficulty) {
+            if (alg === 'FSRS' && card.fsrs?.difficulty) {
                 const diff = card.fsrs.difficulty;
                 const bucket = diffBuckets.find(b => diff >= b.min && diff <= b.max);
                 if (bucket) bucket.value += 1;
@@ -2747,14 +3145,16 @@ export const App = {
             { label: 'New', value: cardCounts.New, color: 'var(--muted-pink)' },
             { label: 'Due', value: cardCounts.Due, color: 'var(--dull-purple)' },
             { label: 'Not due', value: cardCounts['Not due'], color: 'var(--earth-metal)' },
-            { label: 'Suspended', value: cardCounts.Suspended, color: 'rgba(var(--earth-metal-rgb), 0.4)' }
+            { label: 'Suspended', value: cardCounts.Suspended, color: 'rgb(var(--earth-metal-rgb) / 0.4)' }
         ];
         const total = pieSlices.reduce((sum, s) => sum + s.value, 0);
         const cardCountsEl = el('#analyticsCardCounts');
         if (cardCountsEl) {
             cardCountsEl.innerHTML = `
  <div class="analytics-pie">
+ <div class="analytics-pie-chart">
  ${this.buildPieChart(pieSlices)}
+ </div>
  <div class="analytics-legend flex-col gap-2">
  ${pieSlices.map(s => {
                 const pct = total > 0 ? Math.round((s.value / total) * 100) : 0;
@@ -2820,33 +3220,170 @@ export const App = {
  `;
         }
 
+        const heatmapMetric = this.state.analyticsHeatmapMetric || 'count';
+        const heatmapMetricReviewsBtn = el('#heatmapMetricReviews');
+        const heatmapMetricRatingBtn = el('#heatmapMetricRating');
+        if (heatmapMetricReviewsBtn && heatmapMetricRatingBtn) {
+            const isReviews = heatmapMetric === 'count';
+            heatmapMetricReviewsBtn.classList.toggle('is-active', isReviews);
+            heatmapMetricRatingBtn.classList.toggle('is-active', !isReviews);
+            heatmapMetricReviewsBtn.setAttribute('aria-pressed', String(isReviews));
+            heatmapMetricRatingBtn.setAttribute('aria-pressed', String(!isReviews));
+        }
+        const legendLow = el('#heatmapLegendLow');
+        const legendHigh = el('#heatmapLegendHigh');
+        if (legendLow && legendHigh) {
+            if (heatmapMetric === 'rating') {
+                legendLow.textContent = 'Lower rating';
+                legendHigh.textContent = 'Higher rating';
+            } else {
+                legendLow.textContent = 'Fewer reviews';
+                legendHigh.textContent = 'More reviews';
+            }
+        }
+
+        const heatmapRangeStart = this.startOfDay(rangeStart);
+        const heatmapRangeEnd = this.startOfDay(rangeEnd);
+        const heatmapEvents = events.filter(e => {
+            const day = this.startOfDay(e.at);
+            return day >= heatmapRangeStart && day <= heatmapRangeEnd;
+        });
+        const heatmapDayMap = new Map();
+        heatmapEvents.forEach(e => {
+            const key = this.formatDateKey(e.at);
+            if (!key) return;
+            if (!heatmapDayMap.has(key)) heatmapDayMap.set(key, { count: 0, ms: 0, ratingSum: 0, ratingCount: 0 });
+            const entry = heatmapDayMap.get(key);
+            entry.count += 1;
+            entry.ms += e.ms || 0;
+            entry.ratingSum += e.ratingValue || 0;
+            entry.ratingCount += 1;
+        });
+
         const heatmapEl = el('#analyticsHeatmap');
         if (heatmapEl) {
-            const weeks = Math.ceil(rangeDays / 7);
-            const endHeat = this.startOfDay(now);
-            const startHeat = new Date(endHeat);
-            startHeat.setDate(startHeat.getDate() - (weeks * 7 - 1));
-            const startWeek = new Date(startHeat);
-            startWeek.setDate(startWeek.getDate() - startWeek.getDay());
-            const cells = [];
-            const maxDayCount = Math.max(1, ...Array.from(dayMap.values()).map(v => v.count));
-            for (let d = new Date(startHeat); d <= endHeat; d.setDate(d.getDate() + 1)) {
-                const key = this.formatDateKey(d);
-                const count = dayMap.get(key)?.count || 0;
-                let level = 0;
-                if (count > 0) {
-                    const ratio = count / maxDayCount;
-                    if (ratio > 0.75) level = 4;
-                    else if (ratio > 0.5) level = 3;
-                    else if (ratio > 0.25) level = 2;
-                    else level = 1;
-                }
-                const weekIndex = Math.floor((d - startWeek) / (7 * 86400000));
-                const row = d.getDay() + 1;
-                const title = `${key}: ${count} review${count === 1 ? '' : 's'}`;
-                cells.push(`<div class="heatmap-cell level-${level}" style="grid-column:${weekIndex + 1}; grid-row:${row}" title="${escapeHtml(title)}"></div>`);
+            const rangeYearStart = heatmapRangeStart.getFullYear();
+            const rangeYearEnd = heatmapRangeEnd.getFullYear();
+            const rangeYearList = [];
+            for (let y = rangeYearStart; y <= rangeYearEnd; y++) rangeYearList.push(y);
+            const availableYearStart = events.length ? events[0].at.getFullYear() : now.getFullYear();
+            const availableYearEnd = now.getFullYear();
+            const availableYearList = [];
+            for (let y = availableYearStart; y <= availableYearEnd; y++) availableYearList.push(y);
+            const yearMenu = el('#analyticsYearMenu');
+            const selectedYear = (this.state.analyticsYear || 'all').toString();
+            const validYear = availableYearList.includes(Number(selectedYear));
+            const activeYear = (rangeMode === 'year' && validYear) ? selectedYear : 'all';
+            this.state.analyticsYear = activeYear;
+            if (yearMenu) {
+                yearMenu.innerHTML = [
+                    ...availableYearList.map(y => `<button type="button" class="analytics-year-option w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-muted" data-year="${y}">${y}</button>`)
+                ].join('');
+                yearMenu.querySelectorAll('[data-year]').forEach(btn => {
+                    const isActive = (btn.dataset.year || '') === activeYear;
+                    btn.classList.toggle('bg-surface-muted', isActive);
+                    btn.onclick = () => {
+                        this.state.analyticsRange = 'year';
+                        this.state.analyticsYear = btn.dataset.year || 'all';
+                        el('#analyticsRangeMenu')?.classList.add('hidden');
+                        el('#analyticsYearMenu')?.classList.remove('is-open');
+                        this.renderAnalytics();
+                    };
+                });
             }
-            heatmapEl.innerHTML = cells.join('');
+            const yearsToRender = activeYear === 'all' ? rangeYearList : [Number(activeYear)];
+            const dayLabels = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+            const monthLabels = ['Ja', 'Fe', 'Mr', 'Ap', 'My', 'Jn', 'Jl', 'Au', 'Se', 'Oc', 'No', 'De'];
+
+            const yearMaxCounts = new Map();
+            for (const [key, val] of heatmapDayMap.entries()) {
+                const y = Number(key.slice(0, 4));
+                const prev = yearMaxCounts.get(y) || 0;
+                if (val.count > prev) yearMaxCounts.set(y, val.count);
+            }
+
+            const startOfWeekMonday = (date) => {
+                const d = this.startOfDay(date);
+                const dayIndex = (d.getDay() + 6) % 7; // Monday = 0
+                d.setDate(d.getDate() - dayIndex);
+                return d;
+            };
+            const endOfWeekSunday = (date) => {
+                const d = this.startOfDay(date);
+                const dayIndex = (d.getDay() + 6) % 7; // Monday = 0
+                d.setDate(d.getDate() + (6 - dayIndex));
+                return d;
+            };
+
+            const buildYearGrid = (year) => {
+                const yearStart = new Date(year, 0, 1);
+                const yearEnd = new Date(year, 11, 31);
+                const start = startOfWeekMonday(yearStart);
+                const end = endOfWeekSunday(yearEnd);
+                const days = [];
+                for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                    days.push(new Date(d));
+                }
+                const weeks = Math.ceil(days.length / 7);
+                const maxDayCount = Math.max(1, yearMaxCounts.get(year) || 0);
+                const maxDayRating = 4;
+                const cells = [];
+
+                dayLabels.forEach((label, idx) => {
+                    cells.push(`<div class="heatmap-label heatmap-day-label" style="grid-row:${idx + 2};">${label}</div>`);
+                });
+
+                days.forEach((d, idx) => {
+                    const inYear = d.getFullYear() === year;
+                    const inRange = d >= heatmapRangeStart && d <= heatmapRangeEnd;
+                    const key = this.formatDateKey(d);
+                    const stats = inYear && inRange ? (heatmapDayMap.get(key) || { count: 0, ms: 0, ratingSum: 0, ratingCount: 0 }) : { count: 0, ms: 0, ratingSum: 0, ratingCount: 0 };
+                    const count = stats.count || 0;
+                    const ms = stats.ms || 0;
+                    const avgRating = stats.ratingCount ? stats.ratingSum / stats.ratingCount : 0;
+                    let level = 0;
+                    if (heatmapMetric === 'rating' && stats.ratingCount > 0) {
+                        const ratio = avgRating / Math.max(1, maxDayRating || 4);
+                        if (ratio > 0.75) level = 4;
+                        else if (ratio > 0.5) level = 3;
+                        else if (ratio > 0.25) level = 2;
+                        else level = 1;
+                    } else if (count > 0) {
+                        const ratio = count / maxDayCount;
+                        if (ratio > 0.75) level = 4;
+                        else if (ratio > 0.5) level = 3;
+                        else if (ratio > 0.25) level = 2;
+                        else level = 1;
+                    }
+                    const weekIndex = Math.floor(idx / 7);
+                    const row = ((d.getDay() + 6) % 7) + 2;
+                    const duration = this.formatDuration(ms);
+                    const title = heatmapMetric === 'rating'
+                        ? `${key}: avg ${avgRating ? avgRating.toFixed(2) : '—'} • ${count} review${count === 1 ? '' : 's'} • ${duration}`
+                        : `${key}: ${count} review${count === 1 ? '' : 's'} • ${duration}`;
+                    const outsideClass = inYear && inRange ? '' : ' is-outside';
+                    cells.push(`<div class="heatmap-cell level-${level}${outsideClass}" style="grid-column:${weekIndex + 2}; grid-row:${row}" title="${escapeHtml(title)}"></div>`);
+
+                    if (inYear && d.getDate() === 1) {
+                        const label = monthLabels[d.getMonth()];
+                        cells.push(`<div class="heatmap-label heatmap-month-label" style="grid-column:${weekIndex + 2};">${label}</div>`);
+                    }
+                });
+
+                return `
+ <div class="heatmap-year" data-year="${year}">
+ <div class="heatmap-year-title">${year}</div>
+ <div class="heatmap-grid" style="--heatmap-weeks:${weeks};">
+ ${cells.join('')}
+ </div>
+ </div>
+ `;
+            };
+
+            heatmapEl.innerHTML = yearsToRender.map(buildYearGrid).join('');
+        }
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons({ nodes: container.querySelectorAll('[data-lucide]') });
         }
     },
     buildLocalTagOptions() {
@@ -2874,6 +3411,13 @@ export const App = {
 
         const selected = new Set(this.state.tagSelection || []);
         const allOptions = this.collectTagOptions();
+        const colorMap = new Map();
+        allOptions.forEach(opt => {
+            if (opt?.name) colorMap.set(opt.name, opt.color || 'default');
+        });
+        (this.state.editingCard?.tags || []).forEach(t => {
+            if (t?.name && !colorMap.has(t.name)) colorMap.set(t.name, t.color || 'default');
+        });
         const query = (input.value || '').toLowerCase();
         const options = allOptions.filter(opt => opt.name.toLowerCase().includes(query));
         const canAdd = query && !allOptions.some(opt => opt.name.toLowerCase() === query);
@@ -2906,12 +3450,16 @@ export const App = {
         });
 
         selectedWrap.innerHTML = selected.size
-            ? Array.from(selected).map(tag => `
- <span class="tag-pill inline-flex items-center gap-1 px-2 py-1 rounded-full bg-surface-strong text-main text-xs border border-card">
+            ? Array.from(selected).map(tag => {
+                const color = colorMap.get(tag) || 'default';
+                const colorClass = `notion-color-${color.replace(/_/g, '-')}-background`;
+                return `
+ <span class="tag-pill tag-colored inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border border-card ${colorClass}">
  ${escapeHtml(tag)}
  <button class="remove-tag text-sub" data-tag="${encodeDataAttr(tag)}">&times;</button>
  </span>
- `).join('')
+ `;
+            }).join('')
             : '<span class="text-faint text-xs">No tags selected</span>';
 
         selectedWrap.querySelectorAll('.remove-tag').forEach(btn => {
@@ -3082,7 +3630,7 @@ export const App = {
         this.state.editingDeck = deck || null;
         el('#deckModalTitle').textContent = deck ? 'Edit deck' : 'New deck';
         el('#deckNameInput').value = deck?.name ?? '';
-        const algo = deck?.algorithm ?? 'SM-2';
+        const algo = deck?.algorithm || 'SM-2';
         el('#deckAlgoInput').value = algo;
         el('#deckReviewLimit').value = deck?.reviewLimit ?? 50;
         el('#deckNewLimit').value = deck?.newLimit ?? 20;
@@ -3091,8 +3639,6 @@ export const App = {
         el('#deckPromptInput').value = deck?.aiPrompt ?? DEFAULT_AI_PROMPT;
 
         const srsConfig = parseSrsConfig(deck?.srsConfig || null, algo);
-        const srsConfigInput = el('#deckSrsConfigInput');
-        if (srsConfigInput) srsConfigInput.value = JSON.stringify(srsConfig, null, 2);
         const learningStepsInput = el('#deckLearningSteps');
         if (learningStepsInput) learningStepsInput.value = (srsConfig.learningSteps || []).join(', ');
         const relearningStepsInput = el('#deckRelearningSteps');
@@ -3260,8 +3806,6 @@ export const App = {
             deck.srsConfig.fsrs.weights = rounded;
             const paramsInput = el('#deckFsrsParams');
             if (paramsInput) paramsInput.value = rounded.join(', ');
-            const srsConfigInput = el('#deckSrsConfigInput');
-            if (srsConfigInput) srsConfigInput.value = JSON.stringify(deck.srsConfig, null, 2);
             toast(`Optimized FSRS weights loaded (best logloss ${bestLoss.toFixed(4)}). Press Save to apply.`);
         } finally {
             hideLoading();
@@ -3280,29 +3824,14 @@ export const App = {
     async saveDeckFromModal() {
         const d = this.state.editingDeck || this.newDeck('', 'SM-2');
         d.name = el('#deckNameInput').value || d.name || 'Untitled deck';
-        d.algorithm = el('#deckAlgoInput').value;
+        d.algorithm = el('#deckAlgoInput').value || 'SM-2';
         d.reviewLimit = Number(el('#deckReviewLimit').value) || 50;
         d.newLimit = Number(el('#deckNewLimit').value) || 20;
         d.orderMode = el('#deckOrderMode').value || 'none';
         d.reverse = el('#deckReverseInput').checked;
         d.aiPrompt = el('#deckPromptInput').value || '';
 
-        const rawConfig = el('#deckSrsConfigInput')?.value || '';
-        const hasConfig = !!rawConfig.trim();
-        let srsConfig = null;
-        if (hasConfig) {
-            try {
-                JSON.parse(rawConfig);
-                srsConfig = parseSrsConfig(rawConfig, d.algorithm);
-            } catch (e) {
-                toast('Invalid SRS Config JSON — using defaults');
-                srsConfig = parseSrsConfig(null, d.algorithm);
-                const srsConfigInput = el('#deckSrsConfigInput');
-                if (srsConfigInput) srsConfigInput.value = JSON.stringify(srsConfig, null, 2);
-            }
-        } else {
-            srsConfig = parseSrsConfig(d.srsConfig || null, d.algorithm);
-        }
+        const srsConfig = parseSrsConfig(d.srsConfig || null, d.algorithm);
 
         const learningSteps = el('#deckLearningSteps')?.value || '';
         const relearningSteps = el('#deckRelearningSteps')?.value || '';
@@ -3316,7 +3845,7 @@ export const App = {
         if (easyInterval.trim()) srsConfig.easyInterval = easyInterval.trim();
         if (easyDays.trim()) srsConfig.easyDays = toList(easyDays).map(d => d.slice(0, 3));
 
-        if (d.algorithm === 'FSRS' && !hasConfig) {
+        if (d.algorithm === 'FSRS') {
             const rawRetention = el('#deckFsrsDesiredRetention')?.value?.trim() || '';
             const rawParams = el('#deckFsrsParams')?.value?.trim() || '';
             if (rawRetention) {
@@ -3339,8 +3868,6 @@ export const App = {
             }
         }
         d.srsConfig = srsConfig;
-        const srsConfigInput = el('#deckSrsConfigInput');
-        if (srsConfigInput) srsConfigInput.value = JSON.stringify(srsConfig, null, 2);
 
         if (!this.state.editingDeck) this.state.decks.push(d);
         d.updatedInApp = true;
@@ -3505,6 +4032,7 @@ export const App = {
         const deckSelect = el('#cardDeckInput');
         deckSelect.innerHTML = this.state.decks.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
         deckSelect.value = card?.deckId || this.state.selectedDeck?.id || this.state.decks[0]?.id;
+        deckSelect.onchange = () => this.updateCardOrderVisibility(deckSelect.value);
         el('#cardTypeInput').value = card?.type ?? 'Front-Back';
         el('#cardNameInput').value = card?.name ?? '';
         el('#cardBackInput').value = card?.back ?? '';
@@ -3519,7 +4047,22 @@ export const App = {
         el('#cardLeechInput').checked = card?.leech ?? false;
         el('#cardMarkedInput').checked = card?.marked ?? false;
         el('#cardFlagInput').value = card?.flag || '';
+        const flagSwatches = el('#cardFlagSwatches');
+        if (flagSwatches) {
+            this.updateFlagSwatchSelection(flagSwatches, card?.flag || '');
+            flagSwatches.onclick = (e) => {
+                const btn = e.target.closest('[data-flag]');
+                if (!btn) return;
+                const value = btn.dataset.flag || '';
+                const input = el('#cardFlagInput');
+                if (input) input.value = value;
+                this.updateFlagSwatchSelection(flagSwatches, value);
+            };
+        }
         el('#deleteCardBtn').classList.toggle('hidden', !card);
+        const suspField = el('#cardSuspendedLeechField');
+        if (suspField) suspField.classList.toggle('hidden', !card);
+        this.updateCardOrderVisibility(deckSelect.value);
         // Show/hide back section based on card type
         this.updateCardBackVisibility();
         // Populate review history section
@@ -3565,6 +4108,13 @@ export const App = {
         const backSection = el('#cardBackSection');
         if (backSection) backSection.classList.toggle('hidden', isCloze);
     },
+    updateCardOrderVisibility(deckId) {
+        const field = el('#cardOrderField');
+        if (!field) return;
+        const deck = this.deckById(deckId) || this.state.selectedDeck;
+        const show = deck?.orderMode === 'property';
+        field.classList.toggle('hidden', !show);
+    },
     closeCardModal() {
         el('#cardModal').classList.add('hidden');
         el('#cardModal').classList.remove('flex');
@@ -3587,7 +4137,8 @@ export const App = {
         const optionMap = new Map(this.collectTagOptions().map(t => [t.name, t.color || 'default']));
         const existingColors = new Map((this.state.editingCard?.tags || []).map(t => [t.name, t.color || 'default']));
         card.tags = selectedTags.map(name => ({ name, color: optionMap.get(name) || existingColors.get(name) || 'default' }));
-        const orderVal = el('#cardOrderInput').value;
+        const orderField = el('#cardOrderField');
+        const orderVal = (orderField && orderField.classList.contains('hidden')) ? '' : el('#cardOrderInput').value;
         card.order = orderVal === '' ? null : Number(orderVal);
         card.marked = el('#cardMarkedInput').checked;
         card.flag = el('#cardFlagInput').value || '';
@@ -3715,6 +4266,22 @@ export const App = {
         if (invalidDeckConfigs.length > 0) {
             toast(`Invalid SRS Config in ${invalidDeckConfigs.length} deck${invalidDeckConfigs.length === 1 ? '' : 's'} — healed to defaults`);
             invalidDeckConfigs.forEach(d => {
+                d.updatedInApp = true;
+                this.queueOp({ type: 'deck-upsert', payload: d });
+            });
+        }
+        const missingDeckConfigs = mappedDecks.filter(d => !(d.srsConfigRaw || '').trim());
+        if (missingDeckConfigs.length > 0) {
+            toast(`Missing SRS Config in ${missingDeckConfigs.length} deck${missingDeckConfigs.length === 1 ? '' : 's'} — writing defaults`);
+            missingDeckConfigs.forEach(d => {
+                d.updatedInApp = true;
+                this.queueOp({ type: 'deck-upsert', payload: d });
+            });
+        }
+        const mismatchedDeckConfigs = mappedDecks.filter(d => d.srsConfigMismatch);
+        if (mismatchedDeckConfigs.length > 0) {
+            toast(`SRS Config mismatched in ${mismatchedDeckConfigs.length} deck${mismatchedDeckConfigs.length === 1 ? '' : 's'} — fixing format`);
+            mismatchedDeckConfigs.forEach(d => {
                 d.updatedInApp = true;
                 this.queueOp({ type: 'deck-upsert', payload: d });
             });
@@ -4176,6 +4743,11 @@ export const App = {
         const offline = !navigator.onLine;
         btn.disabled = pendingOffline || this.state.syncing || offline;
         btn.classList.toggle('opacity-70', btn.disabled);
+        const refreshBtn = el('#refreshDecksBtn');
+        if (refreshBtn) {
+            refreshBtn.disabled = pendingOffline || this.state.syncing || offline;
+            refreshBtn.classList.toggle('opacity-70', refreshBtn.disabled);
+        }
     },
     async manualSync() {
         if (!navigator.onLine) {
@@ -4186,9 +4758,7 @@ export const App = {
         if (this.state.syncing) { toast('Sync already in progress'); return; }
 
         this.state.syncing = true;
-        const btn = el('#refreshDecksBtn');
-        const svg = btn?.querySelector('svg');
-        if (svg) svg.classList.add('animate-spin');
+        this.setRefreshDecksSpinning(true);
 
         try {
             // Always push first to save local progress
@@ -4211,7 +4781,7 @@ export const App = {
             toast('Sync failed - check connection');
         } finally {
             this.state.syncing = false;
-            if (svg) svg.classList.remove('animate-spin');
+            this.setRefreshDecksSpinning(false);
             if (this.state.queue.length > 0) {
                 this.requestAutoSyncSoon(MIN_PUSH_INTERVAL_MS + 100);
             }
@@ -4421,7 +4991,8 @@ export const App = {
         if (f.suspended && card.suspended) return false;
         if (f.leech && card.leech) return false;
         if (f.marked && !card.marked) return false;
-        if (f.flag && (card.flag || '') !== f.flag) return false;
+        const flagFilter = Array.isArray(f.flag) ? f.flag : (f.flag ? [f.flag] : []);
+        if (flagFilter.length > 0 && !flagFilter.includes(card.flag || '')) return false;
         // Card hierarchy filter - hide sub-items by default (only show when explicitly filtered)
         if (f.cardHierarchy === 'parents' && !isClozeParent(card)) return false;
         if (f.cardHierarchy === 'subitems' && !isSubItem(card)) return false;
@@ -4640,6 +5211,14 @@ export const App = {
                 if (this.state.session && this.state.session.ratingCounts) {
                     this.state.session.ratingCounts[ratingLabel] = (this.state.session.ratingCounts[ratingLabel] || 0) + 1;
                 }
+                const now = new Date();
+                const nowMs = now.getTime();
+                const startMs = this.state.answerRevealedAt || this.state.cardShownAt || nowMs;
+                let durationMs = Math.max(0, nowMs - startMs);
+                durationMs = Math.min(durationMs, 10 * 60 * 1000);
+                card.reviewHistory.push({ rating: ratingKey, at: now.toISOString(), ms: durationMs });
+                await Storage.put('cards', card);
+                this.queueOp({ type: 'card-upsert', payload: card }, 'rating');
                 this.state.lastRating = null;
                 this.setRatingEnabled(false);
                 this.advanceSession(false);
@@ -4833,14 +5412,15 @@ export const App = {
         return `${deckIds.length} decks`;
     },
     resetFilters() {
-        this.state.filters = { again: false, hard: false, addedToday: false, tags: [], suspended: false, leech: false, marked: false, flag: '', cardHierarchy: '', studyDecks: [] };
+        this.state.filters = { again: false, hard: false, addedToday: false, tags: [], suspended: false, leech: false, marked: false, flag: [], cardHierarchy: '', studyDecks: [] };
         el('#filterAgain').checked = false;
         el('#filterHard').checked = false;
         el('#filterAddedToday').checked = false;
         el('#filterSuspended').checked = false;
         el('#filterLeech').checked = false;
         el('#filterMarked').checked = false;
-        el('#filterFlag').value = '';
+        const filterFlagSwatches = el('#filterFlagSwatches');
+        if (filterFlagSwatches) this.updateFlagSwatchMulti(filterFlagSwatches, []);
         const hierarchySelect = el('#filterCardHierarchy');
         if (hierarchySelect) hierarchySelect.value = '';
         this.renderStudyDeckSelection();
@@ -5805,8 +6385,8 @@ export const App = {
                     ['Review History', 'rich_text'],
                     ['Cloze Indexes', 'rich_text'],
                     ['SRS State', 'rich_text'],
-                    ['Parent Card', 'relation'],
-                    ['Sub Cards', 'relation']
+                    ['Cloze Parent Card', 'relation'],
+                    ['Cloze Sub Cards', 'relation']
                 ];
                 const missing = required.filter(([n, k]) => !has(n, k));
                 if (missing.length) return false;
@@ -6031,7 +6611,7 @@ export const App = {
         }
     },
     applyFontMode() {
-        const mode = this.state.settings.fontMode || 'serif';
+        const mode = this.state.settings.fontMode || 'mono';
         const fontMode = mode === 'mono' ? 'mono' : 'serif';
         document.body.setAttribute('data-font', fontMode);
         document.documentElement.setAttribute('data-font', fontMode);

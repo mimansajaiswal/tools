@@ -390,7 +390,7 @@ export const Storage = {
                 sttVerified: false,
                 sttPermissionWarmed: false,
                 themeMode: 'system',
-                fontMode: 'serif',
+                fontMode: 'mono',
                 fabEnabled: true,
                 fabPosition: null,
                 workerVerified: false,
@@ -401,7 +401,13 @@ export const Storage = {
             };
         }
         try {
-            return JSON.parse(raw);
+            const parsed = JSON.parse(raw);
+            // Default to mono font for legacy settings or missing values.
+            if (!parsed.fontMode || parsed.fontMode === 'serif') {
+                parsed.fontMode = 'mono';
+                localStorage.setItem(this.settingsKey, JSON.stringify(parsed));
+            }
+            return parsed;
         } catch (e) {
             console.error('Failed to parse settings, resetting to defaults:', e);
             return {
@@ -420,7 +426,7 @@ export const Storage = {
                 sttVerified: false,
                 sttPermissionWarmed: false,
                 themeMode: 'system',
-                fontMode: 'serif',
+                fontMode: 'mono',
                 fabEnabled: true,
                 fabPosition: null,
                 workerVerified: false,

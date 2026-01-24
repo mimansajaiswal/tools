@@ -27,6 +27,7 @@
     <script src="https://cdn.jsdelivr.net/npm/marked@17.0.1/lib/marked.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://unpkg.com/sql.js@1.13.0/dist/sql-wasm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <!-- KaTeX for equations -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.27/dist/katex.min.css">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.27/dist/katex.min.js"></script>
@@ -44,11 +45,11 @@
         (() => {
             const raw = localStorage.getItem('ghostink_settings_v1');
             let mode = 'system';
-            let font = 'serif';
+            let font = 'mono';
             try {
                 const s = raw ? JSON.parse(raw) : {};
                 mode = s.themeMode || 'system';
-                font = s.fontMode || 'serif';
+                font = s.fontMode || 'mono';
             } catch (_) { }
             const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
             const theme = mode === 'system' ? (prefersDark ? 'dark' : 'light') : mode;
@@ -95,7 +96,7 @@
     <link rel="stylesheet" href="css/styles.css">
 </head>
 
-<body class="text-main font-sans min-h-[100dvh] preinit" data-theme="light" data-font="serif">
+<body class="text-main font-sans min-h-[100dvh] preinit" data-theme="light" data-font="mono">
     <div class="min-h-[100dvh] flex flex-col">
         <header
             class="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-5 md:px-10 pt-4 sm:pt-6 pb-3 sm:pb-4">
@@ -137,7 +138,9 @@
                     data-tip="Keyboard shortcuts" aria-label="Keyboard shortcuts">
                     <i data-lucide="keyboard" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
                 </button>
-                <div class="hidden sm:flex items-center gap-0.5 sm:gap-1 pill-toggle rounded-md px-1 sm:px-2 py-1">
+                <div class="hidden sm:flex items-center gap-1 pill-toggle rounded-md px-1 sm:px-2 py-1">
+                    <span
+                        class="text-[8px] font-mono uppercase tracking-[0.18em] text-[color:var(--text-sub)] leading-none opacity-70">Anki</span>
                     <button id="exportAnkiBtn" class="p-1 rounded-full" data-tip="Export Anki"
                         aria-label="Export to Anki">
                         <i data-lucide="download" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
@@ -183,6 +186,8 @@
                         aria-label="Monospace font"><span class="font-swatch-mono">Aa</span></button>
                 </div>
                 <div class="flex items-center gap-1 pill-toggle rounded-md px-2 py-1">
+                    <span
+                        class="text-[8px] font-mono uppercase tracking-[0.18em] text-[color:var(--text-sub)] opacity-70">Anki</span>
                     <button id="exportAnkiBtnMobile" class="p-1 rounded-full" data-tip="Export Anki"
                         aria-label="Export to Anki"><i data-lucide="download" class="w-4 h-4"></i></button>
                     <label class="p-1 rounded-full cursor-pointer" data-tip="Import Anki" aria-label="Import from Anki">
@@ -199,9 +204,15 @@
         <!-- Tab Navigation -->
         <nav id="tabBar"
             class="px-3 sm:px-5 md:px-10 py-2 sm:py-3 flex gap-1.5 sm:gap-2 border-b border-[color:var(--card-border)]">
-            <button data-tab="study" class="tab-btn active text-xs sm:text-sm">📖 Study</button>
-            <button data-tab="library" class="tab-btn text-xs sm:text-sm">📚 Library</button>
-            <button data-tab="analytics" class="tab-btn text-xs sm:text-sm">📊 Analytics</button>
+            <button data-tab="study" class="tab-btn active text-xs sm:text-sm inline-flex items-center gap-1.5">
+                <i data-lucide="brain" class="w-3.5 h-3.5"></i>Study
+            </button>
+            <button data-tab="library" class="tab-btn text-xs sm:text-sm inline-flex items-center gap-1.5">
+                <i data-lucide="layers" class="w-3.5 h-3.5"></i>Library
+            </button>
+            <button data-tab="analytics" class="tab-btn text-xs sm:text-sm inline-flex items-center gap-1.5">
+                <i data-lucide="bar-chart-3" class="w-3.5 h-3.5"></i>Analytics
+            </button>
         </nav>
 
         <main class="px-3 sm:px-5 md:px-10 pb-6 sm:pb-10 space-y-4 md:space-y-6">
@@ -258,9 +269,9 @@
                 </div>
 
                 <div class="space-y-3">
-                    <p class="font-display text-xl text-main leading-tight">AI-assisted spaced repetition for
+                    <p class="font-display text-lg sm:text-xl text-main leading-tight">AI-assisted spaced repetition for
                         flashcards stored in Notion</p>
-                    <p class="text-sm text-sub leading-relaxed">
+                    <p class="text-xs sm:text-sm text-sub leading-relaxed">
                         Your cards live in Notion where you can see and edit them. Reveal answers like Anki, or
                         type/speak your answer and let AI check it against the ground truth.
                     </p>
@@ -372,7 +383,7 @@
                             <div id="cardsContainer"
                                 class="max-h-[350px] md:max-h-[400px] overflow-y-auto scroll-minimal">
                                 <table class="w-full text-xs md:text-sm">
-                                    <thead class="text-muted sticky top-0 bg-[color:var(--card-bg)] z-10">
+                                    <thead class="text-muted sticky top-0 bg-[color:var(--card-bg)]">
                                         <tr class="border-b border-card">
                                             <th class="py-2 text-left">Name</th>
                                             <th class="py-2 text-left hidden sm:table-cell">Type</th>
@@ -415,7 +426,7 @@
                                     <span class="hidden md:inline">Stop Session</span>
                                     <span class="md:hidden">Stop</span>
                                     <kbd id="stopSessionHotkey"
-                                        class="hidden md:inline text-[10px] ml-1 px-1.5 py-0.5 rounded bg-accent-soft text-accent font-medium"></kbd>
+                                        class="hidden md:inline hotkey-chip text-[10px] ml-1 px-1.5 py-0.5 rounded font-medium"></kbd>
                                 </button>
                             </div>
                         </div>
@@ -462,7 +473,7 @@
                                         <i data-lucide="play" class="w-4 h-4"></i>
                                         <span>Start Study Session</span>
                                         <kbd id="startSessionHotkey"
-                                            class="hidden md:inline-block text-[10px] px-1.5 py-0.5 rounded bg-surface-muted font-medium ml-1 font-sans"></kbd>
+                                            class="hidden md:inline-block hotkey-chip text-[10px] px-1.5 py-0.5 rounded font-medium ml-1"></kbd>
                                     </button>
                                 </div>
                             </div>
@@ -548,20 +559,45 @@
                                         </select>
                                     </div>
                                     <div class="col-span-2">
-                                        <label class="text-xs text-sub">Flag</label>
-                                        <select id="filterFlag"
-                                            class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm">
-                                            <option value="">All flags</option>
-                                            <option value="Red">Red</option>
-                                            <option value="Orange">Orange</option>
-                                            <option value="Yellow">Yellow</option>
-                                            <option value="Green">Green</option>
-                                            <option value="Blue">Blue</option>
-                                            <option value="Purple">Purple</option>
-                                        </select>
+                                        <div class="flex items-center justify-between">
+                                            <label class="text-xs text-sub">Flag</label>
+                                            <button id="filterFlagClear" type="button"
+                                                class="text-[11px] text-accent hover:underline">Clear</button>
+                                        </div>
+                                        <div id="filterFlagSwatches" class="flag-swatch-row">
+                                            <button type="button" class="flag-swatch-btn" data-flag="Red"
+                                                aria-label="Red flag">
+                                                <span class="flag-swatch flag-red"></span>
+                                            </button>
+                                            <button type="button" class="flag-swatch-btn" data-flag="Orange"
+                                                aria-label="Orange flag">
+                                                <span class="flag-swatch flag-orange"></span>
+                                            </button>
+                                            <button type="button" class="flag-swatch-btn" data-flag="Yellow"
+                                                aria-label="Yellow flag">
+                                                <span class="flag-swatch flag-yellow"></span>
+                                            </button>
+                                            <button type="button" class="flag-swatch-btn" data-flag="Green"
+                                                aria-label="Green flag">
+                                                <span class="flag-swatch flag-green"></span>
+                                            </button>
+                                            <button type="button" class="flag-swatch-btn" data-flag="Blue"
+                                                aria-label="Blue flag">
+                                                <span class="flag-swatch flag-blue"></span>
+                                            </button>
+                                            <button type="button" class="flag-swatch-btn" data-flag="Purple"
+                                                aria-label="Purple flag">
+                                                <span class="flag-swatch flag-purple"></span>
+                                            </button>
+                                        </div>
+                                        <p class="text-[10px] text-muted mt-1">Select one or more to filter. Empty = all
+                                            flags.</p>
                                     </div>
                                     <button id="resetFiltersMobile"
                                         class="col-span-2 sm:hidden text-xs text-accent hover:underline text-center py-2">Reset
+                                        all filters</button>
+                                    <button id="resetFiltersAll"
+                                        class="col-span-2 hidden sm:block text-xs text-accent hover:underline text-center py-2">Reset
                                         all filters</button>
                                 </div>
                             </div>
@@ -605,7 +641,7 @@
                                         class="relative px-3 py-2.5 w-full rounded-lg bg-[color:var(--badge-bg)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--badge-bg-hover)] ">
                                         Reveal
                                         <kbd
-                                            class="hidden md:inline-block absolute right-3 top-1/2 -translate-y-1/2 text-[10px] px-1.5 py-0.5 rounded bg-surface-muted font-medium">␣</kbd>
+                                            class="hidden md:inline-block hotkey-chip absolute right-3 top-1/2 -translate-y-1/2 text-[10px] px-2 py-0.5 rounded font-medium">Space</kbd>
                                     </button>
                                     <div id="aiControls" class="hidden space-y-2">
                                         <textarea id="aiAnswer" rows="3" placeholder="Type your answer..."
@@ -616,12 +652,12 @@
                                                 title="Record">
                                                 <i data-lucide="mic" class="w-4 h-4"></i>
                                                 <kbd id="micHotkey"
-                                                    class="hidden md:inline-block absolute right-2 top-1/2 -translate-y-1/2 text-[10px] px-1 py-0.5 rounded bg-surface-muted text-muted"></kbd>
+                                                    class="hidden md:inline-block hotkey-chip absolute right-2 top-1/2 -translate-y-1/2 text-[10px] px-1 py-0.5 rounded"></kbd>
                                             </button>
                                             <button id="aiSubmit"
                                                 class="px-3 py-2 rounded-lg bg-[color:var(--accent)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--accent-hover)] transition-all flex-1">
                                                 Send <kbd id="aiSendHotkey"
-                                                    class="hidden md:inline-block text-[10px] px-1.5 py-0.5 rounded bg-surface-muted font-medium ml-1 font-sans"></kbd>
+                                                    class="hidden md:inline-block hotkey-chip text-[10px] px-1.5 py-0.5 rounded font-medium ml-1"></kbd>
                                             </button>
                                         </div>
                                         <div id="aiFeedback"
@@ -670,7 +706,7 @@
                                             <i data-lucide="square-slash" class="w-3 h-3"></i>
                                             <span>Skip</span>
                                             <kbd id="skipHotkey"
-                                                class="hidden md:inline text-[9px] ml-0.5 px-1 py-0.5 rounded bg-accent-soft text-accent font-medium">S</kbd>
+                                                class="hidden md:inline hotkey-chip text-[9px] ml-0.5 px-1 py-0.5 rounded font-medium">S</kbd>
                                         </button>
                                     </div>
                                 </div>
@@ -766,18 +802,59 @@
                                     and review patterns</p>
                             </div>
                             <div class="flex flex-wrap items-center gap-2">
-                                <select id="analyticsDeckSelect"
-                                    class="rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] px-3 py-2 text-sm text-[color:var(--text-main)]">
-                                    <option value="all">All decks</option>
-                                </select>
-                                <select id="analyticsRangeSelect"
-                                    class="rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] px-3 py-2 text-sm text-[color:var(--text-main)]">
-                                    <option value="7">Last week</option>
-                                    <option value="30">Last month</option>
-                                    <option value="90" selected>Last 3 months</option>
-                                    <option value="180">Last 6 months</option>
-                                    <option value="365">Last year</option>
-                                </select>
+                                <div id="analyticsDeckWrap" class="relative">
+                                    <button id="analyticsDeckBtn"
+                                        class="rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] px-3 py-2 text-sm text-[color:var(--text-main)] inline-flex items-center gap-2">
+                                        <span id="analyticsDeckLabel">All decks</span>
+                                        <i data-lucide="chevron-down" class="w-4 h-4 text-[color:var(--text-sub)]"></i>
+                                    </button>
+                                    <div id="analyticsDeckMenu"
+                                        class="analytics-menu analytics-menu-right mt-2 hidden min-w-[210px] rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] shadow-lg p-1 z-50">
+                                    </div>
+                                </div>
+                                <div id="analyticsRangeWrap" class="relative">
+                                    <button id="analyticsRangeBtn"
+                                        class="rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] px-3 py-2 text-sm text-[color:var(--text-main)] inline-flex items-center gap-2">
+                                        <span id="analyticsRangeLabel">Last 3 months</span>
+                                        <i data-lucide="chevron-down" class="w-4 h-4 text-[color:var(--text-sub)]"></i>
+                                    </button>
+                                    <div id="analyticsRangeMenu"
+                                        class="analytics-menu analytics-menu-right mt-2 hidden min-w-[190px] rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] shadow-lg p-1 z-50">
+                                        <button type="button"
+                                            class="analytics-range-option w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-muted"
+                                            data-range="all">All time</button>
+                                        <button type="button"
+                                            class="analytics-range-option w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-muted"
+                                            data-range="7">Last week</button>
+                                        <button type="button"
+                                            class="analytics-range-option w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-muted"
+                                            data-range="30">Last month</button>
+                                        <button type="button"
+                                            class="analytics-range-option w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-muted"
+                                            data-range="90">Last 3 months</button>
+                                        <button type="button"
+                                            class="analytics-range-option w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-muted"
+                                            data-range="180">Last 6 months</button>
+                                        <button type="button"
+                                            class="analytics-range-option w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-muted"
+                                            data-range="365">Last year</button>
+                                        <button type="button"
+                                            class="analytics-range-option w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-muted"
+                                            data-range="this-year">This year</button>
+                                        <div class="analytics-submenu-wrap">
+                                            <button type="button"
+                                                class="analytics-range-option analytics-submenu-trigger w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-muted inline-flex items-center justify-between"
+                                                data-range="by-year">
+                                                By year
+                                                <i data-lucide="chevron-right"
+                                                    class="submenu-chevron w-3 h-3 text-[color:var(--text-sub)]"></i>
+                                            </button>
+                                            <div id="analyticsYearMenu"
+                                                class="analytics-submenu hidden min-w-[140px] rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] shadow-lg p-1 z-50">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </article>
@@ -806,18 +883,34 @@
                                     heatmap</h3>
                                 <p class="text-xs text-[color:var(--text-sub)] mt-0.5">Daily review activity</p>
                             </div>
-                            <span id="analyticsStreakBadge" class="analytics-pill self-start sm:self-auto"></span>
+                            <div class="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                                <div
+                                    class="inline-flex rounded-full border border-[color:var(--card-border)] bg-[color:var(--surface)] overflow-hidden">
+                                    <button id="heatmapMetricReviews" type="button"
+                                        class="heatmap-metric-btn is-active px-2.5 py-1 text-[10px] font-mono uppercase tracking-wide">
+                                        Reviews</button>
+                                    <button id="heatmapMetricRating" type="button"
+                                        class="heatmap-metric-btn px-2.5 py-1 text-[10px] font-mono uppercase tracking-wide">
+                                        Avg rating</button>
+                                </div>
+                                <button id="heatmapDownloadBtn"
+                                    class="p-1.5 rounded-lg border border-[color:var(--card-border)] text-[color:var(--text-sub)] hover:text-[color:var(--text-main)] hover:bg-surface-strong transition-all"
+                                    title="Download heatmap PNG">
+                                    <i data-lucide="download" class="w-4 h-4"></i>
+                                </button>
+                                <span id="analyticsStreakBadge" class="analytics-pill"></span>
+                            </div>
                         </div>
-                        <div id="analyticsHeatmap" class="heatmap-grid"></div>
+                        <div id="analyticsHeatmap" class="heatmap-years"></div>
                         <div class="flex items-center justify-end mt-3">
                             <div class="heatmap-legend">
-                                <span>Less</span>
+                                <span id="heatmapLegendLow">Fewer reviews</span>
                                 <span class="heatmap-swatch level-0"></span>
                                 <span class="heatmap-swatch level-1"></span>
                                 <span class="heatmap-swatch level-2"></span>
                                 <span class="heatmap-swatch level-3"></span>
                                 <span class="heatmap-swatch level-4"></span>
-                                <span>More</span>
+                                <span id="heatmapLegendHigh">More reviews</span>
                             </div>
                         </div>
                     </article>
@@ -898,15 +991,15 @@
     </div>
 
     <div id="toast" role="status" aria-live="polite"
-        class="fixed z-[110] bottom-6 right-6 px-4 py-3 rounded-md bg-[color:var(--badge-bg)] text-[color:var(--badge-text)] text-sm font-medium hidden opacity-0 transition-opacity duration-300 border border-[color:var(--card-border)]">
+        class="fixed z-[260] bottom-6 right-6 px-4 py-3 rounded-md bg-[color:var(--badge-bg)] text-[color:var(--badge-text)] text-sm font-medium hidden opacity-0 transition-opacity duration-300 border border-[color:var(--card-border)]">
     </div>
     <div id="tooltip"
-        class="fixed z-[120] px-2.5 py-1.5 rounded-md text-xs font-mono bg-[color:var(--badge-bg)] text-[color:var(--badge-text)] pointer-events-none hidden border border-[color:var(--card-border)]">
+        class="fixed z-[260] px-2.5 py-1.5 rounded-md text-xs font-mono bg-[color:var(--badge-bg)] text-[color:var(--badge-text)] pointer-events-none hidden border border-[color:var(--card-border)]">
     </div>
 
     <!-- Global loading overlay -->
     <div id="loadingOverlay"
-        class="fixed inset-0 z-[130] bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center">
+        class="fixed inset-0 z-[300] bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center">
         <div class="flex flex-col items-center gap-3 text-[color:var(--overlay-text)] text-center px-6">
             <div
                 class="h-12 w-12 border-4 border-[color:var(--overlay-track)] border-t-[color:var(--overlay-text)] rounded-full animate-spin">
@@ -929,9 +1022,9 @@
     </div>
 
     <div id="confirmModal" role="dialog" aria-modal="true" aria-labelledby="confirmModalTitle"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[200]">
         <div class="card rounded-lg p-5 w-full max-w-sm shadow-soft">
-            <p id="confirmModalTitle" class="text-main font-display text-lg mb-2">Confirm delete</p>
+            <p id="confirmModalTitle" class="modal-title font-display text-lg mb-2">Confirm delete</p>
             <p class="text-sm text-sub ">This removes it locally and syncs deletion to
                 Notion.</p>
             <div class="flex justify-end gap-2 mt-4">
@@ -945,13 +1038,13 @@
 
     <!-- Reset Algorithm Confirmation Modal -->
     <div id="resetAlgorithmModal" role="dialog" aria-modal="true" aria-labelledby="resetAlgorithmTitle"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50 z-[200]">
         <div class="card rounded-lg p-5 w-full max-w-md shadow-soft">
             <div class="flex items-center gap-3 mb-3">
                 <div class="p-2 rounded-full bg-[color:var(--danger-soft-bg)]">
                     <i data-lucide="alert-triangle" class="w-5 h-5 text-[color:var(--danger-soft-text)]"></i>
                 </div>
-                <h3 id="resetAlgorithmTitle" class="text-main font-display text-lg">Reset Algorithm Parameters</h3>
+                <h3 id="resetAlgorithmTitle" class="modal-title font-display text-lg">Reset Algorithm Parameters</h3>
             </div>
             <div class="space-y-3 text-sm text-sub-strong ">
                 <p>This will reset <strong>all spaced repetition data</strong> for every card in <span
@@ -995,14 +1088,16 @@
 
     <!-- Settings -->
     <div id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[200]">
         <div id="settingsCard" class="card rounded-lg p-5 w-full max-w-3xl shadow-soft max-h-[90vh] overflow-y-auto">
             <div class="sticky top-[-20px] pt-[20px] -mt-[20px] z-20 bg-[color:var(--surface)] pb-2 space-y-3">
                 <div class="flex items-center justify-between">
-                    <h3 id="settingsTitle" class="font-display text-lg text-main">Settings</h3>
+                    <h3 id="settingsTitle" class="modal-title font-display text-lg">Settings</h3>
                     <div class="flex items-center gap-2">
                         <button id="saveSettings"
-                            class="px-3 py-1.5 rounded-lg bg-[color:var(--accent)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--accent-hover)] transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-[color:var(--accent)]">Save</button>
+                            class="px-3 py-1.5 rounded-lg bg-[color:var(--accent)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--accent-hover)] transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-[color:var(--accent)] inline-flex items-center gap-2">
+                            <i data-lucide="save" class="w-4 h-4"></i>Save
+                        </button>
                         <button id="closeSettings" aria-label="Close settings" class="text-muted hover:text-main"><i
                                 data-lucide="x" class="w-5 h-5"></i></button>
                     </div>
@@ -1017,14 +1112,14 @@
                                 <p class="font-semibold text-main text-sm">Status</p>
                             </div>
                             <div id="q2syncIndicator"
-                                class="hidden items-center gap-1.5 px-2 py-0.5 rounded bg-accent-soft border border-[color:var(--accent)]/20">
+                                class="hidden flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-muted border border-[color:var(--border-faint)] whitespace-nowrap min-w-max">
                                 <span class="relative flex h-1.5 w-1.5">
                                     <span
                                         class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[color:var(--dull-purple)] opacity-75"></span>
                                     <span
                                         class="relative inline-flex rounded-full h-1.5 w-1.5 bg-[color:var(--dull-purple)]"></span>
                                 </span>
-                                <span class="font-mono text-[10px] font-medium text-accent"><span
+                                <span class="font-mono text-[9px] font-medium text-[color:var(--text-sub)]"><span
                                         id="q2syncCount">0</span> items in q2sync</span>
                             </div>
                         </div>
@@ -1165,7 +1260,7 @@
                             </div>
                             <div class="w-full h-2 bg-surface-strong rounded-full overflow-hidden">
                                 <div id="syncProgress"
-                                    class="h-2 bg-[color:var(--accent)] w-0 transition-all duration-500"></div>
+                                    class="h-2 bg-[color:var(--accent)]/60 w-0 transition-all duration-500"></div>
                             </div>
                         </div>
                     </details>
@@ -1333,10 +1428,10 @@
 
     <!-- Worker helper -->
     <div id="workerHelpModal"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[200]">
         <div class="card rounded-lg p-5 w-full max-w-3xl shadow-soft h-[80vh] flex flex-col">
             <div class="flex items-center justify-between mb-3">
-                <h3 class="font-display text-lg text-main">Cloudflare Worker proxy</h3>
+                <h3 class="modal-title font-display text-lg">Cloudflare Worker proxy</h3>
                 <button id="closeWorkerHelp" class="text-muted hover:text-main"><i data-lucide="x"
                         class="w-5 h-5"></i></button>
             </div>
@@ -1426,12 +1521,19 @@ async function handleRequest(request, env) {
 
     <!-- Deck modal -->
     <div id="deckModal" role="dialog" aria-modal="true" aria-labelledby="deckModalTitle"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4">
+        class="fixed inset-0 z-50 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[200]">
         <div class="card rounded-lg p-5 w-full max-w-md shadow-soft max-h-[90vh] overflow-y-auto">
             <div class="flex items-center justify-between mb-3">
-                <h3 class="font-display text-lg text-main" id="deckModalTitle">New deck</h3>
-                <button id="closeDeckModal" aria-label="Close deck modal" class="text-muted hover:text-main"><i
-                        data-lucide="x" class="w-5 h-5"></i></button>
+                <h3 class="modal-title font-display text-lg" id="deckModalTitle">New deck</h3>
+                <div class="flex items-center gap-2">
+                    <button id="saveDeckTopBtn" aria-label="Save deck"
+                        class="group p-1.5 rounded-lg border border-card text-main hover:bg-surface-strong">
+                        <i data-lucide="save"
+                            class="w-4 h-4 transition-transform duration-150 group-hover:scale-110 group-hover:text-accent"></i>
+                    </button>
+                    <button id="closeDeckModal" aria-label="Close deck modal" class="text-muted hover:text-main"><i
+                            data-lucide="x" class="w-5 h-5"></i></button>
+                </div>
             </div>
             <div class="space-y-3 text-sm">
                 <input id="deckNameInput" type="text" placeholder="Deck name" maxlength="200"
@@ -1483,14 +1585,6 @@ async function handleRequest(request, env) {
                     </div>
                     <p class="mt-2 text-[11px] text-sub ">Variables replace question,
                         correct answer, and learner answer.</p>
-                </div>
-                <div>
-                    <label class="text-xs text-sub">SRS config (JSON)</label>
-                    <textarea id="deckSrsConfigInput" rows="6"
-                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-xs font-mono"
-                        placeholder='{"learningSteps":["1m","10m"],"relearningSteps":["10m"],"graduatingInterval":"1d","easyInterval":"4d","easyDays":["Sat","Sun"],"fsrs":{"retention":0.9,"weights":[...]}}'></textarea>
-                    <p class="mt-2 text-[10px] text-muted">Self-healing: invalid or missing fields fall back
-                        to defaults. Learning steps apply to SM-2 only.</p>
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div class="col-span-2">
@@ -1555,12 +1649,19 @@ async function handleRequest(request, env) {
 
     <!-- Card modal -->
     <div id="cardModal" role="dialog" aria-modal="true" aria-labelledby="cardModalTitle"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50 z-[200]">
         <div class="card rounded-lg p-5 w-full max-w-2xl shadow-soft max-h-[90vh] overflow-y-auto">
             <div class="flex items-center justify-between mb-3">
-                <h3 class="font-display text-lg text-main" id="cardModalTitle">New card</h3>
-                <button id="closeCardModal" aria-label="Close card modal" class="text-muted hover:text-main"><i
-                        data-lucide="x" class="w-5 h-5"></i></button>
+                <h3 class="modal-title font-display text-lg" id="cardModalTitle">New card</h3>
+                <div class="flex items-center gap-2">
+                    <button id="saveCardTopBtn" aria-label="Save card"
+                        class="group p-1.5 rounded-lg border border-card text-main hover:bg-surface-strong">
+                        <i data-lucide="save"
+                            class="w-4 h-4 transition-transform duration-150 group-hover:scale-110 group-hover:text-accent"></i>
+                    </button>
+                    <button id="closeCardModal" aria-label="Close card modal" class="text-muted hover:text-main"><i
+                            data-lucide="x" class="w-5 h-5"></i></button>
+                </div>
             </div>
             <p class="text-[10px] text-faint mb-2">Editing Name, Back, or Notes will remove
                 Notion text colors
@@ -1585,24 +1686,37 @@ async function handleRequest(request, env) {
                         class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2"></textarea>
                 </div>
                 <div class="space-y-2">
-                    <label class="text-xs text-sub">Marked</label>
-                    <label class="flex items-center gap-2 text-sm">
+                    <label class="flex items-center gap-2 text-sm text-[color:var(--text-main)]">
                         <input id="cardMarkedInput" type="checkbox" class="accent-dull-purple">
-                        <span>Starred</span>
+                        <span>Marked</span>
                     </label>
                 </div>
                 <div class="space-y-2">
                     <label class="text-xs text-sub">Flag</label>
-                    <select id="cardFlagInput"
-                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm">
-                        <option value="">None</option>
-                        <option value="Red">Red</option>
-                        <option value="Orange">Orange</option>
-                        <option value="Yellow">Yellow</option>
-                        <option value="Green">Green</option>
-                        <option value="Blue">Blue</option>
-                        <option value="Purple">Purple</option>
-                    </select>
+                    <input id="cardFlagInput" type="hidden" value="">
+                    <div id="cardFlagSwatches" class="flag-swatch-row">
+                        <button type="button" class="flag-swatch-btn" data-flag="" aria-label="No flag">
+                            <span class="flag-swatch is-none"></span>
+                        </button>
+                        <button type="button" class="flag-swatch-btn" data-flag="Red" aria-label="Red flag">
+                            <span class="flag-swatch flag-red"></span>
+                        </button>
+                        <button type="button" class="flag-swatch-btn" data-flag="Orange" aria-label="Orange flag">
+                            <span class="flag-swatch flag-orange"></span>
+                        </button>
+                        <button type="button" class="flag-swatch-btn" data-flag="Yellow" aria-label="Yellow flag">
+                            <span class="flag-swatch flag-yellow"></span>
+                        </button>
+                        <button type="button" class="flag-swatch-btn" data-flag="Green" aria-label="Green flag">
+                            <span class="flag-swatch flag-green"></span>
+                        </button>
+                        <button type="button" class="flag-swatch-btn" data-flag="Blue" aria-label="Blue flag">
+                            <span class="flag-swatch flag-blue"></span>
+                        </button>
+                        <button type="button" class="flag-swatch-btn" data-flag="Purple" aria-label="Purple flag">
+                            <span class="flag-swatch flag-purple"></span>
+                        </button>
+                    </div>
                 </div>
                 <div id="cardBackSection" class="md:col-span-2 space-y-2">
                     <label class="text-xs text-sub">Back</label>
@@ -1631,12 +1745,12 @@ async function handleRequest(request, env) {
                     </div>
                     <div id="cardTagSelected" class="flex flex-wrap gap-1.5 mt-1"></div>
                 </div>
-                <div class="space-y-2">
+                <div id="cardOrderField" class="space-y-2 hidden">
                     <label class="text-xs text-sub">Order</label>
                     <input id="cardOrderInput" type="number" placeholder="Optional number"
                         class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2">
                 </div>
-                <div class="space-y-2">
+                <div id="cardSuspendedLeechField" class="space-y-2 hidden">
                     <label class="text-xs text-sub">Suspended / Leech</label>
                     <div class="grid grid-cols-2 gap-2">
                         <label class="flex items-center gap-2"><input id="cardSuspendedInput" type="checkbox"
@@ -1669,11 +1783,11 @@ async function handleRequest(request, env) {
 
     <!-- Shortcuts modal -->
     <div id="shortcutsModal" role="dialog" aria-modal="true" aria-labelledby="shortcutsModalTitle"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50 z-[200]">
         <div class="card rounded-lg p-5 w-full max-w-2xl shadow-soft max-h-[90vh] overflow-y-auto shortcuts-card">
             <div class="shortcuts-header">
                 <div>
-                    <h3 class="font-display text-lg text-[color:var(--text-main)]" id="shortcutsModalTitle">Keyboard
+                    <h3 class="modal-title font-display text-lg" id="shortcutsModalTitle">Keyboard
                         shortcuts</h3>
                     <p class="text-xs text-[color:var(--text-sub)]">Quick actions by mode</p>
                 </div>
@@ -1723,13 +1837,13 @@ async function handleRequest(request, env) {
 
     <!-- AI Settings Required Modal -->
     <div id="aiSettingsRequiredModal"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50 z-[200]">
         <div
             class="card rounded-lg p-5 w-full max-w-md shadow-soft text-center space-y-4 bg-[color:var(--card-bg)] border border-[color:var(--card-border)]">
             <div class="w-12 h-12 rounded-full bg-accent-soft flex items-center justify-center mx-auto">
                 <i data-lucide="bot" class="w-6 h-6 text-accent"></i>
             </div>
-            <h3 id="aiSettingsModalTitle" class="font-display text-lg text-main ">AI not available
+            <h3 id="aiSettingsModalTitle" class="modal-title font-display text-lg">AI not available
             </h3>
             <p id="aiSettingsModalBody" class="text-sm text-sub "></p>
             <div id="aiSettingsModalActions" class="flex gap-2 justify-center">
@@ -1744,10 +1858,10 @@ async function handleRequest(request, env) {
 
     <!-- Notes Edit Modal -->
     <div id="notesModal" role="dialog" aria-modal="true" aria-labelledby="notesModalTitle"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50 z-[200]">
         <div class="card rounded-lg p-5 w-full max-w-lg shadow-soft space-y-4 max-h-[90vh] flex flex-col">
             <div class="flex items-center justify-between">
-                <h3 id="notesModalTitle" class="font-display text-lg text-main">Edit Notes</h3>
+                <h3 id="notesModalTitle" class="modal-title font-display text-lg">Edit Notes</h3>
                 <button id="closeNotesModal" aria-label="Close notes modal"
                     class="p-1.5 rounded-lg hover:bg-surface-strong text-main">
                     <i data-lucide="x" class="w-5 h-5"></i>
@@ -1772,13 +1886,13 @@ async function handleRequest(request, env) {
 
     <!-- Reset Confirmation Modal -->
     <div id="resetConfirmModal"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50 z-[200]">
         <div class="card rounded-lg p-5 w-full max-w-sm shadow-soft">
             <div class="flex items-center gap-3 mb-3">
                 <div class="p-2 rounded-full bg-[color:var(--accent-2)]/20">
                     <i data-lucide="alert-triangle" class="w-5 h-5 text-accent-2"></i>
                 </div>
-                <h3 class="font-display text-lg text-main">Reset GhostInk?</h3>
+                <h3 class="modal-title font-display text-lg">Reset GhostInk?</h3>
             </div>
             <p class="text-sm text-sub mb-4">This will permanently delete all local data
                 including decks,
@@ -1794,10 +1908,10 @@ async function handleRequest(request, env) {
 
     <!-- Add Block Note Modal -->
     <div id="addBlockModal"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50 z-[200]">
         <div class="card rounded-lg p-5 w-full max-w-lg shadow-soft space-y-4 max-h-[90vh] flex flex-col">
             <div class="flex items-center justify-between">
-                <h3 class="font-display text-lg text-main">Add Note to Page</h3>
+                <h3 class="modal-title font-display text-lg">Add Note to Page</h3>
                 <button id="closeAddBlockModal" class="p-1.5 rounded-lg hover:bg-surface-strong text-main">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>

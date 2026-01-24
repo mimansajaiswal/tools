@@ -192,11 +192,35 @@ export const markdownToNotionRichText = (markdown) => {
         }
     };
 
+    const allowedColors = new Set([
+        'default',
+        'gray',
+        'brown',
+        'orange',
+        'yellow',
+        'green',
+        'blue',
+        'purple',
+        'pink',
+        'red',
+        'gray_background',
+        'brown_background',
+        'orange_background',
+        'yellow_background',
+        'green_background',
+        'blue_background',
+        'purple_background',
+        'pink_background',
+        'red_background'
+    ]);
+
     const normalizeColor = (cls) => {
         // notion-color-gray-background -> gray_background
         const c = (cls || '').replace(/^notion-color-/, '').trim();
-        if (!c) return null;
-        return c.replace(/-/g, '_');
+        if (!c) return undefined;
+        const normalized = c.replace(/-/g, '_');
+        if (normalized === 'default_background') return 'default';
+        return allowedColors.has(normalized) ? normalized : undefined;
     };
 
     const pushText = (text, annotations, link) => {
@@ -447,15 +471,23 @@ export const NotionMapper = {
         const orderMap = { 'none': 'none', 'created time': 'created', 'order property': 'property' };
         const srsConfigRaw = props['SRS Config']?.rich_text?.map(t => t.plain_text).join('') || '';
         let srsConfigError = false;
+        let srsConfigObj = null;
         if (srsConfigRaw) {
-            try { JSON.parse(srsConfigRaw); } catch { srsConfigError = true; }
+            try { srsConfigObj = JSON.parse(srsConfigRaw); } catch { srsConfigError = true; }
         }
-        const srsConfig = parseSrsConfigText(srsConfigRaw, props['SRS Algorithm']?.select?.name || 'SM-2');
+        const algoRaw = props['SRS Algorithm']?.select?.name || 'SM-2';
+        const algorithm = (algoRaw || '').toUpperCase() === 'FSRS' ? 'FSRS' : 'SM-2';
+        const srsConfig = parseSrsConfigText(srsConfigRaw, algorithm);
+        const hasFsrs = !!(srsConfigObj && typeof srsConfigObj === 'object' && 'fsrs' in srsConfigObj);
+        const srsConfigMismatch = !srsConfigError && srsConfigObj && (
+            (algorithm !== 'FSRS' && hasFsrs) ||
+            (algorithm === 'FSRS' && !hasFsrs)
+        );
         return {
             id: page.id,
             notionId: page.id,
             name: title,
-            algorithm: props['SRS Algorithm']?.select?.name || 'SM-2',
+            algorithm,
             orderMode: orderMap[rawMode.toLowerCase()] || 'none',
             reviewLimit: props['Daily Review Limit']?.number || 50,
             newLimit: props['New Card Limit']?.number || 20,
@@ -467,6 +499,7 @@ export const NotionMapper = {
             srsConfig,
             srsConfigRaw,
             srsConfigError,
+            srsConfigMismatch,
             updatedInApp: false
         };
     },
@@ -478,9 +511,24 @@ export const NotionMapper = {
      */
     deckProps(deck) {
         const orderLabels = { none: 'None', created: 'Created Time', property: 'Order Property' };
+        const algorithm = deck.algorithm || 'SM-2';
+        const normalizedSrsConfig = parseSrsConfig(deck.srsConfig || null, algorithm);
+        const srsPayload = {
+            learningSteps: normalizedSrsConfig.learningSteps,
+            relearningSteps: normalizedSrsConfig.relearningSteps,
+            graduatingInterval: normalizedSrsConfig.graduatingInterval,
+            easyInterval: normalizedSrsConfig.easyInterval,
+            easyDays: normalizedSrsConfig.easyDays
+        };
+        if (algorithm === 'FSRS') {
+            srsPayload.fsrs = {
+                retention: normalizedSrsConfig.fsrs?.retention ?? DEFAULT_DESIRED_RETENTION,
+                weights: normalizedSrsConfig.fsrs?.weights || fsrsW
+            };
+        }
         return {
             'Deck Name': { title: markdownToNotionRichText(deck.name) },
-            'SRS Algorithm': { select: { name: deck.algorithm } },
+            'SRS Algorithm': { select: { name: algorithm } },
             'Order Mode': { select: { name: orderLabels[deck.orderMode] || orderLabels.none } },
             'Daily Review Limit': { number: deck.reviewLimit },
             'New Card Limit': { number: deck.newLimit },
@@ -489,7 +537,7 @@ export const NotionMapper = {
             'Archived?': { checkbox: !!deck.archived },
             'Anki Metadata': { rich_text: deck.ankiMetadata ? [{ text: { content: deck.ankiMetadata } }] : [] },
             'AI Revision Prompt': { rich_text: markdownToNotionRichText(deck.aiPrompt) },
-            'SRS Config': { rich_text: toRichTextChunks(JSON.stringify(deck.srsConfig || parseSrsConfig(null, deck.algorithm))) }
+            'SRS Config': { rich_text: toRichTextChunks(JSON.stringify(srsPayload)) }
         };
     },
 
@@ -561,8 +609,8 @@ export const NotionMapper = {
             ankiNoteType: p['Anki Note Type']?.select?.name || '',
             ankiFields: p['Anki Fields JSON']?.rich_text?.[0]?.plain_text || '',
             clozeIndexes: p['Cloze Indexes']?.rich_text?.[0]?.plain_text || '',
-            parentCard: p['Parent Card']?.relation?.[0]?.id || null,
-            subCards: (p['Sub Cards']?.relation || []).map(r => r.id),
+            parentCard: p['Cloze Parent Card']?.relation?.[0]?.id || null,
+            subCards: (p['Cloze Sub Cards']?.relation || []).map(r => r.id),
             createdAt: page.created_time,
             lastEditedAt: page.last_edited_time,
             // Store original Notion rich_text to preserve colors/equations on sync
@@ -634,7 +682,7 @@ export const NotionMapper = {
             'Anki Note Type': card.ankiNoteType ? { select: { name: card.ankiNoteType } } : { select: null },
             'Anki Fields JSON': card.ankiFields ? { rich_text: [{ type: 'text', text: { content: card.ankiFields } }] } : { rich_text: [] },
             'Cloze Indexes': card.clozeIndexes ? { rich_text: [{ type: 'text', text: { content: card.clozeIndexes } }] } : { rich_text: [] },
-            'Parent Card': card.parentCard
+            'Cloze Parent Card': card.parentCard
                 ? { relation: [{ id: card.parentCard }] }
                 : { relation: [] }
         };
