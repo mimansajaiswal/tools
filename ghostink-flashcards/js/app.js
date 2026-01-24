@@ -3850,7 +3850,7 @@ export const App = {
             }
         };
     },
-    highlightVariables(el, allowedVars = []) {
+    highlightVariables(el, allowedVars = [], sourceText = null) {
         if (!el) return;
 
         // Save cursor position
@@ -3897,16 +3897,19 @@ export const App = {
             selection.addRange(range);
         };
 
-        const caret = getCaretIndex(el);
-        const text = el.innerText;
+        const caret = sourceText === null ? getCaretIndex(el) : 0;
+        const text = sourceText !== null ? sourceText : el.innerText;
 
         // Highlight logic - only match allowed variables
-        let html = text;
+        let html = escapeHtml(text);
         if (allowedVars.length > 0) {
             // Escape vars for regex just in case (though these are known safe strings)
             const pattern = new RegExp(`\\{\\{(${allowedVars.join('|')})\\}\\}`, 'g');
-            html = text.replace(pattern, '<span class="text-accent bg-accent-soft rounded px-0.5">{{$1}}</span>');
+            html = html.replace(pattern, '<span class="text-accent bg-accent-soft rounded px-0.5">{{$1}}</span>');
         }
+
+        // Fix: Contenteditable eats newlines with just pre-wrap; explicit <br> is more robust for editing
+        html = html.replace(/\n/g, '<br>');
 
         // Only update if changed (prevents loop/jitter if no change)
         if (el.innerHTML !== html) {
@@ -3941,8 +3944,8 @@ export const App = {
         const revVars = ['question', 'answer', 'user'];
         // Use innerText for contenteditable
         if (promptInput) {
-            promptInput.innerText = deck?.aiPrompt ?? DEFAULT_AI_PROMPT;
-            this.highlightVariables(promptInput, revVars);
+            const rawPrompt = deck?.aiPrompt ?? DEFAULT_AI_PROMPT;
+            this.highlightVariables(promptInput, revVars, rawPrompt);
             promptInput.oninput = debounce(() => this.highlightVariables(promptInput, revVars), 300);
         }
 
@@ -3952,16 +3955,16 @@ export const App = {
         const dyVars = ['root_front', 'root_back', 'prev_front', 'prev_back', 'tags', 'card_type'];
         if (dyEnabled) dyEnabled.checked = !!deck?.dynamicContext;
         if (dyPromptInput) {
-            dyPromptInput.innerText = deck?.dyAiPrompt ?? '';
-            this.highlightVariables(dyPromptInput, dyVars);
+            const rawDy = deck?.dyAiPrompt ?? '';
+            this.highlightVariables(dyPromptInput, dyVars, rawDy);
             dyPromptInput.oninput = debounce(() => this.highlightVariables(dyPromptInput, dyVars), 300);
         }
         const toggleDyContextFields = () => {
             if (!dyFields || !dyEnabled) return;
             dyFields.classList.toggle('hidden', !dyEnabled.checked);
             if (dyEnabled.checked && dyPromptInput && !(dyPromptInput.innerText || '').trim()) {
-                dyPromptInput.innerText = DEFAULT_DYCONTEXT_PROMPT;
-                this.highlightVariables(dyPromptInput, dyVars);
+                // If showing for first time and empty, load default
+                this.highlightVariables(dyPromptInput, dyVars, DEFAULT_DYCONTEXT_PROMPT);
             }
         };
         if (dyEnabled) dyEnabled.onchange = toggleDyContextFields;
@@ -4515,6 +4518,9 @@ export const App = {
         if (!this.state.editingCard) this.state.cards.push(card);
         await Storage.put('cards', card);
         this.queueOp({ type: 'card-upsert', payload: card });
+        if (isClozeParent(card)) {
+            await this.reconcileSingleParent(card);
+        }
         this.renderCards();
         this.renderDecks(); // Refresh stats (due counts, etc.)
         this.renderStudyDeckSelection();
@@ -5164,13 +5170,6 @@ export const App = {
         const prompt = (deck.dyAiPrompt || '').trim() || DEFAULT_DYCONTEXT_PROMPT;
         return { provider, model, key, prompt };
     },
-    getDyContextPrevMap() {
-        const map = new Map();
-        for (const c of (this.state.cards || [])) {
-            if (c?.dyPrevCard) map.set(c.dyPrevCard, c.id);
-        }
-        return map;
-    },
     getDyContextCardContent(card) {
         if (!card) return { front: '', back: '' };
         const type = (card.type || '').toLowerCase();
@@ -5240,9 +5239,6 @@ export const App = {
         this.state.dyContextProcessing = true;
         const remaining = [];
         try {
-            // Hoist map creation outside the loop for O(n) instead of O(n*m)
-            const prevMap = this.getDyContextPrevMap();
-
             for (const job of queue) {
                 const deck = this.deckById(job.deckId);
                 const prevCard = this.cardById(job.prevId);
@@ -5250,7 +5246,7 @@ export const App = {
                 const dyConfig = this.getDyContextConfig(deck);
                 if (!dyConfig) { continue; }
 
-                if (prevMap.has(job.prevId)) continue;
+                if (prevCard.dyNextCard) continue;
                 if (prevCard.dyPrevCard) {
                     const prevInChain = this.cardById(prevCard.dyPrevCard);
                     if (!this.isDyContextGoodEasy(prevInChain, deck)) { remaining.push(job); continue; }
@@ -5276,11 +5272,6 @@ export const App = {
             await Storage.setMeta('dyContextQueue', this.state.dyContextQueue);
             this.state.dyContextProcessing = false;
         }
-    },
-    hasDyContextChild(prevId, prevMap = null) {
-        if (!prevId) return false;
-        const map = prevMap || this.getDyContextPrevMap();
-        return map.has(prevId);
     },
     getLastRatingFor(card, deck) {
         const alg = deck?.algorithm || 'SM-2';
@@ -5377,6 +5368,9 @@ export const App = {
         this.state.cards.push(newCard);
         await Storage.put('cards', newCard);
         this.queueOp({ type: 'card-upsert', payload: newCard });
+
+        prevCard.dyNextCard = newCard.id;
+        await Storage.put('cards', prevCard);
 
         if ((newCard.type || '').toLowerCase() === 'cloze') {
             await this.reconcileSingleParent(newCard);
@@ -7247,7 +7241,8 @@ export const App = {
                     ['Cloze Parent Card', 'relation'],
                     ['Cloze Sub Cards', 'relation'],
                     ['DyContext Root Card', 'relation'],
-                    ['DyContext Previous Card', 'relation']
+                    ['DyContext Previous Card', 'relation'],
+                    ['DyContext Next Card', 'relation']
                 ];
                 const missing = required.filter(([n, k]) => !has(n, k));
                 if (missing.length) return false;

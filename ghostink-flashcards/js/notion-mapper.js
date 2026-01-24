@@ -626,6 +626,7 @@ export const NotionMapper = {
             subCards: (p['Cloze Sub Cards']?.relation || []).map(r => r.id),
             dyRootCard: p['DyContext Root Card']?.relation?.[0]?.id || null,
             dyPrevCard: p['DyContext Previous Card']?.relation?.[0]?.id || null,
+            dyNextCard: p['DyContext Next Card']?.relation?.[0]?.id || null,
             createdAt: page.created_time,
             lastEditedAt: page.last_edited_time,
             // Store original Notion rich_text to preserve colors/equations on sync
