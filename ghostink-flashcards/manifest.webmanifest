@@ -2,8 +2,8 @@
   "name": "GhostInk Flashcards",
   "short_name": "GhostInk",
   "description": "Spaced repetition flashcard app with Notion integration",
-  "start_url": "/tools/ghostink-flashcards/",
-  "scope": "/tools/ghostink-flashcards/",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#F3F0E6",
   "theme_color": "#917FB3",
@@ -43,7 +43,7 @@
       "name": "Start Study Session",
       "short_name": "Study",
       "description": "Start reviewing your flashcards",
-      "url": "./index.html?action=study",
+      "url": "index.html?action=study",
       "icons": [
         {
           "src": "./icons/icon-96.png",

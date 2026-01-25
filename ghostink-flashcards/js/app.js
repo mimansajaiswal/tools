@@ -4876,6 +4876,10 @@ export const App = {
             }
         }
 
+        // Recalculate stats after pull to ensure UI shows correct counts
+        this.calculateDeckStats();
+        this.renderDecks();
+
         this.renderAll();
     },
 
