@@ -250,10 +250,24 @@ export const Storage = {
                 const tx = this.db.transaction(store, 'readwrite');
                 const objectStore = tx.objectStore(store);
 
-                batch.forEach(value => {
-                    const req = objectStore.put(value);
-                    req.onerror = () => console.warn(`Failed to put item in ${store}:`, req.error);
+                const promises = batch.map(value => {
+                    return new Promise((res, rej) => {
+                        const req = objectStore.put(value);
+                        req.onsuccess = () => res();
+                        req.onerror = () => rej(new Error(`Failed to put item in ${store}: ${req.error?.message}`));
+                    });
                 });
+
+                Promise.all(promises)
+                    .then(() => {
+                        // All requests in this batch succeeded
+                        // Transaction will auto-commit
+                    })
+                    .catch(err => {
+                        // Note: If one fails, the transaction will likely abort
+                        console.error('Batch put error:', err);
+                        // We rely on tx.onerror/tx.onabort to reject the outer promise
+                    });
 
                 tx.oncomplete = () => resolve();
                 tx.onerror = () => reject(new Error(`Transaction failed for ${store}: ${tx.error?.message || 'Unknown error'}`));

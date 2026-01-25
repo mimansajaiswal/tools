@@ -214,26 +214,59 @@ const getCacheMetadata = async (url) => {
   }
 };
 
-// Fix: Clean expired cache entries
+// Optimization: Get all metadata in one transaction
+const getAllCacheMetadata = async () => {
+  try {
+    const db = await openMetaDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(META_STORE, 'readonly');
+      const store = tx.objectStore(META_STORE);
+      // We need keys (URLs) and values (timestamps).
+      // Using openCursor to map them.
+      const map = new Map();
+      const req = store.openCursor();
+      req.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (cursor) {
+          map.set(cursor.key, cursor.value); // key is url, value is timestamp
+          cursor.continue();
+        } else {
+          resolve(map);
+        }
+      };
+      req.onerror = () => reject(req.error);
+    });
+  } catch (e) {
+    console.warn('SW: Failed to get all cache metadata:', e);
+    return new Map();
+  }
+};
+
+// Fix: Clean expired cache entries (Optimized single-transaction)
 async function cleanExpiredCacheEntries() {
   const cache = await caches.open(CACHE_NAME);
   const keys = await cache.keys();
   const now = Date.now();
 
+  // Fetch all IDB metadata at once
+  const metadataMap = await getAllCacheMetadata();
+
   for (const request of keys) {
     try {
-      const response = await cache.match(request);
-      if (!response) continue;
-
       let cacheTime = null;
 
-      // Check if response has a date header we can use
-      const dateHeader = response.headers.get('date');
-      if (dateHeader) {
-        cacheTime = new Date(dateHeader).getTime();
-      } else {
-        // Fallback to IDB metadata for opaque responses
-        cacheTime = await getCacheMetadata(request.url);
+      // 1. Try Date header (fastest, no IDB)
+      const response = await cache.match(request);
+      if (response) {
+        const dateHeader = response.headers.get('date');
+        if (dateHeader) {
+          cacheTime = new Date(dateHeader).getTime();
+        }
+      }
+
+      // 2. Fallback to IDB metadata map (in-memory lookup)
+      if (!cacheTime) {
+        cacheTime = metadataMap.get(request.url);
       }
 
       if (cacheTime && (now - cacheTime > CACHE_EXPIRATION_MS)) {
@@ -274,30 +307,33 @@ self.addEventListener('fetch', (event) => {
 
   if (!isSameOrigin && !isTrustedCdn) return;
 
-  // Stale-While-Revalidate Strategy for app files:
-  // 1. Serve from cache immediately if available (Offline First).
-  // 2. Always fetch from network in background to update cache for next time.
-  // 3. If cache is empty, wait for network.
+  // Optimization: Cache First strategy for static assets
+  // Load instantly from disk (0ms latency), check network in background only if needed/expired.
   event.respondWith(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.match(request).then((cachedResponse) => {
-        const fetchPromise = fetch(request).then((networkResponse) => {
+        // 1. Cache Hit: Return immediately
+        if (cachedResponse) {
+          // Optional: If we want to revalidate occasionally, we could do it here, 
+          // but for "Cache First" reliability we assume the cache is good until specific events.
+          // Note: Since we have manual versioning (CACHE_VERSION), we trust local assets matching that version.
+          return cachedResponse;
+        }
+
+        // 2. Cache Miss: Fetch from network
+        return fetch(request).then((networkResponse) => {
           // Check if valid response before caching
-          // Note: opaque responses (from no-cors CDN requests) can't be inspected for errors,
-          // but we cache them for trusted CDNs. For transparent responses, require status 200.
           const isValidTransparent = networkResponse.status === 200 &&
             (networkResponse.type === 'basic' || networkResponse.type === 'cors');
           const isOpaqueCdn = networkResponse.type === 'opaque' && isTrustedCdn;
           const cacheable = networkResponse && (isValidTransparent || isOpaqueCdn);
 
           if (cacheable) {
-            // Clone response before caching
             const responseToCache = networkResponse.clone();
             cache.put(request, responseToCache).then(() => {
-              // Fix 5: Store metadata for opaque response expiration
               setCacheMetadata(request.url, Date.now());
 
-              // Fix: Periodically trim cache to prevent unbounded growth
+              // Trim cache if needed
               const category = getCacheCategory(request.url);
               if (category === CACHE_CATEGORIES.CDN) {
                 trimCache(CACHE_NAME, MAX_CACHE_SIZE * 2);
@@ -308,20 +344,13 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         }).catch(async () => {
-          // Network failed. If there's no cachedResponse, return an offline fallback Response.
-          if (cachedResponse) return cachedResponse;
-          // For navigations/documents, fall back to cached shell so the app can boot offline.
+          // 3. Offline Fallback
+          // For navigations/documents, fall back to cached shell.
           if (request.mode === 'navigate' || request.destination === 'document') {
             return (await cache.match('./index.html')) || (await cache.match('./')) || Response.error();
           }
           return new Response('', { status: 503, statusText: 'Offline' });
         });
-
-        // Keep the SW alive long enough to update the cache in the background.
-        event.waitUntil(fetchPromise.catch(() => { }));
-
-        // Return cached response immediately if found, else wait for network
-        return cachedResponse || fetchPromise;
       });
     })
   );

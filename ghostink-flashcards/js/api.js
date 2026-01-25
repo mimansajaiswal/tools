@@ -72,7 +72,7 @@ export const API = {
         return results;
     },
 
-    async queryDatabase(dbId, filter = null) {
+    async queryDatabase(dbId, filter = null, onPage = null) {
         const rows = [];
         let cursor = null;
         let hasMore = true;
@@ -83,7 +83,14 @@ export const API = {
                 body.filter = filter;
             }
             const res = await API.requestWithRetry('POST', `/data_sources/${dbId}/query`, body);
-            rows.push(...res.results);
+
+            // Streaming mode: process page immediately and don't buffer if callback provided
+            if (typeof onPage === 'function') {
+                await onPage(res.results);
+            } else {
+                rows.push(...res.results);
+            }
+
             hasMore = res.has_more;
             cursor = res.next_cursor;
         }
