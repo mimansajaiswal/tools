@@ -69,7 +69,8 @@ import {
     isSubItem,
     isSchedulable,
     reconcileSubItems,
-    createSubItem
+    createSubItem,
+    transformClozeForSubItem
 } from './cloze-manager.js';
 
 import {
@@ -5019,21 +5020,60 @@ export const App = {
             c.parentCard === stableParentId ||
             (parent.notionId && c.parentCard === parent.notionId);
 
-        // Check existing cards and queued items
-        const existingSubs = this.state.cards.filter(matchesParent);
+        // Optimization: Use parent.subCards to find existing children (O(1)) instead of scanning library (O(N))
+        const existingSubs = [];
+        if (Array.isArray(parent.subCards)) {
+            for (const id of parent.subCards) {
+                const c = this.cardById(id);
+                if (c) existingSubs.push(c);
+            }
+        }
+
+        // We still check the queue for pending creations (small list, fast)
         const queuedSubs = this.state.queue
             .filter(op => op.type === 'card-upsert' && op.payload?.parentCard && matchesParent(op.payload))
             .map(op => op.payload);
+
         const existingIds = new Set(existingSubs.map(s => s.id));
         const allSubs = [...existingSubs, ...queuedSubs.filter(s => !existingIds.has(s.id))];
 
-        const { toCreate, toSuspend } = reconcileSubItems(parent, allSubs);
+        // Optimization: Map IDs to objects to avoid scanning the library again in the loop
+        const subsMap = new Map(allSubs.map(s => [s.id, s]));
 
-        // Skip if nothing to do
-        if (toCreate.length === 0 && toSuspend.length === 0) {
+        const { toCreate, toKeep, toSuspend } = reconcileSubItems(parent, allSubs);
+        // Skip if nothing to do (no creates, no suspends, and no existing subs to update)
+        if (toCreate.length === 0 && toSuspend.length === 0 && toKeep.length === 0) {
             parent._lastClozeReconcile = new Date().toISOString();
             await Storage.put('cards', parent);
             return;
+        }
+
+        // Update content for existing sub-items (handle parent text edits)
+        for (const subId of toKeep) {
+            const sub = subsMap.get(subId);
+            if (!sub) continue;
+
+            const idx = parseInt(sub.clozeIndexes, 10);
+            if (!idx) continue;
+
+            const newName = transformClozeForSubItem(parent.name, idx);
+            const newBack = transformClozeForSubItem(parent.back || '', idx);
+
+            // Serialize tags for comparison (order-independent comparison would be better but exact match is fine for sync)
+            // We clone parent tags to ensure sub gets its own array instance
+            const newTags = parent.tags ? JSON.parse(JSON.stringify(parent.tags)) : [];
+            const tagsChanged = JSON.stringify(sub.tags || []) !== JSON.stringify(newTags);
+            const contentChanged = sub.name !== newName || sub.back !== newBack;
+
+            // Only save if content or tags actually changed
+            if (contentChanged || tagsChanged) {
+                sub.name = newName;
+                sub.back = newBack;
+                sub.tags = newTags;
+                sub.updatedInApp = true;
+                await Storage.put('cards', sub);
+                this.queueOp({ type: 'card-upsert', payload: sub });
+            }
         }
 
         // Create missing sub-items
@@ -5119,6 +5159,14 @@ export const App = {
         const processedIndices = new Set();
         const failed = [];
         const succeeded = [];
+
+        // Optimization: Map ID -> Index for O(1) lookup during updates
+        const cardIndexMap = new Map();
+        this.state.cards.forEach((c, idx) => {
+            if (c.id) cardIndexMap.set(c.id, idx);
+            if (c.notionId) cardIndexMap.set(c.notionId, idx);
+        });
+
         for (let i = 0; i < queue.length; i++) {
             const op = queue[i];
             if (i > 0) await sleep(350); // Pace requests to ~3 per second
@@ -5160,6 +5208,12 @@ export const App = {
                         op.payload.syncId = res.id;
                         if (oldId && oldId !== res.id) {
                             await this.applyIdMappings({ cardIdMap: { [oldId]: res.id } });
+                            // Update map with new ID
+                            const idx = cardIndexMap.get(oldId);
+                            if (idx !== undefined) {
+                                cardIndexMap.set(res.id, idx);
+                                // Don't delete oldId from map as other ops might still reference it (rare)
+                            }
                         }
                     }
                     // After successful push, reset updatedInApp and update _notionRichText
@@ -5175,8 +5229,14 @@ export const App = {
                     if (isClozeParent(op.payload)) {
                         op.payload._lastClozeReconcile = new Date().toISOString();
                     }
-                    // Update local state
-                    const cardIdx = this.state.cards.findIndex(c => c.notionId === op.payload.notionId || c.id === op.payload.id);
+                    // Update local state (O(1) lookup)
+                    let cardIdx = -1;
+                    if (op.payload.notionId && cardIndexMap.has(op.payload.notionId)) {
+                        cardIdx = cardIndexMap.get(op.payload.notionId);
+                    } else if (op.payload.id && cardIndexMap.has(op.payload.id)) {
+                        cardIdx = cardIndexMap.get(op.payload.id);
+                    }
+
                     if (cardIdx >= 0) {
                         this.state.cards[cardIdx] = { ...this.state.cards[cardIdx], ...op.payload };
                     }

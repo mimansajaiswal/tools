@@ -135,7 +135,7 @@ export const reconcileSubItems = (parent, existingSubItems) => {
  * @param {number} targetIndex - The cloze index to test (1-based)
  * @returns {string} Transformed text
  */
-const transformClozeForSubItem = (text, targetIndex) => {
+export const transformClozeForSubItem = (text, targetIndex) => {
     if (!text) return '';
     return text.replace(/\{\{\s*c(\d+)::(.*?)\}\}/gi, (match, idx, content) => {
         const clozeIdx = parseInt(idx, 10);
