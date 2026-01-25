@@ -71,7 +71,7 @@ export const API = {
     },
 
     async queryDatabase(dbId, filter = null, onPage = null) {
-        const rows = [];
+        const rows = onPage ? null : [];
         let cursor = null;
         let hasMore = true;
         while (hasMore) {
@@ -92,7 +92,7 @@ export const API = {
             hasMore = res.has_more;
             cursor = res.next_cursor;
         }
-        return rows;
+        return rows || [];
     },
 
     async getDatabase(dbId) {

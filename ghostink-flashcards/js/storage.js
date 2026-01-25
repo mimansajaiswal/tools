@@ -19,31 +19,31 @@ export const Storage = {
 
             req.onupgradeneeded = (e) => {
                 const db = e.target.result;
-                const oldVersion = e.oldVersion;
+                const tx = e.target.transaction;
 
                 // Create base stores if they don't exist
                 if (!db.objectStoreNames.contains('decks')) {
                     db.createObjectStore('decks', { keyPath: 'id' });
                 }
+
+                let cardStore;
                 if (!db.objectStoreNames.contains('cards')) {
-                    const cardStore = db.createObjectStore('cards', { keyPath: 'id' });
-                    cardStore.createIndex('deckId', 'deckId', { unique: false });
-                    cardStore.createIndex('dueDate_fsrs', 'fsrs.dueDate', { unique: false });
-                    cardStore.createIndex('dueDate_sm2', 'sm2.dueDate', { unique: false });
-                } else if (oldVersion < 4) {
-                    // Add indexes to existing cards store
-                    const tx = e.target.transaction;
-                    const cardStore = tx.objectStore('cards');
-                    if (!cardStore.indexNames.contains('deckId')) {
-                        cardStore.createIndex('deckId', 'deckId', { unique: false });
-                    }
-                    if (!cardStore.indexNames.contains('dueDate_fsrs')) {
-                        cardStore.createIndex('dueDate_fsrs', 'fsrs.dueDate', { unique: false });
-                    }
-                    if (!cardStore.indexNames.contains('dueDate_sm2')) {
-                        cardStore.createIndex('dueDate_sm2', 'sm2.dueDate', { unique: false });
-                    }
+                    cardStore = db.createObjectStore('cards', { keyPath: 'id' });
+                } else {
+                    cardStore = tx.objectStore('cards');
                 }
+
+                // Ensure indexes exist (idempotent)
+                if (!cardStore.indexNames.contains('deckId')) {
+                    cardStore.createIndex('deckId', 'deckId', { unique: false });
+                }
+                if (!cardStore.indexNames.contains('dueDate_fsrs')) {
+                    cardStore.createIndex('dueDate_fsrs', 'fsrs.dueDate', { unique: false });
+                }
+                if (!cardStore.indexNames.contains('dueDate_sm2')) {
+                    cardStore.createIndex('dueDate_sm2', 'sm2.dueDate', { unique: false });
+                }
+
                 if (!db.objectStoreNames.contains('meta')) {
                     db.createObjectStore('meta', { keyPath: 'key' });
                 }
@@ -67,8 +67,6 @@ export const Storage = {
                     this._initPromise = null;
                     location.reload();
                 };
-                // Migrate session from localStorage to IndexedDB if exists
-                this.migrateSessionFromLocalStorage();
                 resolve();
             };
             req.onerror = (e) => {
@@ -414,11 +412,6 @@ export const Storage = {
         }
         try {
             const parsed = JSON.parse(raw);
-            // Default to mono font for legacy settings or missing values.
-            if (!parsed.fontMode || parsed.fontMode === 'serif') {
-                parsed.fontMode = 'mono';
-                localStorage.setItem(this.settingsKey, JSON.stringify(parsed));
-            }
             return parsed;
         } catch (e) {
             console.error('Failed to parse settings, resetting to defaults:', e);
@@ -457,25 +450,6 @@ export const Storage = {
 
     setSettings(newSettings) {
         localStorage.setItem(this.settingsKey, JSON.stringify(newSettings));
-    },
-
-    // Migrate session from localStorage to IndexedDB (one-time migration)
-    async migrateSessionFromLocalStorage() {
-        const legacyKey = 'ghostink_session_v1';
-        const raw = localStorage.getItem(legacyKey);
-        if (!raw) return;
-
-        try {
-            const session = JSON.parse(raw);
-            if (session && typeof session === 'object' && Array.isArray(session.cardQueue)) {
-                await this.setSession(session);
-                localStorage.removeItem(legacyKey);
-                console.log('Migrated session from localStorage to IndexedDB');
-            }
-        } catch (e) {
-            console.warn('Failed to migrate session from localStorage:', e);
-            localStorage.removeItem(legacyKey);
-        }
     },
 
     // Session validation helper - ensures session data integrity

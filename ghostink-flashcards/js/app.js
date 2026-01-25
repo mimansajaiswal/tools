@@ -509,17 +509,6 @@ export const App = {
             }
         }
 
-        // A card is "new" only if it has never been reviewed (no history, no repetitions, no learning state)
-        const isNewCard = (card) => {
-            const lastReview = card.fsrs?.lastReview || card.sm2?.lastReview || null;
-            const hasHistory = Array.isArray(card.reviewHistory) && card.reviewHistory.length > 0;
-            const reps = card.sm2?.repetitions ?? 0;
-            const learning = parseSrsState(card.srsState || null).learning;
-            const isLearning = ['learning', 'relearning'].includes(learning?.state);
-            // A card is only new if it has no reviews, no history, no repetitions, and is not in learning
-            return !lastReview && !hasHistory && reps === 0 && !isLearning;
-        };
-
         const shuffleInPlace = (arr) => {
             for (let i = arr.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
@@ -610,8 +599,8 @@ export const App = {
                 // Due-only: cap per deck with separate review vs new limits.
                 const reviewLimit = Math.max(0, deck?.reviewLimit ?? 50);
                 const newLimit = Math.max(0, deck?.newLimit ?? 20);
-                const newCards = deckCards.filter(isNewCard);
-                const reviewCards = deckCards.filter(c => !isNewCard(c));
+                const newCards = deckCards.filter(c => this.isCardNew(c));
+                const reviewCards = deckCards.filter(c => !this.isCardNew(c));
                 applyOrderForDeck(reviewCards, deck, false);
                 applyOrderForDeck(newCards, deck, true); // Apply separate ordering for new cards
                 reviewBuckets[deckId] = reviewCards.slice(0, reviewLimit);
@@ -1002,7 +991,9 @@ export const App = {
         if (invalidCardStates > 0) {
             toast(`Invalid SRS State in ${invalidCardStates} card${invalidCardStates === 1 ? '' : 's'} — using defaults`);
         }
-        this.state.queue = (await Storage.getMeta('queue')) || [];
+
+        this.state.queue = await Storage.getSyncQueue();
+
         this.state.lastQueueError = (await Storage.getMeta('lastQueueError')) || null;
         this.state.queueLastChangedAt = (await Storage.getMeta('queueLastChangedAt')) || null;
         this.state.dyContextQueue = (await Storage.getMeta('dyContextQueue')) || [];
@@ -1038,6 +1029,21 @@ export const App = {
             }
             leechFixes.forEach(card => this.queueOp({ type: 'card-upsert', payload: card }));
         }
+        this.calculateDeckStats(); // Initialize stats cache (Issue 3 Fix)
+    },
+    calculateDeckStats() {
+        const stats = new Map();
+        for (const card of this.state.cards) {
+            if (!stats.has(card.deckId)) stats.set(card.deckId, { total: 0, due: 0 });
+            const s = stats.get(card.deckId);
+            if (isSchedulable(card) && !card.suspended) {
+                s.total += 1;
+                if (!card.leech && this.isDue(card)) {
+                    s.due += 1;
+                }
+            }
+        }
+        this.state.deckStats = stats;
     },
     async seedIfEmpty() {
         return;
@@ -1991,24 +1997,11 @@ export const App = {
         const theme = document.body.getAttribute('data-theme') || 'light';
         const selectedId = this.state.selectedDeck?.id;
         const searchQuery = (this.state.deckSearch || '').toLowerCase().trim();
-        const deckStats = new Map();
-        for (const card of this.state.cards) {
-            if (!deckStats.has(card.deckId)) deckStats.set(card.deckId, { total: 0, due: 0 });
-            const stats = deckStats.get(card.deckId);
 
-            // Count total cards (exclude cloze parents, only count actually studyable cards)
-            if (isSchedulable(card) && !card.suspended) {
-                stats.total += 1;
-            }
+        // Use cached stats (Issue 3 Fix)
+        if (!this.state.deckStats) this.calculateDeckStats();
+        const deckStats = this.state.deckStats;
 
-            // Count due cards:
-            // 1. Must be schedulable (isSchedulable checks !isClozeParent)
-            // 2. Must not be suspended or leech
-            // 3. Must be due (isDue checks date)
-            if (isSchedulable(card) && !card.suspended && !card.leech && this.isDue(card)) {
-                stats.due += 1;
-            }
-        }
         let decks = this.state.decks;
         if (searchQuery) {
             decks = decks.filter(d => d.name.toLowerCase().includes(searchQuery));
@@ -5157,20 +5150,14 @@ export const App = {
 
         const hadQueue = queue.length > 0;
 
-        // These are items in rawQueue that are NOT in the final to-be-processed queue.
-        // We remove them immediately to prevent them from becoming "zombies" if the main sync fails.
-        const toProcessIds = new Set(queue.map(op => {
-            // Use object reference identity since we pulled from rawQueue
-            return op;
-        }));
-
-        // Remove superseded items from the live queue immediately
-        this.state.queue = this.state.queue.filter(op => {
-            const inSnapshot = rawQueue.includes(op);
-            if (!inSnapshot) return true; // Keep new items added during sync
-            return toProcessIds.has(op); // Keep only items we are about to process
-        });
-        await Storage.setMeta('queue', this.state.queue);
+        // Cleanup: Remove items that were optimized away (superseded/cancelled) from DB/memory immediately
+        // (These are safe to remove because they are logically replaced by the operations we are about to run)
+        const toProcessSet = new Set(queue);
+        const removedItems = rawQueue.filter(op => !toProcessSet.has(op));
+        for (const item of removedItems) {
+            if (item.id) await Storage.removeFromSyncQueue(item.id).catch(() => { });
+        }
+        this.state.queue = this.state.queue.filter(op => toProcessSet.has(op));
 
         const failed = [];
         const succeeded = [];
@@ -5256,7 +5243,10 @@ export const App = {
                 if (op.type === 'block-append' && op.payload.pageId) {
                     await API.appendBlocks(op.payload.pageId, op.payload.blocks);
                 }
-                // Track success
+
+                // Success: remove from DB and memory (Issue 1 Fix)
+                if (op.id) await Storage.removeFromSyncQueue(op.id).catch(() => { });
+                this.state.queue = this.state.queue.filter(x => x.id !== op.id);
                 succeeded.push(op);
             } catch (e) {
                 console.error(`Queue op failed: ${op.type}`, e);
@@ -5269,23 +5259,18 @@ export const App = {
                 op.retryCount = (op.retryCount || 0) + 1;
                 if (op.retryCount <= 5) {
                     failed.push(op);
+                    // Update retry count in DB
+                    if (op.id) await Storage.put('syncQueue', op).catch(() => { });
                 } else {
+                    // Give up on this item after 5 retries
                     toast(`Sync dropped item after 5 attempts: ${e.message}`);
+                    if (op.id) await Storage.removeFromSyncQueue(op.id).catch(() => { });
+                    this.state.queue = this.state.queue.filter(x => x.id !== op.id);
                 }
             }
         }
 
-        // Remove succeeded items from the live queue (reference check)
-        if (succeeded.length > 0) {
-            const succeededSet = new Set(succeeded);
-            this.state.queue = this.state.queue.filter(op => !succeededSet.has(op));
-        }
-
-        // Re-queue failed operations (append to end if not already present)
         if (failed.length > 0) {
-            // failed items are likely already removed from queue by the pre-filter if they were in the snapshot
-            // so we add them back.
-            this.state.queue = [...this.state.queue, ...failed];
             toast(`${failed.length} sync operation(s) failed, will retry`);
             this.state.queueLastChangedAt = new Date().toISOString();
             Storage.setMeta('queueLastChangedAt', this.state.queueLastChangedAt).catch(() => { });
@@ -5295,22 +5280,27 @@ export const App = {
             this.state.queueLastChangedAt = new Date().toISOString();
             Storage.setMeta('queueLastChangedAt', this.state.queueLastChangedAt).catch(() => { });
         }
+
         el('#queueCount').textContent = String(this.state.queue.length);
-        await Storage.setMeta('queue', this.state.queue);
         this.renderConnection();
         return { success: failed.length === 0, failedCount: failed.length };
     },
-    queueOp(op, reason = 'generic') {
+    async queueOp(op, reason = 'generic') {
         op.reason = reason;
 
         // Deduplicate: remove existing operation for same entity + type
         // Keep only the latest operation for each card/deck
         const entityId = op.payload?.id || op.payload?.notionId;
         if (entityId && (op.type === 'card-upsert' || op.type === 'deck-upsert')) {
-            this.state.queue = this.state.queue.filter(existing => {
+            const superseded = this.state.queue.filter(existing => {
                 const existingId = existing.payload?.id || existing.payload?.notionId;
-                return !(existing.type === op.type && existingId === entityId);
+                return (existing.type === op.type && existingId === entityId);
             });
+            // Remove from DB to prevent orphans
+            for (const item of superseded) {
+                if (item.id) await Storage.removeFromSyncQueue(item.id).catch(() => { });
+            }
+            this.state.queue = this.state.queue.filter(x => !superseded.includes(x));
         }
 
         // Optimization: Timestamp for dirty checking
@@ -5318,9 +5308,13 @@ export const App = {
             op.payload._lastUpdated = Date.now();
         }
 
+        // Persist to syncQueue store (Issue 2 Fix)
+        const dbKey = await Storage.addToSyncQueue(op);
+        op.id = dbKey; // Assign DB key to in-memory obj
         this.state.queue.push(op);
+
         el('#queueCount').textContent = String(this.state.queue.length);
-        Storage.setMeta('queue', this.state.queue).catch(e => console.debug('Storage setMeta queue failed:', e));
+        // Legacy 'queue' meta key is no longer used
         this.state.queueLastChangedAt = new Date().toISOString();
         Storage.setMeta('queueLastChangedAt', this.state.queueLastChangedAt).catch(e => console.debug('Storage setMeta queueLastChangedAt failed:', e));
         if (!navigator.onLine && this.state.queue.length >= SYNC_QUEUE_WARN_THRESHOLD) {
@@ -5331,6 +5325,7 @@ export const App = {
                 this.state.lastQueueWarnAt = now;
             }
         }
+        this.calculateDeckStats(); // Update stats (Issue 3 Fix)
         this.updateSyncButtonState();
         this.renderConnection();
         const delay = (reason === 'rating') ? (5 * 60 * 1000) : 1500;
@@ -6702,6 +6697,7 @@ export const App = {
 
             setLoadingProgress(100, 'Complete!');
             hideLoading();
+            this.calculateDeckStats(); // Update stats after bulk import
             this.renderAll();
             toast(`Imported ${importedCount} cards from .apkg`);
 
@@ -7541,7 +7537,13 @@ export const App = {
             const url = new URL(s.workerUrl.replace(/\/$/, ''));
             url.searchParams.append('url', 'https://api.notion.com/v1/users/me');
             if (s.proxyToken) url.searchParams.append('token', s.proxyToken);
-            const res = await fetch(url.toString());
+
+            // Add timeout to prevent hanging on unstable networks (Issue 4 Fix)
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 3000);
+            const res = await fetch(url.toString(), { signal: controller.signal });
+            clearTimeout(timeout);
+
             if (res.ok || res.status === 401) {
                 this.state.workerVerified = true;
                 this.state.settings.workerVerified = true;
