@@ -841,9 +841,11 @@
             <div class="border-b border-oatmeal p-4 flex items-center justify-between flex-shrink-0">
                 <div class="flex items-center gap-3">
                     <span class="section-header">AI Quick Add</span>
-                    <button onclick="AI.showQueueModal()" class="relative p-1 text-earth-metal hover:text-dull-purple" title="View Queue">
+                    <button onclick="AI.showQueueModal()" class="relative p-1 text-earth-metal hover:text-dull-purple"
+                        title="View Queue">
                         <i data-lucide="list-todo" class="w-5 h-5"></i>
-                        <span id="aiQueueBadge" class="hidden absolute -top-1 -right-1 w-5 h-5 bg-dull-purple text-white-linen text-[10px] font-mono flex items-center justify-center">0</span>
+                        <span id="aiQueueBadge"
+                            class="hidden absolute -top-1 -right-1 w-5 h-5 bg-dull-purple text-white-linen text-[10px] font-mono flex items-center justify-center">0</span>
                     </button>
                 </div>
                 <button onclick="PetTracker.UI.closeModal('aiEntryModal')"
@@ -858,7 +860,8 @@
                     <textarea id="aiInputText" class="input-field h-32 resize-none"
                         placeholder="e.g., Luna threw up this morning, gave Max his heartworm meds yesterday at 8am..."
                         oninput="AI.onInputChange(this.value)"></textarea>
-                    <p class="text-xs text-earth-metal mt-1">AI will parse automatically after 5 seconds of inactivity. Offline? Queue for later.</p>
+                    <p class="text-xs text-earth-metal mt-1">AI will parse automatically after 5 seconds of inactivity.
+                        Offline? Queue for later.</p>
                 </div>
 
                 <!-- Action Buttons -->
@@ -866,10 +869,12 @@
                     <button onclick="AI.parse()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
                         <i data-lucide="sparkles" class="w-4 h-4 inline mr-2"></i>Parse Now
                     </button>
-                    <button onclick="AI.queueForLater()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase" title="Save for later when offline or busy">
+                    <button onclick="AI.queueForLater()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase"
+                        title="Save for later when offline or busy">
                         <i data-lucide="clock" class="w-4 h-4 inline mr-2"></i>Queue for Later
                     </button>
-                    <button onclick="AI.processQueue()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase" title="Process all pending queued items">
+                    <button onclick="AI.processQueue()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase"
+                        title="Process all pending queued items">
                         <i data-lucide="play" class="w-4 h-4 inline mr-2"></i>Process Queue
                     </button>
                 </div>
@@ -900,15 +905,18 @@
     <div id="aiQueueModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
         aria-modal="true" aria-labelledby="aiQueueModalTitle">
         <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
-        <div class="relative bg-white-linen border border-oatmeal w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col z-10">
+        <div
+            class="relative bg-white-linen border border-oatmeal w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col z-10">
             <div class="border-b border-oatmeal p-4 flex items-center justify-between flex-shrink-0">
                 <span id="aiQueueModalTitle" class="section-header">AI Queue</span>
-                <button onclick="PetTracker.UI.closeModal('aiQueueModal')" class="p-1 text-earth-metal hover:text-charcoal">
+                <button onclick="PetTracker.UI.closeModal('aiQueueModal')"
+                    class="p-1 text-earth-metal hover:text-charcoal">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
             <div class="flex-1 overflow-y-auto p-4">
-                <p class="text-xs text-earth-metal mb-4">Items queued for later AI processing. Process when online and ready.</p>
+                <p class="text-xs text-earth-metal mb-4">Items queued for later AI processing. Process when online and
+                    ready.</p>
                 <div id="aiQueueList" class="space-y-2">
                     <p class="text-earth-metal text-sm py-4">No items in queue.</p>
                 </div>
@@ -918,8 +926,10 @@
                     <i data-lucide="rotate-ccw" class="w-4 h-4 inline mr-2"></i>Retry Failed
                 </button>
                 <div class="flex gap-2">
-                    <button onclick="PetTracker.UI.closeModal('aiQueueModal')" class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Close</button>
-                    <button onclick="PetTracker.UI.closeModal('aiQueueModal'); AI.processQueue()" class="btn-primary px-4 py-2 font-mono text-xs uppercase">
+                    <button onclick="PetTracker.UI.closeModal('aiQueueModal')"
+                        class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Close</button>
+                    <button onclick="PetTracker.UI.closeModal('aiQueueModal'); AI.processQueue()"
+                        class="btn-primary px-4 py-2 font-mono text-xs uppercase">
                         <i data-lucide="play" class="w-4 h-4 inline mr-2"></i>Process All
                     </button>
                 </div>
@@ -1262,7 +1272,7 @@ export default {
         App.testConnection = async () => {
             // Save current values first
             App.saveSettings();
-            
+
             try {
                 PetTracker.UI.showLoading('Testing connection...');
                 const user = await PetTracker.API.verifyConnection();
@@ -1283,29 +1293,29 @@ export default {
 
             try {
                 PetTracker.UI.showLoading('Scanning data sources...');
-                
+
                 // Query database to get properties
                 const db = await PetTracker.API.request(`/v1/databases/${dbId}`);
-                
+
                 // For multi-source containers, we query to find distinct sources
                 // For now, we show the database properties and let user map
                 const properties = db.properties || {};
                 const propNames = Object.keys(properties);
-                
+
                 // Show mapping UI
                 const mappingDiv = document.getElementById('dataSourceMapping');
                 const schemaDiv = document.getElementById('schemaStatus');
                 const schemaList = document.getElementById('schemaStatusList');
-                
+
                 if (mappingDiv) {
                     mappingDiv.classList.remove('hidden');
-                    
+
                     // Populate selects with detected source hints
-                    const selects = ['dsMapPets', 'dsMapEvents', 'dsMapEventTypes', 'dsMapCareItems', 
-                                     'dsMapCarePlans', 'dsMapContacts', 'dsMapScales', 'dsMapScaleLevels'];
-                    const optionsHtml = '<option value="">-- Select --</option>' + 
+                    const selects = ['dsMapPets', 'dsMapEvents', 'dsMapEventTypes', 'dsMapCareItems',
+                        'dsMapCarePlans', 'dsMapContacts', 'dsMapScales', 'dsMapScaleLevels'];
+                    const optionsHtml = '<option value="">-- Select --</option>' +
                         propNames.map(p => `<option value="${p}">${p}</option>`).join('');
-                    
+
                     selects.forEach(id => {
                         const el = document.getElementById(id);
                         if (el) el.innerHTML = optionsHtml;
@@ -1327,7 +1337,7 @@ export default {
                 PetTracker.UI.hideLoading();
                 PetTracker.UI.toast(`Found ${propNames.length} properties`, 'success');
                 if (window.lucide) lucide.createIcons();
-                
+
             } catch (e) {
                 PetTracker.UI.hideLoading();
                 PetTracker.UI.toast(`Scan failed: ${e.message}`, 'error');

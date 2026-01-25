@@ -183,7 +183,7 @@ const Sync = {
             PetTracker.Settings.setLastSync();
 
             console.log('[Sync] Sync complete');
-            
+
             // Only show toast for manual sync
             if (showToast) {
                 PetTracker.UI.toast('Synced', 'success', 2000);

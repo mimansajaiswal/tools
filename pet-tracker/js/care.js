@@ -35,6 +35,11 @@ const Care = {
             data: item
         });
 
+        // Update sync UI
+        if (PetTracker.Sync?.updatePendingCount) {
+            PetTracker.Sync.updatePendingCount();
+        }
+
         return item;
     },
 
@@ -81,6 +86,11 @@ const Care = {
             recordId: plan.id,
             data: plan
         });
+
+        // Update sync UI
+        if (PetTracker.Sync?.updatePendingCount) {
+            PetTracker.Sync.updatePendingCount();
+        }
 
         return plan;
     },
