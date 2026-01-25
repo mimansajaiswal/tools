@@ -3658,7 +3658,9 @@ export const App = {
 
             heatmapEl.innerHTML = yearsToRender.map(buildYearGrid).join('');
         }
-        if (typeof lucide !== 'undefined') {
+
+        const container = el('#analyticsSection');
+        if (container && typeof lucide !== 'undefined') {
             lucide.createIcons({ nodes: container.querySelectorAll('[data-lucide]') });
         }
     },
@@ -5325,7 +5327,6 @@ export const App = {
         this.state.queue.push(op);
 
         el('#queueCount').textContent = String(this.state.queue.length);
-        // Legacy 'queue' meta key is no longer used
         this.state.queueLastChangedAt = new Date().toISOString();
         Storage.setMeta('queueLastChangedAt', this.state.queueLastChangedAt).catch(e => console.debug('Storage setMeta queueLastChangedAt failed:', e));
         if (!navigator.onLine && this.state.queue.length >= SYNC_QUEUE_WARN_THRESHOLD) {
@@ -5615,24 +5616,28 @@ export const App = {
         const deck = this.deckById(card.deckId);
         if (!deck || !deck.dynamicContext) return;
 
+        // Check if AI is configured first
+        const dyConfig = this.getDyContextConfig(deck);
+        if (!dyConfig) return;
+
         let prevCard = card;
         let includeSubCards = false;
+
         if (isSubItem(card)) {
             const parent = this.cardById(card.parentCard);
             if (!parent) return;
             prevCard = parent;
             includeSubCards = true;
-            if (!this.allClozeSubsGoodEasy(parent, deck)) return;
         } else if (isClozeParent(card)) {
             includeSubCards = true;
-            if (!this.allClozeSubsGoodEasy(card, deck)) return;
         }
 
-        const prevMap = this.getDyContextPrevMap();
-        if (this.hasDyContextChild(prevCard.id, prevMap)) return;
+        // Optimization: Check if variant exists BEFORE checking sub-item ratings
+        if (prevCard.dyNextCard) return;
 
-        const dyConfig = this.getDyContextConfig(deck);
-        if (!dyConfig) return;
+        if (includeSubCards) {
+            if (!this.allClozeSubsGoodEasy(prevCard, deck)) return;
+        }
 
         const rootId = prevCard.dyRootCard || prevCard.id;
         const rootCard = this.cardById(rootId) || prevCard;
@@ -7423,7 +7428,6 @@ export const App = {
         await Storage.wipeStore('meta');
         // Clear all GhostInk-specific localStorage keys
         localStorage.removeItem(Storage.settingsKey);
-        localStorage.removeItem('ghostink_session_v1');
         // Close the database connection before deleting
         if (Storage.db) {
             Storage.db.close();
@@ -7620,15 +7624,6 @@ export const App = {
             return;
         }
         const pos = this.state.settings.fabPos;
-        // Legacy format: { bottom: px, left: px } anchored to bottom-left of the cluster.
-        if (pos && typeof pos === 'object' && pos.mode !== 'grid' && (pos.bottom != null || pos.left != null)) {
-            fab.style.transform = 'none';
-            fab.style.bottom = (pos.bottom ?? 12) + 'px';
-            fab.style.left = (pos.left ?? 12) + 'px';
-            fab.style.top = 'auto';
-            fab.style.right = 'auto';
-            return;
-        }
 
         // Grid format: { mode:'grid', rows, cols, cell } anchored to the *center* of the cluster.
         const grid = pos && typeof pos === 'object' && pos.mode === 'grid' ? pos : null;

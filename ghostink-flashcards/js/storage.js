@@ -478,7 +478,7 @@ export const Storage = {
     async getSession() {
         await this.ensureReady();
         if (!this.db || !this.db.objectStoreNames.contains('session')) {
-            return this._getSessionFromLocalStorage();
+            return null;
         }
 
         return new Promise((resolve) => {
@@ -494,33 +494,18 @@ export const Storage = {
                     resolve(this._validateSession(result.data));
                 };
                 req.onerror = () => {
-                    console.warn('Failed to get session from IndexedDB, falling back to localStorage');
-                    resolve(this._getSessionFromLocalStorage());
+                    console.warn('Failed to get session from IndexedDB');
+                    resolve(null);
                 };
             } catch (e) {
                 console.warn('Error accessing session store:', e);
-                resolve(this._getSessionFromLocalStorage());
+                resolve(null);
             }
         });
     },
 
     getSessionSync() {
-        if (this._cachedSession !== undefined) {
-            return this._cachedSession;
-        }
-        return this._getSessionFromLocalStorage();
-    },
-
-    _getSessionFromLocalStorage() {
-        const raw = localStorage.getItem('ghostink_session_v1');
-        if (!raw) return null;
-        try {
-            const session = JSON.parse(raw);
-            return this._validateSession(session);
-        } catch (_) {
-            localStorage.removeItem('ghostink_session_v1');
-            return null;
-        }
+        return this._cachedSession;
     },
 
     async setSession(session) {
@@ -539,7 +524,6 @@ export const Storage = {
                     console.warn('Failed to clear session from IndexedDB:', e);
                 }
             }
-            localStorage.removeItem('ghostink_session_v1');
             return;
         }
 
@@ -551,40 +535,9 @@ export const Storage = {
                     req.onsuccess = resolve;
                     req.onerror = () => reject(req.error);
                 });
-                localStorage.removeItem('ghostink_session_v1');
                 return;
             } catch (e) {
-                console.warn('Failed to save session to IndexedDB, falling back to localStorage:', e);
-            }
-        }
-
-        try {
-            const json = JSON.stringify(session);
-            if (json.length > 1000000) {
-                console.warn(`Session size is ${(json.length / 1024 / 1024).toFixed(2)}MB - consider reducing queue size`);
-            }
-            localStorage.setItem('ghostink_session_v1', json);
-        } catch (e) {
-            if (e.name === 'QuotaExceededError') {
-                console.error('LocalStorage quota exceeded for session. Try clearing some browser data.');
-                const minimalSession = {
-                    deckIds: session.deckIds,
-                    settings: session.settings,
-                    currentIndex: 0, // Reset index since we sliced the queue
-                    cardQueue: session.cardQueue.slice(session.currentIndex, session.currentIndex + 50),
-                    completed: session.completed || [],
-                    skipped: session.skipped || [],
-                    startTime: session.startTime,
-                    ratingCounts: session.ratingCounts
-                };
-                try {
-                    localStorage.setItem('ghostink_session_v1', JSON.stringify(minimalSession));
-                    console.warn('Saved minimal session due to quota limits');
-                } catch (e2) {
-                    console.error('Could not save even minimal session:', e2);
-                }
-            } else {
-                throw e;
+                console.warn('Failed to save session to IndexedDB:', e);
             }
         }
     },
