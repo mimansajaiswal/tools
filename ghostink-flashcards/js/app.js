@@ -1177,6 +1177,10 @@ export const App = {
                     card.dyPrevCard = cardIdMap[card.dyPrevCard];
                     changed = true;
                 }
+                if (card.dyNextCard && cardIdMap[card.dyNextCard]) {
+                    card.dyNextCard = cardIdMap[card.dyNextCard];
+                    changed = true;
+                }
             }
             // Optimization: Use Set lookup instead of array.find
             if (changed && !cardsBeingRenamed.has(card)) {
@@ -1225,6 +1229,21 @@ export const App = {
                     }
                     if (op.payload.deckId && deckIdMap[op.payload.deckId]) {
                         op.payload.deckId = deckIdMap[op.payload.deckId];
+                    }
+                    // Fix: Update relational fields in queue payloads
+                    if (hasCardMap) {
+                        if (op.payload.parentCard && cardIdMap[op.payload.parentCard]) {
+                            op.payload.parentCard = cardIdMap[op.payload.parentCard];
+                        }
+                        if (op.payload.dyRootCard && cardIdMap[op.payload.dyRootCard]) {
+                            op.payload.dyRootCard = cardIdMap[op.payload.dyRootCard];
+                        }
+                        if (op.payload.dyPrevCard && cardIdMap[op.payload.dyPrevCard]) {
+                            op.payload.dyPrevCard = cardIdMap[op.payload.dyPrevCard];
+                        }
+                        if (op.payload.dyNextCard && cardIdMap[op.payload.dyNextCard]) {
+                            op.payload.dyNextCard = cardIdMap[op.payload.dyNextCard];
+                        }
                     }
                 }
                 if (op?.type === 'block-append' && op.payload?.pageId && hasCardMap && cardIdMap[op.payload.pageId]) {
@@ -5114,31 +5133,31 @@ export const App = {
 
         // Deduplicate/Squash queue logic
         // Rule 1: Later ops supersede earlier ops for the same ID and type.
-        // Rule 2: Deletes should cancel out previous Upserts for same ID (optimization), or just supersede them.
+        // Rule 2: Deletes should cancel out previous Upserts for same ID (optimization).
         // Rule 3: Decks must be processed before Cards (dependencies).
 
         const rawQueue = [...this.state.queue];
         const mergedMap = new Map();
 
+        // Pass 1: Deduplicate by ID+Type (Last write wins)
+        for (const op of rawQueue) {
+            const id = op.payload?.id || op.payload?.notionId;
+            const key = `${op.type}:${id}`;
+            mergedMap.set(key, op);
+        }
+
+        // Pass 2: Handle logical superseding (Delete cancels Upsert)
         for (const op of rawQueue) {
             const id = op.payload?.id || op.payload?.notionId;
             const key = `${op.type}:${id}`;
 
-            // Handle logical superseding (delete cancels upsert)
-            // If we have an upsert and now a delete comes, the upsert is pointless unless the delete fails?
-            // Actually, if we delete a card that hasn't been synced (no notionId), we just drop both.
-            // If it has notionId, we must send delete.
-
             if (op.type.endsWith('-delete')) {
                 // If there's a pending upsert for this ID, remove it (it's moot if we're deleting)
-                // Note: keys differ by type, so we check the upsert key
                 const upsertKey = key.replace('-delete', '-upsert');
                 if (mergedMap.has(upsertKey)) {
                     mergedMap.delete(upsertKey);
                 }
             }
-
-            mergedMap.set(key, op);
         }
 
         const squashedQueue = Array.from(mergedMap.values());
@@ -5154,9 +5173,23 @@ export const App = {
             .map(x => x.op);
 
         const hadQueue = queue.length > 0;
-        // Bug 1 Fix: Don't clear the queue yet - only clear successfully processed items
-        // Keep track of processed items to remove them atomically after successful sync
-        const processedIndices = new Set();
+
+        // Bug 1 Fix: Identify items that were superseded/squashed so we can remove them
+        // These are items in rawQueue that are NOT in the final to-be-processed queue.
+        // We remove them immediately to prevent them from becoming "zombies" if the main sync fails.
+        const toProcessIds = new Set(queue.map(op => {
+            // Use object reference identity since we pulled from rawQueue
+            return op;
+        }));
+
+        // Remove superseded items from the live queue immediately
+        this.state.queue = this.state.queue.filter(op => {
+            const inSnapshot = rawQueue.includes(op);
+            if (!inSnapshot) return true; // Keep new items added during sync
+            return toProcessIds.has(op); // Keep only items we are about to process
+        });
+        await Storage.setMeta('queue', this.state.queue);
+
         const failed = [];
         const succeeded = [];
 
@@ -5184,8 +5217,7 @@ export const App = {
                             await this.applyIdMappings({ deckIdMap: { [oldId]: res.id } });
                         }
                         // If the queue was rehydrated from storage, op.payload may not be the same object
-                        // instance as the deck in memory. Ensure we update in-memory state so subsequent
-                        // card upserts in this same run can resolve `deck.notionId`.
+                        // instance as the deck in memory. Ensure we update in-memory state.
                         const deckIdx = this.state.decks.findIndex(d => d.id === op.payload.id);
                         if (deckIdx >= 0) {
                             this.state.decks[deckIdx] = { ...this.state.decks[deckIdx], ...op.payload };
@@ -5212,20 +5244,16 @@ export const App = {
                             const idx = cardIndexMap.get(oldId);
                             if (idx !== undefined) {
                                 cardIndexMap.set(res.id, idx);
-                                // Don't delete oldId from map as other ops might still reference it (rare)
                             }
                         }
                     }
                     // After successful push, reset updatedInApp and update _notionRichText
-                    // so subsequent pushes (e.g., SRS updates) preserve the rich_text we just sent
                     op.payload.updatedInApp = false;
                     op.payload._notionRichText = {
                         name: props['Name'].title,
                         back: props['Back'].rich_text,
                         notes: props['Notes'].rich_text
                     };
-                    // For cloze parents, update lastClozeReconcile to prevent re-reconcile
-                    // after Notion updates last_edited_time from our push
                     if (isClozeParent(op.payload)) {
                         op.payload._lastClozeReconcile = new Date().toISOString();
                     }
@@ -5246,17 +5274,16 @@ export const App = {
                 if (op.type === 'block-append' && op.payload.pageId) {
                     await API.appendBlocks(op.payload.pageId, op.payload.blocks);
                 }
-                // Bug 1 Fix: Track successfully processed operations
+                // Track success
                 succeeded.push(op);
             } catch (e) {
                 console.error(`Queue op failed: ${op.type}`, e);
-                // Store last error so the header badge can explain why the queue may look "stuck".
                 this.state.lastQueueError = {
                     at: new Date().toISOString(),
                     type: op.type,
                     message: e?.message || String(e)
                 };
-                Storage.setMeta('lastQueueError', this.state.lastQueueError).catch(e => console.debug('Storage setMeta lastQueueError failed:', e));
+                Storage.setMeta('lastQueueError', this.state.lastQueueError).catch(() => { });
                 op.retryCount = (op.retryCount || 0) + 1;
                 if (op.retryCount <= 5) {
                     failed.push(op);
@@ -5265,36 +5292,25 @@ export const App = {
                 }
             }
         }
+
         // Bug 1 Fix: Atomically update the queue - remove successfully processed items and add failed ones
-        // This prevents data loss from race conditions during sync
-        const succeededIds = new Set(succeeded.map(op => {
-            const id = op.payload?.id || op.payload?.notionId;
-            return `${op.type}:${id}`;
-        }));
-        // Filter out succeeded items from the current queue (in case new items were added during processing)
-        this.state.queue = this.state.queue.filter(op => {
-            const id = op.payload?.id || op.payload?.notionId;
-            const key = `${op.type}:${id}`;
-            // If the original operation in the queue was superseded by a merged/squashed one,
-            // we should technically remove it too if the squashed one succeeded.
-            // But we can just rely on the ID check. If we processed ANY op for this ID successfully,
-            // we assume the state is synced.
-            // Wait, if we merged 3 upserts into 1, we only have 1 success record.
-            // The original 3 are still in `this.state.queue`? No, `this.state.queue` hasn't changed yet.
-            // We need to clear ALL ops that were squashed into the successful one.
-            // Actually, simply clearing by ID and Type is safer if we assume "last write wins".
-            return !succeededIds.has(key);
-        });
-        // Re-queue failed operations
+        // Remove succeeded items from the live queue (reference check)
+        if (succeeded.length > 0) {
+            const succeededSet = new Set(succeeded);
+            this.state.queue = this.state.queue.filter(op => !succeededSet.has(op));
+        }
+
+        // Re-queue failed operations (append to end if not already present)
         if (failed.length > 0) {
+            // failed items are likely already removed from queue by the pre-filter if they were in the snapshot
+            // so we add them back.
             this.state.queue = [...this.state.queue, ...failed];
             toast(`${failed.length} sync operation(s) failed, will retry`);
             this.state.queueLastChangedAt = new Date().toISOString();
-            Storage.setMeta('queueLastChangedAt', this.state.queueLastChangedAt).catch(e => console.debug('Storage setMeta queueLastChangedAt failed:', e));
+            Storage.setMeta('queueLastChangedAt', this.state.queueLastChangedAt).catch(() => { });
         } else if (hadQueue && succeeded.length > 0) {
-            // Queue successfully processed: clear the last error to avoid stale "stuck" tooltips.
             this.state.lastQueueError = null;
-            Storage.setMeta('lastQueueError', null).catch(e => console.debug('Storage clear lastQueueError failed:', e));
+            Storage.setMeta('lastQueueError', null).catch(() => { });
             this.state.queueLastChangedAt = new Date().toISOString();
             Storage.setMeta('queueLastChangedAt', this.state.queueLastChangedAt).catch(() => { });
         }
@@ -6581,6 +6597,20 @@ export const App = {
             let importedCount = 0;
             const totalCards = cards.length;
 
+            // Batching arrays
+            const batchCards = [];
+            const batchQueue = [];
+            const batchSize = 200;
+
+            const flushBatch = async () => {
+                if (batchCards.length === 0) return;
+                await Storage.putMany('cards', batchCards);
+                // Add to queue without triggering full UI/Storage refresh for every single item
+                this.state.queue.push(...batchQueue);
+                batchCards.length = 0;
+                batchQueue.length = 0;
+            };
+
             for (let i = 0; i < cards.length; i++) {
                 const cardRow = cards[i];
                 const [cid, nid, did, ord] = cardRow;
@@ -6634,8 +6664,11 @@ export const App = {
                     parent.sm2.dueDate = null;
                     parent.subCards = []; // Initialize subCards array
                     this.state.cards.push(parent);
-                    await Storage.put('cards', parent);
-                    this.queueOp({ type: 'card-upsert', payload: parent });
+
+                    // Batch write
+                    batchCards.push(parent);
+                    batchQueue.push({ type: 'card-upsert', payload: parent });
+
                     importedCount++;
 
                     // Create sub-items for each cloze index
@@ -6648,12 +6681,14 @@ export const App = {
                         // Fix: Update parent's subCards array immediately
                         parent.subCards.push(subItem.id);
 
-                        await Storage.put('cards', subItem);
-                        this.queueOp({ type: 'card-upsert', payload: subItem });
+                        // Batch write
+                        batchCards.push(subItem);
+                        batchQueue.push({ type: 'card-upsert', payload: subItem });
+
                         importedCount++;
                     }
-                    // Persist parent again with updated subCards
-                    await Storage.put('cards', parent);
+                    // Since parent was modified (subCards pushed), we rely on it being reference-updated in the batch array?
+                    // Yes, objects are by reference. The parent in batchCards[index] is the same object.
                 } else {
                     // Regular front-back card
                     const card = this.newCard(deckCache[deckId].id, front, back, type);
@@ -6664,21 +6699,47 @@ export const App = {
                     card.ankiFields = JSON.stringify(fields);
                     card.clozeIndexes = '';
                     this.state.cards.push(card);
-                    await Storage.put('cards', card);
-                    this.queueOp({ type: 'card-upsert', payload: card });
+
+                    // Batch write
+                    batchCards.push(card);
+                    batchQueue.push({ type: 'card-upsert', payload: card });
+
                     importedCount++;
                 }
 
-                // Update progress every 20 cards
-                if (i % 20 === 0) {
+                // Flush batch periodically and update UI
+                if (batchCards.length >= batchSize) {
+                    await flushBatch();
+                    // Yield to main thread to allow UI render
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
+
+                // Update progress every 50 cards
+                if (i % 50 === 0) {
                     const progress = 50 + (i / totalCards) * 45;
                     setLoadingProgress(progress, `Imported ${importedCount} cards...`);
                 }
             }
+
+            // Flush remaining items
+            await flushBatch();
+
+            // Persist queue metadata once at the end
+            await Storage.setMeta('queue', this.state.queue);
+            this.state.queueLastChangedAt = new Date().toISOString();
+            await Storage.setMeta('queueLastChangedAt', this.state.queueLastChangedAt);
+            this.updateSyncButtonState();
+            this.renderConnection();
+
             setLoadingProgress(100, 'Complete!');
             hideLoading();
             this.renderAll();
             toast(`Imported ${importedCount} cards from .apkg`);
+
+            // Trigger sync if online
+            if (this.state.queue.length > 0) {
+                this.requestAutoSyncSoon(2000, 'import');
+            }
         } catch (e) {
             hideLoading();
             console.error(e);
