@@ -69,17 +69,27 @@ const parseClozeIndexesFromString = (str) => {
  * @returns {Object} { toCreate: number[], toKeep: string[], toSuspend: string[] }
  */
 export const reconcileSubItems = (parent, existingSubItems) => {
-    // Try parsing from card text first, fallback to clozeIndexes property from Notion
-    let indices = parseClozeIndices(parent.name);
-    if (indices.size === 0 && parent.back) {
-        indices = parseClozeIndices(parent.back);
-    }
-    if (indices.size === 0 && parent.clozeIndexes) {
+    // Optimization: Prefer pre-calculated indices from Notion property if available
+    // AND not edited locally (updatedInApp check)
+    let indices = new Set();
+
+    if (parent.clozeIndexes && !parent.updatedInApp) {
         indices = parseClozeIndexesFromString(parent.clozeIndexes);
     }
+
+    // Fallback to parsing text if property missing/empty or edited locally
+    if (indices.size === 0) {
+        // Try name first (standard location)
+        indices = parseClozeIndices(parent.name);
+
+        // Try back if name empty (rare, but supported)
+        if (indices.size === 0 && parent.back) {
+            indices = parseClozeIndices(parent.back);
+        }
+    }
+
     const existingByIndex = new Map();
     const duplicatesToSuspend = [];
-
     for (const sub of existingSubItems) {
         // Parse the clozeIndexes field to get the index
         const idx = parseInt(sub.clozeIndexes, 10);

@@ -173,10 +173,10 @@ export const SRS = {
         const interval = card.sm2?.interval ?? 0;
         const repetitions = card.sm2?.repetitions ?? 0;
         // Map ratings to SM-2 quality grades (0-5 scale)
-        // again=0 (complete blackout), hard=2 (correct with serious difficulty),
+        // again=0 (complete blackout), hard=3 (correct with serious difficulty),
         // good=4 (correct with minor difficulty), easy=5 (perfect)
-        // Fix: hard grade (2) was incorrectly set to 3 (same as good in edge cases)
-        const grade = { again: 0, hard: 2, good: 4, easy: 5 }[rating] ?? 4;
+        // Fix: hard grade (3) allows passing but with lower ease
+        const grade = { again: 0, hard: 3, good: 4, easy: 5 }[rating] ?? 4;
 
         let newEase, newInterval, newReps;
 

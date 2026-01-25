@@ -492,14 +492,26 @@ export const App = {
         const selectedDeckIds = (deckIds || []).filter(id => !!this.deckById(id));
         if (selectedDeckIds.length === 0) return [];
 
-        const candidateCards = this.state.cards.filter(c =>
-            selectedDeckIds.includes(c.deckId) &&
-            this.passFilters(c, { context: 'study' }) &&
-            isSchedulable(c) && // Exclude cloze parents - only sub-items are schedulable
-            (includeNonDue || this.isDue(c))
-        );
+        // Optimization: Single pass bucket sort
+        // Bucket cards by deckId immediately to avoid repeated filtering
+        const deckBuckets = new Map(); // deckId -> Array<Card>
+        const selectedDeckSet = new Set(selectedDeckIds);
 
-        if (candidateCards.length === 0) return [];
+        // Pre-initialize buckets for selected decks
+        for (const id of selectedDeckIds) {
+            deckBuckets.set(id, []);
+        }
+
+        // Single pass over all cards
+        for (const c of this.state.cards) {
+            if (selectedDeckSet.has(c.deckId) &&
+                this.passFilters(c, { context: 'study' }) &&
+                isSchedulable(c) && // Exclude cloze parents
+                (includeNonDue || this.isDue(c))
+            ) {
+                deckBuckets.get(c.deckId).push(c);
+            }
+        }
 
         // Fix: Improved new card detection - check learning state AND review history
         // A card is "new" only if it has never been reviewed (no history, no repetitions, no learning state)
@@ -589,10 +601,10 @@ export const App = {
 
         for (const deckId of selectedDeckIds) {
             const deck = this.deckById(deckId);
-            const deckCards = candidateCards.filter(c => c.deckId === deckId && !seenCardIds.has(c.id));
+            const deckCards = deckBuckets.get(deckId) || [];
             if (deckCards.length === 0) continue;
 
-            // Mark all cards in this deck as seen
+            // Mark all cards in this deck as seen (though buckets are already disjoint by deckId)
             deckCards.forEach(c => seenCardIds.add(c.id));
 
             if (includeNonDue) {
@@ -1105,6 +1117,7 @@ export const App = {
         const deckChanges = [];
         const cardIdChanges = [];
         const cardUpdates = [];
+        const cardsBeingRenamed = new Set();
 
         // Update decks
         if (hasDeckMap) {
@@ -1147,6 +1160,7 @@ export const App = {
                     card.id = newId;
                     card.notionId = newId;
                     cardIdChanges.push({ oldId, value: card });
+                    cardsBeingRenamed.add(card); // Track reference for O(1) lookup
                     changed = true;
                 }
                 // Update parentCard reference for sub-items
@@ -1163,7 +1177,8 @@ export const App = {
                     changed = true;
                 }
             }
-            if (changed && !cardIdChanges.find(c => c.value === card)) {
+            // Optimization: Use Set lookup instead of array.find
+            if (changed && !cardsBeingRenamed.has(card)) {
                 cardUpdates.push(card);
             }
         }
@@ -4708,40 +4723,41 @@ export const App = {
             cardFilter = { timestamp: 'last_edited_time', last_edited_time: { on_or_after: since } };
         }
 
-        // Prepare for full sync wipe if needed (only if not incremental)
-        // Optimization: If streaming, we don't wipe upfront. We rely on upserts. 
-        // But for a true full sync (first run), we might want to clear old garbage.
-        // However, streaming makes "wipe first" risky if connection drops.
-        // Better to just upsert. If `!since`, we assume local state might be stale or empty.
-        // To strictly match "wipe if !since" behavior safely:
-        if (!since) {
-            // We can't wipe *while* streaming easily without losing data if stream fails.
-            // But if we are re-downloading everything, we can track IDs seen and delete others?
-            // For now, let's keep the logic simple: Upsert everything. 
-            // If the user wanted a hard reset, they can use the "Reset" button.
-            // Or we can wipe explicitly if we are sure we want to start fresh.
-            // Let's stick to upserting for robustness.
-            // Wait, previous code did: if (!since) await Storage.wipeStore...
-            // If we remove that, we might keep deleted cards. 
-            // BUT, `queryDatabase` without filter gets ALL cards. So we will update them.
-            // Deleted cards in Notion (archived) won't be returned by default (API filters them usually? No, we filter client side).
-            // Actually, queryDatabase returns archived pages too if we don't filter them out?
-            // API defaults: archived pages are NOT returned unless you query specifically or use specific filters? 
-            // Notion API `query` returns non-archived by default usually? No, it returns all matching filter.
-            // If we filter by last_edited, we get archived too.
-            // If we don't filter, we get all.
-        }
+        // Optimization: Build lookup maps to avoid O(N) search in upsertCard
+        // distinct maps for internal ID and Notion ID
+        const cardIndexByNotionId = new Map();
+        const cardIndexById = new Map();
+        this.state.cards.forEach((c, idx) => {
+            if (c.notionId) cardIndexByNotionId.set(c.notionId, idx);
+            cardIndexById.set(c.id, idx);
+        });
+
+        // Mark-and-sweep for full syncs: track seen IDs to detect server-side deletions
+        const seenNotionIds = !since ? new Set() : null;
 
         const upsertCard = (card) => {
-            const idx = this.state.cards.findIndex(c => c.notionId === card.notionId);
+            if (seenNotionIds && card.notionId) {
+                seenNotionIds.add(card.notionId);
+            }
+
+            let idx = -1;
+            if (card.notionId && cardIndexByNotionId.has(card.notionId)) {
+                idx = cardIndexByNotionId.get(card.notionId);
+            } else if (cardIndexById.has(card.id)) {
+                idx = cardIndexById.get(card.id);
+            }
+
             if (idx >= 0) {
                 const existing = this.state.cards[idx];
                 const localHistory = existing.reviewHistory || [];
                 const remoteHistory = card.reviewHistory || [];
+                // Preserve local history if remote is empty (avoid overwrite during initial sync-back)
                 const preservedHistory = (remoteHistory.length === 0 && localHistory.length > 0) ? localHistory : remoteHistory;
                 this.state.cards[idx] = { ...existing, ...card, reviewHistory: preservedHistory };
             } else {
-                this.state.cards.push(card);
+                const newIdx = this.state.cards.push(card) - 1;
+                if (card.notionId) cardIndexByNotionId.set(card.notionId, newIdx);
+                cardIndexById.set(card.id, newIdx);
             }
         };
 
@@ -4788,6 +4804,35 @@ export const App = {
                     property: 'Deck',
                     relation: { contains: deckId }
                 }, processCardChunk);
+            }
+        }
+
+        // Full Sync Sweep: Remove local cards that are no longer on the server
+        // (activeDeckNotionIds tracks decks we are syncing; orphans in these decks should be removed)
+        if (!since && seenNotionIds) {
+            const orphans = this.state.cards.filter(c => {
+                // Only sweep cards that:
+                // 1. Have a Notion ID (are synced entities)
+                // 2. Belong to a deck we are actively syncing
+                // 3. Were NOT seen in the full sync response
+                // 4. Are not sub-items (managed by reconcileClozeSubItems)
+                return c.notionId &&
+                    !isSubItem(c) &&
+                    activeDeckNotionIds.has(c.deckId) &&
+                    !seenNotionIds.has(c.notionId);
+            });
+
+            if (orphans.length > 0) {
+                console.log(`Sweeping ${orphans.length} orphaned cards`);
+                const orphanIds = new Set(orphans.map(c => c.id));
+
+                // Remove from storage
+                for (const c of orphans) {
+                    await Storage.delete('cards', c.id);
+                }
+
+                // Remove from memory
+                this.state.cards = this.state.cards.filter(c => !orphanIds.has(c.id));
             }
         }
 
@@ -6624,6 +6669,9 @@ export const App = {
         const modelBasicId = deckId + 1;
         const modelClozeId = deckId + 2;
 
+        // Optimization: Create a lookup map for all cards to avoid O(N) searches
+        const cardMap = new Map(this.state.cards.map(c => [c.id, c]));
+
         const conf = { nextPos: 1, estTimes: true, activeDecks: [deckId], sortType: "noteFld", sortBackwards: false, newSpread: 0, dueCounts: true, curDeck: deckId, timeLim: 0 };
         const models = {};
         models[modelBasicId] = {
@@ -6707,7 +6755,7 @@ export const App = {
         // Export cloze parents with their sub-items
         let clozeIdx = regularCards.length;
         for (const [parentId, subs] of parentGroups) {
-            const parent = this.cardById(parentId);
+            const parent = cardMap.get(parentId);
             if (!parent) continue;
 
             const mid = modelClozeId;
