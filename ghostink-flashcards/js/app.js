@@ -115,7 +115,6 @@ const ensureMarkedConfigured = () => {
     markedConfigured = true;
 };
 
-// Phase 5: Safe markdown parse wrapper - returns raw markdown on failure
 const safeMarkdownParse = (md) => {
     if (!md) return '';
     try {
@@ -128,7 +127,6 @@ const safeMarkdownParse = (md) => {
     }
 };
 
-// Phase 12: Safe history state wrapper - silently catches quota/security errors
 const safeHistoryReplace = (data, title, url) => {
     try {
         history.replaceState(data, title, url);
@@ -137,7 +135,6 @@ const safeHistoryReplace = (data, title, url) => {
     }
 };
 
-// Phase 17: Scoped lucide icon creation - avoid scanning whole document
 const createIconsInScope = (container) => {
     if (typeof lucide === 'undefined') return;
     if (container && container.querySelectorAll) {
@@ -158,7 +155,6 @@ const isTypingTarget = (target) => {
 const SYNC_QUEUE_WARN_THRESHOLD = 500;
 const SYNC_QUEUE_WARN_COOLDOWN_MS = 10 * 60 * 1000;
 
-// Phase 22: Focus trap for modals
 const focusTrap = {
     active: null,
     handleKeydown(e) {
@@ -280,7 +276,6 @@ export const App = {
         await this.autoVerifyWorker();
         window.addEventListener('online', () => this.handleOnline());
         window.addEventListener('offline', () => this.handleOffline());
-        // Issue 2 Fix: Check initial online state
         if (!navigator.onLine) {
             document.body.classList.add('offline-mode');
         }
@@ -514,7 +509,6 @@ export const App = {
             }
         }
 
-        // Fix: Improved new card detection - check learning state AND review history
         // A card is "new" only if it has never been reviewed (no history, no repetitions, no learning state)
         const isNewCard = (card) => {
             const lastReview = card.fsrs?.lastReview || card.sm2?.lastReview || null;
@@ -535,7 +529,6 @@ export const App = {
 
         const applyOrderForDeck = (arr, deck, isNewCards = false) => {
             const mode = deck?.orderMode || 'none';
-            // Fix: Add shuffle option for new cards (separate from review cards)
             const shuffleNewCards = deck?.shuffleNew ?? true; // Default to shuffling new cards
 
             if (isNewCards && shuffleNewCards && mode !== 'property') {
@@ -597,7 +590,6 @@ export const App = {
         const newBuckets = {};
         const allBuckets = {};
 
-        // Fix: Track seen card IDs to prevent double-counting
         const seenCardIds = new Set();
 
         for (const deckId of selectedDeckIds) {
@@ -730,7 +722,6 @@ export const App = {
     },
     getSessionCard() {
         const session = this.state.session;
-        // Issue 1 Fix: Automatically skip deleted/archived cards to prevent session stall
         while (session && session.currentIndex < session.cardQueue.length) {
             const queueItem = session.cardQueue[session.currentIndex];
             const card = this.cardById(queueItem.cardId);
@@ -759,11 +750,9 @@ export const App = {
         const session = this.state.session;
         if (!session) return;
 
-        // Bug fix: Guard against race conditions from rapid calls (double-tap, etc.)
         if (this.state._advancingSession) return;
         this.state._advancingSession = true;
 
-        // Issue 3 Fix: Cleanup temporary lightbox instances when switching cards
         cleanupTempLightboxes();
 
         const queueItem = session.cardQueue[session.currentIndex];
@@ -1230,7 +1219,7 @@ export const App = {
                     if (op.payload.deckId && deckIdMap[op.payload.deckId]) {
                         op.payload.deckId = deckIdMap[op.payload.deckId];
                     }
-                    // Fix: Update relational fields in queue payloads
+                    // Update relational fields in queue payloads
                     if (hasCardMap) {
                         if (op.payload.parentCard && cardIdMap[op.payload.parentCard]) {
                             op.payload.parentCard = cardIdMap[op.payload.parentCard];
@@ -1456,7 +1445,6 @@ export const App = {
                 this.renderAnalytics();
             };
         }
-        // Phase 14: Debounce search inputs for better performance
         const debouncedCardSearch = debounce((val) => {
             this.state.cardSearch = val;
             this.state.cardLimit = 50;
@@ -2009,7 +1997,6 @@ export const App = {
             const stats = deckStats.get(card.deckId);
 
             // Count total cards (exclude cloze parents, only count actually studyable cards)
-            // Fix: Also exclude suspended cards from total count
             if (isSchedulable(card) && !card.suspended) {
                 stats.total += 1;
             }
@@ -2988,7 +2975,6 @@ export const App = {
         const allSelected = selectedSet.size === 0;
         const deckIds = this.state.decks.map(d => d.id);
 
-        // Phase 16: Memoization for analytics calculation
         const currentCacheKey = JSON.stringify({
             lastSync: this.state.lastSync,
             cardsLen: this.state.cards.length,
@@ -3988,7 +3974,6 @@ export const App = {
             html = html.replace(pattern, '<span class="text-accent bg-accent-soft rounded px-0.5">{{$1}}</span>');
         }
 
-        // Fix: Contenteditable eats newlines with just pre-wrap; explicit <br> is more robust for editing
         html = html.replace(/\n/g, '<br>');
 
         // Only update if changed (prevents loop/jitter if no change)
@@ -4194,7 +4179,6 @@ export const App = {
                 if (k % 10 === 0) {
                     showLoading('Optimizing FSRS weights...', `Iter ${k + 1}/${iters} • best logloss ${bestLoss.toFixed(4)}`, cancelOptimization);
                     setLoadingProgress(((k + 1) / iters) * 100, `${Math.round(((k + 1) / iters) * 100)}% • iter ${k + 1}/${iters}`);
-                    // Phase 18: Use requestIdleCallback when available for better main thread responsiveness
                     await new Promise(r => {
                         if (typeof requestIdleCallback === 'function') {
                             requestIdleCallback(r, { timeout: 50 });
@@ -4705,20 +4689,22 @@ export const App = {
             .filter(p => !p?.archived && !isHiddenDeck(p))
             .map(d => NotionMapper.deckFrom(d));
 
-        // ... (Config validation logic maintained) ...
         const decksToNormalize = new Set();
+
         for (const d of mappedDecks) {
+            // Restore logic: Fix invalid Notion configs by pushing local defaults
+            if (d.srsConfigError) {
+                console.warn(`Fixing invalid SRS config for deck ${d.name}`);
+                toast(`Fixing invalid config in deck: ${d.name}`);
+                this.queueOp({ type: 'deck-upsert', payload: d });
+            }
+
             if (!d.dynamicContext) continue;
             const local = localDeckMap.get(d.notionId || d.id);
             if (firstSync || !local || !local.dynamicContext) {
                 decksToNormalize.add(d.notionId || d.id);
             }
         }
-
-        // ... (Queue ops for invalid configs maintained) ...
-        // Note: For brevity in this replacement, assume existing queueOp logic for decks is preserved or handled after update.
-        // To be safe, we should re-implement the deck processing loop if it was truncated, but `mappedDecks` is small.
-        // Let's ensure we process mappedDecks updates immediately.
 
         const upsertDeck = (deck) => {
             const idx = this.state.decks.findIndex(d => d.notionId === deck.notionId);
@@ -4858,7 +4844,6 @@ export const App = {
 
         // Handle Deck deletions/hiding (cleanup)
         if (since) {
-            // ... (Existing logic for hidden/deleted decks cleanup) ...
             if (hiddenDeckNotionIds.size > 0) {
                 // Remove decks
                 const toHideDecks = this.state.decks.filter(d => d.notionId && hiddenDeckNotionIds.has(d.notionId));
@@ -5001,7 +4986,6 @@ export const App = {
                 // Update local maps immediately
                 addToMap(subItemsByParent, subItem.parentCard, subItem);
 
-                // Fix: Update parent's subCards array in memory immediately (Source of Truth consistency)
                 if (!Array.isArray(parent.subCards)) parent.subCards = [];
                 if (!parent.subCards.includes(subItem.id)) {
                     parent.subCards.push(subItem.id);
@@ -5104,7 +5088,6 @@ export const App = {
             subItem.parentCard = stableParentId;
             this.state.cards.push(subItem);
 
-            // Fix: Update parent's subCards array in memory immediately
             if (!Array.isArray(parent.subCards)) parent.subCards = [];
             if (!parent.subCards.includes(subItem.id)) {
                 parent.subCards.push(subItem.id);
@@ -5174,7 +5157,6 @@ export const App = {
 
         const hadQueue = queue.length > 0;
 
-        // Bug 1 Fix: Identify items that were superseded/squashed so we can remove them
         // These are items in rawQueue that are NOT in the final to-be-processed queue.
         // We remove them immediately to prevent them from becoming "zombies" if the main sync fails.
         const toProcessIds = new Set(queue.map(op => {
@@ -5293,7 +5275,6 @@ export const App = {
             }
         }
 
-        // Bug 1 Fix: Atomically update the queue - remove successfully processed items and add failed ones
         // Remove succeeded items from the live queue (reference check)
         if (succeeded.length > 0) {
             const succeededSet = new Set(succeeded);
@@ -5772,7 +5753,6 @@ export const App = {
         }
     },
     handleOnline() {
-        // Issue 2 Fix: Show visual feedback when coming back online
         document.body.classList.remove('offline-mode');
         toast('Back online');
         this.renderConnection();
@@ -5780,7 +5760,6 @@ export const App = {
         this.requestAutoSyncSoon(250);
     },
     handleOffline() {
-        // Issue 2 Fix: Show visual feedback when going offline
         document.body.classList.add('offline-mode');
         toast('You are offline - changes will sync when online');
         this.renderConnection();
@@ -5996,7 +5975,6 @@ export const App = {
                 prompt = card.back;
             }
 
-            // Phase 8: Cloze index bounds check with cleanup
             const clozeMatches = (prompt || '').match(/\{\{c\d+::.+?\}\}/gi) || [];
             const maxIndex = Math.max(0, clozeMatches.length - 1);
             let clozeIdx = card.activeClozeIndex ?? 0;
@@ -6029,9 +6007,7 @@ export const App = {
             // For sub-items, only hide the specific cloze index, reveal all others
             const subItemIndex = isSubItem(card) ? parseInt(card.clozeIndexes, 10) : null;
 
-            // Bug 5 fix: Improved cloze regex to handle nested braces (e.g., code snippets)
             // Uses a non-greedy match with proper handling of nested content
-            // Bug 3 fix (XSS): Escape user content before inserting into HTML
             const processed = prompt.replace(/\{\{c(\d+)::((?:[^{}]|\{(?!\{)|\}(?!\}))*?)(?:::((?:[^{}]|\{(?!\{)|\}(?!\}))*?))?\}\}/g, (match, num, answer, hint) => {
                 const clozeNum = parseInt(num, 10);
                 // The hint (if present) is the 3rd capture group after the optional :::
@@ -6126,8 +6102,6 @@ export const App = {
         };
         // Preview mode: never modify scheduling (independent of due/all selection).
         const previewMode = !!this.state.session?.noScheduleChanges;
-
-        // Bug 2 Fix: Wrap all state modifications in try-catch to ensure consistency
 
         try {
 
@@ -6280,7 +6254,6 @@ export const App = {
                 console.error('DyContext generation error:', e);
             });
 
-            // Bug 2 Fix: Only update session statistics AFTER successful storage
             if (this.state.session && this.state.session.ratingCounts) {
                 this.state.session.ratingCounts[ratingLabel] = (this.state.session.ratingCounts[ratingLabel] || 0) + 1;
             }
@@ -6294,7 +6267,6 @@ export const App = {
                 this.nextCard();
             }
         } catch (e) {
-            // Bug 2 Fix: Rollback card state on failure
             console.error('Rating failed, rolling back:', e);
             card.sm2 = previousState.sm2;
             card.fsrs = previousState.fsrs;
@@ -6566,7 +6538,6 @@ export const App = {
     },
     async importApkg(file) {
         try {
-            // Phase 19: Anki import progress feedback
             showLoading('Importing Anki deck...', 'Reading file...');
             const buf = await file.arrayBuffer();
             setLoadingProgress(10, 'Extracting archive...');
@@ -6626,7 +6597,6 @@ export const App = {
                 if (!deckCache[deckId]) {
                     let deckName = decksMap[deckId] || file.name.replace('.apkg', '');
 
-                    // Phase 7: Anki import deck name collision - append suffix for duplicates
                     let finalDeckName = deckName;
                     let suffix = 1;
                     while (this.state.decks.some(d => d.name === finalDeckName)) {
@@ -6678,7 +6648,6 @@ export const App = {
                         // For Anki imports, sub-items start as new cards
                         this.state.cards.push(subItem);
 
-                        // Fix: Update parent's subCards array immediately
                         parent.subCards.push(subItem.id);
 
                         // Batch write
@@ -8018,7 +7987,6 @@ export const App = {
         }
     },
     async callAI(provider, model, prompt, key) {
-        // Phase 9: Offline mode check for AI
         if (!navigator.onLine) {
             throw new Error('Network unavailable');
         }
@@ -8415,7 +8383,6 @@ export const App = {
         this.state.userStoppedMic = false;
         if (!this.state.activeMicButton) this.state.activeMicButton = 'inline';
 
-        // Bug 4 fix: Comprehensive try-catch with proper cleanup
         let stream = null;
         try {
             stream = await this.getMicStream();
@@ -8427,7 +8394,6 @@ export const App = {
             this.mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
 
             this.mediaRecorder.onstop = async () => {
-                // Bug 4 fix: Ensure stream is stopped even if transcription fails
                 const cleanupStream = () => {
                     try { stream.getTracks().forEach(t => t.stop()); } catch (_) { }
                     if (this.state.activeAudioStream === stream) this.state.activeAudioStream = null;
@@ -8460,7 +8426,6 @@ export const App = {
                     this.state.activeMicButton = null;
                     this.setAiControlsLocked(false);
                 } catch (e) {
-                    // Bug 4 fix: Proper cleanup on transcription failure
                     el('#aiFeedback').innerHTML = '';
                     toast('Transcription failed: ' + e.message);
                     this.mediaRecorder = null;
@@ -8503,7 +8468,6 @@ export const App = {
             }, 60000);
 
         } catch (e) {
-            // Bug 4 fix: Cleanup stream on any error during setup
             if (stream) {
                 try { stream.getTracks().forEach(t => t.stop()); } catch (_) { }
             }
@@ -8519,7 +8483,6 @@ export const App = {
         }
     },
     async transcribeWithWhisper(audioBlob, provider, model, key, prompt) {
-        // Phase 9: Offline mode check for STT
         if (!navigator.onLine) {
             throw new Error('Network unavailable for transcription');
         }
@@ -8543,7 +8506,6 @@ export const App = {
         return data.text || '';
     },
     async transcribeWithGemini(audioBlob, model, key, prompt) {
-        // Phase 9: Offline mode check for Gemini STT
         if (!navigator.onLine) {
             throw new Error('Network unavailable for transcription');
         }

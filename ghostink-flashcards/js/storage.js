@@ -11,7 +11,6 @@ export const Storage = {
     _isInitialized: false,
 
     async init() {
-        // Bug 1 fix: Prevent multiple init calls and ensure single initialization
         if (this._initPromise) return this._initPromise;
         if (this._isInitialized && this.db) return Promise.resolve();
 
@@ -28,7 +27,6 @@ export const Storage = {
                 }
                 if (!db.objectStoreNames.contains('cards')) {
                     const cardStore = db.createObjectStore('cards', { keyPath: 'id' });
-                    // Fix: Add indexes for common queries
                     cardStore.createIndex('deckId', 'deckId', { unique: false });
                     cardStore.createIndex('dueDate_fsrs', 'fsrs.dueDate', { unique: false });
                     cardStore.createIndex('dueDate_sm2', 'sm2.dueDate', { unique: false });
@@ -53,7 +51,6 @@ export const Storage = {
                 if (!db.objectStoreNames.contains('session')) {
                     db.createObjectStore('session', { keyPath: 'id' });
                 }
-                // Bug 6 fix: Add sync queue store for persistence
                 if (!db.objectStoreNames.contains('syncQueue')) {
                     db.createObjectStore('syncQueue', { keyPath: 'id', autoIncrement: true });
                 }
@@ -83,12 +80,10 @@ export const Storage = {
         return this._initPromise;
     },
 
-    // Bug 1 fix: Check if storage is ready
     isReady() {
         return this._isInitialized && this.db !== null;
     },
 
-    // Bug 1 fix: Wait for storage to be ready
     async ensureReady() {
         if (this.isReady()) return;
         await this.init();
@@ -217,7 +212,6 @@ export const Storage = {
         });
     },
 
-    // Bug 3 fix: Batch put with yielding to prevent jank
     async putMany(store, values) {
         await this.ensureReady();
         if (!values || values.length === 0) return;
@@ -329,7 +323,6 @@ export const Storage = {
         });
     },
 
-    // Bug 6 fix: Sync queue persistence methods
     async getSyncQueue() {
         await this.ensureReady();
         if (!this.db.objectStoreNames.contains('syncQueue')) {

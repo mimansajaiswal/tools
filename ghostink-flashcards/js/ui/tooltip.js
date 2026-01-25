@@ -60,7 +60,6 @@ export const Tooltip = {
         document.addEventListener('mouseover', (e) => {
             const t = e.target.closest('[data-tip]');
             if (!t) return;
-            // Fix 8: Clear pending timer even if showing immediately to prevent stale content
             clearTimeout(this.timer);
             if (this.lastShown) { this.show(t); return; }
             this.timer = setTimeout(() => this.show(t), 160);

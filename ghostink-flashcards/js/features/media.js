@@ -80,7 +80,6 @@ export const getMediaInfo = (rawUrl) => {
 let lightbox = null;
 // Track if lightbox needs refresh after DOM changes
 let lightboxNeedsRefresh = false;
-// Issue 3 Fix: Track temporary lightbox instances for proper cleanup
 let tempLightboxInstances = [];
 
 /**
@@ -98,11 +97,7 @@ export const cleanupTempLightboxes = () => {
     tempLightboxInstances = [];
 };
 
-/**
- * Initialize or get the GLightbox instance
- * Bug 8 fix: Proper instance management to prevent memory leaks
- * @returns {Object} GLightbox instance
- */
+
 export const initLightbox = () => {
     if (!lightbox && typeof GLightbox !== 'undefined') {
         lightbox = GLightbox({
@@ -128,7 +123,6 @@ export const getLightbox = () => lightbox;
  * Call this when navigating away or before re-initialization
  */
 export const destroyLightbox = () => {
-    // Issue 3 Fix: Also cleanup temp instances
     cleanupTempLightboxes();
 
     if (lightbox) {
@@ -141,14 +135,9 @@ export const destroyLightbox = () => {
     }
 };
 
-/**
- * Bug 8 fix: Safely refresh the lightbox to pick up new elements
- * This avoids creating new instances on each render
- */
 export const refreshLightbox = () => {
     if (typeof GLightbox === 'undefined') return;
 
-    // Issue 3 Fix: Cleanup temp instances before refresh
     cleanupTempLightboxes();
 
     if (lightbox) {

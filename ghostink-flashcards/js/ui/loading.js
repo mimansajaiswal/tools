@@ -24,7 +24,6 @@ export const showLoading = (msg = 'Loading...', subtext = '', onCancel = null) =
     if (lm) lm.textContent = msg;
     if (ls) ls.textContent = subtext;
 
-    // Fix 4: Don't reset progress if overlay is already visible (updating message)
     const isVisible = ov && !ov.classList.contains('hidden');
     if (!isVisible) {
         if (pw) pw.classList.add('hidden');

@@ -6,7 +6,6 @@
 import { Storage } from './storage.js';
 
 export const API = {
-    // Phase 2: API error context enhancement
     async request(method, endpoint, body = null, override = null) {
         const { workerUrl, authToken, proxyToken } = override || Storage.getSettings();
         if (!workerUrl || !authToken) throw new Error('Missing worker URL or Notion token');
@@ -36,7 +35,6 @@ export const API = {
         return await res.json();
     },
 
-    // Phase 13: Exponential backoff for API
     async requestWithRetry(method, endpoint, body = null, override = null, maxRetries = 3) {
         let lastError;
         for (let i = 0; i < maxRetries; i++) {

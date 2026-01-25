@@ -52,7 +52,6 @@ export const nextDifficulty = (w, d, ratingName) => {
     return constrainDifficulty(meanReversion(w, w[4], next_d));
 };
 
-// Phase 6: Calculate new stability after successful recall (capped at MAX_INTERVAL)
 export const nextRecallStability = (w, d, s, r, ratingName) => {
     const hardPenalty = ratingName === 'hard' ? w[15] : 1;
     const easyBonus = ratingName === 'easy' ? w[16] : 1;
@@ -175,7 +174,6 @@ export const SRS = {
         // Map ratings to SM-2 quality grades (0-5 scale)
         // again=0 (complete blackout), hard=3 (correct with serious difficulty),
         // good=4 (correct with minor difficulty), easy=5 (perfect)
-        // Fix: hard grade (3) allows passing but with lower ease
         const grade = { again: 0, hard: 3, good: 4, easy: 5 }[rating] ?? 4;
 
         let newEase, newInterval, newReps;

@@ -3,15 +3,9 @@
  * Handles caching, offline functionality, and background sync.
  */
 
-// Issue 1 Fix: Improved cache versioning strategy
-// The CACHE_VERSION should be incremented when making breaking changes.
-// Additionally, local files use content-aware caching with revalidation.
 const CACHE_VERSION = 11; // Increment this on each deployment with breaking changes
 const CACHE_NAME = `ghostink-cache-v${CACHE_VERSION}`;
 const CACHE_PREFIX = 'ghostink-cache-';
-
-// Issue 1 Fix: Track last modification times for smarter cache invalidation
-// This allows the app to detect when files have changed even without version bump
 const CACHE_METADATA_KEY = 'ghostink-cache-metadata';
 
 // Cache expiration settings (Fix: cache expiration)
@@ -67,7 +61,6 @@ self.addEventListener('install', (event) => {
       ];
       await cache.addAll(localAssets);
 
-      // Fix: Better CDN caching with CORS handling
       // Best-effort pre-cache of third-party assets so the app can boot offline
       // after the first successful online load.
       // Using pinned versions to ensure consistent behavior and avoid cache invalidation issues
@@ -89,7 +82,6 @@ self.addEventListener('install', (event) => {
         'https://unpkg.com/sql.js@1.13.0/dist/sql-wasm.wasm'
       ];
 
-      // Fix: Improved CDN caching with error handling and timeout
       const fetchWithTimeout = async (url, options, timeoutMs = 10000) => {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -139,7 +131,6 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
-      // Bug 9 fix: Clean up old caches when activating a new version
       const keys = await caches.keys();
       await Promise.all(
         keys
@@ -150,14 +141,12 @@ self.addEventListener('activate', (event) => {
           })
       );
 
-      // Fix: Expire old entries in current cache
       await cleanExpiredCacheEntries();
     })()
   );
   self.clients.claim();
 });
 
-// Fix: Cache size management - remove oldest entries when cache gets too large
 async function trimCache(cacheName, maxEntries) {
   const cache = await caches.open(cacheName);
   const keys = await cache.keys();
@@ -168,7 +157,6 @@ async function trimCache(cacheName, maxEntries) {
   }
 }
 
-// Fix 5: IDB helper for cache metadata (timestamps for opaque responses)
 const DB_NAME = 'GhostInkSW';
 const META_STORE = 'cache-meta';
 
@@ -242,7 +230,6 @@ const getAllCacheMetadata = async () => {
   }
 };
 
-// Fix: Clean expired cache entries (Optimized single-transaction)
 async function cleanExpiredCacheEntries() {
   const cache = await caches.open(CACHE_NAME);
   const keys = await cache.keys();
@@ -279,7 +266,6 @@ async function cleanExpiredCacheEntries() {
   }
 }
 
-// Fix: Categorize URLs for cache management
 function getCacheCategory(url) {
   if (url.includes('fonts.googleapis.com') || url.includes('fonts.gstatic.com')) {
     return CACHE_CATEGORIES.FONTS;
