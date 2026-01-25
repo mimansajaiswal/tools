@@ -30,7 +30,8 @@ export const initDifficulty = (w, ratingName) => {
 export const initStability = (w, ratingName) => {
     const r = ratingsMap[ratingName] || 3;
     // S0 = w[G-1]
-    return +Math.max(w[r - 1], 0.1).toFixed(2);
+    const val = Math.max(w[r - 1], 0.1);
+    return Math.round(val * 100) / 100;
 };
 
 /** Calculate probability of recall using the power forgetting curve (v6) */
@@ -40,7 +41,8 @@ export const forgettingCurve = (w, elapsedDays, stability) => Math.pow(1 + getFa
 export const nextInterval = (w, stability, desiredRetention = DEFAULT_DESIRED_RETENTION) => {
     const rr = clampRetention(desiredRetention);
     const newInterval = stability / getFactor(w) * (Math.pow(rr, 1 / getDecay(w)) - 1);
-    return Math.min(Math.max(Math.round(newInterval), 0), MAX_INTERVAL);
+    const rounded = Math.round(newInterval);
+    return Math.min(Math.max(rounded === 0 ? 0 : Math.max(1, rounded), 0), MAX_INTERVAL);
 };
 
 /** Update difficulty after a review (applies mean reversion) */
@@ -101,12 +103,13 @@ export const SRS = {
      */
     getDueDate(intervalDays) {
         const date = new Date();
-        // If interval is 0, set to 4:00 AM today (due immediately)
-        // If interval > 0, add days and set to 4:00 AM
-        const daysToAdd = Math.round(intervalDays);
-        if (daysToAdd > 0) {
-            date.setDate(date.getDate() + daysToAdd);
+        // If current time is before 4 AM, we are still in the previous "study day"
+        if (date.getHours() < 4) {
+            date.setDate(date.getDate() - 1);
         }
+
+        const daysToAdd = Math.round(intervalDays);
+        date.setDate(date.getDate() + daysToAdd);
         date.setHours(4, 0, 0, 0);
         return date.toISOString();
     },
@@ -126,7 +129,7 @@ export const SRS = {
         const lastD = card.fsrs?.difficulty ?? initDifficulty(w, 'good');
         const lastS = card.fsrs?.stability ?? initStability(w, 'good');
         const lastReview = card.fsrs?.lastReview ? new Date(card.fsrs.lastReview) : null;
-        const isNew = !lastReview;
+        const isNew = !lastReview || isNaN(lastReview.getTime());
         let newD, newS, retr;
         if (isNew) {
             newD = initDifficulty(w, ratingName);
@@ -171,39 +174,37 @@ export const SRS = {
         const ease = card.sm2?.easeFactor ?? 2.5;
         const interval = card.sm2?.interval ?? 0;
         const repetitions = card.sm2?.repetitions ?? 0;
-        // Map ratings to SM-2 quality grades (0-5 scale)
-        // again=0 (complete blackout), hard=3 (correct with serious difficulty),
-        // good=4 (correct with minor difficulty), easy=5 (perfect)
+
+        // Map ratings to SM-2 grades (0-5)
+        // again=0 (fail), hard=3 (pass, difficult), good=4 (pass), easy=5 (pass, perfect)
+        // We do not map to 1 or 2 as we lack buttons for those nuance levels of failure
         const grade = { again: 0, hard: 3, good: 4, easy: 5 }[rating] ?? 4;
 
-        let newEase, newInterval, newReps;
+        // Update Easiness Factor (EF)
+        // EF' = EF + (0.1 - (5-q) * (0.08 + (5-q)*0.02))
+        let newEase = ease + (0.1 - (5 - grade) * (0.08 + (5 - grade) * 0.02));
+        if (newEase < 1.3) newEase = 1.3;
 
-        // Update ease factor on every review (including failures), then clamp.
-        newEase = Math.max(1.3, ease + (0.1 - (5 - grade) * (0.08 + (5 - grade) * 0.02)));
+        let newInterval, newReps;
 
-        if (grade < 3) {
-            // Failed recall (again or hard) - reset to beginning
-            // Note: hard (grade=2) now correctly resets the card
-            newReps = 0;
-            newInterval = rating === 'hard' ? 1 : 0; // hard gets 1 day, again gets 0
-        } else {
-            // Successful recall (good or easy)
-            newReps = repetitions + 1;
-
-            // Calculate interval based on repetition count
-            if (newReps === 1) {
+        if (grade >= 3) {
+            // Correct response
+            if (repetitions === 0) {
                 newInterval = 1;
-            } else if (newReps === 2) {
+            } else if (repetitions === 1) {
                 newInterval = 6;
             } else {
-                // Apply bonus/penalty based on rating
-                const multiplier = rating === 'easy' ? 1.3 : 1.0;
-                newInterval = Math.round(interval * newEase * multiplier);
+                newInterval = Math.round(interval * newEase);
             }
+            newReps = repetitions + 1;
+        } else {
+            // Incorrect response
+            newReps = 0;
+            newInterval = 1;
         }
 
         return {
-            easeFactor: newEase,
+            easeFactor: Math.round(newEase * 1000) / 1000, // Keep precision sane
             interval: newInterval,
             repetitions: newReps,
             dueDate: SRS.getDueDate(newInterval),
@@ -259,7 +260,8 @@ export const buildFsrsTrainingSet = (cards, { maxCards = 400 } = {}) => {
         id: c.id,
         history: [...c.reviewHistory]
             .filter(e => e && e.at && e.rating)
-            .sort((a, b) => new Date(a.at) - new Date(b.at))
+            .map(e => ({ ...e, _ts: new Date(e.at).getTime() }))
+            .sort((a, b) => a._ts - b._ts)
     })).filter(x => x.history.length >= 2);
 };
 

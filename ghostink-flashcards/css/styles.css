@@ -1339,7 +1339,14 @@ html[data-theme="dark"] select {
     }
 }
 
-/* Issue 2 Fix: Offline mode indicator */
+/* High Contrast Mode Support */
+@media (forced-colors: active) {
+    select {
+        background-image: none !important;
+    }
+}
+
+/* Offline mode indicator */
 body.offline-mode::before {
     content: '';
     position: fixed;
@@ -1351,6 +1358,7 @@ body.offline-mode::before {
     background-size: 200% 100%;
     animation: offline-stripe 2s linear infinite;
     z-index: 9999;
+    pointer-events: none;
 }
 
 body.offline-mode::after {
@@ -1368,6 +1376,7 @@ body.offline-mode::after {
     z-index: 9999;
     opacity: 0.9;
     box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12);
+    pointer-events: none;
 }
 
 @keyframes offline-stripe {

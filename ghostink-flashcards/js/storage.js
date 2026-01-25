@@ -92,7 +92,7 @@ export const Storage = {
         return this.db.transaction(store, mode).objectStore(store);
     },
 
-    // Transaction support for critical operations (Fix)
+    // Transaction support for critical operations
     async withTransaction(storeNames, mode, callback) {
         if (!this.db) throw new Error('Database not initialized');
         const stores = Array.isArray(storeNames) ? storeNames : [storeNames];
@@ -104,15 +104,17 @@ export const Storage = {
                 storeMap[name] = tx.objectStore(name);
             });
 
-            let result;
+            // Callback must be synchronous to keep transaction alive
             try {
-                result = callback(storeMap, tx);
+                callback(storeMap, tx);
             } catch (e) {
+                // If callback throws, abort immediately
+                try { tx.abort(); } catch (_) { }
                 reject(e);
                 return;
             }
 
-            tx.oncomplete = () => resolve(result);
+            tx.oncomplete = () => resolve();
             tx.onerror = () => reject(new Error(`Transaction failed: ${tx.error?.message || 'Unknown error'}`));
             tx.onabort = () => reject(new Error('Transaction aborted'));
         });
@@ -302,8 +304,7 @@ export const Storage = {
         return new Promise((resolve, reject) => {
             const tx = this.db.transaction(store, 'readwrite');
             const req = tx.objectStore(store).delete(key);
-            req.onsuccess = resolve;
-            req.onerror = () => reject(new Error(`Failed to delete from ${store}: ${req.error?.message || 'Unknown error'}`));
+            tx.oncomplete = () => resolve();
             tx.onerror = () => reject(new Error(`Transaction failed for ${store}: ${tx.error?.message || 'Unknown error'}`));
             tx.onabort = () => reject(new Error(`Transaction aborted for ${store}`));
         });
@@ -314,8 +315,7 @@ export const Storage = {
         return new Promise((resolve, reject) => {
             const tx = this.db.transaction(store, 'readwrite');
             const req = tx.objectStore(store).clear();
-            req.onsuccess = resolve;
-            req.onerror = () => reject(new Error(`Failed to wipe ${store}: ${req.error?.message || 'Unknown error'}`));
+            tx.oncomplete = () => resolve();
             tx.onerror = () => reject(new Error(`Transaction failed for ${store}: ${tx.error?.message || 'Unknown error'}`));
             tx.onabort = () => reject(new Error(`Transaction aborted for ${store}`));
         });
@@ -569,6 +569,7 @@ export const Storage = {
                 console.error('LocalStorage quota exceeded for session. Try clearing some browser data.');
                 const minimalSession = {
                     deckIds: session.deckIds,
+                    settings: session.settings,
                     currentIndex: 0, // Reset index since we sliced the queue
                     cardQueue: session.cardQueue.slice(session.currentIndex, session.currentIndex + 50),
                     completed: session.completed || [],

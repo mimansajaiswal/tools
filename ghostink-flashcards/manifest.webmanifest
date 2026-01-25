@@ -2,10 +2,9 @@
   "name": "GhostInk Flashcards",
   "short_name": "GhostInk",
   "description": "Spaced repetition flashcard app with Notion integration",
-  "start_url": "./index.html",
-  "scope": "./",
+  "start_url": "/tools/ghostink-flashcards/",
+  "scope": "/tools/ghostink-flashcards/",
   "display": "standalone",
-  "orientation": "portrait-primary",
   "background_color": "#F3F0E6",
   "theme_color": "#917FB3",
   "categories": [
@@ -18,25 +17,25 @@
       "src": "./icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
       "src": "./icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
       "src": "./icons/icon-96.png",
       "sizes": "96x96",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
       "src": "./icons/apple-touch-icon.png",
       "sizes": "180x180",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ],
   "shortcuts": [

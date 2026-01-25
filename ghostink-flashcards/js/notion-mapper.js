@@ -545,7 +545,7 @@ export const NotionMapper = {
             'Reverse Mode Enabled': { checkbox: !!deck.reverse },
             'Created In-App': { checkbox: true },
             'Archived?': { checkbox: !!deck.archived },
-            'Anki Metadata': { rich_text: deck.ankiMetadata ? [{ text: { content: deck.ankiMetadata } }] : [] },
+            'Anki Metadata': { rich_text: toRichTextChunks(deck.ankiMetadata) },
             'AI Revision Prompt': { rich_text: markdownToNotionRichText(deck.aiPrompt) },
             'Dynamic Context?': { checkbox: !!deck.dynamicContext },
             'DyContext AI Prompt': { rich_text: toRichTextChunks(dyPrompt) },
@@ -562,6 +562,7 @@ export const NotionMapper = {
     cardFrom(page, decks) {
         const p = page.properties || {};
         const deckRel = p['Deck']?.relation?.[0]?.id || null;
+        if (!deckRel) return null; // Filter out orphaned cards immediately
         const name = richToMarkdown(p['Name']?.title) || 'Card';
         const back = richToMarkdown(p['Back']?.rich_text) || '';
         const tags = p['Tags']?.multi_select?.map(t => ({ name: t.name, color: t.color || 'default' })) || [];
@@ -696,7 +697,7 @@ export const NotionMapper = {
             'SRS State': { rich_text: toRichTextChunks(JSON.stringify(srsState)) },
             'Anki GUID': card.ankiGuid ? { rich_text: [{ type: 'text', text: { content: card.ankiGuid } }] } : { rich_text: [] },
             'Anki Note Type': card.ankiNoteType ? { select: { name: card.ankiNoteType } } : { select: null },
-            'Anki Fields JSON': card.ankiFields ? { rich_text: [{ type: 'text', text: { content: card.ankiFields } }] } : { rich_text: [] },
+            'Anki Fields JSON': { rich_text: toRichTextChunks(card.ankiFields) },
             'Cloze Indexes': card.clozeIndexes ? { rich_text: [{ type: 'text', text: { content: card.clozeIndexes } }] } : { rich_text: [] },
             'Cloze Parent Card': card.parentCard
                 ? { relation: [{ id: card.parentCard }] }

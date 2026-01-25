@@ -15,10 +15,16 @@ let toastHideTimer = null;
 export const toast = (msg) => {
     const t = el('#toast');
     if (!t) return;
-    t.textContent = msg;
-    t.classList.remove('hidden', 'opacity-0');
+
     if (toastTimer) clearTimeout(toastTimer);
     if (toastHideTimer) clearTimeout(toastHideTimer);
+
+    t.setAttribute('role', 'status');
+    t.setAttribute('aria-live', 'polite');
+
+    t.textContent = msg;
+    t.classList.remove('hidden', 'opacity-0');
+
     toastTimer = setTimeout(() => {
         t.classList.add('opacity-0');
         toastHideTimer = setTimeout(() => t.classList.add('hidden'), 500);

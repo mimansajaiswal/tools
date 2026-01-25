@@ -10,6 +10,7 @@ export const Tooltip = {
     timer: null,
     lastShown: null,
     el: null,
+    isBound: false,
 
     /**
      * Ensure tooltip element exists and return it
@@ -30,16 +31,29 @@ export const Tooltip = {
         if (!tip) return;
         const node = this.ensure();
         if (!node) return;
+
+        if (!target.getAttribute('aria-describedby')) {
+            if (!node.id) node.id = 'tooltip';
+            target.setAttribute('aria-describedby', node.id);
+        }
+
         node.textContent = tip;
         const rect = target.getBoundingClientRect();
         const pad = 10;
-        const x = Math.min(window.innerWidth - pad, Math.max(pad, rect.left + rect.width / 2));
-        const preferBelow = rect.top < 100; // near top edge: show below to avoid clipping
+        let x = rect.left + rect.width / 2;
+        x = Math.max(pad, Math.min(window.innerWidth - pad - node.offsetWidth / 2, x));
+        // We need to show it first to get width, or assume max width?
+        node.classList.remove('hidden'); // Show to measure
+
+        // Re-clamp with actual width
+        const width = node.offsetWidth;
+        x = Math.max(pad + width / 2, Math.min(window.innerWidth - pad - width / 2, rect.left + rect.width / 2));
+
+        const preferBelow = rect.top < 100;
         const y = preferBelow ? (rect.bottom + 8) : (rect.top - 8);
         node.style.left = `${x}px`;
         node.style.top = `${y}px`;
         node.style.transform = preferBelow ? 'translate(-50%, 0)' : 'translate(-50%, -100%)';
-        node.classList.remove('hidden');
         this.lastShown = target;
     },
 
@@ -50,13 +64,18 @@ export const Tooltip = {
         const node = this.ensure();
         if (!node) return;
         node.classList.add('hidden');
-        this.lastShown = null;
+        if (this.lastShown) {
+            this.lastShown.removeAttribute('aria-describedby');
+            this.lastShown = null;
+        }
     },
 
     /**
      * Bind tooltip event listeners to document
      */
     bind() {
+        if (this.isBound) return;
+        this.isBound = true;
         document.addEventListener('mouseover', (e) => {
             const t = e.target.closest('[data-tip]');
             if (!t) return;

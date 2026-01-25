@@ -52,7 +52,7 @@ export const getMediaInfo = (rawUrl) => {
         const id = path.replace(/^\/+/, '').split('/')[0];
         if (id) return { kind: 'youtube', src: `https://www.youtube.com/embed/${encodeURIComponent(id)}?enablejsapi=1` };
     }
-    if (host.includes('youtube.com')) {
+    if (host === 'youtube.com' || host === 'www.youtube.com') {
         if (path.startsWith('/watch')) {
             const id = u.searchParams.get('v');
             if (id) return { kind: 'youtube', src: `https://www.youtube.com/embed/${encodeURIComponent(id)}?enablejsapi=1` };
@@ -78,12 +78,10 @@ export const getMediaInfo = (rawUrl) => {
 
 // GLightbox instance (initialized lazily)
 let lightbox = null;
-// Track if lightbox needs refresh after DOM changes
-let lightboxNeedsRefresh = false;
 let tempLightboxInstances = [];
 
 /**
- * Issue 3 Fix: Cleanup all temporary lightbox instances
+ * Cleanup all temporary lightbox instances
  * Should be called when switching cards or cleaning up
  */
 export const cleanupTempLightboxes = () => {
@@ -183,27 +181,33 @@ export const createMediaFigure = (doc, { kind, src }, label, originalUrl) => {
         };
         a.appendChild(img);
         fig.appendChild(a);
-    } else if (kind === 'video') {
-        const video = doc.createElement('video');
-        video.src = src;
-        video.controls = true;
-        video.playsInline = true;
-        video.preload = 'metadata';
-        a.appendChild(video);
-        fig.appendChild(a);
-    } else if (kind === 'youtube' || kind === 'vimeo') {
+    } else if (kind === 'video' || kind === 'youtube' || kind === 'vimeo') {
+        // Don't wrap video controls in anchor. Use frame pattern for all video types.
         const wrap = doc.createElement('div');
         wrap.className = 'media-embed-frame';
-        const iframe = doc.createElement('iframe');
-        iframe.src = src;
-        iframe.loading = 'lazy';
-        iframe.referrerPolicy = 'no-referrer';
-        iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
-        iframe.allowFullscreen = true;
-        wrap.appendChild(iframe);
+
+        if (kind === 'video') {
+            const video = doc.createElement('video');
+            video.src = src;
+            video.controls = true;
+            video.playsInline = true;
+            video.preload = 'metadata';
+            wrap.appendChild(video);
+        } else {
+            const iframe = doc.createElement('iframe');
+            iframe.src = src;
+            iframe.loading = 'lazy';
+            iframe.referrerPolicy = 'no-referrer';
+            iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+            iframe.allowFullscreen = true;
+            iframe.title = label || 'Embedded video';
+            wrap.appendChild(iframe);
+        }
 
         // Add an expand overlay for video frames
         const expandBtn = doc.createElement('button');
+        expandBtn.type = 'button';
+        expandBtn.setAttribute('aria-label', 'Expand video');
         expandBtn.className = 'absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70';
         expandBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 3 6 6-3 3-6-6 3-3Z"/><path d="M9 21 3 15l3-3 6 6-3 3Z"/><path d="M21 3v21H0V3h21ZM3 7v14h14V7H3Z"/></svg>';
 
@@ -215,7 +219,10 @@ export const createMediaFigure = (doc, { kind, src }, label, originalUrl) => {
                 console.warn('GLightbox not available; showing inline only');
                 return;
             }
-            const instance = GLightbox({ elements: [{ href: src, type: 'video', source: kind }] });
+            // For raw video, we use the source URL. For embeds, we use the provider logic.
+            const source = kind === 'video' ? null : kind;
+            // GLightbox expects 'type' for video files to be inferred or explicit.
+            const instance = GLightbox({ elements: [{ href: src, type: source ? 'video' : null, source: source }] });
             tempLightboxInstances.push(instance);
             // Auto-destroy on close to prevent memory leaks
             instance.on('close', () => {
@@ -260,56 +267,80 @@ export const applyMediaEmbeds = (container) => {
     const doc = container.ownerDocument || document;
     const lb = initLightbox();
 
-    // Upgrade raw <img>/<video>/<iframe> styling when users paste HTML.
-    container.querySelectorAll('img').forEach(img => {
-        img.loading = img.loading || 'lazy';
-        img.decoding = img.decoding || 'async';
-        img.referrerPolicy = img.referrerPolicy || 'no-referrer';
-        if (!img.closest('figure.media-embed')) {
-            const fig = doc.createElement('figure');
-            fig.className = 'media-embed';
-            img.replaceWith(fig);
-            fig.appendChild(img);
-        }
-        if (!img.parentElement.classList.contains('glightbox')) {
-            const a = doc.createElement('a');
-            a.href = img.src;
-            a.className = 'glightbox';
-            img.replaceWith(a);
-            a.appendChild(img);
-        }
-    });
-    container.querySelectorAll('video').forEach(v => {
-        v.controls = true;
-        v.playsInline = true;
-        v.preload = v.preload || 'metadata';
-        if (!v.closest('figure.media-embed')) {
-            const fig = doc.createElement('figure');
-            fig.className = 'media-embed';
-            v.replaceWith(fig);
-            fig.appendChild(v);
-        }
-        if (!v.parentElement.classList.contains('glightbox')) {
-            const a = doc.createElement('a');
-            a.href = v.src;
-            a.className = 'glightbox';
-            v.replaceWith(a);
-            a.appendChild(v);
-        }
-    });
+    const elements = container.querySelectorAll('img, video, a[href]');
 
-    // Replace media links with embeds.
-    container.querySelectorAll('a[href]').forEach(a => {
-        const href = a.getAttribute('href') || '';
-        const info = getMediaInfo(href);
-        if (!info) return;
-        // Don't nest embeds.
-        if (a.closest('figure.media-embed')) return;
-        // Don't process glightbox links
-        if (a.classList.contains('glightbox')) return;
-        const label = (a.textContent || '').trim();
-        const fig = createMediaFigure(doc, info, label || href, href);
-        a.replaceWith(fig);
+    elements.forEach(el => {
+        // Skip if already processed
+        if (el.closest('figure.media-embed')) return;
+        if (el.classList.contains('glightbox')) return;
+
+        const tag = el.tagName.toUpperCase();
+
+        if (tag === 'IMG') {
+            if (el.closest('a')) return;
+
+            el.loading = el.loading || 'lazy';
+            el.decoding = el.decoding || 'async';
+            el.referrerPolicy = el.referrerPolicy || 'no-referrer';
+
+            const fig = doc.createElement('figure');
+            fig.className = 'media-embed';
+            // Replace logic
+            el.replaceWith(fig);
+
+            const a = doc.createElement('a');
+            a.href = el.src;
+            a.className = 'glightbox';
+            a.appendChild(el);
+            fig.appendChild(a);
+        }
+        else if (tag === 'VIDEO') {
+            if (el.closest('a')) return; // Unlikely but safe
+
+            // For video, we now use the wrapper pattern
+            // Existing HTML video -> wrap in figure -> add expand button
+            el.controls = true;
+            el.playsInline = true;
+            el.preload = el.preload || 'metadata';
+
+            const fig = doc.createElement('figure');
+            fig.className = 'media-embed';
+            el.replaceWith(fig);
+
+            const wrap = doc.createElement('div');
+            wrap.className = 'media-embed-frame group';
+            wrap.appendChild(el);
+            fig.appendChild(wrap);
+
+            // Add expand button manually here since we are upgrading existing DOM
+            const expandBtn = doc.createElement('button');
+            expandBtn.type = 'button';
+            expandBtn.setAttribute('aria-label', 'Expand video');
+            expandBtn.className = 'absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70';
+            expandBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 3 6 6-3 3-6-6 3-3Z"/><path d="M9 21 3 15l3-3 6 6-3 3Z"/><path d="M21 3v21H0V3h21ZM3 7v14h14V7H3Z"/></svg>';
+            expandBtn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof GLightbox !== 'undefined') {
+                    const instance = GLightbox({ elements: [{ href: el.src, type: 'video' }] });
+                    tempLightboxInstances.push(instance);
+                    instance.on('close', () => {
+                        setTimeout(() => { try { instance.destroy(); } catch (_) { } }, 100);
+                    });
+                    instance.open();
+                }
+            };
+            wrap.appendChild(expandBtn);
+        }
+        else if (tag === 'A') {
+            const href = el.getAttribute('href') || '';
+            const info = getMediaInfo(href);
+            if (!info) return;
+
+            const label = (el.textContent || '').trim();
+            const fig = createMediaFigure(doc, info, label || href, href);
+            el.replaceWith(fig);
+        }
     });
 
     // Embed bare media URLs (not wrapped in markdown links).

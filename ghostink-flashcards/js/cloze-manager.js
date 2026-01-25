@@ -4,7 +4,7 @@
  */
 
 import { parseSrsState } from './config.js';
-import { initDifficulty, initStability } from './srs.js';
+import { initDifficulty, initStability, SRS } from './srs.js';
 import { fsrsW } from './config.js';
 
 /**
@@ -14,7 +14,7 @@ import { fsrsW } from './config.js';
  */
 export const parseClozeIndices = (text) => {
     if (!text) return new Set();
-    const matches = [...text.matchAll(/\{\{\s*c(\d+)::/gi)];
+    const matches = [...text.matchAll(/\{\{\s*c(\d+)::/gis)];
     return new Set(matches.map(m => parseInt(m[1], 10)).filter(n => n > 0));
 };
 
@@ -137,7 +137,7 @@ export const reconcileSubItems = (parent, existingSubItems) => {
  */
 export const transformClozeForSubItem = (text, targetIndex) => {
     if (!text) return '';
-    return text.replace(/\{\{\s*c(\d+)::(.*?)\}\}/gi, (match, idx, content) => {
+    return text.replace(/\{\{\s*c(\d+)::(.*?)\}\}/gis, (match, idx, content) => {
         const clozeIdx = parseInt(idx, 10);
         if (clozeIdx === targetIndex) {
             // Keep this cloze but renumber to c1 for consistency
@@ -158,6 +158,7 @@ export const transformClozeForSubItem = (text, targetIndex) => {
  */
 export const createSubItem = (parent, clozeIndex, deckId, makeTempId) => {
     const now = new Date().toISOString();
+    const due = SRS.getDueDate(0);
     // Transform name to only test the specific cloze index
     const transformedName = transformClozeForSubItem(parent.name, clozeIndex);
     const transformedBack = transformClozeForSubItem(parent.back || '', clozeIndex);
@@ -184,9 +185,9 @@ export const createSubItem = (parent, clozeIndex, deckId, makeTempId) => {
             retrievability: 0.9,
             lastRating: null,
             lastReview: null,
-            dueDate: now
+            dueDate: due
         },
-        sm2: { interval: 1, easeFactor: 2.5, repetitions: 0, dueDate: now },
+        sm2: { interval: 1, easeFactor: 2.5, repetitions: 0, dueDate: due },
         syncId: typeof crypto !== 'undefined' ? crypto.randomUUID() : Date.now().toString(),
         updatedInApp: true,
         reviewHistory: [],

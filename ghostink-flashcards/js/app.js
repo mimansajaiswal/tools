@@ -180,6 +180,7 @@ const focusTrap = {
         if (first) setTimeout(() => first.focus(), 10);
     },
     detach() {
+        if (!focusTrap.active) return; // Already detached
         focusTrap.active = null;
         document.removeEventListener('keydown', focusTrap.handleKeydown);
     }
@@ -750,8 +751,8 @@ export const App = {
             // This catches "Skip" actions where data was modified
             const card = this.cardById(queueItem.cardId);
             if (card && card._pendingSave) {
-                delete card._pendingSave;
                 Storage.put('cards', card).then(() => {
+                    delete card._pendingSave;
                     this.queueOp({ type: 'card-upsert', payload: card });
                 }).catch(e => console.error('Failed to save skipped card:', e));
             }
@@ -1029,7 +1030,7 @@ export const App = {
             }
             leechFixes.forEach(card => this.queueOp({ type: 'card-upsert', payload: card }));
         }
-        this.calculateDeckStats(); // Initialize stats cache (Issue 3 Fix)
+        this.calculateDeckStats(); // Initialize stats cache
     },
     calculateDeckStats() {
         const stats = new Map();
@@ -1998,7 +1999,7 @@ export const App = {
         const selectedId = this.state.selectedDeck?.id;
         const searchQuery = (this.state.deckSearch || '').toLowerCase().trim();
 
-        // Use cached stats (Issue 3 Fix)
+        // Use cached stats
         if (!this.state.deckStats) this.calculateDeckStats();
         const deckStats = this.state.deckStats;
 
@@ -4764,7 +4765,7 @@ export const App = {
             const chunkDeleted = new Set(results.filter(p => p?.archived).map(p => p.id));
             // Map and filter chunk
             // Pass `this.state.decks` (latest) to `cardFrom` to resolve relations
-            const chunkMapped = results.filter(p => !p?.archived).map(c => NotionMapper.cardFrom(c, this.state.decks));
+            const chunkMapped = results.filter(p => !p?.archived).map(c => NotionMapper.cardFrom(c, this.state.decks)).filter(Boolean);
 
             // Filter by active decks
             const chunkFiltered = chunkMapped.filter(c => {
@@ -5112,7 +5113,7 @@ export const App = {
         // Rule 2: Deletes should cancel out previous Upserts for same ID (optimization).
         // Rule 3: Decks must be processed before Cards (dependencies).
 
-        const rawQueue = [...this.state.queue];
+        const rawQueue = this.state.queue.filter(op => op.type !== 'dy-generation');
         const mergedMap = new Map();
 
         // Pass 1: Deduplicate by ID+Type (Last write wins)
@@ -5157,7 +5158,7 @@ export const App = {
         for (const item of removedItems) {
             if (item.id) await Storage.removeFromSyncQueue(item.id).catch(() => { });
         }
-        this.state.queue = this.state.queue.filter(op => toProcessSet.has(op));
+        this.state.queue = this.state.queue.filter(op => toProcessSet.has(op) || op.type === 'dy-generation');
 
         const failed = [];
         const succeeded = [];
@@ -5172,6 +5173,12 @@ export const App = {
         for (let i = 0; i < queue.length; i++) {
             const op = queue[i];
             if (i > 0) await sleep(350); // Pace requests to ~3 per second
+            // Explicitly resolve temporary parentCard IDs
+            if (op.type === 'card-upsert' && op.payload && op.payload.parentCard && this.isTempId(op.payload.parentCard)) {
+                const parent = this.cardById(op.payload.parentCard);
+                if (parent && parent.notionId) op.payload.parentCard = parent.notionId;
+            }
+
             try {
                 if (op.type === 'deck-upsert') {
                     const props = NotionMapper.deckProps(op.payload);
@@ -5244,7 +5251,7 @@ export const App = {
                     await API.appendBlocks(op.payload.pageId, op.payload.blocks);
                 }
 
-                // Success: remove from DB and memory (Issue 1 Fix)
+                // Success: remove from DB and memory
                 if (op.id) await Storage.removeFromSyncQueue(op.id).catch(() => { });
                 this.state.queue = this.state.queue.filter(x => x.id !== op.id);
                 succeeded.push(op);
@@ -5308,7 +5315,7 @@ export const App = {
             op.payload._lastUpdated = Date.now();
         }
 
-        // Persist to syncQueue store (Issue 2 Fix)
+        // Persist to syncQueue store
         const dbKey = await Storage.addToSyncQueue(op);
         op.id = dbKey; // Assign DB key to in-memory obj
         this.state.queue.push(op);
@@ -5325,7 +5332,7 @@ export const App = {
                 this.state.lastQueueWarnAt = now;
             }
         }
-        this.calculateDeckStats(); // Update stats (Issue 3 Fix)
+        this.calculateDeckStats(); // Update stats
         this.updateSyncButtonState();
         this.renderConnection();
         const delay = (reason === 'rating') ? (5 * 60 * 1000) : 1500;
@@ -5422,50 +5429,72 @@ export const App = {
     },
     async enqueueDyContextJob(job) {
         if (!job?.prevId) return;
-        const deduped = (this.state.dyContextQueue || []).filter(j => j.prevId !== job.prevId);
-        deduped.push(job);
-        this.state.dyContextQueue = deduped;
-        await Storage.setMeta('dyContextQueue', this.state.dyContextQueue);
+        this.queueOp({ type: 'dy-generation', payload: job }, 'dy-context');
     },
     async processDyContextQueue() {
         if (this.state.dyContextProcessing) return;
         if (!navigator.onLine) return;
-        const queue = this.state.dyContextQueue || [];
+
+        const queue = this.state.queue.filter(op => op.type === 'dy-generation');
         if (queue.length === 0) return;
+
         this.state.dyContextProcessing = true;
-        const remaining = [];
+
+        // We process sequentially to avoid overloading AI/UI
         try {
-            for (const job of queue) {
+            for (const op of queue) {
+                const job = op.payload;
                 const deck = this.deckById(job.deckId);
                 const prevCard = this.cardById(job.prevId);
-                if (!deck || !prevCard || !deck.dynamicContext) continue;
-                const dyConfig = this.getDyContextConfig(deck);
-                if (!dyConfig) { continue; }
 
-                if (prevCard.dyNextCard) continue;
-                if (prevCard.dyPrevCard) {
-                    const prevInChain = this.cardById(prevCard.dyPrevCard);
-                    if (!this.isDyContextGoodEasy(prevInChain, deck)) { remaining.push(job); continue; }
-                }
-                if (job.includeSubCards && !this.allClozeSubsGoodEasy(prevCard, deck)) {
-                    remaining.push(job);
+                // If invalid context, remove job
+                if (!deck || !prevCard || !deck.dynamicContext) {
+                    await Storage.removeFromSyncQueue(op.id).catch(() => { });
+                    this.state.queue = this.state.queue.filter(x => x.id !== op.id);
                     continue;
                 }
+
+                const dyConfig = this.getDyContextConfig(deck);
+                if (!dyConfig) { continue; } // Keep in queue if config missing (might add later)
+
+                if (prevCard.dyNextCard) {
+                    // Already has next card, remove job
+                    await Storage.removeFromSyncQueue(op.id).catch(() => { });
+                    this.state.queue = this.state.queue.filter(x => x.id !== op.id);
+                    continue;
+                }
+
+                if (prevCard.dyPrevCard) {
+                    const prevInChain = this.cardById(prevCard.dyPrevCard);
+                    if (!this.isDyContextGoodEasy(prevInChain, deck)) {
+                        // Chain broken, maybe retry later? Or remove? 
+                        // Logic says keep in queue until chain is good.
+                        continue;
+                    }
+                }
+                if (job.includeSubCards && !this.allClozeSubsGoodEasy(prevCard, deck)) {
+                    continue;
+                }
+
                 const rootCard = this.cardById(job.rootId) || prevCard;
                 try {
                     await this.generateDyContextVariant(prevCard, rootCard, deck, dyConfig, { includeSubCards: !!job.includeSubCards });
+                    // Success: remove
+                    await Storage.removeFromSyncQueue(op.id).catch(() => { });
+                    this.state.queue = this.state.queue.filter(x => x.id !== op.id);
                 } catch (e) {
-                    const retryCount = (job.retryCount || 0) + 1;
+                    const retryCount = (op.retryCount || 0) + 1;
                     if (retryCount <= 5) {
-                        remaining.push({ ...job, retryCount });
+                        op.retryCount = retryCount;
+                        await Storage.put('syncQueue', op).catch(() => { });
                     } else {
-                        toast(`DyContext job dropped after 5 attempts: ${e?.message || 'error'}`);
+                        toast(`DyContext job dropped: ${e?.message || 'error'}`);
+                        await Storage.removeFromSyncQueue(op.id).catch(() => { });
+                        this.state.queue = this.state.queue.filter(x => x.id !== op.id);
                     }
                 }
             }
         } finally {
-            this.state.dyContextQueue = remaining;
-            await Storage.setMeta('dyContextQueue', this.state.dyContextQueue);
             this.state.dyContextProcessing = false;
         }
     },
@@ -6118,9 +6147,9 @@ export const App = {
 
                 if (card._pendingSave) {
 
-                    delete card._pendingSave;
-
                     await Storage.put('cards', card);
+
+                    delete card._pendingSave;
 
                     this.queueOp({ type: 'card-upsert', payload: card }, 'rating');
 
@@ -6238,9 +6267,15 @@ export const App = {
 
             // Persist to storage first - if this fails, we haven't modified session state yet
 
-            delete card._pendingSave; // Clear any pending flag since we are saving now
+
 
             await Storage.put('cards', card);
+
+
+
+            delete card._pendingSave; // Clear any pending flag since we are saving now
+
+
 
             this.queueOp({ type: 'card-upsert', payload: card }, 'rating');
 
@@ -6571,8 +6606,14 @@ export const App = {
             const flushBatch = async () => {
                 if (batchCards.length === 0) return;
                 await Storage.putMany('cards', batchCards);
-                // Add to queue without triggering full UI/Storage refresh for every single item
-                this.state.queue.push(...batchQueue);
+
+                const queueItems = batchQueue.map(item => ({ ...item, queuedAt: Date.now() }));
+                // We use putMany on syncQueue (auto-increment keys)
+                await Storage.putMany('syncQueue', queueItems);
+
+                // Update in-memory queue
+                this.state.queue.push(...queueItems);
+
                 batchCards.length = 0;
                 batchQueue.length = 0;
             };
@@ -6688,8 +6729,6 @@ export const App = {
             // Flush remaining items
             await flushBatch();
 
-            // Persist queue metadata once at the end
-            await Storage.setMeta('queue', this.state.queue);
             this.state.queueLastChangedAt = new Date().toISOString();
             await Storage.setMeta('queueLastChangedAt', this.state.queueLastChangedAt);
             this.updateSyncButtonState();
@@ -7538,7 +7577,7 @@ export const App = {
             url.searchParams.append('url', 'https://api.notion.com/v1/users/me');
             if (s.proxyToken) url.searchParams.append('token', s.proxyToken);
 
-            // Add timeout to prevent hanging on unstable networks (Issue 4 Fix)
+            // Add timeout to prevent hanging on unstable networks
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 3000);
             const res = await fetch(url.toString(), { signal: controller.signal });

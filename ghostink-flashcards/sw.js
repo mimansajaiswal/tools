@@ -10,7 +10,7 @@ const CACHE_METADATA_KEY = 'ghostink-cache-metadata';
 
 // Cache expiration settings (Fix: cache expiration)
 const CACHE_EXPIRATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-const LOCAL_CACHE_EXPIRATION_MS = 24 * 60 * 60 * 1000; // 24 hours for local files (Issue 1 Fix)
+const LOCAL_CACHE_EXPIRATION_MS = 24 * 60 * 60 * 1000; // 24 hours for local files
 const MAX_CACHE_SIZE = 100; // Maximum number of entries per category
 
 // Cache categories for size management (Fix: cache size management)
@@ -59,7 +59,15 @@ self.addEventListener('install', (event) => {
         './js/features/index.js',
         './js/features/media.js'
       ];
-      await cache.addAll(localAssets);
+      await Promise.all(localAssets.map(async (url) => {
+        try {
+          const res = await fetch(url);
+          if (res.ok) await cache.put(url, res);
+          else console.warn(`SW: Failed to fetch local asset ${url}: ${res.status}`);
+        } catch (e) {
+          console.warn(`SW: Failed to cache local asset ${url}:`, e);
+        }
+      }));
 
       // Best-effort pre-cache of third-party assets so the app can boot offline
       // after the first successful online load.
@@ -128,18 +136,33 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
+const clearMetaDB = () => {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.deleteDatabase(DB_NAME);
+    req.onsuccess = resolve;
+    req.onerror = () => reject(req.error);
+    req.onblocked = () => console.warn('SW: DB delete blocked');
+  });
+};
+
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       const keys = await caches.keys();
+      let clearedOld = false;
       await Promise.all(
         keys
           .filter((k) => k.startsWith(CACHE_PREFIX) && k !== CACHE_NAME)
           .map((k) => {
             console.log(`SW: Deleting old cache: ${k}`);
+            clearedOld = true;
             return caches.delete(k);
           })
       );
+
+      if (clearedOld) {
+        await clearMetaDB().catch(e => console.warn('SW: Failed to clear meta DB:', e));
+      }
 
       await cleanExpiredCacheEntries();
     })()
@@ -180,8 +203,8 @@ const setCacheMetadata = async (url, timestamp) => {
     return new Promise((resolve, reject) => {
       const tx = db.transaction(META_STORE, 'readwrite');
       const req = tx.objectStore(META_STORE).put(timestamp, url);
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error);
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
     });
   } catch (e) {
     console.warn('SW: Failed to set cache metadata:', e);
@@ -194,8 +217,8 @@ const getCacheMetadata = async (url) => {
     return new Promise((resolve, reject) => {
       const tx = db.transaction(META_STORE, 'readonly');
       const req = tx.objectStore(META_STORE).get(url);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => resolve(null);
+      req.onsuccess = () => { db.close(); resolve(req.result); };
+      req.onerror = () => { db.close(); resolve(null); };
     });
   } catch (e) {
     return null;
@@ -219,10 +242,11 @@ const getAllCacheMetadata = async () => {
           map.set(cursor.key, cursor.value); // key is url, value is timestamp
           cursor.continue();
         } else {
+          db.close();
           resolve(map);
         }
       };
-      req.onerror = () => reject(req.error);
+      req.onerror = () => { db.close(); reject(req.error); };
     });
   } catch (e) {
     console.warn('SW: Failed to get all cache metadata:', e);
@@ -297,6 +321,9 @@ self.addEventListener('fetch', (event) => {
   // Load instantly from disk (0ms latency), check network in background only if needed/expired.
   event.respondWith(
     caches.open(CACHE_NAME).then((cache) => {
+      if (Math.random() < 0.01) {
+        cleanExpiredCacheEntries().catch(() => { });
+      }
       return cache.match(request).then((cachedResponse) => {
         // 1. Cache Hit: Return immediately
         if (cachedResponse) {
@@ -348,8 +375,10 @@ self.addEventListener('message', (event) => {
     self.skipWaiting();
   }
   if (event.data === 'clearCache') {
-    caches.delete(CACHE_NAME).then(() => {
-      console.log('SW: Cache cleared by request');
-    });
+    event.waitUntil(
+      caches.delete(CACHE_NAME)
+        .then(() => clearMetaDB())
+        .then(() => console.log('SW: Cache cleared by request'))
+    );
   }
 });

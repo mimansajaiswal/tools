@@ -5,34 +5,62 @@
 
 import { Storage } from './storage.js';
 
+const requestQueue = [];
+let processingQueue = false;
+
+const processQueue = async () => {
+    if (processingQueue) return;
+    processingQueue = true;
+    while (requestQueue.length > 0) {
+        const { fn, resolve, reject } = requestQueue.shift();
+        try {
+            const res = await fn();
+            resolve(res);
+        } catch (e) {
+            reject(e);
+        }
+        await new Promise(r => setTimeout(r, 333)); // Rate limit: ~3 requests/sec
+    }
+    processingQueue = false;
+};
+
+const queueRequest = (fn) => {
+    return new Promise((resolve, reject) => {
+        requestQueue.push({ fn, resolve, reject });
+        processQueue();
+    });
+};
+
 export const API = {
     async request(method, endpoint, body = null, override = null) {
-        const { workerUrl, authToken, proxyToken } = override || Storage.getSettings();
-        if (!workerUrl || !authToken) throw new Error('Missing worker URL or Notion token');
-        const cleanWorker = workerUrl.trim().replace(/\/$/, '');
-        const fetchUrl = new URL(cleanWorker);
-        fetchUrl.searchParams.append('url', `https://api.notion.com/v1${endpoint}`);
-        if (proxyToken) fetchUrl.searchParams.append('token', proxyToken.trim());
-        const headers = { 'Authorization': `Bearer ${authToken.trim()}`, 'Notion-Version': '2025-09-03' };
-        let payload = body;
-        if (body && !(body instanceof FormData)) {
-            headers['Content-Type'] = 'application/json';
-            payload = JSON.stringify(body);
-        }
-        const res = await fetch(fetchUrl.toString(), { method, headers, body: payload });
-        if (!res.ok) {
-            let txt = await res.text();
-            try {
-                const j = JSON.parse(txt);
-                txt = j.message || txt;
-            } catch (_) { }
-            const error = new Error(`[${method} ${endpoint}] ${txt || `Request failed ${res.status}`}`);
-            error.status = res.status;
-            error.endpoint = endpoint;
-            error.method = method;
-            throw error;
-        }
-        return await res.json();
+        return queueRequest(async () => {
+            const { workerUrl, authToken, proxyToken } = override || Storage.getSettings();
+            if (!workerUrl || !authToken) throw new Error('Missing worker URL or Notion token');
+            const cleanWorker = workerUrl.trim().replace(/\/$/, '');
+            const fetchUrl = new URL(cleanWorker);
+            fetchUrl.searchParams.append('url', `https://api.notion.com/v1${endpoint}`);
+            if (proxyToken) fetchUrl.searchParams.append('token', proxyToken.trim());
+            const headers = { 'Authorization': `Bearer ${authToken.trim()}`, 'Notion-Version': '2025-09-03' };
+            let payload = body;
+            if (body && !(body instanceof FormData)) {
+                headers['Content-Type'] = 'application/json';
+                payload = JSON.stringify(body);
+            }
+            const res = await fetch(fetchUrl.toString(), { method, headers, body: payload });
+            if (!res.ok) {
+                let txt = await res.text();
+                try {
+                    const j = JSON.parse(txt);
+                    txt = j.message || txt;
+                } catch (_) { }
+                const error = new Error(`[${method} ${endpoint}] ${txt || `Request failed ${res.status}`}`);
+                error.status = res.status;
+                error.endpoint = endpoint;
+                error.method = method;
+                throw error;
+            }
+            return await res.json();
+        });
     },
 
     async requestWithRetry(method, endpoint, body = null, override = null, maxRetries = 3) {
