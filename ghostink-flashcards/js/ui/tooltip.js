@@ -11,6 +11,7 @@ export const Tooltip = {
     lastShown: null,
     el: null,
     isBound: false,
+    lastMouse: null,
 
     /**
      * Ensure tooltip element exists and return it
@@ -25,7 +26,7 @@ export const Tooltip = {
      * Show tooltip for target element
      * @param {HTMLElement} target - Element with data-tip attribute
      */
-    show(target) {
+    show(target, pos = null) {
         if (window.innerWidth <= 640) return; // Don't show tooltips on small screens
         const tip = target.dataset.tip;
         if (!tip) return;
@@ -38,22 +39,29 @@ export const Tooltip = {
         }
 
         node.textContent = tip;
-        const rect = target.getBoundingClientRect();
-        const pad = 10;
-        let x = rect.left + rect.width / 2;
-        x = Math.max(pad, Math.min(window.innerWidth - pad - node.offsetWidth / 2, x));
-        // We need to show it first to get width, or assume max width?
         node.classList.remove('hidden'); // Show to measure
-
-        // Re-clamp with actual width
+        const pad = 10;
         const width = node.offsetWidth;
-        x = Math.max(pad + width / 2, Math.min(window.innerWidth - pad - width / 2, rect.left + rect.width / 2));
-
-        const preferBelow = rect.top < 100;
-        const y = preferBelow ? (rect.bottom + 8) : (rect.top - 8);
-        node.style.left = `${x}px`;
-        node.style.top = `${y}px`;
-        node.style.transform = preferBelow ? 'translate(-50%, 0)' : 'translate(-50%, -100%)';
+        const height = node.offsetHeight;
+        const cursor = pos || this.lastMouse;
+        if (cursor && Number.isFinite(cursor.x) && Number.isFinite(cursor.y)) {
+            let x = cursor.x + 12;
+            let y = cursor.y + 12;
+            x = Math.max(pad, Math.min(window.innerWidth - pad - width, x));
+            y = Math.max(pad, Math.min(window.innerHeight - pad - height, y));
+            node.style.left = `${x}px`;
+            node.style.top = `${y}px`;
+            node.style.transform = 'translate(0, 0)';
+        } else {
+            const rect = target.getBoundingClientRect();
+            let x = rect.left + rect.width / 2;
+            x = Math.max(pad, Math.min(window.innerWidth - pad - width / 2, x));
+            const preferBelow = rect.top < 100;
+            const y = preferBelow ? (rect.bottom + 8) : (rect.top - 8);
+            node.style.left = `${x}px`;
+            node.style.top = `${y}px`;
+            node.style.transform = preferBelow ? 'translate(-50%, 0)' : 'translate(-50%, -100%)';
+        }
         this.lastShown = target;
     },
 
@@ -76,12 +84,16 @@ export const Tooltip = {
     bind() {
         if (this.isBound) return;
         this.isBound = true;
+        document.addEventListener('mousemove', (e) => {
+            this.lastMouse = { x: e.clientX, y: e.clientY };
+            if (this.lastShown) this.show(this.lastShown, this.lastMouse);
+        });
         document.addEventListener('mouseover', (e) => {
             const t = e.target.closest('[data-tip]');
             if (!t) return;
             clearTimeout(this.timer);
-            if (this.lastShown) { this.show(t); return; }
-            this.timer = setTimeout(() => this.show(t), 160);
+            if (this.lastShown) { this.show(t, { x: e.clientX, y: e.clientY }); return; }
+            this.timer = setTimeout(() => this.show(t, { x: e.clientX, y: e.clientY }), 80);
         });
         document.addEventListener('mouseout', (e) => {
             if (!e.relatedTarget || !e.relatedTarget.closest('[data-tip]')) {

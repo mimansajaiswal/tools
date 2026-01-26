@@ -105,7 +105,7 @@ export const richToMarkdown = (arr = []) => {
         if (a.bold) s = '**' + s + '**';
         if (a.italic) s = '*' + s + '*';
         if (a.strikethrough) s = '~~' + s + '~~';
-        if (a.underline) s = '__' + s + '__';
+        if (a.underline) s = `<u>${s}</u>`;
         if (a.color && a.color !== 'default') {
             s = `<span class="notion-color-${a.color.replace(/_/g, '-')}">${s}</span>`;
         }
@@ -117,7 +117,7 @@ export const richToMarkdown = (arr = []) => {
 // This avoids regex-recursive parsing (which can cause stack overflows on pathological content).
 // Supported:
 // - bold/italic/strikethrough/code/links
-// - underline (from our exporter: __text__ → <u>text</u>)
+// - underline (from our exporter: <u>text</u>)
 // - Notion colors: <span class="notion-color-...">...</span>
 // - Notion equations: <span class="notion-equation">...</span>
 export const markdownToNotionRichText = (markdown) => {
@@ -141,19 +141,15 @@ export const markdownToNotionRichText = (markdown) => {
 
     if (raw.length > MAX_INPUT_CHARS) return safePlain(raw);
 
-    // Treat __text__ as underline (we generate underline using __...__ in richToMarkdown()).
-    // Improved regex: handle newlines inside underline, ensure matching pair.
-    const pre = raw.replace(/__([\s\S]+?)__/g, '<u>$1</u>');
-
     let html;
     try {
-        html = marked.parse(pre, {
+        html = marked.parse(raw, {
             gfm: true,
             breaks: true
         });
     } catch (e) {
         console.error('marked.parse failed; falling back to plain text:', e);
-        return safePlain(pre);
+        return safePlain(raw);
     }
 
     let doc;
@@ -163,11 +159,11 @@ export const markdownToNotionRichText = (markdown) => {
         doc = parser.parseFromString(`<div id="__rtroot__">${html}</div>`, 'text/html');
     } catch (e) {
         console.error('DOMParser failed; falling back to plain text:', e);
-        return safePlain(pre);
+        return safePlain(raw);
     }
 
     const root = doc.getElementById('__rtroot__');
-    if (!root) return safePlain(pre);
+    if (!root) return safePlain(raw);
 
     const runs = [];
 
@@ -570,12 +566,13 @@ export const NotionMapper = {
         const dueDate = p['Due Date']?.date?.start || null;
         const lastRating = normalizeRating(p['Last Rating']?.select?.name) || null;
         const srsStateRaw = p['SRS State']?.rich_text?.map(t => t.plain_text).join('') || '';
+        const reviewHistoryText = (p['Review History']?.rich_text || []).map(t => t.plain_text || '').join('');
         let srsStateError = false;
         if (srsStateRaw) {
             try { JSON.parse(srsStateRaw); } catch { srsStateError = true; }
         }
         const srsState = parseSrsState(srsStateRaw);
-        if (srsState.learning.state === 'new' && (lastReview || (p['Review History']?.rich_text?.[0]?.plain_text || '').length > 0)) {
+        if (srsState.learning.state === 'new' && (lastReview || reviewHistoryText.length > 0)) {
             srsState.learning.state = 'review';
             srsState.learning.step = 0;
             srsState.learning.due = null;
@@ -607,7 +604,7 @@ export const NotionMapper = {
             notes: richToMarkdown(p['Notes']?.rich_text) || '',
             marked: p['Marked']?.checkbox || false,
             flag: p['Flag']?.select?.name || '',
-            suspended: p['Suspended']?.checkbox || false,
+            suspended: p['Suspended']?.checkbox ? 1 : 0,
             leech: p['Leech']?.checkbox || false,
             srsState,
             srsStateRaw,
@@ -617,7 +614,7 @@ export const NotionMapper = {
             syncId: page.id,
             updatedInApp: p['Updated In-App']?.checkbox || false,
             order: typeof p['Order']?.number === 'number' ? p['Order'].number : null,
-            reviewHistory: parseReviewHistory(p['Review History']?.rich_text?.[0]?.plain_text || ''),
+            reviewHistory: parseReviewHistory(reviewHistoryText),
             ankiGuid: p['Anki GUID']?.rich_text?.[0]?.plain_text || '',
             ankiNoteType: p['Anki Note Type']?.select?.name || '',
             ankiFields: p['Anki Fields JSON']?.rich_text?.[0]?.plain_text || '',

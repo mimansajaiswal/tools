@@ -69,20 +69,15 @@ const parseClozeIndexesFromString = (str) => {
  * @returns {Object} { toCreate: number[], toKeep: string[], toSuspend: string[] }
  */
 export const reconcileSubItems = (parent, existingSubItems) => {
-    // Optimization: Prefer pre-calculated indices from Notion property if available
-    // AND not edited locally (updatedInApp check)
     let indices = new Set();
 
     if (parent.clozeIndexes && !parent.updatedInApp) {
         indices = parseClozeIndexesFromString(parent.clozeIndexes);
     }
 
-    // Fallback to parsing text if property missing/empty or edited locally
     if (indices.size === 0) {
-        // Try name first (standard location)
         indices = parseClozeIndices(parent.name);
 
-        // Try back if name empty (rare, but supported)
         if (indices.size === 0 && parent.back) {
             indices = parseClozeIndices(parent.back);
         }
@@ -129,7 +124,7 @@ export const reconcileSubItems = (parent, existingSubItems) => {
 
 /**
  * Transform cloze text to only test one specific index.
- * - The target cloze {{cN::answer}} becomes {{c1::answer}} (renumbered to c1)
+ * - The target cloze {{cN::answer}} keeps its index
  * - Other clozes {{cX::answer}} are revealed as just "answer"
  * @param {string} text - Original text with multiple clozes
  * @param {number} targetIndex - The cloze index to test (1-based)
@@ -140,8 +135,7 @@ export const transformClozeForSubItem = (text, targetIndex) => {
     return text.replace(/\{\{\s*c(\d+)::(.*?)\}\}/gis, (match, idx, content) => {
         const clozeIdx = parseInt(idx, 10);
         if (clozeIdx === targetIndex) {
-            // Keep this cloze but renumber to c1 for consistency
-            return `{{c1::${content}}}`;
+            return `{{c${targetIndex}::${content}}}`;
         }
         // Reveal other clozes
         return content;
@@ -159,9 +153,8 @@ export const transformClozeForSubItem = (text, targetIndex) => {
 export const createSubItem = (parent, clozeIndex, deckId, makeTempId) => {
     const now = new Date().toISOString();
     const due = SRS.getDueDate(0);
-    // Transform name to only test the specific cloze index
     const transformedName = transformClozeForSubItem(parent.name, clozeIndex);
-    const transformedBack = transformClozeForSubItem(parent.back || '', clozeIndex);
+    const transformedBack = parent.back || '';
     return {
         id: makeTempId(),
         notionId: null,
@@ -173,7 +166,7 @@ export const createSubItem = (parent, clozeIndex, deckId, makeTempId) => {
         notes: parent.notes || '',
         marked: false,
         flag: '',
-        suspended: false,
+        suspended: 0,
         leech: false,
         order: clozeIndex - 1, // 0-indexed order
         parentCard: parent.id,

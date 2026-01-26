@@ -15,13 +15,12 @@ export const Storage = {
         if (this._isInitialized && this.db) return Promise.resolve();
 
         this._initPromise = new Promise((resolve, reject) => {
-            const req = indexedDB.open('GhostInkDB', 4); // Bumped version for indexes and sync queue store
+            const req = indexedDB.open('GhostInkDB', 5);
 
             req.onupgradeneeded = (e) => {
                 const db = e.target.result;
                 const tx = e.target.transaction;
 
-                // Create base stores if they don't exist
                 if (!db.objectStoreNames.contains('decks')) {
                     db.createObjectStore('decks', { keyPath: 'id' });
                 }
@@ -33,7 +32,6 @@ export const Storage = {
                     cardStore = tx.objectStore('cards');
                 }
 
-                // Ensure indexes exist (idempotent)
                 if (!cardStore.indexNames.contains('deckId')) {
                     cardStore.createIndex('deckId', 'deckId', { unique: false });
                 }
@@ -43,11 +41,16 @@ export const Storage = {
                 if (!cardStore.indexNames.contains('dueDate_sm2')) {
                     cardStore.createIndex('dueDate_sm2', 'sm2.dueDate', { unique: false });
                 }
+                if (!cardStore.indexNames.contains('parentCard')) {
+                    cardStore.createIndex('parentCard', 'parentCard', { unique: false });
+                }
+                if (!cardStore.indexNames.contains('notionId')) {
+                    cardStore.createIndex('notionId', 'notionId', { unique: false });
+                }
 
                 if (!db.objectStoreNames.contains('meta')) {
                     db.createObjectStore('meta', { keyPath: 'key' });
                 }
-                // Add session store (v3+)
                 if (!db.objectStoreNames.contains('session')) {
                     db.createObjectStore('session', { keyPath: 'id' });
                 }
@@ -59,7 +62,6 @@ export const Storage = {
             req.onsuccess = (e) => {
                 this.db = e.target.result;
                 this._isInitialized = true;
-                // Listen for version change (another tab is resetting/upgrading)
                 this.db.onversionchange = () => {
                     this.db.close();
                     this.db = null;
@@ -69,7 +71,7 @@ export const Storage = {
                 };
                 resolve();
             };
-            req.onerror = (e) => {
+            req.onerror = () => {
                 this._initPromise = null;
                 reject(new Error(`Failed to open database: ${req.error?.message || 'Unknown error'}`));
             };
@@ -92,7 +94,6 @@ export const Storage = {
         return this.db.transaction(store, mode).objectStore(store);
     },
 
-    // Transaction support for critical operations
     async withTransaction(storeNames, mode, callback) {
         if (!this.db) throw new Error('Database not initialized');
         const stores = Array.isArray(storeNames) ? storeNames : [storeNames];
@@ -104,11 +105,9 @@ export const Storage = {
                 storeMap[name] = tx.objectStore(name);
             });
 
-            // Callback must be synchronous to keep transaction alive
             try {
                 callback(storeMap, tx);
             } catch (e) {
-                // If callback throws, abort immediately
                 try { tx.abort(); } catch (_) { }
                 reject(e);
                 return;
@@ -120,7 +119,6 @@ export const Storage = {
         });
     },
 
-    // Data validation helper (Fix)
     _validateCard(card) {
         if (!card || typeof card !== 'object') return { valid: false, error: 'Card must be an object' };
         if (typeof card.id !== 'string' || !card.id) return { valid: false, error: 'Card must have a valid id' };
@@ -141,14 +139,13 @@ export const Storage = {
         return new Promise((resolve, reject) => {
             const tx = this.db.transaction(store, 'readonly');
             const req = tx.objectStore(store).getAll();
-            req.onsuccess = () => resolve(req.result);
+            req.onsuccess = () => resolve(req.result || []);
             req.onerror = () => reject(new Error(`Failed to read from ${store}: ${req.error?.message || 'Unknown error'}`));
             tx.onerror = () => reject(new Error(`Transaction failed for ${store}: ${tx.error?.message || 'Unknown error'}`));
             tx.onabort = () => reject(new Error(`Transaction aborted for ${store}`));
         });
     },
 
-    // Get cards by deck ID using index (Fix: common query optimization)
     async getCardsByDeck(deckId) {
         await this.ensureReady();
         return new Promise((resolve, reject) => {
@@ -156,8 +153,52 @@ export const Storage = {
             const store = tx.objectStore('cards');
             const index = store.index('deckId');
             const req = index.getAll(deckId);
-            req.onsuccess = () => resolve(req.result);
+            req.onsuccess = () => resolve(req.result || []);
             req.onerror = () => reject(new Error(`Failed to get cards by deck: ${req.error?.message || 'Unknown error'}`));
+        });
+    },
+
+    async getSubItems(parentId) {
+        await this.ensureReady();
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction('cards', 'readonly');
+            const index = tx.objectStore('cards').index('parentCard');
+            const req = index.getAll(parentId);
+            req.onsuccess = () => resolve(req.result || []);
+            req.onerror = () => reject(new Error('Failed to get sub-items'));
+        });
+    },
+
+    async deleteCardsByDeck(deckId) {
+        await this.ensureReady();
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction('cards', 'readwrite');
+            const store = tx.objectStore('cards');
+            const index = store.index('deckId');
+            const req = index.getAllKeys(deckId);
+
+            req.onsuccess = () => {
+                const keys = req.result || [];
+                if (keys.length === 0) {
+                    resolve([]);
+                    return;
+                }
+                let completed = 0;
+                let errors = 0;
+                keys.forEach(key => {
+                    const delReq = store.delete(key);
+                    delReq.onsuccess = () => {
+                        completed++;
+                        if (completed + errors === keys.length) resolve(keys);
+                    };
+                    delReq.onerror = () => {
+                        errors++;
+                        if (completed + errors === keys.length) resolve(keys);
+                    };
+                });
+            };
+            req.onerror = () => reject(new Error('Failed to delete cards by deck'));
+            tx.onerror = () => reject(new Error('Transaction failed'));
         });
     },
 
@@ -187,7 +228,6 @@ export const Storage = {
 
     async put(store, value) {
         await this.ensureReady();
-        // Data validation for cards and decks
         if (store === 'cards') {
             const validation = this._validateCard(value);
             if (!validation.valid) {
@@ -216,7 +256,6 @@ export const Storage = {
         await this.ensureReady();
         if (!values || values.length === 0) return;
 
-        // Validate all items first if applicable
         if (store === 'cards') {
             for (const value of values) {
                 const validation = this._validateCard(value);
@@ -235,7 +274,7 @@ export const Storage = {
             }
         }
 
-        const BATCH_SIZE = 100; // Process in batches to prevent blocking
+        const BATCH_SIZE = 100;
 
         for (let i = 0; i < values.length; i += BATCH_SIZE) {
             const batch = values.slice(i, i + BATCH_SIZE);
@@ -253,14 +292,8 @@ export const Storage = {
                 });
 
                 Promise.all(promises)
-                    .then(() => {
-                        // All requests in this batch succeeded
-                        // Transaction will auto-commit
-                    })
                     .catch(err => {
-                        // Note: If one fails, the transaction will likely abort
                         console.error('Batch put error:', err);
-                        // We rely on tx.onerror/tx.onabort to reject the outer promise
                     });
 
                 tx.oncomplete = () => resolve();
@@ -268,15 +301,12 @@ export const Storage = {
                 tx.onabort = () => reject(new Error(`Transaction aborted for ${store}`));
             });
 
-            // Yield to main thread between batches for large datasets
             if (i + BATCH_SIZE < values.length) {
                 await new Promise(resolve => setTimeout(resolve, 0));
             }
         }
     },
 
-    // Replace primary IDs in a store by deleting old keys and writing new records.
-    // Each change: { oldId, value } where value.id is the new key.
     async replaceIds(store, changes) {
         await this.ensureReady();
         if (!changes || changes.length === 0) return;
@@ -402,7 +432,7 @@ export const Storage = {
                 themeMode: 'system',
                 fontMode: 'mono',
                 fabEnabled: true,
-                fabPosition: null,
+                fabPos: null,
                 workerVerified: false,
                 authVerified: false,
                 sourcesVerified: false,
@@ -438,7 +468,7 @@ export const Storage = {
                 themeMode: 'system',
                 fontMode: 'mono',
                 fabEnabled: true,
-                fabPosition: null,
+                fabPos: null,
                 workerVerified: false,
                 authVerified: false,
                 sourcesVerified: false,
@@ -452,7 +482,6 @@ export const Storage = {
         localStorage.setItem(this.settingsKey, JSON.stringify(newSettings));
     },
 
-    // Session validation helper - ensures session data integrity
     _validateSession(session) {
         if (!session || typeof session !== 'object') return null;
         if (!Array.isArray(session.cardQueue)) return null;

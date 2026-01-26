@@ -154,6 +154,7 @@ const isTypingTarget = (target) => {
 
 const SYNC_QUEUE_WARN_THRESHOLD = 500;
 const SYNC_QUEUE_WARN_COOLDOWN_MS = 10 * 60 * 1000;
+const STUDY_DUE_BUCKET_MS = 5 * 60 * 1000;
 
 const focusTrap = {
     active: null,
@@ -193,8 +194,21 @@ const lightbox = initLightbox();
 export const App = {
     state: {
         decks: [],
-        cards: [],
-        queue: [],
+        cards: new Map(),
+        cardNotionIdIndex: new Map(),
+        cardDeckIndex: new Map(),
+        tagRegistry: new Map(),
+        deckStats: new Map(),
+        cardsVersion: 0,
+        studyDeckCache: null,
+        dueIndex: new Map(),
+        cardMeta: new Map(),
+        tagIndex: new Map(),
+        flagIndex: new Map(),
+        markedIndex: new Set(),
+        ratingIndex: new Map(),
+        createdDateIndex: new Map(),
+        queue: new Map(),
         lastQueueError: null,
         queueLastChangedAt: null,
         lastQueueWarnAt: null,
@@ -208,11 +222,16 @@ export const App = {
         deckSearch: '',
         cardLimit: 50,
         cardLimitStep: 50,
-        analyticsRange: '90',
+        analyticsRange: 'this-year',
         analyticsYear: 'all',
         analyticsDecks: [],
         analyticsHeatmapMetric: 'count',
         analyticsIncludeSuspended: true,
+        analyticsTags: [],
+        analyticsFlags: [],
+        analyticsMarked: false,
+        analyticsDirty: true,
+        analyticsCache: null,
         reverse: false,
         lastSync: null,
         lastPull: null,
@@ -246,7 +265,9 @@ export const App = {
         activeAudioStream: null,
         fabSetupMode: false,
         joystickActive: false,
-        joystickHandlers: null
+        joystickHandlers: null,
+        queueBadgeTimer: null,
+        queueBadgeSig: ''
     },
     isAiModeSelected() {
         return el('#revisionMode')?.value === 'ai';
@@ -286,8 +307,28 @@ export const App = {
         }
         Tooltip.bind();
         this.startAutoSync();
+        this.startQueueBadgeHeartbeat();
         this.processDyContextQueue();
         hideLoading();
+    },
+    startQueueBadgeHeartbeat() {
+        if (this.state.queueBadgeTimer) return;
+        const buildSig = () => {
+            const size = this.state.queue.size;
+            const syncing = this.state.syncing ? 1 : 0;
+            const online = navigator.onLine ? 1 : 0;
+            const err = this.state.lastQueueError?.message || '';
+            const at = this.state.queueLastChangedAt || '';
+            return `${size}|${syncing}|${online}|${err}|${at}`;
+        };
+        this.state.queueBadgeSig = buildSig();
+        this.state.queueBadgeTimer = setInterval(() => {
+            const sig = buildSig();
+            if (sig === this.state.queueBadgeSig) return;
+            this.state.queueBadgeSig = sig;
+            el('#queueCount').textContent = String(this.state.queue.size);
+            this.renderConnection();
+        }, 2000);
     },
     async loadSession() {
         this.state.session = await Storage.getSession();
@@ -486,27 +527,27 @@ export const App = {
     },
     generateCardQueue(deckIds, includeNonDue = false, opts = {}) {
         const { precomputeReverse = true } = opts || {};
-        const selectedDeckIds = (deckIds || []).filter(id => !!this.deckById(id));
+        const validIds = (deckIds || []).filter(id => !!this.deckById(id));
+        const selectedDeckIds = [...new Set(validIds)];
         if (selectedDeckIds.length === 0) return [];
 
-        // Optimization: Single pass bucket sort
-        // Bucket cards by deckId immediately to avoid repeated filtering
-        const deckBuckets = new Map(); // deckId -> Array<Card>
-        const selectedDeckSet = new Set(selectedDeckIds);
-
-        // Pre-initialize buckets for selected decks
+        const deckBuckets = new Map();
         for (const id of selectedDeckIds) {
             deckBuckets.set(id, []);
         }
 
-        // Single pass over all cards
-        for (const c of this.state.cards) {
-            if (selectedDeckSet.has(c.deckId) &&
-                this.passFilters(c, { context: 'study' }) &&
-                isSchedulable(c) && // Exclude cloze parents
-                (includeNonDue || this.isDue(c))
-            ) {
-                deckBuckets.get(c.deckId).push(c);
+        for (const deckId of selectedDeckIds) {
+            const cardIds = this.state.cardDeckIndex.get(deckId);
+            if (!cardIds) continue;
+            for (const cardId of cardIds) {
+                const c = this.state.cards.get(cardId);
+                if (!c) continue;
+                if (this.passFilters(c, { context: 'study' }) &&
+                    isSchedulable(c) &&
+                    (includeNonDue || this.isDue(c))
+                ) {
+                    deckBuckets.get(deckId).push(c);
+                }
             }
         }
 
@@ -519,10 +560,9 @@ export const App = {
 
         const applyOrderForDeck = (arr, deck, isNewCards = false) => {
             const mode = deck?.orderMode || 'none';
-            const shuffleNewCards = deck?.shuffleNew ?? true; // Default to shuffling new cards
+            const shuffleNewCards = deck?.shuffleNew ?? true;
 
             if (isNewCards && shuffleNewCards && mode !== 'property') {
-                // Shuffle new cards unless explicitly ordered by property
                 shuffleInPlace(arr);
                 return;
             }
@@ -549,12 +589,9 @@ export const App = {
                 });
                 return;
             }
-            // Default: shuffle within that deck (so mixed sessions can still interleave).
             shuffleInPlace(arr);
         };
 
-        // Interleave multiple per-deck sequences while preserving the relative order within each deck.
-        // This gives "mixed sessions" where deck-specific ordering is respected but decks are blended.
         const interleavePreservingOrder = (deckToArr) => {
             const ids = Object.keys(deckToArr || {}).filter(id => Array.isArray(deckToArr[id]) && deckToArr[id].length > 0);
             if (ids.length === 0) return [];
@@ -580,15 +617,10 @@ export const App = {
         const newBuckets = {};
         const allBuckets = {};
 
-        const seenCardIds = new Set();
-
         for (const deckId of selectedDeckIds) {
             const deck = this.deckById(deckId);
             const deckCards = deckBuckets.get(deckId) || [];
             if (deckCards.length === 0) continue;
-
-            // Mark all cards in this deck as seen (though buckets are already disjoint by deckId)
-            deckCards.forEach(c => seenCardIds.add(c.id));
 
             if (includeNonDue) {
                 // Practice mode: cap per deck using reviewLimit, preserve deck-specific ordering.
@@ -628,6 +660,7 @@ export const App = {
         });
     },
     startSession() {
+
         // Default to all decks if none selected
         let deckIds = this.state.filters.studyDecks || [];
         if (deckIds.length === 0) {
@@ -656,19 +689,28 @@ export const App = {
 
         const cardQueue = this.generateCardQueue(deckIds, includeNonDue);
 
-        // Edge Case 1 Fix: Better empty deck handling with helpful options
         if (cardQueue.length === 0) {
             if (includeNonDue) {
                 // No cards at all in the selected decks
                 toast('No cards in selected decks');
             } else {
                 // Check if there are non-due cards available for practice
-                const allCardsInDecks = this.state.cards.filter(c => deckIds.includes(c.deckId) && this.passFilters(c, { context: 'study' }) && isSchedulable(c));
-                const nonDueCount = allCardsInDecks.filter(c => !this.isDue(c)).length;
+                let totalNonDue = 0;
+                for (const dId of deckIds) {
+                    const cardIds = this.state.cardDeckIndex.get(dId);
+                    if (!cardIds) continue;
+                    for (const cId of cardIds) {
+                        const c = this.state.cards.get(cId);
+                        if (!c) continue;
+                        if (!this.passFilters(c, { context: 'study' })) continue;
+                        if (!isSchedulable(c)) continue;
+                        if (!this.isDue(c)) totalNonDue += 1;
+                    }
+                }
 
-                if (nonDueCount > 0) {
+                if (totalNonDue > 0) {
                     // Show a more helpful message with option to practice
-                    toastLong(`All caught up! ${nonDueCount} card${nonDueCount === 1 ? ' is' : 's are'} available for extra practice.`);
+                    toastLong(`All caught up! ${totalNonDue} card${totalNonDue === 1 ? ' is' : 's are'} available for extra practice.`);
                     // Auto-switch to the practice mode offer in renderStudy
                     this.renderStudy();
                 } else {
@@ -708,7 +750,7 @@ export const App = {
         this.saveSession();
         this.renderStudy();
         toast('Session stopped');
-        if (this.state.queue.length > 0) this.requestAutoSyncSoon(200, 'session-end');
+        if (this.state.queue.size > 0) this.requestAutoSyncSoon(200, 'session-end');
     },
     getSessionCard() {
         const session = this.state.session;
@@ -894,7 +936,7 @@ export const App = {
         }, 0);
 
         // Trigger sync for any pending reviews from this session
-        if (this.state.queue?.length > 0) {
+        if (this.state.queue?.size > 0) {
             this.requestAutoSyncSoon(500, 'session-complete');
         }
     },
@@ -956,15 +998,33 @@ export const App = {
                 srsConfig: parseSrsConfig(d.srsConfig || d.srsConfigRaw || null, algorithm)
             };
         });
-        this.state.cards = (await Storage.getAll('cards')).map(c => {
+        this.state.cards = new Map();
+        this.state.cardNotionIdIndex = new Map();
+        this.state.cardDeckIndex = new Map();
+        this.state.tagRegistry = new Map();
+        this.state.deckStats = new Map();
+        this.state.dueIndex = new Map();
+        this.state.cardMeta = new Map();
+        this.state.cardsVersion = 0;
+        this.state.studyDeckCache = null;
+        this.state.tagIndex = new Map();
+        this.state.flagIndex = new Map();
+        this.state.markedIndex = new Set();
+        this.state.ratingIndex = new Map();
+        this.state.createdDateIndex = new Map();
+
+        const rawCards = await Storage.getAll('cards');
+        let invalidCardStates = 0;
+        for (const c of rawCards) {
             const srsState = parseSrsState(c.srsState || null);
             if (srsState.learning.state === 'new' && ((c.reviewHistory || []).length > 0 || c.fsrs?.lastReview || c.sm2?.lastReview)) {
                 srsState.learning.state = 'review';
                 srsState.learning.step = 0;
                 srsState.learning.due = null;
             }
-            return {
+            const card = {
                 ...c,
+                suspended: c.suspended ? 1 : 0,
                 srsState,
                 fsrs: {
                     difficulty: c.fsrs?.difficulty ?? srsState.fsrs.difficulty,
@@ -983,17 +1043,23 @@ export const App = {
                     dueDate: c.sm2?.dueDate ?? c.dueDate ?? null
                 }
             };
-        });
+            if (card.srsStateError) invalidCardStates += 1;
+            this.setCard(card);
+        }
         const invalidDeckConfigs = this.state.decks.filter(d => d.srsConfigError).length;
         if (invalidDeckConfigs > 0) {
             toast(`Invalid SRS Config in ${invalidDeckConfigs} deck${invalidDeckConfigs === 1 ? '' : 's'} — using defaults`);
         }
-        const invalidCardStates = this.state.cards.filter(c => c.srsStateError).length;
         if (invalidCardStates > 0) {
             toast(`Invalid SRS State in ${invalidCardStates} card${invalidCardStates === 1 ? '' : 's'} — using defaults`);
         }
 
-        this.state.queue = await Storage.getSyncQueue();
+        const rawQueue = await Storage.getSyncQueue();
+        this.state.queue = new Map();
+        for (const op of rawQueue) {
+            const key = this.queueKey(op);
+            if (key) this.state.queue.set(key, op);
+        }
 
         this.state.lastQueueError = (await Storage.getMeta('lastQueueError')) || null;
         this.state.queueLastChangedAt = (await Storage.getMeta('queueLastChangedAt')) || null;
@@ -1014,37 +1080,10 @@ export const App = {
             if (typeof libraryPrefs.hideSuspended === 'boolean') this.state.filters.suspended = libraryPrefs.hideSuspended;
             if (typeof libraryPrefs.hideLeech === 'boolean') this.state.filters.leech = libraryPrefs.hideLeech;
             if (typeof analyticsPrefs.includeSuspended === 'boolean') this.state.analyticsIncludeSuspended = analyticsPrefs.includeSuspended;
+            if (Array.isArray(analyticsPrefs.tags)) this.state.analyticsTags = analyticsPrefs.tags.filter(Boolean);
+            if (Array.isArray(analyticsPrefs.flags)) this.state.analyticsFlags = analyticsPrefs.flags.filter(Boolean);
+            if (typeof analyticsPrefs.marked === 'boolean') this.state.analyticsMarked = analyticsPrefs.marked;
         }
-        const leechFixes = this.state.cards.filter(c => c.leech && !c.suspended);
-        if (leechFixes.length > 0) {
-            leechFixes.forEach(card => {
-                card.suspended = true;
-            });
-            try {
-                await Storage.putMany('cards', leechFixes);
-            } catch (e) {
-                console.error('Failed to persist leech suspensions, retrying individually:', e);
-                for (const card of leechFixes) {
-                    await Storage.put('cards', card).catch(err => console.error('Leech suspend save failed:', err));
-                }
-            }
-            leechFixes.forEach(card => this.queueOp({ type: 'card-upsert', payload: card }));
-        }
-        this.calculateDeckStats(); // Initialize stats cache
-    },
-    calculateDeckStats() {
-        const stats = new Map();
-        for (const card of this.state.cards) {
-            if (!stats.has(card.deckId)) stats.set(card.deckId, { total: 0, due: 0 });
-            const s = stats.get(card.deckId);
-            if (isSchedulable(card) && !card.suspended) {
-                s.total += 1;
-                if (!card.leech && this.isDue(card)) {
-                    s.due += 1;
-                }
-            }
-        }
-        this.state.deckStats = stats;
     },
     async seedIfEmpty() {
         return;
@@ -1089,7 +1128,7 @@ export const App = {
             notes: '',
             marked: false,
             flag: '',
-            suspended: false,
+            suspended: 0,
             leech: false,
             order: null,
             parentCard: null,
@@ -1142,45 +1181,80 @@ export const App = {
             }
         }
 
-        // Update cards
-        for (const card of this.state.cards) {
-            let changed = false;
-            const newDeckId = hasDeckMap ? (deckIdMap[card.deckId] || card.deckId) : card.deckId;
-            if (newDeckId !== card.deckId) {
-                card.deckId = newDeckId;
-                changed = true;
+        if (hasDeckMap) {
+            for (const [oldDeckId, newDeckId] of Object.entries(deckIdMap)) {
+                if (oldDeckId === newDeckId) continue;
+                const cardIds = this.state.cardDeckIndex.get(oldDeckId);
+                if (cardIds) {
+                    const toUpdate = Array.from(cardIds).map(id => this.state.cards.get(id)).filter(Boolean);
+                    for (const card of toUpdate) {
+                        card.deckId = newDeckId;
+                        this.updateCardIndices(card);
+                        cardUpdates.push(card);
+                        this.state.cardDeckIndex.get(oldDeckId).delete(card.id);
+                        if (!this.state.cardDeckIndex.has(newDeckId)) {
+                            this.state.cardDeckIndex.set(newDeckId, new Set());
+                        }
+                        this.state.cardDeckIndex.get(newDeckId).add(card.id);
+                    }
+                }
             }
-            if (hasCardMap) {
-                const newId = cardIdMap[card.id];
-                if (newId && newId !== card.id) {
-                    const oldId = card.id;
+        }
+
+        if (hasCardMap) {
+            for (const [oldId, newId] of Object.entries(cardIdMap)) {
+                if (oldId === newId) continue;
+
+                const card = this.state.cards.get(oldId);
+                if (card) {
+                    this.removeCard(oldId);
                     card.id = newId;
                     card.notionId = newId;
+                    this.setCard(card);
                     cardIdChanges.push({ oldId, value: card });
-                    cardsBeingRenamed.add(card); // Track reference for O(1) lookup
-                    changed = true;
+                    cardsBeingRenamed.add(card);
+                    if (card.dyRootCard === oldId) card.dyRootCard = newId;
+                    if (card.dyPrevCard === oldId) card.dyPrevCard = newId;
+                    if (card.dyNextCard === oldId) card.dyNextCard = newId;
+
+                    if (Array.isArray(card.subCards) && card.subCards.length > 0) {
+                        for (const childId of card.subCards) {
+                            const child = this.state.cards.get(childId);
+                            if (child) {
+                                this.removeCard(child.id);
+                                child.parentCard = newId;
+                                this.setCard(child);
+                                if (!cardsBeingRenamed.has(child)) cardUpdates.push(child);
+                            }
+                        }
+                    }
+
+                    if (card.parentCard) {
+                        const parent = this.state.cards.get(card.parentCard);
+                        if (parent && parent.subCards) {
+                            const idx = parent.subCards.indexOf(oldId);
+                            if (idx !== -1) {
+                                parent.subCards[idx] = newId;
+                                if (!cardsBeingRenamed.has(parent)) cardUpdates.push(parent);
+                            }
+                        }
+                    }
+
+                    if (card.dyPrevCard) {
+                        const prev = this.state.cards.get(card.dyPrevCard);
+                        if (prev && prev.dyNextCard === oldId) {
+                            prev.dyNextCard = newId;
+                            if (!cardsBeingRenamed.has(prev)) cardUpdates.push(prev);
+                        }
+                    }
+                    if (card.dyNextCard) {
+                        const next = this.state.cards.get(card.dyNextCard);
+                        if (next && next.dyPrevCard === oldId) {
+                            next.dyPrevCard = newId;
+                            if (!cardsBeingRenamed.has(next)) cardUpdates.push(next);
+                        }
+                    }
                 }
-                // Update parentCard reference for sub-items
-                if (card.parentCard && cardIdMap[card.parentCard]) {
-                    card.parentCard = cardIdMap[card.parentCard];
-                    changed = true;
-                }
-                if (card.dyRootCard && cardIdMap[card.dyRootCard]) {
-                    card.dyRootCard = cardIdMap[card.dyRootCard];
-                    changed = true;
-                }
-                if (card.dyPrevCard && cardIdMap[card.dyPrevCard]) {
-                    card.dyPrevCard = cardIdMap[card.dyPrevCard];
-                    changed = true;
-                }
-                if (card.dyNextCard && cardIdMap[card.dyNextCard]) {
-                    card.dyNextCard = cardIdMap[card.dyNextCard];
-                    changed = true;
-                }
-            }
-            // Optimization: Use Set lookup instead of array.find
-            if (changed && !cardsBeingRenamed.has(card)) {
-                cardUpdates.push(card);
             }
         }
 
@@ -1211,42 +1285,76 @@ export const App = {
         }
 
         // Update queue payloads
-        if (Array.isArray(this.state.queue)) {
-            for (const op of this.state.queue) {
+        if (this.state.queue instanceof Map) {
+            const rekeys = [];
+            const dirtyOps = [];
+
+            for (const [key, op] of this.state.queue) {
+                let keyChanged = false;
+                let payloadChanged = false;
+
                 if (op?.payload) {
                     const pid = op.payload.id;
                     if (pid && deckIdMap[pid]) {
                         op.payload.id = deckIdMap[pid];
                         op.payload.notionId = op.payload.id;
+                        keyChanged = true;
+                        payloadChanged = true;
                     }
                     if (pid && cardIdMap[pid]) {
                         op.payload.id = cardIdMap[pid];
                         op.payload.notionId = op.payload.id;
+                        keyChanged = true;
+                        payloadChanged = true;
                     }
                     if (op.payload.deckId && deckIdMap[op.payload.deckId]) {
                         op.payload.deckId = deckIdMap[op.payload.deckId];
+                        payloadChanged = true;
                     }
-                    // Update relational fields in queue payloads
                     if (hasCardMap) {
                         if (op.payload.parentCard && cardIdMap[op.payload.parentCard]) {
                             op.payload.parentCard = cardIdMap[op.payload.parentCard];
+                            payloadChanged = true;
                         }
                         if (op.payload.dyRootCard && cardIdMap[op.payload.dyRootCard]) {
                             op.payload.dyRootCard = cardIdMap[op.payload.dyRootCard];
+                            payloadChanged = true;
                         }
                         if (op.payload.dyPrevCard && cardIdMap[op.payload.dyPrevCard]) {
                             op.payload.dyPrevCard = cardIdMap[op.payload.dyPrevCard];
+                            payloadChanged = true;
                         }
                         if (op.payload.dyNextCard && cardIdMap[op.payload.dyNextCard]) {
                             op.payload.dyNextCard = cardIdMap[op.payload.dyNextCard];
+                            payloadChanged = true;
                         }
                     }
                 }
                 if (op?.type === 'block-append' && op.payload?.pageId && hasCardMap && cardIdMap[op.payload.pageId]) {
                     op.payload.pageId = cardIdMap[op.payload.pageId];
+                    keyChanged = true;
+                    payloadChanged = true;
+                }
+
+                if (payloadChanged && op.id) dirtyOps.push(op);
+                if (keyChanged) {
+                    const newKey = this.queueKey(op);
+                    if (newKey && newKey !== key) {
+                        rekeys.push({ oldKey: key, newKey, op });
+                    }
                 }
             }
+
+            for (const { oldKey, newKey, op } of rekeys) {
+                this.state.queue.delete(oldKey);
+                this.state.queue.set(newKey, op);
+            }
+
+            if (dirtyOps.length > 0) {
+                await Promise.all(dirtyOps.map(op => Storage.put('syncQueue', op).catch(() => { })));
+            }
         }
+
         if (Array.isArray(this.state.dyContextQueue)) {
             this.state.dyContextQueue = this.state.dyContextQueue.map(j => {
                 const next = { ...j };
@@ -1270,7 +1378,6 @@ export const App = {
         if (this.state.session) {
             this.saveSession();
         }
-        await Storage.setMeta('queue', this.state.queue);
         await Storage.setMeta('dyContextQueue', this.state.dyContextQueue);
     },
     bind() {
@@ -1386,16 +1493,32 @@ export const App = {
         if (flagBtn) flagBtn.onclick = (e) => this.openFlagPicker(e.currentTarget);
         const analyticsDeckBtn = el('#analyticsDeckBtn');
         const analyticsDeckMenu = el('#analyticsDeckMenu');
+        const analyticsFilterBtn = el('#analyticsFilterBtn');
+        const analyticsFilterMenu = el('#analyticsFilterMenu');
+        const rangeBtn = el('#analyticsRangeBtn');
+        const rangeMenu = el('#analyticsRangeMenu');
+        const yearMenu = el('#analyticsYearMenu');
+        const closeAnalyticsMenus = () => {
+            if (analyticsDeckMenu) analyticsDeckMenu.classList.add('hidden');
+            if (analyticsFilterMenu) analyticsFilterMenu.classList.add('hidden');
+            if (rangeMenu) rangeMenu.classList.add('hidden');
+            if (yearMenu) yearMenu.classList.remove('is-open');
+        };
         if (analyticsDeckBtn && analyticsDeckMenu) {
             analyticsDeckBtn.onclick = (e) => {
                 e.stopPropagation();
-                analyticsDeckMenu.classList.toggle('hidden');
+                const willOpen = analyticsDeckMenu.classList.contains('hidden');
+                closeAnalyticsMenus();
+                analyticsDeckMenu.classList.toggle('hidden', !willOpen);
             };
-            document.addEventListener('click', (e) => {
-                if (analyticsDeckMenu.classList.contains('hidden')) return;
-                if (analyticsDeckBtn.contains(e.target) || analyticsDeckMenu.contains(e.target)) return;
-                analyticsDeckMenu.classList.add('hidden');
-            });
+        }
+        if (analyticsFilterBtn && analyticsFilterMenu) {
+            analyticsFilterBtn.onclick = (e) => {
+                e.stopPropagation();
+                const willOpen = analyticsFilterMenu.classList.contains('hidden');
+                closeAnalyticsMenus();
+                analyticsFilterMenu.classList.toggle('hidden', !willOpen);
+            };
         }
         const heatmapMetricReviews = el('#heatmapMetricReviews');
         const heatmapMetricRating = el('#heatmapMetricRating');
@@ -1415,13 +1538,12 @@ export const App = {
         if (heatmapDownloadBtn) {
             heatmapDownloadBtn.onclick = () => this.downloadHeatmapPng();
         }
-        const rangeBtn = el('#analyticsRangeBtn');
-        const rangeMenu = el('#analyticsRangeMenu');
-        const yearMenu = el('#analyticsYearMenu');
         if (rangeBtn && rangeMenu) {
             rangeBtn.onclick = (e) => {
                 e.stopPropagation();
-                rangeMenu.classList.toggle('hidden');
+                const willOpen = rangeMenu.classList.contains('hidden');
+                closeAnalyticsMenus();
+                rangeMenu.classList.toggle('hidden', !willOpen);
             };
             rangeMenu.onclick = (e) => {
                 const btn = e.target.closest('[data-range]');
@@ -1431,18 +1553,34 @@ export const App = {
                     if (yearMenu) yearMenu.classList.toggle('is-open');
                     return;
                 }
-                this.state.analyticsRange = range || '90';
+                this.state.analyticsRange = range || 'this-year';
                 if (range !== 'year') this.state.analyticsYear = 'all';
                 rangeMenu.classList.add('hidden');
                 if (yearMenu) yearMenu.classList.remove('is-open');
                 this.renderAnalytics();
             };
-            document.addEventListener('click', (e) => {
-                if (rangeMenu.classList.contains('hidden')) return;
-                if (rangeBtn.contains(e.target) || rangeMenu.contains(e.target)) return;
-                rangeMenu.classList.add('hidden');
-                if (yearMenu) yearMenu.classList.remove('is-open');
-            });
+        }
+        document.addEventListener('click', (e) => {
+            const inDeck = analyticsDeckBtn?.contains(e.target) || analyticsDeckMenu?.contains(e.target);
+            const inFilter = analyticsFilterBtn?.contains(e.target) || analyticsFilterMenu?.contains(e.target);
+            const inRange = rangeBtn?.contains(e.target) || rangeMenu?.contains(e.target);
+            if (inDeck || inFilter || inRange) return;
+            closeAnalyticsMenus();
+        });
+        const analyticsResetBtn = el('#analyticsResetBtn');
+        if (analyticsResetBtn) {
+            analyticsResetBtn.onclick = () => {
+                this.state.analyticsDecks = [];
+                this.state.analyticsRange = 'this-year';
+                this.state.analyticsYear = 'all';
+                this.state.analyticsTags = [];
+                this.state.analyticsFlags = [];
+                this.state.analyticsMarked = false;
+                this.state.analyticsIncludeSuspended = true;
+                this.persistFilterPrefs();
+                this.renderAnalytics();
+                closeAnalyticsMenus();
+            };
         }
         const analyticsIncludeSuspended = el('#analyticsIncludeSuspended');
         if (analyticsIncludeSuspended) {
@@ -1585,7 +1723,7 @@ export const App = {
                 this.startSession();
                 return;
             }
-            if (!this.state.session || !this.state.selectedCard) return;
+            if (!this.state.session) return;
 
             const isAiMode = this.isAiModeUsable();
             const aiAnswer = el('#aiAnswer');
@@ -1887,7 +2025,10 @@ export const App = {
                 hideLeech: !!this.state.filters.leech
             },
             analytics: {
-                includeSuspended: this.state.analyticsIncludeSuspended !== false
+                includeSuspended: this.state.analyticsIncludeSuspended !== false,
+                tags: Array.isArray(this.state.analyticsTags) ? this.state.analyticsTags : [],
+                flags: Array.isArray(this.state.analyticsFlags) ? this.state.analyticsFlags : [],
+                marked: !!this.state.analyticsMarked
             }
         };
         Storage.setMeta('filterPrefs', prefs).catch(e => console.debug('Storage setMeta filterPrefs failed:', e));
@@ -1899,6 +2040,8 @@ export const App = {
         if (filterLeech) filterLeech.checked = !!this.state.filters.leech;
         const analyticsIncludeSuspended = el('#analyticsIncludeSuspended');
         if (analyticsIncludeSuspended) analyticsIncludeSuspended.checked = this.state.analyticsIncludeSuspended !== false;
+        const analyticsMarkedOnly = el('#analyticsMarkedOnly');
+        if (analyticsMarkedOnly) analyticsMarkedOnly.checked = !!this.state.analyticsMarked;
     },
     // Render selected deck bar
     renderSelectedDeckBar() {
@@ -1945,7 +2088,7 @@ export const App = {
         const authOk = workerOk && hasToken;
         const ready = online && workerOk && authOk;
 
-        const q2count = (this.state.queue || []).length;
+        const q2count = this.state.queue.size;
         const pendingSpan = q2count > 0
             ? ` <span class="ml-1 font-mono text-[10px] sm:text-[11px] text-accent ">(${q2count})</span>`
             : '';
@@ -1999,8 +2142,6 @@ export const App = {
         const selectedId = this.state.selectedDeck?.id;
         const searchQuery = (this.state.deckSearch || '').toLowerCase().trim();
 
-        // Use cached stats
-        if (!this.state.deckStats) this.calculateDeckStats();
         const deckStats = this.state.deckStats;
 
         let decks = this.state.decks;
@@ -2014,7 +2155,8 @@ export const App = {
         grid.innerHTML = decks.map(d => {
             const isSelected = d.id === selectedId;
             const selectedClass = isSelected ? 'ring-2 ring-dull-purple' : '';
-            const stats = deckStats.get(d.id) || { total: 0, due: 0 };
+            const stats = deckStats.get(d.id) || { total: 0 };
+            const dueCount = this.getDueCountForDeck(d.id);
             return `
  <article class="rounded-2xl border border-[color:var(--card-border)] p-3 bg-[color:var(--surface)] text-[color:var(--text-main)] flex flex-col gap-2 hover:bg-[color:var(--surface-strong)] transition cursor-pointer ${selectedClass}" data-deck-id="${d.id}">
  <div class="flex items-center justify-between">
@@ -2026,9 +2168,9 @@ export const App = {
  <span class="tag-pill text-[11px] px-2 py-1 rounded-full bg-[color:var(--surface-strong)] text-[color:var(--text-main)] border border-[color:var(--card-border)]">${d.algorithm}</span>
  </div>
  </div>
- <div class="flex items-center gap-3 text-xs text-[color:var(--text-sub)]">
- <span>${stats.due} due</span>
- <span>${stats.total} cards</span>
+ <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[color:var(--text-sub)]">
+ <span>${dueCount} due</span>
+ <span>${stats.total} studyable cards</span>
  </div>
  <div class="flex items-center gap-2 text-[11px] text-[color:var(--text-sub)]">
  <i data-lucide="refresh-cw" class="w-3 h-3"></i>
@@ -2087,12 +2229,14 @@ export const App = {
 
         // Sort by due date (overdue/upcoming first, new cards at end)
         cards.sort((a, b) => {
-            const dueA = (a.fsrs?.dueDate || a.sm2?.dueDate);
-            const dueB = (b.fsrs?.dueDate || b.sm2?.dueDate);
-            if (!dueA && !dueB) return 0;
-            if (!dueA) return 1;
-            if (!dueB) return -1;
-            return new Date(dueA) - new Date(dueB);
+            const dueA = this.getCardDueTs(a, this.state.selectedDeck);
+            const dueB = this.getCardDueTs(b, this.state.selectedDeck);
+            const validA = Number.isFinite(dueA);
+            const validB = Number.isFinite(dueB);
+            if (!validA && !validB) return 0;
+            if (!validA) return 1;
+            if (!validB) return -1;
+            return dueA - dueB;
         });
 
         // Apply card name search filter
@@ -2120,7 +2264,6 @@ export const App = {
             const hasMore = cards.length > limit;
             const remainingCount = cards.length - limit;
 
-            // Optimization: Dirty checking with _lastUpdated
             // Reuse existing rows where possible
             const existingRows = new Map();
             Array.from(tbody.children).forEach(row => {
@@ -2149,15 +2292,21 @@ export const App = {
 
                 // Strip HTML tags and cloze syntax for display, then escape for safety
                 const plainName = (c.name || '').replace(/<[^>]*>/g, '').replace(/\{\{c\d+::(.*?)\}\}/g, '$1');
-                const nameText = escapeHtml(plainName.slice(0, 50));
+                const maxNameLen = 50;
+                const displayName = plainName.length > maxNameLen
+                    ? `${plainName.slice(0, Math.max(0, maxNameLen - 3))}...`
+                    : plainName;
+                const nameText = escapeHtml(displayName);
                 const flagColorClass = c.flag ? this.getFlagColorClass(c.flag) : '';
                 const flagIcon = c.flag ? `<i data-lucide="flag" class="w-3 h-3 ${flagColorClass} flag-icon-filled" title="${escapeHtml(c.flag)}"></i>` : '';
                 const markIcon = c.marked ? `<i data-lucide="star" class="w-3 h-3 text-accent fill-current" title="Marked"></i>` : '';
                 const suspendedIcon = c.suspended ? `<i data-lucide="ban" class="w-3 h-3 text-[color:var(--danger-soft-text)]" title="Suspended"></i>` : '';
                 const leechIcon = c.leech ? `<i data-lucide="bug" class="w-3 h-3 text-[color:var(--danger-soft-text)]" title="Leech"></i>` : '';
                 const tagPills = c.tags.slice(0, 2).map(t => `<span class="notion-color-${t.color.replace('_', '-')}-background px-1.5 py-0.5 rounded text-[10px]">${escapeHtml(t.name)}</span>`).join(' ');
-                const dueDate = c.fsrs?.dueDate || c.sm2?.dueDate;
-                const dueDisplay = dueDate ? new Date(dueDate).toLocaleDateString() : '—';
+                const extraTagCount = Math.max(0, c.tags.length - 2);
+                const extraTagLabel = extraTagCount > 0 ? `<span class="text-faint ">+${extraTagCount}</span>` : '';
+                const dueTs = this.getCardDueTs(c, this.state.selectedDeck);
+                const dueDisplay = Number.isFinite(dueTs) ? new Date(dueTs).toLocaleDateString() : '—';
                 const isParent = isClozeParent(c);
                 const isSub = isSubItem(c);
                 const subCount = isParent ? (Array.isArray(c.subCards) ? c.subCards.length : 0) : 0;
@@ -2180,7 +2329,7 @@ export const App = {
  </td>
  <td class="py-2 pr-2 capitalize hidden sm:table-cell">${c.type}${isSub ? ` #${c.clozeIndexes || '?'}` : ''}</td>
  <td class="py-2 pr-2 text-sub text-xs whitespace-nowrap">${isParent ? '—' : dueDisplay}</td>
- <td class="py-2 pr-2 hidden md:table-cell text-xs"><div class="flex gap-1 flex-wrap">${tagPills}${c.tags.length > 2 ? '<span class="text-faint ">...</span>' : ''}</div></td>
+ <td class="py-2 pr-2 hidden md:table-cell text-xs"><div class="flex gap-1 flex-wrap">${tagPills}${extraTagLabel}</div></td>
  <td class="py-2 flex gap-1">
  <button class="info-card-btn p-1 rounded hover:bg-accent-soft text-muted relative" data-card-id="${c.id}" title="Review history">
  <i data-lucide="info" class="w-4 h-4 pointer-events-none"></i>
@@ -2273,7 +2422,7 @@ export const App = {
                 const previewBadge = el('#previewBadge');
                 if (previewBadge) previewBadge.classList.toggle('hidden', !session.noScheduleChanges);
             }
-            lucide.createIcons();
+            createIconsInScope(studyCardSection || document.body);
         } else {
             // No session - show settings, hide session bar, study card, and notes
             if (studySettingsCard) studySettingsCard.classList.remove('hidden');
@@ -2307,19 +2456,37 @@ export const App = {
         // Check if no cards are due but decks are selected
         const f = this.state.filters;
         const hasSelectedDecks = f.studyDecks && f.studyDecks.length > 0;
-        const allCards = hasSelectedDecks
-            ? this.state.cards.filter(c => f.studyDecks.includes(c.deckId))
-            : this.state.cards;
-        const dueCards = allCards.filter(c => this.passFilters(c, { context: 'study' }) && isSchedulable(c) && this.isDue(c));
-        const nonDueCards = allCards.filter(c => this.passFilters(c, { context: 'study' }) && isSchedulable(c) && !this.isDue(c));
 
-        if (!card && hasSelectedDecks && nonDueCards.length > 0 && !session) {
+        let hasDue = false;
+        let nonDueCount = 0;
+
+        if (!card && hasSelectedDecks && !session) {
+            for (const dId of f.studyDecks) {
+                const cardIds = this.state.cardDeckIndex?.get(dId);
+                if (!cardIds) continue;
+
+                for (const cId of cardIds) {
+                    const c = this.state.cards.get(cId);
+                    if (c && this.passFilters(c, { context: 'study' }) && isSchedulable(c)) {
+                        if (this.isDue(c)) {
+                            hasDue = true;
+                            break; // Stop if we found a due card (should have been picked by pickCard?)
+                        } else {
+                            nonDueCount++;
+                        }
+                    }
+                }
+                if (hasDue) break;
+            }
+        }
+
+        if (!card && hasSelectedDecks && nonDueCount > 0 && !session) {
             // No due cards but there are non-due cards available (only show when no session)
             el('#studyDeckLabel').textContent = 'No cards due';
             el('#cardFront').innerHTML = `
  <div class="text-center py-4">
  <p class="text-sub text-sm mb-3">No cards are due for review right now.</p>
- <p class="text-muted text-xs mb-4">${nonDueCards.length} card${nonDueCards.length === 1 ? '' : 's'} available for extra practice.</p>
+ <p class="text-muted text-xs mb-4">${nonDueCount} card${nonDueCount === 1 ? '' : 's'} available for extra practice.</p>
  <button id="studyNonDueBtn" class="px-4 py-2 bg-[color:var(--accent)] text-[color:var(--badge-text)] rounded-lg text-sm hover:bg-[color:var(--accent)]/90 transition">
  Practice non-due cards
  </button>
@@ -2406,7 +2573,7 @@ export const App = {
         el('#aiAnswer').value = '';
         el('#aiFeedback').innerHTML = '';
         el('#aiFeedback').classList.add('hidden');
-        lucide.createIcons();
+        createIconsInScope(el('#studyTab') || studyCardSection || document.body);
     },
     renderNotes() {
         const notes = this.state.selectedCard?.notes ?? '';
@@ -2423,13 +2590,7 @@ export const App = {
         const selectedWrap = el('#filterTagSelected');
         if (!input || !dropdown || !selectedWrap) return;
 
-        const tagMap = new Map();
-        this.state.cards.forEach(c => {
-            (c.tags || []).forEach(t => {
-                if (!tagMap.has(t.name)) tagMap.set(t.name, t.color || 'default');
-            });
-        });
-        const allTags = Array.from(tagMap.keys()).sort((a, b) => a.localeCompare(b));
+        const allTags = Array.from(this.state.tagRegistry.keys()).sort((a, b) => a.localeCompare(b));
         const selected = new Set(this.state.filters.tags || []);
         const query = (input.value || '').toLowerCase();
         const options = allTags.filter(name => name.toLowerCase().includes(query));
@@ -2563,6 +2724,7 @@ export const App = {
         if (!card) return;
         card.marked = !card.marked;
         this.updateMarkFlagButtons(card);
+        this.setCard(card);
         // Defer persistence if in a session (will be saved on rate/skip)
         if (this.state.session) {
             card._pendingSave = true;
@@ -2585,8 +2747,9 @@ export const App = {
             return;
         }
         targets.forEach(card => {
-            card.suspended = false;
+            card.suspended = 0;
             if (card.leech) card.leech = false;
+            this.setCard(card);
         });
         try {
             await Storage.putMany('cards', targets);
@@ -2608,6 +2771,7 @@ export const App = {
         if (!card) return;
         card.flag = flag || '';
         this.updateMarkFlagButtons(card);
+        this.setCard(card);
         // Defer persistence if in a session (will be saved on rate/skip)
         if (this.state.session) {
             card._pendingSave = true;
@@ -2652,8 +2816,8 @@ export const App = {
     updateFlagSwatchMulti(container, flags) {
         if (!container) return;
         const selected = new Set(Array.isArray(flags) ? flags : (flags ? [flags] : []));
-        container.querySelectorAll('[data-flag]').forEach(btn => {
-            const val = btn.dataset.flag || '';
+        container.querySelectorAll('[data-flag], [data-analytic-flag]').forEach(btn => {
+            const val = btn.dataset.flag || btn.dataset.analyticFlag || '';
             const isSelected = selected.has(val);
             btn.classList.toggle('is-selected', isSelected);
             btn.setAttribute('aria-pressed', isSelected);
@@ -2965,19 +3129,27 @@ export const App = {
     renderAnalytics() {
         const deckLabel = el('#analyticsDeckLabel');
         const deckMenu = el('#analyticsDeckMenu');
+        const filterLabel = el('#analyticsFilterLabel');
+        const filterMenu = el('#analyticsFilterMenu');
         const selectedSet = new Set(this.state.analyticsDecks || []);
         const allSelected = selectedSet.size === 0;
         const deckIds = this.state.decks.map(d => d.id);
+        const analyticsTags = Array.isArray(this.state.analyticsTags) ? this.state.analyticsTags : [];
+        const analyticsFlags = Array.isArray(this.state.analyticsFlags) ? this.state.analyticsFlags : [];
+        const analyticsMarked = !!this.state.analyticsMarked;
+        const tagsKey = analyticsTags.slice().sort().join('|');
+        const flagsKey = analyticsFlags.slice().sort().join('|');
 
         const currentCacheKey = JSON.stringify({
-            lastSync: this.state.lastSync,
-            cardsLen: this.state.cards.length,
             filters: {
                 range: this.state.analyticsRange,
                 year: this.state.analyticsYear,
                 decks: this.state.analyticsDecks,
                 suspended: this.state.analyticsIncludeSuspended,
-                metric: this.state.analyticsHeatmapMetric
+                metric: this.state.analyticsHeatmapMetric,
+                tags: tagsKey,
+                flags: flagsKey,
+                marked: analyticsMarked ? 1 : 0
             }
         });
 
@@ -3033,7 +3205,145 @@ export const App = {
                     };
                 });
             }
-            let rangeMode = this.state.analyticsRange || '90';
+            if (filterLabel) {
+                const filterCount = analyticsTags.length + analyticsFlags.length + (analyticsMarked ? 1 : 0);
+                filterLabel.textContent = filterCount > 0 ? `Filters • ${filterCount}` : 'Filters';
+            }
+            if (filterMenu) {
+                const selectedTags = new Set(analyticsTags);
+                const selectedFlags = new Set(analyticsFlags);
+                const tagOptions = this.collectTagOptions();
+                const tagRows = tagOptions.length
+                    ? tagOptions.map(opt => {
+                        const active = selectedTags.has(opt.name);
+                        const tagName = opt.name || '';
+                        return `
+ <button type="button" class="analytics-menu-option analytics-tag-option w-full text-left px-3 py-2 text-sm rounded-md inline-flex items-center justify-between ${active ? 'bg-surface-muted' : 'hover:bg-surface-muted'}" data-analytic-tag="${encodeDataAttr(tagName)}" data-tag-name="${encodeDataAttr(tagName.toLowerCase())}">
+ <span class="truncate">${escapeHtml(tagName)}</span>
+ ${active ? '<i data-lucide="check" class="w-3 h-3 text-accent"></i>' : '<span class="w-3 h-3"></span>'}
+ </button>
+ `;
+                    }).join('')
+                    : '<div class="px-3 py-2 text-xs text-[color:var(--text-sub)]">No tags yet.</div>';
+
+                const flagOrder = this.getFlagOrder().filter(f => f);
+                filterMenu.innerHTML = `
+ <div class="px-3 py-2 text-[11px] uppercase tracking-wide text-[color:var(--text-sub)]">Tags</div>
+ <button type="button" class="analytics-menu-option w-full text-left px-3 py-2 text-sm rounded-md inline-flex items-center justify-between ${selectedTags.size === 0 ? 'bg-surface-muted' : 'hover:bg-surface-muted'}" data-analytic-tag="__all">
+ <span>No filter (all tags)</span>
+ ${selectedTags.size === 0 ? '<i data-lucide="check" class="w-3 h-3 text-accent"></i>' : '<span class="w-3 h-3"></span>'}
+ </button>
+ ${tagOptions.length ? '<div class="h-px bg-[color:var(--card-border)] my-1"></div>' : ''}
+ <div class="px-3 py-2">
+ <input id="analyticsTagSearch" type="text" value="${escapeHtml(filterMenu.dataset.tagQuery || '')}" placeholder="Search tags"
+ class="w-full rounded-md border border-[color:var(--card-border)] bg-[color:var(--surface)] px-2 py-1.5 text-xs text-[color:var(--text-main)] placeholder:text-[color:var(--text-sub)]">
+ </div>
+ <div class="max-h-44 overflow-auto">${tagRows}</div>
+ <div class="h-px bg-[color:var(--card-border)] my-2"></div>
+ <div class="px-3 py-2 text-[11px] uppercase tracking-wide text-[color:var(--text-sub)]">Flags</div>
+ <button type="button" class="analytics-menu-option w-full text-left px-3 py-2 text-sm rounded-md inline-flex items-center justify-between ${selectedFlags.size === 0 ? 'bg-surface-muted' : 'hover:bg-surface-muted'}" data-analytic-flag="__all">
+ <span>No filter (all flags)</span>
+ ${selectedFlags.size === 0 ? '<i data-lucide="check" class="w-3 h-3 text-accent"></i>' : '<span class="w-3 h-3"></span>'}
+ </button>
+ <div class="px-3 py-2">
+ <div id="analyticsFlagSwatches" class="flag-swatch-row">
+ ${flagOrder.map(f => `
+ <button type="button" class="flag-swatch-btn" data-analytic-flag="${f}" aria-label="${f} flag">
+ <span class="flag-swatch ${this.getFlagClass(f)}"></span>
+ </button>
+ `).join('')}
+ </div>
+ </div>
+ <div class="h-px bg-[color:var(--card-border)] my-2"></div>
+ <label class="flex items-center gap-2 px-3 py-2 text-sm text-[color:var(--text-main)]">
+ <input id="analyticsMarkedOnly" type="checkbox" class="accent-dull-purple" ${analyticsMarked ? 'checked' : ''}>
+ <span>Marked only</span>
+ </label>
+ <button type="button" class="analytics-menu-option w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-muted" data-analytic-clear="1">Clear filters</button>
+ `;
+
+                const flagRow = filterMenu.querySelector('#analyticsFlagSwatches');
+                this.updateFlagSwatchMulti(flagRow, analyticsFlags);
+
+                filterMenu.querySelectorAll('[data-analytic-tag]').forEach(btn => {
+                    btn.onclick = (e) => {
+                        e.stopPropagation();
+                        const raw = btn.dataset.analyticTag || '';
+                        if (raw === '__all') {
+                            this.state.analyticsTags = [];
+                        } else {
+                            const tag = decodeDataAttr(raw);
+                            const next = new Set(this.state.analyticsTags || []);
+                            if (next.has(tag)) next.delete(tag);
+                            else next.add(tag);
+                            this.state.analyticsTags = Array.from(next);
+                        }
+                        this.persistFilterPrefs();
+                        this.renderAnalytics();
+                        filterMenu.classList.remove('hidden');
+                    };
+                });
+                const tagSearch = filterMenu.querySelector('#analyticsTagSearch');
+                const tagButtons = Array.from(filterMenu.querySelectorAll('.analytics-tag-option'));
+                const applyTagQuery = (query) => {
+                    const q = (query || '').trim().toLowerCase();
+                    tagButtons.forEach(btn => {
+                        const name = decodeDataAttr(btn.dataset.tagName || '');
+                        btn.classList.toggle('hidden', q && !name.includes(q));
+                    });
+                };
+                if (tagSearch) {
+                    tagSearch.oninput = (e) => {
+                        const q = e.target.value || '';
+                        filterMenu.dataset.tagQuery = q;
+                        applyTagQuery(q);
+                    };
+                    applyTagQuery(tagSearch.value || '');
+                }
+
+                filterMenu.querySelectorAll('[data-analytic-flag]').forEach(btn => {
+                    btn.onclick = (e) => {
+                        e.stopPropagation();
+                        const raw = btn.dataset.analyticFlag || '';
+                        if (raw === '__all') {
+                            this.state.analyticsFlags = [];
+                        } else {
+                            const next = new Set(this.state.analyticsFlags || []);
+                            if (next.has(raw)) next.delete(raw);
+                            else next.add(raw);
+                            this.state.analyticsFlags = Array.from(next);
+                        }
+                        this.persistFilterPrefs();
+                        this.renderAnalytics();
+                        filterMenu.classList.remove('hidden');
+                    };
+                });
+
+                const markedToggle = filterMenu.querySelector('#analyticsMarkedOnly');
+                if (markedToggle) {
+                    markedToggle.onchange = (e) => {
+                        this.state.analyticsMarked = !!e.target.checked;
+                        this.persistFilterPrefs();
+                        this.renderAnalytics();
+                        filterMenu.classList.remove('hidden');
+                    };
+                }
+
+                const clearBtn = filterMenu.querySelector('[data-analytic-clear]');
+                if (clearBtn) {
+                    clearBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        this.state.analyticsTags = [];
+                        this.state.analyticsFlags = [];
+                        this.state.analyticsMarked = false;
+                        this.persistFilterPrefs();
+                        this.renderAnalytics();
+                        filterMenu.classList.remove('hidden');
+                    };
+                }
+                createIconsInScope(filterMenu);
+            }
+            let rangeMode = this.state.analyticsRange || 'this-year';
             if (rangeMode !== 'year') this.state.analyticsYear = 'all';
             const rangeLabels = {
                 all: 'All time',
@@ -3050,7 +3360,7 @@ export const App = {
                 if (rangeMode === 'year' && this.state.analyticsYear && this.state.analyticsYear !== 'all') {
                     rangeLabelEl.textContent = `Year • ${this.state.analyticsYear}`;
                 } else {
-                    rangeLabelEl.textContent = rangeLabels[rangeMode] || 'Last 3 months';
+                    rangeLabelEl.textContent = rangeLabels[rangeMode] || 'This year';
                 }
             }
             const rangeMenu = el('#analyticsRangeMenu');
@@ -3077,8 +3387,7 @@ export const App = {
         };
 
         // If cache valid and DOM populated, just update labels
-        // Note: checking if DOM is empty ensures we re-render on tab switch
-        if (this.state.analyticsCache && this.state.analyticsCache.key === currentCacheKey && el('#analyticsToday').hasChildNodes()) {
+        if (!this.state.analyticsDirty && this.state.analyticsCache && this.state.analyticsCache.key === currentCacheKey && el('#analyticsToday').hasChildNodes()) {
             updateLabels();
             return;
         }
@@ -3086,13 +3395,26 @@ export const App = {
         updateLabels();
 
         // HEAVY CALCULATION START
-        let rangeMode = this.state.analyticsRange || '90';
+        let rangeMode = this.state.analyticsRange || 'this-year';
         if (rangeMode !== 'year') this.state.analyticsYear = 'all';
 
         const includeSuspended = this.state.analyticsIncludeSuspended !== false;
-        const baseCards = allSelected
-            ? this.state.cards
-            : this.state.cards.filter(c => selectedSet.has(c.deckId));
+        const filterIds = this.getAnalyticsFilterCandidates();
+        let baseCards;
+        if (filterIds) {
+            baseCards = [];
+            for (const id of filterIds) {
+                const card = this.state.cards.get(id);
+                if (!card) continue;
+                if (!allSelected && !selectedSet.has(card.deckId)) continue;
+                baseCards.push(card);
+            }
+        } else {
+            const allCardsArray = Array.from(this.state.cards.values());
+            baseCards = allSelected
+                ? allCardsArray
+                : allCardsArray.filter(c => selectedSet.has(c.deckId));
+        }
         const cards = includeSuspended
             ? baseCards
             : baseCards.filter(c => !c.suspended && !c.leech);
@@ -3193,6 +3515,7 @@ export const App = {
             key: currentCacheKey,
             data: { /* Just key marker for now, we render directly */ }
         };
+        this.state.analyticsDirty = false;
 
         const todayEl = el('#analyticsToday');
         if (todayEl) {
@@ -3528,12 +3851,24 @@ export const App = {
         heatmapEvents.forEach(e => {
             const key = this.formatDateKey(e.at);
             if (!key) return;
-            if (!heatmapDayMap.has(key)) heatmapDayMap.set(key, { count: 0, ms: 0, ratingSum: 0, ratingCount: 0 });
+            if (!heatmapDayMap.has(key)) {
+                heatmapDayMap.set(key, {
+                    count: 0,
+                    ms: 0,
+                    ratingSum: 0,
+                    ratingCount: 0,
+                    ratingCounts: { again: 0, hard: 0, good: 0, easy: 0 }
+                });
+            }
             const entry = heatmapDayMap.get(key);
             entry.count += 1;
             entry.ms += e.ms || 0;
             entry.ratingSum += e.ratingValue || 0;
             entry.ratingCount += 1;
+            if (entry.ratingCounts && e.rating) {
+                if (entry.ratingCounts[e.rating] === undefined) entry.ratingCounts[e.rating] = 0;
+                entry.ratingCounts[e.rating] += 1;
+            }
         });
 
         const heatmapEl = el('#analyticsHeatmap');
@@ -3613,10 +3948,14 @@ export const App = {
                     const inYear = d.getFullYear() === year;
                     const inRange = d >= heatmapRangeStart && d <= heatmapRangeEnd;
                     const key = this.formatDateKey(d);
-                    const stats = inYear && inRange ? (heatmapDayMap.get(key) || { count: 0, ms: 0, ratingSum: 0, ratingCount: 0 }) : { count: 0, ms: 0, ratingSum: 0, ratingCount: 0 };
+                    const stats = inYear && inRange
+                        ? (heatmapDayMap.get(key) || { count: 0, ms: 0, ratingSum: 0, ratingCount: 0, ratingCounts: { again: 0, hard: 0, good: 0, easy: 0 } })
+                        : { count: 0, ms: 0, ratingSum: 0, ratingCount: 0, ratingCounts: { again: 0, hard: 0, good: 0, easy: 0 } };
                     const count = stats.count || 0;
                     const ms = stats.ms || 0;
                     const avgRating = stats.ratingCount ? stats.ratingSum / stats.ratingCount : 0;
+                    const rc = stats.ratingCounts || { again: 0, hard: 0, good: 0, easy: 0 };
+                    const distLabel = `Again ${rc.again || 0}, Hard ${rc.hard || 0}, Good ${rc.good || 0}, Easy ${rc.easy || 0}`;
                     let level = 0;
                     if (this.state.analyticsHeatmapMetric === 'rating' && stats.ratingCount > 0) {
                         const ratio = avgRating / Math.max(1, maxDayRating || 4);
@@ -3633,12 +3972,11 @@ export const App = {
                     }
                     const weekIndex = Math.floor(idx / 7);
                     const row = ((d.getDay() + 6) % 7) + 2;
-                    const duration = this.formatDuration(ms);
                     const title = this.state.analyticsHeatmapMetric === 'rating'
-                        ? `${key}: avg ${avgRating ? avgRating.toFixed(2) : '—'} • ${count} review${count === 1 ? '' : 's'} • ${duration}`
-                        : `${key}: ${count} review${count === 1 ? '' : 's'} • ${duration}`;
+                        ? `${key}: ${count} card${count === 1 ? '' : 's'} reviewed • avg ${avgRating ? avgRating.toFixed(2) : '—'} • ${distLabel}`
+                        : `${key}: ${count} card${count === 1 ? '' : 's'} reviewed`;
                     const outsideClass = inYear && inRange ? '' : ' is-outside';
-                    cells.push(`<div class="heatmap-cell level-${level}${outsideClass}" style="grid-column:${weekIndex + 2}; grid-row:${row}" title="${escapeHtml(title)}"></div>`);
+                    cells.push(`<div class="heatmap-cell level-${level}${outsideClass}" style="grid-column:${weekIndex + 2}; grid-row:${row}" data-tip="${escapeHtml(title)}" tabindex="0"></div>`);
 
                     if (inYear && d.getDate() === 1) {
                         const label = monthLabels[d.getMonth()];
@@ -3659,19 +3997,13 @@ export const App = {
             heatmapEl.innerHTML = yearsToRender.map(buildYearGrid).join('');
         }
 
-        const container = el('#analyticsSection');
-        if (container && typeof lucide !== 'undefined') {
-            lucide.createIcons({ nodes: container.querySelectorAll('[data-lucide]') });
-        }
+        const container = el('#analyticsTab');
+        if (container) createIconsInScope(container);
     },
     buildLocalTagOptions() {
-        const tagMap = new Map();
-        this.state.cards.forEach(c => {
-            (c.tags || []).forEach(t => {
-                if (!tagMap.has(t.name)) tagMap.set(t.name, t.color || 'default');
-            });
-        });
-        return Array.from(tagMap.entries()).map(([name, color]) => ({ name, color }));
+        return Array.from(this.state.tagRegistry.entries())
+            .map(([name, data]) => ({ name, color: data.color }))
+            .sort((a, b) => a.name.localeCompare(b.name));
     },
     collectTagOptions() {
         const tagMap = new Map();
@@ -3814,12 +4146,55 @@ export const App = {
 
         const dueCounts = new Map();
         let totalDue = 0;
-        for (const card of this.state.cards) {
-            if (!this.passFilters(card, { context: 'study' })) continue;
-            if (!isSchedulable(card)) continue;
-            if (!this.isDue(card)) continue;
-            dueCounts.set(card.deckId, (dueCounts.get(card.deckId) || 0) + 1);
-            totalDue += 1;
+        const f = this.state.filters;
+        const defaultStudyFilters = !f.again && !f.hard && !f.addedToday && (!f.tags || f.tags.length === 0) &&
+            !f.marked && (!f.flag || (Array.isArray(f.flag) ? f.flag.length === 0 : f.flag === ''));
+        const tagsKey = (f.tags || []).slice().sort().join('|');
+        const flagKey = Array.isArray(f.flag) ? f.flag.slice().sort().join('|') : (f.flag || '');
+        const timeBucket = Math.floor(Date.now() / STUDY_DUE_BUCKET_MS);
+        const cacheKey = JSON.stringify({
+            v: this.state.cardsVersion,
+            b: timeBucket,
+            f: { again: f.again, hard: f.hard, addedToday: f.addedToday, tags: tagsKey, marked: f.marked, flag: flagKey, default: defaultStudyFilters }
+        });
+
+        if (this.state.studyDeckCache?.key === cacheKey) {
+            const cached = this.state.studyDeckCache;
+            cached.dueCounts.forEach((value, key) => dueCounts.set(key, value));
+            totalDue = cached.totalDue;
+        } else {
+            if (defaultStudyFilters) {
+                const effectiveNow = this.getEffectiveNowMs();
+                for (const d of this.state.decks) {
+                    const due = this.getDueCountForDeck(d.id, effectiveNow);
+                    if (due > 0) dueCounts.set(d.id, due);
+                    totalDue += due;
+                }
+            } else {
+                const candidateIds = this.getStudyFilterCandidates(f);
+                if (candidateIds && candidateIds.size === 0) {
+                    totalDue = 0;
+                } else if (candidateIds) {
+                    for (const id of candidateIds) {
+                        const card = this.state.cards.get(id);
+                        if (!card) continue;
+                        if (!this.passFilters(card, { context: 'study' })) continue;
+                        if (!isSchedulable(card)) continue;
+                        if (!this.isDue(card)) continue;
+                        dueCounts.set(card.deckId, (dueCounts.get(card.deckId) || 0) + 1);
+                        totalDue += 1;
+                    }
+                } else {
+                    for (const card of this.state.cards.values()) {
+                        if (!this.passFilters(card, { context: 'study' })) continue;
+                        if (!isSchedulable(card)) continue;
+                        if (!this.isDue(card)) continue;
+                        dueCounts.set(card.deckId, (dueCounts.get(card.deckId) || 0) + 1);
+                        totalDue += 1;
+                    }
+                }
+            }
+            this.state.studyDeckCache = { key: cacheKey, dueCounts, totalDue };
         }
 
         const selected = this.state.filters.studyDecks || [];
@@ -3856,7 +4231,94 @@ export const App = {
         if (selected.length === 0) {
             display.innerHTML = `<span class="text-accent text-xs italic">All decks (${totalDue} due)</span>`;
         }
-        lucide.createIcons();
+        createIconsInScope(dropdown);
+        createIconsInScope(display);
+    },
+    getStudyFilterCandidates(filters) {
+        const f = filters || this.state.filters;
+        const tags = Array.isArray(f.tags) ? f.tags.map(t => (t || '').trim()).filter(Boolean) : [];
+        const flags = Array.isArray(f.flag)
+            ? f.flag.map(v => (v || '').trim()).filter(Boolean)
+            : [(f.flag || '').trim()].filter(Boolean);
+        const needsMarked = !!f.marked;
+        const needsAgain = !!f.again;
+        const needsHard = !!f.hard;
+        const needsToday = !!f.addedToday;
+
+        let candidates = null;
+        if (tags.length > 0) {
+            const union = new Set();
+            for (const tag of tags) {
+                const set = this.state.tagIndex.get(tag);
+                if (set) set.forEach(id => union.add(id));
+            }
+            candidates = union;
+        }
+        if (flags.length > 0) {
+            const union = new Set();
+            for (const flag of flags) {
+                const set = this.state.flagIndex.get(flag);
+                if (set) set.forEach(id => union.add(id));
+            }
+            candidates = candidates ? this.intersectIdSets(candidates, union) : union;
+        }
+        if (needsMarked) {
+            const marked = this.state.markedIndex || new Set();
+            candidates = candidates ? this.intersectIdSets(candidates, marked) : new Set(marked);
+        }
+        if (needsAgain || needsHard) {
+            const union = new Set();
+            const againSet = this.state.ratingIndex.get('again');
+            if (againSet) againSet.forEach(id => union.add(id));
+            if (!needsAgain) {
+                const hardSet = this.state.ratingIndex.get('hard');
+                if (hardSet) hardSet.forEach(id => union.add(id));
+            }
+            candidates = candidates ? this.intersectIdSets(candidates, union) : union;
+        }
+        if (needsToday) {
+            const key = this.formatDateKey(new Date());
+            const set = (key && this.state.createdDateIndex.get(key)) || new Set();
+            candidates = candidates ? this.intersectIdSets(candidates, set) : new Set(set);
+        }
+        return candidates;
+    },
+    getAnalyticsFilterCandidates() {
+        const tags = Array.isArray(this.state.analyticsTags) ? this.state.analyticsTags.map(t => (t || '').trim()).filter(Boolean) : [];
+        const flags = Array.isArray(this.state.analyticsFlags) ? this.state.analyticsFlags.map(t => (t || '').trim()).filter(Boolean) : [];
+        const needsMarked = !!this.state.analyticsMarked;
+
+        let candidates = null;
+        if (tags.length > 0) {
+            const union = new Set();
+            for (const tag of tags) {
+                const set = this.state.tagIndex.get(tag);
+                if (set) set.forEach(id => union.add(id));
+            }
+            candidates = union;
+        }
+        if (flags.length > 0) {
+            const union = new Set();
+            for (const flag of flags) {
+                const set = this.state.flagIndex.get(flag);
+                if (set) set.forEach(id => union.add(id));
+            }
+            candidates = candidates ? this.intersectIdSets(candidates, union) : union;
+        }
+        if (needsMarked) {
+            const marked = this.state.markedIndex || new Set();
+            candidates = candidates ? this.intersectIdSets(candidates, marked) : new Set(marked);
+        }
+        return candidates;
+    },
+    intersectIdSets(a, b) {
+        if (!a || !b) return new Set();
+        const out = new Set();
+        const [small, large] = a.size <= b.size ? [a, b] : [b, a];
+        for (const id of small) {
+            if (large.has(id)) out.add(id);
+        }
+        return out;
     },
     bindDeckSearch() {
         const input = el('#deckSearchInput');
@@ -3978,7 +4440,6 @@ export const App = {
             try {
                 setCaretIndex(el, caret);
             } catch (e) {
-                // Fallback: move to end
                 const range = document.createRange();
                 range.selectNodeContents(el);
                 range.collapse(false);
@@ -4216,6 +4677,7 @@ export const App = {
     async saveDeckFromModal() {
         const wasDynamic = this.state.editingDeck?.dynamicContext === true;
         const d = this.state.editingDeck || this.newDeck('', 'SM-2');
+        const prevAlgorithm = d.algorithm || 'SM-2';
         d.name = el('#deckNameInput').value || d.name || 'Untitled deck';
         d.algorithm = el('#deckAlgoInput').value || 'SM-2';
         d.reviewLimit = Number(el('#deckReviewLimit').value) || 50;
@@ -4274,6 +4736,9 @@ export const App = {
         if (d.dynamicContext && !wasDynamic) {
             await this.normalizeDyContextRootsForDeck(d.id);
         }
+        if (this.state.editingDeck && prevAlgorithm !== d.algorithm) {
+            this.reindexDeckDue(d.id);
+        }
         this.closeDeckModal();
         this.renderDecks();
         this.renderStudy();
@@ -4297,12 +4762,14 @@ export const App = {
         await Storage.put('decks', deck);
         this.queueOp({ type: 'deck-upsert', payload: deck });
 
-        const cards = this.cardsForDeck(deck.id);
-        for (const card of cards) {
-            const idx = this.state.cards.findIndex(c => c.id === card.id);
-            if (idx >= 0) this.state.cards.splice(idx, 1);
-            await Storage.delete('cards', card.id);
+        await Storage.deleteCardsByDeck(deck.id);
+        // Clean from memory using index (efficient)
+        const deckCards = this.cardsForDeck(deck.id);
+        // Use a copy since removeCard modifies the index
+        for (const c of [...deckCards]) {
+            this.removeCard(c.id);
         }
+
         const deckIdx = this.state.decks.findIndex(d => d.id === deck.id);
         if (deckIdx >= 0) this.state.decks.splice(deckIdx, 1);
         await Storage.delete('decks', deck.id);
@@ -4331,7 +4798,7 @@ export const App = {
     async confirmResetAlgorithm() {
         const deck = this.state.selectedDeck;
         if (!deck) return;
-        const cards = this.cardsForDeck(deck.id);
+        const cards = await Storage.getCardsByDeck(deck.id);
         if (cards.length === 0) {
             toast('No cards in this deck');
             this.closeModal('resetAlgorithmModal');
@@ -4399,17 +4866,16 @@ export const App = {
                 }
             }
 
-            // Queue for sync to Notion
             for (const card of chunk) {
                 this.queueOp({ type: 'card-upsert', payload: card });
             }
         }
 
-        // Update in-memory state
-        this.state.cards = this.state.cards.map(c => {
-            const updated = cards.find(uc => uc.id === c.id);
-            return updated || c;
-        });
+        for (const card of cards) {
+            if (this.state.cards.has(card.id)) {
+                this.setCard(card);
+            }
+        }
 
         this.closeModal('resetAlgorithmModal');
 
@@ -4480,7 +4946,7 @@ export const App = {
         this.renderCardModalReviewHistory(card);
         el('#cardModal').classList.remove('hidden');
         el('#cardModal').classList.add('flex');
-        lucide.createIcons();
+        createIconsInScope(el('#cardModal'));
     },
     renderCardModalReviewHistory(card) {
         const section = el('#cardReviewHistorySection');
@@ -4544,6 +5010,14 @@ export const App = {
             const autoType = detectCardType(card.name, card.back);
             if (card.type === 'Front-Back' && autoType === 'Cloze') card.type = 'Cloze';
         }
+        if (isClozeParent(card)) {
+            const clozeSet = parseClozeIndices(card.name);
+            if (card.back) parseClozeIndices(card.back).forEach(i => clozeSet.add(i));
+            const indices = Array.from(clozeSet).sort((a, b) => a - b);
+            card.clozeIndexes = indices.length ? indices.join(',') : '';
+        } else if ((card.type || '').toLowerCase() !== 'cloze' && !card.parentCard) {
+            card.clozeIndexes = '';
+        }
         const selectedTags = this.state.tagSelection || [];
         const optionMap = new Map(this.collectTagOptions().map(t => [t.name, t.color || 'default']));
         const existingColors = new Map((this.state.editingCard?.tags || []).map(t => [t.name, t.color || 'default']));
@@ -4557,14 +5031,12 @@ export const App = {
         const leechChecked = el('#cardLeechInput').checked;
         if (!suspendedChecked && leechChecked) {
             // Unsuspending always clears leech.
-            card.suspended = false;
+            card.suspended = 0;
             card.leech = false;
         } else {
             card.leech = leechChecked;
-            card.suspended = suspendedChecked || leechChecked;
+            card.suspended = (suspendedChecked || leechChecked) ? 1 : 0;
         }
-        // Only set updatedInApp if name/back/notes changed (affects rich_text preservation)
-        // Note: Editing Name, Back, or Notes will cause text colors and highlights to be lost on sync
         if (card.name !== oldName || card.back !== oldBack || card.notes !== oldNotes) {
             card.updatedInApp = true;
         }
@@ -4575,7 +5047,9 @@ export const App = {
             }
         });
         Storage.setMeta('tagOptions', this.state.tagOptions).catch(e => console.debug('Storage setMeta tagOptions failed:', e));
-        if (!this.state.editingCard) this.state.cards.push(card);
+
+        this.setCard(card);
+
         await Storage.put('cards', card);
         this.queueOp({ type: 'card-upsert', payload: card });
         if (isClozeParent(card)) {
@@ -4616,6 +5090,13 @@ export const App = {
             if (pushResult.failedCount > 0) {
                 toast(`Push completed with ${pushResult.failedCount} errors. Some items may not be synced.`);
             }
+            if (!pushResult.success) {
+                if (loadingMsg && !el('#loadingOverlay').classList.contains('hidden')) {
+                    loadingMsg.textContent = 'Push failed — pull skipped';
+                }
+                toast('Push failed, skipping pull to avoid overwriting local changes');
+                return;
+            }
 
             // Then pull to get updates
             if (loadingMsg && !el('#loadingOverlay').classList.contains('hidden')) {
@@ -4647,7 +5128,7 @@ export const App = {
             setTimeout(() => el('#syncProgress').style.width = '0%', 700);
             this.state.syncing = false;
             this.updateSyncButtonState();
-            if (this.state.queue.length > 0) {
+            if (this.state.queue.size > 0) {
                 this.requestAutoSyncSoon(MIN_PUSH_INTERVAL_MS + 100);
             }
         }
@@ -4725,41 +5206,51 @@ export const App = {
             cardFilter = { timestamp: 'last_edited_time', last_edited_time: { on_or_after: since } };
         }
 
-        // Optimization: Build lookup maps to avoid O(N) search in upsertCard
-        // distinct maps for internal ID and Notion ID
-        const cardIndexByNotionId = new Map();
-        const cardIndexById = new Map();
-        this.state.cards.forEach((c, idx) => {
-            if (c.notionId) cardIndexByNotionId.set(c.notionId, idx);
-            cardIndexById.set(c.id, idx);
-        });
-
         // Mark-and-sweep for full syncs: track seen IDs to detect server-side deletions
         const seenNotionIds = !since ? new Set() : null;
+        const clozeParentsToReconcile = new Set();
+        let analyticsTouched = false;
+        const historiesEqual = (a, b) => {
+            if (a === b) return true;
+            if (!Array.isArray(a) || !Array.isArray(b)) return false;
+            if (a.length !== b.length) return false;
+            for (let i = 0; i < a.length; i++) {
+                const x = a[i] || {};
+                const y = b[i] || {};
+                if (x.rating !== y.rating || x.at !== y.at || x.ms !== y.ms) return false;
+            }
+            return true;
+        };
 
         const upsertCard = (card) => {
             if (seenNotionIds && card.notionId) {
                 seenNotionIds.add(card.notionId);
             }
 
-            let idx = -1;
-            if (card.notionId && cardIndexByNotionId.has(card.notionId)) {
-                idx = cardIndexByNotionId.get(card.notionId);
-            } else if (cardIndexById.has(card.id)) {
-                idx = cardIndexById.get(card.id);
+            let existing = this.state.cards.get(card.id);
+            if (!existing && card.notionId) {
+                existing = this.cardByNotionId(card.notionId);
             }
 
-            if (idx >= 0) {
-                const existing = this.state.cards[idx];
+            if (existing) {
                 const localHistory = existing.reviewHistory || [];
                 const remoteHistory = card.reviewHistory || [];
-                // Preserve local history if remote is empty (avoid overwrite during initial sync-back)
+                // Preserve local history if remote is empty
                 const preservedHistory = (remoteHistory.length === 0 && localHistory.length > 0) ? localHistory : remoteHistory;
-                this.state.cards[idx] = { ...existing, ...card, reviewHistory: preservedHistory };
+                const updated = { ...existing, ...card, reviewHistory: preservedHistory };
+                if (!historiesEqual(localHistory, preservedHistory) ||
+                    (existing.fsrs?.lastReview || null) !== (card.fsrs?.lastReview || null) ||
+                    (existing.sm2?.lastReview || null) !== (card.sm2?.lastReview || null) ||
+                    (existing.fsrs?.lastRating || null) !== (card.fsrs?.lastRating || null) ||
+                    (existing.sm2?.lastRating || null) !== (card.sm2?.lastRating || null)) {
+                    analyticsTouched = true;
+                }
+                this.setCard(updated);
             } else {
-                const newIdx = this.state.cards.push(card) - 1;
-                if (card.notionId) cardIndexByNotionId.set(card.notionId, newIdx);
-                cardIndexById.set(card.id, newIdx);
+                if ((card.reviewHistory && card.reviewHistory.length > 0) || card.fsrs?.lastReview || card.sm2?.lastReview) {
+                    analyticsTouched = true;
+                }
+                this.setCard(card);
             }
         };
 
@@ -4775,19 +5266,30 @@ export const App = {
                 return activeDeckNotionIds.has(c.deckId);
             });
 
+            for (const c of chunkFiltered) {
+                if (isClozeParent(c)) {
+                    clozeParentsToReconcile.add(c.id);
+                } else if (isSubItem(c) && c.parentCard) {
+                    clozeParentsToReconcile.add(c.parentCard);
+                }
+            }
+
             // Upsert to memory and DB
             for (const c of chunkFiltered) upsertCard(c);
             if (chunkFiltered.length > 0) await Storage.putMany('cards', chunkFiltered);
 
             // Handle deletions in this chunk
             if (since && chunkDeleted.size > 0) {
+                if (chunkDeleted.size > 0) analyticsTouched = true;
                 for (const nid of chunkDeleted) {
-                    const local = this.state.cards.find(c => c.notionId === nid);
+                    const local = this.cardByNotionId(nid);
                     if (local) {
                         await Storage.delete('cards', local.id);
-                        // Remove from memory
-                        const idx = this.state.cards.findIndex(c => c.id === local.id);
-                        if (idx >= 0) this.state.cards.splice(idx, 1);
+                        this.removeCard(local.id);
+                        // Update cardDeckIndex
+                        if (this.state.cardDeckIndex?.has(local.deckId)) {
+                            this.state.cardDeckIndex.get(local.deckId).delete(local.id);
+                        }
                     }
                 }
             }
@@ -4810,64 +5312,60 @@ export const App = {
         }
 
         // Full Sync Sweep: Remove local cards that are no longer on the server
-        // (activeDeckNotionIds tracks decks we are syncing; orphans in these decks should be removed)
         if (!since && seenNotionIds) {
-            const orphans = this.state.cards.filter(c => {
-                // Only sweep cards that:
-                // 1. Have a Notion ID (are synced entities)
-                // 2. Belong to a deck we are actively syncing
-                // 3. Were NOT seen in the full sync response
-                // 4. Are not sub-items (managed by reconcileClozeSubItems)
-                return c.notionId &&
-                    !isSubItem(c) &&
-                    activeDeckNotionIds.has(c.deckId) &&
-                    !seenNotionIds.has(c.notionId);
-            });
+            const orphans = [];
+            // Optimize: Iterate only relevant decks instead of all cards
+            for (const deck of this.state.decks) {
+                if (deck.notionId && activeDeckNotionIds.has(deck.notionId)) {
+                    const deckCards = this.cardsForDeck(deck.id);
+                    for (const c of deckCards) {
+                        // Check for orphans: has Notion ID, not seen in sync, not sub-item
+                        if (c.notionId && !seenNotionIds.has(c.notionId) && !isSubItem(c)) {
+                            orphans.push(c);
+                        }
+                    }
+                }
+            }
 
             if (orphans.length > 0) {
                 console.log(`Sweeping ${orphans.length} orphaned cards`);
-                const orphanIds = new Set(orphans.map(c => c.id));
-
-                // Remove from storage
                 for (const c of orphans) {
                     await Storage.delete('cards', c.id);
+                    this.removeCard(c.id);
                 }
-
-                // Remove from memory
-                this.state.cards = this.state.cards.filter(c => !orphanIds.has(c.id));
+                analyticsTouched = true;
             }
         }
 
         // Handle Deck deletions/hiding (cleanup)
         if (since) {
             if (hiddenDeckNotionIds.size > 0) {
-                // Remove decks
                 const toHideDecks = this.state.decks.filter(d => d.notionId && hiddenDeckNotionIds.has(d.notionId));
-                for (const d of toHideDecks) await Storage.delete('decks', d.id);
-
-                // Remove cards
-                const hideDeckKeys = new Set([...toHideDecks.map(d => d.id), ...toHideDecks.map(d => d.notionId).filter(Boolean), ...hiddenDeckNotionIds]);
-                const cardsToHide = this.state.cards.filter(c => hideDeckKeys.has(c.deckId));
-                for (const c of cardsToHide) await Storage.delete('cards', c.id);
-
+                for (const d of toHideDecks) {
+                    await Storage.delete('decks', d.id);
+                    await Storage.deleteCardsByDeck(d.id);
+                    const deckCards = this.cardsForDeck(d.id);
+                    // Use a copy since removeCard modifies the index
+                    for (const c of [...deckCards]) this.removeCard(c.id);
+                }
                 this.state.decks = this.state.decks.filter(d => !hiddenDeckNotionIds.has(d.notionId));
-                this.state.cards = this.state.cards.filter(c => !hideDeckKeys.has(c.deckId));
             }
             if (deletedDeckNotionIds.size > 0) {
                 const toDeleteDecks = this.state.decks.filter(d => deletedDeckNotionIds.has(d.notionId));
-                for (const d of toDeleteDecks) await Storage.delete('decks', d.id);
-
-                const deletedDeckKeys = new Set([...toDeleteDecks.map(d => d.id), ...toDeleteDecks.map(d => d.notionId).filter(Boolean), ...deletedDeckNotionIds]);
-                const cardsToDelete = this.state.cards.filter(c => deletedDeckKeys.has(c.deckId));
-                for (const c of cardsToDelete) await Storage.delete('cards', c.id);
-
+                for (const d of toDeleteDecks) {
+                    await Storage.delete('decks', d.id);
+                    await Storage.deleteCardsByDeck(d.id);
+                    const deckCards = this.cardsForDeck(d.id);
+                    for (const c of [...deckCards]) this.removeCard(c.id);
+                }
                 this.state.decks = this.state.decks.filter(d => !deletedDeckNotionIds.has(d.notionId));
-                this.state.cards = this.state.cards.filter(c => !deletedDeckKeys.has(c.deckId));
             }
         }
 
         // Post-process
-        await this.reconcileClozeSubItems();
+        if (clozeParentsToReconcile.size > 0) {
+            await this.reconcileClozeSubItems(Array.from(clozeParentsToReconcile));
+        }
         if (decksToNormalize.size > 0) {
             let normalized = 0;
             for (const deckId of decksToNormalize) {
@@ -4878,10 +5376,9 @@ export const App = {
             }
         }
 
-        // Recalculate stats after pull to ensure UI shows correct counts
-        this.calculateDeckStats();
         this.renderDecks();
 
+        if (analyticsTouched) this.state.analyticsDirty = true;
         this.renderAll();
     },
 
@@ -4889,102 +5386,65 @@ export const App = {
     * Reconcile sub-items for all cloze parent cards.
     * Creates missing sub-items and suspends removed ones.
     */
-    async reconcileClozeSubItems() {
-        const clozeParents = this.state.cards.filter(c => isClozeParent(c));
-        if (clozeParents.length === 0) return; // Nothing to do
+    async reconcileClozeSubItems(parents = null) {
+        let clozeParents = [];
+        if (Array.isArray(parents)) {
+            for (const p of parents) {
+                const card = typeof p === 'string'
+                    ? (this.cardById(p) || this.cardByNotionId(p))
+                    : p;
+                if (isClozeParent(card)) clozeParents.push(card);
+            }
+        } else {
+            for (const card of this.state.cards.values()) {
+                if (isClozeParent(card)) clozeParents.push(card);
+            }
+        }
+        if (clozeParents.length === 0) return;
 
-        // Pre-compute map of existing sub-items by parent ID (O(N))
-        const subItemsByParent = new Map();
-        // Also map queued ops by parent
         const queuedSubItemsByParent = new Map();
-
-        // Helper to add to map
         const addToMap = (map, parentKey, item) => {
             if (!map.has(parentKey)) map.set(parentKey, []);
             map.get(parentKey).push(item);
         };
 
-        // Scan all cards once
-        for (const c of this.state.cards) {
-            if (c.parentCard) {
-                addToMap(subItemsByParent, c.parentCard, c);
+        const queuedSubItemsMap = new Map();
+        this.state.queue.forEach(op => {
+            if (op.type === 'card-upsert' && op.payload?.parentCard) {
+                queuedSubItemsMap.set(op.payload.id, op.payload);
             }
-        }
-
-        // Scan queue once
-        const queuedSubItems = this.state.queue
-            .filter(op => op.type === 'card-upsert' && op.payload?.parentCard)
-            .map(op => op.payload);
-
-        for (const q of queuedSubItems) {
-            if (q.parentCard) {
-                addToMap(queuedSubItemsByParent, q.parentCard, q);
-            }
-        }
-
-        // Track which parents we've processed this run to avoid duplicate work
-        const processedParentIds = new Set();
+        });
+        Array.from(queuedSubItemsMap.values()).forEach(c => {
+            if (c.parentCard) addToMap(queuedSubItemsByParent, c.parentCard, c);
+        });
 
         for (const parent of clozeParents) {
-            // Skip if already processed (shouldn't happen, but defensive)
-            const parentKey = parent.notionId || parent.id;
-            if (processedParentIds.has(parentKey)) continue;
-            processedParentIds.add(parentKey);
-
-            // Lookup existing subs (O(1))
-            // Check matches for both ID and NotionID keys
-            const subsById = subItemsByParent.get(parent.id) || [];
-            const subsByNotionId = parent.notionId ? (subItemsByParent.get(parent.notionId) || []) : [];
-            // Merge unique
-            const existingSubs = [...subsById];
-            for (const s of subsByNotionId) {
-                if (!existingSubs.includes(s)) existingSubs.push(s);
-            }
-
-            // Skip if parent hasn't been edited since last reconcile
-            // (unless it has no sub-items yet)
-            const lastReconciled = parent._lastClozeReconcile;
-            const lastEdited = parent.lastEditedAt || parent.createdAt;
-            const hasExistingSubs = existingSubs.length > 0;
-
-            if (lastReconciled && hasExistingSubs) {
-                // Compare timestamps - skip if not edited since last reconcile
-                if (lastEdited && new Date(lastEdited) <= new Date(lastReconciled)) {
-                    continue;
-                }
-            }
-
             const stableParentId = parent.notionId || parent.id;
+            const mappedSubs = (parent.subCards || []).map(id => {
+                return this.state.cards.get(id) || this.cardByNotionId(id);
+            }).filter(c => c && !c.suspended);
 
-            // Lookup queued subs (O(1))
-            const qSubsById = queuedSubItemsByParent.get(parent.id) || [];
-            const qSubsByNotionId = parent.notionId ? (queuedSubItemsByParent.get(parent.notionId) || []) : [];
-            const queuedSubs = [...qSubsById];
-            for (const s of qSubsByNotionId) {
-                if (!queuedSubs.includes(s)) queuedSubs.push(s);
+            const queuedSubs = (queuedSubItemsByParent.get(parent.id) || [])
+                .concat(queuedSubItemsByParent.get(parent.notionId) || []);
+
+            const currentSubs = [...mappedSubs];
+
+            for (const q of queuedSubs) {
+                const idx = currentSubs.findIndex(s => s.id === q.id || (s.notionId && s.notionId === q.notionId));
+                if (idx >= 0) currentSubs[idx] = q;
+                else currentSubs.push(q);
             }
 
-            // Combine existing and queued sub-items, avoiding duplicates by id
-            const existingIds = new Set(existingSubs.map(s => s.id));
-            const allSubs = [...existingSubs, ...queuedSubs.filter(s => !existingIds.has(s.id))];
+            const { toCreate, toKeep, toSuspend } = reconcileSubItems(parent, currentSubs);
 
-            const { toCreate, toSuspend } = reconcileSubItems(parent, allSubs);
-
-            // Skip if nothing to do for this parent
-            if (toCreate.length === 0 && toSuspend.length === 0) continue;
-
-            // Create missing sub-items (use notionId as parentCard when available for stability)
+            const createdSubs = [];
             for (const idx of toCreate) {
-                // Double-check this index doesn't already exist (defensive against race conditions)
-                const alreadyExists = allSubs.some(s => parseInt(s.clozeIndexes, 10) === idx && !s.suspended);
-                if (alreadyExists) continue;
-
                 const subItem = createSubItem(parent, idx, parent.deckId, () => this.makeTempId());
                 subItem.parentCard = stableParentId;
-                this.state.cards.push(subItem);
+                subItem.suspended = parent.suspended ? 1 : 0;
 
-                // Update local maps immediately
-                addToMap(subItemsByParent, subItem.parentCard, subItem);
+                this.setCard(subItem);
+                createdSubs.push(subItem);
 
                 if (!Array.isArray(parent.subCards)) parent.subCards = [];
                 if (!parent.subCards.includes(subItem.id)) {
@@ -4995,20 +5455,50 @@ export const App = {
                 this.queueOp({ type: 'card-upsert', payload: subItem });
             }
 
-            // Suspend sub-items for removed cloze indices
-            for (const subId of toSuspend) {
-                const sub = this.cardById(subId);
-                if (sub && !sub.suspended) {
-                    sub.suspended = true;
-                    sub.flag = 'Empty';
+            for (const subId of toKeep) {
+                const sub = currentSubs.find(s => s.id === subId);
+                if (!sub) continue;
+                const idx = parseInt(sub.clozeIndexes, 10);
+                if (!idx) continue;
+
+                const newName = transformClozeForSubItem(parent.name, idx);
+                const newBack = parent.back || '';
+                const newTags = parent.tags ? JSON.parse(JSON.stringify(parent.tags)) : [];
+                const tagsChanged = JSON.stringify(sub.tags || []) !== JSON.stringify(newTags);
+                const shouldUpdateNotes = !sub.notes;
+                const newNotes = shouldUpdateNotes ? parent.notes : sub.notes;
+                const notesChanged = sub.notes !== newNotes;
+                const contentChanged = sub.name !== newName || sub.back !== newBack || notesChanged || sub.deckId !== parent.deckId;
+
+                if (contentChanged || tagsChanged) {
+                    sub.name = newName;
+                    sub.back = newBack;
+                    if (shouldUpdateNotes) sub.notes = parent.notes;
+                    sub.tags = newTags;
+                    sub.deckId = parent.deckId;
+                    sub.updatedInApp = true;
+                    this.setCard(sub);
                     await Storage.put('cards', sub);
                     this.queueOp({ type: 'card-upsert', payload: sub });
                 }
             }
 
-            // Mark parent as reconciled (local-only field, not synced to Notion)
+            for (const subId of toSuspend) {
+                const sub = this.cardById(subId);
+                if (sub && !sub.suspended) {
+                    sub.suspended = 1;
+                    this.setCard(sub);
+                    await Storage.put('cards', sub);
+                    this.queueOp({ type: 'card-upsert', payload: sub });
+                }
+            }
+
+            if (parent.suspended) {
+                await this.suspendClozeSubs(parent, currentSubs.concat(createdSubs));
+            }
+
             parent._lastClozeReconcile = new Date().toISOString();
-            await Storage.put('cards', parent);
+            if (toCreate.length > 0) await Storage.put('cards', parent);
         }
     },
     /**
@@ -5023,24 +5513,25 @@ export const App = {
             c.parentCard === stableParentId ||
             (parent.notionId && c.parentCard === parent.notionId);
 
-        // Optimization: Use parent.subCards to find existing children (O(1)) instead of scanning library (O(N))
-        const existingSubs = [];
-        if (Array.isArray(parent.subCards)) {
-            for (const id of parent.subCards) {
-                const c = this.cardById(id);
-                if (c) existingSubs.push(c);
-            }
+        const subsById = await Storage.getSubItems(parent.id);
+        let subsByNotion = [];
+        if (parent.notionId) {
+            subsByNotion = await Storage.getSubItems(parent.notionId);
         }
 
+        // Merge and dedup
+        const subMap = new Map();
+        [...subsById, ...subsByNotion].forEach(s => subMap.set(s.id, s));
+        const existingSubs = Array.from(subMap.values());
+
         // We still check the queue for pending creations (small list, fast)
-        const queuedSubs = this.state.queue
+        const queuedSubs = Array.from(this.state.queue.values())
             .filter(op => op.type === 'card-upsert' && op.payload?.parentCard && matchesParent(op.payload))
             .map(op => op.payload);
 
         const existingIds = new Set(existingSubs.map(s => s.id));
         const allSubs = [...existingSubs, ...queuedSubs.filter(s => !existingIds.has(s.id))];
 
-        // Optimization: Map IDs to objects to avoid scanning the library again in the loop
         const subsMap = new Map(allSubs.map(s => [s.id, s]));
 
         const { toCreate, toKeep, toSuspend } = reconcileSubItems(parent, allSubs);
@@ -5060,25 +5551,36 @@ export const App = {
             if (!idx) continue;
 
             const newName = transformClozeForSubItem(parent.name, idx);
-            const newBack = transformClozeForSubItem(parent.back || '', idx);
+            const newBack = parent.back || '';
 
-            // Serialize tags for comparison (order-independent comparison would be better but exact match is fine for sync)
-            // We clone parent tags to ensure sub gets its own array instance
+            // Serialize tags for comparison
             const newTags = parent.tags ? JSON.parse(JSON.stringify(parent.tags)) : [];
             const tagsChanged = JSON.stringify(sub.tags || []) !== JSON.stringify(newTags);
-            const contentChanged = sub.name !== newName || sub.back !== newBack;
+
+            // Notes logic: Only overwrite if sub-card notes are empty
+            const shouldUpdateNotes = !sub.notes;
+            const newNotes = shouldUpdateNotes ? parent.notes : sub.notes;
+            const notesChanged = sub.notes !== newNotes;
+
+            const contentChanged = sub.name !== newName || sub.back !== newBack || notesChanged || sub.deckId !== parent.deckId;
 
             // Only save if content or tags actually changed
             if (contentChanged || tagsChanged) {
                 sub.name = newName;
                 sub.back = newBack;
+                if (shouldUpdateNotes) sub.notes = parent.notes;
                 sub.tags = newTags;
+                sub.deckId = parent.deckId; // Ensure deck matches parent
                 sub.updatedInApp = true;
+
+                // Save update
+                this.setCard(sub);
                 await Storage.put('cards', sub);
                 this.queueOp({ type: 'card-upsert', payload: sub });
             }
         }
 
+        const createdSubs = [];
         // Create missing sub-items
         for (const idx of toCreate) {
             const alreadyExists = allSubs.some(s => parseInt(s.clozeIndexes, 10) === idx && !s.suspended);
@@ -5086,7 +5588,11 @@ export const App = {
 
             const subItem = createSubItem(parent, idx, parent.deckId, () => this.makeTempId());
             subItem.parentCard = stableParentId;
-            this.state.cards.push(subItem);
+            subItem.suspended = parent.suspended ? 1 : 0;
+
+            // Update Map and notionId index
+            this.setCard(subItem);
+            createdSubs.push(subItem);
 
             if (!Array.isArray(parent.subCards)) parent.subCards = [];
             if (!parent.subCards.includes(subItem.id)) {
@@ -5099,89 +5605,117 @@ export const App = {
 
         // Suspend removed sub-items
         for (const subId of toSuspend) {
-            const sub = this.cardById(subId);
+            const sub = this.state.cards.get(subId);
             if (sub && !sub.suspended) {
-                sub.suspended = true;
-                sub.flag = 'Empty';
+                sub.suspended = 1;
+                this.setCard(sub);
                 await Storage.put('cards', sub);
                 this.queueOp({ type: 'card-upsert', payload: sub });
             }
         }
 
+        if (parent.suspended) {
+            await this.suspendClozeSubs(parent, allSubs.concat(createdSubs));
+        }
+
         parent._lastClozeReconcile = new Date().toISOString();
         await Storage.put('cards', parent);
+    },
+    async suspendClozeSubs(parent, subs = null) {
+        if (!isClozeParent(parent) || !parent.suspended) return 0;
+        const seen = new Set();
+        const candidates = [];
+
+        if (Array.isArray(subs)) {
+            for (const s of subs) {
+                if (!s?.id || seen.has(s.id)) continue;
+                seen.add(s.id);
+                candidates.push(s);
+            }
+        } else {
+            const subIds = parent.subCards || [];
+            for (const id of subIds) {
+                if (!id || seen.has(id)) continue;
+                seen.add(id);
+                const sub = this.cardById(id) || this.cardByNotionId(id);
+                if (sub) candidates.push(sub);
+            }
+        }
+
+        const updates = [];
+        for (const sub of candidates) {
+            if (sub.suspended) continue;
+            sub.suspended = 1;
+            sub.updatedInApp = true;
+            this.setCard(sub);
+            updates.push(sub);
+        }
+        if (updates.length === 0) return 0;
+
+        await Storage.putMany('cards', updates);
+        for (const sub of updates) {
+            this.queueOp({ type: 'card-upsert', payload: sub });
+        }
+        return updates.length;
+    },
+    queueEntityId(op) {
+        if (!op) return null;
+        return op.payload?.id || op.payload?.notionId || op.payload?.pageId || null;
+    },
+    queueKey(op) {
+        if (!op?.type) return null;
+        if (op.type === 'block-append' || op.type === 'dy-generation') {
+            if (op._queueKey) return op._queueKey;
+            const seed = op.id || (typeof crypto !== 'undefined' && crypto.randomUUID
+                ? crypto.randomUUID()
+                : `${Date.now()}_${Math.random().toString(16).slice(2)}`);
+            op._queueKey = `${op.type}:${seed}`;
+            return op._queueKey;
+        }
+        const entityId = this.queueEntityId(op);
+        if (!entityId) return null;
+        return `${op.type}:${entityId}`;
     },
     async pushQueue() {
         const { deckSource, cardSource } = this.state.settings;
 
-        // Deduplicate/Squash queue logic
-        // Rule 1: Later ops supersede earlier ops for the same ID and type.
-        // Rule 2: Deletes should cancel out previous Upserts for same ID (optimization).
-        // Rule 3: Decks must be processed before Cards (dependencies).
-
-        const rawQueue = this.state.queue.filter(op => op.type !== 'dy-generation');
-        const mergedMap = new Map();
-
-        // Pass 1: Deduplicate by ID+Type (Last write wins)
-        for (const op of rawQueue) {
-            const id = op.payload?.id || op.payload?.notionId;
-            const key = `${op.type}:${id}`;
-            mergedMap.set(key, op);
+        const rawQueue = [];
+        for (const op of this.state.queue.values()) {
+            if (op.type !== 'dy-generation') rawQueue.push(op);
         }
 
-        // Pass 2: Handle logical superseding (Delete cancels Upsert)
+        const buckets = {
+            'deck-upsert': [],
+            'deck-delete': [],
+            'card-upsert': [],
+            'card-delete': [],
+            'block-append': [],
+            other: []
+        };
         for (const op of rawQueue) {
-            const id = op.payload?.id || op.payload?.notionId;
-            const key = `${op.type}:${id}`;
-
-            if (op.type.endsWith('-delete')) {
-                // If there's a pending upsert for this ID, remove it (it's moot if we're deleting)
-                const upsertKey = key.replace('-delete', '-upsert');
-                if (mergedMap.has(upsertKey)) {
-                    mergedMap.delete(upsertKey);
-                }
-            }
+            const bucket = buckets[op.type] || buckets.other;
+            bucket.push(op);
         }
 
-        const squashedQueue = Array.from(mergedMap.values());
-
-        // Process deck operations before card operations to satisfy Notion relation dependencies.
-        const queue = squashedQueue
-            .map((op, idx) => ({ op, idx }))
-            .sort((a, b) => {
-                const prio = (t) => ({ 'deck-upsert': 1, 'deck-delete': 2, 'card-upsert': 3, 'card-delete': 4, 'block-append': 5 }[t] || 99);
-                const dp = prio(a.op.type) - prio(b.op.type);
-                return dp !== 0 ? dp : a.idx - b.idx; // stable within the same type
-            })
-            .map(x => x.op);
+        const queue = [
+            ...buckets['deck-upsert'],
+            ...buckets['deck-delete'],
+            ...buckets['card-upsert'],
+            ...buckets['card-delete'],
+            ...buckets['block-append'],
+            ...buckets.other
+        ];
 
         const hadQueue = queue.length > 0;
-
-        // Cleanup: Remove items that were optimized away (superseded/cancelled) from DB/memory immediately
-        // (These are safe to remove because they are logically replaced by the operations we are about to run)
-        const toProcessSet = new Set(queue);
-        const removedItems = rawQueue.filter(op => !toProcessSet.has(op));
-        for (const item of removedItems) {
-            if (item.id) await Storage.removeFromSyncQueue(item.id).catch(() => { });
-        }
-        this.state.queue = this.state.queue.filter(op => toProcessSet.has(op) || op.type === 'dy-generation');
 
         const failed = [];
         const succeeded = [];
 
-        // Optimization: Map ID -> Index for O(1) lookup during updates
-        const cardIndexMap = new Map();
-        this.state.cards.forEach((c, idx) => {
-            if (c.id) cardIndexMap.set(c.id, idx);
-            if (c.notionId) cardIndexMap.set(c.notionId, idx);
-        });
-
         for (let i = 0; i < queue.length; i++) {
             const op = queue[i];
-            if (i > 0) await sleep(350); // Pace requests to ~3 per second
-            // Explicitly resolve temporary parentCard IDs
+            if (i > 0) await sleep(350);
             if (op.type === 'card-upsert' && op.payload && op.payload.parentCard && this.isTempId(op.payload.parentCard)) {
-                const parent = this.cardById(op.payload.parentCard);
+                const parent = this.state.cards.get(op.payload.parentCard);
                 if (parent && parent.notionId) op.payload.parentCard = parent.notionId;
             }
 
@@ -5198,8 +5732,6 @@ export const App = {
                         if (oldId && oldId !== res.id) {
                             await this.applyIdMappings({ deckIdMap: { [oldId]: res.id } });
                         }
-                        // If the queue was rehydrated from storage, op.payload may not be the same object
-                        // instance as the deck in memory. Ensure we update in-memory state.
                         const deckIdx = this.state.decks.findIndex(d => d.id === op.payload.id);
                         if (deckIdx >= 0) {
                             this.state.decks[deckIdx] = { ...this.state.decks[deckIdx], ...op.payload };
@@ -5222,14 +5754,8 @@ export const App = {
                         op.payload.syncId = res.id;
                         if (oldId && oldId !== res.id) {
                             await this.applyIdMappings({ cardIdMap: { [oldId]: res.id } });
-                            // Update map with new ID
-                            const idx = cardIndexMap.get(oldId);
-                            if (idx !== undefined) {
-                                cardIndexMap.set(res.id, idx);
-                            }
                         }
                     }
-                    // After successful push, reset updatedInApp and update _notionRichText
                     op.payload.updatedInApp = false;
                     op.payload._notionRichText = {
                         name: props['Name'].title,
@@ -5239,16 +5765,11 @@ export const App = {
                     if (isClozeParent(op.payload)) {
                         op.payload._lastClozeReconcile = new Date().toISOString();
                     }
-                    // Update local state (O(1) lookup)
-                    let cardIdx = -1;
-                    if (op.payload.notionId && cardIndexMap.has(op.payload.notionId)) {
-                        cardIdx = cardIndexMap.get(op.payload.notionId);
-                    } else if (op.payload.id && cardIndexMap.has(op.payload.id)) {
-                        cardIdx = cardIndexMap.get(op.payload.id);
-                    }
-
-                    if (cardIdx >= 0) {
-                        this.state.cards[cardIdx] = { ...this.state.cards[cardIdx], ...op.payload };
+                    const existingCard = this.state.cards.get(op.payload.id) || this.cardByNotionId(op.payload.notionId);
+                    if (existingCard) {
+                        this.setCard({ ...existingCard, ...op.payload });
+                    } else {
+                        this.setCard(op.payload);
                     }
                     await Storage.put('cards', op.payload);
                 }
@@ -5257,9 +5778,9 @@ export const App = {
                     await API.appendBlocks(op.payload.pageId, op.payload.blocks);
                 }
 
-                // Success: remove from DB and memory
                 if (op.id) await Storage.removeFromSyncQueue(op.id).catch(() => { });
-                this.state.queue = this.state.queue.filter(x => x.id !== op.id);
+                const key = this.queueKey(op);
+                if (key) this.state.queue.delete(key);
                 succeeded.push(op);
             } catch (e) {
                 console.error(`Queue op failed: ${op.type}`, e);
@@ -5272,13 +5793,12 @@ export const App = {
                 op.retryCount = (op.retryCount || 0) + 1;
                 if (op.retryCount <= 5) {
                     failed.push(op);
-                    // Update retry count in DB
                     if (op.id) await Storage.put('syncQueue', op).catch(() => { });
                 } else {
-                    // Give up on this item after 5 retries
                     toast(`Sync dropped item after 5 attempts: ${e.message}`);
                     if (op.id) await Storage.removeFromSyncQueue(op.id).catch(() => { });
-                    this.state.queue = this.state.queue.filter(x => x.id !== op.id);
+                    const key = this.queueKey(op);
+                    if (key) this.state.queue.delete(key);
                 }
             }
         }
@@ -5294,50 +5814,55 @@ export const App = {
             Storage.setMeta('queueLastChangedAt', this.state.queueLastChangedAt).catch(() => { });
         }
 
-        el('#queueCount').textContent = String(this.state.queue.length);
+        el('#queueCount').textContent = String(this.state.queue.size);
         this.renderConnection();
         return { success: failed.length === 0, failedCount: failed.length };
     },
     async queueOp(op, reason = 'generic') {
         op.reason = reason;
 
-        // Deduplicate: remove existing operation for same entity + type
-        // Keep only the latest operation for each card/deck
-        const entityId = op.payload?.id || op.payload?.notionId;
-        if (entityId && (op.type === 'card-upsert' || op.type === 'deck-upsert')) {
-            const superseded = this.state.queue.filter(existing => {
-                const existingId = existing.payload?.id || existing.payload?.notionId;
-                return (existing.type === op.type && existingId === entityId);
-            });
-            // Remove from DB to prevent orphans
-            for (const item of superseded) {
-                if (item.id) await Storage.removeFromSyncQueue(item.id).catch(() => { });
+        const key = this.queueKey(op);
+        if (!key) return;
+
+        const entityId = this.queueEntityId(op);
+        if (entityId && (op.type.endsWith('-delete') || op.type.endsWith('-upsert'))) {
+            const counterpartType = op.type.endsWith('-delete')
+                ? op.type.replace('-delete', '-upsert')
+                : op.type.replace('-upsert', '-delete');
+            const counterpartKey = `${counterpartType}:${entityId}`;
+            if (this.state.queue.has(counterpartKey)) {
+                const existing = this.state.queue.get(counterpartKey);
+                if (existing.id) await Storage.removeFromSyncQueue(existing.id).catch(() => { });
+                this.state.queue.delete(counterpartKey);
             }
-            this.state.queue = this.state.queue.filter(x => !superseded.includes(x));
         }
 
-        // Optimization: Timestamp for dirty checking
+        if (this.state.queue.has(key)) {
+            const existing = this.state.queue.get(key);
+            if (existing.id) await Storage.removeFromSyncQueue(existing.id).catch(() => { });
+            this.state.queue.delete(key);
+        }
+
         if (op.type === 'card-upsert' && op.payload) {
             op.payload._lastUpdated = Date.now();
         }
 
-        // Persist to syncQueue store
         const dbKey = await Storage.addToSyncQueue(op);
         op.id = dbKey; // Assign DB key to in-memory obj
-        this.state.queue.push(op);
+        this.state.queue.set(key, op);
 
-        el('#queueCount').textContent = String(this.state.queue.length);
+        el('#queueCount').textContent = String(this.state.queue.size);
         this.state.queueLastChangedAt = new Date().toISOString();
         Storage.setMeta('queueLastChangedAt', this.state.queueLastChangedAt).catch(e => console.debug('Storage setMeta queueLastChangedAt failed:', e));
-        if (!navigator.onLine && this.state.queue.length >= SYNC_QUEUE_WARN_THRESHOLD) {
+
+        if (!navigator.onLine && this.state.queue.size >= SYNC_QUEUE_WARN_THRESHOLD) {
             const now = Date.now();
             const lastWarn = this.state.lastQueueWarnAt || 0;
             if (now - lastWarn > SYNC_QUEUE_WARN_COOLDOWN_MS) {
-                toastLong(`Sync queue is large (${this.state.queue.length}). Go online soon to avoid storage limits.`);
+                toastLong(`Sync queue is large (${this.state.queue.size}). Go online soon to avoid storage limits.`);
                 this.state.lastQueueWarnAt = now;
             }
         }
-        this.calculateDeckStats(); // Update stats
         this.updateSyncButtonState();
         this.renderConnection();
         const delay = (reason === 'rating') ? (5 * 60 * 1000) : 1500;
@@ -5346,7 +5871,7 @@ export const App = {
     updateSyncButtonState() {
         const btn = el('#syncNowBtn');
         if (!btn) return;
-        const pendingOffline = this.state.queue.length > 0 && !navigator.onLine;
+        const pendingOffline = this.state.queue.size > 0 && !navigator.onLine;
         const offline = !navigator.onLine;
         btn.disabled = pendingOffline || this.state.syncing || offline;
         btn.classList.toggle('opacity-70', btn.disabled);
@@ -5401,8 +5926,11 @@ export const App = {
     async normalizeDyContextRootsForDeck(deckId) {
         if (!deckId) return 0;
         const updates = [];
-        for (const card of (this.state.cards || [])) {
-            if (card.deckId !== deckId) continue;
+        const cardIds = this.state.cardDeckIndex?.get(deckId);
+        if (!cardIds || cardIds.size === 0) return 0;
+        for (const cardId of cardIds) {
+            const card = this.state.cards.get(cardId);
+            if (!card) continue;
             if (isSubItem(card)) continue;
             if (card.dyRootCard || card.dyPrevCard) continue;
             card.dyRootCard = card.id;
@@ -5434,46 +5962,50 @@ export const App = {
     },
     async enqueueDyContextJob(job) {
         if (!job?.prevId) return;
+        const deck = this.deckById(job.deckId);
+        if (!deck || !deck.dynamicContext) return;
+        const dyConfig = this.getDyContextConfig(deck);
+        if (!dyConfig) return;
         this.queueOp({ type: 'dy-generation', payload: job }, 'dy-context');
     },
     async processDyContextQueue() {
         if (this.state.dyContextProcessing) return;
         if (!navigator.onLine) return;
 
-        const queue = this.state.queue.filter(op => op.type === 'dy-generation');
+        const queue = Array.from(this.state.queue.values()).filter(op => op.type === 'dy-generation');
         if (queue.length === 0) return;
 
         this.state.dyContextProcessing = true;
 
-        // We process sequentially to avoid overloading AI/UI
         try {
             for (const op of queue) {
                 const job = op.payload;
                 const deck = this.deckById(job.deckId);
                 const prevCard = this.cardById(job.prevId);
+                const key = this.queueKey(op);
 
-                // If invalid context, remove job
                 if (!deck || !prevCard || !deck.dynamicContext) {
                     await Storage.removeFromSyncQueue(op.id).catch(() => { });
-                    this.state.queue = this.state.queue.filter(x => x.id !== op.id);
+                    if (key) this.state.queue.delete(key);
                     continue;
                 }
 
                 const dyConfig = this.getDyContextConfig(deck);
-                if (!dyConfig) { continue; } // Keep in queue if config missing (might add later)
+                if (!dyConfig) {
+                    await Storage.removeFromSyncQueue(op.id).catch(() => { });
+                    if (key) this.state.queue.delete(key);
+                    continue;
+                }
 
                 if (prevCard.dyNextCard) {
-                    // Already has next card, remove job
                     await Storage.removeFromSyncQueue(op.id).catch(() => { });
-                    this.state.queue = this.state.queue.filter(x => x.id !== op.id);
+                    if (key) this.state.queue.delete(key);
                     continue;
                 }
 
                 if (prevCard.dyPrevCard) {
                     const prevInChain = this.cardById(prevCard.dyPrevCard);
                     if (!this.isDyContextGoodEasy(prevInChain, deck)) {
-                        // Chain broken, maybe retry later? Or remove? 
-                        // Logic says keep in queue until chain is good.
                         continue;
                     }
                 }
@@ -5484,9 +6016,8 @@ export const App = {
                 const rootCard = this.cardById(job.rootId) || prevCard;
                 try {
                     await this.generateDyContextVariant(prevCard, rootCard, deck, dyConfig, { includeSubCards: !!job.includeSubCards });
-                    // Success: remove
                     await Storage.removeFromSyncQueue(op.id).catch(() => { });
-                    this.state.queue = this.state.queue.filter(x => x.id !== op.id);
+                    if (key) this.state.queue.delete(key);
                 } catch (e) {
                     const retryCount = (op.retryCount || 0) + 1;
                     if (retryCount <= 5) {
@@ -5495,12 +6026,14 @@ export const App = {
                     } else {
                         toast(`DyContext job dropped: ${e?.message || 'error'}`);
                         await Storage.removeFromSyncQueue(op.id).catch(() => { });
-                        this.state.queue = this.state.queue.filter(x => x.id !== op.id);
+                        if (key) this.state.queue.delete(key);
                     }
                 }
             }
         } finally {
             this.state.dyContextProcessing = false;
+            el('#queueCount').textContent = String(this.state.queue.size);
+            this.renderConnection();
         }
     },
     getLastRatingFor(card, deck) {
@@ -5517,18 +6050,25 @@ export const App = {
     },
     allClozeSubsGoodEasy(parent, deck) {
         if (!parent) return false;
-        const parentKey = parent.notionId || parent.id;
-        const matchesParent = (c) =>
-            c.parentCard === parent.id ||
-            c.parentCard === parentKey ||
-            (parent.notionId && c.parentCard === parent.notionId);
-        const subs = (this.state.cards || []).filter(matchesParent);
-        if (subs.length === 0) return false;
-        return subs.every(s => {
-            if (s.suspended) return false;
-            const r = this.getLastRatingFor(s, deck);
-            return r === 'good' || r === 'easy';
-        });
+
+        const subIds = parent.subCards || [];
+
+        if (subIds.length === 0) return false;
+
+        let allGood = true;
+        let activeCount = 0;
+        for (const subId of subIds) {
+            const sub = this.state.cards.get(subId);
+            if (!sub) continue;
+            if (sub.suspended) continue;
+            activeCount += 1;
+            const r = this.getLastRatingFor(sub, deck);
+            if (r !== 'good' && r !== 'easy') {
+                allGood = false;
+                break;
+            }
+        }
+        return allGood && activeCount > 0;
     },
     buildDyContextPrompt(promptTemplate, rootCard, prevCard) {
         const root = this.getDyContextCardContent(rootCard);
@@ -5543,27 +6083,25 @@ export const App = {
             card_type: prevCard?.type || ''
         });
     },
-    async retireDyContextVariants(rootId, keepIds = [], includeSubCards = false) {
-        if (!rootId) return;
-        const keep = new Set(keepIds || []);
-        const candidates = (this.state.cards || []).filter(c => c.id === rootId || c.dyRootCard === rootId);
-        for (const c of candidates) {
-            if (keep.has(c.id)) continue;
-            if (!c.suspended) {
-                c.suspended = true;
-                await Storage.put('cards', c);
-                this.queueOp({ type: 'card-upsert', payload: c });
-            }
-            if (includeSubCards && isClozeParent(c)) {
-                const parentKey = c.notionId || c.id;
-                const matchesParent = (sc) =>
-                    sc.parentCard === c.id ||
-                    sc.parentCard === parentKey ||
-                    (c.notionId && sc.parentCard === c.notionId);
-                const subs = (this.state.cards || []).filter(matchesParent);
-                for (const sub of subs) {
-                    if (!sub.suspended) {
-                        sub.suspended = true;
+    async retirePreviousVariant(currentCard, includeSubCards = false) {
+        if (!currentCard || !currentCard.dyPrevCard) return;
+
+        const prevId = currentCard.dyPrevCard;
+        const prevCard = this.state.cards.get(prevId);
+
+        if (prevCard && !prevCard.suspended) {
+            prevCard.suspended = 1;
+            this.setCard(prevCard);
+            await Storage.put('cards', prevCard);
+            this.queueOp({ type: 'card-upsert', payload: prevCard });
+
+            if (includeSubCards && isClozeParent(prevCard)) {
+                const subIds = prevCard.subCards || [];
+                for (const subId of subIds) {
+                    const sub = this.state.cards.get(subId);
+                    if (sub && !sub.suspended) {
+                        sub.suspended = 1;
+                        this.setCard(sub);
                         await Storage.put('cards', sub);
                         this.queueOp({ type: 'card-upsert', payload: sub });
                     }
@@ -5595,18 +6133,22 @@ export const App = {
         newCard.dyRootCard = rootCard?.id || prevCard.dyRootCard || prevCard.id;
         newCard.dyPrevCard = prevCard.id;
 
-        this.state.cards.push(newCard);
+        this.setCard(newCard);
         await Storage.put('cards', newCard);
         this.queueOp({ type: 'card-upsert', payload: newCard });
 
+        // Link previous card to new one
         prevCard.dyNextCard = newCard.id;
         await Storage.put('cards', prevCard);
+        this.queueOp({ type: 'card-upsert', payload: prevCard });
 
-        if ((newCard.type || '').toLowerCase() === 'cloze') {
+        await this.retirePreviousVariant(prevCard, includeSubCards);
+
+        if (includeSubCards && isClozeParent(newCard)) {
             await this.reconcileSingleParent(newCard);
         }
 
-        await this.retireDyContextVariants(newCard.dyRootCard, [prevCard.id, newCard.id], includeSubCards);
+        toast('Generated new DyContext variant');
     },
     async maybeGenerateDyContext(card, ratingKey) {
         if (!card || !ratingKey) return;
@@ -5632,7 +6174,6 @@ export const App = {
             includeSubCards = true;
         }
 
-        // Optimization: Check if variant exists BEFORE checking sub-item ratings
         if (prevCard.dyNextCard) return;
 
         if (includeSubCards) {
@@ -5679,7 +6220,7 @@ export const App = {
 
         try {
             // Always push first to save local progress
-            if (this.state.queue.length > 0) {
+            if (this.state.queue.size > 0) {
                 await this.pushQueue();
                 this.state.lastPush = new Date().toISOString();
                 await Storage.put('meta', { key: 'lastPush', value: this.state.lastPush });
@@ -5699,7 +6240,7 @@ export const App = {
         } finally {
             this.state.syncing = false;
             this.setRefreshDecksSpinning(false);
-            if (this.state.queue.length > 0) {
+            if (this.state.queue.size > 0) {
                 this.requestAutoSyncSoon(MIN_PUSH_INTERVAL_MS + 100);
             }
         }
@@ -5741,7 +6282,7 @@ export const App = {
         const wantsPull = !this.state.session && (now - lastPullMs > MIN_PULL_INTERVAL_MS);
         // Never pull while there are pending local mutations; a pull can overwrite local edits or
         // break deck/card references before the queue finishes pushing.
-        const wantsPush = this.state.queue.length > 0;
+        const wantsPush = this.state.queue.size > 0;
         const canPushNow = wantsPush && (this.state.lastPush == null || (now - lastPushMs > MIN_PUSH_INTERVAL_MS));
         if (!wantsPull && !wantsPush) return;
         // If we have pending work but are within the push cooldown, schedule another tick close to the allowed time.
@@ -5763,7 +6304,7 @@ export const App = {
                 didWork = true;
             }
             // Only pull when the queue is empty after any push attempt.
-            if (wantsPull && this.state.queue.length === 0) {
+            if (wantsPull && this.state.queue.size === 0) {
                 await this.pullFromNotion();
                 this.state.lastPull = new Date().toISOString();
                 await Storage.put('meta', { key: 'lastPull', value: this.state.lastPull });
@@ -5780,7 +6321,7 @@ export const App = {
             this.state.syncing = false;
             this.updateSyncButtonState();
             // If more work was added to the queue during sync, schedule another tick.
-            if (this.state.queue.length > 0) {
+            if (this.state.queue.size > 0) {
                 this.requestAutoSyncSoon(MIN_PUSH_INTERVAL_MS + 100);
             }
         }
@@ -5881,7 +6422,7 @@ export const App = {
         popover.style.left = `${left}px`;
         popover.style.top = `${top}px`;
 
-        lucide.createIcons({ nodes: [popover] });
+        createIconsInScope(popover);
 
         // Close handlers
         const closeOnClickOutside = (e) => {
@@ -5950,12 +6491,9 @@ export const App = {
         const dueFallback = alg === 'FSRS' ? card.sm2?.dueDate : card.fsrs?.dueDate;
         const due = duePrimary || dueFallback;
         if (!due) return true;
-
-        const now = new Date();
         const dueDate = new Date(due);
-        const studyDayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 4, 0, 0, 0);
-        const effectiveNow = now < studyDayStart ? studyDayStart : now;
-        return dueDate <= effectiveNow;
+        if (!Number.isFinite(dueDate.getTime())) return true;
+        return dueDate.getTime() <= this.getEffectiveNowMs();
     },
     pickCard() {
         // If session is active, return the session's current card
@@ -6128,7 +6666,7 @@ export const App = {
             history: [...card.reviewHistory],
             srsState: JSON.parse(JSON.stringify(card.srsState || {})),
             leech: !!card.leech,
-            suspended: !!card.suspended,
+            suspended: card.suspended ? 1 : 0,
             rating: ratingLabel,
             sessionIndex: this.state.session ? this.state.session.currentIndex : null,
             ratingCounts: this.state.session?.ratingCounts ? { ...this.state.session.ratingCounts } : null
@@ -6139,46 +6677,20 @@ export const App = {
         try {
 
             if (previewMode) {
-
-                // Track rating in session statistics (only after confirming we will advance)
-
                 if (this.state.session && this.state.session.ratingCounts) {
-
                     this.state.session.ratingCounts[ratingLabel] = (this.state.session.ratingCounts[ratingLabel] || 0) + 1;
-
                 }
-
-
-
-                // If marks/flags were changed (deferred), save them now even in preview mode.
-
-                // We do NOT change scheduling/history, just the card properties.
-
                 if (card._pendingSave) {
-
                     await Storage.put('cards', card);
-
                     delete card._pendingSave;
-
                     this.queueOp({ type: 'card-upsert', payload: card }, 'rating');
-
                 }
-
-
-
                 this.state.lastRating = null;
-
                 this.setRatingEnabled(false);
-
                 this.advanceSession(false);
-
                 toast('Preview mode: scheduling unchanged');
-
                 return;
-
             }
-
-
 
             const deck = this.deckById(card.deckId);
 
@@ -6252,7 +6764,7 @@ export const App = {
 
                 card.leech = true;
 
-                card.suspended = true;
+                card.suspended = 1;
 
                 toast(`Leech detected (lapses: ${learning.lapses}) — auto-suspended`);
 
@@ -6264,31 +6776,21 @@ export const App = {
 
             const nowMs = now.getTime();
 
-            const startMs = this.state.answerRevealedAt || this.state.cardShownAt || nowMs;
+            const startMs = this.state.cardShownAt || nowMs;
 
             let durationMs = Math.max(0, nowMs - startMs);
 
             durationMs = Math.min(durationMs, 10 * 60 * 1000);
 
             card.reviewHistory.push({ rating: ratingKey, at: now.toISOString(), ms: durationMs });
-
-
-
-            // Persist to storage first - if this fails, we haven't modified session state yet
-
-
-
             await Storage.put('cards', card);
 
+            delete card._pendingSave;
+            this.setCard(card);
 
-
-            delete card._pendingSave; // Clear any pending flag since we are saving now
-
-
-
+            await this.suspendClozeSubs(card);
             this.queueOp({ type: 'card-upsert', payload: card }, 'rating');
-
-            // DyContext generation (non-blocking)
+            this.state.analyticsDirty = true;
             this.maybeGenerateDyContext(card, ratingKey).catch(e => {
                 console.error('DyContext generation error:', e);
             });
@@ -6297,9 +6799,7 @@ export const App = {
                 this.state.session.ratingCounts[ratingLabel] = (this.state.session.ratingCounts[ratingLabel] || 0) + 1;
             }
 
-            // Show undo toast
             this.showUndoToast(previousState);
-            // If session is active, advance the session; otherwise just render next card
             if (this.state.session) {
                 this.advanceSession(false);
             } else {
@@ -6312,7 +6812,7 @@ export const App = {
             card.reviewHistory = previousState.history;
             card.srsState = previousState.srsState;
             card.leech = previousState.leech;
-            card.suspended = previousState.suspended;
+            card.suspended = previousState.suspended ? 1 : 0;
             toast('Rating failed, please try again');
         }
     },
@@ -6366,16 +6866,14 @@ export const App = {
         card.reviewHistory = prev.history;
         card.srsState = prev.srsState || parseSrsState(null);
         card.leech = !!prev.leech;
-        card.suspended = !!prev.suspended;
+        card.suspended = prev.suspended ? 1 : 0;
         // Save restored card
         await Storage.put('cards', card);
         // Ensure undo is propagated to Notion on next sync.
         this.queueOp({ type: 'card-upsert', payload: card });
-        // Also update in memory
-        const cardIndex = this.state.cards.findIndex(c => c.id === card.id);
-        if (cardIndex !== -1) {
-            this.state.cards[cardIndex] = card;
-        }
+        // Also update in memory (with notionId index)
+        this.setCard(card);
+        this.state.analyticsDirty = true;
         // Restore session state if applicable
         if (this.state.session && prev.sessionIndex !== null) {
             this.state.session.currentIndex = prev.sessionIndex;
@@ -6405,13 +6903,355 @@ export const App = {
         this.renderStudy();
     },
     cardsForDeck(deckId) {
-        return this.state.cards.filter(c => c.deckId === deckId);
+        const cardIds = this.state.cardDeckIndex.get(deckId);
+        if (!cardIds) return [];
+
+        const results = [];
+        for (const id of cardIds) {
+            const c = this.state.cards.get(id);
+            if (c) results.push(c);
+        }
+        return results;
     },
     deckById(id) {
         return this.state.decks.find(d => d.id === id);
     },
     cardById(id) {
-        return this.state.cards.find(c => c.id === id);
+        if (!id) return null;
+        return this.state.cards.get(id) || null;
+    },
+    cardByNotionId(notionId) {
+        if (!notionId) return null;
+        const cardId = this.state.cardNotionIdIndex.get(notionId);
+        return cardId ? this.state.cards.get(cardId) : null;
+    },
+    getTagsKey(tags) {
+        if (!Array.isArray(tags) || tags.length === 0) return '';
+        return tags
+            .map(t => `${t?.name || ''}:${t?.color || ''}`)
+            .sort()
+            .join('|');
+    },
+    getEffectiveNowMs(now = new Date()) {
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 4, 0, 0, 0);
+        const effectiveNow = now < start ? start : now;
+        return effectiveNow.getTime();
+    },
+    getCardDueTs(card, deck = null) {
+        if (!card) return null;
+        const learning = parseSrsState(card.srsState || null).learning;
+        if (learning && ['learning', 'relearning'].includes(learning.state) && learning.due) {
+            const d = new Date(learning.due);
+            if (Number.isFinite(d.getTime())) return d.getTime();
+        }
+        const alg = deck?.algorithm || 'SM-2';
+        const duePrimary = alg === 'FSRS' ? card.fsrs?.dueDate : card.sm2?.dueDate;
+        const dueFallback = alg === 'FSRS' ? card.sm2?.dueDate : card.fsrs?.dueDate;
+        const due = duePrimary || dueFallback;
+        if (!due) return Number.NEGATIVE_INFINITY;
+        const dueDate = new Date(due);
+        if (!Number.isFinite(dueDate.getTime())) return Number.NEGATIVE_INFINITY;
+        return dueDate.getTime();
+    },
+    isValidDueTs(dueTs) {
+        return dueTs !== null && dueTs !== undefined && !Number.isNaN(dueTs);
+    },
+    normalizeTagNames(tags) {
+        if (!Array.isArray(tags) || tags.length === 0) return [];
+        const out = new Set();
+        for (const t of tags) {
+            const name = (t?.name || '').trim();
+            if (name) out.add(name);
+        }
+        return Array.from(out);
+    },
+    addToIndex(map, key, cardId) {
+        if (!key || !cardId) return;
+        let set = map.get(key);
+        if (!set) {
+            set = new Set();
+            map.set(key, set);
+        }
+        set.add(cardId);
+    },
+    removeFromIndex(map, key, cardId) {
+        if (!key || !cardId) return;
+        const set = map.get(key);
+        if (!set) return;
+        set.delete(cardId);
+        if (set.size === 0) map.delete(key);
+    },
+    updateTagIndex(prevTags, nextTags, cardId) {
+        const prevSet = new Set(prevTags || []);
+        const nextSet = new Set(nextTags || []);
+        for (const tag of prevSet) {
+            if (!nextSet.has(tag)) this.removeFromIndex(this.state.tagIndex, tag, cardId);
+        }
+        for (const tag of nextSet) {
+            if (!prevSet.has(tag)) this.addToIndex(this.state.tagIndex, tag, cardId);
+        }
+    },
+    updateFlagIndex(prevFlag, nextFlag, cardId) {
+        const prev = (prevFlag || '').trim();
+        const next = (nextFlag || '').trim();
+        if (prev && prev !== next) this.removeFromIndex(this.state.flagIndex, prev, cardId);
+        if (next && prev !== next) this.addToIndex(this.state.flagIndex, next, cardId);
+    },
+    updateMarkedIndex(prevMarked, nextMarked, cardId) {
+        if (prevMarked && !nextMarked) this.state.markedIndex.delete(cardId);
+        if (!prevMarked && nextMarked) this.state.markedIndex.add(cardId);
+    },
+    updateRatingIndex(prevRating, nextRating, cardId) {
+        const prev = normalizeRating(prevRating);
+        const next = normalizeRating(nextRating);
+        if (prev && prev !== next) this.removeFromIndex(this.state.ratingIndex, prev, cardId);
+        if (next && prev !== next) this.addToIndex(this.state.ratingIndex, next, cardId);
+    },
+    updateCreatedDateIndex(prevDateKey, nextDateKey, cardId) {
+        const prev = (prevDateKey || '').trim();
+        const next = (nextDateKey || '').trim();
+        if (prev && prev !== next) this.removeFromIndex(this.state.createdDateIndex, prev, cardId);
+        if (next && prev !== next) this.addToIndex(this.state.createdDateIndex, next, cardId);
+    },
+    adjustDeckTotal(deckId, delta) {
+        if (!deckId) return;
+        const stats = this.state.deckStats.get(deckId) || { total: 0 };
+        stats.total = Math.max(0, (stats.total || 0) + delta);
+        this.state.deckStats.set(deckId, stats);
+    },
+    insertDueIndex(deckId, cardId, dueTs) {
+        if (!deckId || !cardId || !this.isValidDueTs(dueTs)) return;
+        let arr = this.state.dueIndex.get(deckId);
+        if (!arr) {
+            arr = [];
+            this.state.dueIndex.set(deckId, arr);
+        }
+        let lo = 0;
+        let hi = arr.length;
+        while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (arr[mid].due <= dueTs) lo = mid + 1;
+            else hi = mid;
+        }
+        arr.splice(lo, 0, { due: dueTs, id: cardId });
+    },
+    removeDueIndex(deckId, cardId, dueTs) {
+        if (!deckId || !cardId || !this.isValidDueTs(dueTs)) return;
+        const arr = this.state.dueIndex.get(deckId);
+        if (!arr || arr.length === 0) return;
+        let lo = 0;
+        let hi = arr.length;
+        while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (arr[mid].due < dueTs) lo = mid + 1;
+            else hi = mid;
+        }
+        for (let i = lo; i < arr.length && arr[i].due === dueTs; i++) {
+            if (arr[i].id === cardId) {
+                arr.splice(i, 1);
+                break;
+            }
+        }
+        if (arr.length === 0) this.state.dueIndex.delete(deckId);
+    },
+    getDueCountForDeck(deckId, nowMs = null) {
+        const arr = this.state.dueIndex.get(deckId);
+        if (!arr || arr.length === 0) return 0;
+        const now = Number.isFinite(nowMs) ? nowMs : this.getEffectiveNowMs();
+        let lo = 0;
+        let hi = arr.length;
+        while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (arr[mid].due <= now) lo = mid + 1;
+            else hi = mid;
+        }
+        return lo;
+    },
+    buildCardMeta(card) {
+        const deckId = card?.deckId || '';
+        const deck = deckId ? this.deckById(deckId) : null;
+        const schedulable = isSchedulable(card);
+        const suspended = card?.suspended ? 1 : 0;
+        const leech = !!card?.leech;
+        const totalEligible = !!deckId && schedulable && !suspended;
+        const dueEligible = totalEligible && !leech;
+        const dueTs = dueEligible ? this.getCardDueTs(card, deck) : null;
+        const tagsKey = this.getTagsKey(card?.tags);
+        const tagsList = this.normalizeTagNames(card?.tags);
+        const lastRating = normalizeRating(this.getLastRatingFor(card, deck) || '') || '';
+        const flag = (card?.flag || '').trim();
+        const marked = !!card?.marked;
+        const createdDateKey = card?.createdAt ? this.formatDateKey(card.createdAt) : '';
+        const versionSig = [
+            deckId,
+            schedulable ? 1 : 0,
+            suspended,
+            leech ? 1 : 0,
+            flag,
+            marked ? 1 : 0,
+            tagsKey,
+            lastRating,
+            createdDateKey,
+            dueEligible ? String(dueTs ?? '') : ''
+        ].join('|');
+
+        const learning = parseSrsState(card?.srsState || null).learning;
+        const history = Array.isArray(card?.reviewHistory) ? card.reviewHistory : [];
+        const lastEntry = history.length > 0 ? history[history.length - 1] : null;
+        const lastEntrySig = lastEntry ? `${lastEntry.rating || ''}:${lastEntry.at || ''}:${Number.isFinite(lastEntry.ms) ? lastEntry.ms : 0}` : '';
+        const lastReview = card?.fsrs?.lastReview || card?.sm2?.lastReview || '';
+        const analyticsSig = [
+            deckId,
+            suspended,
+            leech ? 1 : 0,
+            dueEligible ? String(dueTs ?? '') : '',
+            lastReview,
+            lastRating,
+            card?.sm2?.repetitions ?? '',
+            card?.sm2?.easeFactor ?? '',
+            card?.fsrs?.difficulty ?? '',
+            learning?.state || '',
+            Number.isFinite(learning?.step) ? learning.step : '',
+            learning?.due || '',
+            Number.isFinite(learning?.lapses) ? learning.lapses : '',
+            history.length,
+            lastEntrySig
+        ].join('|');
+
+        return { deckId, totalEligible, dueEligible, dueTs, versionSig, analyticsSig, tagsList, flag, marked, lastRating, createdDateKey };
+    },
+    updateCardIndices(card) {
+        if (!card?.id) return;
+        const prev = this.state.cardMeta.get(card.id);
+        if (prev?.deckId) {
+            if (prev.totalEligible) this.adjustDeckTotal(prev.deckId, -1);
+            if (prev.dueEligible && this.isValidDueTs(prev.dueTs)) {
+                this.removeDueIndex(prev.deckId, card.id, prev.dueTs);
+            }
+        }
+        const next = this.buildCardMeta(card);
+        if (next.deckId) {
+            if (next.totalEligible) this.adjustDeckTotal(next.deckId, 1);
+            if (next.dueEligible && this.isValidDueTs(next.dueTs)) {
+                this.insertDueIndex(next.deckId, card.id, next.dueTs);
+            }
+        }
+        this.updateTagIndex(prev?.tagsList, next.tagsList, card.id);
+        this.updateFlagIndex(prev?.flag, next.flag, card.id);
+        this.updateMarkedIndex(!!prev?.marked, !!next.marked, card.id);
+        this.updateRatingIndex(prev?.lastRating, next.lastRating, card.id);
+        this.updateCreatedDateIndex(prev?.createdDateKey, next.createdDateKey, card.id);
+        this.state.cardMeta.set(card.id, next);
+        if (!prev || prev.versionSig !== next.versionSig) {
+            this.state.cardsVersion = (this.state.cardsVersion || 0) + 1;
+        }
+        if (!prev || prev.analyticsSig !== next.analyticsSig) {
+            this.state.analyticsDirty = true;
+        }
+    },
+    removeCardMeta(cardId) {
+        const prev = this.state.cardMeta.get(cardId);
+        if (!prev) return;
+        if (prev.deckId) {
+            if (prev.totalEligible) this.adjustDeckTotal(prev.deckId, -1);
+            if (prev.dueEligible && this.isValidDueTs(prev.dueTs)) {
+                this.removeDueIndex(prev.deckId, cardId, prev.dueTs);
+            }
+        }
+        this.updateTagIndex(prev.tagsList, [], cardId);
+        this.updateFlagIndex(prev.flag, '', cardId);
+        this.updateMarkedIndex(!!prev.marked, false, cardId);
+        this.updateRatingIndex(prev.lastRating, '', cardId);
+        this.updateCreatedDateIndex(prev.createdDateKey, '', cardId);
+        this.state.cardMeta.delete(cardId);
+        this.state.cardsVersion = (this.state.cardsVersion || 0) + 1;
+        this.state.analyticsDirty = true;
+    },
+    reindexDeckDue(deckId) {
+        if (!deckId) return;
+        const deckCards = this.cardsForDeck(deckId);
+        for (const card of deckCards) {
+            this.updateCardIndices(card);
+        }
+    },
+    setCard(card) {
+        if (!card?.id) return;
+
+        card.suspended = card.suspended ? 1 : 0;
+        const oldCard = this.state.cards.get(card.id);
+
+        const oldTags = oldCard?.tags || [];
+        const newTags = card.tags || [];
+        const seenTags = new Set();
+
+        if (oldCard) {
+            oldTags.forEach(t => {
+                const entry = this.state.tagRegistry.get(t.name);
+                if (entry) {
+                    entry.count--;
+                    if (entry.count <= 0) this.state.tagRegistry.delete(t.name);
+                }
+            });
+        }
+
+        newTags.forEach(t => {
+            if (!seenTags.has(t.name)) {
+                seenTags.add(t.name);
+                const entry = this.state.tagRegistry.get(t.name);
+                if (entry) {
+                    entry.count++;
+                    // Update color if it changed to something non-default
+                    if (t.color && t.color !== 'default') entry.color = t.color;
+                } else {
+                    this.state.tagRegistry.set(t.name, { count: 1, color: t.color || 'default' });
+                }
+            }
+        });
+
+        this.state.cards.set(card.id, card);
+        if (oldCard?.notionId && oldCard.notionId !== card.notionId) {
+            this.state.cardNotionIdIndex.delete(oldCard.notionId);
+        }
+        if (card.notionId) {
+            this.state.cardNotionIdIndex.set(card.notionId, card.id);
+        } else if (oldCard?.notionId) {
+            this.state.cardNotionIdIndex.delete(oldCard.notionId);
+        }
+
+        if (this.state.cardDeckIndex && card.deckId) {
+            if (oldCard && oldCard.deckId && oldCard.deckId !== card.deckId) {
+                const oldSet = this.state.cardDeckIndex.get(oldCard.deckId);
+                if (oldSet) oldSet.delete(card.id);
+            }
+            if (!this.state.cardDeckIndex.has(card.deckId)) {
+                this.state.cardDeckIndex.set(card.deckId, new Set());
+            }
+            this.state.cardDeckIndex.get(card.deckId).add(card.id);
+        }
+        this.updateCardIndices(card);
+    },
+    removeCard(cardId) {
+        const card = this.state.cards.get(cardId);
+        if (!card) return;
+
+        if (card.notionId) {
+            this.state.cardNotionIdIndex.delete(card.notionId);
+        }
+        if (this.state.cardDeckIndex && card.deckId) {
+            const set = this.state.cardDeckIndex.get(card.deckId);
+            if (set) set.delete(cardId);
+        }
+
+        (card.tags || []).forEach(t => {
+            const entry = this.state.tagRegistry.get(t.name);
+            if (entry) {
+                entry.count--;
+                if (entry.count <= 0) this.state.tagRegistry.delete(t.name);
+            }
+        });
+
+        this.state.cards.delete(cardId);
+        this.removeCardMeta(cardId);
     },
     deckName(id) {
         return this.deckById(id)?.name ?? '—';
@@ -6557,21 +7397,19 @@ export const App = {
         }
 
         let importedCount = 0;
-        const existingGuids = new Set(this.state.cards.map(c => c.ankiGuid).filter(Boolean));
         for (const raw of payload.cards) {
             const guid = raw.guid || raw.id || null;
-            if (guid && existingGuids.has(guid)) continue;
 
             const card = this.newCard(deck.id, raw.name || raw.front || 'Imported', raw.back || '', raw.type || 'Front-Back');
             card.tags = (raw.tags || []).map(t => typeof t === 'string' ? { name: t, color: 'default' } : t);
             card.notes = raw.notes || '';
             card.ankiGuid = guid || crypto.randomUUID();
-            existingGuids.add(card.ankiGuid);
-            this.state.cards.push(card);
+            this.setCard(card);
             await Storage.put('cards', card);
             this.queueOp({ type: 'card-upsert', payload: card });
             importedCount++;
         }
+        this.state.analyticsDirty = true;
         this.renderAll();
         toast(`Imported ${importedCount} cards from JSON`);
     },
@@ -6603,42 +7441,81 @@ export const App = {
 
             const deckCache = {};
             const notesById = new Map(notes.map(n => [n[0], n]));
-            const existingGuids = new Set(this.state.cards.map(c => c.ankiGuid).filter(Boolean));
             let importedCount = 0;
-            const totalCards = cards.length;
-
-            // Batching arrays
-            const batchCards = [];
-            const batchQueue = [];
             const batchSize = 200;
+            let batchCards = [];
+            let batchQueue = [];
+
+            const normalizeAnkiFieldName = (name) => {
+                const raw = (name || '').toString().trim();
+                if (!raw) return '';
+                const parts = raw.split(':');
+                return (parts[parts.length - 1] || '').trim();
+            };
+
+            const renderAnkiTemplate = (template, fieldMap, extras = {}) => {
+                let out = (template || '').toString();
+                if (!out) return '';
+
+                const resolveField = (rawName) => {
+                    const key = normalizeAnkiFieldName(rawName);
+                    if (!key) return '';
+                    if (key === 'FrontSide') return extras.frontSide ?? '';
+                    if (key === 'Tags') return extras.tags ?? '';
+                    if (key === 'Deck') return extras.deck ?? '';
+                    return fieldMap[key] ?? '';
+                };
+
+                const sectionRe = /\{\{([#^])\s*([^}]+?)\s*\}\}([\s\S]*?)\{\{\/\s*\2\s*\}\}/g;
+                let prev;
+                do {
+                    prev = out;
+                    out = out.replace(sectionRe, (_, type, key, body) => {
+                        const val = resolveField(key);
+                        const hasVal = !!(val && String(val).trim());
+                        return type === '#' ? (hasVal ? body : '') : (hasVal ? '' : body);
+                    });
+                } while (out !== prev);
+
+                out = out.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, key) => {
+                    const trimmed = (key || '').trim();
+                    if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('^') || trimmed.startsWith('/')) return '';
+                    return resolveField(trimmed);
+                });
+
+                return out;
+            };
+
+            const stripAnkiBackFrontSide = (html) => {
+                if (!html) return '';
+                return html
+                    .replace(/\{\{\s*FrontSide\s*\}\}/gi, '')
+                    .replace(/<hr\s+id=["']?answer["']?\s*\/?>/gi, '');
+            };
 
             const flushBatch = async () => {
                 if (batchCards.length === 0) return;
-                await Storage.putMany('cards', batchCards);
-
-                const queueItems = batchQueue.map(item => ({ ...item, queuedAt: Date.now() }));
-                // We use putMany on syncQueue (auto-increment keys)
-                await Storage.putMany('syncQueue', queueItems);
-
-                // Update in-memory queue
-                this.state.queue.push(...queueItems);
-
-                batchCards.length = 0;
-                batchQueue.length = 0;
+                try {
+                    await Storage.putMany('cards', batchCards);
+                    batchQueue.forEach(op => this.queueOp(op));
+                } catch (e) {
+                    console.error('Batch import failed:', e);
+                    for (const c of batchCards) await Storage.put('cards', c);
+                    batchQueue.forEach(op => this.queueOp(op));
+                }
+                setLoadingProgress(30 + Math.floor((importedCount / cards.length) * 70), `Imported ${importedCount} cards...`);
+                batchCards = [];
+                batchQueue = [];
             };
 
-            for (let i = 0; i < cards.length; i++) {
-                const cardRow = cards[i];
+            const cardsByNid = new Map();
+            for (const cardRow of cards) {
                 const [cid, nid, did, ord] = cardRow;
-                const note = notesById.get(nid);
-                if (!note) continue;
-                const [_, guid, mid, mod, usn, tags, flds] = note;
+                if (!cardsByNid.has(nid)) cardsByNid.set(nid, []);
+                cardsByNid.get(nid).push({ cid, nid, did, ord });
+            }
 
-                // Check if card with this GUID already exists
-                if (guid && existingGuids.has(guid)) continue;
-
-                const deckId = did;
-                // Use existing deck if available, or create/cache new one
+            const resolveDeckForDid = async (deckId) => {
                 if (!deckCache[deckId]) {
                     let deckName = decksMap[deckId] || file.name.replace('.apkg', '');
 
@@ -6657,81 +7534,101 @@ export const App = {
                     }
                     deckCache[deckId] = deck;
                 }
+                return deckCache[deckId];
+            };
+
+            for (const [nid, cardRows] of cardsByNid.entries()) {
+                const note = notesById.get(nid);
+                if (!note) continue;
+                const [_, guid, mid, mod, usn, tags, flds] = note;
 
                 const model = models[mid];
                 const fields = (flds || '').split('\u001f');
                 const front = fields[0] || 'Imported';
                 const back = fields[1] || '';
                 const isCloze = model?.type === 1;
-                const type = isCloze ? 'Cloze' : 'Front-Back';
+                const fieldMap = {};
+                (model?.flds || []).forEach((f, idx) => {
+                    if (f?.name) fieldMap[f.name] = fields[idx] || '';
+                });
+                const noteTags = (tags || '').trim();
 
                 if (isCloze) {
+                    const firstRow = cardRows[0];
+                    const deck = await resolveDeckForDid(firstRow.did);
+                    if (!deck) continue;
+
                     // Create parent card (no SRS scheduling - sub-items handle that)
-                    const parent = this.newCard(deckCache[deckId].id, front, back || front, 'Cloze');
+                    const parent = this.newCard(deck.id, front, back || front, 'Cloze');
                     parent.tags = (tags || '').trim().split(' ').filter(Boolean).map(t => ({ name: t.replace(/^\s*/, '').replace(/\s*$/, ''), color: 'default' }));
                     parent.ankiGuid = guid;
-                    if (guid) existingGuids.add(guid);
                     parent.ankiNoteType = model?.name || '';
                     parent.ankiFields = JSON.stringify(fields);
-                    parent.clozeIndexes = '';
+
+                    const clozeSet = parseClozeIndices(front);
+                    if (clozeSet.size === 0 && back) {
+                        parseClozeIndices(back).forEach(i => clozeSet.add(i));
+                    }
+                    const clozeIndices = Array.from(clozeSet).filter(n => n > 0).sort((a, b) => a - b);
+                    parent.clozeIndexes = clozeIndices.length ? clozeIndices.join(',') : '';
+
                     // Parent doesn't get scheduled - clear due dates
                     parent.fsrs.dueDate = null;
                     parent.sm2.dueDate = null;
-                    parent.subCards = []; // Initialize subCards array
-                    this.state.cards.push(parent);
+                    parent.subCards = [];
 
-                    // Batch write
+                    this.setCard(parent);
                     batchCards.push(parent);
                     batchQueue.push({ type: 'card-upsert', payload: parent });
-
                     importedCount++;
 
-                    // Create sub-items for each cloze index
-                    const clozeIndices = parseClozeIndices(front);
                     for (const idx of clozeIndices) {
-                        const subItem = createSubItem(parent, idx, deckCache[deckId].id, () => this.makeTempId());
-                        // For Anki imports, sub-items start as new cards
-                        this.state.cards.push(subItem);
-
+                        const subItem = createSubItem(parent, idx, deck.id, () => this.makeTempId());
+                        this.setCard(subItem);
                         parent.subCards.push(subItem.id);
-
-                        // Batch write
                         batchCards.push(subItem);
                         batchQueue.push({ type: 'card-upsert', payload: subItem });
-
                         importedCount++;
                     }
-                    // Since parent was modified (subCards pushed), we rely on it being reference-updated in the batch array?
-                    // Yes, objects are by reference. The parent in batchCards[index] is the same object.
                 } else {
-                    // Regular front-back card
-                    const card = this.newCard(deckCache[deckId].id, front, back, type);
-                    card.tags = (tags || '').trim().split(' ').filter(Boolean).map(t => ({ name: t.replace(/^\s*/, '').replace(/\s*$/, ''), color: 'default' }));
-                    card.ankiGuid = guid;
-                    if (guid) existingGuids.add(guid);
-                    card.ankiNoteType = model?.name || '';
-                    card.ankiFields = JSON.stringify(fields);
-                    card.clozeIndexes = '';
-                    this.state.cards.push(card);
+                    const templates = Array.isArray(model?.tmpls) ? model.tmpls : [];
+                    const templateByOrd = new Map();
+                    templates.forEach(t => {
+                        if (t && Number.isFinite(Number(t.ord))) templateByOrd.set(Number(t.ord), t);
+                    });
 
-                    // Batch write
-                    batchCards.push(card);
-                    batchQueue.push({ type: 'card-upsert', payload: card });
+                    const seenOrd = new Set();
+                    for (const row of cardRows) {
+                        const ord = Number(row.ord);
+                        if (Number.isFinite(ord) && seenOrd.has(ord)) continue;
+                        if (Number.isFinite(ord)) seenOrd.add(ord);
+                        const deck = await resolveDeckForDid(row.did);
+                        if (!deck) continue;
 
-                    importedCount++;
+                        const tmpl = templateByOrd.get(ord) || templates[ord] || templates[0] || null;
+                        const extras = { tags: noteTags, deck: deck.name || '', frontSide: '' };
+                        const renderedFront = tmpl ? renderAnkiTemplate(tmpl.qfmt || '', fieldMap, extras) : front;
+                        const renderedBack = tmpl ? renderAnkiTemplate(tmpl.afmt || '', fieldMap, extras) : back;
+                        const finalFront = (renderedFront || front || 'Imported').trim() || 'Imported';
+                        const finalBack = stripAnkiBackFrontSide(renderedBack || back || '');
+
+                        const card = this.newCard(deck.id, finalFront, finalBack, 'Front-Back');
+                        card.tags = noteTags.split(' ').filter(Boolean).map(t => ({ name: t.replace(/^\s*/, '').replace(/\s*$/, ''), color: 'default' }));
+                        card.ankiGuid = guid;
+                        card.ankiNoteType = model?.name || '';
+                        card.ankiFields = JSON.stringify(fields);
+                        card.clozeIndexes = '';
+
+                        this.setCard(card);
+                        batchCards.push(card);
+                        batchQueue.push({ type: 'card-upsert', payload: card });
+                        importedCount++;
+                    }
                 }
 
-                // Flush batch periodically and update UI
                 if (batchCards.length >= batchSize) {
                     await flushBatch();
-                    // Yield to main thread to allow UI render
                     await new Promise(resolve => setTimeout(resolve, 0));
-                }
-
-                // Update progress every 50 cards
-                if (i % 50 === 0) {
-                    const progress = 50 + (i / totalCards) * 45;
-                    setLoadingProgress(progress, `Imported ${importedCount} cards...`);
                 }
             }
 
@@ -6745,12 +7642,12 @@ export const App = {
 
             setLoadingProgress(100, 'Complete!');
             hideLoading();
-            this.calculateDeckStats(); // Update stats after bulk import
+            this.state.analyticsDirty = true;
             this.renderAll();
             toast(`Imported ${importedCount} cards from .apkg`);
 
             // Trigger sync if online
-            if (this.state.queue.length > 0) {
+            if (this.state.queue.size > 0) {
                 this.requestAutoSyncSoon(2000, 'import');
             }
         } catch (e) {
@@ -6803,8 +7700,7 @@ export const App = {
         const modelBasicId = deckId + 1;
         const modelClozeId = deckId + 2;
 
-        // Optimization: Create a lookup map for all cards to avoid O(N) searches
-        const cardMap = new Map(this.state.cards.map(c => [c.id, c]));
+        const cardMap = this.state.cards; // Already a Map
 
         const conf = { nextPos: 1, estTimes: true, activeDecks: [deckId], sortType: "noteFld", sortBackwards: false, newSpread: 0, dueCounts: true, curDeck: deckId, timeLim: 0 };
         const models = {};
@@ -6920,10 +7816,10 @@ export const App = {
         return h;
     },
     updateCounts() {
-        el('#deckCount').textContent = String(this.state.decks.length);
-        el('#cardCount').textContent = String(this.state.cards.length);
-        el('#queueCount').textContent = String(this.state.queue.length);
-        el('#lastSync').textContent = this.state.lastSync ? new Date(this.state.lastSync).toLocaleString() : '—';
+        el('#cardCount').textContent = String(this.state.cards.size);
+        const deckCount = this.state.decks.filter(d => !d.archived).length;
+        el('#deckCount').textContent = String(deckCount);
+        el('#queueCount').textContent = String(this.state.queue.size);
     },
     openSettings() {
         setLastFocusedElement(document.activeElement);
@@ -7070,8 +7966,8 @@ export const App = {
             this.updateMobileFab();
         }
 
-        // Check if this is first sync (no decks/cards loaded yet)
-        const isFirstSync = this.state.decks.length === 0 && this.state.cards.length === 0;
+        // Check first sync status
+        const isFirstSync = this.state.decks.length === 0 && this.state.cards.size === 0;
 
         if (isFirstSync && this.isReady()) {
             // Close settings and show sync loading overlay
@@ -8271,7 +9167,8 @@ export const App = {
 
         // Re-init lucide icons for the joystick
         if (revealed) {
-            setTimeout(() => lucide.createIcons(), 0);
+            const iconScope = joystickContainer || cluster || document.body;
+            setTimeout(() => createIconsInScope(iconScope), 0);
         }
     },
     renderMath(container) {
@@ -8289,7 +9186,7 @@ export const App = {
                     this._katexPolling = false;
                     // Re-render everything that might have math
                     this.renderMath(document.body);
-                } else if (attempts > 50) { // Give up after 5s
+                } else if (attempts > 50) {
                     clearInterval(checkInterval);
                     this._katexPolling = false;
                 }
@@ -8586,7 +9483,7 @@ export const App = {
         if (!target) return;
         if (target.type === 'card') {
             await Storage.delete('cards', target.id);
-            this.state.cards = this.state.cards.filter(c => c.id !== target.id);
+            this.state.cards.delete(target.id);
             this.queueOp({ type: 'card-delete', payload: { id: target.id, notionId: target.notionId } });
             this.renderCards();
             this.renderDecks(); // Refresh stats

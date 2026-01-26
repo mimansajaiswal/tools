@@ -825,7 +825,7 @@
                                 <div id="analyticsRangeWrap" class="relative">
                                     <button id="analyticsRangeBtn"
                                         class="rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] px-3 py-2 text-sm text-[color:var(--text-main)] inline-flex items-center gap-2">
-                                        <span id="analyticsRangeLabel">Last 3 months</span>
+                                        <span id="analyticsRangeLabel">This year</span>
                                         <i data-lucide="chevron-down" class="w-4 h-4 text-[color:var(--text-sub)]"></i>
                                     </button>
                                     <div id="analyticsRangeMenu"
@@ -865,10 +865,26 @@
                                         </div>
                                     </div>
                                 </div>
+                                <div id="analyticsFilterWrap" class="relative">
+                                    <button id="analyticsFilterBtn"
+                                        class="rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] px-3 py-2 text-sm text-[color:var(--text-main)] inline-flex items-center gap-2">
+                                        <i data-lucide="filter" class="w-4 h-4 text-[color:var(--text-sub)]"></i>
+                                        <span id="analyticsFilterLabel">Filters</span>
+                                        <i data-lucide="chevron-down" class="w-4 h-4 text-[color:var(--text-sub)]"></i>
+                                    </button>
+                                    <div id="analyticsFilterMenu"
+                                        class="analytics-menu analytics-menu-right mt-2 hidden min-w-[230px] rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] shadow-lg p-1 z-50">
+                                    </div>
+                                </div>
                                 <label class="flex items-center gap-2 text-xs text-[color:var(--text-sub)]">
                                     <input id="analyticsIncludeSuspended" type="checkbox" class="accent-dull-purple">
                                     <span>Include suspended</span>
                                 </label>
+                                <button id="analyticsResetBtn"
+                                    class="rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] px-3 py-2 text-xs text-[color:var(--text-main)] inline-flex items-center gap-2 hover:bg-surface-muted">
+                                    <i data-lucide="rotate-ccw" class="w-3 h-3 text-[color:var(--text-sub)]"></i>
+                                    Reset
+                                </button>
                             </div>
                         </div>
                     </article>
@@ -1005,15 +1021,15 @@
     </div>
 
     <div id="toast" role="status" aria-live="polite"
-        class="fixed z-[260] bottom-6 right-6 px-4 py-3 rounded-md bg-[color:var(--badge-bg)] text-[color:var(--badge-text)] text-sm font-medium hidden opacity-0 transition-opacity duration-300 border border-[color:var(--card-border)]">
+        class="fixed z-[230] bottom-6 right-6 px-4 py-3 rounded-md bg-[color:var(--badge-bg)] text-[color:var(--badge-text)] text-sm font-medium hidden opacity-0 transition-opacity duration-300 border border-[color:var(--card-border)]">
     </div>
     <div id="tooltip"
-        class="fixed z-[260] px-2.5 py-1.5 rounded-md text-xs font-mono bg-[color:var(--badge-bg)] text-[color:var(--badge-text)] pointer-events-none hidden border border-[color:var(--card-border)]">
+        class="fixed z-[230] px-2.5 py-1.5 rounded-md text-xs font-mono bg-[color:var(--badge-bg)] text-[color:var(--badge-text)] pointer-events-none hidden border border-[color:var(--card-border)]">
     </div>
 
     <!-- Global loading overlay -->
     <div id="loadingOverlay"
-        class="fixed inset-0 z-[300] bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center">
+        class="fixed inset-0 z-[180] bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center">
         <div class="flex flex-col items-center gap-3 text-[color:var(--overlay-text)] text-center px-6">
             <div
                 class="h-12 w-12 border-4 border-[color:var(--overlay-track)] border-t-[color:var(--overlay-text)] rounded-full animate-spin">
@@ -1036,7 +1052,7 @@
     </div>
 
     <div id="confirmModal" role="dialog" aria-modal="true" aria-labelledby="confirmModalTitle"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[210]">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[220]">
         <div class="card rounded-lg p-5 w-full max-w-sm shadow-soft">
             <p id="confirmModalTitle" class="modal-title font-display text-lg mb-2">Confirm delete</p>
             <p class="text-sm text-sub ">This removes it locally and syncs deletion to
@@ -1052,7 +1068,7 @@
 
     <!-- Reset Algorithm Confirmation Modal -->
     <div id="resetAlgorithmModal" role="dialog" aria-modal="true" aria-labelledby="resetAlgorithmTitle"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[210]">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[220]">
         <div class="card rounded-lg p-5 w-full max-w-md shadow-soft">
             <div class="flex items-center gap-3 mb-3">
                 <div class="p-2 rounded-full bg-[color:var(--danger-soft-bg)]">
@@ -1581,7 +1597,7 @@ async function handleRequest(request, env) {
 
     <!-- Deck modal -->
     <div id="deckModal" role="dialog" aria-modal="true" aria-labelledby="deckModalTitle"
-        class="fixed inset-0 z-50 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[200]">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[200]">
         <div class="card rounded-lg p-5 w-full max-w-md shadow-soft max-h-[90vh] overflow-y-auto">
             <div class="flex items-center justify-between mb-3">
                 <h3 class="modal-title font-display text-lg" id="deckModalTitle">New deck</h3>
@@ -1733,7 +1749,7 @@ async function handleRequest(request, env) {
 
     <!-- Card modal -->
     <div id="cardModal" role="dialog" aria-modal="true" aria-labelledby="cardModalTitle"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50 z-[200]">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[200]">
         <div class="card rounded-lg p-5 w-full max-w-2xl shadow-soft max-h-[90vh] overflow-y-auto">
             <div class="flex items-center justify-between mb-3">
                 <h3 class="modal-title font-display text-lg" id="cardModalTitle">New card</h3>
@@ -1867,7 +1883,7 @@ async function handleRequest(request, env) {
 
     <!-- Shortcuts modal -->
     <div id="shortcutsModal" role="dialog" aria-modal="true" aria-labelledby="shortcutsModalTitle"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50 z-[200]">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[210]">
         <div class="card rounded-lg p-5 w-full max-w-2xl shadow-soft max-h-[90vh] overflow-y-auto shortcuts-card">
             <div class="shortcuts-header">
                 <div>
@@ -1921,7 +1937,7 @@ async function handleRequest(request, env) {
 
     <!-- AI Settings Required Modal -->
     <div id="aiSettingsRequiredModal"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50 z-[210]">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[210]">
         <div
             class="card rounded-lg p-5 w-full max-w-md shadow-soft text-center space-y-4 bg-[color:var(--card-bg)] border border-[color:var(--card-border)]">
             <div class="w-12 h-12 rounded-full bg-accent-soft flex items-center justify-center mx-auto">
@@ -1942,7 +1958,7 @@ async function handleRequest(request, env) {
 
     <!-- Notes Edit Modal -->
     <div id="notesModal" role="dialog" aria-modal="true" aria-labelledby="notesModalTitle"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50 z-[210]">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[210]">
         <div class="card rounded-lg p-5 w-full max-w-lg shadow-soft space-y-4 max-h-[90vh] flex flex-col">
             <div class="flex items-center justify-between">
                 <h3 id="notesModalTitle" class="modal-title font-display text-lg">Edit Notes</h3>
@@ -1970,7 +1986,7 @@ async function handleRequest(request, env) {
 
     <!-- Reset Confirmation Modal -->
     <div id="resetConfirmModal"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[210]">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[220]">
         <div class="card rounded-lg p-5 w-full max-w-sm shadow-soft">
             <div class="flex items-center gap-3 mb-3">
                 <div class="p-2 rounded-full bg-[color:var(--accent-2)]/20">
@@ -1992,7 +2008,7 @@ async function handleRequest(request, env) {
 
     <!-- Add Block Note Modal -->
     <div id="addBlockModal"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50 z-[210]">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[210]">
         <div class="card rounded-lg p-5 w-full max-w-lg shadow-soft space-y-4 max-h-[90vh] flex flex-col">
             <div class="flex items-center justify-between">
                 <h3 class="modal-title font-display text-lg">Add Note to Page</h3>
@@ -2028,6 +2044,83 @@ async function handleRequest(request, env) {
     </div>
 
 
+    <script>
+            (function () {
+                if (window.__ghostinkStartup) return;
+
+                const showStartupError = (detail) => {
+                    const render = () => {
+                        document.body.classList.remove('preinit');
+                        let wrap = document.getElementById('startupError');
+                        if (!wrap) {
+                            wrap = document.createElement('div');
+                            wrap.id = 'startupError';
+                            wrap.style.cssText = [
+                                'position:fixed',
+                                'inset:0',
+                                'display:flex',
+                                'align-items:center',
+                                'justify-content:center',
+                                'padding:24px',
+                                'background:#0f0f12',
+                                'color:#f2f2f4',
+                                'z-index:300'
+                            ].join(';');
+                            const card = document.createElement('div');
+                            card.style.cssText = [
+                                'max-width:520px',
+                                'width:100%',
+                                'background:#15161a',
+                                'border:1px solid #2a2d33',
+                                'border-radius:16px',
+                                'padding:20px 22px',
+                                'font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                                'font-size:14px',
+                                'line-height:1.4'
+                            ].join(';');
+                            const title = document.createElement('div');
+                            title.style.cssText = 'font-size:16px;font-weight:700;margin-bottom:8px;';
+                            title.textContent = 'GhostInk failed to start';
+                            const body = document.createElement('div');
+                            body.style.cssText = 'opacity:0.9;margin-bottom:10px;';
+                            body.textContent = 'Check your connection, CDN availability, and refresh the page.';
+                            card.appendChild(title);
+                            card.appendChild(body);
+                            wrap.appendChild(card);
+                            document.body.appendChild(wrap);
+                        }
+                        if (detail && wrap.firstChild) {
+                            const detailLine = document.createElement('div');
+                            detailLine.style.cssText = 'opacity:0.6;font-size:12px;word-break:break-word;';
+                            detailLine.textContent = String(detail);
+                            wrap.firstChild.appendChild(detailLine);
+                        }
+                    };
+                    if (document.body) render();
+                    else document.addEventListener('DOMContentLoaded', render, { once: true });
+                };
+
+                const timer = setTimeout(() => {
+                    if (window.__ghostinkStartup?.readyFlag) return;
+                    showStartupError('Startup timeout');
+                }, 12000);
+
+                window.__ghostinkStartup = {
+                    readyFlag: false,
+                    ready() {
+                        this.readyFlag = true;
+                        clearTimeout(timer);
+                        const el = document.getElementById('startupError');
+                        if (el) el.remove();
+                    },
+                    fail(err) {
+                        clearTimeout(timer);
+                        showStartupError(err && err.message ? err.message : 'Startup failed');
+                    }
+                };
+            })();
+    </script>
+
     <script type="module">
         import { App } from './js/app.js';
         import { toast } from './js/ui/index.js';
@@ -2036,9 +2129,11 @@ async function handleRequest(request, env) {
             document.body.classList.remove('preinit');
             try {
                 await App.init();
+                window.__ghostinkStartup?.ready();
             } catch (e) {
                 console.error('Failed to initialize GhostInk', e);
                 toast('Startup failed – see console for details');
+                window.__ghostinkStartup?.fail(e);
             }
         });
 
