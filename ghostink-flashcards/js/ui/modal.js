@@ -7,9 +7,35 @@ import { el } from '../config.js';
 
 /**
  * Track the last focused element for returning focus after modal closes
- * Issue 7 Fix: Use a stack to handle nested modals properly
  */
 const focusStack = [];
+let focusTimeout = null;
+let activeModal = null;
+
+const handleTabKey = (e) => {
+    if (e.key !== 'Tab' || !activeModal) return;
+    const focusables = activeModal.querySelectorAll(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    if (focusables.length === 0) {
+        e.preventDefault();
+        return;
+    }
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+
+    if (e.shiftKey) {
+        if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+        }
+    } else {
+        if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+        }
+    }
+};
 
 /**
  * Open a modal by ID
@@ -18,12 +44,24 @@ const focusStack = [];
 export const openModal = (id) => {
     const m = el('#' + id);
     if (!m) return;
-    // Store the element that triggered the modal
-    if (document.activeElement) focusStack.push(document.activeElement);
+
+    // Push current focus to stack if valid
+    if (document.activeElement && document.body.contains(document.activeElement)) {
+        focusStack.push(document.activeElement);
+    }
+
     m.classList.remove('hidden');
     m.classList.add('flex');
+    m.setAttribute('aria-modal', 'true');
+    m.setAttribute('role', 'dialog');
+
+    activeModal = m;
+    document.addEventListener('keydown', handleTabKey);
+
+    if (focusTimeout) clearTimeout(focusTimeout);
+
     // Focus the first focusable element in the modal
-    setTimeout(() => {
+    focusTimeout = setTimeout(() => {
         const focusable = m.querySelector('button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
         if (focusable) focusable.focus();
     }, 50);
@@ -36,10 +74,23 @@ export const openModal = (id) => {
 export const closeModal = (id) => {
     const m = el('#' + id);
     if (!m) return;
+
     m.classList.add('hidden');
     m.classList.remove('flex');
+    m.removeAttribute('aria-modal');
+
+    if (activeModal === m) {
+        document.removeEventListener('keydown', handleTabKey);
+        activeModal = null;
+    }
+
+    if (focusTimeout) clearTimeout(focusTimeout);
+
     // Return focus to the element that triggered the modal
-    const prev = focusStack.pop();
+    let prev = focusStack.pop();
+    while (prev && !document.body.contains(prev)) {
+        prev = focusStack.pop();
+    }
     if (prev) {
         prev.focus();
     }
@@ -66,7 +117,9 @@ export const setLastFocusedElement = (element) => {
 export const setupModalClickOutside = (id) => {
     const m = el('#' + id);
     if (!m) return;
+    if (m._clickOutsideAttached) return;
     m.addEventListener('click', (e) => {
         if (e.target === m) closeModal(id);
     });
+    m._clickOutsideAttached = true;
 };

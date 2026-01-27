@@ -147,6 +147,39 @@ export const parseSrsState = (raw) => {
 
 // Default AI prompt template
 export const DEFAULT_AI_PROMPT = 'You are a strict flashcard grader.\nQuestion: {{question}}\nCorrect answer: {{answer}}\nLearner answer: {{user}}\nJudge correctness (short) and give brief feedback.';
+export const DEFAULT_DYCONTEXT_PROMPT = `You are generating the next flashcard variant in a linear study chain.
+Preserve the original meaning/energy, but make the task slightly more difficult than the previous variant.
+Return ONLY a single JSON object with keys: "front", "back", "notes". No extra text, no code fences.
+
+Context (available variables):
+- Root front: {{root_front}}
+- Root back: {{root_back}}
+- Previous front: {{prev_front}}
+- Previous back: {{prev_back}}
+- Tags: {{tags}}
+- Card type: {{card_type}}
+
+Guidelines:
+- Identify the exact target item the learner is trying to memorize (word, phrase, definition, mechanism, formula, etc.).
+- The new variant MUST still test the same target item; do not shift to a different concept.
+- Compare root vs previous to gauge how far the learner has progressed. The new variant should be one small step harder than previous (not a huge jump).
+- Keep the same domain and core idea; do NOT change the subject.
+- Avoid repeating the exact same phrasing from the previous card.
+- If input contains images, embeds, or URLs, ignore them (do not copy or invent images/links).
+- Keep length concise and similar to the previous card unless difficulty requires a small increase in complexity.
+
+Output rules:
+- If card_type is "Front-Back":
+  - front = question/prompt
+  - back = answer/explanation
+- If card_type is "Cloze":
+  - front MUST include valid cloze markup (e.g., {{c1::...}}).
+  - Prefer 1–2 cloze deletions max; do not reveal the answer elsewhere in the sentence.
+  - back can be empty or a brief explanation.
+- notes = a short learning hint or meta-note (not the full answer).
+
+Return format example (not content):
+{"front":"...","back":"...","notes":"..."}`;
 
 // DOM helper
 export const el = (sel) => document.querySelector(sel);

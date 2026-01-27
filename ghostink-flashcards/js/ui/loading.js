@@ -5,7 +5,58 @@
 
 import { el } from '../config.js';
 
-let currentCancelCallback = null;
+const loadingStack = [];
+
+const renderStackTop = () => {
+    const ov = el('#loadingOverlay');
+    const lm = el('#loadingMessage');
+    const ls = el('#loadingSubtext');
+    const cancelBtn = el('#loadingCancelBtn');
+    const mainContent = document.querySelector('main');
+
+    if (loadingStack.length === 0) {
+        if (ov) {
+            ov.classList.add('hidden');
+            ov.classList.remove('flex');
+            ov.removeAttribute('aria-modal');
+        }
+        if (mainContent) {
+            mainContent.removeAttribute('aria-busy');
+            mainContent.removeAttribute('aria-hidden');
+        }
+        return;
+    }
+
+    const top = loadingStack[loadingStack.length - 1];
+    if (lm) lm.textContent = top.msg;
+    if (ls) ls.textContent = top.subtext;
+
+    if (ov) {
+        ov.classList.remove('hidden');
+        ov.classList.add('flex');
+        ov.setAttribute('role', 'alertdialog');
+        ov.setAttribute('aria-modal', 'true');
+    }
+
+    if (mainContent) {
+        mainContent.setAttribute('aria-busy', 'true');
+        mainContent.setAttribute('aria-hidden', 'true');
+    }
+
+    if (cancelBtn) {
+        if (top.onCancel) {
+            cancelBtn.classList.remove('hidden');
+            cancelBtn.onclick = () => {
+                top.onCancel();
+                // We don't auto-pop here; the caller should handle logic and call hideLoading
+            };
+            cancelBtn.focus();
+        } else {
+            cancelBtn.classList.add('hidden');
+            cancelBtn.onclick = null;
+        }
+    }
+};
 
 /**
  * Show loading overlay with message and optional subtext
@@ -14,45 +65,16 @@ let currentCancelCallback = null;
  * @param {Function|null} onCancel - Optional callback when user cancels
  */
 export const showLoading = (msg = 'Loading...', subtext = '', onCancel = null) => {
-    const ov = el('#loadingOverlay');
-    const lm = el('#loadingMessage');
-    const ls = el('#loadingSubtext');
+    loadingStack.push({ msg, subtext, onCancel });
+    renderStackTop();
+
+    // Reset progress on new show
     const pw = el('#loadingProgressWrap');
     const pb = el('#loadingProgressBar');
     const pt = el('#loadingProgressText');
-    const cancelBtn = el('#loadingCancelBtn');
-    if (lm) lm.textContent = msg;
-    if (ls) ls.textContent = subtext;
-
-    // Fix 4: Don't reset progress if overlay is already visible (updating message)
-    const isVisible = ov && !ov.classList.contains('hidden');
-    if (!isVisible) {
-        if (pw) pw.classList.add('hidden');
-        if (pb) pb.style.width = '0%';
-        if (pt) pt.textContent = '0%';
-    }
-
-    // Handle cancel button
-    currentCancelCallback = onCancel;
-    if (cancelBtn) {
-        if (onCancel) {
-            cancelBtn.classList.remove('hidden');
-            cancelBtn.onclick = () => {
-                if (currentCancelCallback) {
-                    currentCancelCallback();
-                    currentCancelCallback = null;
-                }
-            };
-        } else {
-            cancelBtn.classList.add('hidden');
-            cancelBtn.onclick = null;
-        }
-    }
-
-    if (ov) {
-        ov.classList.remove('hidden');
-        ov.classList.add('flex');
-    }
+    if (pw) pw.classList.add('hidden');
+    if (pb) pb.style.width = '0%';
+    if (pt) pt.textContent = '0%';
 };
 
 /**
@@ -74,15 +96,6 @@ export const setLoadingProgress = (percent, label = null) => {
  * Hide loading overlay
  */
 export const hideLoading = () => {
-    const ov = el('#loadingOverlay');
-    const cancelBtn = el('#loadingCancelBtn');
-    currentCancelCallback = null;
-    if (cancelBtn) {
-        cancelBtn.classList.add('hidden');
-        cancelBtn.onclick = null;
-    }
-    if (ov) {
-        ov.classList.add('hidden');
-        ov.classList.remove('flex');
-    }
+    loadingStack.pop();
+    renderStackTop();
 };

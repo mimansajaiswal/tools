@@ -4,7 +4,7 @@
  */
 
 import { parseSrsState } from './config.js';
-import { initDifficulty, initStability } from './srs.js';
+import { initDifficulty, initStability, SRS } from './srs.js';
 import { fsrsW } from './config.js';
 
 /**
@@ -14,7 +14,7 @@ import { fsrsW } from './config.js';
  */
 export const parseClozeIndices = (text) => {
     if (!text) return new Set();
-    const matches = [...text.matchAll(/\{\{\s*c(\d+)::/gi)];
+    const matches = [...text.matchAll(/\{\{\s*c(\d+)::/gis)];
     return new Set(matches.map(m => parseInt(m[1], 10)).filter(n => n > 0));
 };
 
@@ -69,17 +69,22 @@ const parseClozeIndexesFromString = (str) => {
  * @returns {Object} { toCreate: number[], toKeep: string[], toSuspend: string[] }
  */
 export const reconcileSubItems = (parent, existingSubItems) => {
-    // Try parsing from card text first, fallback to clozeIndexes property from Notion
-    let indices = parseClozeIndices(parent.name);
-    if (indices.size === 0 && parent.back) {
-        indices = parseClozeIndices(parent.back);
-    }
-    if (indices.size === 0 && parent.clozeIndexes) {
+    let indices = new Set();
+
+    if (parent.clozeIndexes && !parent.updatedInApp) {
         indices = parseClozeIndexesFromString(parent.clozeIndexes);
     }
+
+    if (indices.size === 0) {
+        indices = parseClozeIndices(parent.name);
+
+        if (indices.size === 0 && parent.back) {
+            indices = parseClozeIndices(parent.back);
+        }
+    }
+
     const existingByIndex = new Map();
     const duplicatesToSuspend = [];
-
     for (const sub of existingSubItems) {
         // Parse the clozeIndexes field to get the index
         const idx = parseInt(sub.clozeIndexes, 10);
@@ -119,19 +124,18 @@ export const reconcileSubItems = (parent, existingSubItems) => {
 
 /**
  * Transform cloze text to only test one specific index.
- * - The target cloze {{cN::answer}} becomes {{c1::answer}} (renumbered to c1)
+ * - The target cloze {{cN::answer}} keeps its index
  * - Other clozes {{cX::answer}} are revealed as just "answer"
  * @param {string} text - Original text with multiple clozes
  * @param {number} targetIndex - The cloze index to test (1-based)
  * @returns {string} Transformed text
  */
-const transformClozeForSubItem = (text, targetIndex) => {
+export const transformClozeForSubItem = (text, targetIndex) => {
     if (!text) return '';
-    return text.replace(/\{\{\s*c(\d+)::(.*?)\}\}/gi, (match, idx, content) => {
+    return text.replace(/\{\{\s*c(\d+)::(.*?)\}\}/gis, (match, idx, content) => {
         const clozeIdx = parseInt(idx, 10);
         if (clozeIdx === targetIndex) {
-            // Keep this cloze but renumber to c1 for consistency
-            return `{{c1::${content}}}`;
+            return `{{c${targetIndex}::${content}}}`;
         }
         // Reveal other clozes
         return content;
@@ -148,9 +152,9 @@ const transformClozeForSubItem = (text, targetIndex) => {
  */
 export const createSubItem = (parent, clozeIndex, deckId, makeTempId) => {
     const now = new Date().toISOString();
-    // Transform name to only test the specific cloze index
+    const due = SRS.getDueDate(0);
     const transformedName = transformClozeForSubItem(parent.name, clozeIndex);
-    const transformedBack = transformClozeForSubItem(parent.back || '', clozeIndex);
+    const transformedBack = parent.back || '';
     return {
         id: makeTempId(),
         notionId: null,
@@ -162,7 +166,7 @@ export const createSubItem = (parent, clozeIndex, deckId, makeTempId) => {
         notes: parent.notes || '',
         marked: false,
         flag: '',
-        suspended: false,
+        suspended: 0,
         leech: false,
         order: clozeIndex - 1, // 0-indexed order
         parentCard: parent.id,
@@ -174,9 +178,9 @@ export const createSubItem = (parent, clozeIndex, deckId, makeTempId) => {
             retrievability: 0.9,
             lastRating: null,
             lastReview: null,
-            dueDate: now
+            dueDate: due
         },
-        sm2: { interval: 1, easeFactor: 2.5, repetitions: 0, dueDate: now },
+        sm2: { interval: 1, easeFactor: 2.5, repetitions: 0, dueDate: due },
         syncId: typeof crypto !== 'undefined' ? crypto.randomUUID() : Date.now().toString(),
         updatedInApp: true,
         reviewHistory: [],

@@ -14,6 +14,7 @@ import {
     ratingsMap,
     DEFAULT_LEECH_LAPSE_THRESHOLD,
     DEFAULT_AI_PROMPT,
+    DEFAULT_DYCONTEXT_PROMPT,
     parseSrsConfig,
     parseSrsState,
     el,
@@ -68,7 +69,8 @@ import {
     isSubItem,
     isSchedulable,
     reconcileSubItems,
-    createSubItem
+    createSubItem,
+    transformClozeForSubItem
 } from './cloze-manager.js';
 
 import {
@@ -113,7 +115,6 @@ const ensureMarkedConfigured = () => {
     markedConfigured = true;
 };
 
-// Phase 5: Safe markdown parse wrapper - returns raw markdown on failure
 const safeMarkdownParse = (md) => {
     if (!md) return '';
     try {
@@ -126,7 +127,6 @@ const safeMarkdownParse = (md) => {
     }
 };
 
-// Phase 12: Safe history state wrapper - silently catches quota/security errors
 const safeHistoryReplace = (data, title, url) => {
     try {
         history.replaceState(data, title, url);
@@ -135,7 +135,6 @@ const safeHistoryReplace = (data, title, url) => {
     }
 };
 
-// Phase 17: Scoped lucide icon creation - avoid scanning whole document
 const createIconsInScope = (container) => {
     if (typeof lucide === 'undefined') return;
     if (container && container.querySelectorAll) {
@@ -155,8 +154,8 @@ const isTypingTarget = (target) => {
 
 const SYNC_QUEUE_WARN_THRESHOLD = 500;
 const SYNC_QUEUE_WARN_COOLDOWN_MS = 10 * 60 * 1000;
+const STUDY_DUE_BUCKET_MS = 5 * 60 * 1000;
 
-// Phase 22: Focus trap for modals
 const focusTrap = {
     active: null,
     handleKeydown(e) {
@@ -182,6 +181,7 @@ const focusTrap = {
         if (first) setTimeout(() => first.focus(), 10);
     },
     detach() {
+        if (!focusTrap.active) return; // Already detached
         focusTrap.active = null;
         document.removeEventListener('keydown', focusTrap.handleKeydown);
     }
@@ -194,18 +194,43 @@ const lightbox = initLightbox();
 export const App = {
     state: {
         decks: [],
-        cards: [],
-        queue: [],
+        cards: new Map(),
+        cardNotionIdIndex: new Map(),
+        cardDeckIndex: new Map(),
+        tagRegistry: new Map(),
+        deckStats: new Map(),
+        cardsVersion: 0,
+        studyDeckCache: null,
+        dueIndex: new Map(),
+        cardMeta: new Map(),
+        tagIndex: new Map(),
+        flagIndex: new Map(),
+        markedIndex: new Set(),
+        ratingIndex: new Map(),
+        createdDateIndex: new Map(),
+        queue: new Map(),
         lastQueueError: null,
         queueLastChangedAt: null,
         lastQueueWarnAt: null,
+        dyContextProcessing: false,
         selectedDeck: null,
         selectedCard: null,
-        filters: { again: false, hard: false, addedToday: false, tags: [], suspended: false, leech: false, marked: false, flag: '', cardHierarchy: '', studyDecks: [] },
+        // Library filters: suspended/leech true by default (auto-hide)
+        filters: { again: false, hard: false, addedToday: false, tags: [], suspended: true, leech: true, marked: false, flag: [], studyDecks: [] },
         cardSearch: '',
         deckSearch: '',
         cardLimit: 50,
         cardLimitStep: 50,
+        analyticsRange: 'this-year',
+        analyticsYear: 'all',
+        analyticsDecks: [],
+        analyticsHeatmapMetric: 'count',
+        analyticsIncludeSuspended: true,
+        analyticsTags: [],
+        analyticsFlags: [],
+        analyticsMarked: false,
+        analyticsDirty: true,
+        analyticsCache: null,
         reverse: false,
         lastSync: null,
         lastPull: null,
@@ -239,7 +264,10 @@ export const App = {
         activeAudioStream: null,
         fabSetupMode: false,
         joystickActive: false,
-        joystickHandlers: null
+        joystickHandlers: null,
+        queueBadgeTimer: null,
+        queueBadgeSig: '',
+        expandedClozeParents: new Set()
     },
     isAiModeSelected() {
         return el('#revisionMode')?.value === 'ai';
@@ -270,7 +298,6 @@ export const App = {
         await this.autoVerifyWorker();
         window.addEventListener('online', () => this.handleOnline());
         window.addEventListener('offline', () => this.handleOffline());
-        // Issue 2 Fix: Check initial online state
         if (!navigator.onLine) {
             document.body.classList.add('offline-mode');
         }
@@ -280,10 +307,34 @@ export const App = {
         }
         Tooltip.bind();
         this.startAutoSync();
+        this.startQueueBadgeHeartbeat();
+        this.processDyContextQueue();
         hideLoading();
+    },
+    startQueueBadgeHeartbeat() {
+        if (this.state.queueBadgeTimer) return;
+        const buildSig = () => {
+            const size = this.state.queue.size;
+            const syncing = this.state.syncing ? 1 : 0;
+            const online = navigator.onLine ? 1 : 0;
+            const err = this.state.lastQueueError?.message || '';
+            const at = this.state.queueLastChangedAt || '';
+            return `${size}|${syncing}|${online}|${err}|${at}`;
+        };
+        this.state.queueBadgeSig = buildSig();
+        this.state.queueBadgeTimer = setInterval(() => {
+            const sig = buildSig();
+            if (sig === this.state.queueBadgeSig) return;
+            this.state.queueBadgeSig = sig;
+            el('#queueCount').textContent = String(this.state.queue.size);
+            this.renderConnection();
+        }, 5000);
     },
     async loadSession() {
         this.state.session = await Storage.getSession();
+        if (this.state.session) {
+            this.state.activeTab = 'study';
+        }
     },
     saveSession() {
         // Fire-and-forget async save - session is cached in Storage for sync access
@@ -306,7 +357,15 @@ export const App = {
     setSyncButtonSpinning(on) {
         const btn = el('#syncNowBtn');
         if (!btn) return;
-        const icon = btn.querySelector('i');
+        const icon = btn.querySelector('svg, i');
+        btn.disabled = on || !navigator.onLine || this.state.syncing;
+        btn.classList.toggle('opacity-70', btn.disabled);
+        if (icon) icon.classList.toggle('animate-spin', on);
+    },
+    setRefreshDecksSpinning(on) {
+        const btn = el('#refreshDecksBtn');
+        if (!btn) return;
+        const icon = btn.querySelector('svg, i');
         btn.disabled = on || !navigator.onLine || this.state.syncing;
         btn.classList.toggle('opacity-70', btn.disabled);
         if (icon) icon.classList.toggle('animate-spin', on);
@@ -471,29 +530,29 @@ export const App = {
     },
     generateCardQueue(deckIds, includeNonDue = false, opts = {}) {
         const { precomputeReverse = true } = opts || {};
-        const selectedDeckIds = (deckIds || []).filter(id => !!this.deckById(id));
+        const validIds = (deckIds || []).filter(id => !!this.deckById(id));
+        const selectedDeckIds = [...new Set(validIds)];
         if (selectedDeckIds.length === 0) return [];
 
-        const candidateCards = this.state.cards.filter(c =>
-            selectedDeckIds.includes(c.deckId) &&
-            this.passFilters(c) &&
-            isSchedulable(c) && // Exclude cloze parents - only sub-items are schedulable
-            (includeNonDue || this.isDue(c))
-        );
+        const deckBuckets = new Map();
+        for (const id of selectedDeckIds) {
+            deckBuckets.set(id, []);
+        }
 
-        if (candidateCards.length === 0) return [];
-
-        // Fix: Improved new card detection - check learning state AND review history
-        // A card is "new" only if it has never been reviewed (no history, no repetitions, no learning state)
-        const isNewCard = (card) => {
-            const lastReview = card.fsrs?.lastReview || card.sm2?.lastReview || null;
-            const hasHistory = Array.isArray(card.reviewHistory) && card.reviewHistory.length > 0;
-            const reps = card.sm2?.repetitions ?? 0;
-            const learning = parseSrsState(card.srsState || null).learning;
-            const isLearning = ['learning', 'relearning'].includes(learning?.state);
-            // A card is only new if it has no reviews, no history, no repetitions, and is not in learning
-            return !lastReview && !hasHistory && reps === 0 && !isLearning;
-        };
+        for (const deckId of selectedDeckIds) {
+            const cardIds = this.state.cardDeckIndex.get(deckId);
+            if (!cardIds) continue;
+            for (const cardId of cardIds) {
+                const c = this.state.cards.get(cardId);
+                if (!c) continue;
+                if (this.passFilters(c, { context: 'study' }) &&
+                    isSchedulable(c) &&
+                    (includeNonDue || this.isDue(c))
+                ) {
+                    deckBuckets.get(deckId).push(c);
+                }
+            }
+        }
 
         const shuffleInPlace = (arr) => {
             for (let i = arr.length - 1; i > 0; i--) {
@@ -504,11 +563,9 @@ export const App = {
 
         const applyOrderForDeck = (arr, deck, isNewCards = false) => {
             const mode = deck?.orderMode || 'none';
-            // Fix: Add shuffle option for new cards (separate from review cards)
-            const shuffleNewCards = deck?.shuffleNew ?? true; // Default to shuffling new cards
+            const shuffleNewCards = deck?.shuffleNew ?? true;
 
             if (isNewCards && shuffleNewCards && mode !== 'property') {
-                // Shuffle new cards unless explicitly ordered by property
                 shuffleInPlace(arr);
                 return;
             }
@@ -535,12 +592,9 @@ export const App = {
                 });
                 return;
             }
-            // Default: shuffle within that deck (so mixed sessions can still interleave).
             shuffleInPlace(arr);
         };
 
-        // Interleave multiple per-deck sequences while preserving the relative order within each deck.
-        // This gives "mixed sessions" where deck-specific ordering is respected but decks are blended.
         const interleavePreservingOrder = (deckToArr) => {
             const ids = Object.keys(deckToArr || {}).filter(id => Array.isArray(deckToArr[id]) && deckToArr[id].length > 0);
             if (ids.length === 0) return [];
@@ -566,16 +620,10 @@ export const App = {
         const newBuckets = {};
         const allBuckets = {};
 
-        // Fix: Track seen card IDs to prevent double-counting
-        const seenCardIds = new Set();
-
         for (const deckId of selectedDeckIds) {
             const deck = this.deckById(deckId);
-            const deckCards = candidateCards.filter(c => c.deckId === deckId && !seenCardIds.has(c.id));
+            const deckCards = deckBuckets.get(deckId) || [];
             if (deckCards.length === 0) continue;
-
-            // Mark all cards in this deck as seen
-            deckCards.forEach(c => seenCardIds.add(c.id));
 
             if (includeNonDue) {
                 // Practice mode: cap per deck using reviewLimit, preserve deck-specific ordering.
@@ -587,8 +635,8 @@ export const App = {
                 // Due-only: cap per deck with separate review vs new limits.
                 const reviewLimit = Math.max(0, deck?.reviewLimit ?? 50);
                 const newLimit = Math.max(0, deck?.newLimit ?? 20);
-                const newCards = deckCards.filter(isNewCard);
-                const reviewCards = deckCards.filter(c => !isNewCard(c));
+                const newCards = deckCards.filter(c => this.isCardNew(c));
+                const reviewCards = deckCards.filter(c => !this.isCardNew(c));
                 applyOrderForDeck(reviewCards, deck, false);
                 applyOrderForDeck(newCards, deck, true); // Apply separate ordering for new cards
                 reviewBuckets[deckId] = reviewCards.slice(0, reviewLimit);
@@ -615,6 +663,7 @@ export const App = {
         });
     },
     startSession() {
+
         // Default to all decks if none selected
         let deckIds = this.state.filters.studyDecks || [];
         if (deckIds.length === 0) {
@@ -643,19 +692,28 @@ export const App = {
 
         const cardQueue = this.generateCardQueue(deckIds, includeNonDue);
 
-        // Edge Case 1 Fix: Better empty deck handling with helpful options
         if (cardQueue.length === 0) {
             if (includeNonDue) {
                 // No cards at all in the selected decks
                 toast('No cards in selected decks');
             } else {
                 // Check if there are non-due cards available for practice
-                const allCardsInDecks = this.state.cards.filter(c => deckIds.includes(c.deckId) && this.passFilters(c));
-                const nonDueCount = allCardsInDecks.filter(c => !this.isDue(c)).length;
+                let totalNonDue = 0;
+                for (const dId of deckIds) {
+                    const cardIds = this.state.cardDeckIndex.get(dId);
+                    if (!cardIds) continue;
+                    for (const cId of cardIds) {
+                        const c = this.state.cards.get(cId);
+                        if (!c) continue;
+                        if (!this.passFilters(c, { context: 'study' })) continue;
+                        if (!isSchedulable(c)) continue;
+                        if (!this.isDue(c)) totalNonDue += 1;
+                    }
+                }
 
-                if (nonDueCount > 0) {
+                if (totalNonDue > 0) {
                     // Show a more helpful message with option to practice
-                    toastLong(`All caught up! ${nonDueCount} card${nonDueCount === 1 ? ' is' : 's are'} available for extra practice.`);
+                    toastLong(`All caught up! ${totalNonDue} card${totalNonDue === 1 ? ' is' : 's are'} available for extra practice.`);
                     // Auto-switch to the practice mode offer in renderStudy
                     this.renderStudy();
                 } else {
@@ -695,15 +753,21 @@ export const App = {
         this.saveSession();
         this.renderStudy();
         toast('Session stopped');
-        if (this.state.queue.length > 0) this.requestAutoSyncSoon(200, 'session-end');
+        if (this.state.queue.size > 0) this.requestAutoSyncSoon(200, 'session-end');
     },
     getSessionCard() {
         const session = this.state.session;
-        // Issue 1 Fix: Automatically skip deleted/archived cards to prevent session stall
         while (session && session.currentIndex < session.cardQueue.length) {
             const queueItem = session.cardQueue[session.currentIndex];
             const card = this.cardById(queueItem.cardId);
             if (card) {
+                if (card.suspended || card.leech) {
+                    console.warn(`Skipping suspended/leech card in session: ${queueItem.cardId}`);
+                    session.skipped.push(queueItem.cardId);
+                    session.currentIndex++;
+                    this.saveSessionDebounced();
+                    continue;
+                }
                 return {
                     card: card,
                     reversed: queueItem.reversed
@@ -721,15 +785,23 @@ export const App = {
         const session = this.state.session;
         if (!session) return;
 
-        // Bug fix: Guard against race conditions from rapid calls (double-tap, etc.)
         if (this.state._advancingSession) return;
         this.state._advancingSession = true;
 
-        // Issue 3 Fix: Cleanup temporary lightbox instances when switching cards
         cleanupTempLightboxes();
 
         const queueItem = session.cardQueue[session.currentIndex];
         if (queueItem) {
+            // Check for pending saves (e.g. from Mark/Flag in preview/cram/study) that weren't saved by rate()
+            // This catches "Skip" actions where data was modified
+            const card = this.cardById(queueItem.cardId);
+            if (card && card._pendingSave) {
+                Storage.put('cards', card).then(() => {
+                    delete card._pendingSave;
+                    this.queueOp({ type: 'card-upsert', payload: card });
+                }).catch(e => console.error('Failed to save skipped card:', e));
+            }
+
             if (wasSkipped) {
                 session.skipped.push(queueItem.cardId);
             } else {
@@ -867,7 +939,7 @@ export const App = {
         }, 0);
 
         // Trigger sync for any pending reviews from this session
-        if (this.state.queue?.length > 0) {
+        if (this.state.queue?.size > 0) {
             this.requestAutoSyncSoon(500, 'session-complete');
         }
     },
@@ -915,21 +987,50 @@ export const App = {
         }
     },
     async loadFromDB() {
-        this.state.decks = (await Storage.getAll('decks')).map(d => ({
-            ...d,
-            orderMode: d.orderMode || (d.ordered ? 'created' : 'none') || 'none',
-            aiPrompt: d.aiPrompt || DEFAULT_AI_PROMPT,
-            srsConfig: parseSrsConfig(d.srsConfig || d.srsConfigRaw || null, d.algorithm || 'SM-2')
-        }));
-        this.state.cards = (await Storage.getAll('cards')).map(c => {
+        this.state.decks = (await Storage.getAll('decks')).map(d => {
+            const algorithm = (d.algorithm || '').toUpperCase() === 'FSRS' ? 'FSRS' : 'SM-2';
+            return {
+                ...d,
+                algorithm,
+                orderMode: d.orderMode || (d.ordered ? 'created' : 'none') || 'none',
+                aiPrompt: d.aiPrompt || DEFAULT_AI_PROMPT,
+                dynamicContext: !!d.dynamicContext,
+                dyAiPrompt: ((d.dyAiPrompt || '').trim())
+                    ? (d.dyAiPrompt || '')
+                    : (d.dynamicContext ? DEFAULT_DYCONTEXT_PROMPT : ''),
+                srsConfig: parseSrsConfig(d.srsConfig || d.srsConfigRaw || null, algorithm)
+            };
+        });
+        this.state.cards = new Map();
+        this.state.cardNotionIdIndex = new Map();
+        this.state.cardDeckIndex = new Map();
+        this.state.tagRegistry = new Map();
+        this.state.deckStats = new Map();
+        this.state.dueIndex = new Map();
+        this.state.cardMeta = new Map();
+        this.state.cardsVersion = 0;
+        this.state.studyDeckCache = null;
+        this.state.tagIndex = new Map();
+        this.state.flagIndex = new Map();
+        this.state.markedIndex = new Set();
+        this.state.ratingIndex = new Map();
+        this.state.createdDateIndex = new Map();
+
+        const rawCards = await Storage.getAll('cards');
+        let invalidCardStates = 0;
+        const cardsToSave = [];
+        for (const c of rawCards) {
             const srsState = parseSrsState(c.srsState || null);
+            let needsSave = false;
             if (srsState.learning.state === 'new' && ((c.reviewHistory || []).length > 0 || c.fsrs?.lastReview || c.sm2?.lastReview)) {
                 srsState.learning.state = 'review';
                 srsState.learning.step = 0;
                 srsState.learning.due = null;
+                needsSave = true;
             }
-            return {
+            const card = {
                 ...c,
+                suspended: c.suspended ? 1 : 0,
                 srsState,
                 fsrs: {
                     difficulty: c.fsrs?.difficulty ?? srsState.fsrs.difficulty,
@@ -948,16 +1049,34 @@ export const App = {
                     dueDate: c.sm2?.dueDate ?? c.dueDate ?? null
                 }
             };
-        });
+            if (card.srsStateError) {
+                invalidCardStates += 1;
+                needsSave = true;
+                delete card.srsStateError;
+            }
+            if (needsSave) cardsToSave.push(card);
+            this.setCard(card);
+        }
+        // Persist corrected SRS states to avoid repeated warnings
+        if (cardsToSave.length > 0) {
+            await Storage.putMany('cards', cardsToSave).catch(() => { });
+        }
         const invalidDeckConfigs = this.state.decks.filter(d => d.srsConfigError).length;
         if (invalidDeckConfigs > 0) {
             toast(`Invalid SRS Config in ${invalidDeckConfigs} deck${invalidDeckConfigs === 1 ? '' : 's'} — using defaults`);
         }
-        const invalidCardStates = this.state.cards.filter(c => c.srsStateError).length;
         if (invalidCardStates > 0) {
             toast(`Invalid SRS State in ${invalidCardStates} card${invalidCardStates === 1 ? '' : 's'} — using defaults`);
         }
-        this.state.queue = (await Storage.getMeta('queue')) || [];
+
+        const rawQueue = await Storage.getSyncQueue();
+        this.state.queue = new Map();
+        for (const op of rawQueue) {
+            const key = this.queueKey(op);
+            if (key) this.state.queue.set(key, op);
+        }
+        el('#queueCount').textContent = String(this.state.queue.size);
+
         this.state.lastQueueError = (await Storage.getMeta('lastQueueError')) || null;
         this.state.queueLastChangedAt = (await Storage.getMeta('queueLastChangedAt')) || null;
         const meta = await Storage.getAll('meta');
@@ -969,6 +1088,53 @@ export const App = {
         if (lpush) this.state.lastPush = lpush.value;
         const tagMeta = meta.find(m => m.key === 'tagOptions');
         if (tagMeta && Array.isArray(tagMeta.value)) this.state.tagOptions = tagMeta.value;
+        const filterPrefs = meta.find(m => m.key === 'filterPrefs')?.value;
+        if (filterPrefs && typeof filterPrefs === 'object') {
+            const libraryPrefs = filterPrefs.library || {};
+            const analyticsPrefs = filterPrefs.analytics || {};
+            if (typeof libraryPrefs.hideSuspended === 'boolean') this.state.filters.suspended = libraryPrefs.hideSuspended;
+            if (typeof libraryPrefs.hideLeech === 'boolean') this.state.filters.leech = libraryPrefs.hideLeech;
+            if (typeof analyticsPrefs.includeSuspended === 'boolean') this.state.analyticsIncludeSuspended = analyticsPrefs.includeSuspended;
+            if (Array.isArray(analyticsPrefs.tags)) this.state.analyticsTags = analyticsPrefs.tags.filter(Boolean);
+            if (Array.isArray(analyticsPrefs.flags)) this.state.analyticsFlags = analyticsPrefs.flags.filter(Boolean);
+            if (typeof analyticsPrefs.marked === 'boolean') this.state.analyticsMarked = analyticsPrefs.marked;
+        }
+        const uiState = meta.find(m => m.key === 'uiState')?.value;
+        if (uiState && typeof uiState === 'object') {
+            const allowedTabs = new Set(['study', 'library', 'analytics']);
+            if (typeof uiState.activeTab === 'string' && allowedTabs.has(uiState.activeTab)) {
+                this.state.activeTab = uiState.activeTab;
+            }
+            if (typeof uiState.selectedDeckId === 'string') {
+                const deck = this.deckById(uiState.selectedDeckId);
+                if (deck) this.state.selectedDeck = deck;
+            }
+            if (typeof uiState.cardSearch === 'string') this.state.cardSearch = uiState.cardSearch;
+            if (typeof uiState.deckSearch === 'string') this.state.deckSearch = uiState.deckSearch;
+            if (uiState.filters && typeof uiState.filters === 'object') {
+                const f = uiState.filters;
+                this.state.filters = {
+                    ...this.state.filters,
+                    again: !!f.again,
+                    hard: !!f.hard,
+                    addedToday: !!f.addedToday,
+                    tags: Array.isArray(f.tags) ? f.tags.filter(Boolean) : [],
+                    suspended: typeof f.suspended === 'boolean' ? f.suspended : this.state.filters.suspended,
+                    leech: typeof f.leech === 'boolean' ? f.leech : this.state.filters.leech,
+                    marked: !!f.marked,
+                    flag: Array.isArray(f.flag) ? f.flag.filter(Boolean) : (typeof f.flag === 'string' ? f.flag : []),
+                    studyDecks: Array.isArray(f.studyDecks) ? f.studyDecks.filter(Boolean) : []
+                };
+            }
+            if (typeof uiState.analyticsRange === 'string') this.state.analyticsRange = uiState.analyticsRange;
+            if (typeof uiState.analyticsYear === 'string') this.state.analyticsYear = uiState.analyticsYear;
+            if (Array.isArray(uiState.analyticsDecks)) this.state.analyticsDecks = uiState.analyticsDecks.filter(Boolean);
+            if (typeof uiState.analyticsHeatmapMetric === 'string') this.state.analyticsHeatmapMetric = uiState.analyticsHeatmapMetric;
+            if (typeof uiState.analyticsIncludeSuspended === 'boolean') this.state.analyticsIncludeSuspended = uiState.analyticsIncludeSuspended;
+            if (Array.isArray(uiState.analyticsTags)) this.state.analyticsTags = uiState.analyticsTags.filter(Boolean);
+            if (Array.isArray(uiState.analyticsFlags)) this.state.analyticsFlags = uiState.analyticsFlags.filter(Boolean);
+            if (typeof uiState.analyticsMarked === 'boolean') this.state.analyticsMarked = uiState.analyticsMarked;
+        }
     },
     async seedIfEmpty() {
         return;
@@ -994,6 +1160,8 @@ export const App = {
             aiProvider: '',
             aiModel: '',
             aiKey: '',
+            dynamicContext: false,
+            dyAiPrompt: '',
             orderMode: 'none',
             srsConfig: parseSrsConfig(null, algorithm)
         };
@@ -1011,12 +1179,14 @@ export const App = {
             notes: '',
             marked: false,
             flag: '',
-            suspended: false,
+            suspended: 0,
             leech: false,
             order: null,
             parentCard: null,
             subCards: [],
             clozeIndexes: '',
+            dyRootCard: null,
+            dyPrevCard: null,
             fsrs: { difficulty: 4, stability: 1, retrievability: 0.9, lastRating: null, lastReview: null, dueDate: now },
             sm2: { interval: 1, easeFactor: 2.5, repetitions: 0, dueDate: now },
             syncId: crypto.randomUUID(),
@@ -1034,6 +1204,7 @@ export const App = {
         const deckChanges = [];
         const cardIdChanges = [];
         const cardUpdates = [];
+        const cardsBeingRenamed = new Set();
 
         // Update decks
         if (hasDeckMap) {
@@ -1061,31 +1232,80 @@ export const App = {
             }
         }
 
-        // Update cards
-        for (const card of this.state.cards) {
-            let changed = false;
-            const newDeckId = hasDeckMap ? (deckIdMap[card.deckId] || card.deckId) : card.deckId;
-            if (newDeckId !== card.deckId) {
-                card.deckId = newDeckId;
-                changed = true;
+        if (hasDeckMap) {
+            for (const [oldDeckId, newDeckId] of Object.entries(deckIdMap)) {
+                if (oldDeckId === newDeckId) continue;
+                const cardIds = this.state.cardDeckIndex.get(oldDeckId);
+                if (cardIds) {
+                    const toUpdate = Array.from(cardIds).map(id => this.state.cards.get(id)).filter(Boolean);
+                    for (const card of toUpdate) {
+                        card.deckId = newDeckId;
+                        this.updateCardIndices(card);
+                        cardUpdates.push(card);
+                        this.state.cardDeckIndex.get(oldDeckId).delete(card.id);
+                        if (!this.state.cardDeckIndex.has(newDeckId)) {
+                            this.state.cardDeckIndex.set(newDeckId, new Set());
+                        }
+                        this.state.cardDeckIndex.get(newDeckId).add(card.id);
+                    }
+                }
             }
-            if (hasCardMap) {
-                const newId = cardIdMap[card.id];
-                if (newId && newId !== card.id) {
-                    const oldId = card.id;
+        }
+
+        if (hasCardMap) {
+            for (const [oldId, newId] of Object.entries(cardIdMap)) {
+                if (oldId === newId) continue;
+
+                const card = this.state.cards.get(oldId);
+                if (card) {
+                    this.removeCard(oldId);
                     card.id = newId;
                     card.notionId = newId;
+                    this.setCard(card);
                     cardIdChanges.push({ oldId, value: card });
-                    changed = true;
+                    cardsBeingRenamed.add(card);
+                    if (card.dyRootCard === oldId) card.dyRootCard = newId;
+                    if (card.dyPrevCard === oldId) card.dyPrevCard = newId;
+                    if (card.dyNextCard === oldId) card.dyNextCard = newId;
+
+                    if (Array.isArray(card.subCards) && card.subCards.length > 0) {
+                        for (const childId of card.subCards) {
+                            const child = this.state.cards.get(childId);
+                            if (child) {
+                                this.removeCard(child.id);
+                                child.parentCard = newId;
+                                this.setCard(child);
+                                if (!cardsBeingRenamed.has(child)) cardUpdates.push(child);
+                            }
+                        }
+                    }
+
+                    if (card.parentCard) {
+                        const parent = this.state.cards.get(card.parentCard);
+                        if (parent && parent.subCards) {
+                            const idx = parent.subCards.indexOf(oldId);
+                            if (idx !== -1) {
+                                parent.subCards[idx] = newId;
+                                if (!cardsBeingRenamed.has(parent)) cardUpdates.push(parent);
+                            }
+                        }
+                    }
+
+                    if (card.dyPrevCard) {
+                        const prev = this.state.cards.get(card.dyPrevCard);
+                        if (prev && prev.dyNextCard === oldId) {
+                            prev.dyNextCard = newId;
+                            if (!cardsBeingRenamed.has(prev)) cardUpdates.push(prev);
+                        }
+                    }
+                    if (card.dyNextCard) {
+                        const next = this.state.cards.get(card.dyNextCard);
+                        if (next && next.dyPrevCard === oldId) {
+                            next.dyPrevCard = newId;
+                            if (!cardsBeingRenamed.has(next)) cardUpdates.push(next);
+                        }
+                    }
                 }
-                // Update parentCard reference for sub-items
-                if (card.parentCard && cardIdMap[card.parentCard]) {
-                    card.parentCard = cardIdMap[card.parentCard];
-                    changed = true;
-                }
-            }
-            if (changed && !cardIdChanges.find(c => c.value === card)) {
-                cardUpdates.push(card);
             }
         }
 
@@ -1116,25 +1336,73 @@ export const App = {
         }
 
         // Update queue payloads
-        if (Array.isArray(this.state.queue)) {
-            for (const op of this.state.queue) {
+        if (this.state.queue instanceof Map) {
+            const rekeys = [];
+            const dirtyOps = [];
+
+            for (const [key, op] of this.state.queue) {
+                let keyChanged = false;
+                let payloadChanged = false;
+
                 if (op?.payload) {
                     const pid = op.payload.id;
                     if (pid && deckIdMap[pid]) {
                         op.payload.id = deckIdMap[pid];
                         op.payload.notionId = op.payload.id;
+                        keyChanged = true;
+                        payloadChanged = true;
                     }
                     if (pid && cardIdMap[pid]) {
                         op.payload.id = cardIdMap[pid];
                         op.payload.notionId = op.payload.id;
+                        keyChanged = true;
+                        payloadChanged = true;
                     }
                     if (op.payload.deckId && deckIdMap[op.payload.deckId]) {
                         op.payload.deckId = deckIdMap[op.payload.deckId];
+                        payloadChanged = true;
+                    }
+                    if (hasCardMap) {
+                        if (op.payload.parentCard && cardIdMap[op.payload.parentCard]) {
+                            op.payload.parentCard = cardIdMap[op.payload.parentCard];
+                            payloadChanged = true;
+                        }
+                        if (op.payload.dyRootCard && cardIdMap[op.payload.dyRootCard]) {
+                            op.payload.dyRootCard = cardIdMap[op.payload.dyRootCard];
+                            payloadChanged = true;
+                        }
+                        if (op.payload.dyPrevCard && cardIdMap[op.payload.dyPrevCard]) {
+                            op.payload.dyPrevCard = cardIdMap[op.payload.dyPrevCard];
+                            payloadChanged = true;
+                        }
+                        if (op.payload.dyNextCard && cardIdMap[op.payload.dyNextCard]) {
+                            op.payload.dyNextCard = cardIdMap[op.payload.dyNextCard];
+                            payloadChanged = true;
+                        }
                     }
                 }
                 if (op?.type === 'block-append' && op.payload?.pageId && hasCardMap && cardIdMap[op.payload.pageId]) {
                     op.payload.pageId = cardIdMap[op.payload.pageId];
+                    keyChanged = true;
+                    payloadChanged = true;
                 }
+
+                if (payloadChanged && op.id) dirtyOps.push(op);
+                if (keyChanged) {
+                    const newKey = this.queueKey(op);
+                    if (newKey && newKey !== key) {
+                        rekeys.push({ oldKey: key, newKey, op });
+                    }
+                }
+            }
+
+            for (const { oldKey, newKey, op } of rekeys) {
+                this.state.queue.delete(oldKey);
+                this.state.queue.set(newKey, op);
+            }
+
+            if (dirtyOps.length > 0) {
+                await Promise.all(dirtyOps.map(op => Storage.put('syncQueue', op).catch(() => { })));
             }
         }
 
@@ -1151,7 +1419,6 @@ export const App = {
         if (this.state.session) {
             this.saveSession();
         }
-        await Storage.setMeta('queue', this.state.queue);
     },
     bind() {
         el('#syncNowBtn').onclick = () => this.syncNow();
@@ -1171,6 +1438,7 @@ export const App = {
         el('#refreshDecksBtn').onclick = () => this.manualSync();
         el('#closeDeckModal').onclick = () => this.closeDeckModal();
         el('#saveDeckBtn').onclick = () => this.saveDeckFromModal();
+        el('#saveDeckTopBtn')?.addEventListener('click', () => this.saveDeckFromModal());
         el('#archiveDeckBtn').onclick = () => this.archiveDeckFromModal();
         el('#deckAlgoInput').onchange = (e) => {
             const isFsrs = e.target.value === 'FSRS';
@@ -1183,6 +1451,7 @@ export const App = {
         el('#resetAlgorithmModal').addEventListener('click', (e) => { if (e.target === el('#resetAlgorithmModal')) this.closeModal('resetAlgorithmModal'); });
         el('#closeCardModal').onclick = () => this.closeCardModal();
         el('#saveCardBtn').onclick = () => this.saveCardFromModal();
+        el('#saveCardTopBtn')?.addEventListener('click', () => this.saveCardFromModal());
         el('#cardTypeInput').onchange = () => this.updateCardBackVisibility();
         el('#deleteCardBtn').onclick = () => this.deleteCardFromModal();
         const cardSelectionMode = el('#cardSelectionMode');
@@ -1262,19 +1531,114 @@ export const App = {
         if (markBtn) markBtn.onclick = () => this.toggleMarkForSelected();
         const flagBtn = el('#flagCardBtn');
         if (flagBtn) flagBtn.onclick = (e) => this.openFlagPicker(e.currentTarget);
-        const analyticsDeckSelect = el('#analyticsDeckSelect');
-        if (analyticsDeckSelect) analyticsDeckSelect.onchange = () => this.renderAnalytics();
-        const analyticsRangeSelect = el('#analyticsRangeSelect');
-        if (analyticsRangeSelect) analyticsRangeSelect.onchange = () => this.renderAnalytics();
-        // Phase 14: Debounce search inputs for better performance
+        const analyticsDeckBtn = el('#analyticsDeckBtn');
+        const analyticsDeckMenu = el('#analyticsDeckMenu');
+        const analyticsFilterBtn = el('#analyticsFilterBtn');
+        const analyticsFilterMenu = el('#analyticsFilterMenu');
+        const rangeBtn = el('#analyticsRangeBtn');
+        const rangeMenu = el('#analyticsRangeMenu');
+        const yearMenu = el('#analyticsYearMenu');
+        const closeAnalyticsMenus = () => {
+            if (analyticsDeckMenu) analyticsDeckMenu.classList.add('hidden');
+            if (analyticsFilterMenu) analyticsFilterMenu.classList.add('hidden');
+            if (rangeMenu) rangeMenu.classList.add('hidden');
+            if (yearMenu) yearMenu.classList.remove('is-open');
+        };
+        if (analyticsDeckBtn && analyticsDeckMenu) {
+            analyticsDeckBtn.onclick = (e) => {
+                e.stopPropagation();
+                const willOpen = analyticsDeckMenu.classList.contains('hidden');
+                closeAnalyticsMenus();
+                analyticsDeckMenu.classList.toggle('hidden', !willOpen);
+            };
+        }
+        if (analyticsFilterBtn && analyticsFilterMenu) {
+            analyticsFilterBtn.onclick = (e) => {
+                e.stopPropagation();
+                const willOpen = analyticsFilterMenu.classList.contains('hidden');
+                closeAnalyticsMenus();
+                analyticsFilterMenu.classList.toggle('hidden', !willOpen);
+            };
+        }
+        const heatmapMetricReviews = el('#heatmapMetricReviews');
+        const heatmapMetricRating = el('#heatmapMetricRating');
+        if (heatmapMetricReviews) {
+            heatmapMetricReviews.onclick = () => {
+                this.state.analyticsHeatmapMetric = 'count';
+                this.renderAnalytics();
+            };
+        }
+        if (heatmapMetricRating) {
+            heatmapMetricRating.onclick = () => {
+                this.state.analyticsHeatmapMetric = 'rating';
+                this.renderAnalytics();
+            };
+        }
+        const heatmapDownloadBtn = el('#heatmapDownloadBtn');
+        if (heatmapDownloadBtn) {
+            heatmapDownloadBtn.onclick = () => this.downloadHeatmapPng();
+        }
+        if (rangeBtn && rangeMenu) {
+            rangeBtn.onclick = (e) => {
+                e.stopPropagation();
+                const willOpen = rangeMenu.classList.contains('hidden');
+                closeAnalyticsMenus();
+                rangeMenu.classList.toggle('hidden', !willOpen);
+            };
+            rangeMenu.onclick = (e) => {
+                const btn = e.target.closest('[data-range]');
+                if (!btn) return;
+                const range = btn.dataset.range || '';
+                if (range === 'by-year') {
+                    if (yearMenu) yearMenu.classList.toggle('is-open');
+                    return;
+                }
+                this.state.analyticsRange = range || 'this-year';
+                if (range !== 'year') this.state.analyticsYear = 'all';
+                rangeMenu.classList.add('hidden');
+                if (yearMenu) yearMenu.classList.remove('is-open');
+                this.renderAnalytics();
+            };
+        }
+        document.addEventListener('click', (e) => {
+            const inDeck = analyticsDeckBtn?.contains(e.target) || analyticsDeckMenu?.contains(e.target);
+            const inFilter = analyticsFilterBtn?.contains(e.target) || analyticsFilterMenu?.contains(e.target);
+            const inRange = rangeBtn?.contains(e.target) || rangeMenu?.contains(e.target);
+            if (inDeck || inFilter || inRange) return;
+            closeAnalyticsMenus();
+        });
+        document.querySelectorAll('.analytics-reset-btn').forEach(btn => {
+            btn.onclick = () => {
+                this.state.analyticsDecks = [];
+                this.state.analyticsRange = 'this-year';
+                this.state.analyticsYear = 'all';
+                this.state.analyticsTags = [];
+                this.state.analyticsFlags = [];
+                this.state.analyticsMarked = false;
+                this.state.analyticsIncludeSuspended = true;
+                this.persistFilterPrefs();
+                this.renderAnalytics();
+                closeAnalyticsMenus();
+            };
+        });
+        const analyticsIncludeSuspended = el('#analyticsIncludeSuspended');
+        if (analyticsIncludeSuspended) {
+            analyticsIncludeSuspended.onchange = (e) => {
+                this.state.analyticsIncludeSuspended = e.target.checked;
+                this.persistFilterPrefs();
+                this.renderAnalytics();
+            };
+        }
         const debouncedCardSearch = debounce((val) => {
             this.state.cardSearch = val;
             this.state.cardLimit = 50;
             this.renderCards();
+            this.persistUiStateDebounced();
         }, 150);
         const debouncedDeckSearch = debounce((val) => {
             this.state.deckSearch = val;
             this.renderDecks();
+            this.persistUiStateDebounced();
         }, 150);
         el('#cardSearchInput').oninput = (e) => debouncedCardSearch(e.target.value);
         el('#libraryDeckSearch').oninput = (e) => debouncedDeckSearch(e.target.value);
@@ -1285,6 +1649,8 @@ export const App = {
         el('#resetFilters').onclick = () => this.resetFilters();
         const resetMobile = el('#resetFiltersMobile');
         if (resetMobile) resetMobile.onclick = () => this.resetFilters();
+        const resetAll = el('#resetFiltersAll');
+        if (resetAll) resetAll.onclick = () => this.resetFilters();
         const filterTagInput = el('#filterTagSearch');
         const filterTagDropdown = el('#filterTagDropdown');
         if (filterTagInput) {
@@ -1307,11 +1673,46 @@ export const App = {
             filterTagDropdown.onmouseenter = () => filterTagDropdown.classList.remove('hidden');
             filterTagDropdown.onmouseleave = () => filterTagDropdown.classList.add('hidden');
         }
-        el('#filterSuspended').onchange = (e) => { this.state.filters.suspended = e.target.checked; this.renderCards(); this.updateActiveFiltersCount(); };
-        el('#filterLeech').onchange = (e) => { this.state.filters.leech = e.target.checked; this.renderCards(); this.updateActiveFiltersCount(); };
+        el('#filterSuspended').onchange = (e) => {
+            this.state.filters.suspended = e.target.checked;
+            this.persistFilterPrefs();
+            this.renderCards();
+            this.updateActiveFiltersCount();
+        };
+        el('#filterLeech').onchange = (e) => {
+            this.state.filters.leech = e.target.checked;
+            this.persistFilterPrefs();
+            this.renderCards();
+            this.updateActiveFiltersCount();
+        };
         el('#filterMarked').onchange = (e) => { this.state.filters.marked = e.target.checked; this.renderCards(); this.updateActiveFiltersCount(); };
-        el('#filterFlag').onchange = (e) => { this.state.filters.flag = e.target.value || ''; this.renderCards(); this.updateActiveFiltersCount(); };
-        el('#filterCardHierarchy')?.addEventListener('change', (e) => { this.state.filters.cardHierarchy = e.target.value || ''; this.renderCards(); this.updateActiveFiltersCount(); });
+        const filterFlagSwatches = el('#filterFlagSwatches');
+        if (filterFlagSwatches) {
+            const normalizeFlags = (val) => Array.isArray(val) ? val : (val ? [val] : []);
+            this.updateFlagSwatchMulti(filterFlagSwatches, normalizeFlags(this.state.filters.flag));
+            filterFlagSwatches.onclick = (e) => {
+                const btn = e.target.closest('[data-flag]');
+                if (!btn) return;
+                const flag = btn.dataset.flag || '';
+                const current = new Set(normalizeFlags(this.state.filters.flag));
+                if (current.has(flag)) current.delete(flag); else current.add(flag);
+                this.state.filters.flag = Array.from(current);
+                this.updateFlagSwatchMulti(filterFlagSwatches, this.state.filters.flag);
+                this.renderCards();
+                this.updateActiveFiltersCount();
+            };
+        }
+        const filterFlagClear = el('#filterFlagClear');
+        if (filterFlagClear) {
+            filterFlagClear.onclick = () => {
+                this.state.filters.flag = [];
+                if (filterFlagSwatches) this.updateFlagSwatchMulti(filterFlagSwatches, []);
+                this.renderCards();
+                this.updateActiveFiltersCount();
+            };
+        }
+        const unsuspendAllBtn = el('#unsuspendAllBtn');
+        if (unsuspendAllBtn) unsuspendAllBtn.onclick = () => this.unsuspendAllSelectedDeck();
         // Toggle filters panel
         el('#toggleFilters').onclick = () => this.toggleFiltersPanel();
         el('#ankiImportInput').onchange = (e) => this.handleAnkiImport(e.target.files[0]);
@@ -1334,6 +1735,7 @@ export const App = {
         if (importMobile) importMobile.onchange = (e) => this.handleAnkiImport(e.target.files[0]);
         this.initMobileFab();
         this.bindDeckSearch();
+        this.applyFilterPrefsToUi();
         // Keyboard shortcuts for study
         // Use capture to ensure we can intercept combo hotkeys even when textarea is focused.
         document.addEventListener('keydown', (e) => {
@@ -1362,7 +1764,7 @@ export const App = {
                 this.startSession();
                 return;
             }
-            if (!this.state.session || !this.state.selectedCard) return;
+            if (!this.state.session) return;
 
             const isAiMode = this.isAiModeUsable();
             const aiAnswer = el('#aiAnswer');
@@ -1448,6 +1850,13 @@ export const App = {
             }
         }, true);
         document.addEventListener('click', (e) => {
+            const clozeToggle = e.target.closest('.cloze-parent-toggle');
+            if (clozeToggle) {
+                e.stopPropagation();
+                const parentId = clozeToggle.dataset.parentId;
+                if (parentId) this.toggleClozeParent(parentId);
+                return;
+            }
             // Handle edit deck button click
             const editDeckBtn = e.target.closest('.edit-deck-btn');
             if (editDeckBtn) {
@@ -1491,6 +1900,7 @@ export const App = {
             this.state.settings.cardSource = el('#cardSourceSelect').value;
             this.state.sourcesVerified = !!(this.state.settings.deckSource && this.state.settings.cardSource);
             this.state.settings.sourcesVerified = this.state.sourcesVerified;
+            this.state.settings.sourcesSaved = true;
             Storage.setSettings(this.state.settings);
             this.renderStatus();
             toast('Sources choice saved. Syncing...');
@@ -1545,6 +1955,7 @@ export const App = {
         el('#saveNotesBtn').onclick = () => this.saveNotes();
         el('#notesModal').addEventListener('click', (e) => { if (e.target === el('#notesModal')) this.closeModal('notesModal'); });
         el('#verifyAi').onclick = () => this.verifyAiSettings();
+        el('#verifyDyContextAi').onclick = () => this.verifyDyContextSettings();
         el('#verifyStt').onclick = () => this.verifySttSettings();
         el('#aiSubmit').onclick = () => this.submitToAI();
         el('#aiAnswer').oninput = (e) => {
@@ -1585,8 +1996,24 @@ export const App = {
         this.renderStatus();
         this.renderSelectedDeckBar();
         this.updateActiveFiltersCount();
-        lucide.createIcons();
+        createIconsInScope(document.body);
         this.loadAISettings();
+        const cardSearchInput = el('#cardSearchInput');
+        if (cardSearchInput) cardSearchInput.value = this.state.cardSearch || '';
+        const deckSearchInput = el('#libraryDeckSearch');
+        if (deckSearchInput) deckSearchInput.value = this.state.deckSearch || '';
+        const filterAgain = el('#filterAgain');
+        if (filterAgain) filterAgain.checked = !!this.state.filters.again;
+        const filterHard = el('#filterHard');
+        if (filterHard) filterHard.checked = !!this.state.filters.hard;
+        const filterAddedToday = el('#filterAddedToday');
+        if (filterAddedToday) filterAddedToday.checked = !!this.state.filters.addedToday;
+        const filterMarked = el('#filterMarked');
+        if (filterMarked) filterMarked.checked = !!this.state.filters.marked;
+        const filterSuspended = el('#filterSuspended');
+        if (filterSuspended) filterSuspended.checked = !!this.state.filters.suspended;
+        const filterLeech = el('#filterLeech');
+        if (filterLeech) filterLeech.checked = !!this.state.filters.leech;
         // Show/hide STT settings based on whether AI is verified
         const isAiVerified = this.state.settings?.aiVerified;
         el('#sttSettings')?.classList.toggle('hidden', !isAiVerified);
@@ -1611,12 +2038,14 @@ export const App = {
         if (shortcutsSend) shortcutsSend.textContent = `${ctrlSymbol} ${enterSymbol}`;
         const shortcutsMic = el('#shortcutsMic');
         if (shortcutsMic) shortcutsMic.textContent = `${ctrlSymbol} E`;
+        this.switchTab(this.state.activeTab || 'study', { silent: true, skipPersist: true });
     },
     // Tab switching
-    switchTab(tab) {
+    switchTab(tab, opts = {}) {
+        const { silent = false, skipPersist = false } = opts || {};
         // Block library access during active study session
         if (tab === 'library' && this.state.session) {
-            toast('Please stop your study session first to access the library');
+            if (!silent) toast('Please stop your study session first to access the library');
             return;
         }
         document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
@@ -1626,8 +2055,9 @@ export const App = {
         const btnEl = el(`[data-tab="${tab}"]`);
         if (btnEl) btnEl.classList.add('active');
         this.state.activeTab = tab;
+        if (!skipPersist) this.persistUiStateDebounced();
         if (tab === 'analytics') this.renderAnalytics();
-        lucide.createIcons();
+        if (tabEl) createIconsInScope(tabEl);
     },
     // Toggle filters panel
     toggleFiltersPanel() {
@@ -1647,17 +2077,66 @@ export const App = {
         if (f.hard) count++;
         if (f.addedToday) count++;
         if (f.tags && f.tags.length > 0) count++;
-        if (f.suspended) count++;
-        if (f.leech) count++;
         if (f.marked) count++;
-        if (f.flag) count++;
-        if (f.cardHierarchy) count++;
+        if (Array.isArray(f.flag) ? f.flag.length > 0 : !!f.flag) count++;
         if (f.studyDecks && f.studyDecks.length > 0) count++;
         // Show reset button if any filters are active
         const resetBtn = el('#resetFilters');
         if (resetBtn) {
             resetBtn.classList.toggle('hidden', count === 0);
         }
+        this.persistUiStateDebounced();
+    },
+    persistFilterPrefs() {
+        const prefs = {
+            library: {
+                hideSuspended: !!this.state.filters.suspended,
+                hideLeech: !!this.state.filters.leech
+            },
+            analytics: {
+                includeSuspended: this.state.analyticsIncludeSuspended !== false,
+                tags: Array.isArray(this.state.analyticsTags) ? this.state.analyticsTags : [],
+                flags: Array.isArray(this.state.analyticsFlags) ? this.state.analyticsFlags : [],
+                marked: !!this.state.analyticsMarked
+            }
+        };
+        Storage.setMeta('filterPrefs', prefs).catch(e => console.debug('Storage setMeta filterPrefs failed:', e));
+    },
+    persistUiState() {
+        const uiState = {
+            activeTab: this.state.activeTab,
+            selectedDeckId: this.state.selectedDeck?.id || null,
+            filters: { ...this.state.filters },
+            cardSearch: this.state.cardSearch || '',
+            deckSearch: this.state.deckSearch || '',
+            analyticsRange: this.state.analyticsRange,
+            analyticsYear: this.state.analyticsYear,
+            analyticsDecks: Array.isArray(this.state.analyticsDecks) ? this.state.analyticsDecks : [],
+            analyticsHeatmapMetric: this.state.analyticsHeatmapMetric,
+            analyticsIncludeSuspended: this.state.analyticsIncludeSuspended,
+            analyticsTags: Array.isArray(this.state.analyticsTags) ? this.state.analyticsTags : [],
+            analyticsFlags: Array.isArray(this.state.analyticsFlags) ? this.state.analyticsFlags : [],
+            analyticsMarked: !!this.state.analyticsMarked
+        };
+        Storage.setMeta('uiState', uiState).catch(e => console.debug('Storage setMeta uiState failed:', e));
+    },
+    persistUiStateDebounced() {
+        if (!this._debouncedPersistUiState) {
+            this._debouncedPersistUiState = debounce(() => {
+                this.persistUiState();
+            }, 300);
+        }
+        this._debouncedPersistUiState();
+    },
+    applyFilterPrefsToUi() {
+        const filterSuspended = el('#filterSuspended');
+        const filterLeech = el('#filterLeech');
+        if (filterSuspended) filterSuspended.checked = !!this.state.filters.suspended;
+        if (filterLeech) filterLeech.checked = !!this.state.filters.leech;
+        const analyticsIncludeSuspended = el('#analyticsIncludeSuspended');
+        if (analyticsIncludeSuspended) analyticsIncludeSuspended.checked = this.state.analyticsIncludeSuspended !== false;
+        const analyticsMarkedOnly = el('#analyticsMarkedOnly');
+        if (analyticsMarkedOnly) analyticsMarkedOnly.checked = !!this.state.analyticsMarked;
     },
     // Render selected deck bar
     renderSelectedDeckBar() {
@@ -1704,7 +2183,7 @@ export const App = {
         const authOk = workerOk && hasToken;
         const ready = online && workerOk && authOk;
 
-        const q2count = (this.state.queue || []).length;
+        const q2count = this.state.queue.size;
         const pendingSpan = q2count > 0
             ? ` <span class="ml-1 font-mono text-[10px] sm:text-[11px] text-accent ">(${q2count})</span>`
             : '';
@@ -1757,6 +2236,9 @@ export const App = {
         const theme = document.body.getAttribute('data-theme') || 'light';
         const selectedId = this.state.selectedDeck?.id;
         const searchQuery = (this.state.deckSearch || '').toLowerCase().trim();
+
+        const deckStats = this.state.deckStats;
+
         let decks = this.state.decks;
         if (searchQuery) {
             decks = decks.filter(d => d.name.toLowerCase().includes(searchQuery));
@@ -1768,6 +2250,8 @@ export const App = {
         grid.innerHTML = decks.map(d => {
             const isSelected = d.id === selectedId;
             const selectedClass = isSelected ? 'ring-2 ring-dull-purple' : '';
+            const stats = deckStats.get(d.id) || { total: 0 };
+            const dueCount = this.getDueCountForDeck(d.id);
             return `
  <article class="rounded-2xl border border-[color:var(--card-border)] p-3 bg-[color:var(--surface)] text-[color:var(--text-main)] flex flex-col gap-2 hover:bg-[color:var(--surface-strong)] transition cursor-pointer ${selectedClass}" data-deck-id="${d.id}">
  <div class="flex items-center justify-between">
@@ -1779,9 +2263,9 @@ export const App = {
  <span class="tag-pill text-[11px] px-2 py-1 rounded-full bg-[color:var(--surface-strong)] text-[color:var(--text-main)] border border-[color:var(--card-border)]">${d.algorithm}</span>
  </div>
  </div>
- <div class="flex items-center gap-3 text-xs text-[color:var(--text-sub)]">
- <span>${this.cardsForDeck(d.id).filter(c => this.isDue(c)).length} due</span>
- <span>${this.cardsForDeck(d.id).length} cards</span>
+ <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[color:var(--text-sub)]">
+ <span>${dueCount} due</span>
+ <span>${stats.total} studyable cards</span>
  </div>
  <div class="flex items-center gap-2 text-[11px] text-[color:var(--text-sub)]">
  <i data-lucide="refresh-cw" class="w-3 h-3"></i>
@@ -1799,6 +2283,7 @@ export const App = {
         const tbody = el('#cardTable');
         const noCardsMsg = el('#noCardsMessage');
         const container = el('#cardsContainer');
+        const previousScrollTop = container ? container.scrollTop : 0;
 
         // Cleanup previous observer to prevent memory leaks
         if (this.state.cardListObserver) {
@@ -1814,30 +2299,49 @@ export const App = {
                 noCardsMsg.textContent = 'Select a deck above to view its cards';
                 noCardsMsg.classList.remove('hidden');
             }
+            const unsuspendWrap = el('#unsuspendAllWrap');
+            if (unsuspendWrap) unsuspendWrap.classList.add('hidden');
             this.updateCounts();
             return;
         }
 
-        let cards = this.cardsForDeck(this.state.selectedDeck.id);
-        cards = cards.filter(c => this.passFilters(c));
+        const deckCards = this.cardsForDeck(this.state.selectedDeck.id);
+        let suspendedCount = 0;
+        deckCards.forEach(c => {
+            if (c.suspended || c.leech) suspendedCount += 1;
+        });
+        const unsuspendWrap = el('#unsuspendAllWrap');
+        const unsuspendBtn = el('#unsuspendAllBtn');
+        if (unsuspendWrap && unsuspendBtn) {
+            if (suspendedCount > 0) {
+                unsuspendWrap.classList.remove('hidden');
+                unsuspendBtn.textContent = `Unsuspend all (${suspendedCount})`;
+            } else {
+                unsuspendWrap.classList.add('hidden');
+            }
+        }
+
+        let cards = deckCards.filter(c => this.passFilters(c, { context: 'library' }));
 
         // Sort by due date (overdue/upcoming first, new cards at end)
         cards.sort((a, b) => {
-            const dueA = (a.fsrs?.dueDate || a.sm2?.dueDate);
-            const dueB = (b.fsrs?.dueDate || b.sm2?.dueDate);
-            if (!dueA && !dueB) return 0;
-            if (!dueA) return 1;
-            if (!dueB) return -1;
-            return new Date(dueA) - new Date(dueB);
+            const dueA = this.getCardDueTs(a, this.state.selectedDeck);
+            const dueB = this.getCardDueTs(b, this.state.selectedDeck);
+            const validA = Number.isFinite(dueA);
+            const validB = Number.isFinite(dueB);
+            if (!validA && !validB) return 0;
+            if (!validA) return 1;
+            if (!validB) return -1;
+            return dueA - dueB;
         });
 
-        // Apply card name search filter
         const searchQuery = (this.state.cardSearch || '').toLowerCase().trim();
+        const matchesSearch = (card) => {
+            const plainName = (card.name || '').replace(/<[^>]*>/g, '').replace(/\{\{c\d+::(.*?)\}\}/g, '$1').toLowerCase();
+            return plainName.includes(searchQuery);
+        };
         if (searchQuery) {
-            cards = cards.filter(c => {
-                const plainName = (c.name || '').replace(/<[^>]*>/g, '').replace(/\{\{c\d+::(.*?)\}\}/g, '$1').toLowerCase();
-                return plainName.includes(searchQuery);
-            });
+            cards = cards.filter(c => matchesSearch(c));
         }
 
         if (cards.length === 0) {
@@ -1851,44 +2355,115 @@ export const App = {
             if (container) container.classList.remove('hidden');
             if (noCardsMsg) noCardsMsg.classList.add('hidden');
 
-            const limit = this.state.cardLimit || 50;
-            const visibleCards = cards.slice(0, limit);
-            const hasMore = cards.length > limit;
-            const remainingCount = cards.length - limit;
+            const expandedParents = this.state.expandedClozeParents || new Set();
+            const displayCards = [];
 
-            tbody.innerHTML = visibleCards.map(c => {
-                // Strip HTML tags and cloze syntax for display, then escape for safety
-                const plainName = (c.name || '').replace(/<[^>]*>/g, '').replace(/\{\{c\d+::(.*?)\}\}/g, '$1');
-                const nameText = escapeHtml(plainName.slice(0, 50));
-                const flagClass = c.flag ? this.getFlagClass(c.flag) : '';
-                const flagDot = c.flag ? `<span class="flag-dot ${flagClass}" title="${escapeHtml(c.flag)}"></span>` : '';
-                const markIcon = c.marked ? `<i data-lucide="star" class="w-3 h-3 text-accent" title="Marked"></i>` : '';
-                const tagPills = c.tags.slice(0, 2).map(t => `<span class="notion-color-${t.color.replace('_', '-')}-background px-1.5 py-0.5 rounded text-[10px]">${escapeHtml(t.name)}</span>`).join(' ');
-                // Get due date
-                const dueDate = c.fsrs?.dueDate || c.sm2?.dueDate;
-                const dueDisplay = dueDate ? new Date(dueDate).toLocaleDateString() : '—';
-                // Card hierarchy indicators
+            const parseClozeIndex = (val) => {
+                if (val === undefined || val === null) return Infinity;
+                const str = String(val);
+                const first = str.split(',')[0];
+                const num = Number(first);
+                return Number.isFinite(num) ? num : Infinity;
+            };
+
+            const buildSubCards = (parent) => {
+                const subIds = Array.isArray(parent.subCards) ? parent.subCards : [];
+                const subs = subIds
+                    .map(id => this.state.cards.get(id))
+                    .filter(Boolean)
+                    .filter(sub => this.passFilters(sub, { context: 'library', allowSubItems: true }));
+                subs.sort((a, b) => {
+                    const orderA = Number.isFinite(a.order) ? a.order : parseClozeIndex(a.clozeIndexes);
+                    const orderB = Number.isFinite(b.order) ? b.order : parseClozeIndex(b.clozeIndexes);
+                    if (orderA !== orderB) return orderA - orderB;
+                    return (a.name || '').localeCompare(b.name || '');
+                });
+                return subs;
+            };
+
+            cards.forEach(c => {
+                displayCards.push({ card: c, isSub: false });
+                if (isClozeParent(c) && expandedParents.has(c.id)) {
+                    const subs = buildSubCards(c);
+                    subs.forEach(sub => displayCards.push({ card: sub, isSub: true, parentId: c.id }));
+                }
+            });
+
+            const limit = this.state.cardLimit || 50;
+            const visibleCards = displayCards.slice(0, limit);
+            const hasMore = displayCards.length > limit;
+            const remainingCount = displayCards.length - limit;
+
+            // Reuse existing rows where possible
+            const existingRows = new Map();
+            Array.from(tbody.children).forEach(row => {
+                if (row.dataset.cardId) existingRows.set(row.dataset.cardId, row);
+            });
+
+            // Build new content using a DocumentFragment
+            const frag = document.createDocumentFragment();
+
+            visibleCards.forEach(item => {
+                const c = item.card;
+                const existingRow = existingRows.get(c.id);
+                const lastUpdated = c._lastUpdated || 0;
                 const isParent = isClozeParent(c);
                 const isSub = isSubItem(c);
-                const subCount = isParent ? this.state.cards.filter(sc => sc.parentCard === c.id).length : 0;
+
+                const expandedKey = (isParent && expandedParents.has(c.id)) ? '1' : '0';
+                if (existingRow && existingRow.dataset.timestamp == lastUpdated && (existingRow.dataset.expanded || '0') === expandedKey) {
+                    // Reuse DOM node if timestamp matches (no changes)
+                    frag.appendChild(existingRow);
+                    existingRows.delete(c.id); // Mark as used
+                    return;
+                }
+
+                // Render new row
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-surface-muted';
+                tr.dataset.cardId = c.id;
+                tr.dataset.timestamp = lastUpdated;
+                tr.dataset.expanded = expandedKey;
+                if (item.isSub) tr.dataset.parentId = item.parentId;
+                if (item.isSub) tr.classList.add('cloze-sub-row');
+
+                // Strip HTML tags and cloze syntax for display, then escape for safety
+                const plainName = (c.name || '').replace(/<[^>]*>/g, '').replace(/\{\{c\d+::(.*?)\}\}/g, '$1');
+                const maxNameLen = 50;
+                const displayName = plainName.length > maxNameLen
+                    ? `${plainName.slice(0, Math.max(0, maxNameLen - 3))}...`
+                    : plainName;
+                const nameText = escapeHtml(displayName);
+                const flagColorClass = c.flag ? this.getFlagColorClass(c.flag) : '';
+                const flagIcon = c.flag ? `<i data-lucide="flag" class="w-3 h-3 ${flagColorClass} flag-icon-filled" title="${escapeHtml(c.flag)}"></i>` : '';
+                const markIcon = c.marked ? `<i data-lucide="star" class="w-3 h-3 text-accent fill-current" title="Marked"></i>` : '';
+                const suspendedIcon = c.suspended ? `<i data-lucide="ban" class="w-3 h-3 text-[color:var(--danger-soft-text)]" title="Suspended"></i>` : '';
+                const leechIcon = c.leech ? `<i data-lucide="bug" class="w-3 h-3 text-[color:var(--danger-soft-text)]" title="Leech"></i>` : '';
+                const tagPills = c.tags.slice(0, 2).map(t => `<span class="notion-color-${t.color.replace('_', '-')}-background px-1.5 py-0.5 rounded text-[10px]">${escapeHtml(t.name)}</span>`).join(' ');
+                const extraTagCount = Math.max(0, c.tags.length - 2);
+                const extraTagLabel = extraTagCount > 0 ? `<span class="text-faint ">+${extraTagCount}</span>` : '';
+                const dueTs = this.getCardDueTs(c, this.state.selectedDeck);
+                const dueDisplay = Number.isFinite(dueTs) ? new Date(dueTs).toLocaleDateString() : '—';
+                const subCount = isParent ? (Array.isArray(c.subCards) ? c.subCards.length : 0) : 0;
+                const expanded = isParent && expandedParents.has(c.id);
                 const hierarchyIcon = isParent
-                    ? `<span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-accent-soft text-accent text-[10px] font-medium" title="${subCount} sub-cards">${subCount}</span>`
-                    : isSub
-                        ? `<i data-lucide="corner-down-right" class="w-3 h-3 text-faint" title="Sub-item #${c.clozeIndexes || '?'}"></i>`
-                        : '';
-                return `
- <tr class="hover:bg-surface-muted " data-card-id="${c.id}">
- <td class="py-2 pr-2 text-main">
- <div class="flex items-center gap-2">
+                    ? `<button class="cloze-parent-toggle ${expanded ? 'is-open' : ''}" data-parent-id="${c.id}" aria-expanded="${expanded ? 'true' : 'false'}" title="${expanded ? 'Hide sub-cards' : 'Show sub-cards'}"><i data-lucide="chevron-right" class="cloze-toggle-icon w-3 h-3"></i><span class="cloze-toggle-count">${subCount}</span></button>`
+                    : '';
+
+                tr.innerHTML = `
+ <td class="py-2 pr-2 text-main ${item.isSub ? 'cloze-sub-cell' : ''}">
+ <div class="flex items-center gap-2 cloze-row-main ${item.isSub ? 'cloze-row-main-sub' : ''}">
  ${hierarchyIcon}
  ${markIcon}
- ${flagDot}
+ ${flagIcon}
+ ${suspendedIcon}
+ ${leechIcon}
  <div class="truncate max-w-[150px] sm:max-w-[250px] md:max-w-[350px] lg:max-w-[450px]">${nameText}</div>
  </div>
  </td>
  <td class="py-2 pr-2 capitalize hidden sm:table-cell">${c.type}${isSub ? ` #${c.clozeIndexes || '?'}` : ''}</td>
  <td class="py-2 pr-2 text-sub text-xs whitespace-nowrap">${isParent ? '—' : dueDisplay}</td>
- <td class="py-2 pr-2 hidden md:table-cell text-xs"><div class="flex gap-1 flex-wrap">${tagPills}${c.tags.length > 2 ? '<span class="text-faint ">...</span>' : ''}</div></td>
+ <td class="py-2 pr-2 hidden md:table-cell text-xs"><div class="flex gap-1 flex-wrap">${tagPills}${extraTagLabel}</div></td>
  <td class="py-2 flex gap-1">
  <button class="info-card-btn p-1 rounded hover:bg-accent-soft text-muted relative" data-card-id="${c.id}" title="Review history">
  <i data-lucide="info" class="w-4 h-4 pointer-events-none"></i>
@@ -1896,21 +2471,31 @@ export const App = {
  <button class="edit-card-btn p-1 rounded hover:bg-accent-soft text-accent" data-card-id="${c.id}" title="Edit card">
  <i data-lucide="edit-2" class="w-4 h-4 pointer-events-none"></i>
  </button>
- </td>
- </tr>`;
-            }).join('');
+ </td>`;
+                frag.appendChild(tr);
+            });
 
+            // Handle sentinel for infinite scroll
             if (hasMore) {
-                tbody.innerHTML += `
- <tr id="cardListSentinel">
+                const sentinelRow = document.createElement('tr');
+                sentinelRow.id = 'cardListSentinel';
+                sentinelRow.innerHTML = `
  <td colspan="5" class="py-3 text-center">
  <button id="showMoreCardsBtn" class="text-xs text-accent hover:underline bg-surface-muted px-4 py-2 rounded-lg">
  Show ${Math.min(remainingCount, this.state.cardLimitStep || 50)} more cards (${remainingCount} remaining)
  </button>
- </td>
- </tr>
- `;
-                // Phase 15: IntersectionObserver for infinite scroll with cleanup
+ </td>`;
+                frag.appendChild(sentinelRow);
+            }
+
+            // Replace entire tbody content with the optimized fragment
+            // This implicitly removes any rows in existingRows that weren't reused (stale/filtered out)
+            tbody.innerHTML = '';
+            tbody.appendChild(frag);
+            if (container) container.scrollTop = previousScrollTop;
+
+            // Re-bind intersection observer if needed
+            if (hasMore) {
                 setTimeout(() => {
                     const btn = el('#showMoreCardsBtn');
                     const sentinel = el('#cardListSentinel');
@@ -1919,7 +2504,6 @@ export const App = {
                         this.renderCards();
                     };
                     if (sentinel && 'IntersectionObserver' in window) {
-                        // Disconnect any existing observer before creating a new one
                         if (this.state.cardListObserver) {
                             this.state.cardListObserver.disconnect();
                             this.state.cardListObserver = null;
@@ -1933,7 +2517,6 @@ export const App = {
                             }
                         }, { rootMargin: '100px' });
                         observer.observe(sentinel);
-                        // Store observer reference for cleanup
                         this.state.cardListObserver = observer;
                     }
                 }, 0);
@@ -1941,6 +2524,15 @@ export const App = {
             createIconsInScope(tbody);
         }
         this.updateCounts();
+        this.persistUiStateDebounced();
+    },
+    toggleClozeParent(parentId) {
+        if (!parentId) return;
+        const expanded = this.state.expandedClozeParents || new Set();
+        if (expanded.has(parentId)) expanded.delete(parentId);
+        else expanded.add(parentId);
+        this.state.expandedClozeParents = expanded;
+        this.renderCards();
     },
     renderStudy() {
         // Ensure we never keep the mic open across cards/screens.
@@ -1974,7 +2566,7 @@ export const App = {
                 const previewBadge = el('#previewBadge');
                 if (previewBadge) previewBadge.classList.toggle('hidden', !session.noScheduleChanges);
             }
-            lucide.createIcons();
+            createIconsInScope(studyCardSection || document.body);
         } else {
             // No session - show settings, hide session bar, study card, and notes
             if (studySettingsCard) studySettingsCard.classList.remove('hidden');
@@ -2008,19 +2600,37 @@ export const App = {
         // Check if no cards are due but decks are selected
         const f = this.state.filters;
         const hasSelectedDecks = f.studyDecks && f.studyDecks.length > 0;
-        const allCards = hasSelectedDecks
-            ? this.state.cards.filter(c => f.studyDecks.includes(c.deckId))
-            : this.state.cards;
-        const dueCards = allCards.filter(c => this.passFilters(c) && this.isDue(c));
-        const nonDueCards = allCards.filter(c => this.passFilters(c) && !this.isDue(c));
 
-        if (!card && hasSelectedDecks && nonDueCards.length > 0 && !session) {
+        let hasDue = false;
+        let nonDueCount = 0;
+
+        if (!card && hasSelectedDecks && !session) {
+            for (const dId of f.studyDecks) {
+                const cardIds = this.state.cardDeckIndex?.get(dId);
+                if (!cardIds) continue;
+
+                for (const cId of cardIds) {
+                    const c = this.state.cards.get(cId);
+                    if (c && this.passFilters(c, { context: 'study' }) && isSchedulable(c)) {
+                        if (this.isDue(c)) {
+                            hasDue = true;
+                            break; // Stop if we found a due card (should have been picked by pickCard?)
+                        } else {
+                            nonDueCount++;
+                        }
+                    }
+                }
+                if (hasDue) break;
+            }
+        }
+
+        if (!card && hasSelectedDecks && nonDueCount > 0 && !session) {
             // No due cards but there are non-due cards available (only show when no session)
             el('#studyDeckLabel').textContent = 'No cards due';
             el('#cardFront').innerHTML = `
  <div class="text-center py-4">
  <p class="text-sub text-sm mb-3">No cards are due for review right now.</p>
- <p class="text-muted text-xs mb-4">${nonDueCards.length} card${nonDueCards.length === 1 ? '' : 's'} available for extra practice.</p>
+ <p class="text-muted text-xs mb-4">${nonDueCount} card${nonDueCount === 1 ? '' : 's'} available for extra practice.</p>
  <button id="studyNonDueBtn" class="px-4 py-2 bg-[color:var(--accent)] text-[color:var(--badge-text)] rounded-lg text-sm hover:bg-[color:var(--accent)]/90 transition">
  Practice non-due cards
  </button>
@@ -2107,7 +2717,7 @@ export const App = {
         el('#aiAnswer').value = '';
         el('#aiFeedback').innerHTML = '';
         el('#aiFeedback').classList.add('hidden');
-        lucide.createIcons();
+        createIconsInScope(el('#studyTab') || studyCardSection || document.body);
     },
     renderNotes() {
         const notes = this.state.selectedCard?.notes ?? '';
@@ -2124,13 +2734,7 @@ export const App = {
         const selectedWrap = el('#filterTagSelected');
         if (!input || !dropdown || !selectedWrap) return;
 
-        const tagMap = new Map();
-        this.state.cards.forEach(c => {
-            (c.tags || []).forEach(t => {
-                if (!tagMap.has(t.name)) tagMap.set(t.name, t.color || 'default');
-            });
-        });
-        const allTags = Array.from(tagMap.keys()).sort((a, b) => a.localeCompare(b));
+        const allTags = Array.from(this.state.tagRegistry.keys()).sort((a, b) => a.localeCompare(b));
         const selected = new Set(this.state.filters.tags || []);
         const query = (input.value || '').toLowerCase();
         const options = allTags.filter(name => name.toLowerCase().includes(query));
@@ -2153,6 +2757,7 @@ export const App = {
                 this.renderTagFilter();
                 this.renderCards();
                 this.updateActiveFiltersCount();
+                this.persistUiStateDebounced();
             };
         });
 
@@ -2172,16 +2777,17 @@ export const App = {
                 this.renderTagFilter();
                 this.renderCards();
                 this.updateActiveFiltersCount();
+                this.persistUiStateDebounced();
             };
         });
     },
     formatDuration(ms) {
-        if (!Number.isFinite(ms) || ms <= 0) return '0m';
+        if (!Number.isFinite(ms) || ms <= 0) return '0 sec';
         const totalSec = Math.round(ms / 1000);
         const mins = Math.floor(totalSec / 60);
         const secs = totalSec % 60;
-        if (mins <= 0) return `${secs}s`;
-        return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+        if (mins <= 0) return `${secs} sec`;
+        return secs > 0 ? `${mins} min ${secs} sec` : `${mins} min`;
     },
     parseDurationToMs(token) {
         if (!token) return null;
@@ -2248,22 +2854,77 @@ export const App = {
             purple: 'flag-purple'
         }[key] || '';
     },
+    getFlagColorClass(flag) {
+        const key = (flag || '').toLowerCase();
+        return {
+            red: 'flag-color-red',
+            orange: 'flag-color-orange',
+            yellow: 'flag-color-yellow',
+            green: 'flag-color-green',
+            blue: 'flag-color-blue',
+            purple: 'flag-color-purple'
+        }[key] || '';
+    },
     async toggleMarkForSelected() {
         const card = this.state.selectedCard;
         if (!card) return;
         card.marked = !card.marked;
+        this.updateMarkFlagButtons(card);
+        this.setCard(card);
+        // Defer persistence if in a session (will be saved on rate/skip)
+        if (this.state.session) {
+            card._pendingSave = true;
+            return;
+        }
         await Storage.put('cards', card);
         this.queueOp({ type: 'card-upsert', payload: card });
-        this.updateMarkFlagButtons(card);
         this.renderCards();
+    },
+    async unsuspendAllSelectedDeck() {
+        const deck = this.state.selectedDeck;
+        if (!deck) {
+            toast('Select a deck first');
+            return;
+        }
+        const deckCards = this.cardsForDeck(deck.id);
+        const targets = deckCards.filter(c => c.suspended || c.leech);
+        if (targets.length === 0) {
+            toast('No suspended cards in this deck');
+            return;
+        }
+        targets.forEach(card => {
+            card.suspended = 0;
+            if (card.leech) card.leech = false;
+            this.setCard(card);
+        });
+        try {
+            await Storage.putMany('cards', targets);
+        } catch (e) {
+            console.error('Bulk unsuspend failed, retrying individually:', e);
+            for (const card of targets) {
+                await Storage.put('cards', card).catch(err => console.error('Unsuspend save failed:', err));
+            }
+        }
+        targets.forEach(card => this.queueOp({ type: 'card-upsert', payload: card }));
+        this.renderCards();
+        this.renderDecks();
+        this.renderStudyDeckSelection();
+        this.renderStudy();
+        toast(`Unsuspended ${targets.length} card${targets.length === 1 ? '' : 's'}`);
     },
     async setFlagForSelected(flag) {
         const card = this.state.selectedCard;
         if (!card) return;
         card.flag = flag || '';
+        this.updateMarkFlagButtons(card);
+        this.setCard(card);
+        // Defer persistence if in a session (will be saved on rate/skip)
+        if (this.state.session) {
+            card._pendingSave = true;
+            return;
+        }
         await Storage.put('cards', card);
         this.queueOp({ type: 'card-upsert', payload: card });
-        this.updateMarkFlagButtons(card);
         this.renderCards();
     },
     updateMarkFlagButtons(card) {
@@ -2272,32 +2933,68 @@ export const App = {
         if (markBtn) {
             markBtn.classList.toggle('text-accent', !!card?.marked);
             markBtn.classList.toggle('text-muted', !card?.marked);
+            markBtn.classList.toggle('is-marked', !!card?.marked);
+            markBtn.setAttribute('aria-pressed', !!card?.marked);
         }
         if (flagBtn) {
+            const flag = card?.flag || '';
+            const flagColorClass = this.getFlagColorClass(flag);
+            const flagColorClasses = ['flag-color-red', 'flag-color-orange', 'flag-color-yellow', 'flag-color-green', 'flag-color-blue', 'flag-color-purple'];
             flagBtn.dataset.flag = card?.flag || '';
-            flagBtn.classList.toggle('text-accent', !!card?.flag);
-            flagBtn.classList.toggle('text-muted', !card?.flag);
+            flagBtn.classList.remove('text-accent');
+            flagBtn.classList.remove(...flagColorClasses);
+            flagBtn.classList.toggle('is-flagged', !!flag);
+            flagBtn.classList.toggle('text-muted', !flag);
+            if (flagColorClass) flagBtn.classList.add(flagColorClass);
+            flagBtn.setAttribute('aria-pressed', !!flag);
         }
+    },
+    updateFlagSwatchSelection(container, flag) {
+        if (!container) return;
+        const current = flag || '';
+        container.querySelectorAll('[data-flag]').forEach(btn => {
+            const val = btn.dataset.flag || '';
+            const isSelected = val === current;
+            btn.classList.toggle('is-selected', isSelected);
+            btn.setAttribute('aria-pressed', isSelected);
+        });
+    },
+    updateFlagSwatchMulti(container, flags) {
+        if (!container) return;
+        const selected = new Set(Array.isArray(flags) ? flags : (flags ? [flags] : []));
+        container.querySelectorAll('[data-flag], [data-analytic-flag]').forEach(btn => {
+            const val = btn.dataset.flag || btn.dataset.analyticFlag || '';
+            const isSelected = selected.has(val);
+            btn.classList.toggle('is-selected', isSelected);
+            btn.setAttribute('aria-pressed', isSelected);
+        });
     },
     openFlagPicker(anchor) {
         const card = this.state.selectedCard;
         if (!card || !anchor) return;
         const existing = document.querySelector('.flag-picker-popover');
         if (existing) existing.remove();
-        const flags = this.getFlagOrder().filter(f => f);
+        const flags = this.getFlagOrder();
         const popover = document.createElement('div');
         popover.className = 'flag-picker-popover fixed z-50 bg-[color:var(--surface)] border border-[color:var(--card-border)] rounded-lg shadow-lg p-2 flex gap-2';
-        popover.innerHTML = `
- <button class="flag-choice px-2 py-1 text-xs rounded-lg border border-card" data-flag="">None</button>
- ${flags.map(f => `<button class="flag-choice px-2 py-1 text-xs rounded-lg border border-card flex items-center gap-2" data-flag="${f}">
- <span class="flag-dot ${this.getFlagClass(f)}"></span>${f}
- </button>`).join('')}
- `;
+        popover.innerHTML = flags.map(f => {
+            const label = f || 'None';
+            const swatchClass = f ? this.getFlagClass(f) : 'is-none';
+            const selected = (card.flag || '') === (f || '') ? ' is-selected' : '';
+            return `
+ <button type="button" class="flag-swatch-btn${selected}" data-flag="${f || ''}" aria-label="${label}">
+ <span class="flag-swatch ${swatchClass}"></span>
+ </button>`;
+        }).join('');
         document.body.appendChild(popover);
+        this.updateFlagSwatchSelection(popover, card.flag || '');
         const rect = anchor.getBoundingClientRect();
-        popover.style.left = `${Math.min(window.innerWidth - popover.offsetWidth - 8, rect.right - popover.offsetWidth)}px`;
+        // Clamp left so popover stays within viewport
+        const desiredLeft = rect.right - popover.offsetWidth;
+        const clampedLeft = Math.max(8, Math.min(window.innerWidth - popover.offsetWidth - 8, desiredLeft));
+        popover.style.left = `${clampedLeft}px`;
         popover.style.top = `${rect.bottom + 6}px`;
-        popover.querySelectorAll('.flag-choice').forEach(btn => {
+        popover.querySelectorAll('.flag-swatch-btn').forEach(btn => {
             btn.onclick = async () => {
                 const flag = btn.dataset.flag || '';
                 await this.setFlagForSelected(flag);
@@ -2400,6 +3097,54 @@ export const App = {
         }).join('');
         return `<svg class="chart-svg" width="${svgWidth}" height="${height}" viewBox="0 0 ${svgWidth} ${height}" xmlns="http://www.w3.org/2000/svg">${parts}</svg>`;
     },
+    formatShortDateLabel(dateStr, includeYear = false) {
+        const d = new Date(dateStr);
+        if (!Number.isFinite(d.getTime())) return '';
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const label = `${months[d.getMonth()]} ${d.getDate()}`;
+        return includeYear ? `${label}, ${d.getFullYear()}` : label;
+    },
+    buildChartAxis(labels) {
+        if (!labels || labels.length === 0) return '';
+        return `<div class="chart-axis">${labels.map(label => `<span>${escapeHtml(label)}</span>`).join('')}</div>`;
+    },
+    formatChartValue(value, { unit = '', isTime = false } = {}) {
+        const num = Number.isFinite(value) ? value : 0;
+        const decimals = isTime && num < 10 ? 1 : 0;
+        const formatted = num.toLocaleString(undefined, { maximumFractionDigits: decimals, minimumFractionDigits: 0 });
+        return unit ? `${formatted}${unit}` : formatted;
+    },
+    buildChartTopValues(values, { unit = '', isTime = false } = {}) {
+        if (!values || values.length === 0) return '';
+        const clean = values.map(v => Number.isFinite(v) ? v : 0);
+        const sorted = [...clean].sort((a, b) => a - b);
+        const min = sorted[0] ?? 0;
+        const max = sorted[sorted.length - 1] ?? 0;
+        const avg = clean.reduce((sum, v) => sum + v, 0) / clean.length;
+        const mid = Math.floor(sorted.length / 2);
+        const median = sorted.length % 2 === 0
+            ? (sorted[mid - 1] + sorted[mid]) / 2
+            : sorted[mid];
+        return `<div class="chart-top-values">
+ <span>Min ${escapeHtml(this.formatChartValue(min, { unit, isTime }))}</span>
+ <span>Med ${escapeHtml(this.formatChartValue(median, { unit, isTime }))}</span>
+ <span>Avg ${escapeHtml(this.formatChartValue(avg, { unit, isTime }))}</span>
+ <span>Max ${escapeHtml(this.formatChartValue(max, { unit, isTime }))}</span>
+ </div>`;
+    },
+    buildDateAxisLabels(dates) {
+        if (!dates || dates.length === 0) return '';
+        const first = dates[0];
+        const last = dates[dates.length - 1];
+        const mid = dates[Math.floor(dates.length / 2)] || first;
+        const includeYear = new Date(first).getFullYear() !== new Date(last).getFullYear();
+        const labels = [
+            this.formatShortDateLabel(first, includeYear),
+            this.formatShortDateLabel(mid, includeYear),
+            this.formatShortDateLabel(last, includeYear)
+        ];
+        return this.buildChartAxis(labels);
+    },
     buildDistributionBars(items) {
         if (!items || items.length === 0) return '<p class="text-sm text-[color:var(--text-sub)]">No data yet.</p>';
         const max = Math.max(1, ...items.map(i => i.value));
@@ -2409,7 +3154,7 @@ export const App = {
  <div class="flex items-center gap-3 text-sm">
  <span class="w-16 font-medium text-[color:var(--text-main)]">${escapeHtml(item.label)}</span>
  <div class="flex-1 analytics-bar-bg">
- <div class="analytics-bar-fill" style="width:${(item.value / max) * 100}%; background:${item.color || 'rgba(var(--dull-purple-rgb),0.65)'}"></div>
+ <div class="analytics-bar-fill" style="width:${(item.value / max) * 100}%;${item.color ? ` background:${item.color};` : ''}"></div>
  </div>
  <span class="w-12 text-right text-[color:var(--text-sub)]">${item.value.toLocaleString()}</span>
  </div>
@@ -2424,7 +3169,7 @@ export const App = {
         const cy = 55;
         if (total <= 0) {
             return `<svg width="110" height="110" viewBox="0 0 110 110" aria-hidden="true">
- <circle cx="${cx}" cy="${cy}" r="${radius}" fill="rgba(var(--dull-purple-rgb),0.12)"></circle>
+ <circle cx="${cx}" cy="${cy}" r="${radius}" fill="rgb(var(--dull-purple-rgb) / 0.12)"></circle>
  <circle cx="${cx}" cy="${cy}" r="${radius * 0.55}" fill="var(--card-bg)"></circle>
  </svg>`;
         }
@@ -2449,6 +3194,75 @@ export const App = {
         const hole = `<circle cx="${cx}" cy="${cy}" r="${radius * 0.55}" fill="var(--card-bg)"></circle>`;
         return `<svg width="110" height="110" viewBox="0 0 110 110" aria-hidden="true">${paths}${hole}</svg>`;
     },
+    async downloadHeatmapPng() {
+        const heatmap = el('#analyticsHeatmap');
+        if (!heatmap) return;
+        if (typeof html2canvas === 'undefined') {
+            toast('Heatmap download unavailable');
+            return;
+        }
+        const card = heatmap.closest('.card');
+        const downloadBtn = el('#heatmapDownloadBtn');
+        const grids = Array.from(heatmap.querySelectorAll('.heatmap-grid'));
+        const prevStyles = grids.map(grid => ({
+            node: grid,
+            overflow: grid.style.overflow,
+            width: grid.style.width
+        }));
+        const prevHeatmap = {
+            width: heatmap.style.width
+        };
+        const prevCard = card ? {
+            width: card.style.width,
+            maxWidth: card.style.maxWidth,
+            overflow: card.style.overflow
+        } : null;
+        const prevDownloadVisibility = downloadBtn ? downloadBtn.style.visibility : '';
+        grids.forEach(grid => {
+            grid.scrollLeft = 0;
+            grid.style.overflow = 'visible';
+            grid.style.width = `${grid.scrollWidth}px`;
+        });
+        const widestGrid = grids.reduce((max, grid) => Math.max(max, grid.scrollWidth || 0), heatmap.clientWidth);
+        if (widestGrid > 0) heatmap.style.width = `${widestGrid}px`;
+        if (card) {
+            card.style.overflow = 'visible';
+            card.style.maxWidth = 'none';
+            const cardWidth = Math.max(card.scrollWidth, widestGrid);
+            card.style.width = `${cardWidth}px`;
+        }
+        if (downloadBtn) downloadBtn.style.visibility = 'hidden';
+
+        await new Promise(resolve => requestAnimationFrame(resolve));
+
+        const target = card || heatmap;
+        const bgColor = target ? getComputedStyle(target).backgroundColor : getComputedStyle(document.body).backgroundColor;
+        try {
+            const canvas = await html2canvas(target, {
+                backgroundColor: bgColor || '#ffffff',
+                scale: window.devicePixelRatio || 2
+            });
+            const link = document.createElement('a');
+            link.download = `activity-heatmap-${new Date().toISOString().slice(0, 10)}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        } catch (err) {
+            console.error('Heatmap download failed', err);
+            toast('Heatmap download failed');
+        } finally {
+            prevStyles.forEach(({ node, overflow, width }) => {
+                node.style.overflow = overflow;
+                node.style.width = width;
+            });
+            heatmap.style.width = prevHeatmap.width;
+            if (card && prevCard) {
+                card.style.width = prevCard.width;
+                card.style.maxWidth = prevCard.maxWidth;
+                card.style.overflow = prevCard.overflow;
+            }
+            if (downloadBtn) downloadBtn.style.visibility = prevDownloadVisibility;
+        }
+    },
     polarToCartesian(cx, cy, r, angleDeg) {
         const rad = (angleDeg - 90) * Math.PI / 180.0;
         return { x: cx + (r * Math.cos(rad)), y: cy + (r * Math.sin(rad)) };
@@ -2462,36 +3276,387 @@ export const App = {
         return !lastReview && !hasHistory && reps === 0 && !isLearning;
     },
     renderAnalytics() {
-        const container = el('#analyticsTab');
-        if (!container) return;
-        const deckSelect = el('#analyticsDeckSelect');
-        const rangeSelect = el('#analyticsRangeSelect');
-        const currentDeck = deckSelect ? deckSelect.value : 'all';
-        if (deckSelect) {
-            const opts = ['all', ...this.state.decks.map(d => d.id)];
-            deckSelect.innerHTML = [
-                `<option value="all">All decks</option>`,
-                ...this.state.decks.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`)
-            ].join('');
-            deckSelect.value = opts.includes(currentDeck) ? currentDeck : 'all';
+        const deckLabel = el('#analyticsDeckLabel');
+        const deckMenu = el('#analyticsDeckMenu');
+        const filterLabel = el('#analyticsFilterLabel');
+        const filterMenu = el('#analyticsFilterMenu');
+        const selectedSet = new Set(this.state.analyticsDecks || []);
+        const allSelected = selectedSet.size === 0;
+        const deckIds = this.state.decks.map(d => d.id);
+        const analyticsTags = Array.isArray(this.state.analyticsTags) ? this.state.analyticsTags : [];
+        const analyticsFlags = Array.isArray(this.state.analyticsFlags) ? this.state.analyticsFlags : [];
+        const analyticsMarked = !!this.state.analyticsMarked;
+        const tagsKey = analyticsTags.slice().sort().join('|');
+        const flagsKey = analyticsFlags.slice().sort().join('|');
+
+        const currentCacheKey = JSON.stringify({
+            filters: {
+                range: this.state.analyticsRange,
+                year: this.state.analyticsYear,
+                decks: this.state.analyticsDecks,
+                suspended: this.state.analyticsIncludeSuspended,
+                metric: this.state.analyticsHeatmapMetric,
+                tags: tagsKey,
+                flags: flagsKey,
+                marked: analyticsMarked ? 1 : 0
+            }
+        });
+
+        // Helper to update labels (always runs)
+        const updateLabels = () => {
+            if (deckLabel) {
+                if (allSelected) deckLabel.textContent = 'All decks';
+                else if (selectedSet.size === 1) {
+                    const onlyId = Array.from(selectedSet)[0];
+                    deckLabel.textContent = this.deckById(onlyId)?.name || '1 deck';
+                } else {
+                    deckLabel.textContent = `${selectedSet.size} decks`;
+                }
+            }
+            if (deckMenu) {
+                const allCheck = allSelected ? '<i data-lucide="check" class="w-3 h-3 text-accent"></i>' : '<span class="w-3 h-3"></span>';
+                const deckQuery = (deckMenu.dataset.query || '').trim().toLowerCase();
+                const deckRows = this.state.decks.length
+                    ? this.state.decks.map(d => {
+                        const active = selectedSet.has(d.id);
+                        const deckName = escapeHtml(d.name);
+                        const deckNameKey = escapeHtml((d.name || '').toLowerCase());
+                        return `
+ <button type="button" class="analytics-menu-option analytics-deck-option w-full text-left px-3 py-2 text-sm rounded-md inline-flex items-start justify-between gap-2 ${active ? 'bg-surface-muted' : 'hover:bg-surface-muted'}" data-deck="${d.id}" data-deck-name="${deckNameKey}">
+ <span class="analytics-deck-name">${deckName}</span>
+ ${active ? '<i data-lucide="check" class="w-3 h-3 text-accent mt-0.5"></i>' : '<span class="w-3 h-3 mt-0.5"></span>'}
+ </button>
+ `;
+                    }).join('')
+                    : '<div class="px-3 py-2 text-xs text-[color:var(--text-sub)]">No decks yet.</div>';
+                const deckSearch = this.state.decks.length ? `
+ <div class="px-3 py-2">
+ <input id="analyticsDeckSearch" type="text" value="${escapeHtml(deckMenu.dataset.query || '')}" placeholder="Search decks"
+ class="w-full rounded-md border border-[color:var(--card-border)] bg-[color:var(--surface)] px-2 py-1.5 text-xs text-[color:var(--text-main)] placeholder:text-[color:var(--text-sub)]">
+ </div>
+ ` : '';
+                deckMenu.innerHTML = `
+ <button type="button" class="analytics-menu-option w-full text-left px-3 py-2 text-sm rounded-md inline-flex items-center justify-between ${allSelected ? 'bg-surface-muted' : 'hover:bg-surface-muted'}" data-deck="all">
+ <span>No filter (all decks)</span>
+ ${allCheck}
+ </button>
+ ${this.state.decks.length ? '<div class="h-px bg-[color:var(--card-border)] my-1"></div>' : ''}
+ ${deckSearch}
+ ${this.state.decks.length ? '<div class="analytics-deck-scroll scroll-minimal">' + deckRows + '</div>' : deckRows}
+ `;
+                deckMenu.querySelectorAll('[data-deck]').forEach(btn => {
+                    btn.onclick = (e) => {
+                        e.stopPropagation();
+                        const deckId = btn.dataset.deck || '';
+                        if (deckId === 'all') {
+                            this.state.analyticsDecks = [];
+                            this.renderAnalytics();
+                            deckMenu.classList.remove('hidden');
+                            return;
+                        }
+                        const next = new Set(this.state.analyticsDecks || []);
+                        if (next.has(deckId)) next.delete(deckId);
+                        else next.add(deckId);
+                        if (next.size === deckIds.length) next.clear();
+                        this.state.analyticsDecks = Array.from(next);
+                        this.renderAnalytics();
+                        deckMenu.classList.remove('hidden');
+                    };
+                });
+                const deckSearchInput = deckMenu.querySelector('#analyticsDeckSearch');
+                const deckButtons = Array.from(deckMenu.querySelectorAll('.analytics-deck-option'));
+                const applyDeckQuery = (query) => {
+                    const q = (query || '').trim().toLowerCase();
+                    deckButtons.forEach(btn => {
+                        const name = (btn.dataset.deckName || '').toLowerCase();
+                        btn.classList.toggle('hidden', q && !name.includes(q));
+                    });
+                };
+                if (deckSearchInput) {
+                    deckSearchInput.oninput = (e) => {
+                        const q = e.target.value || '';
+                        deckMenu.dataset.query = q;
+                        applyDeckQuery(q);
+                    };
+                    applyDeckQuery(deckSearchInput.value || '');
+                }
+            }
+            if (filterLabel) {
+                const filterCount = analyticsTags.length + analyticsFlags.length + (analyticsMarked ? 1 : 0);
+                filterLabel.textContent = filterCount > 0 ? `Filters • ${filterCount}` : 'Filters';
+            }
+            if (filterMenu) {
+                const selectedTags = new Set(analyticsTags);
+                const selectedFlags = new Set(analyticsFlags);
+                const tagOptions = this.collectTagOptions();
+                const tagRows = tagOptions.length
+                    ? tagOptions.map(opt => {
+                        const active = selectedTags.has(opt.name);
+                        const tagName = opt.name || '';
+                        return `
+ <button type="button" class="analytics-menu-option analytics-tag-option w-full text-left px-3 py-2 text-sm rounded-md inline-flex items-center justify-between ${active ? 'bg-surface-muted' : 'hover:bg-surface-muted'}" data-analytic-tag="${encodeDataAttr(tagName)}" data-tag-name="${encodeDataAttr(tagName.toLowerCase())}">
+ <span class="truncate">${escapeHtml(tagName)}</span>
+ ${active ? '<i data-lucide="check" class="w-3 h-3 text-accent"></i>' : '<span class="w-3 h-3"></span>'}
+ </button>
+ `;
+                    }).join('')
+                    : '<div class="px-3 py-2 text-xs text-[color:var(--text-sub)]">No tags yet.</div>';
+
+                const flagOrder = this.getFlagOrder().filter(f => f);
+                const tagHeaderAction = selectedTags.size > 0
+                    ? `<button type="button" class="analytics-filter-clear-btn rounded-md px-2 text-[10px] font-semibold bg-[color:var(--accent-2)]/10 text-[color:var(--accent-2)] hover:bg-[color:var(--accent-2)]/20" data-analytic-clear-tags="1">Clear</button>`
+                    : '';
+                const flagHeaderAction = selectedFlags.size > 0
+                    ? `<button type="button" class="analytics-filter-clear-btn rounded-md px-2 text-[10px] font-semibold bg-[color:var(--accent-2)]/10 text-[color:var(--accent-2)] hover:bg-[color:var(--accent-2)]/20" data-analytic-clear-flags="1">Clear</button>`
+                    : '';
+                filterMenu.innerHTML = `
+ <div class="flex items-center justify-between px-3 py-2">
+ <span class="text-[11px] uppercase tracking-wide text-[color:var(--text-sub)]">Tags</span>
+ ${tagHeaderAction}
+ </div>
+ <div class="px-3 py-2">
+ <input id="analyticsTagSearch" type="text" value="${escapeHtml(filterMenu.dataset.tagQuery || '')}" placeholder="Search tags"
+ class="w-full rounded-md border border-[color:var(--card-border)] bg-[color:var(--surface)] px-2 py-1.5 text-xs text-[color:var(--text-main)] placeholder:text-[color:var(--text-sub)]">
+ </div>
+ <div class="analytics-tag-scroll scroll-minimal">${tagRows}</div>
+ <div class="h-px bg-[color:var(--card-border)] my-2"></div>
+ <div class="flex items-center justify-between px-3 py-2">
+ <span class="text-[11px] uppercase tracking-wide text-[color:var(--text-sub)]">Flags</span>
+ ${flagHeaderAction}
+ </div>
+ <div class="px-3 py-2">
+ <div id="analyticsFlagSwatches" class="flag-swatch-row">
+ ${flagOrder.map(f => `
+ <button type="button" class="flag-swatch-btn" data-analytic-flag="${f}" aria-label="${f} flag">
+ <span class="flag-swatch ${this.getFlagClass(f)}"></span>
+ </button>
+ `).join('')}
+ </div>
+ </div>
+ <div class="h-px bg-[color:var(--card-border)] my-2"></div>
+ <label class="flex items-center gap-2 px-3 py-2 text-sm text-[color:var(--text-main)]">
+ <input id="analyticsMarkedOnly" type="checkbox" class="accent-dull-purple" ${analyticsMarked ? 'checked' : ''}>
+ <span>Marked only</span>
+ </label>
+ <label class="flex items-center gap-2 px-3 py-2 text-sm text-[color:var(--text-main)]">
+ <input id="analyticsIncludeSuspended" type="checkbox" class="accent-dull-purple" ${this.state.analyticsIncludeSuspended !== false ? 'checked' : ''}>
+ <span>Include suspended</span>
+ </label>
+ <div class="h-px bg-[color:var(--card-border)] my-2"></div>
+ <button type="button" class="analytics-menu-option w-full text-left px-3 py-2 text-sm rounded-md bg-[color:var(--accent)]/10 text-[color:var(--accent)] hover:bg-[color:var(--accent)]/20" data-analytic-clear="1">Clear filters</button>
+ `;
+
+                const flagRow = filterMenu.querySelector('#analyticsFlagSwatches');
+                this.updateFlagSwatchMulti(flagRow, analyticsFlags);
+
+                filterMenu.querySelectorAll('[data-analytic-tag]').forEach(btn => {
+                    btn.onclick = (e) => {
+                        e.stopPropagation();
+                        const raw = btn.dataset.analyticTag || '';
+                        const tag = decodeDataAttr(raw);
+                        const next = new Set(this.state.analyticsTags || []);
+                        if (next.has(tag)) next.delete(tag);
+                        else next.add(tag);
+                        this.state.analyticsTags = Array.from(next);
+                        this.persistFilterPrefs();
+                        this.renderAnalytics();
+                        filterMenu.classList.remove('hidden');
+                    };
+                });
+                const tagSearch = filterMenu.querySelector('#analyticsTagSearch');
+                const tagButtons = Array.from(filterMenu.querySelectorAll('.analytics-tag-option'));
+                const applyTagQuery = (query) => {
+                    const q = (query || '').trim().toLowerCase();
+                    tagButtons.forEach(btn => {
+                        const name = decodeDataAttr(btn.dataset.tagName || '');
+                        btn.classList.toggle('hidden', q && !name.includes(q));
+                    });
+                };
+                if (tagSearch) {
+                    tagSearch.oninput = (e) => {
+                        const q = e.target.value || '';
+                        filterMenu.dataset.tagQuery = q;
+                        applyTagQuery(q);
+                    };
+                    applyTagQuery(tagSearch.value || '');
+                }
+
+                filterMenu.querySelectorAll('[data-analytic-flag]').forEach(btn => {
+                    btn.onclick = (e) => {
+                        e.stopPropagation();
+                        const raw = btn.dataset.analyticFlag || '';
+                        const next = new Set(this.state.analyticsFlags || []);
+                        if (next.has(raw)) next.delete(raw);
+                        else next.add(raw);
+                        this.state.analyticsFlags = Array.from(next);
+                        this.persistFilterPrefs();
+                        this.renderAnalytics();
+                        filterMenu.classList.remove('hidden');
+                    };
+                });
+
+                const clearTagsBtn = filterMenu.querySelector('[data-analytic-clear-tags]');
+                if (clearTagsBtn) {
+                    clearTagsBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        this.state.analyticsTags = [];
+                        this.persistFilterPrefs();
+                        this.renderAnalytics();
+                        filterMenu.classList.remove('hidden');
+                    };
+                }
+                const clearFlagsBtn = filterMenu.querySelector('[data-analytic-clear-flags]');
+                if (clearFlagsBtn) {
+                    clearFlagsBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        this.state.analyticsFlags = [];
+                        this.persistFilterPrefs();
+                        this.renderAnalytics();
+                        filterMenu.classList.remove('hidden');
+                    };
+                }
+
+                const markedToggle = filterMenu.querySelector('#analyticsMarkedOnly');
+                if (markedToggle) {
+                    markedToggle.onchange = (e) => {
+                        this.state.analyticsMarked = !!e.target.checked;
+                        this.persistFilterPrefs();
+                        this.renderAnalytics();
+                        filterMenu.classList.remove('hidden');
+                    };
+                }
+                const includeSuspendedToggle = filterMenu.querySelector('#analyticsIncludeSuspended');
+                if (includeSuspendedToggle) {
+                    includeSuspendedToggle.onchange = (e) => {
+                        this.state.analyticsIncludeSuspended = !!e.target.checked;
+                        this.persistFilterPrefs();
+                        this.renderAnalytics();
+                        filterMenu.classList.remove('hidden');
+                    };
+                }
+
+                const clearBtn = filterMenu.querySelector('[data-analytic-clear]');
+                if (clearBtn) {
+                    clearBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        this.state.analyticsTags = [];
+                        this.state.analyticsFlags = [];
+                        this.state.analyticsMarked = false;
+                        this.state.analyticsIncludeSuspended = true;
+                        this.persistFilterPrefs();
+                        this.renderAnalytics();
+                        filterMenu.classList.remove('hidden');
+                    };
+                }
+                createIconsInScope(filterMenu);
+            }
+            let rangeMode = this.state.analyticsRange || 'this-year';
+            if (rangeMode !== 'year') this.state.analyticsYear = 'all';
+            const rangeLabels = {
+                all: 'All time',
+                '7': 'Last week',
+                '30': 'Last month',
+                '90': 'Last 3 months',
+                '180': 'Last 6 months',
+                '365': 'Last year',
+                'this-year': 'This year',
+                year: 'Year'
+            };
+            const rangeLabelEl = el('#analyticsRangeLabel');
+            if (rangeLabelEl) {
+                if (rangeMode === 'year' && this.state.analyticsYear && this.state.analyticsYear !== 'all') {
+                    rangeLabelEl.textContent = `Year • ${this.state.analyticsYear}`;
+                } else {
+                    rangeLabelEl.textContent = rangeLabels[rangeMode] || 'This year';
+                }
+            }
+            const rangeMenu = el('#analyticsRangeMenu');
+            if (rangeMenu) {
+                rangeMenu.querySelectorAll('[data-range]').forEach(btn => {
+                    const rangeKey = btn.dataset.range || '';
+                    const isActive = rangeKey === rangeMode || (rangeKey === 'by-year' && rangeMode === 'year');
+                    btn.classList.toggle('bg-surface-muted', isActive);
+                    btn.classList.toggle('text-main', true);
+                });
+            }
+            const includeSuspendedToggle = el('#analyticsIncludeSuspended');
+            if (includeSuspendedToggle) includeSuspendedToggle.checked = this.state.analyticsIncludeSuspended !== false;
+
+            const heatmapMetricReviewsBtn = el('#heatmapMetricReviews');
+            const heatmapMetricRatingBtn = el('#heatmapMetricRating');
+            if (heatmapMetricReviewsBtn && heatmapMetricRatingBtn) {
+                const isReviews = this.state.analyticsHeatmapMetric === 'count';
+                heatmapMetricReviewsBtn.classList.toggle('is-active', isReviews);
+                heatmapMetricRatingBtn.classList.toggle('is-active', !isReviews);
+                heatmapMetricReviewsBtn.setAttribute('aria-pressed', String(isReviews));
+                heatmapMetricRatingBtn.setAttribute('aria-pressed', String(!isReviews));
+            }
+        };
+
+        // If cache valid and DOM populated, just update labels
+        if (!this.state.analyticsDirty && this.state.analyticsCache && this.state.analyticsCache.key === currentCacheKey && el('#analyticsToday').hasChildNodes()) {
+            updateLabels();
+            return;
         }
-        const selectedDeckId = deckSelect ? deckSelect.value : 'all';
-        const rangeDays = Number(rangeSelect?.value || 90);
-        const cards = selectedDeckId === 'all'
-            ? this.state.cards
-            : this.state.cards.filter(c => c.deckId === selectedDeckId);
+
+        updateLabels();
+
+        // HEAVY CALCULATION START
+        let rangeMode = this.state.analyticsRange || 'this-year';
+        if (rangeMode !== 'year') this.state.analyticsYear = 'all';
+
+        const includeSuspended = this.state.analyticsIncludeSuspended !== false;
+        const filterIds = this.getAnalyticsFilterCandidates();
+        let baseCards;
+        if (filterIds) {
+            baseCards = [];
+            for (const id of filterIds) {
+                const card = this.state.cards.get(id);
+                if (!card) continue;
+                if (!allSelected && !selectedSet.has(card.deckId)) continue;
+                baseCards.push(card);
+            }
+        } else {
+            const allCardsArray = Array.from(this.state.cards.values());
+            baseCards = allSelected
+                ? allCardsArray
+                : allCardsArray.filter(c => selectedSet.has(c.deckId));
+        }
+        const cards = includeSuspended
+            ? baseCards
+            : baseCards.filter(c => !c.suspended && !c.leech);
 
         const events = [];
         cards.forEach(card => {
-            (card.reviewHistory || []).forEach(h => {
-                const at = new Date(h.at);
-                if (!Number.isFinite(at.getTime())) return;
-                events.push({
-                    rating: normalizeRating(h.rating) || h.rating,
-                    at,
-                    ms: Number.isFinite(h.ms) ? Math.max(0, h.ms) : 0
+            const history = Array.isArray(card.reviewHistory) ? card.reviewHistory : [];
+            if (history.length > 0) {
+                history.forEach(h => {
+                    const at = new Date(h.at);
+                    if (!Number.isFinite(at.getTime())) return;
+                    const normalized = normalizeRating(h.rating) || h.rating;
+                    const ratingValue = ratingsMap[normalized] ? ratingsMap[normalized] : ratingsMap.good;
+                    events.push({
+                        rating: normalized,
+                        ratingValue,
+                        at,
+                        ms: Number.isFinite(h.ms) ? Math.max(0, h.ms) : 0
+                    });
                 });
-            });
+                return;
+            }
+            const fallbackReview = card.fsrs?.lastReview || card.sm2?.lastReview || null;
+            if (fallbackReview) {
+                const at = new Date(fallbackReview);
+                if (!Number.isFinite(at.getTime())) return;
+                const normalized = normalizeRating(card.fsrs?.lastRating || card.sm2?.lastRating) || 'good';
+                const ratingValue = ratingsMap[normalized] ? ratingsMap[normalized] : ratingsMap.good;
+                events.push({
+                    rating: normalized,
+                    ratingValue,
+                    at,
+                    ms: 0
+                });
+            }
         });
         events.sort((a, b) => a.at - b.at);
 
@@ -2499,16 +3664,18 @@ export const App = {
         events.forEach(e => {
             const key = this.formatDateKey(e.at);
             if (!key) return;
-            if (!dayMap.has(key)) dayMap.set(key, { count: 0, ms: 0 });
+            if (!dayMap.has(key)) dayMap.set(key, { count: 0, ms: 0, ratingSum: 0, ratingCount: 0 });
             const entry = dayMap.get(key);
             entry.count += 1;
             entry.ms += e.ms || 0;
+            entry.ratingSum += e.ratingValue || 0;
+            entry.ratingCount += 1;
         });
 
         const now = new Date();
         const todayKey = this.formatDateKey(now);
         const todayStats = dayMap.get(todayKey) || { count: 0, ms: 0 };
-        const dueToday = cards.filter(c => !c.suspended && this.isDue(c)).length;
+        const dueToday = cards.filter(c => isSchedulable(c) && this.isDue(c)).length;
 
         const ratings = { again: 0, hard: 0, good: 0, easy: 0 };
         events.forEach(e => {
@@ -2524,10 +3691,16 @@ export const App = {
             return dayMap.get(key)?.count || 0;
         };
         let streak = 0;
-        let cursor = this.startOfDay(now);
-        while (getCountForDate(cursor) > 0) {
-            streak += 1;
-            cursor.setDate(cursor.getDate() - 1);
+        if (events.length > 0) {
+            const lastActive = this.startOfDay(events[events.length - 1].at);
+            const gapDays = Math.floor((this.startOfDay(now) - lastActive) / 86400000);
+            if (gapDays <= 1) {
+                let cursor = new Date(lastActive);
+                while (getCountForDate(cursor) > 0) {
+                    streak += 1;
+                    cursor.setDate(cursor.getDate() - 1);
+                }
+            }
         }
         let longest = 0;
         let current = 0;
@@ -2544,13 +3717,20 @@ export const App = {
             scanDate.setDate(scanDate.getDate() + 1);
         }
 
+        // Cache the heavy lifting result
+        this.state.analyticsCache = {
+            key: currentCacheKey,
+            data: { /* Just key marker for now, we render directly */ }
+        };
+        this.state.analyticsDirty = false;
+
         const todayEl = el('#analyticsToday');
         if (todayEl) {
             todayEl.innerHTML = `
  <div class="analytics-stat-value">${todayStats.count}</div>
  <div class="flex flex-wrap gap-2 mt-2">
- <span class="analytics-pill">⏱️ ${this.formatDuration(todayStats.ms)}</span>
- <span class="analytics-pill">📋 ${dueToday} due</span>
+ <span class="analytics-pill"><i data-lucide="clock" class="w-3 h-3"></i><span class="analytics-pill-value">${this.formatDuration(todayStats.ms)}</span></span>
+ <span class="analytics-pill"><i data-lucide="calendar" class="w-3 h-3"></i>${dueToday} due</span>
  </div>
  `;
         }
@@ -2559,8 +3739,8 @@ export const App = {
             streakEl.innerHTML = `
  <div class="analytics-stat-value">${streak} <span class="text-base font-normal text-[color:var(--text-sub)]">day${streak === 1 ? '' : 's'}</span></div>
  <div class="flex flex-wrap gap-2 mt-2">
- <span class="analytics-pill">🏆 Best: ${longest}</span>
- <span class="analytics-pill">📅 ${dayMap.size} active</span>
+ <span class="analytics-pill"><i data-lucide="trophy" class="w-3 h-3"></i>Best: ${longest}</span>
+ <span class="analytics-pill"><i data-lucide="activity" class="w-3 h-3"></i>${dayMap.size} active</span>
  </div>
  `;
         }
@@ -2569,55 +3749,82 @@ export const App = {
             retentionEl.innerHTML = `
  <div class="analytics-stat-value">${retentionPct}%</div>
  <div class="flex flex-wrap gap-2 mt-2">
- <span class="analytics-pill">📊 ${totalRatings.toLocaleString()} reviews</span>
+ <span class="analytics-pill"><i data-lucide="bar-chart-3" class="w-3 h-3"></i>${totalRatings.toLocaleString()} reviews</span>
  </div>
  `;
         }
         const streakBadge = el('#analyticsStreakBadge');
-        if (streakBadge) streakBadge.textContent = `🔥 ${streak} day streak`;
+        if (streakBadge) streakBadge.innerHTML = `<i data-lucide="flame" class="w-3 h-3"></i>${streak} day streak`;
 
-        const rangeStart = this.startOfDay(new Date(now));
-        rangeStart.setDate(rangeStart.getDate() - (rangeDays - 1));
+        let rangeStart = this.startOfDay(new Date(now));
+        let rangeEnd = this.startOfDay(new Date(now));
+        if (rangeMode === 'this-year') {
+            rangeStart = new Date(now.getFullYear(), 0, 1);
+        } else if (rangeMode === 'year' && this.state.analyticsYear && this.state.analyticsYear !== 'all') {
+            const yearNum = Number(this.state.analyticsYear);
+            if (Number.isFinite(yearNum)) {
+                rangeStart = new Date(yearNum, 0, 1);
+                rangeEnd = new Date(yearNum, 11, 31);
+                if (yearNum === now.getFullYear()) rangeEnd = this.startOfDay(now);
+            }
+        } else if (rangeMode === 'all') {
+            rangeStart = events.length ? this.startOfDay(events[0].at) : this.startOfDay(now);
+        } else {
+            const rangeDays = Number(rangeMode || 90);
+            rangeStart.setDate(rangeStart.getDate() - (rangeDays - 1));
+        }
         const rangeDates = [];
         const rangeCounts = [];
         const rangeMinutes = [];
         const tempDate = new Date(rangeStart);
-        while (tempDate <= this.startOfDay(now)) {
+        while (tempDate <= rangeEnd) {
             const key = this.formatDateKey(tempDate);
             const dayStat = dayMap.get(key) || { count: 0, ms: 0 };
             rangeDates.push(key);
             rangeCounts.push(dayStat.count);
-            rangeMinutes.push(Math.round((dayStat.ms || 0) / 60000));
+            rangeMinutes.push((dayStat.ms || 0) / 60000);
             tempDate.setDate(tempDate.getDate() + 1);
         }
         const countChart = el('#analyticsReviewCount');
         if (countChart) {
-            countChart.innerHTML = this.buildSparkBars(rangeCounts, {
+            const axis = this.buildDateAxisLabels(rangeDates);
+            const top = this.buildChartTopValues(rangeCounts);
+            countChart.innerHTML = `<div class="chart-wrap">
+ ${top}
+ ${this.buildSparkBars(rangeCounts, {
                 height: 100,
                 width: 7,
                 gap: 2,
                 color: 'var(--chart-accent)',
                 titleFormatter: (val, i) => `${rangeDates[i]} • ${val} reviews`
-            });
+            })}
+ ${axis}
+ </div>`;
         }
         const timeChart = el('#analyticsReviewTime');
         if (timeChart) {
-            timeChart.innerHTML = this.buildSparkBars(rangeMinutes, {
+            const axis = this.buildDateAxisLabels(rangeDates);
+            const top = this.buildChartTopValues(rangeMinutes, { unit: 'm', isTime: true });
+            timeChart.innerHTML = `<div class="chart-wrap">
+ ${top}
+ ${this.buildSparkBars(rangeMinutes, {
                 height: 100,
                 width: 7,
                 gap: 2,
                 color: 'var(--chart-accent-2)',
-                titleFormatter: (val, i) => `${rangeDates[i]} • ${val} min`
-            });
+                titleFormatter: (_, i) => `${rangeDates[i]} • ${this.formatDuration(dayMap.get(rangeDates[i])?.ms || 0)}`
+            })}
+ ${axis}
+ </div>`;
         }
 
         const answerBreakdown = el('#analyticsAnswerBreakdown');
         if (answerBreakdown) {
             const rows = [
-                { label: 'Again', key: 'again', color: 'var(--rating-again-fill)', emoji: '🔴' },
-                { label: 'Hard', key: 'hard', color: 'var(--rating-hard-fill)', emoji: '🟠' },
-                { label: 'Good', key: 'good', color: 'var(--rating-good-fill)', emoji: '🟢' },
-                { label: 'Easy', key: 'easy', color: 'var(--rating-easy-fill)', emoji: '🔵' }
+                { label: 'Again', key: 'again', color: 'var(--rating-again-fill)' },
+                { label: 'Hard', key: 'hard', color: 'var(--rating-hard-fill)' },
+                { label: 'Good', key: 'good', color: 'var(--rating-good-fill)' },
+                { label: 'Easy', key: 'easy', color: 'var(--rating-easy-fill)' }
             ];
             answerBreakdown.innerHTML = `
  <div class="space-y-3">
@@ -2646,13 +3853,18 @@ export const App = {
         const hourlyEl = el('#analyticsHourlyBreakdown');
         if (hourlyEl) {
             const formatHour = (h) => h === 0 ? '12am' : h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`;
-            hourlyEl.innerHTML = this.buildSparkBars(hourly, {
+            const axis = this.buildChartAxis(['12a', '6a', '12p', '6p', '11p']);
+            hourlyEl.innerHTML = `<div class="chart-wrap">
+ ${this.buildChartTopValues(hourly)}
+ ${this.buildSparkBars(hourly, {
                 height: 100,
                 width: 14,
                 gap: 4,
                 color: 'var(--chart-accent)',
                 titleFormatter: (val, i) => `${formatHour(i)} • ${val} reviews`
-            });
+            })}
+ ${axis}
+ </div>`;
         }
 
         const intervalBuckets = [
@@ -2698,12 +3910,14 @@ export const App = {
             { label: '9-10', min: 9, max: 10, value: 0 }
         ];
         cards.forEach(card => {
-            if (card.sm2?.easeFactor) {
+            const deck = this.deckById(card.deckId);
+            const alg = deck?.algorithm || 'SM-2';
+            if (alg === 'SM-2' && card.sm2?.easeFactor) {
                 const ease = card.sm2.easeFactor;
                 const bucket = easeBuckets.find(b => ease >= b.min && ease <= b.max);
                 if (bucket) bucket.value += 1;
             }
-            if (card.fsrs?.difficulty) {
+            if (alg === 'FSRS' && card.fsrs?.difficulty) {
                 const diff = card.fsrs.difficulty;
                 const bucket = diffBuckets.find(b => diff >= b.min && diff <= b.max);
                 if (bucket) bucket.value += 1;
@@ -2732,7 +3946,7 @@ export const App = {
             Suspended: 0
         };
         cards.forEach(card => {
-            if (card.suspended) {
+            if (card.suspended || card.leech) {
                 cardCounts.Suspended += 1;
                 return;
             }
@@ -2747,14 +3961,16 @@ export const App = {
             { label: 'New', value: cardCounts.New, color: 'var(--muted-pink)' },
             { label: 'Due', value: cardCounts.Due, color: 'var(--dull-purple)' },
             { label: 'Not due', value: cardCounts['Not due'], color: 'var(--earth-metal)' },
-            { label: 'Suspended', value: cardCounts.Suspended, color: 'rgba(var(--earth-metal-rgb), 0.4)' }
+            ...(includeSuspended ? [{ label: 'Suspended', value: cardCounts.Suspended, color: 'rgb(var(--earth-metal-rgb) / 0.4)' }] : [])
         ];
         const total = pieSlices.reduce((sum, s) => sum + s.value, 0);
         const cardCountsEl = el('#analyticsCardCounts');
         if (cardCountsEl) {
             cardCountsEl.innerHTML = `
  <div class="analytics-pie">
+ <div class="analytics-pie-chart">
  ${this.buildPieChart(pieSlices)}
+ </div>
  <div class="analytics-legend flex-col gap-2">
  ${pieSlices.map(s => {
                 const pct = total > 0 ? Math.round((s.value / total) * 100) : 0;
@@ -2820,43 +4036,182 @@ export const App = {
  `;
         }
 
+        const legendLow = el('#heatmapLegendLow');
+        const legendHigh = el('#heatmapLegendHigh');
+        if (legendLow && legendHigh) {
+            if (this.state.analyticsHeatmapMetric === 'rating') {
+                legendLow.textContent = 'Lower rating';
+                legendHigh.textContent = 'Higher rating';
+            } else {
+                legendLow.textContent = 'Fewer reviews';
+                legendHigh.textContent = 'More reviews';
+            }
+        }
+
+        const heatmapRangeStart = this.startOfDay(rangeStart);
+        const heatmapRangeEnd = this.startOfDay(rangeEnd);
+        const heatmapEvents = events.filter(e => {
+            const day = this.startOfDay(e.at);
+            return day >= heatmapRangeStart && day <= heatmapRangeEnd;
+        });
+        const heatmapDayMap = new Map();
+        heatmapEvents.forEach(e => {
+            const key = this.formatDateKey(e.at);
+            if (!key) return;
+            if (!heatmapDayMap.has(key)) {
+                heatmapDayMap.set(key, {
+                    count: 0,
+                    ms: 0,
+                    ratingSum: 0,
+                    ratingCount: 0,
+                    ratingCounts: { again: 0, hard: 0, good: 0, easy: 0 }
+                });
+            }
+            const entry = heatmapDayMap.get(key);
+            entry.count += 1;
+            entry.ms += e.ms || 0;
+            entry.ratingSum += e.ratingValue || 0;
+            entry.ratingCount += 1;
+            if (entry.ratingCounts && e.rating) {
+                if (entry.ratingCounts[e.rating] === undefined) entry.ratingCounts[e.rating] = 0;
+                entry.ratingCounts[e.rating] += 1;
+            }
+        });
+
         const heatmapEl = el('#analyticsHeatmap');
         if (heatmapEl) {
-            const weeks = Math.ceil(rangeDays / 7);
-            const endHeat = this.startOfDay(now);
-            const startHeat = new Date(endHeat);
-            startHeat.setDate(startHeat.getDate() - (weeks * 7 - 1));
-            const startWeek = new Date(startHeat);
-            startWeek.setDate(startWeek.getDate() - startWeek.getDay());
-            const cells = [];
-            const maxDayCount = Math.max(1, ...Array.from(dayMap.values()).map(v => v.count));
-            for (let d = new Date(startHeat); d <= endHeat; d.setDate(d.getDate() + 1)) {
-                const key = this.formatDateKey(d);
-                const count = dayMap.get(key)?.count || 0;
-                let level = 0;
-                if (count > 0) {
-                    const ratio = count / maxDayCount;
-                    if (ratio > 0.75) level = 4;
-                    else if (ratio > 0.5) level = 3;
-                    else if (ratio > 0.25) level = 2;
-                    else level = 1;
-                }
-                const weekIndex = Math.floor((d - startWeek) / (7 * 86400000));
-                const row = d.getDay() + 1;
-                const title = `${key}: ${count} review${count === 1 ? '' : 's'}`;
-                cells.push(`<div class="heatmap-cell level-${level}" style="grid-column:${weekIndex + 1}; grid-row:${row}" title="${escapeHtml(title)}"></div>`);
+            const rangeYearStart = heatmapRangeStart.getFullYear();
+            const rangeYearEnd = heatmapRangeEnd.getFullYear();
+            const rangeYearList = [];
+            for (let y = rangeYearStart; y <= rangeYearEnd; y++) rangeYearList.push(y);
+            const availableYearStart = events.length ? events[0].at.getFullYear() : now.getFullYear();
+            const availableYearEnd = now.getFullYear();
+            const availableYearList = [];
+            for (let y = availableYearStart; y <= availableYearEnd; y++) availableYearList.push(y);
+            const yearMenu = el('#analyticsYearMenu');
+            const selectedYear = (this.state.analyticsYear || 'all').toString();
+            const validYear = availableYearList.includes(Number(selectedYear));
+            const activeYear = (rangeMode === 'year' && validYear) ? selectedYear : 'all';
+            this.state.analyticsYear = activeYear;
+            if (yearMenu) {
+                yearMenu.innerHTML = [
+                    ...availableYearList.map(y => `<button type="button" class="analytics-year-option w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-muted" data-year="${y}">${y}</button>`)
+                ].join('');
+                yearMenu.querySelectorAll('[data-year]').forEach(btn => {
+                    const isActive = (btn.dataset.year || '') === activeYear;
+                    btn.classList.toggle('bg-surface-muted', isActive);
+                    btn.onclick = () => {
+                        this.state.analyticsRange = 'year';
+                        this.state.analyticsYear = btn.dataset.year || 'all';
+                        el('#analyticsRangeMenu')?.classList.add('hidden');
+                        el('#analyticsYearMenu')?.classList.remove('is-open');
+                        this.renderAnalytics();
+                    };
+                });
             }
-            heatmapEl.innerHTML = cells.join('');
+            const yearsToRender = activeYear === 'all' ? rangeYearList : [Number(activeYear)];
+            const dayLabels = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
+            const monthLabels = ['Ja', 'Fe', 'Mr', 'Ap', 'My', 'Jn', 'Jl', 'Au', 'Se', 'Oc', 'No', 'De'];
+
+            const yearMaxCounts = new Map();
+            for (const [key, val] of heatmapDayMap.entries()) {
+                const y = Number(key.slice(0, 4));
+                const prev = yearMaxCounts.get(y) || 0;
+                if (val.count > prev) yearMaxCounts.set(y, val.count);
+            }
+
+            const startOfWeekMonday = (date) => {
+                const d = this.startOfDay(date);
+                const dayIndex = (d.getDay() + 6) % 7; // Monday = 0
+                d.setDate(d.getDate() - dayIndex);
+                return d;
+            };
+            const endOfWeekSunday = (date) => {
+                const d = this.startOfDay(date);
+                const dayIndex = (d.getDay() + 6) % 7; // Monday = 0
+                d.setDate(d.getDate() + (6 - dayIndex));
+                return d;
+            };
+
+            const buildYearGrid = (year) => {
+                const yearStart = new Date(year, 0, 1);
+                const yearEnd = new Date(year, 11, 31);
+                const start = startOfWeekMonday(yearStart);
+                const end = endOfWeekSunday(yearEnd);
+                const days = [];
+                for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                    days.push(new Date(d));
+                }
+                const weeks = Math.ceil(days.length / 7);
+                const maxDayCount = Math.max(1, yearMaxCounts.get(year) || 0);
+                const maxDayRating = 4;
+                const cells = [];
+
+                dayLabels.forEach((label, idx) => {
+                    cells.push(`<div class="heatmap-label heatmap-day-label" style="grid-row:${idx + 2};">${label}</div>`);
+                });
+
+                days.forEach((d, idx) => {
+                    const inYear = d.getFullYear() === year;
+                    const inRange = d >= heatmapRangeStart && d <= heatmapRangeEnd;
+                    const key = this.formatDateKey(d);
+                    const stats = inYear && inRange
+                        ? (heatmapDayMap.get(key) || { count: 0, ms: 0, ratingSum: 0, ratingCount: 0, ratingCounts: { again: 0, hard: 0, good: 0, easy: 0 } })
+                        : { count: 0, ms: 0, ratingSum: 0, ratingCount: 0, ratingCounts: { again: 0, hard: 0, good: 0, easy: 0 } };
+                    const count = stats.count || 0;
+                    const ms = stats.ms || 0;
+                    const avgRating = stats.ratingCount ? stats.ratingSum / stats.ratingCount : 0;
+                    const rc = stats.ratingCounts || { again: 0, hard: 0, good: 0, easy: 0 };
+                    const distLabel = `Again ${rc.again || 0}, Hard ${rc.hard || 0}, Good ${rc.good || 0}, Easy ${rc.easy || 0}`;
+                    let level = 0;
+                    if (this.state.analyticsHeatmapMetric === 'rating' && stats.ratingCount > 0) {
+                        const ratio = avgRating / Math.max(1, maxDayRating || 4);
+                        if (ratio > 0.75) level = 4;
+                        else if (ratio > 0.5) level = 3;
+                        else if (ratio > 0.25) level = 2;
+                        else level = 1;
+                    } else if (count > 0) {
+                        const ratio = count / maxDayCount;
+                        if (ratio > 0.75) level = 4;
+                        else if (ratio > 0.5) level = 3;
+                        else if (ratio > 0.25) level = 2;
+                        else level = 1;
+                    }
+                    const weekIndex = Math.floor(idx / 7);
+                    const row = ((d.getDay() + 6) % 7) + 2;
+                    const title = this.state.analyticsHeatmapMetric === 'rating'
+                        ? `${key}: ${count} card${count === 1 ? '' : 's'} reviewed • Average ${avgRating ? avgRating.toFixed(2) : '—'} • ${distLabel}`
+                        : `${key}: ${count} card${count === 1 ? '' : 's'} reviewed`;
+                    const outsideClass = inYear && inRange ? '' : ' is-outside';
+                    cells.push(`<div class="heatmap-cell level-${level}${outsideClass}" style="grid-column:${weekIndex + 2}; grid-row:${row}" data-tip="${escapeHtml(title)}" tabindex="0"></div>`);
+
+                    if (inYear && d.getDate() === 1) {
+                        const label = monthLabels[d.getMonth()];
+                        cells.push(`<div class="heatmap-label heatmap-month-label" style="grid-column:${weekIndex + 2};">${label}</div>`);
+                    }
+                });
+
+                return `
+ <div class="heatmap-year" data-year="${year}">
+ <div class="heatmap-year-title">${year}</div>
+ <div class="heatmap-grid" style="--heatmap-weeks:${weeks};">
+ ${cells.join('')}
+ </div>
+ </div>
+ `;
+            };
+
+            heatmapEl.innerHTML = yearsToRender.map(buildYearGrid).join('');
         }
+
+        const container = el('#analyticsTab');
+        if (container) createIconsInScope(container);
+        this.persistUiStateDebounced();
     },
     buildLocalTagOptions() {
-        const tagMap = new Map();
-        this.state.cards.forEach(c => {
-            (c.tags || []).forEach(t => {
-                if (!tagMap.has(t.name)) tagMap.set(t.name, t.color || 'default');
-            });
-        });
-        return Array.from(tagMap.entries()).map(([name, color]) => ({ name, color }));
+        return Array.from(this.state.tagRegistry.entries())
+            .map(([name, data]) => ({ name, color: data.color }))
+            .sort((a, b) => a.name.localeCompare(b.name));
     },
     collectTagOptions() {
         const tagMap = new Map();
@@ -2874,6 +4229,13 @@ export const App = {
 
         const selected = new Set(this.state.tagSelection || []);
         const allOptions = this.collectTagOptions();
+        const colorMap = new Map();
+        allOptions.forEach(opt => {
+            if (opt?.name) colorMap.set(opt.name, opt.color || 'default');
+        });
+        (this.state.editingCard?.tags || []).forEach(t => {
+            if (t?.name && !colorMap.has(t.name)) colorMap.set(t.name, t.color || 'default');
+        });
         const query = (input.value || '').toLowerCase();
         const options = allOptions.filter(opt => opt.name.toLowerCase().includes(query));
         const canAdd = query && !allOptions.some(opt => opt.name.toLowerCase() === query);
@@ -2906,12 +4268,16 @@ export const App = {
         });
 
         selectedWrap.innerHTML = selected.size
-            ? Array.from(selected).map(tag => `
- <span class="tag-pill inline-flex items-center gap-1 px-2 py-1 rounded-full bg-surface-strong text-main text-xs border border-card">
+            ? Array.from(selected).map(tag => {
+                const color = colorMap.get(tag) || 'default';
+                const colorClass = `notion-color-${color.replace(/_/g, '-')}-background`;
+                return `
+ <span class="tag-pill tag-colored inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border border-card ${colorClass}">
  ${escapeHtml(tag)}
  <button class="remove-tag text-sub" data-tag="${encodeDataAttr(tag)}">&times;</button>
  </span>
- `).join('')
+ `;
+            }).join('')
             : '<span class="text-faint text-xs">No tags selected</span>';
 
         selectedWrap.querySelectorAll('.remove-tag').forEach(btn => {
@@ -2986,6 +4352,59 @@ export const App = {
             startBtn.classList.remove('opacity-60', 'cursor-not-allowed');
         }
 
+        const dueCounts = new Map();
+        let totalDue = 0;
+        const f = this.state.filters;
+        const defaultStudyFilters = !f.again && !f.hard && !f.addedToday && (!f.tags || f.tags.length === 0) &&
+            !f.marked && (!f.flag || (Array.isArray(f.flag) ? f.flag.length === 0 : f.flag === ''));
+        const tagsKey = (f.tags || []).slice().sort().join('|');
+        const flagKey = Array.isArray(f.flag) ? f.flag.slice().sort().join('|') : (f.flag || '');
+        const timeBucket = Math.floor(Date.now() / STUDY_DUE_BUCKET_MS);
+        const cacheKey = JSON.stringify({
+            v: this.state.cardsVersion,
+            b: timeBucket,
+            f: { again: f.again, hard: f.hard, addedToday: f.addedToday, tags: tagsKey, marked: f.marked, flag: flagKey, default: defaultStudyFilters }
+        });
+
+        if (this.state.studyDeckCache?.key === cacheKey) {
+            const cached = this.state.studyDeckCache;
+            cached.dueCounts.forEach((value, key) => dueCounts.set(key, value));
+            totalDue = cached.totalDue;
+        } else {
+            if (defaultStudyFilters) {
+                const effectiveNow = this.getEffectiveNowMs();
+                for (const d of this.state.decks) {
+                    const due = this.getDueCountForDeck(d.id, effectiveNow);
+                    if (due > 0) dueCounts.set(d.id, due);
+                    totalDue += due;
+                }
+            } else {
+                const candidateIds = this.getStudyFilterCandidates(f);
+                if (candidateIds && candidateIds.size === 0) {
+                    totalDue = 0;
+                } else if (candidateIds) {
+                    for (const id of candidateIds) {
+                        const card = this.state.cards.get(id);
+                        if (!card) continue;
+                        if (!this.passFilters(card, { context: 'study' })) continue;
+                        if (!isSchedulable(card)) continue;
+                        if (!this.isDue(card)) continue;
+                        dueCounts.set(card.deckId, (dueCounts.get(card.deckId) || 0) + 1);
+                        totalDue += 1;
+                    }
+                } else {
+                    for (const card of this.state.cards.values()) {
+                        if (!this.passFilters(card, { context: 'study' })) continue;
+                        if (!isSchedulable(card)) continue;
+                        if (!this.isDue(card)) continue;
+                        dueCounts.set(card.deckId, (dueCounts.get(card.deckId) || 0) + 1);
+                        totalDue += 1;
+                    }
+                }
+            }
+            this.state.studyDeckCache = { key: cacheKey, dueCounts, totalDue };
+        }
+
         const selected = this.state.filters.studyDecks || [];
         const query = (input.value || '').toLowerCase();
 
@@ -2993,7 +4412,7 @@ export const App = {
         const filtered = this.state.decks.filter(d => d.name.toLowerCase().includes(query));
         dropdown.innerHTML = filtered.map(d => {
             const isSelected = selected.includes(d.id);
-            const dueCount = this.cardsForDeck(d.id).filter(c => this.isDue(c)).length;
+            const dueCount = dueCounts.get(d.id) || 0;
             return `<div class="deck-option flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-surface-muted ${isSelected ? 'bg-accent-soft' : ''}" data-deck-id="${d.id}">
  <span class="flex items-center gap-2">
  ${isSelected ? '<i data-lucide="check" class="w-3 h-3 text-accent"></i>' : '<span class="w-3"></span>'}
@@ -3018,10 +4437,96 @@ export const App = {
  </span>`;
         }).join('');
         if (selected.length === 0) {
-            const totalDue = this.state.cards.filter(c => this.isDue(c)).length;
             display.innerHTML = `<span class="text-accent text-xs italic">All decks (${totalDue} due)</span>`;
         }
-        lucide.createIcons();
+        createIconsInScope(dropdown);
+        createIconsInScope(display);
+    },
+    getStudyFilterCandidates(filters) {
+        const f = filters || this.state.filters;
+        const tags = Array.isArray(f.tags) ? f.tags.map(t => (t || '').trim()).filter(Boolean) : [];
+        const flags = Array.isArray(f.flag)
+            ? f.flag.map(v => (v || '').trim()).filter(Boolean)
+            : [(f.flag || '').trim()].filter(Boolean);
+        const needsMarked = !!f.marked;
+        const needsAgain = !!f.again;
+        const needsHard = !!f.hard;
+        const needsToday = !!f.addedToday;
+
+        let candidates = null;
+        if (tags.length > 0) {
+            const union = new Set();
+            for (const tag of tags) {
+                const set = this.state.tagIndex.get(tag);
+                if (set) set.forEach(id => union.add(id));
+            }
+            candidates = union;
+        }
+        if (flags.length > 0) {
+            const union = new Set();
+            for (const flag of flags) {
+                const set = this.state.flagIndex.get(flag);
+                if (set) set.forEach(id => union.add(id));
+            }
+            candidates = candidates ? this.intersectIdSets(candidates, union) : union;
+        }
+        if (needsMarked) {
+            const marked = this.state.markedIndex || new Set();
+            candidates = candidates ? this.intersectIdSets(candidates, marked) : new Set(marked);
+        }
+        if (needsAgain || needsHard) {
+            const union = new Set();
+            const againSet = this.state.ratingIndex.get('again');
+            if (againSet) againSet.forEach(id => union.add(id));
+            if (!needsAgain) {
+                const hardSet = this.state.ratingIndex.get('hard');
+                if (hardSet) hardSet.forEach(id => union.add(id));
+            }
+            candidates = candidates ? this.intersectIdSets(candidates, union) : union;
+        }
+        if (needsToday) {
+            const key = this.formatDateKey(new Date());
+            const set = (key && this.state.createdDateIndex.get(key)) || new Set();
+            candidates = candidates ? this.intersectIdSets(candidates, set) : new Set(set);
+        }
+        return candidates;
+    },
+    getAnalyticsFilterCandidates() {
+        const tags = Array.isArray(this.state.analyticsTags) ? this.state.analyticsTags.map(t => (t || '').trim()).filter(Boolean) : [];
+        const flags = Array.isArray(this.state.analyticsFlags) ? this.state.analyticsFlags.map(t => (t || '').trim()).filter(Boolean) : [];
+        const needsMarked = !!this.state.analyticsMarked;
+
+        let candidates = null;
+        if (tags.length > 0) {
+            const union = new Set();
+            for (const tag of tags) {
+                const set = this.state.tagIndex.get(tag);
+                if (set) set.forEach(id => union.add(id));
+            }
+            candidates = union;
+        }
+        if (flags.length > 0) {
+            const union = new Set();
+            for (const flag of flags) {
+                const set = this.state.flagIndex.get(flag);
+                if (set) set.forEach(id => union.add(id));
+            }
+            candidates = candidates ? this.intersectIdSets(candidates, union) : union;
+        }
+        if (needsMarked) {
+            const marked = this.state.markedIndex || new Set();
+            candidates = candidates ? this.intersectIdSets(candidates, marked) : new Set(marked);
+        }
+        return candidates;
+    },
+    intersectIdSets(a, b) {
+        if (!a || !b) return new Set();
+        const out = new Set();
+        const [small, large] = a.size <= b.size ? [a, b] : [b, a];
+        for (const id of small) {
+            if (large.has(id)) out.add(id);
+        }
+        return out;
     },
     bindDeckSearch() {
         const input = el('#deckSearchInput');
@@ -3077,22 +4582,125 @@ export const App = {
             }
         };
     },
+    highlightVariables(el, allowedVars = [], sourceText = null) {
+        if (!el) return;
+
+        // Save cursor position
+        const getCaretIndex = (element) => {
+            let position = 0;
+            const isSupported = typeof window.getSelection !== "undefined";
+            if (isSupported) {
+                const selection = window.getSelection();
+                if (selection.rangeCount !== 0) {
+                    const range = window.getSelection().getRangeAt(0);
+                    const preCaretRange = range.cloneRange();
+                    preCaretRange.selectNodeContents(element);
+                    preCaretRange.setEnd(range.endContainer, range.endOffset);
+                    position = preCaretRange.toString().length;
+                }
+            }
+            return position;
+        };
+
+        const setCaretIndex = (element, index) => {
+            let charIndex = 0, range = document.createRange();
+            range.setStart(element, 0);
+            range.collapse(true);
+            let nodeStack = [element], node, found = false, stop = false;
+
+            while (!stop && (node = nodeStack.pop())) {
+                if (node.nodeType === 3) {
+                    const nextCharIndex = charIndex + node.length;
+                    if (!found && index >= charIndex && index <= nextCharIndex) {
+                        range.setStart(node, index - charIndex);
+                        range.collapse(true);
+                        found = true;
+                    }
+                    charIndex = nextCharIndex;
+                } else {
+                    let i = node.childNodes.length;
+                    while (i--) {
+                        nodeStack.push(node.childNodes[i]);
+                    }
+                }
+            }
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+        };
+
+        const caret = sourceText === null ? getCaretIndex(el) : 0;
+        const text = sourceText !== null ? sourceText : el.innerText;
+
+        // Highlight logic - only match allowed variables
+        let html = escapeHtml(text);
+        if (allowedVars.length > 0) {
+            // Escape vars for regex just in case (though these are known safe strings)
+            const pattern = new RegExp(`\\{\\{(${allowedVars.join('|')})\\}\\}`, 'g');
+            html = html.replace(pattern, '<span class="text-accent bg-accent-soft rounded px-0.5">{{$1}}</span>');
+        }
+
+        html = html.replace(/\n/g, '<br>');
+
+        // Only update if changed (prevents loop/jitter if no change)
+        if (el.innerHTML !== html) {
+            el.innerHTML = html;
+            try {
+                setCaretIndex(el, caret);
+            } catch (e) {
+                const range = document.createRange();
+                range.selectNodeContents(el);
+                range.collapse(false);
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+            }
+        }
+    },
+
     openDeckModal(deck) {
         if (!this.isReady()) { this.openSettings(); return; }
         this.state.editingDeck = deck || null;
         el('#deckModalTitle').textContent = deck ? 'Edit deck' : 'New deck';
         el('#deckNameInput').value = deck?.name ?? '';
-        const algo = deck?.algorithm ?? 'SM-2';
+        const algo = deck?.algorithm || 'SM-2';
         el('#deckAlgoInput').value = algo;
         el('#deckReviewLimit').value = deck?.reviewLimit ?? 50;
         el('#deckNewLimit').value = deck?.newLimit ?? 20;
         el('#deckOrderMode').value = deck?.orderMode ?? 'none';
         el('#deckReverseInput').checked = deck?.reverse ?? false;
-        el('#deckPromptInput').value = deck?.aiPrompt ?? DEFAULT_AI_PROMPT;
+
+        const promptInput = el('#deckPromptInput');
+        const revVars = ['question', 'answer', 'user'];
+        // Use innerText for contenteditable
+        if (promptInput) {
+            const rawPrompt = deck?.aiPrompt ?? DEFAULT_AI_PROMPT;
+            this.highlightVariables(promptInput, revVars, rawPrompt);
+            promptInput.oninput = debounce(() => this.highlightVariables(promptInput, revVars), 300);
+        }
+
+        const dyEnabled = el('#deckDynamicContextInput');
+        const dyFields = el('#dyContextFields');
+        const dyPromptInput = el('#deckDyPromptInput');
+        const dyVars = ['root_front', 'root_back', 'prev_front', 'prev_back', 'tags', 'card_type'];
+        if (dyEnabled) dyEnabled.checked = !!deck?.dynamicContext;
+        if (dyPromptInput) {
+            const rawDy = deck?.dyAiPrompt ?? '';
+            this.highlightVariables(dyPromptInput, dyVars, rawDy);
+            dyPromptInput.oninput = debounce(() => this.highlightVariables(dyPromptInput, dyVars), 300);
+        }
+        const toggleDyContextFields = () => {
+            if (!dyFields || !dyEnabled) return;
+            dyFields.classList.toggle('hidden', !dyEnabled.checked);
+            if (dyEnabled.checked && dyPromptInput && !(dyPromptInput.innerText || '').trim()) {
+                // If showing for first time and empty, load default
+                this.highlightVariables(dyPromptInput, dyVars, DEFAULT_DYCONTEXT_PROMPT);
+            }
+        };
+        if (dyEnabled) dyEnabled.onchange = toggleDyContextFields;
+        toggleDyContextFields();
 
         const srsConfig = parseSrsConfig(deck?.srsConfig || null, algo);
-        const srsConfigInput = el('#deckSrsConfigInput');
-        if (srsConfigInput) srsConfigInput.value = JSON.stringify(srsConfig, null, 2);
         const learningStepsInput = el('#deckLearningSteps');
         if (learningStepsInput) learningStepsInput.value = (srsConfig.learningSteps || []).join(', ');
         const relearningStepsInput = el('#deckRelearningSteps');
@@ -3236,7 +4844,6 @@ export const App = {
                 if (k % 10 === 0) {
                     showLoading('Optimizing FSRS weights...', `Iter ${k + 1}/${iters} • best logloss ${bestLoss.toFixed(4)}`, cancelOptimization);
                     setLoadingProgress(((k + 1) / iters) * 100, `${Math.round(((k + 1) / iters) * 100)}% • iter ${k + 1}/${iters}`);
-                    // Phase 18: Use requestIdleCallback when available for better main thread responsiveness
                     await new Promise(r => {
                         if (typeof requestIdleCallback === 'function') {
                             requestIdleCallback(r, { timeout: 50 });
@@ -3260,8 +4867,6 @@ export const App = {
             deck.srsConfig.fsrs.weights = rounded;
             const paramsInput = el('#deckFsrsParams');
             if (paramsInput) paramsInput.value = rounded.join(', ');
-            const srsConfigInput = el('#deckSrsConfigInput');
-            if (srsConfigInput) srsConfigInput.value = JSON.stringify(deck.srsConfig, null, 2);
             toast(`Optimized FSRS weights loaded (best logloss ${bestLoss.toFixed(4)}). Press Save to apply.`);
         } finally {
             hideLoading();
@@ -3278,31 +4883,23 @@ export const App = {
         el('#deckModal').classList.remove('flex');
     },
     async saveDeckFromModal() {
+        const wasDynamic = this.state.editingDeck?.dynamicContext === true;
         const d = this.state.editingDeck || this.newDeck('', 'SM-2');
+        const prevAlgorithm = d.algorithm || 'SM-2';
         d.name = el('#deckNameInput').value || d.name || 'Untitled deck';
-        d.algorithm = el('#deckAlgoInput').value;
+        d.algorithm = el('#deckAlgoInput').value || 'SM-2';
         d.reviewLimit = Number(el('#deckReviewLimit').value) || 50;
         d.newLimit = Number(el('#deckNewLimit').value) || 20;
         d.orderMode = el('#deckOrderMode').value || 'none';
         d.reverse = el('#deckReverseInput').checked;
-        d.aiPrompt = el('#deckPromptInput').value || '';
+        d.aiPrompt = el('#deckPromptInput')?.innerText || '';
+        d.dynamicContext = !!el('#deckDynamicContextInput')?.checked;
+        const rawDyPrompt = (el('#deckDyPromptInput')?.innerText || '').trim();
+        d.dyAiPrompt = d.dynamicContext
+            ? (rawDyPrompt || DEFAULT_DYCONTEXT_PROMPT)
+            : rawDyPrompt;
 
-        const rawConfig = el('#deckSrsConfigInput')?.value || '';
-        const hasConfig = !!rawConfig.trim();
-        let srsConfig = null;
-        if (hasConfig) {
-            try {
-                JSON.parse(rawConfig);
-                srsConfig = parseSrsConfig(rawConfig, d.algorithm);
-            } catch (e) {
-                toast('Invalid SRS Config JSON — using defaults');
-                srsConfig = parseSrsConfig(null, d.algorithm);
-                const srsConfigInput = el('#deckSrsConfigInput');
-                if (srsConfigInput) srsConfigInput.value = JSON.stringify(srsConfig, null, 2);
-            }
-        } else {
-            srsConfig = parseSrsConfig(d.srsConfig || null, d.algorithm);
-        }
+        const srsConfig = parseSrsConfig(d.srsConfig || null, d.algorithm);
 
         const learningSteps = el('#deckLearningSteps')?.value || '';
         const relearningSteps = el('#deckRelearningSteps')?.value || '';
@@ -3316,7 +4913,7 @@ export const App = {
         if (easyInterval.trim()) srsConfig.easyInterval = easyInterval.trim();
         if (easyDays.trim()) srsConfig.easyDays = toList(easyDays).map(d => d.slice(0, 3));
 
-        if (d.algorithm === 'FSRS' && !hasConfig) {
+        if (d.algorithm === 'FSRS') {
             const rawRetention = el('#deckFsrsDesiredRetention')?.value?.trim() || '';
             const rawParams = el('#deckFsrsParams')?.value?.trim() || '';
             if (rawRetention) {
@@ -3339,13 +4936,17 @@ export const App = {
             }
         }
         d.srsConfig = srsConfig;
-        const srsConfigInput = el('#deckSrsConfigInput');
-        if (srsConfigInput) srsConfigInput.value = JSON.stringify(srsConfig, null, 2);
 
         if (!this.state.editingDeck) this.state.decks.push(d);
         d.updatedInApp = true;
         await Storage.put('decks', d);
         this.queueOp({ type: 'deck-upsert', payload: d });
+        if (d.dynamicContext && !wasDynamic) {
+            await this.normalizeDyContextRootsForDeck(d.id);
+        }
+        if (this.state.editingDeck && prevAlgorithm !== d.algorithm) {
+            this.reindexDeckDue(d.id);
+        }
         this.closeDeckModal();
         this.renderDecks();
         this.renderStudy();
@@ -3369,12 +4970,14 @@ export const App = {
         await Storage.put('decks', deck);
         this.queueOp({ type: 'deck-upsert', payload: deck });
 
-        const cards = this.cardsForDeck(deck.id);
-        for (const card of cards) {
-            const idx = this.state.cards.findIndex(c => c.id === card.id);
-            if (idx >= 0) this.state.cards.splice(idx, 1);
-            await Storage.delete('cards', card.id);
+        await Storage.deleteCardsByDeck(deck.id);
+        // Clean from memory using index (efficient)
+        const deckCards = this.cardsForDeck(deck.id);
+        // Use a copy since removeCard modifies the index
+        for (const c of [...deckCards]) {
+            this.removeCard(c.id);
         }
+
         const deckIdx = this.state.decks.findIndex(d => d.id === deck.id);
         if (deckIdx >= 0) this.state.decks.splice(deckIdx, 1);
         await Storage.delete('decks', deck.id);
@@ -3403,7 +5006,7 @@ export const App = {
     async confirmResetAlgorithm() {
         const deck = this.state.selectedDeck;
         if (!deck) return;
-        const cards = this.cardsForDeck(deck.id);
+        const cards = await Storage.getCardsByDeck(deck.id);
         if (cards.length === 0) {
             toast('No cards in this deck');
             this.closeModal('resetAlgorithmModal');
@@ -3471,17 +5074,16 @@ export const App = {
                 }
             }
 
-            // Queue for sync to Notion
             for (const card of chunk) {
                 this.queueOp({ type: 'card-upsert', payload: card });
             }
         }
 
-        // Update in-memory state
-        this.state.cards = this.state.cards.map(c => {
-            const updated = cards.find(uc => uc.id === c.id);
-            return updated || c;
-        });
+        for (const card of cards) {
+            if (this.state.cards.has(card.id)) {
+                this.setCard(card);
+            }
+        }
 
         this.closeModal('resetAlgorithmModal');
 
@@ -3505,6 +5107,7 @@ export const App = {
         const deckSelect = el('#cardDeckInput');
         deckSelect.innerHTML = this.state.decks.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
         deckSelect.value = card?.deckId || this.state.selectedDeck?.id || this.state.decks[0]?.id;
+        deckSelect.onchange = () => this.updateCardOrderVisibility(deckSelect.value);
         el('#cardTypeInput').value = card?.type ?? 'Front-Back';
         el('#cardNameInput').value = card?.name ?? '';
         el('#cardBackInput').value = card?.back ?? '';
@@ -3517,16 +5120,43 @@ export const App = {
         el('#cardOrderInput').value = (typeof card?.order === 'number') ? card.order : '';
         el('#cardSuspendedInput').checked = card?.suspended ?? false;
         el('#cardLeechInput').checked = card?.leech ?? false;
+        const suspendedInput = el('#cardSuspendedInput');
+        const leechInput = el('#cardLeechInput');
+        if (suspendedInput && leechInput) {
+            suspendedInput.onchange = () => {
+                if (!suspendedInput.checked) leechInput.checked = false;
+            };
+            leechInput.onchange = () => {
+                if (leechInput.checked) suspendedInput.checked = true;
+            };
+        }
         el('#cardMarkedInput').checked = card?.marked ?? false;
         el('#cardFlagInput').value = card?.flag || '';
+        const flagSwatches = el('#cardFlagSwatches');
+        if (flagSwatches) {
+            this.updateFlagSwatchSelection(flagSwatches, card?.flag || '');
+            flagSwatches.onclick = (e) => {
+                const btn = e.target.closest('[data-flag]');
+                if (!btn) return;
+                const value = btn.dataset.flag || '';
+                const input = el('#cardFlagInput');
+                if (input) input.value = value;
+                this.updateFlagSwatchSelection(flagSwatches, value);
+            };
+        }
         el('#deleteCardBtn').classList.toggle('hidden', !card);
+        const suspField = el('#cardSuspendedLeechField');
+        if (suspField) suspField.classList.toggle('hidden', !card);
+        this.updateCardOrderVisibility(deckSelect.value);
         // Show/hide back section based on card type
         this.updateCardBackVisibility();
         // Populate review history section
         this.renderCardModalReviewHistory(card);
-        el('#cardModal').classList.remove('hidden');
-        el('#cardModal').classList.add('flex');
-        lucide.createIcons();
+        const modal = el('#cardModal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        createIconsInScope(modal);
+        focusTrap.attach(modal);
     },
     renderCardModalReviewHistory(card) {
         const section = el('#cardReviewHistorySection');
@@ -3565,9 +5195,18 @@ export const App = {
         const backSection = el('#cardBackSection');
         if (backSection) backSection.classList.toggle('hidden', isCloze);
     },
+    updateCardOrderVisibility(deckId) {
+        const field = el('#cardOrderField');
+        if (!field) return;
+        const deck = this.deckById(deckId) || this.state.selectedDeck;
+        const show = deck?.orderMode === 'property';
+        field.classList.toggle('hidden', !show);
+    },
     closeCardModal() {
-        el('#cardModal').classList.add('hidden');
-        el('#cardModal').classList.remove('flex');
+        const modal = el('#cardModal');
+        focusTrap.detach();
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
     },
     async saveCardFromModal() {
         let card = this.state.editingCard || this.newCard('', '', '', 'Front-Back');
@@ -3583,18 +5222,35 @@ export const App = {
             const autoType = detectCardType(card.name, card.back);
             if (card.type === 'Front-Back' && autoType === 'Cloze') card.type = 'Cloze';
         }
+        if (isClozeParent(card)) {
+            const clozeSet = parseClozeIndices(card.name);
+            if (card.back) parseClozeIndices(card.back).forEach(i => clozeSet.add(i));
+            const indices = Array.from(clozeSet).sort((a, b) => a - b);
+            card.clozeIndexes = indices.length ? indices.join(',') : '';
+        } else if ((card.type || '').toLowerCase() !== 'cloze' && !card.parentCard) {
+            card.clozeIndexes = '';
+        }
         const selectedTags = this.state.tagSelection || [];
         const optionMap = new Map(this.collectTagOptions().map(t => [t.name, t.color || 'default']));
         const existingColors = new Map((this.state.editingCard?.tags || []).map(t => [t.name, t.color || 'default']));
         card.tags = selectedTags.map(name => ({ name, color: optionMap.get(name) || existingColors.get(name) || 'default' }));
-        const orderVal = el('#cardOrderInput').value;
-        card.order = orderVal === '' ? null : Number(orderVal);
+        const orderField = el('#cardOrderField');
+        const orderVal = (orderField && orderField.classList.contains('hidden')) ? '' : el('#cardOrderInput').value;
+        const parsedOrder = orderVal === '' ? null : Number(orderVal);
+        // Omit order if NaN to avoid sending invalid number to Notion API
+        card.order = Number.isFinite(parsedOrder) ? parsedOrder : null;
         card.marked = el('#cardMarkedInput').checked;
         card.flag = el('#cardFlagInput').value || '';
-        card.suspended = el('#cardSuspendedInput').checked;
-        card.leech = el('#cardLeechInput').checked;
-        // Only set updatedInApp if name/back/notes changed (affects rich_text preservation)
-        // Note: Editing Name, Back, or Notes will cause text colors and highlights to be lost on sync
+        const suspendedChecked = el('#cardSuspendedInput').checked;
+        const leechChecked = el('#cardLeechInput').checked;
+        if (!suspendedChecked && leechChecked) {
+            // Unsuspending always clears leech.
+            card.suspended = 0;
+            card.leech = false;
+        } else {
+            card.leech = leechChecked;
+            card.suspended = (suspendedChecked || leechChecked) ? 1 : 0;
+        }
         if (card.name !== oldName || card.back !== oldBack || card.notes !== oldNotes) {
             card.updatedInApp = true;
         }
@@ -3605,17 +5261,18 @@ export const App = {
             }
         });
         Storage.setMeta('tagOptions', this.state.tagOptions).catch(e => console.debug('Storage setMeta tagOptions failed:', e));
-        if (!this.state.editingCard) this.state.cards.push(card);
+
+        this.setCard(card);
+
         await Storage.put('cards', card);
         this.queueOp({ type: 'card-upsert', payload: card });
-
-        // If this is a cloze parent, reconcile its sub-items immediately
         if (isClozeParent(card)) {
             await this.reconcileSingleParent(card);
         }
-
-        this.closeCardModal();
         this.renderCards();
+        this.renderDecks(); // Refresh stats (due counts, etc.)
+        this.renderStudyDeckSelection();
+        this.closeCardModal();
         toast('Card saved');
     },
     async deleteCardFromModal() {
@@ -3641,8 +5298,19 @@ export const App = {
             if (loadingMsg && !el('#loadingOverlay').classList.contains('hidden')) {
                 loadingMsg.textContent = 'Pushing local changes...';
             }
-            await this.pushQueue();
+            const pushResult = await this.pushQueue();
             el('#syncProgress').style.width = '50%';
+
+            if (pushResult.failedCount > 0) {
+                toast(`Push completed with ${pushResult.failedCount} errors. Some items may not be synced.`);
+            }
+            if (!pushResult.success) {
+                if (loadingMsg && !el('#loadingOverlay').classList.contains('hidden')) {
+                    loadingMsg.textContent = 'Push failed — pull skipped';
+                }
+                toast('Push failed, skipping pull to avoid overwriting local changes');
+                return;
+            }
 
             // Then pull to get updates
             if (loadingMsg && !el('#loadingOverlay').classList.contains('hidden')) {
@@ -3656,12 +5324,16 @@ export const App = {
             }
             const nowIso = new Date().toISOString();
             this.state.lastPull = nowIso;
-            this.state.lastPush = nowIso;
-            this.state.lastSync = nowIso;
+            if (pushResult.success) {
+                this.state.lastPush = nowIso;
+                this.state.lastSync = nowIso;
+                await Storage.put('meta', { key: 'lastPush', value: nowIso });
+                await Storage.put('meta', { key: 'lastSync', value: nowIso });
+                toast('Synced with Notion');
+            } else {
+                toast('Synced with warnings (check status)');
+            }
             await Storage.put('meta', { key: 'lastPull', value: nowIso });
-            await Storage.put('meta', { key: 'lastPush', value: nowIso });
-            await Storage.put('meta', { key: 'lastSync', value: nowIso });
-            toast('Synced with Notion');
         } catch (e) {
             console.error('Sync failed', e);
             toast('Sync failed – check your internet connection or Notion settings');
@@ -3670,7 +5342,7 @@ export const App = {
             setTimeout(() => el('#syncProgress').style.width = '0%', 700);
             this.state.syncing = false;
             this.updateSyncButtonState();
-            if (this.state.queue.length > 0) {
+            if (this.state.queue.size > 0) {
                 this.requestAutoSyncSoon(MIN_PUSH_INTERVAL_MS + 100);
             }
         }
@@ -3679,26 +5351,22 @@ export const App = {
         const { deckSource, cardSource } = this.state.settings;
         if (!deckSource || !cardSource) return;
         const since = this.state.lastPull;
+        const firstSync = !since;
+        const localDeckMap = new Map(this.state.decks.map(d => [d.notionId || d.id, d]));
 
-        // Deck visibility:
-        // - Custom deck property "Archived?" means "hide deck + cards from app".
-        // - Notion page-level `archived: true` means deleted in Notion (remove locally).
-        // For incremental pulls, we must fetch both archived/unarchived to detect newly hidden decks.
+        // Deck visibility logic...
         let deckFilter = { property: 'Archived?', checkbox: { equals: false } };
         if (since) {
             deckFilter = { timestamp: 'last_edited_time', last_edited_time: { on_or_after: since } };
         }
 
-        // Query non-archived decks first
+        // Fetch decks (small dataset, streaming not critical but good for consistency)
         const decks = await API.queryDatabase(deckSource, deckFilter);
         const deckPages = decks || [];
         const isHiddenDeck = (p) => !!p?.properties?.['Archived?']?.checkbox;
-        // Notion page-level deletion sets `archived: true`. Remove those locally.
         const deletedDeckNotionIds = new Set(deckPages.filter(p => p?.archived).map(p => p.id));
-        // Custom "Archived?" decks should not exist locally at all.
         const hiddenDeckNotionIds = new Set(deckPages.filter(p => !p?.archived && isHiddenDeck(p)).map(p => p.id));
-        // Optional safety: fetch all hidden decks to ensure we never show them even if they were archived
-        // before `since` (e.g., after upgrading from older versions).
+
         if (since) {
             try {
                 const hiddenAll = await API.queryDatabase(deckSource, { property: 'Archived?', checkbox: { equals: true } });
@@ -3711,129 +5379,21 @@ export const App = {
         const mappedDecks = deckPages
             .filter(p => !p?.archived && !isHiddenDeck(p))
             .map(d => NotionMapper.deckFrom(d));
-        const invalidDeckConfigs = mappedDecks.filter(d => d.srsConfigError);
-        if (invalidDeckConfigs.length > 0) {
-            toast(`Invalid SRS Config in ${invalidDeckConfigs.length} deck${invalidDeckConfigs.length === 1 ? '' : 's'} — healed to defaults`);
-            invalidDeckConfigs.forEach(d => {
-                d.updatedInApp = true;
+
+        const decksToNormalize = new Set();
+
+        for (const d of mappedDecks) {
+            // Restore logic: Fix invalid Notion configs by pushing local defaults
+            if (d.srsConfigError) {
+                console.warn(`Fixing invalid SRS config for deck ${d.name}`);
+                toast(`Fixing invalid config in deck: ${d.name}`);
                 this.queueOp({ type: 'deck-upsert', payload: d });
-            });
-        }
-
-        // Identify decks that are new (not in local state) - need to fetch their cards
-        const existingActiveDeckNotionIds = new Set(
-            this.state.decks.filter(d => d.notionId && !d.archived).map(d => d.notionId)
-        );
-        const newDeckIds = mappedDecks.filter(d => !existingActiveDeckNotionIds.has(d.notionId)).map(d => d.notionId);
-
-        // Active deck ids for card filtering (local active + newly pulled active), excluding hidden/deleted.
-        const activeDeckNotionIds = new Set([...existingActiveDeckNotionIds, ...mappedDecks.map(d => d.notionId)]);
-        for (const id of hiddenDeckNotionIds) activeDeckNotionIds.delete(id);
-        for (const id of deletedDeckNotionIds) activeDeckNotionIds.delete(id);
-
-        // Query cards (with timestamp if incremental), then filter client-side
-        let cardFilter = null;
-        if (since) {
-            cardFilter = { timestamp: 'last_edited_time', last_edited_time: { on_or_after: since } };
-        }
-        const cards = await API.queryDatabase(cardSource, cardFilter);
-        const deletedCardNotionIds = new Set((cards || []).filter(p => p?.archived).map(p => p.id));
-        let mappedCards = (cards || []).filter(p => !p?.archived).map(c => NotionMapper.cardFrom(c, mappedDecks));
-        const invalidCardStates = mappedCards.filter(c => c.srsStateError);
-        if (invalidCardStates.length > 0) {
-            toast(`Invalid SRS State in ${invalidCardStates.length} card${invalidCardStates.length === 1 ? '' : 's'} — healed to defaults`);
-            invalidCardStates.forEach(c => {
-                c.updatedInApp = true;
-                this.queueOp({ type: 'card-upsert', payload: c });
-            });
-        }
-
-        // If we have new decks, fetch their cards separately (they may not have been edited recently)
-        if (since && newDeckIds.length > 0) {
-            for (const deckId of newDeckIds) {
-                const deckCards = await API.queryDatabase(cardSource, {
-                    property: 'Deck',
-                    relation: { contains: deckId }
-                });
-                const newCards = (deckCards || []).filter(p => !p?.archived).map(c => NotionMapper.cardFrom(c, mappedDecks));
-                // Add cards we don't already have
-                for (const nc of newCards) {
-                    if (!mappedCards.find(c => c.notionId === nc.notionId)) {
-                        mappedCards.push(nc);
-                    }
-                }
             }
-        }
 
-        // Filter out cards that belong to hidden/deleted decks
-        const filteredCards = mappedCards.filter(c => {
-            // If card has no deck relation, include it
-            if (!c.deckId) return true;
-            // Include only if deck is in our non-archived list
-            return activeDeckNotionIds.has(c.deckId);
-        });
-
-        if (!since) {
-            await Storage.wipeStore('decks');
-            await Storage.wipeStore('cards');
-            this.state.decks = [];
-            this.state.cards = [];
-        }
-
-        // Apply deletions (Notion page-level archive/delete) on incremental pulls.
-        // Deck deletions also remove their cards locally.
-        if (since) {
-            if (deletedCardNotionIds.size > 0) {
-                for (const nid of deletedCardNotionIds) {
-                    const local = this.state.cards.find(c => c.notionId === nid);
-                    if (!local) continue;
-                    await Storage.delete('cards', local.id);
-                }
-                this.state.cards = this.state.cards.filter(c => !deletedCardNotionIds.has(c.notionId));
-            }
-            if (hiddenDeckNotionIds.size > 0) {
-                const toHideDecks = this.state.decks.filter(d => d.notionId && hiddenDeckNotionIds.has(d.notionId));
-                // Remove from local DB/state entirely.
-                for (const d of toHideDecks) {
-                    await Storage.delete('decks', d.id);
-                }
-                const hideDeckKeys = new Set([
-                    ...toHideDecks.map(d => d.id),
-                    ...toHideDecks.map(d => d.notionId).filter(Boolean),
-                    ...hiddenDeckNotionIds
-                ]);
-                const cardsToHide = this.state.cards.filter(c => hideDeckKeys.has(c.deckId));
-                for (const c of cardsToHide) {
-                    await Storage.delete('cards', c.id);
-                }
-                this.state.cards = this.state.cards.filter(c => !hideDeckKeys.has(c.deckId));
-                this.state.decks = this.state.decks.filter(d => !(d.notionId && hiddenDeckNotionIds.has(d.notionId)));
-                // Remove hidden decks from selection/filter state
-                if (this.state.filters?.studyDecks?.length) {
-                    const hiddenIds = new Set(toHideDecks.map(d => d.id));
-                    this.state.filters.studyDecks = this.state.filters.studyDecks.filter(id => !hiddenIds.has(id));
-                }
-                if (this.state.selectedDeck && this.state.selectedDeck.notionId && hiddenDeckNotionIds.has(this.state.selectedDeck.notionId)) {
-                    this.state.selectedDeck = null;
-                }
-            }
-            if (deletedDeckNotionIds.size > 0) {
-                const toDeleteDecks = this.state.decks.filter(d => deletedDeckNotionIds.has(d.notionId));
-                for (const d of toDeleteDecks) {
-                    await Storage.delete('decks', d.id);
-                }
-                const deletedDeckKeys = new Set([
-                    ...toDeleteDecks.map(d => d.id),
-                    ...toDeleteDecks.map(d => d.notionId).filter(Boolean),
-                    ...deletedDeckNotionIds
-                ]);
-                // Remove cards in deleted decks (by either local id or Notion id).
-                const cardsToDelete = this.state.cards.filter(c => deletedDeckKeys.has(c.deckId));
-                for (const c of cardsToDelete) {
-                    await Storage.delete('cards', c.id);
-                }
-                this.state.decks = this.state.decks.filter(d => !deletedDeckNotionIds.has(d.notionId));
-                this.state.cards = this.state.cards.filter(c => !deletedDeckKeys.has(c.deckId));
+            if (!d.dynamicContext) continue;
+            const local = localDeckMap.get(d.notionId || d.id);
+            if (firstSync || !local || !local.dynamicContext) {
+                decksToNormalize.add(d.notionId || d.id);
             }
         }
 
@@ -3842,29 +5402,208 @@ export const App = {
             if (idx >= 0) this.state.decks[idx] = { ...this.state.decks[idx], ...deck };
             else this.state.decks.push(deck);
         };
+        for (const d of mappedDecks) upsertDeck(d);
+        if (mappedDecks.length > 0) await Storage.putMany('decks', mappedDecks);
+
+        // Identify decks active for sync
+        const existingActiveDeckNotionIds = new Set(
+            this.state.decks.filter(d => d.notionId && !d.archived).map(d => d.notionId)
+        );
+        const newDeckIds = mappedDecks.filter(d => !existingActiveDeckNotionIds.has(d.notionId)).map(d => d.notionId);
+        const activeDeckNotionIds = new Set([...existingActiveDeckNotionIds, ...mappedDecks.map(d => d.notionId)]);
+        for (const id of hiddenDeckNotionIds) activeDeckNotionIds.delete(id);
+        for (const id of deletedDeckNotionIds) activeDeckNotionIds.delete(id);
+
+        // STREAMING CARDS
+        let cardFilter = null;
+        if (since) {
+            cardFilter = { timestamp: 'last_edited_time', last_edited_time: { on_or_after: since } };
+        }
+
+        // Mark-and-sweep for full syncs: track seen IDs to detect server-side deletions
+        const seenNotionIds = !since ? new Set() : null;
+        const clozeParentsToReconcile = new Set();
+        let analyticsTouched = false;
+        const historiesEqual = (a, b) => {
+            if (a === b) return true;
+            if (!Array.isArray(a) || !Array.isArray(b)) return false;
+            if (a.length !== b.length) return false;
+            for (let i = 0; i < a.length; i++) {
+                const x = a[i] || {};
+                const y = b[i] || {};
+                if (x.rating !== y.rating || x.at !== y.at || x.ms !== y.ms) return false;
+            }
+            return true;
+        };
+
         const upsertCard = (card) => {
-            const idx = this.state.cards.findIndex(c => c.notionId === card.notionId);
-            if (idx >= 0) {
-                const existing = this.state.cards[idx];
-                // Preserve local review history if Notion's is empty but local has data
-                // This prevents data loss from sync parse failures
+            if (seenNotionIds && card.notionId) {
+                seenNotionIds.add(card.notionId);
+            }
+
+            let existing = this.state.cards.get(card.id);
+            if (!existing && card.notionId) {
+                existing = this.cardByNotionId(card.notionId);
+            }
+
+            if (existing) {
                 const localHistory = existing.reviewHistory || [];
                 const remoteHistory = card.reviewHistory || [];
-                const preservedHistory = (remoteHistory.length === 0 && localHistory.length > 0)
-                    ? localHistory
-                    : remoteHistory;
-                this.state.cards[idx] = { ...existing, ...card, reviewHistory: preservedHistory };
+                // Preserve local history if remote is empty
+                const preservedHistory = (remoteHistory.length === 0 && localHistory.length > 0) ? localHistory : remoteHistory;
+                const updated = { ...existing, ...card, reviewHistory: preservedHistory };
+                if (!historiesEqual(localHistory, preservedHistory) ||
+                    (existing.fsrs?.lastReview || null) !== (card.fsrs?.lastReview || null) ||
+                    (existing.sm2?.lastReview || null) !== (card.sm2?.lastReview || null) ||
+                    (existing.fsrs?.lastRating || null) !== (card.fsrs?.lastRating || null) ||
+                    (existing.sm2?.lastRating || null) !== (card.sm2?.lastRating || null)) {
+                    analyticsTouched = true;
+                }
+                this.setCard(updated);
             } else {
-                this.state.cards.push(card);
+                if ((card.reviewHistory && card.reviewHistory.length > 0) || card.fsrs?.lastReview || card.sm2?.lastReview) {
+                    analyticsTouched = true;
+                }
+                this.setCard(card);
             }
         };
 
-        for (const d of mappedDecks) { upsertDeck(d); await Storage.put('decks', d); }
-        for (const c of filteredCards) { upsertCard(c); await Storage.put('cards', c); }
+        const processCardChunk = async (results) => {
+            const chunkDeleted = new Set(results.filter(p => p?.archived).map(p => p.id));
+            // Map and filter chunk
+            // Pass `this.state.decks` (latest) to `cardFrom` to resolve relations
+            const chunkMapped = results.filter(p => !p?.archived).map(c => NotionMapper.cardFrom(c, this.state.decks)).filter(Boolean);
 
-        // Phase 3: Reconcile cloze sub-items after pulling cards
-        await this.reconcileClozeSubItems();
+            // Filter by active decks
+            const chunkFiltered = chunkMapped.filter(c => {
+                if (!c.deckId) return true;
+                return activeDeckNotionIds.has(c.deckId);
+            });
 
+            for (const c of chunkFiltered) {
+                if (isClozeParent(c)) {
+                    clozeParentsToReconcile.add(c.id);
+                } else if (isSubItem(c) && c.parentCard) {
+                    clozeParentsToReconcile.add(c.parentCard);
+                }
+            }
+
+            // Upsert to memory and DB
+            for (const c of chunkFiltered) upsertCard(c);
+            if (chunkFiltered.length > 0) await Storage.putMany('cards', chunkFiltered);
+
+            // Handle deletions in this chunk
+            if (since && chunkDeleted.size > 0) {
+                if (chunkDeleted.size > 0) analyticsTouched = true;
+                for (const nid of chunkDeleted) {
+                    const local = this.cardByNotionId(nid);
+                    if (local) {
+                        await Storage.delete('cards', local.id);
+                        this.removeCard(local.id);
+                        // Update cardDeckIndex
+                        if (this.state.cardDeckIndex?.has(local.deckId)) {
+                            this.state.cardDeckIndex.get(local.deckId).delete(local.id);
+                        }
+                    }
+                }
+            }
+
+            // Update UI incrementally (optional, or just wait for end)
+            // this.updateCounts(); // fast enough?
+        };
+
+        // Stream main card query
+        await API.queryDatabase(cardSource, cardFilter, processCardChunk);
+
+        // Fetch new decks' cards if incremental
+        if (since && newDeckIds.length > 0) {
+            for (const deckId of newDeckIds) {
+                await API.queryDatabase(cardSource, {
+                    property: 'Deck',
+                    relation: { contains: deckId }
+                }, processCardChunk);
+            }
+        }
+
+        // Full Sync Sweep: Remove local cards that are no longer on the server
+        if (!since && seenNotionIds) {
+            const orphans = [];
+            // Optimize: Iterate only relevant decks instead of all cards
+            for (const deck of this.state.decks) {
+                if (deck.notionId && activeDeckNotionIds.has(deck.notionId)) {
+                    const deckCards = this.cardsForDeck(deck.id);
+                    for (const c of deckCards) {
+                        // Check for orphans: has Notion ID, not seen in sync, not sub-item
+                        if (c.notionId && !seenNotionIds.has(c.notionId) && !isSubItem(c)) {
+                            orphans.push(c);
+                        }
+                    }
+                }
+            }
+
+            if (orphans.length > 0) {
+                console.log(`Sweeping ${orphans.length} orphaned cards`);
+                // Collect orphan IDs for sub-item cleanup
+                const orphanIds = new Set(orphans.map(c => c.id));
+                for (const c of orphans) {
+                    // Also remove sub-items of orphaned parents
+                    if (isClozeParent(c) && Array.isArray(c.subCards)) {
+                        for (const subId of c.subCards) {
+                            if (!orphanIds.has(subId)) {
+                                await Storage.delete('cards', subId);
+                                this.removeCard(subId);
+                            }
+                        }
+                    }
+                    await Storage.delete('cards', c.id);
+                    this.removeCard(c.id);
+                }
+                analyticsTouched = true;
+            }
+        }
+
+        // Handle Deck deletions/hiding (cleanup)
+        if (since) {
+            if (hiddenDeckNotionIds.size > 0) {
+                const toHideDecks = this.state.decks.filter(d => d.notionId && hiddenDeckNotionIds.has(d.notionId));
+                for (const d of toHideDecks) {
+                    await Storage.delete('decks', d.id);
+                    await Storage.deleteCardsByDeck(d.id);
+                    const deckCards = this.cardsForDeck(d.id);
+                    // Use a copy since removeCard modifies the index
+                    for (const c of [...deckCards]) this.removeCard(c.id);
+                }
+                this.state.decks = this.state.decks.filter(d => !hiddenDeckNotionIds.has(d.notionId));
+            }
+            if (deletedDeckNotionIds.size > 0) {
+                const toDeleteDecks = this.state.decks.filter(d => deletedDeckNotionIds.has(d.notionId));
+                for (const d of toDeleteDecks) {
+                    await Storage.delete('decks', d.id);
+                    await Storage.deleteCardsByDeck(d.id);
+                    const deckCards = this.cardsForDeck(d.id);
+                    for (const c of [...deckCards]) this.removeCard(c.id);
+                }
+                this.state.decks = this.state.decks.filter(d => !deletedDeckNotionIds.has(d.notionId));
+            }
+        }
+
+        // Post-process
+        if (clozeParentsToReconcile.size > 0) {
+            await this.reconcileClozeSubItems(Array.from(clozeParentsToReconcile));
+        }
+        if (decksToNormalize.size > 0) {
+            let normalized = 0;
+            for (const deckId of decksToNormalize) {
+                normalized += await this.normalizeDyContextRootsForDeck(deckId);
+            }
+            if (normalized > 0) {
+                toast(`Normalized DyContext roots for ${normalized} card${normalized === 1 ? '' : 's'}`);
+            }
+        }
+
+        this.renderDecks();
+
+        if (analyticsTouched) this.state.analyticsDirty = true;
         this.renderAll();
     },
 
@@ -3872,83 +5611,119 @@ export const App = {
     * Reconcile sub-items for all cloze parent cards.
     * Creates missing sub-items and suspends removed ones.
     */
-    async reconcileClozeSubItems() {
-        const clozeParents = this.state.cards.filter(c => isClozeParent(c));
-        if (clozeParents.length === 0) return; // Nothing to do
+    async reconcileClozeSubItems(parents = null) {
+        let clozeParents = [];
+        if (Array.isArray(parents)) {
+            for (const p of parents) {
+                const card = typeof p === 'string'
+                    ? (this.cardById(p) || this.cardByNotionId(p))
+                    : p;
+                if (isClozeParent(card)) clozeParents.push(card);
+            }
+        } else {
+            for (const card of this.state.cards.values()) {
+                if (isClozeParent(card)) clozeParents.push(card);
+            }
+        }
+        if (clozeParents.length === 0) return;
 
-        // Also check queued sub-items that haven't been processed yet
-        const queuedSubItems = this.state.queue
-            .filter(op => op.type === 'card-upsert' && op.payload?.parentCard)
-            .map(op => op.payload);
+        const queuedSubItemsByParent = new Map();
+        const addToMap = (map, parentKey, item) => {
+            if (!map.has(parentKey)) map.set(parentKey, []);
+            map.get(parentKey).push(item);
+        };
 
-        // Track which parents we've processed this run to avoid duplicate work
-        const processedParentIds = new Set();
+        const queuedSubItemsMap = new Map();
+        this.state.queue.forEach(op => {
+            if (op.type === 'card-upsert' && op.payload?.parentCard) {
+                queuedSubItemsMap.set(op.payload.id, op.payload);
+            }
+        });
+        Array.from(queuedSubItemsMap.values()).forEach(c => {
+            if (c.parentCard) addToMap(queuedSubItemsByParent, c.parentCard, c);
+        });
 
         for (const parent of clozeParents) {
-            // Skip if already processed (shouldn't happen, but defensive)
-            const parentKey = parent.notionId || parent.id;
-            if (processedParentIds.has(parentKey)) continue;
-            processedParentIds.add(parentKey);
+            const stableParentId = parent.notionId || parent.id;
+            const mappedSubs = (parent.subCards || []).map(id => {
+                return this.state.cards.get(id) || this.cardByNotionId(id);
+            }).filter(c => c && !c.suspended);
 
-            // Skip if parent hasn't been edited since last reconcile
-            // (unless it has no sub-items yet)
-            const lastReconciled = parent._lastClozeReconcile;
-            const lastEdited = parent.lastEditedAt || parent.createdAt;
-            const hasExistingSubs = this.state.cards.some(c =>
-                c.parentCard === parentKey || c.parentCard === parent.id
-            );
-            if (lastReconciled && hasExistingSubs) {
-                // Compare timestamps - skip if not edited since last reconcile
-                if (lastEdited && new Date(lastEdited) <= new Date(lastReconciled)) {
-                    continue;
-                }
+            const queuedSubs = (queuedSubItemsByParent.get(parent.id) || [])
+                .concat(queuedSubItemsByParent.get(parent.notionId) || []);
+
+            const currentSubs = [...mappedSubs];
+
+            for (const q of queuedSubs) {
+                const idx = currentSubs.findIndex(s => s.id === q.id || (s.notionId && s.notionId === q.notionId));
+                if (idx >= 0) currentSubs[idx] = q;
+                else currentSubs.push(q);
             }
 
-            // Match sub-items by parentCard referencing either id or notionId
-            const stableParentId = parent.notionId || parent.id;
-            const matchesParent = (c) =>
-                c.parentCard === parent.id ||
-                c.parentCard === stableParentId ||
-                (parent.notionId && c.parentCard === parent.notionId);
+            const { toCreate, toKeep, toSuspend } = reconcileSubItems(parent, currentSubs);
 
-            const existingSubs = this.state.cards.filter(matchesParent);
-            const queuedSubs = queuedSubItems.filter(matchesParent);
-            // Combine existing and queued sub-items, avoiding duplicates by id
-            const existingIds = new Set(existingSubs.map(s => s.id));
-            const allSubs = [...existingSubs, ...queuedSubs.filter(s => !existingIds.has(s.id))];
-
-            const { toCreate, toSuspend } = reconcileSubItems(parent, allSubs);
-
-            // Skip if nothing to do for this parent
-            if (toCreate.length === 0 && toSuspend.length === 0) continue;
-
-            // Create missing sub-items (use notionId as parentCard when available for stability)
+            const createdSubs = [];
             for (const idx of toCreate) {
-                // Double-check this index doesn't already exist (defensive against race conditions)
-                const alreadyExists = allSubs.some(s => parseInt(s.clozeIndexes, 10) === idx && !s.suspended);
-                if (alreadyExists) continue;
-
                 const subItem = createSubItem(parent, idx, parent.deckId, () => this.makeTempId());
                 subItem.parentCard = stableParentId;
-                this.state.cards.push(subItem);
+                subItem.suspended = parent.suspended ? 1 : 0;
+
+                this.setCard(subItem);
+                createdSubs.push(subItem);
+
+                if (!Array.isArray(parent.subCards)) parent.subCards = [];
+                if (!parent.subCards.includes(subItem.id)) {
+                    parent.subCards.push(subItem.id);
+                }
+
                 await Storage.put('cards', subItem);
                 this.queueOp({ type: 'card-upsert', payload: subItem });
             }
 
-            // Suspend sub-items for removed cloze indices
-            for (const subId of toSuspend) {
-                const sub = this.cardById(subId);
-                if (sub && !sub.suspended) {
-                    sub.suspended = true;
-                    sub.flag = 'Empty';
+            for (const subId of toKeep) {
+                const sub = currentSubs.find(s => s.id === subId);
+                if (!sub) continue;
+                const idx = parseInt(sub.clozeIndexes, 10);
+                if (!idx) continue;
+
+                const newName = transformClozeForSubItem(parent.name, idx);
+                const newBack = parent.back || '';
+                const newTags = parent.tags ? JSON.parse(JSON.stringify(parent.tags)) : [];
+                const tagsChanged = JSON.stringify(sub.tags || []) !== JSON.stringify(newTags);
+                const shouldUpdateNotes = !sub.notes;
+                const newNotes = shouldUpdateNotes ? parent.notes : sub.notes;
+                const notesChanged = sub.notes !== newNotes;
+                const contentChanged = sub.name !== newName || sub.back !== newBack || notesChanged || sub.deckId !== parent.deckId;
+
+                if (contentChanged || tagsChanged) {
+                    sub.name = newName;
+                    sub.back = newBack;
+                    if (shouldUpdateNotes) sub.notes = parent.notes;
+                    sub.tags = newTags;
+                    sub.deckId = parent.deckId;
+                    sub.updatedInApp = true;
+                    this.setCard(sub);
                     await Storage.put('cards', sub);
                     this.queueOp({ type: 'card-upsert', payload: sub });
                 }
             }
 
-            // Mark parent as reconciled (local-only field, not synced to Notion)
+            for (const subId of toSuspend) {
+                const sub = this.cardById(subId);
+                if (sub && !sub.suspended) {
+                    sub.suspended = 1;
+                    this.setCard(sub);
+                    await Storage.put('cards', sub);
+                    this.queueOp({ type: 'card-upsert', payload: sub });
+                }
+            }
+
+            if (parent.suspended) {
+                await this.suspendClozeSubs(parent, currentSubs.concat(createdSubs));
+            }
+
             parent._lastClozeReconcile = new Date().toISOString();
-            await Storage.put('cards', parent);
+            if (toCreate.length > 0) await Storage.put('cards', parent);
         }
     },
     /**
@@ -3963,23 +5738,74 @@ export const App = {
             c.parentCard === stableParentId ||
             (parent.notionId && c.parentCard === parent.notionId);
 
-        // Check existing cards and queued items
-        const existingSubs = this.state.cards.filter(matchesParent);
-        const queuedSubs = this.state.queue
+        const subsById = await Storage.getSubItems(parent.id);
+        let subsByNotion = [];
+        if (parent.notionId) {
+            subsByNotion = await Storage.getSubItems(parent.notionId);
+        }
+
+        // Merge and dedup
+        const subMap = new Map();
+        [...subsById, ...subsByNotion].forEach(s => subMap.set(s.id, s));
+        const existingSubs = Array.from(subMap.values());
+
+        // We still check the queue for pending creations (small list, fast)
+        const queuedSubs = Array.from(this.state.queue.values())
             .filter(op => op.type === 'card-upsert' && op.payload?.parentCard && matchesParent(op.payload))
             .map(op => op.payload);
+
         const existingIds = new Set(existingSubs.map(s => s.id));
         const allSubs = [...existingSubs, ...queuedSubs.filter(s => !existingIds.has(s.id))];
 
-        const { toCreate, toSuspend } = reconcileSubItems(parent, allSubs);
+        const subsMap = new Map(allSubs.map(s => [s.id, s]));
 
-        // Skip if nothing to do
-        if (toCreate.length === 0 && toSuspend.length === 0) {
+        const { toCreate, toKeep, toSuspend } = reconcileSubItems(parent, allSubs);
+        // Skip if nothing to do (no creates, no suspends, and no existing subs to update)
+        if (toCreate.length === 0 && toSuspend.length === 0 && toKeep.length === 0) {
             parent._lastClozeReconcile = new Date().toISOString();
             await Storage.put('cards', parent);
             return;
         }
 
+        // Update content for existing sub-items (handle parent text edits)
+        for (const subId of toKeep) {
+            const sub = subsMap.get(subId);
+            if (!sub) continue;
+
+            const idx = parseInt(sub.clozeIndexes, 10);
+            if (!idx) continue;
+
+            const newName = transformClozeForSubItem(parent.name, idx);
+            const newBack = parent.back || '';
+
+            // Serialize tags for comparison
+            const newTags = parent.tags ? JSON.parse(JSON.stringify(parent.tags)) : [];
+            const tagsChanged = JSON.stringify(sub.tags || []) !== JSON.stringify(newTags);
+
+            // Notes logic: Only overwrite if sub-card notes are empty
+            const shouldUpdateNotes = !sub.notes;
+            const newNotes = shouldUpdateNotes ? parent.notes : sub.notes;
+            const notesChanged = sub.notes !== newNotes;
+
+            const contentChanged = sub.name !== newName || sub.back !== newBack || notesChanged || sub.deckId !== parent.deckId;
+
+            // Only save if content or tags actually changed
+            if (contentChanged || tagsChanged) {
+                sub.name = newName;
+                sub.back = newBack;
+                if (shouldUpdateNotes) sub.notes = parent.notes;
+                sub.tags = newTags;
+                sub.deckId = parent.deckId; // Ensure deck matches parent
+                sub.updatedInApp = true;
+
+                // Save update
+                this.setCard(sub);
+                await Storage.put('cards', sub);
+                this.queueOp({ type: 'card-upsert', payload: sub });
+            }
+        }
+
+        const createdSubs = [];
         // Create missing sub-items
         for (const idx of toCreate) {
             const alreadyExists = allSubs.some(s => parseInt(s.clozeIndexes, 10) === idx && !s.suspended);
@@ -3987,45 +5813,155 @@ export const App = {
 
             const subItem = createSubItem(parent, idx, parent.deckId, () => this.makeTempId());
             subItem.parentCard = stableParentId;
-            this.state.cards.push(subItem);
+            subItem.suspended = parent.suspended ? 1 : 0;
+
+            // Update Map and notionId index
+            this.setCard(subItem);
+            createdSubs.push(subItem);
+
+            if (!Array.isArray(parent.subCards)) parent.subCards = [];
+            if (!parent.subCards.includes(subItem.id)) {
+                parent.subCards.push(subItem.id);
+            }
+
             await Storage.put('cards', subItem);
             this.queueOp({ type: 'card-upsert', payload: subItem });
         }
 
         // Suspend removed sub-items
         for (const subId of toSuspend) {
-            const sub = this.cardById(subId);
+            const sub = this.state.cards.get(subId);
             if (sub && !sub.suspended) {
-                sub.suspended = true;
-                sub.flag = 'Empty';
+                sub.suspended = 1;
+                this.setCard(sub);
                 await Storage.put('cards', sub);
                 this.queueOp({ type: 'card-upsert', payload: sub });
             }
         }
 
+        if (parent.suspended) {
+            await this.suspendClozeSubs(parent, allSubs.concat(createdSubs));
+        }
+
         parent._lastClozeReconcile = new Date().toISOString();
         await Storage.put('cards', parent);
     },
+    async suspendClozeSubs(parent, subs = null) {
+        if (!isClozeParent(parent) || !parent.suspended) return 0;
+        const seen = new Set();
+        const candidates = [];
+
+        if (Array.isArray(subs)) {
+            for (const s of subs) {
+                if (!s?.id || seen.has(s.id)) continue;
+                seen.add(s.id);
+                candidates.push(s);
+            }
+        } else {
+            const subIds = parent.subCards || [];
+            for (const id of subIds) {
+                if (!id || seen.has(id)) continue;
+                seen.add(id);
+                const sub = this.cardById(id) || this.cardByNotionId(id);
+                if (sub) candidates.push(sub);
+            }
+        }
+
+        const updates = [];
+        for (const sub of candidates) {
+            if (sub.suspended) continue;
+            sub.suspended = 1;
+            sub.updatedInApp = true;
+            this.setCard(sub);
+            updates.push(sub);
+        }
+        if (updates.length === 0) return 0;
+
+        await Storage.putMany('cards', updates);
+        for (const sub of updates) {
+            this.queueOp({ type: 'card-upsert', payload: sub });
+        }
+        return updates.length;
+    },
+    queueEntityId(op) {
+        if (!op) return null;
+        return op.payload?.id || op.payload?.notionId || op.payload?.pageId || null;
+    },
+    queueKey(op) {
+        if (!op?.type) return null;
+        if (op.type === 'block-append' || op.type === 'dy-generation') {
+            if (op._queueKey) return op._queueKey;
+            const seed = op.id || (typeof crypto !== 'undefined' && crypto.randomUUID
+                ? crypto.randomUUID()
+                : `${Date.now()}_${Math.random().toString(16).slice(2)}`);
+            op._queueKey = `${op.type}:${seed}`;
+            return op._queueKey;
+        }
+        const entityId = this.queueEntityId(op);
+        if (!entityId) return null;
+        return `${op.type}:${entityId}`;
+    },
     async pushQueue() {
         const { deckSource, cardSource } = this.state.settings;
-        // Process deck operations before card operations to satisfy Notion relation dependencies.
-        const queue = [...this.state.queue]
-            .map((op, idx) => ({ op, idx }))
-            .sort((a, b) => {
-                const prio = (t) => ({ 'deck-upsert': 1, 'deck-delete': 2, 'card-upsert': 3, 'card-delete': 4, 'block-append': 5 }[t] || 99);
-                const dp = prio(a.op.type) - prio(b.op.type);
-                return dp !== 0 ? dp : a.idx - b.idx; // stable within the same type
-            })
-            .map(x => x.op);
+
+        const rawQueue = [];
+        for (const op of this.state.queue.values()) {
+            if (op.type !== 'dy-generation') rawQueue.push(op);
+        }
+
+        const buckets = {
+            'deck-upsert': [],
+            'deck-delete': [],
+            'card-upsert': [],
+            'card-upsert-sub': [], // Sub-items deferred until parents sync
+            'card-delete': [],
+            'block-append': [],
+            other: []
+        };
+        // Collect parent cards being synced in this batch
+        const parentCardIds = new Set();
+        for (const op of rawQueue) {
+            if (op.type === 'card-upsert' && op.payload && isClozeParent(op.payload)) {
+                parentCardIds.add(op.payload.id);
+                if (op.payload.notionId) parentCardIds.add(op.payload.notionId);
+            }
+        }
+        for (const op of rawQueue) {
+            if (op.type === 'card-upsert' && op.payload?.parentCard) {
+                // Defer subcards if their parent is also being synced in this batch
+                const parentRef = op.payload.parentCard;
+                if (this.isTempId(parentRef) || parentCardIds.has(parentRef)) {
+                    buckets['card-upsert-sub'].push(op);
+                    continue;
+                }
+            }
+            const bucket = buckets[op.type] || buckets.other;
+            bucket.push(op);
+        }
+
+        const queue = [
+            ...buckets['deck-upsert'],
+            ...buckets['deck-delete'],
+            ...buckets['card-upsert'],
+            ...buckets['card-upsert-sub'], // Process subcards after their parents
+            ...buckets['card-delete'],
+            ...buckets['block-append'],
+            ...buckets.other
+        ];
+
         const hadQueue = queue.length > 0;
-        // Bug 1 Fix: Don't clear the queue yet - only clear successfully processed items
-        // Keep track of processed items to remove them atomically after successful sync
-        const processedIndices = new Set();
+
         const failed = [];
         const succeeded = [];
+
         for (let i = 0; i < queue.length; i++) {
             const op = queue[i];
-            if (i > 0) await sleep(350); // Pace requests to ~3 per second
+            if (i > 0) await sleep(350);
+            if (op.type === 'card-upsert' && op.payload && op.payload.parentCard && this.isTempId(op.payload.parentCard)) {
+                const parent = this.state.cards.get(op.payload.parentCard);
+                if (parent && parent.notionId) op.payload.parentCard = parent.notionId;
+            }
+
             try {
                 if (op.type === 'deck-upsert') {
                     const props = NotionMapper.deckProps(op.payload);
@@ -4039,9 +5975,6 @@ export const App = {
                         if (oldId && oldId !== res.id) {
                             await this.applyIdMappings({ deckIdMap: { [oldId]: res.id } });
                         }
-                        // If the queue was rehydrated from storage, op.payload may not be the same object
-                        // instance as the deck in memory. Ensure we update in-memory state so subsequent
-                        // card upserts in this same run can resolve `deck.notionId`.
                         const deckIdx = this.state.decks.findIndex(d => d.id === op.payload.id);
                         if (deckIdx >= 0) {
                             this.state.decks[deckIdx] = { ...this.state.decks[deckIdx], ...op.payload };
@@ -4066,23 +5999,20 @@ export const App = {
                             await this.applyIdMappings({ cardIdMap: { [oldId]: res.id } });
                         }
                     }
-                    // After successful push, reset updatedInApp and update _notionRichText
-                    // so subsequent pushes (e.g., SRS updates) preserve the rich_text we just sent
                     op.payload.updatedInApp = false;
                     op.payload._notionRichText = {
                         name: props['Name'].title,
                         back: props['Back'].rich_text,
                         notes: props['Notes'].rich_text
                     };
-                    // For cloze parents, update lastClozeReconcile to prevent re-reconcile
-                    // after Notion updates last_edited_time from our push
                     if (isClozeParent(op.payload)) {
                         op.payload._lastClozeReconcile = new Date().toISOString();
                     }
-                    // Update local state
-                    const cardIdx = this.state.cards.findIndex(c => c.notionId === op.payload.notionId || c.id === op.payload.id);
-                    if (cardIdx >= 0) {
-                        this.state.cards[cardIdx] = { ...this.state.cards[cardIdx], ...op.payload };
+                    const existingCard = this.state.cards.get(op.payload.id) || this.cardByNotionId(op.payload.notionId);
+                    if (existingCard) {
+                        this.setCard({ ...existingCard, ...op.payload });
+                    } else {
+                        this.setCard(op.payload);
                     }
                     await Storage.put('cards', op.payload);
                 }
@@ -4090,92 +6020,435 @@ export const App = {
                 if (op.type === 'block-append' && op.payload.pageId) {
                     await API.appendBlocks(op.payload.pageId, op.payload.blocks);
                 }
-                // Bug 1 Fix: Track successfully processed operations
+
+                if (op.id) await Storage.removeFromSyncQueue(op.id).catch(() => { });
+                const key = this.queueKey(op);
+                if (key) this.state.queue.delete(key);
                 succeeded.push(op);
             } catch (e) {
                 console.error(`Queue op failed: ${op.type}`, e);
-                // Store last error so the header badge can explain why the queue may look "stuck".
                 this.state.lastQueueError = {
                     at: new Date().toISOString(),
                     type: op.type,
                     message: e?.message || String(e)
                 };
-                Storage.setMeta('lastQueueError', this.state.lastQueueError).catch(e => console.debug('Storage setMeta lastQueueError failed:', e));
+                Storage.setMeta('lastQueueError', this.state.lastQueueError).catch(() => { });
                 op.retryCount = (op.retryCount || 0) + 1;
                 if (op.retryCount <= 5) {
                     failed.push(op);
+                    if (op.id) await Storage.put('syncQueue', op).catch(() => { });
                 } else {
                     toast(`Sync dropped item after 5 attempts: ${e.message}`);
+                    if (op.id) await Storage.removeFromSyncQueue(op.id).catch(() => { });
+                    const key = this.queueKey(op);
+                    if (key) this.state.queue.delete(key);
                 }
             }
         }
-        // Bug 1 Fix: Atomically update the queue - remove successfully processed items and add failed ones
-        // This prevents data loss from race conditions during sync
-        const succeededIds = new Set(succeeded.map(op => {
-            const id = op.payload?.id || op.payload?.notionId;
-            return `${op.type}:${id}`;
-        }));
-        // Filter out succeeded items from the current queue (in case new items were added during processing)
-        this.state.queue = this.state.queue.filter(op => {
-            const id = op.payload?.id || op.payload?.notionId;
-            const key = `${op.type}:${id}`;
-            return !succeededIds.has(key);
-        });
-        // Re-queue failed operations
+
         if (failed.length > 0) {
-            this.state.queue = [...this.state.queue, ...failed];
             toast(`${failed.length} sync operation(s) failed, will retry`);
             this.state.queueLastChangedAt = new Date().toISOString();
-            Storage.setMeta('queueLastChangedAt', this.state.queueLastChangedAt).catch(e => console.debug('Storage setMeta queueLastChangedAt failed:', e));
+            Storage.setMeta('queueLastChangedAt', this.state.queueLastChangedAt).catch(() => { });
         } else if (hadQueue && succeeded.length > 0) {
-            // Queue successfully processed: clear the last error to avoid stale "stuck" tooltips.
             this.state.lastQueueError = null;
-            Storage.setMeta('lastQueueError', null).catch(e => console.debug('Storage clear lastQueueError failed:', e));
+            Storage.setMeta('lastQueueError', null).catch(() => { });
             this.state.queueLastChangedAt = new Date().toISOString();
             Storage.setMeta('queueLastChangedAt', this.state.queueLastChangedAt).catch(() => { });
         }
-        el('#queueCount').textContent = String(this.state.queue.length);
-        await Storage.setMeta('queue', this.state.queue);
+
+        el('#queueCount').textContent = String(this.state.queue.size);
         this.renderConnection();
+        return { success: failed.length === 0, failedCount: failed.length };
     },
-    queueOp(op, reason = 'generic') {
+    async queueOp(op, reason = 'generic') {
         op.reason = reason;
 
-        // Deduplicate: remove existing operation for same entity + type
-        // Keep only the latest operation for each card/deck
-        const entityId = op.payload?.id || op.payload?.notionId;
-        if (entityId && (op.type === 'card-upsert' || op.type === 'deck-upsert')) {
-            this.state.queue = this.state.queue.filter(existing => {
-                const existingId = existing.payload?.id || existing.payload?.notionId;
-                return !(existing.type === op.type && existingId === entityId);
-            });
+        const key = this.queueKey(op);
+        if (!key) return;
+
+        const entityId = this.queueEntityId(op);
+        if (entityId && (op.type.endsWith('-delete') || op.type.endsWith('-upsert'))) {
+            const counterpartType = op.type.endsWith('-delete')
+                ? op.type.replace('-delete', '-upsert')
+                : op.type.replace('-upsert', '-delete');
+            const counterpartKey = `${counterpartType}:${entityId}`;
+            if (this.state.queue.has(counterpartKey)) {
+                const existing = this.state.queue.get(counterpartKey);
+                if (existing.id) await Storage.removeFromSyncQueue(existing.id).catch(() => { });
+                this.state.queue.delete(counterpartKey);
+            }
         }
 
-        this.state.queue.push(op);
-        el('#queueCount').textContent = String(this.state.queue.length);
-        Storage.setMeta('queue', this.state.queue).catch(e => console.debug('Storage setMeta queue failed:', e));
+        if (this.state.queue.has(key)) {
+            const existing = this.state.queue.get(key);
+            if (existing.id) await Storage.removeFromSyncQueue(existing.id).catch(() => { });
+            this.state.queue.delete(key);
+        }
+
+        if (op.type === 'card-upsert' && op.payload) {
+            op.payload._lastUpdated = Date.now();
+        }
+
+        const dbKey = await Storage.addToSyncQueue(op);
+        op.id = dbKey; // Assign DB key to in-memory obj
+        this.state.queue.set(key, op);
+
+        el('#queueCount').textContent = String(this.state.queue.size);
         this.state.queueLastChangedAt = new Date().toISOString();
         Storage.setMeta('queueLastChangedAt', this.state.queueLastChangedAt).catch(e => console.debug('Storage setMeta queueLastChangedAt failed:', e));
-        if (!navigator.onLine && this.state.queue.length >= SYNC_QUEUE_WARN_THRESHOLD) {
+
+        if (!navigator.onLine && this.state.queue.size >= SYNC_QUEUE_WARN_THRESHOLD) {
             const now = Date.now();
             const lastWarn = this.state.lastQueueWarnAt || 0;
             if (now - lastWarn > SYNC_QUEUE_WARN_COOLDOWN_MS) {
-                toastLong(`Sync queue is large (${this.state.queue.length}). Go online soon to avoid storage limits.`);
+                toastLong(`Sync queue is large (${this.state.queue.size}). Go online soon to avoid storage limits.`);
                 this.state.lastQueueWarnAt = now;
             }
         }
         this.updateSyncButtonState();
-        this.renderConnection();
+        if (this.state.queue.size === 1) this.renderConnection();
         const delay = (reason === 'rating') ? (5 * 60 * 1000) : 1500;
         this.requestAutoSyncSoon(delay, reason);
     },
     updateSyncButtonState() {
         const btn = el('#syncNowBtn');
         if (!btn) return;
-        const pendingOffline = this.state.queue.length > 0 && !navigator.onLine;
+        const pendingOffline = this.state.queue.size > 0 && !navigator.onLine;
         const offline = !navigator.onLine;
         btn.disabled = pendingOffline || this.state.syncing || offline;
         btn.classList.toggle('opacity-70', btn.disabled);
+        const refreshBtn = el('#refreshDecksBtn');
+        if (refreshBtn) {
+            refreshBtn.disabled = pendingOffline || this.state.syncing || offline;
+            refreshBtn.classList.toggle('opacity-70', refreshBtn.disabled);
+        }
+    },
+    applyTemplateVars(tpl, vars) {
+        let out = String(tpl || '');
+        for (const [key, value] of Object.entries(vars || {})) {
+            out = out.split(`{{${key}}}`).join(String(value ?? ''));
+        }
+        return out;
+    },
+    getDyContextConfig(deck) {
+        if (!deck || !deck.dynamicContext) return null;
+        const useJudge = this.state.settings.dyUseJudgeAi === true;
+        if (useJudge) {
+            if (!this.state.settings.aiVerified) return null;
+        } else {
+            if (!this.state.settings.dyVerified) return null;
+        }
+        const provider = useJudge ? (this.state.settings.aiProvider || '') : (this.state.settings.dyProvider || '');
+        const model = useJudge ? (this.state.settings.aiModel || '') : (this.state.settings.dyModel || '');
+        const key = useJudge ? (this.state.settings.aiKey || '') : (this.state.settings.dyKey || '');
+        if (!provider || !model || !key) return null;
+        const prompt = (deck.dyAiPrompt || '').trim() || DEFAULT_DYCONTEXT_PROMPT;
+        return { provider, model, key, prompt };
+    },
+    getDyContextCardContent(card) {
+        if (!card) return { front: '', back: '' };
+        const type = (card.type || '').toLowerCase();
+        if (type === 'cloze') {
+            const hasClozeInName = /\{\{c\d+::.+?\}\}/i.test(card.name || '');
+            const hasClozeInBack = /\{\{c\d+::.+?\}\}/i.test(card.back || '');
+            if (!hasClozeInName && hasClozeInBack) {
+                return { front: card.back || '', back: card.name || '' };
+            }
+        }
+        return { front: card.name || '', back: card.back || '' };
+    },
+    async ensureDyContextRoot(card) {
+        if (!card || card.dyRootCard) return card?.dyRootCard || null;
+        card.dyRootCard = card.id;
+        card.updatedInApp = true;
+        await Storage.put('cards', card);
+        this.queueOp({ type: 'card-upsert', payload: card });
+        return card.dyRootCard;
+    },
+    async normalizeDyContextRootsForDeck(deckId) {
+        if (!deckId) return 0;
+        const updates = [];
+        const cardIds = this.state.cardDeckIndex?.get(deckId);
+        if (!cardIds || cardIds.size === 0) return 0;
+        for (const cardId of cardIds) {
+            const card = this.state.cards.get(cardId);
+            if (!card) continue;
+            if (isSubItem(card)) continue;
+            if (card.dyRootCard || card.dyPrevCard) continue;
+            card.dyRootCard = card.id;
+            card.updatedInApp = true;
+            updates.push(card);
+        }
+        if (updates.length === 0) return 0;
+        await Promise.all(updates.map(c => Storage.put('cards', c)));
+        updates.forEach(c => this.queueOp({ type: 'card-upsert', payload: c }));
+        return updates.length;
+    },
+    parseDyContextJson(raw) {
+        if (!raw || typeof raw !== 'string') return null;
+        let text = raw.trim();
+        if (text.startsWith('```')) {
+            text = text.replace(/^```[a-z]*\s*/i, '').replace(/```$/i, '').trim();
+        }
+        try {
+            return JSON.parse(text);
+        } catch (_) {
+            const first = text.indexOf('{');
+            const last = text.lastIndexOf('}');
+            if (first >= 0 && last > first) {
+                const slice = text.slice(first, last + 1);
+                try { return JSON.parse(slice); } catch { return null; }
+            }
+            return null;
+        }
+    },
+    async enqueueDyContextJob(job) {
+        if (!job?.prevId) return;
+        const deck = this.deckById(job.deckId);
+        if (!deck || !deck.dynamicContext) return;
+        const dyConfig = this.getDyContextConfig(deck);
+        if (!dyConfig) return;
+        this.queueOp({ type: 'dy-generation', payload: job }, 'dy-context');
+    },
+    async processDyContextQueue() {
+        if (this.state.dyContextProcessing) return;
+        if (!navigator.onLine) return;
+
+        const queue = Array.from(this.state.queue.values()).filter(op => op.type === 'dy-generation');
+        if (queue.length === 0) return;
+
+        this.state.dyContextProcessing = true;
+
+        try {
+            for (const op of queue) {
+                const job = op.payload;
+                const deck = this.deckById(job.deckId);
+                const prevCard = this.cardById(job.prevId);
+                const key = this.queueKey(op);
+
+                if (!deck || !prevCard || !deck.dynamicContext) {
+                    await Storage.removeFromSyncQueue(op.id).catch(() => { });
+                    if (key) this.state.queue.delete(key);
+                    continue;
+                }
+
+                const dyConfig = this.getDyContextConfig(deck);
+                if (!dyConfig) {
+                    await Storage.removeFromSyncQueue(op.id).catch(() => { });
+                    if (key) this.state.queue.delete(key);
+                    continue;
+                }
+
+                if (prevCard.dyNextCard) {
+                    await Storage.removeFromSyncQueue(op.id).catch(() => { });
+                    if (key) this.state.queue.delete(key);
+                    continue;
+                }
+
+                if (prevCard.dyPrevCard) {
+                    const prevInChain = this.cardById(prevCard.dyPrevCard);
+                    if (!this.isDyContextGoodEasy(prevInChain, deck)) {
+                        continue;
+                    }
+                }
+                if (job.includeSubCards && !this.allClozeSubsGoodEasy(prevCard, deck)) {
+                    continue;
+                }
+
+                const rootCard = this.cardById(job.rootId) || prevCard;
+                try {
+                    await this.generateDyContextVariant(prevCard, rootCard, deck, dyConfig, { includeSubCards: !!job.includeSubCards });
+                    await Storage.removeFromSyncQueue(op.id).catch(() => { });
+                    if (key) this.state.queue.delete(key);
+                } catch (e) {
+                    const retryCount = (op.retryCount || 0) + 1;
+                    if (retryCount <= 5) {
+                        op.retryCount = retryCount;
+                        await Storage.put('syncQueue', op).catch(() => { });
+                    } else {
+                        toast(`DyContext job dropped: ${e?.message || 'error'}`);
+                        await Storage.removeFromSyncQueue(op.id).catch(() => { });
+                        if (key) this.state.queue.delete(key);
+                    }
+                }
+            }
+        } finally {
+            this.state.dyContextProcessing = false;
+            el('#queueCount').textContent = String(this.state.queue.size);
+            this.renderConnection();
+        }
+    },
+    getLastRatingFor(card, deck) {
+        const alg = deck?.algorithm || 'SM-2';
+        return (alg === 'FSRS' ? card.fsrs?.lastRating : card.sm2?.lastRating) || card.fsrs?.lastRating || card.sm2?.lastRating || null;
+    },
+    isDyContextGoodEasy(card, deck) {
+        if (!card) return false;
+        if (isClozeParent(card)) {
+            return this.allClozeSubsGoodEasy(card, deck);
+        }
+        const r = this.getLastRatingFor(card, deck);
+        return r === 'good' || r === 'easy';
+    },
+    allClozeSubsGoodEasy(parent, deck) {
+        if (!parent) return false;
+
+        const subIds = parent.subCards || [];
+
+        if (subIds.length === 0) return false;
+
+        let allGood = true;
+        let activeCount = 0;
+        for (const subId of subIds) {
+            const sub = this.state.cards.get(subId);
+            if (!sub) continue;
+            if (sub.suspended) continue;
+            activeCount += 1;
+            const r = this.getLastRatingFor(sub, deck);
+            if (r !== 'good' && r !== 'easy') {
+                allGood = false;
+                break;
+            }
+        }
+        return allGood && activeCount > 0;
+    },
+    buildDyContextPrompt(promptTemplate, rootCard, prevCard) {
+        const root = this.getDyContextCardContent(rootCard);
+        const prev = this.getDyContextCardContent(prevCard);
+        const tags = (prevCard?.tags || []).map(t => t?.name).filter(Boolean).join(', ');
+        return this.applyTemplateVars(promptTemplate, {
+            root_front: root.front || '',
+            root_back: root.back || '',
+            prev_front: prev.front || '',
+            prev_back: prev.back || '',
+            tags,
+            card_type: prevCard?.type || ''
+        });
+    },
+    async retirePreviousVariant(currentCard, includeSubCards = false) {
+        if (!currentCard || !currentCard.dyPrevCard) return;
+
+        const prevId = currentCard.dyPrevCard;
+        const prevCard = this.state.cards.get(prevId);
+
+        if (prevCard && !prevCard.suspended) {
+            prevCard.suspended = 1;
+            this.setCard(prevCard);
+            await Storage.put('cards', prevCard);
+            this.queueOp({ type: 'card-upsert', payload: prevCard });
+
+            if (includeSubCards && isClozeParent(prevCard)) {
+                const subIds = prevCard.subCards || [];
+                for (const subId of subIds) {
+                    const sub = this.state.cards.get(subId);
+                    if (sub && !sub.suspended) {
+                        sub.suspended = 1;
+                        this.setCard(sub);
+                        await Storage.put('cards', sub);
+                        this.queueOp({ type: 'card-upsert', payload: sub });
+                    }
+                }
+            }
+        }
+    },
+    async generateDyContextVariant(prevCard, rootCard, deck, dyConfig, { includeSubCards = false } = {}) {
+        if (!prevCard || !deck || !dyConfig) return;
+        const prompt = this.buildDyContextPrompt(dyConfig.prompt, rootCard, prevCard);
+        const raw = await this.callAI(dyConfig.provider, dyConfig.model, prompt, dyConfig.key);
+        const parsed = this.parseDyContextJson(raw);
+        if (!parsed || typeof parsed.front !== 'string') {
+            throw new Error('DyContext AI returned invalid JSON');
+        }
+        const front = parsed.front.trim();
+        const back = typeof parsed.back === 'string' ? parsed.back.trim() : '';
+        const notes = typeof parsed.notes === 'string' ? parsed.notes.trim() : '';
+        if (!front) {
+            throw new Error('DyContext AI returned empty front');
+        }
+        if ((prevCard.type || '').toLowerCase() === 'cloze' && !/\{\{c\d+::.+?\}\}/i.test(front)) {
+            throw new Error('DyContext AI returned invalid cloze front');
+        }
+        const newCard = this.newCard(prevCard.deckId, front, back, prevCard.type || 'Front-Back');
+        newCard.notes = notes;
+        newCard.tags = (prevCard.tags || []).map(t => ({ name: t.name, color: t.color || 'default' }));
+        if (typeof prevCard.order === 'number') newCard.order = prevCard.order;
+        newCard.dyRootCard = rootCard?.id || prevCard.dyRootCard || prevCard.id;
+        newCard.dyPrevCard = prevCard.id;
+
+        this.setCard(newCard);
+        await Storage.put('cards', newCard);
+        this.queueOp({ type: 'card-upsert', payload: newCard });
+
+        // Link previous card to new one
+        prevCard.dyNextCard = newCard.id;
+        await Storage.put('cards', prevCard);
+        this.queueOp({ type: 'card-upsert', payload: prevCard });
+
+        await this.retirePreviousVariant(prevCard, includeSubCards);
+
+        if (includeSubCards && isClozeParent(newCard)) {
+            await this.reconcileSingleParent(newCard);
+        }
+
+        toast('Generated new DyContext variant');
+    },
+    async maybeGenerateDyContext(card, ratingKey) {
+        if (!card || !ratingKey) return;
+        if (!['good', 'easy'].includes(ratingKey)) return;
+        const previewMode = !!this.state.session?.noScheduleChanges;
+        if (previewMode) return;
+        const deck = this.deckById(card.deckId);
+        if (!deck || !deck.dynamicContext) return;
+
+        // Check if AI is configured first
+        const dyConfig = this.getDyContextConfig(deck);
+        if (!dyConfig) return;
+
+        let prevCard = card;
+        let includeSubCards = false;
+
+        if (isSubItem(card)) {
+            const parent = this.cardById(card.parentCard);
+            if (!parent) return;
+            prevCard = parent;
+            includeSubCards = true;
+        } else if (isClozeParent(card)) {
+            includeSubCards = true;
+        }
+
+        if (prevCard.dyNextCard) return;
+
+        if (includeSubCards) {
+            if (!this.allClozeSubsGoodEasy(prevCard, deck)) return;
+        }
+
+        const rootId = prevCard.dyRootCard || prevCard.id;
+        const rootCard = this.cardById(rootId) || prevCard;
+        if (!prevCard.dyRootCard) {
+            await this.ensureDyContextRoot(prevCard);
+        }
+
+        if (prevCard.dyPrevCard) {
+            const prevInChain = this.cardById(prevCard.dyPrevCard);
+            if (!this.isDyContextGoodEasy(prevInChain, deck)) return;
+        }
+
+        if (!navigator.onLine) {
+            await this.enqueueDyContextJob({
+                id: crypto.randomUUID(),
+                deckId: deck.id,
+                prevId: prevCard.id,
+                rootId: rootId,
+                includeSubCards,
+                createdAt: new Date().toISOString(),
+                retryCount: 0
+            });
+            return;
+        }
+
+        this.generateDyContextVariant(prevCard, rootCard, deck, dyConfig, { includeSubCards })
+            .catch(e => console.error('DyContext generation failed', e));
     },
     async manualSync() {
         if (!navigator.onLine) {
@@ -4186,13 +6459,11 @@ export const App = {
         if (this.state.syncing) { toast('Sync already in progress'); return; }
 
         this.state.syncing = true;
-        const btn = el('#refreshDecksBtn');
-        const svg = btn?.querySelector('svg');
-        if (svg) svg.classList.add('animate-spin');
+        this.setRefreshDecksSpinning(true);
 
         try {
             // Always push first to save local progress
-            if (this.state.queue.length > 0) {
+            if (this.state.queue.size > 0) {
                 await this.pushQueue();
                 this.state.lastPush = new Date().toISOString();
                 await Storage.put('meta', { key: 'lastPush', value: this.state.lastPush });
@@ -4211,8 +6482,8 @@ export const App = {
             toast('Sync failed - check connection');
         } finally {
             this.state.syncing = false;
-            if (svg) svg.classList.remove('animate-spin');
-            if (this.state.queue.length > 0) {
+            this.setRefreshDecksSpinning(false);
+            if (this.state.queue.size > 0) {
                 this.requestAutoSyncSoon(MIN_PUSH_INTERVAL_MS + 100);
             }
         }
@@ -4254,7 +6525,7 @@ export const App = {
         const wantsPull = !this.state.session && (now - lastPullMs > MIN_PULL_INTERVAL_MS);
         // Never pull while there are pending local mutations; a pull can overwrite local edits or
         // break deck/card references before the queue finishes pushing.
-        const wantsPush = this.state.queue.length > 0;
+        const wantsPush = this.state.queue.size > 0;
         const canPushNow = wantsPush && (this.state.lastPush == null || (now - lastPushMs > MIN_PUSH_INTERVAL_MS));
         if (!wantsPull && !wantsPush) return;
         // If we have pending work but are within the push cooldown, schedule another tick close to the allowed time.
@@ -4268,13 +6539,15 @@ export const App = {
             let didWork = false;
             // Always push first to avoid overwriting local changes with stale Notion data
             if (canPushNow) {
-                await this.pushQueue();
-                this.state.lastPush = new Date().toISOString();
-                await Storage.put('meta', { key: 'lastPush', value: this.state.lastPush });
+                const pushResult = await this.pushQueue();
+                if (pushResult.success) {
+                    this.state.lastPush = new Date().toISOString();
+                    await Storage.put('meta', { key: 'lastPush', value: this.state.lastPush });
+                }
                 didWork = true;
             }
             // Only pull when the queue is empty after any push attempt.
-            if (wantsPull && this.state.queue.length === 0) {
+            if (wantsPull && this.state.queue.size === 0) {
                 await this.pullFromNotion();
                 this.state.lastPull = new Date().toISOString();
                 await Storage.put('meta', { key: 'lastPull', value: this.state.lastPull });
@@ -4291,20 +6564,19 @@ export const App = {
             this.state.syncing = false;
             this.updateSyncButtonState();
             // If more work was added to the queue during sync, schedule another tick.
-            if (this.state.queue.length > 0) {
+            if (this.state.queue.size > 0) {
                 this.requestAutoSyncSoon(MIN_PUSH_INTERVAL_MS + 100);
             }
         }
     },
     handleOnline() {
-        // Issue 2 Fix: Show visual feedback when coming back online
         document.body.classList.remove('offline-mode');
         toast('Back online');
         this.renderConnection();
+        this.processDyContextQueue();
         this.requestAutoSyncSoon(250);
     },
     handleOffline() {
-        // Issue 2 Fix: Show visual feedback when going offline
         document.body.classList.add('offline-mode');
         toast('You are offline - changes will sync when online');
         this.renderConnection();
@@ -4318,6 +6590,7 @@ export const App = {
         this.renderCards();
         this.renderStudy();
         this.renderSelectedDeckBar();
+        this.persistUiStateDebounced();
         // Scroll to cards section
         const cardsSection = el('#cardsSection');
         if (cardsSection) cardsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -4393,7 +6666,7 @@ export const App = {
         popover.style.left = `${left}px`;
         popover.style.top = `${top}px`;
 
-        lucide.createIcons({ nodes: [popover] });
+        createIconsInScope(popover);
 
         // Close handlers
         const closeOnClickOutside = (e) => {
@@ -4408,27 +6681,59 @@ export const App = {
         };
         setTimeout(() => document.addEventListener('click', closeOnClickOutside), 0);
     },
-    passFilters(card) {
+    passFilters(card, opts = {}) {
         const f = this.state.filters;
-        const now = new Date();
-        const deck = this.deckById(card.deckId);
-        const alg = deck?.algorithm || 'SM-2';
-        const lastRating = (alg === 'FSRS' ? card.fsrs?.lastRating : card.sm2?.lastRating) || card.fsrs?.lastRating || card.sm2?.lastRating;
-        if (f.again && lastRating !== 'again') return false;
-        if (f.hard && !['again', 'hard'].includes(lastRating)) return false;
-        if (f.addedToday && card.createdAt && new Date(card.createdAt).toDateString() !== now.toDateString()) return false;
-        if (f.tags.length && !f.tags.some(t => card.tags.some(ct => ct.name === t))) return false;
-        if (f.suspended && card.suspended) return false;
-        if (f.leech && card.leech) return false;
-        if (f.marked && !card.marked) return false;
-        if (f.flag && (card.flag || '') !== f.flag) return false;
-        // Card hierarchy filter - hide sub-items by default (only show when explicitly filtered)
-        if (f.cardHierarchy === 'parents' && !isClozeParent(card)) return false;
-        if (f.cardHierarchy === 'subitems' && !isSubItem(card)) return false;
-        if (f.cardHierarchy === 'regular' && (isClozeParent(card) || isSubItem(card))) return false;
-        // Default: hide sub-items (show parents and regular cards)
-        if (!f.cardHierarchy && isSubItem(card)) return false;
-        return true;
+        const context = opts.context || 'library';
+        const allowSubItems = opts.allowSubItems === true;
+
+        if (context === 'study') {
+            // Study Mode: Strict rules
+            // 1. MUST NOT be suspended or leech (hard rule)
+            if (card.suspended || card.leech) return false;
+
+            // 2. Filter by card type (unless sub-item)
+            const typeKey = (card.type || '').toLowerCase();
+            const isFrontBack = typeKey.includes('front');
+            if (!isSubItem(card) && !isFrontBack) return false;
+
+            // 3. Apply Study-specific filters
+            const now = new Date();
+            const deck = this.deckById(card.deckId);
+            const alg = deck?.algorithm || 'SM-2';
+            const lastRating = (alg === 'FSRS' ? card.fsrs?.lastRating : card.sm2?.lastRating) || card.fsrs?.lastRating || card.sm2?.lastRating;
+
+            // Apply again/hard filters: if both selected, show cards matching either
+            const wantsAgain = f.again;
+            const wantsHard = f.hard;
+            if (wantsAgain || wantsHard) {
+                const matchesAgain = lastRating === 'again';
+                const matchesHard = lastRating === 'hard';
+                if (wantsAgain && wantsHard) {
+                    if (!matchesAgain && !matchesHard) return false;
+                } else if (wantsAgain && !matchesAgain) {
+                    return false;
+                } else if (wantsHard && !matchesHard && !matchesAgain) {
+                    // Hard filter includes "again" as more severe
+                    return false;
+                }
+            }
+            if (f.addedToday && card.createdAt && new Date(card.createdAt).toDateString() !== now.toDateString()) return false;
+            if (f.tags.length && !f.tags.some(t => card.tags.some(ct => ct.name === t))) return false;
+            if (f.marked && !card.marked) return false;
+            const flagFilter = Array.isArray(f.flag) ? f.flag : (f.flag ? [f.flag] : []);
+            if (flagFilter.length > 0 && !flagFilter.includes(card.flag || '')) return false;
+
+            return true;
+        } else {
+            // Library Mode: Only respect Library-specific controls
+            // Ignore 'again', 'hard', 'tags', 'flag' etc. set in Study tab
+            if (f.suspended && card.suspended) return false; // "Hide suspended" checked
+            if (f.leech && card.leech) return false;       // "Hide leeches" checked
+            // Hide sub-items by default in library unless explicitly allowed
+            if (!allowSubItems && isSubItem(card)) return false;
+
+            return true;
+        }
     },
     isDue(card) {
         const deck = this.deckById(card.deckId);
@@ -4444,12 +6749,9 @@ export const App = {
         const dueFallback = alg === 'FSRS' ? card.sm2?.dueDate : card.fsrs?.dueDate;
         const due = duePrimary || dueFallback;
         if (!due) return true;
-
-        const now = new Date();
         const dueDate = new Date(due);
-        const studyDayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 4, 0, 0, 0);
-        const effectiveNow = now < studyDayStart ? studyDayStart : now;
-        return dueDate <= effectiveNow;
+        if (!Number.isFinite(dueDate.getTime())) return true;
+        return dueDate.getTime() <= this.getEffectiveNowMs();
     },
     pickCard() {
         // If session is active, return the session's current card
@@ -4502,42 +6804,10 @@ export const App = {
                 prompt = card.back;
             }
 
-            // Phase 8: Cloze index bounds check with cleanup
-            const clozeMatches = (prompt || '').match(/\{\{c\d+::.+?\}\}/gi) || [];
-            const maxIndex = Math.max(0, clozeMatches.length - 1);
-            let clozeIdx = card.activeClozeIndex ?? 0;
-            if (clozeIdx > maxIndex || clozeIdx < 0) {
-                console.warn(`Cloze index ${clozeIdx} out of bounds (max: ${maxIndex}), resetting to 0`);
-                clozeIdx = 0;
-                card.activeClozeIndex = 0;
-                // Check flag BEFORE starting any async operations to prevent race conditions
-                const shouldQueue = !card._clozeIndexFixQueued;
-                if (shouldQueue) {
-                    card._clozeIndexFixQueued = true;
-                }
-                // Persist fix to local storage
-                Storage.put('cards', card)
-                    .then(() => {
-                        // Clear the flag after successful save so future out-of-bounds corrections can be queued
-                        delete card._clozeIndexFixQueued;
-                    })
-                    .catch(e => {
-                        // Clear flag on error so retry is possible
-                        delete card._clozeIndexFixQueued;
-                        console.error('Failed to fix cloze index:', e);
-                    });
-                // Queue sync to Notion only if not already queued
-                if (shouldQueue) {
-                    this.queueOp({ type: 'card-upsert', payload: card });
-                }
-            }
-
             // For sub-items, only hide the specific cloze index, reveal all others
             const subItemIndex = isSubItem(card) ? parseInt(card.clozeIndexes, 10) : null;
 
-            // Bug 5 fix: Improved cloze regex to handle nested braces (e.g., code snippets)
             // Uses a non-greedy match with proper handling of nested content
-            // Bug 3 fix (XSS): Escape user content before inserting into HTML
             const processed = prompt.replace(/\{\{c(\d+)::((?:[^{}]|\{(?!\{)|\}(?!\}))*?)(?:::((?:[^{}]|\{(?!\{)|\}(?!\}))*?))?\}\}/g, (match, num, answer, hint) => {
                 const clozeNum = parseInt(num, 10);
                 // The hint (if present) is the 3rd capture group after the optional :::
@@ -4625,7 +6895,7 @@ export const App = {
             history: [...card.reviewHistory],
             srsState: JSON.parse(JSON.stringify(card.srsState || {})),
             leech: !!card.leech,
-            suspended: !!card.suspended,
+            suspended: card.suspended ? 1 : 0,
             rating: ratingLabel,
             sessionIndex: this.state.session ? this.state.session.currentIndex : null,
             ratingCounts: this.state.session?.ratingCounts ? { ...this.state.session.ratingCounts } : null
@@ -4633,12 +6903,16 @@ export const App = {
         // Preview mode: never modify scheduling (independent of due/all selection).
         const previewMode = !!this.state.session?.noScheduleChanges;
 
-        // Bug 2 Fix: Wrap all state modifications in try-catch to ensure consistency
         try {
+
             if (previewMode) {
-                // Track rating in session statistics (only after confirming we will advance)
                 if (this.state.session && this.state.session.ratingCounts) {
                     this.state.session.ratingCounts[ratingLabel] = (this.state.session.ratingCounts[ratingLabel] || 0) + 1;
+                }
+                if (card._pendingSave) {
+                    await Storage.put('cards', card);
+                    delete card._pendingSave;
+                    this.queueOp({ type: 'card-upsert', payload: card }, 'rating');
                 }
                 this.state.lastRating = null;
                 this.setRatingEnabled(false);
@@ -4648,78 +6922,126 @@ export const App = {
             }
 
             const deck = this.deckById(card.deckId);
+
             const alg = deck?.algorithm || 'SM-2';
+
             const srsConfig = parseSrsConfig(deck?.srsConfig || null, alg);
+
             let handledLearning = false;
+
             if (alg === 'SM-2') {
+
                 handledLearning = this.applySm2Learning(card, ratingKey, deck);
+
                 if (!handledLearning) {
+
                     card.sm2 = SRS.sm2(card, ratingKey); // SM-2 is default
+
                     card.sm2.dueDate = this.adjustDueDateForEasyDays(card.sm2.dueDate, srsConfig.easyDays);
+
                 }
+
             } else {
+
                 card.fsrs = SRS.fsrs(card, ratingKey, srsConfig.fsrs?.weights, srsConfig.fsrs?.retention);
+
                 card.fsrs.dueDate = this.adjustDueDateForEasyDays(card.fsrs.dueDate, srsConfig.easyDays);
+
             }
+
             card.fsrs = card.fsrs || {};
+
             if (alg === 'FSRS') card.fsrs.lastRating = ratingKey;
+
             else {
+
                 card.sm2 = card.sm2 || {};
+
                 card.sm2.lastRating = ratingKey;
+
             }
+
             let learning = parseSrsState(card.srsState || null).learning;
+
             if (alg === 'SM-2' && !handledLearning) {
+
                 learning.state = 'review';
+
                 learning.step = 0;
+
                 learning.due = null;
+
             }
+
             if (alg === 'FSRS') {
+
                 learning.state = 'review';
+
                 learning.step = 0;
+
                 learning.due = null;
+
             }
+
             if (ratingKey === 'again' && !handledLearning) {
+
                 learning.lapses = (learning.lapses || 0) + 1;
+
             }
+
             if (!card.leech && (learning.lapses || 0) >= DEFAULT_LEECH_LAPSE_THRESHOLD) {
+
                 card.leech = true;
-                card.suspended = true;
+
+                card.suspended = 1;
+
                 toast(`Leech detected (lapses: ${learning.lapses}) — auto-suspended`);
+
             }
+
             card.srsState = this.buildSrsState(card, learning);
+
             const now = new Date();
+
             const nowMs = now.getTime();
-            const startMs = this.state.answerRevealedAt || this.state.cardShownAt || nowMs;
+
+            const startMs = this.state.cardShownAt || nowMs;
+
             let durationMs = Math.max(0, nowMs - startMs);
+
             durationMs = Math.min(durationMs, 10 * 60 * 1000);
+
             card.reviewHistory.push({ rating: ratingKey, at: now.toISOString(), ms: durationMs });
-
-            // Persist to storage first - if this fails, we haven't modified session state yet
             await Storage.put('cards', card);
-            this.queueOp({ type: 'card-upsert', payload: card }, 'rating');
 
-            // Bug 2 Fix: Only update session statistics AFTER successful storage
+            delete card._pendingSave;
+            this.setCard(card);
+
+            await this.suspendClozeSubs(card);
+            this.queueOp({ type: 'card-upsert', payload: card }, 'rating');
+            this.state.analyticsDirty = true;
+            this.maybeGenerateDyContext(card, ratingKey).catch(e => {
+                console.error('DyContext generation error:', e);
+            });
+
             if (this.state.session && this.state.session.ratingCounts) {
                 this.state.session.ratingCounts[ratingLabel] = (this.state.session.ratingCounts[ratingLabel] || 0) + 1;
             }
 
-            // Show undo toast
             this.showUndoToast(previousState);
-            // If session is active, advance the session; otherwise just render next card
             if (this.state.session) {
                 this.advanceSession(false);
             } else {
                 this.nextCard();
             }
         } catch (e) {
-            // Bug 2 Fix: Rollback card state on failure
             console.error('Rating failed, rolling back:', e);
             card.sm2 = previousState.sm2;
             card.fsrs = previousState.fsrs;
             card.reviewHistory = previousState.history;
             card.srsState = previousState.srsState;
             card.leech = previousState.leech;
-            card.suspended = previousState.suspended;
+            card.suspended = previousState.suspended ? 1 : 0;
             toast('Rating failed, please try again');
         }
     },
@@ -4773,16 +7095,14 @@ export const App = {
         card.reviewHistory = prev.history;
         card.srsState = prev.srsState || parseSrsState(null);
         card.leech = !!prev.leech;
-        card.suspended = !!prev.suspended;
+        card.suspended = prev.suspended ? 1 : 0;
         // Save restored card
         await Storage.put('cards', card);
         // Ensure undo is propagated to Notion on next sync.
         this.queueOp({ type: 'card-upsert', payload: card });
-        // Also update in memory
-        const cardIndex = this.state.cards.findIndex(c => c.id === card.id);
-        if (cardIndex !== -1) {
-            this.state.cards[cardIndex] = card;
-        }
+        // Also update in memory (with notionId index)
+        this.setCard(card);
+        this.state.analyticsDirty = true;
         // Restore session state if applicable
         if (this.state.session && prev.sessionIndex !== null) {
             this.state.session.currentIndex = prev.sessionIndex;
@@ -4812,13 +7132,355 @@ export const App = {
         this.renderStudy();
     },
     cardsForDeck(deckId) {
-        return this.state.cards.filter(c => c.deckId === deckId);
+        const cardIds = this.state.cardDeckIndex.get(deckId);
+        if (!cardIds) return [];
+
+        const results = [];
+        for (const id of cardIds) {
+            const c = this.state.cards.get(id);
+            if (c) results.push(c);
+        }
+        return results;
     },
     deckById(id) {
         return this.state.decks.find(d => d.id === id);
     },
     cardById(id) {
-        return this.state.cards.find(c => c.id === id);
+        if (!id) return null;
+        return this.state.cards.get(id) || null;
+    },
+    cardByNotionId(notionId) {
+        if (!notionId) return null;
+        const cardId = this.state.cardNotionIdIndex.get(notionId);
+        return cardId ? this.state.cards.get(cardId) : null;
+    },
+    getTagsKey(tags) {
+        if (!Array.isArray(tags) || tags.length === 0) return '';
+        return tags
+            .map(t => `${t?.name || ''}:${t?.color || ''}`)
+            .sort()
+            .join('|');
+    },
+    getEffectiveNowMs(now = new Date()) {
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 4, 0, 0, 0);
+        const effectiveNow = now < start ? start : now;
+        return effectiveNow.getTime();
+    },
+    getCardDueTs(card, deck = null) {
+        if (!card) return null;
+        const learning = parseSrsState(card.srsState || null).learning;
+        if (learning && ['learning', 'relearning'].includes(learning.state) && learning.due) {
+            const d = new Date(learning.due);
+            if (Number.isFinite(d.getTime())) return d.getTime();
+        }
+        const alg = deck?.algorithm || 'SM-2';
+        const duePrimary = alg === 'FSRS' ? card.fsrs?.dueDate : card.sm2?.dueDate;
+        const dueFallback = alg === 'FSRS' ? card.sm2?.dueDate : card.fsrs?.dueDate;
+        const due = duePrimary || dueFallback;
+        if (!due) return Number.NEGATIVE_INFINITY;
+        const dueDate = new Date(due);
+        if (!Number.isFinite(dueDate.getTime())) return Number.NEGATIVE_INFINITY;
+        return dueDate.getTime();
+    },
+    isValidDueTs(dueTs) {
+        return dueTs !== null && dueTs !== undefined && !Number.isNaN(dueTs);
+    },
+    normalizeTagNames(tags) {
+        if (!Array.isArray(tags) || tags.length === 0) return [];
+        const out = new Set();
+        for (const t of tags) {
+            const name = (t?.name || '').trim();
+            if (name) out.add(name);
+        }
+        return Array.from(out);
+    },
+    addToIndex(map, key, cardId) {
+        if (!key || !cardId) return;
+        let set = map.get(key);
+        if (!set) {
+            set = new Set();
+            map.set(key, set);
+        }
+        set.add(cardId);
+    },
+    removeFromIndex(map, key, cardId) {
+        if (!key || !cardId) return;
+        const set = map.get(key);
+        if (!set) return;
+        set.delete(cardId);
+        if (set.size === 0) map.delete(key);
+    },
+    updateTagIndex(prevTags, nextTags, cardId) {
+        const prevSet = new Set(prevTags || []);
+        const nextSet = new Set(nextTags || []);
+        for (const tag of prevSet) {
+            if (!nextSet.has(tag)) this.removeFromIndex(this.state.tagIndex, tag, cardId);
+        }
+        for (const tag of nextSet) {
+            if (!prevSet.has(tag)) this.addToIndex(this.state.tagIndex, tag, cardId);
+        }
+    },
+    updateFlagIndex(prevFlag, nextFlag, cardId) {
+        const prev = (prevFlag || '').trim();
+        const next = (nextFlag || '').trim();
+        if (prev && prev !== next) this.removeFromIndex(this.state.flagIndex, prev, cardId);
+        if (next && prev !== next) this.addToIndex(this.state.flagIndex, next, cardId);
+    },
+    updateMarkedIndex(prevMarked, nextMarked, cardId) {
+        if (prevMarked && !nextMarked) this.state.markedIndex.delete(cardId);
+        if (!prevMarked && nextMarked) this.state.markedIndex.add(cardId);
+    },
+    updateRatingIndex(prevRating, nextRating, cardId) {
+        const prev = normalizeRating(prevRating);
+        const next = normalizeRating(nextRating);
+        if (prev && prev !== next) this.removeFromIndex(this.state.ratingIndex, prev, cardId);
+        if (next && prev !== next) this.addToIndex(this.state.ratingIndex, next, cardId);
+    },
+    updateCreatedDateIndex(prevDateKey, nextDateKey, cardId) {
+        const prev = (prevDateKey || '').trim();
+        const next = (nextDateKey || '').trim();
+        if (prev && prev !== next) this.removeFromIndex(this.state.createdDateIndex, prev, cardId);
+        if (next && prev !== next) this.addToIndex(this.state.createdDateIndex, next, cardId);
+    },
+    adjustDeckTotal(deckId, delta) {
+        if (!deckId) return;
+        const stats = this.state.deckStats.get(deckId) || { total: 0 };
+        stats.total = Math.max(0, (stats.total || 0) + delta);
+        this.state.deckStats.set(deckId, stats);
+    },
+    insertDueIndex(deckId, cardId, dueTs) {
+        if (!deckId || !cardId || !this.isValidDueTs(dueTs)) return;
+        let arr = this.state.dueIndex.get(deckId);
+        if (!arr) {
+            arr = [];
+            this.state.dueIndex.set(deckId, arr);
+        }
+        let lo = 0;
+        let hi = arr.length;
+        while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (arr[mid].due <= dueTs) lo = mid + 1;
+            else hi = mid;
+        }
+        arr.splice(lo, 0, { due: dueTs, id: cardId });
+    },
+    removeDueIndex(deckId, cardId, dueTs) {
+        if (!deckId || !cardId || !this.isValidDueTs(dueTs)) return;
+        const arr = this.state.dueIndex.get(deckId);
+        if (!arr || arr.length === 0) return;
+        let lo = 0;
+        let hi = arr.length;
+        while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (arr[mid].due < dueTs) lo = mid + 1;
+            else hi = mid;
+        }
+        for (let i = lo; i < arr.length && arr[i].due === dueTs; i++) {
+            if (arr[i].id === cardId) {
+                arr.splice(i, 1);
+                break;
+            }
+        }
+        if (arr.length === 0) this.state.dueIndex.delete(deckId);
+    },
+    getDueCountForDeck(deckId, nowMs = null) {
+        const arr = this.state.dueIndex.get(deckId);
+        if (!arr || arr.length === 0) return 0;
+        const now = Number.isFinite(nowMs) ? nowMs : this.getEffectiveNowMs();
+        let lo = 0;
+        let hi = arr.length;
+        while (lo < hi) {
+            const mid = (lo + hi) >> 1;
+            if (arr[mid].due <= now) lo = mid + 1;
+            else hi = mid;
+        }
+        return lo;
+    },
+    buildCardMeta(card) {
+        const deckId = card?.deckId || '';
+        const deck = deckId ? this.deckById(deckId) : null;
+        const schedulable = isSchedulable(card);
+        const suspended = card?.suspended ? 1 : 0;
+        const leech = !!card?.leech;
+        const totalEligible = !!deckId && schedulable && !suspended;
+        const dueEligible = totalEligible && !leech;
+        const dueTs = dueEligible ? this.getCardDueTs(card, deck) : null;
+        const tagsKey = this.getTagsKey(card?.tags);
+        const tagsList = this.normalizeTagNames(card?.tags);
+        const lastRating = normalizeRating(this.getLastRatingFor(card, deck) || '') || '';
+        const flag = (card?.flag || '').trim();
+        const marked = !!card?.marked;
+        const createdDateKey = card?.createdAt ? this.formatDateKey(card.createdAt) : '';
+        const versionSig = [
+            deckId,
+            schedulable ? 1 : 0,
+            suspended,
+            leech ? 1 : 0,
+            flag,
+            marked ? 1 : 0,
+            tagsKey,
+            lastRating,
+            createdDateKey,
+            dueEligible ? String(dueTs ?? '') : ''
+        ].join('|');
+
+        const learning = parseSrsState(card?.srsState || null).learning;
+        const history = Array.isArray(card?.reviewHistory) ? card.reviewHistory : [];
+        const lastEntry = history.length > 0 ? history[history.length - 1] : null;
+        const lastEntrySig = lastEntry ? `${lastEntry.rating || ''}:${lastEntry.at || ''}:${Number.isFinite(lastEntry.ms) ? lastEntry.ms : 0}` : '';
+        const lastReview = card?.fsrs?.lastReview || card?.sm2?.lastReview || '';
+        const analyticsSig = [
+            deckId,
+            suspended,
+            leech ? 1 : 0,
+            dueEligible ? String(dueTs ?? '') : '',
+            lastReview,
+            lastRating,
+            card?.sm2?.repetitions ?? '',
+            card?.sm2?.easeFactor ?? '',
+            card?.fsrs?.difficulty ?? '',
+            learning?.state || '',
+            Number.isFinite(learning?.step) ? learning.step : '',
+            learning?.due || '',
+            Number.isFinite(learning?.lapses) ? learning.lapses : '',
+            history.length,
+            lastEntrySig
+        ].join('|');
+
+        return { deckId, totalEligible, dueEligible, dueTs, versionSig, analyticsSig, tagsList, flag, marked, lastRating, createdDateKey };
+    },
+    updateCardIndices(card) {
+        if (!card?.id) return;
+        const prev = this.state.cardMeta.get(card.id);
+        if (prev?.deckId) {
+            if (prev.totalEligible) this.adjustDeckTotal(prev.deckId, -1);
+            if (prev.dueEligible && this.isValidDueTs(prev.dueTs)) {
+                this.removeDueIndex(prev.deckId, card.id, prev.dueTs);
+            }
+        }
+        const next = this.buildCardMeta(card);
+        if (next.deckId) {
+            if (next.totalEligible) this.adjustDeckTotal(next.deckId, 1);
+            if (next.dueEligible && this.isValidDueTs(next.dueTs)) {
+                this.insertDueIndex(next.deckId, card.id, next.dueTs);
+            }
+        }
+        this.updateTagIndex(prev?.tagsList, next.tagsList, card.id);
+        this.updateFlagIndex(prev?.flag, next.flag, card.id);
+        this.updateMarkedIndex(!!prev?.marked, !!next.marked, card.id);
+        this.updateRatingIndex(prev?.lastRating, next.lastRating, card.id);
+        this.updateCreatedDateIndex(prev?.createdDateKey, next.createdDateKey, card.id);
+        this.state.cardMeta.set(card.id, next);
+        if (!prev || prev.versionSig !== next.versionSig) {
+            this.state.cardsVersion = (this.state.cardsVersion || 0) + 1;
+        }
+        if (!prev || prev.analyticsSig !== next.analyticsSig) {
+            this.state.analyticsDirty = true;
+        }
+    },
+    removeCardMeta(cardId) {
+        const prev = this.state.cardMeta.get(cardId);
+        if (!prev) return;
+        if (prev.deckId) {
+            if (prev.totalEligible) this.adjustDeckTotal(prev.deckId, -1);
+            if (prev.dueEligible && this.isValidDueTs(prev.dueTs)) {
+                this.removeDueIndex(prev.deckId, cardId, prev.dueTs);
+            }
+        }
+        this.updateTagIndex(prev.tagsList, [], cardId);
+        this.updateFlagIndex(prev.flag, '', cardId);
+        this.updateMarkedIndex(!!prev.marked, false, cardId);
+        this.updateRatingIndex(prev.lastRating, '', cardId);
+        this.updateCreatedDateIndex(prev.createdDateKey, '', cardId);
+        this.state.cardMeta.delete(cardId);
+        this.state.cardsVersion = (this.state.cardsVersion || 0) + 1;
+        this.state.analyticsDirty = true;
+    },
+    reindexDeckDue(deckId) {
+        if (!deckId) return;
+        const deckCards = this.cardsForDeck(deckId);
+        for (const card of deckCards) {
+            this.updateCardIndices(card);
+        }
+    },
+    setCard(card) {
+        if (!card?.id) return;
+
+        card.suspended = card.suspended ? 1 : 0;
+        const oldCard = this.state.cards.get(card.id);
+
+        const oldTags = oldCard?.tags || [];
+        const newTags = card.tags || [];
+        const seenTags = new Set();
+
+        if (oldCard) {
+            oldTags.forEach(t => {
+                const entry = this.state.tagRegistry.get(t.name);
+                if (entry) {
+                    entry.count--;
+                    if (entry.count <= 0) this.state.tagRegistry.delete(t.name);
+                }
+            });
+        }
+
+        newTags.forEach(t => {
+            if (!seenTags.has(t.name)) {
+                seenTags.add(t.name);
+                const entry = this.state.tagRegistry.get(t.name);
+                if (entry) {
+                    entry.count++;
+                    // Update color if it changed to something non-default
+                    if (t.color && t.color !== 'default') entry.color = t.color;
+                } else {
+                    this.state.tagRegistry.set(t.name, { count: 1, color: t.color || 'default' });
+                }
+            }
+        });
+
+        this.state.cards.set(card.id, card);
+        if (oldCard?.notionId && oldCard.notionId !== card.notionId) {
+            this.state.cardNotionIdIndex.delete(oldCard.notionId);
+        }
+        if (card.notionId) {
+            this.state.cardNotionIdIndex.set(card.notionId, card.id);
+        } else if (oldCard?.notionId) {
+            this.state.cardNotionIdIndex.delete(oldCard.notionId);
+        }
+
+        if (this.state.cardDeckIndex && card.deckId) {
+            if (oldCard && oldCard.deckId && oldCard.deckId !== card.deckId) {
+                const oldSet = this.state.cardDeckIndex.get(oldCard.deckId);
+                if (oldSet) oldSet.delete(card.id);
+            }
+            if (!this.state.cardDeckIndex.has(card.deckId)) {
+                this.state.cardDeckIndex.set(card.deckId, new Set());
+            }
+            this.state.cardDeckIndex.get(card.deckId).add(card.id);
+        }
+        this.updateCardIndices(card);
+    },
+    removeCard(cardId) {
+        const card = this.state.cards.get(cardId);
+        if (!card) return;
+
+        if (card.notionId) {
+            this.state.cardNotionIdIndex.delete(card.notionId);
+        }
+        if (this.state.cardDeckIndex && card.deckId) {
+            const set = this.state.cardDeckIndex.get(card.deckId);
+            if (set) set.delete(cardId);
+        }
+
+        (card.tags || []).forEach(t => {
+            const entry = this.state.tagRegistry.get(t.name);
+            if (entry) {
+                entry.count--;
+                if (entry.count <= 0) this.state.tagRegistry.delete(t.name);
+            }
+        });
+
+        this.state.cards.delete(cardId);
+        this.removeCardMeta(cardId);
     },
     deckName(id) {
         return this.deckById(id)?.name ?? '—';
@@ -4833,20 +7495,23 @@ export const App = {
         return `${deckIds.length} decks`;
     },
     resetFilters() {
-        this.state.filters = { again: false, hard: false, addedToday: false, tags: [], suspended: false, leech: false, marked: false, flag: '', cardHierarchy: '', studyDecks: [] };
+        const { suspended, leech } = this.state.filters;
+        this.state.filters = { again: false, hard: false, addedToday: false, tags: [], suspended, leech, marked: false, flag: [], studyDecks: [] };
         el('#filterAgain').checked = false;
         el('#filterHard').checked = false;
         el('#filterAddedToday').checked = false;
-        el('#filterSuspended').checked = false;
-        el('#filterLeech').checked = false;
+        const filterSuspended = el('#filterSuspended');
+        const filterLeech = el('#filterLeech');
+        if (filterSuspended) filterSuspended.checked = !!suspended;
+        if (filterLeech) filterLeech.checked = !!leech;
         el('#filterMarked').checked = false;
-        el('#filterFlag').value = '';
-        const hierarchySelect = el('#filterCardHierarchy');
-        if (hierarchySelect) hierarchySelect.value = '';
+        const filterFlagSwatches = el('#filterFlagSwatches');
+        if (filterFlagSwatches) this.updateFlagSwatchMulti(filterFlagSwatches, []);
         this.renderStudyDeckSelection();
         this.renderTagFilter();
         this.renderStudy();
         this.renderCards();
+        this.updateActiveFiltersCount();
     },
     openNotesModal() {
         const card = this.state.selectedCard;
@@ -4962,27 +7627,24 @@ export const App = {
         }
 
         let importedCount = 0;
-        const existingGuids = new Set(this.state.cards.map(c => c.ankiGuid).filter(Boolean));
         for (const raw of payload.cards) {
             const guid = raw.guid || raw.id || null;
-            if (guid && existingGuids.has(guid)) continue;
 
             const card = this.newCard(deck.id, raw.name || raw.front || 'Imported', raw.back || '', raw.type || 'Front-Back');
             card.tags = (raw.tags || []).map(t => typeof t === 'string' ? { name: t, color: 'default' } : t);
             card.notes = raw.notes || '';
             card.ankiGuid = guid || crypto.randomUUID();
-            existingGuids.add(card.ankiGuid);
-            this.state.cards.push(card);
+            this.setCard(card);
             await Storage.put('cards', card);
             this.queueOp({ type: 'card-upsert', payload: card });
             importedCount++;
         }
+        this.state.analyticsDirty = true;
         this.renderAll();
         toast(`Imported ${importedCount} cards from JSON`);
     },
     async importApkg(file) {
         try {
-            // Phase 19: Anki import progress feedback
             showLoading('Importing Anki deck...', 'Reading file...');
             const buf = await file.arrayBuffer();
             setLoadingProgress(10, 'Extracting archive...');
@@ -5009,26 +7671,84 @@ export const App = {
 
             const deckCache = {};
             const notesById = new Map(notes.map(n => [n[0], n]));
-            const existingGuids = new Set(this.state.cards.map(c => c.ankiGuid).filter(Boolean));
             let importedCount = 0;
-            const totalCards = cards.length;
+            const batchSize = 200;
+            let batchCards = [];
+            let batchQueue = [];
 
-            for (let i = 0; i < cards.length; i++) {
-                const cardRow = cards[i];
+            const normalizeAnkiFieldName = (name) => {
+                const raw = (name || '').toString().trim();
+                if (!raw) return '';
+                const parts = raw.split(':');
+                return (parts[parts.length - 1] || '').trim();
+            };
+
+            const renderAnkiTemplate = (template, fieldMap, extras = {}) => {
+                let out = (template || '').toString();
+                if (!out) return '';
+
+                const resolveField = (rawName) => {
+                    const key = normalizeAnkiFieldName(rawName);
+                    if (!key) return '';
+                    if (key === 'FrontSide') return extras.frontSide ?? '';
+                    if (key === 'Tags') return extras.tags ?? '';
+                    if (key === 'Deck') return extras.deck ?? '';
+                    return fieldMap[key] ?? '';
+                };
+
+                const sectionRe = /\{\{([#^])\s*([^}]+?)\s*\}\}([\s\S]*?)\{\{\/\s*\2\s*\}\}/g;
+                let prev;
+                do {
+                    prev = out;
+                    out = out.replace(sectionRe, (_, type, key, body) => {
+                        const val = resolveField(key);
+                        const hasVal = !!(val && String(val).trim());
+                        return type === '#' ? (hasVal ? body : '') : (hasVal ? '' : body);
+                    });
+                } while (out !== prev);
+
+                out = out.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_, key) => {
+                    const trimmed = (key || '').trim();
+                    if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('^') || trimmed.startsWith('/')) return '';
+                    return resolveField(trimmed);
+                });
+
+                return out;
+            };
+
+            const stripAnkiBackFrontSide = (html) => {
+                if (!html) return '';
+                return html
+                    .replace(/\{\{\s*FrontSide\s*\}\}/gi, '')
+                    .replace(/<hr\s+id=["']?answer["']?\s*\/?>/gi, '');
+            };
+
+            const flushBatch = async () => {
+                if (batchCards.length === 0) return;
+                try {
+                    await Storage.putMany('cards', batchCards);
+                    batchQueue.forEach(op => this.queueOp(op));
+                } catch (e) {
+                    console.error('Batch import failed:', e);
+                    for (const c of batchCards) await Storage.put('cards', c);
+                    batchQueue.forEach(op => this.queueOp(op));
+                }
+                setLoadingProgress(30 + Math.floor((importedCount / cards.length) * 70), `Imported ${importedCount} cards...`);
+                batchCards = [];
+                batchQueue = [];
+            };
+
+            const cardsByNid = new Map();
+            for (const cardRow of cards) {
                 const [cid, nid, did, ord] = cardRow;
-                const note = notesById.get(nid);
-                if (!note) continue;
-                const [_, guid, mid, mod, usn, tags, flds] = note;
+                if (!cardsByNid.has(nid)) cardsByNid.set(nid, []);
+                cardsByNid.get(nid).push({ cid, nid, did, ord });
+            }
 
-                // Check if card with this GUID already exists
-                if (guid && existingGuids.has(guid)) continue;
-
-                const deckId = did;
-                // Use existing deck if available, or create/cache new one
+            const resolveDeckForDid = async (deckId) => {
                 if (!deckCache[deckId]) {
                     let deckName = decksMap[deckId] || file.name.replace('.apkg', '');
 
-                    // Phase 7: Anki import deck name collision - append suffix for duplicates
                     let finalDeckName = deckName;
                     let suffix = 1;
                     while (this.state.decks.some(d => d.name === finalDeckName)) {
@@ -5044,66 +7764,122 @@ export const App = {
                     }
                     deckCache[deckId] = deck;
                 }
+                return deckCache[deckId];
+            };
+
+            for (const [nid, cardRows] of cardsByNid.entries()) {
+                const note = notesById.get(nid);
+                if (!note) continue;
+                const [_, guid, mid, mod, usn, tags, flds] = note;
 
                 const model = models[mid];
                 const fields = (flds || '').split('\u001f');
                 const front = fields[0] || 'Imported';
                 const back = fields[1] || '';
                 const isCloze = model?.type === 1;
-                const type = isCloze ? 'Cloze' : 'Front-Back';
+                const fieldMap = {};
+                (model?.flds || []).forEach((f, idx) => {
+                    if (f?.name) fieldMap[f.name] = fields[idx] || '';
+                });
+                const noteTags = (tags || '').trim();
 
                 if (isCloze) {
+                    const firstRow = cardRows[0];
+                    const deck = await resolveDeckForDid(firstRow.did);
+                    if (!deck) continue;
+
                     // Create parent card (no SRS scheduling - sub-items handle that)
-                    const parent = this.newCard(deckCache[deckId].id, front, back || front, 'Cloze');
+                    const parent = this.newCard(deck.id, front, back || front, 'Cloze');
                     parent.tags = (tags || '').trim().split(' ').filter(Boolean).map(t => ({ name: t.replace(/^\s*/, '').replace(/\s*$/, ''), color: 'default' }));
                     parent.ankiGuid = guid;
-                    if (guid) existingGuids.add(guid);
                     parent.ankiNoteType = model?.name || '';
                     parent.ankiFields = JSON.stringify(fields);
-                    parent.clozeIndexes = '';
+
+                    const clozeSet = parseClozeIndices(front);
+                    if (clozeSet.size === 0 && back) {
+                        parseClozeIndices(back).forEach(i => clozeSet.add(i));
+                    }
+                    const clozeIndices = Array.from(clozeSet).filter(n => n > 0).sort((a, b) => a - b);
+                    parent.clozeIndexes = clozeIndices.length ? clozeIndices.join(',') : '';
+
                     // Parent doesn't get scheduled - clear due dates
                     parent.fsrs.dueDate = null;
                     parent.sm2.dueDate = null;
-                    this.state.cards.push(parent);
-                    await Storage.put('cards', parent);
-                    this.queueOp({ type: 'card-upsert', payload: parent });
+                    parent.subCards = [];
+
+                    this.setCard(parent);
+                    batchCards.push(parent);
+                    batchQueue.push({ type: 'card-upsert', payload: parent });
                     importedCount++;
 
-                    // Create sub-items for each cloze index
-                    const clozeIndices = parseClozeIndices(front);
                     for (const idx of clozeIndices) {
-                        const subItem = createSubItem(parent, idx, deckCache[deckId].id, () => this.makeTempId());
-                        // For Anki imports, sub-items start as new cards
-                        this.state.cards.push(subItem);
-                        await Storage.put('cards', subItem);
-                        this.queueOp({ type: 'card-upsert', payload: subItem });
+                        const subItem = createSubItem(parent, idx, deck.id, () => this.makeTempId());
+                        this.setCard(subItem);
+                        parent.subCards.push(subItem.id);
+                        batchCards.push(subItem);
+                        batchQueue.push({ type: 'card-upsert', payload: subItem });
                         importedCount++;
                     }
                 } else {
-                    // Regular front-back card
-                    const card = this.newCard(deckCache[deckId].id, front, back, type);
-                    card.tags = (tags || '').trim().split(' ').filter(Boolean).map(t => ({ name: t.replace(/^\s*/, '').replace(/\s*$/, ''), color: 'default' }));
-                    card.ankiGuid = guid;
-                    if (guid) existingGuids.add(guid);
-                    card.ankiNoteType = model?.name || '';
-                    card.ankiFields = JSON.stringify(fields);
-                    card.clozeIndexes = '';
-                    this.state.cards.push(card);
-                    await Storage.put('cards', card);
-                    this.queueOp({ type: 'card-upsert', payload: card });
-                    importedCount++;
+                    const templates = Array.isArray(model?.tmpls) ? model.tmpls : [];
+                    const templateByOrd = new Map();
+                    templates.forEach(t => {
+                        if (t && Number.isFinite(Number(t.ord))) templateByOrd.set(Number(t.ord), t);
+                    });
+
+                    const seenOrd = new Set();
+                    for (const row of cardRows) {
+                        const ord = Number(row.ord);
+                        if (Number.isFinite(ord) && seenOrd.has(ord)) continue;
+                        if (Number.isFinite(ord)) seenOrd.add(ord);
+                        const deck = await resolveDeckForDid(row.did);
+                        if (!deck) continue;
+
+                        const tmpl = templateByOrd.get(ord) || templates[ord] || templates[0] || null;
+                        const extras = { tags: noteTags, deck: deck.name || '', frontSide: '' };
+                        const renderedFront = tmpl ? renderAnkiTemplate(tmpl.qfmt || '', fieldMap, extras) : front;
+                        const renderedBack = tmpl ? renderAnkiTemplate(tmpl.afmt || '', fieldMap, extras) : back;
+                        const finalFront = (renderedFront || front || 'Imported').trim() || 'Imported';
+                        const finalBack = stripAnkiBackFrontSide(renderedBack || back || '');
+
+                        const card = this.newCard(deck.id, finalFront, finalBack, 'Front-Back');
+                        card.tags = noteTags.split(' ').filter(Boolean).map(t => ({ name: t.replace(/^\s*/, '').replace(/\s*$/, ''), color: 'default' }));
+                        card.ankiGuid = guid;
+                        card.ankiNoteType = model?.name || '';
+                        card.ankiFields = JSON.stringify(fields);
+                        card.clozeIndexes = '';
+
+                        this.setCard(card);
+                        batchCards.push(card);
+                        batchQueue.push({ type: 'card-upsert', payload: card });
+                        importedCount++;
+                    }
                 }
 
-                // Update progress every 20 cards
-                if (i % 20 === 0) {
-                    const progress = 50 + (i / totalCards) * 45;
-                    setLoadingProgress(progress, `Imported ${importedCount} cards...`);
+                if (batchCards.length >= batchSize) {
+                    await flushBatch();
+                    await new Promise(resolve => setTimeout(resolve, 0));
                 }
             }
+
+            // Flush remaining items
+            await flushBatch();
+
+            this.state.queueLastChangedAt = new Date().toISOString();
+            await Storage.setMeta('queueLastChangedAt', this.state.queueLastChangedAt);
+            this.updateSyncButtonState();
+            this.renderConnection();
+
             setLoadingProgress(100, 'Complete!');
             hideLoading();
+            this.state.analyticsDirty = true;
             this.renderAll();
             toast(`Imported ${importedCount} cards from .apkg`);
+
+            // Trigger sync if online
+            if (this.state.queue.size > 0) {
+                this.requestAutoSyncSoon(2000, 'import');
+            }
         } catch (e) {
             hideLoading();
             console.error(e);
@@ -5153,6 +7929,8 @@ export const App = {
         const deckId = Math.abs(this.hash(deck.name));
         const modelBasicId = deckId + 1;
         const modelClozeId = deckId + 2;
+
+        const cardMap = this.state.cards; // Already a Map
 
         const conf = { nextPos: 1, estTimes: true, activeDecks: [deckId], sortType: "noteFld", sortBackwards: false, newSpread: 0, dueCounts: true, curDeck: deckId, timeLim: 0 };
         const models = {};
@@ -5237,7 +8015,7 @@ export const App = {
         // Export cloze parents with their sub-items
         let clozeIdx = regularCards.length;
         for (const [parentId, subs] of parentGroups) {
-            const parent = this.cardById(parentId);
+            const parent = cardMap.get(parentId);
             if (!parent) continue;
 
             const mid = modelClozeId;
@@ -5253,8 +8031,10 @@ export const App = {
             // Create cards from sub-items (use sub.order as ordinal)
             for (const sub of subs) {
                 const cid = ++cidCounter;
-                const ord = sub.order ?? (parseInt(sub.clozeIndexes, 10) - 1) ?? 0;
-                cardStmt.run([cid, nid, deckId, ord, now, 0, 0, 0, ++clozeIdx, 0, 0, 0, 0, 0, 0, 0, 0, ""]);
+                // Parse cloze index; fallback to 0 if NaN
+                const clozeIndex = parseInt(sub.clozeIndexes, 10);
+                const ord = sub.order ?? (Number.isFinite(clozeIndex) ? clozeIndex - 1 : 0);
+                cardStmt.run([cid, nid, deckId, Number.isFinite(ord) ? ord : 0, now, 0, 0, 0, ++clozeIdx, 0, 0, 0, 0, 0, 0, 0, 0, ""]);
             }
         }
 
@@ -5268,10 +8048,10 @@ export const App = {
         return h;
     },
     updateCounts() {
-        el('#deckCount').textContent = String(this.state.decks.length);
-        el('#cardCount').textContent = String(this.state.cards.length);
-        el('#queueCount').textContent = String(this.state.queue.length);
-        el('#lastSync').textContent = this.state.lastSync ? new Date(this.state.lastSync).toLocaleString() : '—';
+        el('#cardCount').textContent = String(this.state.cards.size);
+        const deckCount = this.state.decks.filter(d => !d.archived).length;
+        el('#deckCount').textContent = String(deckCount);
+        el('#queueCount').textContent = String(this.state.queue.size);
     },
     openSettings() {
         setLastFocusedElement(document.activeElement);
@@ -5327,6 +8107,10 @@ export const App = {
         const prevAiProvider = this.state.settings.aiProvider || '';
         const prevAiModel = this.state.settings.aiModel || '';
         const prevAiKey = this.state.settings.aiKey || '';
+        const prevDyUseJudge = this.state.settings.dyUseJudgeAi === true;
+        const prevDyProvider = this.state.settings.dyProvider || '';
+        const prevDyModel = this.state.settings.dyModel || '';
+        const prevDyKey = this.state.settings.dyKey || '';
         this.state.settings.workerUrl = el('#settingWorkerUrl').value.trim();
         this.state.settings.proxyToken = el('#settingProxyToken').value.trim();
         if (this.state.settings.workerUrl !== prevWorkerUrl || this.state.settings.proxyToken !== prevProxyToken) {
@@ -5357,6 +8141,23 @@ export const App = {
         const aiChanged = (aiProvider || '') !== prevAiProvider || (aiModel || '') !== prevAiModel || aiKeyChanged;
         if (!aiProvider || aiChanged) {
             this.state.settings.aiVerified = false;
+        }
+        // Save DyContext AI settings (separate from judge)
+        const dyUseJudgeAi = el('#dyUseJudgeAi')?.checked ?? true;
+        const dyProvider = (el('#dyProvider')?.value || '').trim();
+        const dyModel = (el('#dyModel')?.value || '').trim();
+        const dyKey = (el('#dyKey')?.value || '').trim();
+        this.state.settings.dyUseJudgeAi = dyUseJudgeAi;
+        this.state.settings.dyProvider = dyProvider;
+        this.state.settings.dyModel = dyModel;
+        this.state.settings.dyKey = dyKey;
+        const dyKeyChanged = !!(dyKey !== prevDyKey);
+        const dyChanged = dyUseJudgeAi !== prevDyUseJudge
+            || (dyProvider || '') !== prevDyProvider
+            || (dyModel || '') !== prevDyModel
+            || dyKeyChanged;
+        if (dyUseJudgeAi || dyChanged || !dyProvider || !dyModel || !dyKey) {
+            this.state.settings.dyVerified = false;
         }
 
         // Save STT settings
@@ -5397,8 +8198,8 @@ export const App = {
             this.updateMobileFab();
         }
 
-        // Check if this is first sync (no decks/cards loaded yet)
-        const isFirstSync = this.state.decks.length === 0 && this.state.cards.length === 0;
+        // Check first sync status
+        const isFirstSync = this.state.decks.length === 0 && this.state.cards.size === 0;
 
         if (isFirstSync && this.isReady()) {
             // Close settings and show sync loading overlay
@@ -5508,6 +8309,7 @@ export const App = {
                 Storage.setSettings(this.state.settings);
                 // Show STT settings now that AI is verified
                 el('#sttSettings')?.classList.remove('hidden');
+                this.updateDyContextSettingsUI();
                 toast('AI settings verified');
             } else {
                 throw new Error(`API returned ${res.status}`);
@@ -5517,7 +8319,52 @@ export const App = {
             Storage.setSettings(this.state.settings);
             // Hide STT settings since AI is not verified
             el('#sttSettings')?.classList.add('hidden');
+            this.updateDyContextSettingsUI();
             toast('AI verification failed: ' + e.message);
+        } finally {
+            hideLoading();
+        }
+    },
+    async verifyDyContextSettings() {
+        if (!navigator.onLine) {
+            toast('Offline: connect to verify Dynamic Context AI settings');
+            return;
+        }
+        const provider = el('#dyProvider')?.value || '';
+        const model = el('#dyModel')?.value?.trim() || '';
+        const key = el('#dyKey')?.value?.trim() || '';
+        if (!provider) return toast('Select a provider for Dynamic Context');
+        if (!model) return toast('Enter a model name for Dynamic Context');
+        if (!key) return toast('Enter an API key for Dynamic Context');
+        try {
+            showLoading('Verifying Dynamic Context AI...', 'Testing connection to AI provider.');
+            let endpoint, headers, body;
+            if (provider === 'openai') {
+                endpoint = 'https://api.openai.com/v1/models';
+                headers = { 'Authorization': `Bearer ${key}` };
+            } else if (provider === 'anthropic') {
+                endpoint = 'https://api.anthropic.com/v1/messages';
+                headers = { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' };
+                body = JSON.stringify({ model, max_tokens: 1, messages: [{ role: 'user', content: 'Hi' }] });
+            } else if (provider === 'gemini') {
+                endpoint = `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`;
+                headers = {};
+            }
+            const res = await fetch(endpoint, { method: body ? 'POST' : 'GET', headers, body });
+            if (res.ok || res.status === 400) {
+                this.state.settings.dyProvider = provider;
+                this.state.settings.dyModel = model;
+                this.state.settings.dyKey = key;
+                this.state.settings.dyVerified = true;
+                Storage.setSettings(this.state.settings);
+                toast('Dynamic Context AI settings verified');
+            } else {
+                throw new Error(`API returned ${res.status}`);
+            }
+        } catch (e) {
+            this.state.settings.dyVerified = false;
+            Storage.setSettings(this.state.settings);
+            toast('Dynamic Context AI verification failed: ' + e.message);
         } finally {
             hideLoading();
         }
@@ -5647,6 +8494,7 @@ export const App = {
             el('#cardSourceSelect').innerHTML = `<option value=\"\">Select card source</option>` + cardOptions.map(o => `<option value=\"${o.id}\">${o.title}</option>`).join('');
             if (deckOptions.length === 1) this.state.settings.deckSource = deckOptions[0].id;
             if (cardOptions.length === 1) this.state.settings.cardSource = cardOptions[0].id;
+            this.state.settings.sourcesSaved = false;
             Storage.setSettings(this.state.settings);
             if (this.state.settings.deckSource) el('#deckSourceSelect').value = this.state.settings.deckSource;
             if (this.state.settings.cardSource) el('#cardSourceSelect').value = this.state.settings.cardSource;
@@ -5672,8 +8520,24 @@ export const App = {
         el('#cardSourceSelect').innerHTML = `<option value="">Select card source</option>` + cardOptions.map(o => `<option value="${o.id}">${o.title}</option>`).join('');
         if (this.state.settings.deckSource) el('#deckSourceSelect').value = this.state.settings.deckSource;
         if (this.state.settings.cardSource) el('#cardSourceSelect').value = this.state.settings.cardSource;
-        el('#deckSourceSelect').onchange = (e) => { this.state.settings.deckSource = e.target.value; this.state.sourcesVerified = !!(this.state.settings.deckSource && this.state.settings.cardSource); this.state.settings.sourcesVerified = this.state.sourcesVerified; Storage.setSettings(this.state.settings); this.renderStatus(); this.renderGate(); };
-        el('#cardSourceSelect').onchange = (e) => { this.state.settings.cardSource = e.target.value; this.state.sourcesVerified = !!(this.state.settings.deckSource && this.state.settings.cardSource); this.state.settings.sourcesVerified = this.state.sourcesVerified; Storage.setSettings(this.state.settings); this.renderStatus(); this.renderGate(); };
+        el('#deckSourceSelect').onchange = (e) => {
+            this.state.settings.deckSource = e.target.value;
+            this.state.sourcesVerified = !!(this.state.settings.deckSource && this.state.settings.cardSource);
+            this.state.settings.sourcesVerified = this.state.sourcesVerified;
+            this.state.settings.sourcesSaved = false;
+            Storage.setSettings(this.state.settings);
+            this.renderStatus();
+            this.renderGate();
+        };
+        el('#cardSourceSelect').onchange = (e) => {
+            this.state.settings.cardSource = e.target.value;
+            this.state.sourcesVerified = !!(this.state.settings.deckSource && this.state.settings.cardSource);
+            this.state.settings.sourcesVerified = this.state.sourcesVerified;
+            this.state.settings.sourcesSaved = false;
+            Storage.setSettings(this.state.settings);
+            this.renderStatus();
+            this.renderGate();
+        };
     },
     openModal(id) {
         // Delegate to the UI module's openModal function
@@ -5709,15 +8573,14 @@ export const App = {
         await Storage.wipeStore('meta');
         // Clear all GhostInk-specific localStorage keys
         localStorage.removeItem(Storage.settingsKey);
-        localStorage.removeItem('ghostink_session_v1');
         // Close the database connection before deleting
         if (Storage.db) {
             Storage.db.close();
             Storage.db = null;
         }
         // Delete the entire database and wait for it to complete
-        await new Promise((resolve, reject) => {
-            const req = indexedDB.deleteDatabase('GhostInkDB');
+        const deleteDb = (name) => new Promise((resolve, reject) => {
+            const req = indexedDB.deleteDatabase(name);
             req.onsuccess = resolve;
             req.onerror = reject;
             req.onblocked = () => {
@@ -5725,6 +8588,7 @@ export const App = {
                 resolve();
             };
         });
+        await deleteDb(Storage.dbName);
         // Clear caches used by this app only
         if (typeof caches !== 'undefined') {
             try {
@@ -5751,6 +8615,7 @@ export const App = {
         const hasToken = !!this.state.settings.authToken;
         const authOk = workerOk && hasToken && (this.state.authVerified || this.state.settings.authVerified);
         const hasSources = !!(this.state.settings.deckSource && this.state.settings.cardSource && this.state.sourcesVerified);
+        const sourcesSaved = this.state.settings.sourcesSaved === true;
 
         el('#statusWorker').textContent = `Worker: ${workerOk ? 'verified' : hasWorkerUrl ? 'unverified' : 'missing'}`;
         el('#statusAuth').textContent = `Auth: ${authOk ? 'verified' : workerOk ? (hasToken ? 'unverified' : 'missing') : 'blocked (verify worker)'}`;
@@ -5758,6 +8623,15 @@ export const App = {
 
         const vaultSection = el('#vaultStatusSection');
         if (vaultSection) vaultSection.classList.toggle('hidden', !hasSources);
+
+        const notionDetails = el('#notionSettingsDetails');
+        if (notionDetails && authOk && hasSources && sourcesSaved && !notionDetails.dataset.autoCollapsed) {
+            notionDetails.removeAttribute('open');
+            notionDetails.dataset.autoCollapsed = '1';
+        }
+        if (!sourcesSaved && notionDetails?.dataset.autoCollapsed) {
+            delete notionDetails.dataset.autoCollapsed;
+        }
 
         this.updateSettingsButtons();
         this.renderConnection();
@@ -5777,6 +8651,8 @@ export const App = {
                     ['Daily Review Limit', 'number'],
                     ['New Card Limit', 'number'],
                     ['Reverse Mode Enabled', 'checkbox'],
+                    ['Dynamic Context?', 'checkbox'],
+                    ['DyContext AI Prompt', 'rich_text'],
                     ['Created In-App', 'checkbox'],
                     ['Archived?', 'checkbox'],
                     ['SRS Config', 'rich_text']
@@ -5805,8 +8681,11 @@ export const App = {
                     ['Review History', 'rich_text'],
                     ['Cloze Indexes', 'rich_text'],
                     ['SRS State', 'rich_text'],
-                    ['Parent Card', 'relation'],
-                    ['Sub Cards', 'relation']
+                    ['Cloze Parent Card', 'relation'],
+                    ['Cloze Sub Cards', 'relation'],
+                    ['DyContext Root Card', 'relation'],
+                    ['DyContext Previous Card', 'relation'],
+                    ['DyContext Next Card', 'relation']
                 ];
                 const missing = required.filter(([n, k]) => !has(n, k));
                 if (missing.length) return false;
@@ -5839,7 +8718,7 @@ export const App = {
         if (tokenInput) tokenInput.disabled = blockAuth;
 
         // Disable AI/STT verification buttons when offline
-        ['verifyAi', 'verifyStt'].forEach(id => {
+        ['verifyAi', 'verifyDyContextAi', 'verifyStt'].forEach(id => {
             const btn = el('#' + id);
             if (!btn) return;
             btn.disabled = !online;
@@ -5861,7 +8740,13 @@ export const App = {
             const url = new URL(s.workerUrl.replace(/\/$/, ''));
             url.searchParams.append('url', 'https://api.notion.com/v1/users/me');
             if (s.proxyToken) url.searchParams.append('token', s.proxyToken);
-            const res = await fetch(url.toString());
+
+            // Add timeout to prevent hanging on unstable networks
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 3000);
+            const res = await fetch(url.toString(), { signal: controller.signal });
+            clearTimeout(timeout);
+
             if (res.ok || res.status === 401) {
                 this.state.workerVerified = true;
                 this.state.settings.workerVerified = true;
@@ -5895,15 +8780,6 @@ export const App = {
             return;
         }
         const pos = this.state.settings.fabPos;
-        // Legacy format: { bottom: px, left: px } anchored to bottom-left of the cluster.
-        if (pos && typeof pos === 'object' && pos.mode !== 'grid' && (pos.bottom != null || pos.left != null)) {
-            fab.style.transform = 'none';
-            fab.style.bottom = (pos.bottom ?? 12) + 'px';
-            fab.style.left = (pos.left ?? 12) + 'px';
-            fab.style.top = 'auto';
-            fab.style.right = 'auto';
-            return;
-        }
 
         // Grid format: { mode:'grid', rows, cols, cell } anchored to the *center* of the cluster.
         const grid = pos && typeof pos === 'object' && pos.mode === 'grid' ? pos : null;
@@ -5971,11 +8847,11 @@ export const App = {
         const renderAscii = (activeCell) => {
             if (!ascii) return;
             const pad2 = (n) => String(n).padStart(2, '0');
-            let out = ' ┌──────────────┐ \n';
-            out += ' │ ┌──────────┐ │ \n';
+            let out = '';
+            out += '┌──────────────┐\n';
+            out += '│ ┌──────────┐ │\n';
             let cell = 1;
             for (let r = 0; r < rows; r++) {
-                let rowStr = ' │ │';
                 const rowArr = [];
                 for (let c = 0; c < cols; c++) {
                     const label = pad2(cell);
@@ -5986,14 +8862,10 @@ export const App = {
                     }
                     cell++;
                 }
-                rowStr += rowArr.join(' ') + '│ │ ';
-                out += rowStr + '\n';
-                if (r < rows - 1) {
-                    out += ' │ │ │ │ \n';
-                }
+                out += `│ │ ${rowArr.join(' ')} │ │\n`;
             }
-            out += ' │ └──────────┘ │ \n';
-            out += ' └──────────────┘ ';
+            out += '│ └──────────┘ │\n';
+            out += '└──────────────┘';
             ascii.innerHTML = out;
         };
 
@@ -6031,7 +8903,7 @@ export const App = {
         }
     },
     applyFontMode() {
-        const mode = this.state.settings.fontMode || 'serif';
+        const mode = this.state.settings.fontMode || 'mono';
         const fontMode = mode === 'mono' ? 'mono' : 'serif';
         document.body.setAttribute('data-font', fontMode);
         document.documentElement.setAttribute('data-font', fontMode);
@@ -6052,6 +8924,13 @@ export const App = {
         if (s.aiProvider) el('#aiProvider').value = s.aiProvider;
         if (s.aiModel) el('#aiModel').value = s.aiModel;
         if (s.aiKey) el('#aiKey').value = s.aiKey;
+        const dyUseJudgeAi = s.dyUseJudgeAi === true;
+        const dyUseJudgeEl = el('#dyUseJudgeAi');
+        if (dyUseJudgeEl) dyUseJudgeEl.checked = dyUseJudgeAi;
+        if (s.dyProvider) el('#dyProvider').value = s.dyProvider;
+        if (s.dyModel) el('#dyModel').value = s.dyModel;
+        if (s.dyKey) el('#dyKey').value = s.dyKey;
+        this.state.settings.dyVerified = s.dyVerified || false;
 
         // Load STT settings
         if (s.sttProvider) el('#sttProvider').value = s.sttProvider;
@@ -6068,6 +8947,7 @@ export const App = {
         this.updateSkipHotkeyLabel(el('#revisionMode')?.value === 'ai');
         // Toggle provider field visibility based on current selection
         this.toggleAiProviderFields();
+        this.updateDyContextSettingsUI();
         this.toggleSttProviderFields();
         // On file:// we still need to proactively ask once to enable mic; HTTPS will reuse prior grant
         if (location.protocol === 'file:' && s.sttProvider && s.sttPermissionWarmed) {
@@ -6075,6 +8955,10 @@ export const App = {
         }
         // Add change listeners for provider dropdowns
         el('#aiProvider').onchange = () => this.toggleAiProviderFields();
+        const dyUseToggle = el('#dyUseJudgeAi');
+        if (dyUseToggle) dyUseToggle.onchange = () => this.updateDyContextSettingsUI();
+        const dyProvider = el('#dyProvider');
+        if (dyProvider) dyProvider.onchange = () => this.updateDyContextSettingsUI();
         el('#sttProvider').onchange = () => {
             this.toggleSttProviderFields();
             const provider = el('#sttProvider')?.value || '';
@@ -6138,6 +9022,29 @@ export const App = {
                 fields.classList.add('hidden');
             }
         }
+    },
+    updateDyContextSettingsUI() {
+        const useRow = el('#dyUseJudgeAiRow');
+        const useToggle = el('#dyUseJudgeAi');
+        const fields = el('#dyProviderFields');
+        const detailFields = el('#dyProviderDetailFields');
+        const providerSelect = el('#dyProvider');
+        const help = el('#dyProviderHelp');
+        const aiVerified = !!this.state.settings.aiVerified;
+        if (useRow) useRow.classList.toggle('hidden', !aiVerified);
+        if (!aiVerified) {
+            if (useToggle) useToggle.checked = false;
+            if (this.state.settings.dyUseJudgeAi !== false) {
+                this.state.settings.dyUseJudgeAi = false;
+                Storage.setSettings(this.state.settings);
+            }
+        }
+        const useJudge = aiVerified && (useToggle?.checked ?? false);
+        if (fields) fields.classList.toggle('hidden', useJudge);
+        const provider = (providerSelect?.value || '').trim();
+        const showDetails = !!provider && !useJudge;
+        if (detailFields) detailFields.classList.toggle('hidden', !showDetails);
+        if (help) help.classList.toggle('hidden', !provider);
     },
     toggleSttProviderFields() {
         const provider = el('#sttProvider').value;
@@ -6238,7 +9145,28 @@ export const App = {
             this.updateMobileFab();
             // Provide user-friendly error messages
             const msg = e?.message || 'Unknown error';
-            if (msg.includes('401') || msg.includes('403')) {
+            if (msg.includes('Switch to Reveal mode')) {
+                // Create toast with action button
+                const t = el('#toast');
+                t.innerHTML = `AI timed out. <button id="switchToRevealBtn" class="underline font-bold ml-1">Switch to Reveal mode?</button>`;
+                t.classList.remove('hidden', 'opacity-0');
+                // Auto hide after 5s
+                setTimeout(() => {
+                    t.classList.add('opacity-0');
+                    setTimeout(() => t.classList.add('hidden'), 300);
+                }, 5000);
+
+                const switchBtn = el('#switchToRevealBtn');
+                if (switchBtn) {
+                    switchBtn.onclick = () => {
+                        el('#revisionMode').value = 'manual';
+                        el('#aiControls').classList.add('hidden');
+                        this.state.aiLocked = false;
+                        this.updateMobileFab();
+                        toast('Switched to Reveal mode');
+                    };
+                }
+            } else if (msg.includes('401') || msg.includes('403')) {
                 toast('AI API key invalid or expired');
             } else if (msg.includes('429')) {
                 toast('AI rate limited - try again in a moment');
@@ -6251,7 +9179,6 @@ export const App = {
         }
     },
     async callAI(provider, model, prompt, key) {
-        // Phase 9: Offline mode check for AI
         if (!navigator.onLine) {
             throw new Error('Network unavailable');
         }
@@ -6267,15 +9194,48 @@ export const App = {
             }
         };
 
+        const fetchWithTimeout = async (url, options, timeoutMs = 15000) => {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+                const res = await fetch(url, { ...options, signal: controller.signal });
+                clearTimeout(timeout);
+                return res;
+            } catch (e) {
+                clearTimeout(timeout);
+                throw e;
+            }
+        };
+
+        const attemptFetch = async (url, options) => {
+            let lastErr;
+            for (let i = 0; i < 3; i++) {
+                try {
+                    const res = await fetchWithTimeout(url, options);
+                    if (res.status === 429 || res.status >= 500) {
+                        lastErr = new Error(`Request failed ${res.status}`);
+                        await sleep(1000 * (i + 1));
+                        continue;
+                    }
+                    return res;
+                } catch (e) {
+                    lastErr = e;
+                    if (e.name === 'AbortError') throw new Error('Request timed out. Switch to Reveal mode?');
+                    await sleep(1000);
+                }
+            }
+            throw lastErr;
+        };
+
         if (provider === 'anthropic') {
-            const resp = await fetch('https://api.anthropic.com/v1/messages', {
+            const resp = await attemptFetch('https://api.anthropic.com/v1/messages', {
                 method: 'POST',
                 headers: {
                     'content-type': 'application/json',
                     'x-api-key': key,
                     'anthropic-version': '2023-06-01'
                 },
-                body: JSON.stringify({ model, max_tokens: 256, messages: [{ role: 'user', content: prompt }] })
+                body: JSON.stringify({ model, max_tokens: 1024, messages: [{ role: 'user', content: prompt }] })
             });
             if (!resp.ok) throw new Error('Claude returned ' + resp.status);
             const json = await safeParseJson(resp, 'Claude');
@@ -6283,7 +9243,7 @@ export const App = {
         }
         if (provider === 'gemini') {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
-            const resp = await fetch(url, {
+            const resp = await attemptFetch(url, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
@@ -6292,10 +9252,10 @@ export const App = {
             const json = await safeParseJson(resp, 'Gemini');
             return json.candidates?.[0]?.content?.parts?.map(p => p.text).join('\n') || 'No response';
         }
-        const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+        const resp = await attemptFetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: { 'content-type': 'application/json', 'authorization': 'Bearer ' + key },
-            body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], max_tokens: 256 })
+            body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], max_tokens: 1024 })
         });
         if (!resp.ok) throw new Error('OpenAI returned ' + resp.status);
         const json = await safeParseJson(resp, 'OpenAI');
@@ -6463,22 +9423,30 @@ export const App = {
 
         // Re-init lucide icons for the joystick
         if (revealed) {
-            setTimeout(() => lucide.createIcons(), 0);
+            const iconScope = joystickContainer || cluster || document.body;
+            setTimeout(() => createIconsInScope(iconScope), 0);
         }
     },
     renderMath(container) {
         // Guard against KaTeX not being loaded yet (async CDN load)
         if (!container) return;
         if (typeof katex === 'undefined') {
-            // KaTeX not loaded yet, wait for it and retry
+            // KaTeX not loaded yet, wait for it using a shared poller
+            if (this._katexPolling) return; // Already polling globally
+            this._katexPolling = true;
+            let attempts = 0;
             const checkInterval = setInterval(() => {
+                attempts++;
                 if (typeof katex !== 'undefined') {
                     clearInterval(checkInterval);
-                    this.renderMath(container);
+                    this._katexPolling = false;
+                    // Re-render everything that might have math
+                    this.renderMath(document.body);
+                } else if (attempts > 50) {
+                    clearInterval(checkInterval);
+                    this._katexPolling = false;
                 }
             }, 100);
-            // Stop checking after 5 seconds to avoid infinite loop
-            setTimeout(() => clearInterval(checkInterval), 5000);
             return;
         }
         container.querySelectorAll('.notion-equation').forEach(span => {
@@ -6608,7 +9576,6 @@ export const App = {
         this.state.userStoppedMic = false;
         if (!this.state.activeMicButton) this.state.activeMicButton = 'inline';
 
-        // Bug 4 fix: Comprehensive try-catch with proper cleanup
         let stream = null;
         try {
             stream = await this.getMicStream();
@@ -6620,7 +9587,6 @@ export const App = {
             this.mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
 
             this.mediaRecorder.onstop = async () => {
-                // Bug 4 fix: Ensure stream is stopped even if transcription fails
                 const cleanupStream = () => {
                     try { stream.getTracks().forEach(t => t.stop()); } catch (_) { }
                     if (this.state.activeAudioStream === stream) this.state.activeAudioStream = null;
@@ -6653,7 +9619,6 @@ export const App = {
                     this.state.activeMicButton = null;
                     this.setAiControlsLocked(false);
                 } catch (e) {
-                    // Bug 4 fix: Proper cleanup on transcription failure
                     el('#aiFeedback').innerHTML = '';
                     toast('Transcription failed: ' + e.message);
                     this.mediaRecorder = null;
@@ -6696,7 +9661,6 @@ export const App = {
             }, 60000);
 
         } catch (e) {
-            // Bug 4 fix: Cleanup stream on any error during setup
             if (stream) {
                 try { stream.getTracks().forEach(t => t.stop()); } catch (_) { }
             }
@@ -6712,7 +9676,6 @@ export const App = {
         }
     },
     async transcribeWithWhisper(audioBlob, provider, model, key, prompt) {
-        // Phase 9: Offline mode check for STT
         if (!navigator.onLine) {
             throw new Error('Network unavailable for transcription');
         }
@@ -6736,7 +9699,6 @@ export const App = {
         return data.text || '';
     },
     async transcribeWithGemini(audioBlob, model, key, prompt) {
-        // Phase 9: Offline mode check for Gemini STT
         if (!navigator.onLine) {
             throw new Error('Network unavailable for transcription');
         }
@@ -6777,9 +9739,10 @@ export const App = {
         if (!target) return;
         if (target.type === 'card') {
             await Storage.delete('cards', target.id);
-            this.state.cards = this.state.cards.filter(c => c.id !== target.id);
+            this.state.cards.delete(target.id);
             this.queueOp({ type: 'card-delete', payload: { id: target.id, notionId: target.notionId } });
             this.renderCards();
+            this.renderDecks(); // Refresh stats
             toast('Card deleted');
         }
         this.pendingDelete = null;

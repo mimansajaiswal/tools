@@ -3,57 +3,76 @@
  * IndexedDB and localStorage management for decks, cards, settings, and sessions.
  */
 
+const resolveStorageScope = () => {
+    try {
+        const rawPath = location?.pathname || '';
+        const trimmed = rawPath.replace(/\/index\.html$/i, '').replace(/\/$/, '');
+        const parts = trimmed.split('/').filter(Boolean);
+        const last = parts[parts.length - 1] || 'ghostink-flashcards';
+        const normalized = last.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
+        return normalized || 'ghostink-flashcards';
+    } catch (_) {
+        return 'ghostink-flashcards';
+    }
+};
+
+const STORAGE_SCOPE = resolveStorageScope();
+const SETTINGS_KEY = `${STORAGE_SCOPE}_settings_v1`;
+const DB_NAME = `GhostInkDB_${STORAGE_SCOPE}`;
+
 export const Storage = {
     db: null,
-    settingsKey: 'ghostink_settings_v1',
+    dbName: DB_NAME,
+    scope: STORAGE_SCOPE,
+    settingsKey: SETTINGS_KEY,
     sqlReady: null,
     _initPromise: null,
     _isInitialized: false,
 
     async init() {
-        // Bug 1 fix: Prevent multiple init calls and ensure single initialization
         if (this._initPromise) return this._initPromise;
         if (this._isInitialized && this.db) return Promise.resolve();
 
         this._initPromise = new Promise((resolve, reject) => {
-            const req = indexedDB.open('GhostInkDB', 4); // Bumped version for indexes and sync queue store
+            const req = indexedDB.open(this.dbName, 5);
 
             req.onupgradeneeded = (e) => {
                 const db = e.target.result;
-                const oldVersion = e.oldVersion;
+                const tx = e.target.transaction;
 
-                // Create base stores if they don't exist
                 if (!db.objectStoreNames.contains('decks')) {
                     db.createObjectStore('decks', { keyPath: 'id' });
                 }
+
+                let cardStore;
                 if (!db.objectStoreNames.contains('cards')) {
-                    const cardStore = db.createObjectStore('cards', { keyPath: 'id' });
-                    // Fix: Add indexes for common queries
-                    cardStore.createIndex('deckId', 'deckId', { unique: false });
-                    cardStore.createIndex('dueDate_fsrs', 'fsrs.dueDate', { unique: false });
-                    cardStore.createIndex('dueDate_sm2', 'sm2.dueDate', { unique: false });
-                } else if (oldVersion < 4) {
-                    // Add indexes to existing cards store
-                    const tx = e.target.transaction;
-                    const cardStore = tx.objectStore('cards');
-                    if (!cardStore.indexNames.contains('deckId')) {
-                        cardStore.createIndex('deckId', 'deckId', { unique: false });
-                    }
-                    if (!cardStore.indexNames.contains('dueDate_fsrs')) {
-                        cardStore.createIndex('dueDate_fsrs', 'fsrs.dueDate', { unique: false });
-                    }
-                    if (!cardStore.indexNames.contains('dueDate_sm2')) {
-                        cardStore.createIndex('dueDate_sm2', 'sm2.dueDate', { unique: false });
-                    }
+                    cardStore = db.createObjectStore('cards', { keyPath: 'id' });
+                } else {
+                    cardStore = tx.objectStore('cards');
                 }
+
+                if (!cardStore.indexNames.contains('deckId')) {
+                    cardStore.createIndex('deckId', 'deckId', { unique: false });
+                }
+                if (!cardStore.indexNames.contains('dueDate_fsrs')) {
+                    cardStore.createIndex('dueDate_fsrs', 'fsrs.dueDate', { unique: false });
+                }
+                if (!cardStore.indexNames.contains('dueDate_sm2')) {
+                    cardStore.createIndex('dueDate_sm2', 'sm2.dueDate', { unique: false });
+                }
+                if (!cardStore.indexNames.contains('parentCard')) {
+                    cardStore.createIndex('parentCard', 'parentCard', { unique: false });
+                }
+                if (!cardStore.indexNames.contains('notionId')) {
+                    cardStore.createIndex('notionId', 'notionId', { unique: false });
+                }
+
                 if (!db.objectStoreNames.contains('meta')) {
                     db.createObjectStore('meta', { keyPath: 'key' });
                 }
-                // Add session store (v3+)
                 if (!db.objectStoreNames.contains('session')) {
                     db.createObjectStore('session', { keyPath: 'id' });
                 }
-                // Bug 6 fix: Add sync queue store for persistence
                 if (!db.objectStoreNames.contains('syncQueue')) {
                     db.createObjectStore('syncQueue', { keyPath: 'id', autoIncrement: true });
                 }
@@ -62,7 +81,6 @@ export const Storage = {
             req.onsuccess = (e) => {
                 this.db = e.target.result;
                 this._isInitialized = true;
-                // Listen for version change (another tab is resetting/upgrading)
                 this.db.onversionchange = () => {
                     this.db.close();
                     this.db = null;
@@ -70,11 +88,9 @@ export const Storage = {
                     this._initPromise = null;
                     location.reload();
                 };
-                // Migrate session from localStorage to IndexedDB if exists
-                this.migrateSessionFromLocalStorage();
                 resolve();
             };
-            req.onerror = (e) => {
+            req.onerror = () => {
                 this._initPromise = null;
                 reject(new Error(`Failed to open database: ${req.error?.message || 'Unknown error'}`));
             };
@@ -83,12 +99,10 @@ export const Storage = {
         return this._initPromise;
     },
 
-    // Bug 1 fix: Check if storage is ready
     isReady() {
         return this._isInitialized && this.db !== null;
     },
 
-    // Bug 1 fix: Wait for storage to be ready
     async ensureReady() {
         if (this.isReady()) return;
         await this.init();
@@ -99,7 +113,6 @@ export const Storage = {
         return this.db.transaction(store, mode).objectStore(store);
     },
 
-    // Transaction support for critical operations (Fix)
     async withTransaction(storeNames, mode, callback) {
         if (!this.db) throw new Error('Database not initialized');
         const stores = Array.isArray(storeNames) ? storeNames : [storeNames];
@@ -111,21 +124,20 @@ export const Storage = {
                 storeMap[name] = tx.objectStore(name);
             });
 
-            let result;
             try {
-                result = callback(storeMap, tx);
+                callback(storeMap, tx);
             } catch (e) {
+                try { tx.abort(); } catch (_) { }
                 reject(e);
                 return;
             }
 
-            tx.oncomplete = () => resolve(result);
+            tx.oncomplete = () => resolve();
             tx.onerror = () => reject(new Error(`Transaction failed: ${tx.error?.message || 'Unknown error'}`));
             tx.onabort = () => reject(new Error('Transaction aborted'));
         });
     },
 
-    // Data validation helper (Fix)
     _validateCard(card) {
         if (!card || typeof card !== 'object') return { valid: false, error: 'Card must be an object' };
         if (typeof card.id !== 'string' || !card.id) return { valid: false, error: 'Card must have a valid id' };
@@ -146,14 +158,13 @@ export const Storage = {
         return new Promise((resolve, reject) => {
             const tx = this.db.transaction(store, 'readonly');
             const req = tx.objectStore(store).getAll();
-            req.onsuccess = () => resolve(req.result);
+            req.onsuccess = () => resolve(req.result || []);
             req.onerror = () => reject(new Error(`Failed to read from ${store}: ${req.error?.message || 'Unknown error'}`));
             tx.onerror = () => reject(new Error(`Transaction failed for ${store}: ${tx.error?.message || 'Unknown error'}`));
             tx.onabort = () => reject(new Error(`Transaction aborted for ${store}`));
         });
     },
 
-    // Get cards by deck ID using index (Fix: common query optimization)
     async getCardsByDeck(deckId) {
         await this.ensureReady();
         return new Promise((resolve, reject) => {
@@ -161,8 +172,52 @@ export const Storage = {
             const store = tx.objectStore('cards');
             const index = store.index('deckId');
             const req = index.getAll(deckId);
-            req.onsuccess = () => resolve(req.result);
+            req.onsuccess = () => resolve(req.result || []);
             req.onerror = () => reject(new Error(`Failed to get cards by deck: ${req.error?.message || 'Unknown error'}`));
+        });
+    },
+
+    async getSubItems(parentId) {
+        await this.ensureReady();
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction('cards', 'readonly');
+            const index = tx.objectStore('cards').index('parentCard');
+            const req = index.getAll(parentId);
+            req.onsuccess = () => resolve(req.result || []);
+            req.onerror = () => reject(new Error('Failed to get sub-items'));
+        });
+    },
+
+    async deleteCardsByDeck(deckId) {
+        await this.ensureReady();
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction('cards', 'readwrite');
+            const store = tx.objectStore('cards');
+            const index = store.index('deckId');
+            const req = index.getAllKeys(deckId);
+
+            req.onsuccess = () => {
+                const keys = req.result || [];
+                if (keys.length === 0) {
+                    resolve([]);
+                    return;
+                }
+                let completed = 0;
+                let errors = 0;
+                keys.forEach(key => {
+                    const delReq = store.delete(key);
+                    delReq.onsuccess = () => {
+                        completed++;
+                        if (completed + errors === keys.length) resolve(keys);
+                    };
+                    delReq.onerror = () => {
+                        errors++;
+                        if (completed + errors === keys.length) resolve(keys);
+                    };
+                });
+            };
+            req.onerror = () => reject(new Error('Failed to delete cards by deck'));
+            tx.onerror = () => reject(new Error('Transaction failed'));
         });
     },
 
@@ -192,7 +247,6 @@ export const Storage = {
 
     async put(store, value) {
         await this.ensureReady();
-        // Data validation for cards and decks
         if (store === 'cards') {
             const validation = this._validateCard(value);
             if (!validation.valid) {
@@ -217,12 +271,10 @@ export const Storage = {
         });
     },
 
-    // Bug 3 fix: Batch put with yielding to prevent jank
     async putMany(store, values) {
         await this.ensureReady();
         if (!values || values.length === 0) return;
 
-        // Validate all items first if applicable
         if (store === 'cards') {
             for (const value of values) {
                 const validation = this._validateCard(value);
@@ -241,7 +293,7 @@ export const Storage = {
             }
         }
 
-        const BATCH_SIZE = 100; // Process in batches to prevent blocking
+        const BATCH_SIZE = 100;
 
         for (let i = 0; i < values.length; i += BATCH_SIZE) {
             const batch = values.slice(i, i + BATCH_SIZE);
@@ -250,25 +302,30 @@ export const Storage = {
                 const tx = this.db.transaction(store, 'readwrite');
                 const objectStore = tx.objectStore(store);
 
-                batch.forEach(value => {
-                    const req = objectStore.put(value);
-                    req.onerror = () => console.warn(`Failed to put item in ${store}:`, req.error);
+                const promises = batch.map(value => {
+                    return new Promise((res, rej) => {
+                        const req = objectStore.put(value);
+                        req.onsuccess = () => res();
+                        req.onerror = () => rej(new Error(`Failed to put item in ${store}: ${req.error?.message}`));
+                    });
                 });
+
+                Promise.all(promises)
+                    .catch(err => {
+                        console.error('Batch put error:', err);
+                    });
 
                 tx.oncomplete = () => resolve();
                 tx.onerror = () => reject(new Error(`Transaction failed for ${store}: ${tx.error?.message || 'Unknown error'}`));
                 tx.onabort = () => reject(new Error(`Transaction aborted for ${store}`));
             });
 
-            // Yield to main thread between batches for large datasets
             if (i + BATCH_SIZE < values.length) {
                 await new Promise(resolve => setTimeout(resolve, 0));
             }
         }
     },
 
-    // Replace primary IDs in a store by deleting old keys and writing new records.
-    // Each change: { oldId, value } where value.id is the new key.
     async replaceIds(store, changes) {
         await this.ensureReady();
         if (!changes || changes.length === 0) return;
@@ -296,8 +353,7 @@ export const Storage = {
         return new Promise((resolve, reject) => {
             const tx = this.db.transaction(store, 'readwrite');
             const req = tx.objectStore(store).delete(key);
-            req.onsuccess = resolve;
-            req.onerror = () => reject(new Error(`Failed to delete from ${store}: ${req.error?.message || 'Unknown error'}`));
+            tx.oncomplete = () => resolve();
             tx.onerror = () => reject(new Error(`Transaction failed for ${store}: ${tx.error?.message || 'Unknown error'}`));
             tx.onabort = () => reject(new Error(`Transaction aborted for ${store}`));
         });
@@ -308,14 +364,12 @@ export const Storage = {
         return new Promise((resolve, reject) => {
             const tx = this.db.transaction(store, 'readwrite');
             const req = tx.objectStore(store).clear();
-            req.onsuccess = resolve;
-            req.onerror = () => reject(new Error(`Failed to wipe ${store}: ${req.error?.message || 'Unknown error'}`));
+            tx.oncomplete = () => resolve();
             tx.onerror = () => reject(new Error(`Transaction failed for ${store}: ${tx.error?.message || 'Unknown error'}`));
             tx.onabort = () => reject(new Error(`Transaction aborted for ${store}`));
         });
     },
 
-    // Bug 6 fix: Sync queue persistence methods
     async getSyncQueue() {
         await this.ensureReady();
         if (!this.db.objectStoreNames.contains('syncQueue')) {
@@ -383,6 +437,11 @@ export const Storage = {
                 aiProvider: '',
                 aiModel: '',
                 aiKey: '',
+                dyUseJudgeAi: false,
+                dyProvider: '',
+                dyModel: '',
+                dyKey: '',
+                dyVerified: false,
                 sttProvider: '',
                 sttModel: '',
                 sttKey: '',
@@ -390,18 +449,20 @@ export const Storage = {
                 sttVerified: false,
                 sttPermissionWarmed: false,
                 themeMode: 'system',
-                fontMode: 'serif',
+                fontMode: 'mono',
                 fabEnabled: true,
-                fabPosition: null,
+                fabPos: null,
                 workerVerified: false,
                 authVerified: false,
                 sourcesVerified: false,
                 aiVerified: false,
-                sourcesCache: { deckOptions: [], cardOptions: [] }
+                sourcesCache: { deckOptions: [], cardOptions: [] },
+                sourcesSaved: false
             };
         }
         try {
-            return JSON.parse(raw);
+            const parsed = JSON.parse(raw);
+            return parsed;
         } catch (e) {
             console.error('Failed to parse settings, resetting to defaults:', e);
             return {
@@ -413,6 +474,11 @@ export const Storage = {
                 aiProvider: '',
                 aiModel: '',
                 aiKey: '',
+                dyUseJudgeAi: false,
+                dyProvider: '',
+                dyModel: '',
+                dyKey: '',
+                dyVerified: false,
                 sttProvider: '',
                 sttModel: '',
                 sttKey: '',
@@ -420,14 +486,15 @@ export const Storage = {
                 sttVerified: false,
                 sttPermissionWarmed: false,
                 themeMode: 'system',
-                fontMode: 'serif',
+                fontMode: 'mono',
                 fabEnabled: true,
-                fabPosition: null,
+                fabPos: null,
                 workerVerified: false,
                 authVerified: false,
                 sourcesVerified: false,
                 aiVerified: false,
-                sourcesCache: { deckOptions: [], cardOptions: [] }
+                sourcesCache: { deckOptions: [], cardOptions: [] },
+                sourcesSaved: false
             };
         }
     },
@@ -436,26 +503,6 @@ export const Storage = {
         localStorage.setItem(this.settingsKey, JSON.stringify(newSettings));
     },
 
-    // Migrate session from localStorage to IndexedDB (one-time migration)
-    async migrateSessionFromLocalStorage() {
-        const legacyKey = 'ghostink_session_v1';
-        const raw = localStorage.getItem(legacyKey);
-        if (!raw) return;
-
-        try {
-            const session = JSON.parse(raw);
-            if (session && typeof session === 'object' && Array.isArray(session.cardQueue)) {
-                await this.setSession(session);
-                localStorage.removeItem(legacyKey);
-                console.log('Migrated session from localStorage to IndexedDB');
-            }
-        } catch (e) {
-            console.warn('Failed to migrate session from localStorage:', e);
-            localStorage.removeItem(legacyKey);
-        }
-    },
-
-    // Session validation helper - ensures session data integrity
     _validateSession(session) {
         if (!session || typeof session !== 'object') return null;
         if (!Array.isArray(session.cardQueue)) return null;
@@ -481,7 +528,7 @@ export const Storage = {
     async getSession() {
         await this.ensureReady();
         if (!this.db || !this.db.objectStoreNames.contains('session')) {
-            return this._getSessionFromLocalStorage();
+            return null;
         }
 
         return new Promise((resolve) => {
@@ -497,33 +544,18 @@ export const Storage = {
                     resolve(this._validateSession(result.data));
                 };
                 req.onerror = () => {
-                    console.warn('Failed to get session from IndexedDB, falling back to localStorage');
-                    resolve(this._getSessionFromLocalStorage());
+                    console.warn('Failed to get session from IndexedDB');
+                    resolve(null);
                 };
             } catch (e) {
                 console.warn('Error accessing session store:', e);
-                resolve(this._getSessionFromLocalStorage());
+                resolve(null);
             }
         });
     },
 
     getSessionSync() {
-        if (this._cachedSession !== undefined) {
-            return this._cachedSession;
-        }
-        return this._getSessionFromLocalStorage();
-    },
-
-    _getSessionFromLocalStorage() {
-        const raw = localStorage.getItem('ghostink_session_v1');
-        if (!raw) return null;
-        try {
-            const session = JSON.parse(raw);
-            return this._validateSession(session);
-        } catch (_) {
-            localStorage.removeItem('ghostink_session_v1');
-            return null;
-        }
+        return this._cachedSession;
     },
 
     async setSession(session) {
@@ -542,7 +574,6 @@ export const Storage = {
                     console.warn('Failed to clear session from IndexedDB:', e);
                 }
             }
-            localStorage.removeItem('ghostink_session_v1');
             return;
         }
 
@@ -554,39 +585,9 @@ export const Storage = {
                     req.onsuccess = resolve;
                     req.onerror = () => reject(req.error);
                 });
-                localStorage.removeItem('ghostink_session_v1');
                 return;
             } catch (e) {
-                console.warn('Failed to save session to IndexedDB, falling back to localStorage:', e);
-            }
-        }
-
-        try {
-            const json = JSON.stringify(session);
-            if (json.length > 1000000) {
-                console.warn(`Session size is ${(json.length / 1024 / 1024).toFixed(2)}MB - consider reducing queue size`);
-            }
-            localStorage.setItem('ghostink_session_v1', json);
-        } catch (e) {
-            if (e.name === 'QuotaExceededError') {
-                console.error('LocalStorage quota exceeded for session. Try clearing some browser data.');
-                const minimalSession = {
-                    deckIds: session.deckIds,
-                    currentIndex: 0, // Reset index since we sliced the queue
-                    cardQueue: session.cardQueue.slice(session.currentIndex, session.currentIndex + 50),
-                    completed: session.completed || [],
-                    skipped: session.skipped || [],
-                    startTime: session.startTime,
-                    ratingCounts: session.ratingCounts
-                };
-                try {
-                    localStorage.setItem('ghostink_session_v1', JSON.stringify(minimalSession));
-                    console.warn('Saved minimal session due to quota limits');
-                } catch (e2) {
-                    console.error('Could not save even minimal session:', e2);
-                }
-            } else {
-                throw e;
+                console.warn('Failed to save session to IndexedDB:', e);
             }
         }
     },

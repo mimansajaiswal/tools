@@ -6,6 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GhostInk Flashcards</title>
     <meta name="theme-color" content="#917FB3">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <link rel="icon" type="image/png" href="icons/icon-96.png" sizes="96x96">
@@ -17,6 +20,41 @@
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
     <link rel="preconnect" href="https://unpkg.com" crossorigin>
 
+    <!-- Tailwind config must be defined before loading the CDN script -->
+    <script>
+        tailwind = {
+            config: {
+                darkMode: ['class', '[data-theme="dark"]'],
+                theme: {
+                    extend: {
+                        colors: {
+                            oatmeal: {
+                                DEFAULT: 'rgb(var(--oatmeal-rgb) / <alpha-value>)',
+                                dark: 'rgb(var(--oatmeal-dark-rgb) / <alpha-value>)',
+                                hover: 'rgb(var(--oatmeal-hover-rgb) / <alpha-value>)'
+                            },
+                            'earth-metal': 'rgb(var(--earth-metal-rgb) / <alpha-value>)',
+                            charcoal: 'rgb(var(--charcoal-rgb) / <alpha-value>)',
+                            'white-linen': 'rgb(var(--linen-rgb) / <alpha-value>)',
+                            'dull-purple': {
+                                DEFAULT: 'rgb(var(--dull-purple-rgb) / <alpha-value>)',
+                                hover: 'rgb(var(--dull-purple-hover-rgb) / <alpha-value>)'
+                            },
+                            'muted-pink': {
+                                DEFAULT: 'rgb(var(--muted-pink-rgb) / <alpha-value>)',
+                                hover: 'rgb(var(--muted-pink-hover-rgb) / <alpha-value>)'
+                            }
+                        },
+                        fontFamily: {
+                            display: ['var(--font-display, "Fraunces")', 'serif'],
+                            sans: ['var(--font-sans, "Sora")', 'system-ui', 'sans-serif']
+                        }
+                    }
+                }
+            }
+        };
+    </script>
+
     <!-- Core Dependencies (Pinned Versions) -->
     <!-- Tailwind CSS (v3 latest) -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -27,9 +65,10 @@
     <script src="https://cdn.jsdelivr.net/npm/marked@17.0.1/lib/marked.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://unpkg.com/sql.js@1.13.0/dist/sql-wasm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <!-- KaTeX for equations -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.27/dist/katex.min.css">
-    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.27/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.27/dist/katex.min.js"></script>
 
     <!-- GLightbox (CSS before JS) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/glightbox@3.3.1/dist/css/glightbox.min.css" />
@@ -42,13 +81,30 @@
 
     <script>
         (() => {
-            const raw = localStorage.getItem('ghostink_settings_v1');
+            const resolveSettingsKey = () => {
+                try {
+                    const rawPath = location?.pathname || '';
+                    const trimmed = rawPath.replace(/\/index\.html$/i, '').replace(/\/$/, '');
+                    const parts = trimmed.split('/').filter(Boolean);
+                    const last = parts[parts.length - 1] || 'ghostink-flashcards';
+                    const normalized = last.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
+                    return `${normalized || 'ghostink-flashcards'}_settings_v1`;
+                } catch (_) {
+                    return 'ghostink-flashcards_settings_v1';
+                }
+            };
+            let raw = null;
+            try {
+                const key = resolveSettingsKey();
+                raw = localStorage.getItem(key);
+            } catch (_) { }
+
             let mode = 'system';
-            let font = 'serif';
+            let font = 'mono';
             try {
                 const s = raw ? JSON.parse(raw) : {};
                 mode = s.themeMode || 'system';
-                font = s.fontMode || 'serif';
+                font = s.fontMode || 'mono';
             } catch (_) { }
             const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
             const theme = mode === 'system' ? (prefersDark ? 'dark' : 'light') : mode;
@@ -59,43 +115,11 @@
         })();
     </script>
 
-    <script>
-        tailwind.config = {
-            darkMode: ['class', '[data-theme="dark"]'],
-            theme: {
-                extend: {
-                    colors: {
-                        oatmeal: {
-                            DEFAULT: 'rgb(var(--oatmeal-rgb) / <alpha-value>)',
-                            dark: 'rgb(var(--oatmeal-dark-rgb) / <alpha-value>)',
-                            hover: 'rgb(var(--oatmeal-hover-rgb) / <alpha-value>)'
-                        },
-                        'earth-metal': 'rgb(var(--earth-metal-rgb) / <alpha-value>)',
-                        charcoal: 'rgb(var(--charcoal-rgb) / <alpha-value>)',
-                        'white-linen': 'rgb(var(--linen-rgb) / <alpha-value>)',
-                        'dull-purple': {
-                            DEFAULT: 'rgb(var(--dull-purple-rgb) / <alpha-value>)',
-                            hover: 'rgb(var(--dull-purple-hover-rgb) / <alpha-value>)'
-                        },
-                        'muted-pink': {
-                            DEFAULT: 'rgb(var(--muted-pink-rgb) / <alpha-value>)',
-                            hover: 'rgb(var(--muted-pink-hover-rgb) / <alpha-value>)'
-                        }
-                    },
-                    fontFamily: {
-                        display: ['var(--font-display, "Fraunces")', 'serif'],
-                        sans: ['var(--font-sans, "Sora")', 'system-ui', 'sans-serif']
-                    }
-                }
-            }
-        }
-    </script>
-
     <!-- Application styles -->
     <link rel="stylesheet" href="css/styles.css">
 </head>
 
-<body class="text-main font-sans min-h-[100dvh] preinit" data-theme="light" data-font="serif">
+<body class="text-main font-sans min-h-[100dvh] preinit" data-theme="light" data-font="mono">
     <div class="min-h-[100dvh] flex flex-col">
         <header
             class="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-5 md:px-10 pt-4 sm:pt-6 pb-3 sm:pb-4">
@@ -137,7 +161,9 @@
                     data-tip="Keyboard shortcuts" aria-label="Keyboard shortcuts">
                     <i data-lucide="keyboard" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
                 </button>
-                <div class="hidden sm:flex items-center gap-0.5 sm:gap-1 pill-toggle rounded-md px-1 sm:px-2 py-1">
+                <div class="hidden sm:flex items-center gap-1 pill-toggle rounded-md px-1 sm:px-2 py-1">
+                    <span
+                        class="text-[8px] font-mono uppercase tracking-[0.18em] text-[color:var(--text-sub)] leading-none opacity-70">Anki</span>
                     <button id="exportAnkiBtn" class="p-1 rounded-full" data-tip="Export Anki"
                         aria-label="Export to Anki">
                         <i data-lucide="download" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
@@ -183,6 +209,8 @@
                         aria-label="Monospace font"><span class="font-swatch-mono">Aa</span></button>
                 </div>
                 <div class="flex items-center gap-1 pill-toggle rounded-md px-2 py-1">
+                    <span
+                        class="text-[8px] font-mono uppercase tracking-[0.18em] text-[color:var(--text-sub)] opacity-70">Anki</span>
                     <button id="exportAnkiBtnMobile" class="p-1 rounded-full" data-tip="Export Anki"
                         aria-label="Export to Anki"><i data-lucide="download" class="w-4 h-4"></i></button>
                     <label class="p-1 rounded-full cursor-pointer" data-tip="Import Anki" aria-label="Import from Anki">
@@ -199,9 +227,15 @@
         <!-- Tab Navigation -->
         <nav id="tabBar"
             class="px-3 sm:px-5 md:px-10 py-2 sm:py-3 flex gap-1.5 sm:gap-2 border-b border-[color:var(--card-border)]">
-            <button data-tab="study" class="tab-btn active text-xs sm:text-sm">📖 Study</button>
-            <button data-tab="library" class="tab-btn text-xs sm:text-sm">📚 Library</button>
-            <button data-tab="analytics" class="tab-btn text-xs sm:text-sm">📊 Analytics</button>
+            <button data-tab="study" class="tab-btn active text-xs sm:text-sm inline-flex items-center gap-1.5">
+                <i data-lucide="brain" class="w-3.5 h-3.5"></i>Study
+            </button>
+            <button data-tab="library" class="tab-btn text-xs sm:text-sm inline-flex items-center gap-1.5">
+                <i data-lucide="layers" class="w-3.5 h-3.5"></i>Library
+            </button>
+            <button data-tab="analytics" class="tab-btn text-xs sm:text-sm inline-flex items-center gap-1.5">
+                <i data-lucide="bar-chart-3" class="w-3.5 h-3.5"></i>Analytics
+            </button>
         </nav>
 
         <main class="px-3 sm:px-5 md:px-10 pb-6 sm:pb-10 space-y-4 md:space-y-6">
@@ -238,6 +272,10 @@
                                 <span>Front-back & Cloze</span>
                             </div>
                             <div class="flex items-center gap-2">
+                                <i data-lucide="sparkles" class="w-3.5 h-3.5 text-accent shrink-0"></i>
+                                <span>Dynamic Context variants</span>
+                            </div>
+                            <div class="flex items-center gap-2">
                                 <i data-lucide="image" class="w-3.5 h-3.5 text-accent shrink-0"></i>
                                 <span>Media & LaTeX</span>
                             </div>
@@ -258,11 +296,11 @@
                 </div>
 
                 <div class="space-y-3">
-                    <p class="font-display text-xl text-main leading-tight">AI-assisted spaced repetition for
+                    <p class="font-display text-lg sm:text-xl text-main leading-tight">AI-assisted spaced repetition for
                         flashcards stored in Notion</p>
-                    <p class="text-sm text-sub leading-relaxed">
-                        Your cards live in Notion where you can see and edit them. Reveal answers like Anki, or
-                        type/speak your answer and let AI check it against the ground truth.
+                    <p class="text-xs sm:text-sm text-sub leading-relaxed">
+                        Your cards live in Notion where you can see and edit them. Review like Anki, optionally get AI
+                        judging for your answers, and generate fresh Dynamic Context variants as you advance.
                     </p>
                     <p class="text-[11px] text-muted ">
                         Built by <a class="underline text-accent " href="https://mimansajaiswal.github.io"
@@ -294,7 +332,7 @@
                         class="rounded-lg bg-[color:var(--surface)] border border-[color:var(--card-border)] p-3 space-y-1">
                         <div class="flex items-center gap-2 text-accent font-semibold"><i data-lucide="wand-2"
                                 class="w-4 h-4"></i>3. Study</div>
-                        <p class="text-sub">Sync and start reviewing flashcards.</p>
+                        <p class="text-sub">Sync, review, and unlock Dynamic Context variants as you progress.</p>
                     </div>
                 </div>
                 <div class="flex justify-center">
@@ -333,6 +371,7 @@
                         <!-- Deck search -->
                         <div class="mt-3">
                             <input id="libraryDeckSearch" type="text" placeholder="Search decks..." maxlength="100"
+                                aria-label="Search decks"
                                 class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dull-purple/40">
                         </div>
                         <div id="deckGrid"
@@ -366,13 +405,29 @@
                             <!-- Card search -->
                             <div class="mb-3">
                                 <input id="cardSearchInput" type="text" placeholder="Search cards by name..."
-                                    maxlength="200"
+                                    maxlength="200" aria-label="Search cards"
                                     class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-dull-purple/40">
+                            </div>
+                            <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                                <div class="flex flex-wrap items-center gap-3 text-xs text-[color:var(--text-sub)]">
+                                    <label class="flex items-center gap-2">
+                                        <input id="filterSuspended" type="checkbox" class="accent-dull-purple">
+                                        <span>Hide suspended</span>
+                                    </label>
+                                    <label class="flex items-center gap-2">
+                                        <input id="filterLeech" type="checkbox" class="accent-dull-purple">
+                                        <span>Hide leeches</span>
+                                    </label>
+                                </div>
+                                <div id="unsuspendAllWrap" class="hidden">
+                                    <button id="unsuspendAllBtn" class="text-xs text-accent hover:underline">Unsuspend
+                                        all</button>
+                                </div>
                             </div>
                             <div id="cardsContainer"
                                 class="max-h-[350px] md:max-h-[400px] overflow-y-auto scroll-minimal">
                                 <table class="w-full text-xs md:text-sm">
-                                    <thead class="text-muted sticky top-0 bg-[color:var(--card-bg)] z-10">
+                                    <thead class="text-muted sticky top-0 bg-[color:var(--card-bg)]">
                                         <tr class="border-b border-card">
                                             <th class="py-2 text-left">Name</th>
                                             <th class="py-2 text-left hidden sm:table-cell">Type</th>
@@ -415,7 +470,7 @@
                                     <span class="hidden md:inline">Stop Session</span>
                                     <span class="md:hidden">Stop</span>
                                     <kbd id="stopSessionHotkey"
-                                        class="hidden md:inline text-[10px] ml-1 px-1.5 py-0.5 rounded bg-accent-soft text-accent font-medium"></kbd>
+                                        class="hidden md:inline hotkey-chip text-[10px] ml-1 px-1.5 py-0.5 rounded font-medium"></kbd>
                                 </button>
                             </div>
                         </div>
@@ -462,7 +517,7 @@
                                         <i data-lucide="play" class="w-4 h-4"></i>
                                         <span>Start Study Session</span>
                                         <kbd id="startSessionHotkey"
-                                            class="hidden md:inline-block text-[10px] px-1.5 py-0.5 rounded bg-surface-muted font-medium ml-1 font-sans"></kbd>
+                                            class="hidden md:inline-block hotkey-chip text-[10px] px-1.5 py-0.5 rounded font-medium ml-1"></kbd>
                                     </button>
                                 </div>
                             </div>
@@ -526,42 +581,49 @@
                                         <div id="filterTagSelected" class="flex flex-wrap gap-1.5 mt-2"></div>
                                     </div>
                                     <label class="flex items-center gap-2">
-                                        <input id="filterSuspended" type="checkbox" class="accent-dull-purple">
-                                        <span>Hide suspended</span>
-                                    </label>
-                                    <label class="flex items-center gap-2">
-                                        <input id="filterLeech" type="checkbox" class="accent-dull-purple">
-                                        <span>Hide leeches</span>
-                                    </label>
-                                    <label class="flex items-center gap-2">
                                         <input id="filterMarked" type="checkbox" class="accent-dull-purple">
                                         <span>Only marked</span>
                                     </label>
                                     <div class="col-span-2">
-                                        <label class="text-xs text-sub">Card hierarchy</label>
-                                        <select id="filterCardHierarchy"
-                                            class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm">
-                                            <option value="">All cards</option>
-                                            <option value="parents">Cloze parents only</option>
-                                            <option value="subitems">Sub-items only</option>
-                                            <option value="regular">Regular cards only</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-span-2">
-                                        <label class="text-xs text-sub">Flag</label>
-                                        <select id="filterFlag"
-                                            class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm">
-                                            <option value="">All flags</option>
-                                            <option value="Red">Red</option>
-                                            <option value="Orange">Orange</option>
-                                            <option value="Yellow">Yellow</option>
-                                            <option value="Green">Green</option>
-                                            <option value="Blue">Blue</option>
-                                            <option value="Purple">Purple</option>
-                                        </select>
+                                        <div class="flex items-center justify-between">
+                                            <label class="text-xs text-sub">Flag</label>
+                                            <button id="filterFlagClear" type="button"
+                                                class="text-[11px] text-accent hover:underline">Clear</button>
+                                        </div>
+                                        <div id="filterFlagSwatches" class="flag-swatch-row">
+                                            <button type="button" class="flag-swatch-btn" data-flag="Red"
+                                                aria-label="Red flag">
+                                                <span class="flag-swatch flag-red"></span>
+                                            </button>
+                                            <button type="button" class="flag-swatch-btn" data-flag="Orange"
+                                                aria-label="Orange flag">
+                                                <span class="flag-swatch flag-orange"></span>
+                                            </button>
+                                            <button type="button" class="flag-swatch-btn" data-flag="Yellow"
+                                                aria-label="Yellow flag">
+                                                <span class="flag-swatch flag-yellow"></span>
+                                            </button>
+                                            <button type="button" class="flag-swatch-btn" data-flag="Green"
+                                                aria-label="Green flag">
+                                                <span class="flag-swatch flag-green"></span>
+                                            </button>
+                                            <button type="button" class="flag-swatch-btn" data-flag="Blue"
+                                                aria-label="Blue flag">
+                                                <span class="flag-swatch flag-blue"></span>
+                                            </button>
+                                            <button type="button" class="flag-swatch-btn" data-flag="Purple"
+                                                aria-label="Purple flag">
+                                                <span class="flag-swatch flag-purple"></span>
+                                            </button>
+                                        </div>
+                                        <p class="text-[10px] text-muted mt-1">Select one or more to filter. Empty = all
+                                            flags.</p>
                                     </div>
                                     <button id="resetFiltersMobile"
                                         class="col-span-2 sm:hidden text-xs text-accent hover:underline text-center py-2">Reset
+                                        all filters</button>
+                                    <button id="resetFiltersAll"
+                                        class="col-span-2 hidden sm:block text-xs text-accent hover:underline text-center py-2">Reset
                                         all filters</button>
                                 </div>
                             </div>
@@ -605,7 +667,7 @@
                                         class="relative px-3 py-2.5 w-full rounded-lg bg-[color:var(--badge-bg)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--badge-bg-hover)] ">
                                         Reveal
                                         <kbd
-                                            class="hidden md:inline-block absolute right-3 top-1/2 -translate-y-1/2 text-[10px] px-1.5 py-0.5 rounded bg-surface-muted font-medium">␣</kbd>
+                                            class="hidden md:inline-block hotkey-chip absolute right-3 top-1/2 -translate-y-1/2 text-[10px] px-2 py-0.5 rounded font-medium">Space</kbd>
                                     </button>
                                     <div id="aiControls" class="hidden space-y-2">
                                         <textarea id="aiAnswer" rows="3" placeholder="Type your answer..."
@@ -616,12 +678,12 @@
                                                 title="Record">
                                                 <i data-lucide="mic" class="w-4 h-4"></i>
                                                 <kbd id="micHotkey"
-                                                    class="hidden md:inline-block absolute right-2 top-1/2 -translate-y-1/2 text-[10px] px-1 py-0.5 rounded bg-surface-muted text-muted"></kbd>
+                                                    class="hidden md:inline-block hotkey-chip absolute right-2 top-1/2 -translate-y-1/2 text-[10px] px-1 py-0.5 rounded"></kbd>
                                             </button>
                                             <button id="aiSubmit"
                                                 class="px-3 py-2 rounded-lg bg-[color:var(--accent)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--accent-hover)] transition-all flex-1">
                                                 Send <kbd id="aiSendHotkey"
-                                                    class="hidden md:inline-block text-[10px] px-1.5 py-0.5 rounded bg-surface-muted font-medium ml-1 font-sans"></kbd>
+                                                    class="hidden md:inline-block hotkey-chip text-[10px] px-1.5 py-0.5 rounded font-medium ml-1"></kbd>
                                             </button>
                                         </div>
                                         <div id="aiFeedback"
@@ -670,7 +732,7 @@
                                             <i data-lucide="square-slash" class="w-3 h-3"></i>
                                             <span>Skip</span>
                                             <kbd id="skipHotkey"
-                                                class="hidden md:inline text-[9px] ml-0.5 px-1 py-0.5 rounded bg-accent-soft text-accent font-medium">S</kbd>
+                                                class="hidden md:inline hotkey-chip text-[9px] ml-0.5 px-1 py-0.5 rounded font-medium">S</kbd>
                                         </button>
                                     </div>
                                 </div>
@@ -758,26 +820,87 @@
                 <div id="analyticsTab" class="tab-content hidden space-y-4 md:space-y-5">
                     <!-- Header with filters -->
                     <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                            <div>
-                                <h2 class="font-display text-base sm:text-lg md:text-xl text-[color:var(--text-main)]">
-                                    Analytics</h2>
-                                <p class="text-xs sm:text-sm text-[color:var(--text-sub)] mt-0.5">Your learning progress
-                                    and review patterns</p>
+                        <div class="flex flex-col gap-3 md:gap-1">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <h2
+                                        class="font-display text-base sm:text-lg md:text-xl text-[color:var(--text-main)]">
+                                        Analytics</h2>
+                                    <p class="text-xs sm:text-sm text-[color:var(--text-sub)] mt-0.5">Your learning
+                                        progress
+                                        and review patterns</p>
+                                </div>
+                                <button id="analyticsResetBtn"
+                                    class="analytics-reset-btn rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] px-2.5 py-1.5 text-[11px] sm:text-xs text-[color:var(--text-main)] inline-flex items-center gap-1.5 hover:bg-surface-muted">
+                                    <i data-lucide="rotate-ccw" class="w-3 h-3 text-[color:var(--text-sub)]"></i>
+                                    Reset
+                                </button>
                             </div>
-                            <div class="flex flex-wrap items-center gap-2">
-                                <select id="analyticsDeckSelect"
-                                    class="rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] px-3 py-2 text-sm text-[color:var(--text-main)]">
-                                    <option value="all">All decks</option>
-                                </select>
-                                <select id="analyticsRangeSelect"
-                                    class="rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] px-3 py-2 text-sm text-[color:var(--text-main)]">
-                                    <option value="7">Last week</option>
-                                    <option value="30">Last month</option>
-                                    <option value="90" selected>Last 3 months</option>
-                                    <option value="180">Last 6 months</option>
-                                    <option value="365">Last year</option>
-                                </select>
+                            <div class="flex flex-wrap items-center gap-2 justify-start sm:justify-end">
+                                <div id="analyticsRangeWrap" class="relative">
+                                    <button id="analyticsRangeBtn"
+                                        class="rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] px-3 py-2 text-sm text-[color:var(--text-main)] inline-flex items-center gap-2">
+                                        <span id="analyticsRangeLabel">This year</span>
+                                        <i data-lucide="chevron-down" class="w-4 h-4 text-[color:var(--text-sub)]"></i>
+                                    </button>
+                                    <div id="analyticsRangeMenu"
+                                        class="analytics-menu analytics-menu-left mt-2 hidden min-w-[190px] rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] shadow-lg p-1 z-50">
+                                        <button type="button"
+                                            class="analytics-range-option w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-muted"
+                                            data-range="all">All time</button>
+                                        <button type="button"
+                                            class="analytics-range-option w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-muted"
+                                            data-range="7">Last week</button>
+                                        <button type="button"
+                                            class="analytics-range-option w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-muted"
+                                            data-range="30">Last month</button>
+                                        <button type="button"
+                                            class="analytics-range-option w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-muted"
+                                            data-range="90">Last 3 months</button>
+                                        <button type="button"
+                                            class="analytics-range-option w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-muted"
+                                            data-range="180">Last 6 months</button>
+                                        <button type="button"
+                                            class="analytics-range-option w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-muted"
+                                            data-range="365">Last year</button>
+                                        <button type="button"
+                                            class="analytics-range-option w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-muted"
+                                            data-range="this-year">This year</button>
+                                        <div class="analytics-submenu-wrap">
+                                            <button type="button"
+                                                class="analytics-range-option analytics-submenu-trigger w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-muted inline-flex items-center justify-between"
+                                                data-range="by-year">
+                                                By year
+                                                <i data-lucide="chevron-right"
+                                                    class="submenu-chevron w-3 h-3 text-[color:var(--text-sub)]"></i>
+                                            </button>
+                                            <div id="analyticsYearMenu"
+                                                class="analytics-submenu hidden min-w-[140px] rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] shadow-lg p-1 z-50">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="analyticsDeckWrap" class="relative">
+                                    <button id="analyticsDeckBtn"
+                                        class="rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] px-3 py-2 text-sm text-[color:var(--text-main)] inline-flex items-center gap-2">
+                                        <span id="analyticsDeckLabel">All decks</span>
+                                        <i data-lucide="chevron-down" class="w-4 h-4 text-[color:var(--text-sub)]"></i>
+                                    </button>
+                                    <div id="analyticsDeckMenu"
+                                        class="analytics-menu analytics-menu-left mt-2 hidden min-w-[240px] rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] shadow-lg p-1 z-50">
+                                    </div>
+                                </div>
+                                <div id="analyticsFilterWrap" class="relative">
+                                    <button id="analyticsFilterBtn"
+                                        class="rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] px-3 py-2 text-sm text-[color:var(--text-main)] inline-flex items-center gap-2">
+                                        <i data-lucide="filter" class="w-4 h-4 text-[color:var(--text-sub)]"></i>
+                                        <span id="analyticsFilterLabel">Filters</span>
+                                        <i data-lucide="chevron-down" class="w-4 h-4 text-[color:var(--text-sub)]"></i>
+                                    </button>
+                                    <div id="analyticsFilterMenu"
+                                        class="analytics-menu analytics-menu-left mt-2 hidden min-w-[260px] rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] shadow-lg p-1 z-50">
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </article>
@@ -806,18 +929,34 @@
                                     heatmap</h3>
                                 <p class="text-xs text-[color:var(--text-sub)] mt-0.5">Daily review activity</p>
                             </div>
-                            <span id="analyticsStreakBadge" class="analytics-pill self-start sm:self-auto"></span>
+                            <div class="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                                <div
+                                    class="inline-flex rounded-full border border-[color:var(--card-border)] bg-[color:var(--surface)] overflow-hidden">
+                                    <button id="heatmapMetricReviews" type="button"
+                                        class="heatmap-metric-btn is-active px-2.5 py-1 text-[10px] font-mono uppercase tracking-wide">
+                                        Reviews</button>
+                                    <button id="heatmapMetricRating" type="button"
+                                        class="heatmap-metric-btn px-2.5 py-1 text-[10px] font-mono uppercase tracking-wide">
+                                        Avg rating</button>
+                                </div>
+                                <button id="heatmapDownloadBtn"
+                                    class="p-1.5 rounded-lg border border-[color:var(--card-border)] text-[color:var(--text-sub)] hover:text-[color:var(--text-main)] hover:bg-surface-strong transition-all"
+                                    title="Download heatmap PNG">
+                                    <i data-lucide="download" class="w-4 h-4"></i>
+                                </button>
+                                <span id="analyticsStreakBadge" class="analytics-pill"></span>
+                            </div>
                         </div>
-                        <div id="analyticsHeatmap" class="heatmap-grid"></div>
+                        <div id="analyticsHeatmap" class="heatmap-years"></div>
                         <div class="flex items-center justify-end mt-3">
                             <div class="heatmap-legend">
-                                <span>Less</span>
+                                <span id="heatmapLegendLow">Fewer reviews</span>
                                 <span class="heatmap-swatch level-0"></span>
                                 <span class="heatmap-swatch level-1"></span>
                                 <span class="heatmap-swatch level-2"></span>
                                 <span class="heatmap-swatch level-3"></span>
                                 <span class="heatmap-swatch level-4"></span>
-                                <span>More</span>
+                                <span id="heatmapLegendHigh">More reviews</span>
                             </div>
                         </div>
                     </article>
@@ -898,15 +1037,15 @@
     </div>
 
     <div id="toast" role="status" aria-live="polite"
-        class="fixed z-[110] bottom-6 right-6 px-4 py-3 rounded-md bg-[color:var(--badge-bg)] text-[color:var(--badge-text)] text-sm font-medium hidden opacity-0 transition-opacity duration-300 border border-[color:var(--card-border)]">
+        class="fixed z-[230] bottom-6 right-6 px-4 py-3 rounded-md bg-[color:var(--badge-bg)] text-[color:var(--badge-text)] text-sm font-medium hidden opacity-0 transition-opacity duration-300 border border-[color:var(--card-border)]">
     </div>
     <div id="tooltip"
-        class="fixed z-[120] px-2.5 py-1.5 rounded-md text-xs font-mono bg-[color:var(--badge-bg)] text-[color:var(--badge-text)] pointer-events-none hidden border border-[color:var(--card-border)]">
+        class="fixed z-[230] px-2.5 py-1.5 rounded-md text-xs font-mono bg-[color:var(--badge-bg)] text-[color:var(--badge-text)] pointer-events-none hidden border border-[color:var(--card-border)]">
     </div>
 
     <!-- Global loading overlay -->
     <div id="loadingOverlay"
-        class="fixed inset-0 z-[130] bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center">
+        class="fixed inset-0 z-[180] bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center">
         <div class="flex flex-col items-center gap-3 text-[color:var(--overlay-text)] text-center px-6">
             <div
                 class="h-12 w-12 border-4 border-[color:var(--overlay-track)] border-t-[color:var(--overlay-text)] rounded-full animate-spin">
@@ -929,9 +1068,9 @@
     </div>
 
     <div id="confirmModal" role="dialog" aria-modal="true" aria-labelledby="confirmModalTitle"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[220]">
         <div class="card rounded-lg p-5 w-full max-w-sm shadow-soft">
-            <p id="confirmModalTitle" class="text-main font-display text-lg mb-2">Confirm delete</p>
+            <p id="confirmModalTitle" class="modal-title font-display text-lg mb-2">Confirm delete</p>
             <p class="text-sm text-sub ">This removes it locally and syncs deletion to
                 Notion.</p>
             <div class="flex justify-end gap-2 mt-4">
@@ -945,13 +1084,13 @@
 
     <!-- Reset Algorithm Confirmation Modal -->
     <div id="resetAlgorithmModal" role="dialog" aria-modal="true" aria-labelledby="resetAlgorithmTitle"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[220]">
         <div class="card rounded-lg p-5 w-full max-w-md shadow-soft">
             <div class="flex items-center gap-3 mb-3">
                 <div class="p-2 rounded-full bg-[color:var(--danger-soft-bg)]">
                     <i data-lucide="alert-triangle" class="w-5 h-5 text-[color:var(--danger-soft-text)]"></i>
                 </div>
-                <h3 id="resetAlgorithmTitle" class="text-main font-display text-lg">Reset Algorithm Parameters</h3>
+                <h3 id="resetAlgorithmTitle" class="modal-title font-display text-lg">Reset Algorithm Parameters</h3>
             </div>
             <div class="space-y-3 text-sm text-sub-strong ">
                 <p>This will reset <strong>all spaced repetition data</strong> for every card in <span
@@ -995,14 +1134,16 @@
 
     <!-- Settings -->
     <div id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[200]">
         <div id="settingsCard" class="card rounded-lg p-5 w-full max-w-3xl shadow-soft max-h-[90vh] overflow-y-auto">
             <div class="sticky top-[-20px] pt-[20px] -mt-[20px] z-20 bg-[color:var(--surface)] pb-2 space-y-3">
                 <div class="flex items-center justify-between">
-                    <h3 id="settingsTitle" class="font-display text-lg text-main">Settings</h3>
+                    <h3 id="settingsTitle" class="modal-title font-display text-lg">Settings</h3>
                     <div class="flex items-center gap-2">
                         <button id="saveSettings"
-                            class="px-3 py-1.5 rounded-lg bg-[color:var(--accent)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--accent-hover)] transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-[color:var(--accent)]">Save</button>
+                            class="px-3 py-1.5 rounded-lg bg-[color:var(--accent)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--accent-hover)] transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-[color:var(--accent)] inline-flex items-center gap-2">
+                            <i data-lucide="save" class="w-4 h-4"></i>Save
+                        </button>
                         <button id="closeSettings" aria-label="Close settings" class="text-muted hover:text-main"><i
                                 data-lucide="x" class="w-5 h-5"></i></button>
                     </div>
@@ -1017,14 +1158,14 @@
                                 <p class="font-semibold text-main text-sm">Status</p>
                             </div>
                             <div id="q2syncIndicator"
-                                class="hidden items-center gap-1.5 px-2 py-0.5 rounded bg-accent-soft border border-[color:var(--accent)]/20">
+                                class="hidden flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-muted border border-[color:var(--border-faint)] whitespace-nowrap min-w-max">
                                 <span class="relative flex h-1.5 w-1.5">
                                     <span
                                         class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[color:var(--dull-purple)] opacity-75"></span>
                                     <span
                                         class="relative inline-flex rounded-full h-1.5 w-1.5 bg-[color:var(--dull-purple)]"></span>
                                 </span>
-                                <span class="font-mono text-[10px] font-medium text-accent"><span
+                                <span class="font-mono text-[9px] font-medium text-[color:var(--text-sub)]"><span
                                         id="q2syncCount">0</span> items in q2sync</span>
                             </div>
                         </div>
@@ -1165,7 +1306,7 @@
                             </div>
                             <div class="w-full h-2 bg-surface-strong rounded-full overflow-hidden">
                                 <div id="syncProgress"
-                                    class="h-2 bg-[color:var(--accent)] w-0 transition-all duration-500"></div>
+                                    class="h-2 bg-[color:var(--accent)]/60 w-0 transition-all duration-500"></div>
                             </div>
                         </div>
                     </details>
@@ -1219,10 +1360,11 @@
                         </div>
                     </div>
                     <div class="rounded-lg border border-card p-3 bg-surface ">
-                        <div class="flex items-center gap-2 mb-2">
+                        <div class="flex items-center gap-2">
                             <i data-lucide="bot" class="w-4 h-4 text-accent "></i>
-                            <p class="font-semibold text-main ">AI judge settings</p>
+                            <p class="font-semibold text-main ">AI Judge</p>
                         </div>
+                        <p class="text-[11px] text-sub mb-2">Checks your answer against the card.</p>
                         <div class="space-y-2">
                             <div>
                                 <label class="text-xs text-sub">Provider</label>
@@ -1250,10 +1392,55 @@
                                 </form>
                                 <button id="verifyAi" data-tip="Requires internet"
                                     class="px-3 py-2 rounded-lg bg-surface-strong text-main text-sm border border-card w-full">Verify
-                                    AI settings</button>
+                                    API keys</button>
                                 <p class="text-[11px] text-muted">Keys stay on-device (localStorage). AI
                                     judging
                                     only runs if verified.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="rounded-lg border border-card p-3 bg-surface ">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="sparkles" class="w-4 h-4 text-accent "></i>
+                            <p class="font-semibold text-main ">Dynamic Context Variants</p>
+                        </div>
+                        <p class="text-[11px] text-sub mb-2">Generates harder variants from your last card.</p>
+                        <div class="space-y-2">
+                            <div id="dyUseJudgeAiRow">
+                                <label class="flex items-center gap-2 text-xs text-sub">
+                                    <input id="dyUseJudgeAi" type="checkbox" class="accent-dull-purple">
+                                    <span>Use AI judge settings</span>
+                                </label>
+                            </div>
+                            <div id="dyProviderFields" class="space-y-2 hidden">
+                                <div>
+                                    <label class="text-xs text-sub">Provider</label>
+                                    <select id="dyProvider"
+                                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-2 py-2 text-sm">
+                                        <option value="">Disabled</option>
+                                        <option value="openai">OpenAI</option>
+                                        <option value="anthropic">Claude</option>
+                                        <option value="gemini">Gemini</option>
+                                    </select>
+                                </div>
+                                <div id="dyProviderDetailFields" class="space-y-2 hidden">
+                                    <div>
+                                        <label class="text-xs text-sub">Model</label>
+                                        <input id="dyModel" type="text"
+                                            placeholder="gpt-4o-mini / claude-3-haiku / gemini-1.5-flash"
+                                            class="w-full rounded-lg border border-card bg-[var(--surface)] px-2 py-2 text-sm">
+                                    </div>
+                                    <form autocomplete="off" onsubmit="return false;">
+                                        <input type="text" name="username" autocomplete="username" class="sr-only"
+                                            tabindex="-1" aria-hidden="true">
+                                        <input id="dyKey" type="password" autocomplete="new-password"
+                                            placeholder="API key (kept locally)"
+                                            class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm">
+                                    </form>
+                                    <button id="verifyDyContextAi" data-tip="Requires internet"
+                                        class="px-3 py-2 rounded-lg bg-surface-strong text-main text-sm border border-card w-full">Verify
+                                        API keys</button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1295,7 +1482,7 @@
                                 </div>
                                 <button id="verifyStt" data-tip="Requires internet"
                                     class="px-3 py-2 rounded-lg bg-surface-strong text-main text-sm border border-card w-full">Verify
-                                    STT settings</button>
+                                    API keys</button>
                             </div>
                             <p class="text-[11px] text-muted">Browser uses free built-in speech recognition.
                                 Cloud providers offer better accuracy.</p>
@@ -1333,10 +1520,10 @@
 
     <!-- Worker helper -->
     <div id="workerHelpModal"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[210]">
         <div class="card rounded-lg p-5 w-full max-w-3xl shadow-soft h-[80vh] flex flex-col">
             <div class="flex items-center justify-between mb-3">
-                <h3 class="font-display text-lg text-main">Cloudflare Worker proxy</h3>
+                <h3 class="modal-title font-display text-lg">Cloudflare Worker proxy</h3>
                 <button id="closeWorkerHelp" class="text-muted hover:text-main"><i data-lucide="x"
                         class="w-5 h-5"></i></button>
             </div>
@@ -1426,12 +1613,19 @@ async function handleRequest(request, env) {
 
     <!-- Deck modal -->
     <div id="deckModal" role="dialog" aria-modal="true" aria-labelledby="deckModalTitle"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[200]">
         <div class="card rounded-lg p-5 w-full max-w-md shadow-soft max-h-[90vh] overflow-y-auto">
             <div class="flex items-center justify-between mb-3">
-                <h3 class="font-display text-lg text-main" id="deckModalTitle">New deck</h3>
-                <button id="closeDeckModal" aria-label="Close deck modal" class="text-muted hover:text-main"><i
-                        data-lucide="x" class="w-5 h-5"></i></button>
+                <h3 class="modal-title font-display text-lg" id="deckModalTitle">New deck</h3>
+                <div class="flex items-center gap-2">
+                    <button id="saveDeckTopBtn" aria-label="Save deck"
+                        class="group p-1.5 rounded-lg border border-card text-main hover:bg-surface-strong">
+                        <i data-lucide="save"
+                            class="w-4 h-4 transition-transform duration-150 group-hover:scale-110 group-hover:text-accent"></i>
+                    </button>
+                    <button id="closeDeckModal" aria-label="Close deck modal" class="text-muted hover:text-main"><i
+                            data-lucide="x" class="w-5 h-5"></i></button>
+                </div>
             </div>
             <div class="space-y-3 text-sm">
                 <input id="deckNameInput" type="text" placeholder="Deck name" maxlength="200"
@@ -1473,9 +1667,9 @@ async function handleRequest(request, env) {
                 </label>
                 <div>
                     <label class="text-xs text-sub">AI revision prompt (optional)</label>
-                    <textarea id="deckPromptInput" rows="3"
-                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2"
-                        placeholder="Use {{question}} {{answer}} {{user}} placeholders"></textarea>
+                    <div id="deckPromptInput" contenteditable="true"
+                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 min-h-[3.5rem] max-h-48 overflow-y-auto whitespace-pre-wrap font-mono text-xs focus:outline-none focus:ring-2 focus:ring-dull-purple/40 scroll-minimal"
+                        role="textbox" aria-multiline="true"></div>
                     <div class="flex flex-wrap gap-2 mt-2 text-[11px] text-muted ">
                         <span class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{question}}</span>
                         <span class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{answer}}</span>
@@ -1484,13 +1678,29 @@ async function handleRequest(request, env) {
                     <p class="mt-2 text-[11px] text-sub ">Variables replace question,
                         correct answer, and learner answer.</p>
                 </div>
-                <div>
-                    <label class="text-xs text-sub">SRS config (JSON)</label>
-                    <textarea id="deckSrsConfigInput" rows="6"
-                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-xs font-mono"
-                        placeholder='{"learningSteps":["1m","10m"],"relearningSteps":["10m"],"graduatingInterval":"1d","easyInterval":"4d","easyDays":["Sat","Sun"],"fsrs":{"retention":0.9,"weights":[...]}}'></textarea>
-                    <p class="mt-2 text-[10px] text-muted">Self-healing: invalid or missing fields fall back
-                        to defaults. Learning steps apply to SM-2 only.</p>
+                <label class="flex items-center gap-2 text-sm">
+                    <input id="deckDynamicContextInput" type="checkbox" class="accent-dull-purple">
+                    <span>Dynamic Context?</span>
+                </label>
+                <div id="dyContextFields" class="space-y-2 hidden">
+                    <div>
+                        <label class="text-xs text-sub">Dynamic Context AI prompt (optional)</label>
+                        <div id="deckDyPromptInput" contenteditable="true"
+                            class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 min-h-[3.5rem] max-h-48 overflow-y-auto whitespace-pre-wrap font-mono text-xs focus:outline-none focus:ring-2 focus:ring-dull-purple/40 scroll-minimal"
+                            role="textbox" aria-multiline="true"></div>
+                        <div class="flex flex-wrap gap-2 mt-2 text-[11px] text-muted">
+                            <span
+                                class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{root_front}}</span>
+                            <span class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{root_back}}</span>
+                            <span
+                                class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{prev_front}}</span>
+                            <span class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{prev_back}}</span>
+                            <span class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{tags}}</span>
+                            <span class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{card_type}}</span>
+                        </div>
+                        <p class="mt-2 text-[11px] text-sub">Variables replace root/previous text, tags, and card type.
+                        </p>
+                    </div>
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div class="col-span-2">
@@ -1555,12 +1765,19 @@ async function handleRequest(request, env) {
 
     <!-- Card modal -->
     <div id="cardModal" role="dialog" aria-modal="true" aria-labelledby="cardModalTitle"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[200]">
         <div class="card rounded-lg p-5 w-full max-w-2xl shadow-soft max-h-[90vh] overflow-y-auto">
             <div class="flex items-center justify-between mb-3">
-                <h3 class="font-display text-lg text-main" id="cardModalTitle">New card</h3>
-                <button id="closeCardModal" aria-label="Close card modal" class="text-muted hover:text-main"><i
-                        data-lucide="x" class="w-5 h-5"></i></button>
+                <h3 class="modal-title font-display text-lg" id="cardModalTitle">New card</h3>
+                <div class="flex items-center gap-2">
+                    <button id="saveCardTopBtn" aria-label="Save card"
+                        class="group p-1.5 rounded-lg border border-card text-main hover:bg-surface-strong">
+                        <i data-lucide="save"
+                            class="w-4 h-4 transition-transform duration-150 group-hover:scale-110 group-hover:text-accent"></i>
+                    </button>
+                    <button id="closeCardModal" aria-label="Close card modal" class="text-muted hover:text-main"><i
+                            data-lucide="x" class="w-5 h-5"></i></button>
+                </div>
             </div>
             <p class="text-[10px] text-faint mb-2">Editing Name, Back, or Notes will remove
                 Notion text colors
@@ -1585,24 +1802,37 @@ async function handleRequest(request, env) {
                         class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2"></textarea>
                 </div>
                 <div class="space-y-2">
-                    <label class="text-xs text-sub">Marked</label>
-                    <label class="flex items-center gap-2 text-sm">
+                    <label class="flex items-center gap-2 text-sm text-[color:var(--text-main)]">
                         <input id="cardMarkedInput" type="checkbox" class="accent-dull-purple">
-                        <span>Starred</span>
+                        <span>Marked</span>
                     </label>
                 </div>
                 <div class="space-y-2">
                     <label class="text-xs text-sub">Flag</label>
-                    <select id="cardFlagInput"
-                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm">
-                        <option value="">None</option>
-                        <option value="Red">Red</option>
-                        <option value="Orange">Orange</option>
-                        <option value="Yellow">Yellow</option>
-                        <option value="Green">Green</option>
-                        <option value="Blue">Blue</option>
-                        <option value="Purple">Purple</option>
-                    </select>
+                    <input id="cardFlagInput" type="hidden" value="">
+                    <div id="cardFlagSwatches" class="flag-swatch-row">
+                        <button type="button" class="flag-swatch-btn" data-flag="" aria-label="No flag">
+                            <span class="flag-swatch is-none"></span>
+                        </button>
+                        <button type="button" class="flag-swatch-btn" data-flag="Red" aria-label="Red flag">
+                            <span class="flag-swatch flag-red"></span>
+                        </button>
+                        <button type="button" class="flag-swatch-btn" data-flag="Orange" aria-label="Orange flag">
+                            <span class="flag-swatch flag-orange"></span>
+                        </button>
+                        <button type="button" class="flag-swatch-btn" data-flag="Yellow" aria-label="Yellow flag">
+                            <span class="flag-swatch flag-yellow"></span>
+                        </button>
+                        <button type="button" class="flag-swatch-btn" data-flag="Green" aria-label="Green flag">
+                            <span class="flag-swatch flag-green"></span>
+                        </button>
+                        <button type="button" class="flag-swatch-btn" data-flag="Blue" aria-label="Blue flag">
+                            <span class="flag-swatch flag-blue"></span>
+                        </button>
+                        <button type="button" class="flag-swatch-btn" data-flag="Purple" aria-label="Purple flag">
+                            <span class="flag-swatch flag-purple"></span>
+                        </button>
+                    </div>
                 </div>
                 <div id="cardBackSection" class="md:col-span-2 space-y-2">
                     <label class="text-xs text-sub">Back</label>
@@ -1631,12 +1861,12 @@ async function handleRequest(request, env) {
                     </div>
                     <div id="cardTagSelected" class="flex flex-wrap gap-1.5 mt-1"></div>
                 </div>
-                <div class="space-y-2">
+                <div id="cardOrderField" class="space-y-2 hidden">
                     <label class="text-xs text-sub">Order</label>
                     <input id="cardOrderInput" type="number" placeholder="Optional number"
                         class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2">
                 </div>
-                <div class="space-y-2">
+                <div id="cardSuspendedLeechField" class="space-y-2 hidden">
                     <label class="text-xs text-sub">Suspended / Leech</label>
                     <div class="grid grid-cols-2 gap-2">
                         <label class="flex items-center gap-2"><input id="cardSuspendedInput" type="checkbox"
@@ -1669,11 +1899,11 @@ async function handleRequest(request, env) {
 
     <!-- Shortcuts modal -->
     <div id="shortcutsModal" role="dialog" aria-modal="true" aria-labelledby="shortcutsModalTitle"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[210]">
         <div class="card rounded-lg p-5 w-full max-w-2xl shadow-soft max-h-[90vh] overflow-y-auto shortcuts-card">
             <div class="shortcuts-header">
                 <div>
-                    <h3 class="font-display text-lg text-[color:var(--text-main)]" id="shortcutsModalTitle">Keyboard
+                    <h3 class="modal-title font-display text-lg" id="shortcutsModalTitle">Keyboard
                         shortcuts</h3>
                     <p class="text-xs text-[color:var(--text-sub)]">Quick actions by mode</p>
                 </div>
@@ -1723,13 +1953,13 @@ async function handleRequest(request, env) {
 
     <!-- AI Settings Required Modal -->
     <div id="aiSettingsRequiredModal"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[210]">
         <div
             class="card rounded-lg p-5 w-full max-w-md shadow-soft text-center space-y-4 bg-[color:var(--card-bg)] border border-[color:var(--card-border)]">
             <div class="w-12 h-12 rounded-full bg-accent-soft flex items-center justify-center mx-auto">
                 <i data-lucide="bot" class="w-6 h-6 text-accent"></i>
             </div>
-            <h3 id="aiSettingsModalTitle" class="font-display text-lg text-main ">AI not available
+            <h3 id="aiSettingsModalTitle" class="modal-title font-display text-lg">AI not available
             </h3>
             <p id="aiSettingsModalBody" class="text-sm text-sub "></p>
             <div id="aiSettingsModalActions" class="flex gap-2 justify-center">
@@ -1744,10 +1974,10 @@ async function handleRequest(request, env) {
 
     <!-- Notes Edit Modal -->
     <div id="notesModal" role="dialog" aria-modal="true" aria-labelledby="notesModalTitle"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[210]">
         <div class="card rounded-lg p-5 w-full max-w-lg shadow-soft space-y-4 max-h-[90vh] flex flex-col">
             <div class="flex items-center justify-between">
-                <h3 id="notesModalTitle" class="font-display text-lg text-main">Edit Notes</h3>
+                <h3 id="notesModalTitle" class="modal-title font-display text-lg">Edit Notes</h3>
                 <button id="closeNotesModal" aria-label="Close notes modal"
                     class="p-1.5 rounded-lg hover:bg-surface-strong text-main">
                     <i data-lucide="x" class="w-5 h-5"></i>
@@ -1772,13 +2002,13 @@ async function handleRequest(request, env) {
 
     <!-- Reset Confirmation Modal -->
     <div id="resetConfirmModal"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[220]">
         <div class="card rounded-lg p-5 w-full max-w-sm shadow-soft">
             <div class="flex items-center gap-3 mb-3">
                 <div class="p-2 rounded-full bg-[color:var(--accent-2)]/20">
                     <i data-lucide="alert-triangle" class="w-5 h-5 text-accent-2"></i>
                 </div>
-                <h3 class="font-display text-lg text-main">Reset GhostInk?</h3>
+                <h3 class="modal-title font-display text-lg">Reset GhostInk?</h3>
             </div>
             <p class="text-sm text-sub mb-4">This will permanently delete all local data
                 including decks,
@@ -1794,10 +2024,10 @@ async function handleRequest(request, env) {
 
     <!-- Add Block Note Modal -->
     <div id="addBlockModal"
-        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[210]">
         <div class="card rounded-lg p-5 w-full max-w-lg shadow-soft space-y-4 max-h-[90vh] flex flex-col">
             <div class="flex items-center justify-between">
-                <h3 class="font-display text-lg text-main">Add Note to Page</h3>
+                <h3 class="modal-title font-display text-lg">Add Note to Page</h3>
                 <button id="closeAddBlockModal" class="p-1.5 rounded-lg hover:bg-surface-strong text-main">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
@@ -1830,6 +2060,83 @@ async function handleRequest(request, env) {
     </div>
 
 
+    <script>
+        (function () {
+            if (window.__ghostinkStartup) return;
+
+            const showStartupError = (detail) => {
+                const render = () => {
+                    document.body.classList.remove('preinit');
+                    let wrap = document.getElementById('startupError');
+                    if (!wrap) {
+                        wrap = document.createElement('div');
+                        wrap.id = 'startupError';
+                        wrap.style.cssText = [
+                            'position:fixed',
+                            'inset:0',
+                            'display:flex',
+                            'align-items:center',
+                            'justify-content:center',
+                            'padding:24px',
+                            'background:#0f0f12',
+                            'color:#f2f2f4',
+                            'z-index:300'
+                        ].join(';');
+                        const card = document.createElement('div');
+                        card.style.cssText = [
+                            'max-width:520px',
+                            'width:100%',
+                            'background:#15161a',
+                            'border:1px solid #2a2d33',
+                            'border-radius:16px',
+                            'padding:20px 22px',
+                            'font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                            'font-size:14px',
+                            'line-height:1.4'
+                        ].join(';');
+                        const title = document.createElement('div');
+                        title.style.cssText = 'font-size:16px;font-weight:700;margin-bottom:8px;';
+                        title.textContent = 'GhostInk failed to start';
+                        const body = document.createElement('div');
+                        body.style.cssText = 'opacity:0.9;margin-bottom:10px;';
+                        body.textContent = 'Check your connection, CDN availability, and refresh the page.';
+                        card.appendChild(title);
+                        card.appendChild(body);
+                        wrap.appendChild(card);
+                        document.body.appendChild(wrap);
+                    }
+                    if (detail && wrap.firstChild) {
+                        const detailLine = document.createElement('div');
+                        detailLine.style.cssText = 'opacity:0.6;font-size:12px;word-break:break-word;';
+                        detailLine.textContent = String(detail);
+                        wrap.firstChild.appendChild(detailLine);
+                    }
+                };
+                if (document.body) render();
+                else document.addEventListener('DOMContentLoaded', render, { once: true });
+            };
+
+            const timer = setTimeout(() => {
+                if (window.__ghostinkStartup?.readyFlag) return;
+                showStartupError('Startup timeout');
+            }, 12000);
+
+            window.__ghostinkStartup = {
+                readyFlag: false,
+                ready() {
+                    this.readyFlag = true;
+                    clearTimeout(timer);
+                    const el = document.getElementById('startupError');
+                    if (el) el.remove();
+                },
+                fail(err) {
+                    clearTimeout(timer);
+                    showStartupError(err && err.message ? err.message : 'Startup failed');
+                }
+            };
+        })();
+    </script>
+
     <script type="module">
         import { App } from './js/app.js';
         import { toast } from './js/ui/index.js';
@@ -1838,9 +2145,11 @@ async function handleRequest(request, env) {
             document.body.classList.remove('preinit');
             try {
                 await App.init();
+                window.__ghostinkStartup?.ready();
             } catch (e) {
                 console.error('Failed to initialize GhostInk', e);
                 toast('Startup failed – see console for details');
+                window.__ghostinkStartup?.fail(e);
             }
         });
 

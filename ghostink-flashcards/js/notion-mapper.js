@@ -7,6 +7,7 @@ import {
     fsrsW,
     DEFAULT_DESIRED_RETENTION,
     DEFAULT_AI_PROMPT,
+    DEFAULT_DYCONTEXT_PROMPT,
     parseSrsConfig,
     parseSrsState
 } from './config.js';
@@ -57,7 +58,6 @@ export const compactReviewHistory = (history) => {
     }).filter(Boolean).join(',');
 };
 
-// Phase 4: Review history parse validation
 export const parseReviewHistory = (compact) => {
     if (!compact || typeof compact !== 'string') return [];
     const ratingNames = { a: 'again', h: 'hard', g: 'good', e: 'easy' };
@@ -105,7 +105,7 @@ export const richToMarkdown = (arr = []) => {
         if (a.bold) s = '**' + s + '**';
         if (a.italic) s = '*' + s + '*';
         if (a.strikethrough) s = '~~' + s + '~~';
-        if (a.underline) s = '__' + s + '__';
+        if (a.underline) s = `<u>${s}</u>`;
         if (a.color && a.color !== 'default') {
             s = `<span class="notion-color-${a.color.replace(/_/g, '-')}">${s}</span>`;
         }
@@ -117,7 +117,7 @@ export const richToMarkdown = (arr = []) => {
 // This avoids regex-recursive parsing (which can cause stack overflows on pathological content).
 // Supported:
 // - bold/italic/strikethrough/code/links
-// - underline (from our exporter: __text__ → <u>text</u>)
+// - underline (from our exporter: <u>text</u>)
 // - Notion colors: <span class="notion-color-...">...</span>
 // - Notion equations: <span class="notion-equation">...</span>
 export const markdownToNotionRichText = (markdown) => {
@@ -141,19 +141,15 @@ export const markdownToNotionRichText = (markdown) => {
 
     if (raw.length > MAX_INPUT_CHARS) return safePlain(raw);
 
-    // Treat __text__ as underline (we generate underline using __...__ in richToMarkdown()).
-    // This is intentionally different from Markdown strong; we always generate bold with **...**.
-    const pre = raw.replace(/__([\s\S]+?)__/g, '<u>$1</u>');
-
     let html;
     try {
-        html = marked.parse(pre, {
+        html = marked.parse(raw, {
             gfm: true,
             breaks: true
         });
     } catch (e) {
         console.error('marked.parse failed; falling back to plain text:', e);
-        return safePlain(pre);
+        return safePlain(raw);
     }
 
     let doc;
@@ -163,11 +159,11 @@ export const markdownToNotionRichText = (markdown) => {
         doc = parser.parseFromString(`<div id="__rtroot__">${html}</div>`, 'text/html');
     } catch (e) {
         console.error('DOMParser failed; falling back to plain text:', e);
-        return safePlain(pre);
+        return safePlain(raw);
     }
 
     const root = doc.getElementById('__rtroot__');
-    if (!root) return safePlain(pre);
+    if (!root) return safePlain(raw);
 
     const runs = [];
 
@@ -192,11 +188,35 @@ export const markdownToNotionRichText = (markdown) => {
         }
     };
 
+    const allowedColors = new Set([
+        'default',
+        'gray',
+        'brown',
+        'orange',
+        'yellow',
+        'green',
+        'blue',
+        'purple',
+        'pink',
+        'red',
+        'gray_background',
+        'brown_background',
+        'orange_background',
+        'yellow_background',
+        'green_background',
+        'blue_background',
+        'purple_background',
+        'pink_background',
+        'red_background'
+    ]);
+
     const normalizeColor = (cls) => {
         // notion-color-gray-background -> gray_background
         const c = (cls || '').replace(/^notion-color-/, '').trim();
-        if (!c) return null;
-        return c.replace(/-/g, '_');
+        if (!c) return undefined;
+        const normalized = c.replace(/-/g, '_');
+        if (normalized === 'default_background') return 'default';
+        return allowedColors.has(normalized) ? normalized : undefined;
     };
 
     const pushText = (text, annotations, link) => {
@@ -442,20 +462,33 @@ export const NotionMapper = {
      */
     deckFrom(page) {
         const props = page.properties || {};
+        const richTextToString = (prop) => (prop?.rich_text || []).map(t => t.plain_text).join('');
         const title = props['Deck Name']?.title?.map(t => t.plain_text).join('') || 'Untitled deck';
         const rawMode = props['Order Mode']?.select?.name || 'None';
         const orderMap = { 'none': 'none', 'created time': 'created', 'order property': 'property' };
-        const srsConfigRaw = props['SRS Config']?.rich_text?.map(t => t.plain_text).join('') || '';
+        const srsConfigRaw = richTextToString(props['SRS Config']) || '';
         let srsConfigError = false;
+        let srsConfigObj = null;
         if (srsConfigRaw) {
-            try { JSON.parse(srsConfigRaw); } catch { srsConfigError = true; }
+            try { srsConfigObj = JSON.parse(srsConfigRaw); } catch { srsConfigError = true; }
         }
-        const srsConfig = parseSrsConfigText(srsConfigRaw, props['SRS Algorithm']?.select?.name || 'SM-2');
+        const algoRaw = props['SRS Algorithm']?.select?.name || 'SM-2';
+        const algorithm = (algoRaw || '').toUpperCase() === 'FSRS' ? 'FSRS' : 'SM-2';
+        const srsConfig = parseSrsConfigText(srsConfigRaw, algorithm);
+        const hasFsrs = !!(srsConfigObj && typeof srsConfigObj === 'object' && 'fsrs' in srsConfigObj);
+        const srsConfigMismatch = !srsConfigError && srsConfigObj && (
+            (algorithm !== 'FSRS' && hasFsrs) ||
+            (algorithm === 'FSRS' && !hasFsrs)
+        );
+        const aiPromptRaw = richTextToString(props['AI Revision Prompt']);
+        const dyPromptRaw = richTextToString(props['DyContext AI Prompt']);
+        const dynamicContext = props['Dynamic Context?']?.checkbox || false;
+        const dyPrompt = dyPromptRaw || (dynamicContext ? DEFAULT_DYCONTEXT_PROMPT : '');
         return {
             id: page.id,
             notionId: page.id,
             name: title,
-            algorithm: props['SRS Algorithm']?.select?.name || 'SM-2',
+            algorithm,
             orderMode: orderMap[rawMode.toLowerCase()] || 'none',
             reviewLimit: props['Daily Review Limit']?.number || 50,
             newLimit: props['New Card Limit']?.number || 20,
@@ -463,10 +496,14 @@ export const NotionMapper = {
             createdInApp: props['Created In-App']?.checkbox || false,
             archived: props['Archived?']?.checkbox || false,
             ankiMetadata: props['Anki Metadata']?.rich_text?.[0]?.plain_text || '',
-            aiPrompt: props['AI Revision Prompt']?.rich_text?.map(t => t.plain_text).join('') || DEFAULT_AI_PROMPT,
+            aiPrompt: aiPromptRaw || DEFAULT_AI_PROMPT,
+            dynamicContext,
+            dyAiPrompt: dyPrompt,
+            dyAiPromptRaw: dyPromptRaw || '',
             srsConfig,
             srsConfigRaw,
             srsConfigError,
+            srsConfigMismatch,
             updatedInApp: false
         };
     },
@@ -478,18 +515,37 @@ export const NotionMapper = {
      */
     deckProps(deck) {
         const orderLabels = { none: 'None', created: 'Created Time', property: 'Order Property' };
+        const algorithm = deck.algorithm || 'SM-2';
+        const normalizedSrsConfig = parseSrsConfig(deck.srsConfig || null, algorithm);
+        const dyPromptRaw = (deck.dyAiPrompt || '').trim();
+        const dyPrompt = dyPromptRaw || (deck.dynamicContext ? DEFAULT_DYCONTEXT_PROMPT : '');
+        const srsPayload = {
+            learningSteps: normalizedSrsConfig.learningSteps,
+            relearningSteps: normalizedSrsConfig.relearningSteps,
+            graduatingInterval: normalizedSrsConfig.graduatingInterval,
+            easyInterval: normalizedSrsConfig.easyInterval,
+            easyDays: normalizedSrsConfig.easyDays
+        };
+        if (algorithm === 'FSRS') {
+            srsPayload.fsrs = {
+                retention: normalizedSrsConfig.fsrs?.retention ?? DEFAULT_DESIRED_RETENTION,
+                weights: normalizedSrsConfig.fsrs?.weights || fsrsW
+            };
+        }
         return {
             'Deck Name': { title: markdownToNotionRichText(deck.name) },
-            'SRS Algorithm': { select: { name: deck.algorithm } },
+            'SRS Algorithm': { select: { name: algorithm } },
             'Order Mode': { select: { name: orderLabels[deck.orderMode] || orderLabels.none } },
             'Daily Review Limit': { number: deck.reviewLimit },
             'New Card Limit': { number: deck.newLimit },
             'Reverse Mode Enabled': { checkbox: !!deck.reverse },
             'Created In-App': { checkbox: true },
             'Archived?': { checkbox: !!deck.archived },
-            'Anki Metadata': { rich_text: deck.ankiMetadata ? [{ text: { content: deck.ankiMetadata } }] : [] },
+            'Anki Metadata': { rich_text: toRichTextChunks(deck.ankiMetadata) },
             'AI Revision Prompt': { rich_text: markdownToNotionRichText(deck.aiPrompt) },
-            'SRS Config': { rich_text: toRichTextChunks(JSON.stringify(deck.srsConfig || parseSrsConfig(null, deck.algorithm))) }
+            'Dynamic Context?': { checkbox: !!deck.dynamicContext },
+            'DyContext AI Prompt': { rich_text: toRichTextChunks(dyPrompt) },
+            'SRS Config': { rich_text: toRichTextChunks(JSON.stringify(srsPayload)) }
         };
     },
 
@@ -502,6 +558,7 @@ export const NotionMapper = {
     cardFrom(page, decks) {
         const p = page.properties || {};
         const deckRel = p['Deck']?.relation?.[0]?.id || null;
+        if (!deckRel) return null; // Filter out orphaned cards immediately
         const name = richToMarkdown(p['Name']?.title) || 'Card';
         const back = richToMarkdown(p['Back']?.rich_text) || '';
         const tags = p['Tags']?.multi_select?.map(t => ({ name: t.name, color: t.color || 'default' })) || [];
@@ -509,12 +566,13 @@ export const NotionMapper = {
         const dueDate = p['Due Date']?.date?.start || null;
         const lastRating = normalizeRating(p['Last Rating']?.select?.name) || null;
         const srsStateRaw = p['SRS State']?.rich_text?.map(t => t.plain_text).join('') || '';
+        const reviewHistoryText = (p['Review History']?.rich_text || []).map(t => t.plain_text || '').join('');
         let srsStateError = false;
         if (srsStateRaw) {
             try { JSON.parse(srsStateRaw); } catch { srsStateError = true; }
         }
         const srsState = parseSrsState(srsStateRaw);
-        if (srsState.learning.state === 'new' && (lastReview || (p['Review History']?.rich_text?.[0]?.plain_text || '').length > 0)) {
+        if (srsState.learning.state === 'new' && (lastReview || reviewHistoryText.length > 0)) {
             srsState.learning.state = 'review';
             srsState.learning.step = 0;
             srsState.learning.due = null;
@@ -546,7 +604,7 @@ export const NotionMapper = {
             notes: richToMarkdown(p['Notes']?.rich_text) || '',
             marked: p['Marked']?.checkbox || false,
             flag: p['Flag']?.select?.name || '',
-            suspended: p['Suspended']?.checkbox || false,
+            suspended: p['Suspended']?.checkbox ? 1 : 0,
             leech: p['Leech']?.checkbox || false,
             srsState,
             srsStateRaw,
@@ -556,13 +614,16 @@ export const NotionMapper = {
             syncId: page.id,
             updatedInApp: p['Updated In-App']?.checkbox || false,
             order: typeof p['Order']?.number === 'number' ? p['Order'].number : null,
-            reviewHistory: parseReviewHistory(p['Review History']?.rich_text?.[0]?.plain_text || ''),
+            reviewHistory: parseReviewHistory(reviewHistoryText),
             ankiGuid: p['Anki GUID']?.rich_text?.[0]?.plain_text || '',
             ankiNoteType: p['Anki Note Type']?.select?.name || '',
             ankiFields: p['Anki Fields JSON']?.rich_text?.[0]?.plain_text || '',
             clozeIndexes: p['Cloze Indexes']?.rich_text?.[0]?.plain_text || '',
-            parentCard: p['Parent Card']?.relation?.[0]?.id || null,
-            subCards: (p['Sub Cards']?.relation || []).map(r => r.id),
+            parentCard: p['Cloze Parent Card']?.relation?.[0]?.id || null,
+            subCards: (p['Cloze Sub Cards']?.relation || []).map(r => r.id),
+            dyRootCard: p['DyContext Root Card']?.relation?.[0]?.id || null,
+            dyPrevCard: p['DyContext Previous Card']?.relation?.[0]?.id || null,
+            dyNextCard: p['DyContext Next Card']?.relation?.[0]?.id || null,
             createdAt: page.created_time,
             lastEditedAt: page.last_edited_time,
             // Store original Notion rich_text to preserve colors/equations on sync
@@ -613,6 +674,7 @@ export const NotionMapper = {
         };
 
         const orig = card._notionRichText || {};
+        const isTempId = (id) => typeof id === 'string' && id.startsWith('tmp_');
         const props = {
             'Name': { title: getRichText('name', card.name, orig.name) },
             'Back': { rich_text: getRichText('back', card.back, orig.back) },
@@ -632,10 +694,16 @@ export const NotionMapper = {
             'SRS State': { rich_text: toRichTextChunks(JSON.stringify(srsState)) },
             'Anki GUID': card.ankiGuid ? { rich_text: [{ type: 'text', text: { content: card.ankiGuid } }] } : { rich_text: [] },
             'Anki Note Type': card.ankiNoteType ? { select: { name: card.ankiNoteType } } : { select: null },
-            'Anki Fields JSON': card.ankiFields ? { rich_text: [{ type: 'text', text: { content: card.ankiFields } }] } : { rich_text: [] },
+            'Anki Fields JSON': { rich_text: toRichTextChunks(card.ankiFields) },
             'Cloze Indexes': card.clozeIndexes ? { rich_text: [{ type: 'text', text: { content: card.clozeIndexes } }] } : { rich_text: [] },
-            'Parent Card': card.parentCard
+            'Cloze Parent Card': card.parentCard
                 ? { relation: [{ id: card.parentCard }] }
+                : { relation: [] },
+            'DyContext Root Card': card.dyRootCard && !isTempId(card.dyRootCard)
+                ? { relation: [{ id: card.dyRootCard }] }
+                : { relation: [] },
+            'DyContext Previous Card': card.dyPrevCard && !isTempId(card.dyPrevCard)
+                ? { relation: [{ id: card.dyPrevCard }] }
                 : { relation: [] }
         };
 
