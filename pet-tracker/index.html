@@ -1171,6 +1171,21 @@ export default {
                 gcalEnabled: document.getElementById('settingsGcalEnabled')?.checked || false,
                 gcalCalendarId: document.getElementById('settingsGcalCalendarId')?.value || ''
             };
+            
+            // Get data source mappings if visible
+            const mappingDiv = document.getElementById('dataSourceMapping');
+            if (mappingDiv && !mappingDiv.classList.contains('hidden')) {
+                settings.dataSources = {
+                    pets: document.getElementById('dsMapPets')?.value || '',
+                    events: document.getElementById('dsMapEvents')?.value || '',
+                    eventTypes: document.getElementById('dsMapEventTypes')?.value || '',
+                    careItems: document.getElementById('dsMapCareItems')?.value || '',
+                    carePlans: document.getElementById('dsMapCarePlans')?.value || '',
+                    contacts: document.getElementById('dsMapContacts')?.value || '',
+                    scales: document.getElementById('dsMapScales')?.value || '',
+                    scaleLevels: document.getElementById('dsMapScaleLevels')?.value || ''
+                };
+            }
             PetTracker.Settings.set(settings);
             PetTracker.UI.toast('Settings saved', 'success');
             PetTracker.UI.closeModal('settingsModal');
@@ -1245,42 +1260,7 @@ export default {
             }
         };
 
-        App.startNotionOAuth = async () => {
-            // Save worker URL and client ID first
-            const workerUrl = document.getElementById('settingsWorkerUrl')?.value || '';
-            const oauthClientId = document.getElementById('settingsOAuthClientId')?.value || '';
 
-            if (!workerUrl) {
-                PetTracker.UI.toast('Enter Worker URL first', 'error');
-                return;
-            }
-            if (!oauthClientId) {
-                PetTracker.UI.toast('Enter OAuth Client ID first', 'error');
-                return;
-            }
-
-            // Save temp settings for OAuth
-            const settings = PetTracker.Settings.get();
-            settings.workerUrl = workerUrl;
-            settings.oauthClientId = oauthClientId;
-            PetTracker.Settings.set(settings);
-
-            try {
-                PetTracker.UI.showLoading('Connecting to Notion...');
-                const token = await PetTracker.API.startOAuth();
-
-                // Save the token
-                document.getElementById('settingsNotionToken').value = token;
-                settings.notionToken = token;
-                PetTracker.Settings.set(settings);
-
-                PetTracker.UI.hideLoading();
-                PetTracker.UI.toast('Connected to Notion!', 'success');
-            } catch (e) {
-                PetTracker.UI.hideLoading();
-                PetTracker.UI.toast(`OAuth failed: ${e.message}`, 'error');
-            }
-        };
 
         App.testConnection = async () => {
             // Save current values first
@@ -1308,7 +1288,7 @@ export default {
                 PetTracker.UI.showLoading('Scanning data sources...');
 
                 // Query database to get properties
-                const db = await PetTracker.API.request(`/v1/databases/${dbId}`);
+                const db = await PetTracker.API.request('GET', `/databases/${dbId}`);
 
                 // For multi-source containers, we query to find distinct sources
                 // For now, we show the database properties and let user map

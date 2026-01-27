@@ -260,6 +260,9 @@ const Onboarding = {
             return;
         }
 
+        // Save token to settings so API calls work
+        PetTracker.Settings.set({ notionToken: token });
+
         const container = document.getElementById('onboardingDbList');
         const verifyBtn = document.getElementById('onboardingDbVerifyBtn');
         

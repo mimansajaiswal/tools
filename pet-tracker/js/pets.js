@@ -86,6 +86,21 @@ const Pets = {
         const pet = await PetTracker.DB.get(PetTracker.STORES.PETS, id);
         if (!pet) return;
 
+        const events = await PetTracker.DB.query(
+            PetTracker.STORES.EVENTS,
+            e => e.petIds?.includes(id)
+        );
+        
+        for (const event of events) {
+            await PetTracker.SyncQueue.add({
+                type: 'delete',
+                store: 'events',
+                recordId: event.id,
+                data: { notionId: event.notionId }
+            });
+            await PetTracker.DB.delete(PetTracker.STORES.EVENTS, event.id);
+        }
+
         await PetTracker.SyncQueue.add({
             type: 'delete',
             store: 'pets',

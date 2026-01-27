@@ -17,6 +17,24 @@ const Sync = {
     // Background sync interval (2 minutes)
     syncIntervalMs: 2 * 60 * 1000,
 
+    // Store name mapping (camelCase store names to UPPER_CASE STORES constants)
+    storeNameMap: {
+        'pets': 'PETS',
+        'events': 'EVENTS',
+        'eventTypes': 'EVENT_TYPES',
+        'careItems': 'CARE_ITEMS',
+        'carePlans': 'CARE_PLANS',
+        'contacts': 'CONTACTS',
+        'scales': 'SCALES',
+        'scaleLevels': 'SCALE_LEVELS'
+    },
+
+    // Helper to get store constant from camelCase name
+    getStoreConstant: (store) => {
+        const key = Sync.storeNameMap[store];
+        return key ? PetTracker.STORES[key] : null;
+    },
+
     /**
      * Initialize background sync
      */
@@ -266,21 +284,27 @@ const Sync = {
 
         switch (type) {
             case 'create': {
+                const storeConstant = Sync.getStoreConstant(store);
+                if (!storeConstant) throw new Error(`Unknown store: ${store}`);
+                
                 const properties = Sync.toNotionProperties(store, data);
                 const result = await PetTracker.API.createPage(dataSourceId, properties);
 
                 // Update local record with Notion ID
-                const record = await PetTracker.DB.get(PetTracker.STORES[store.toUpperCase()], recordId);
+                const record = await PetTracker.DB.get(storeConstant, recordId);
                 if (record) {
                     record.notionId = result.id;
                     record.synced = true;
-                    await PetTracker.DB.put(PetTracker.STORES[store.toUpperCase()], record);
+                    await PetTracker.DB.put(storeConstant, record);
                 }
                 break;
             }
 
             case 'update': {
-                const record = await PetTracker.DB.get(PetTracker.STORES[store.toUpperCase()], recordId);
+                const storeConstant = Sync.getStoreConstant(store);
+                if (!storeConstant) throw new Error(`Unknown store: ${store}`);
+                
+                const record = await PetTracker.DB.get(storeConstant, recordId);
                 if (!record?.notionId) {
                     throw new Error('No Notion ID for update');
                 }
@@ -288,16 +312,19 @@ const Sync = {
                 await PetTracker.API.updatePage(record.notionId, properties);
 
                 record.synced = true;
-                await PetTracker.DB.put(PetTracker.STORES[store.toUpperCase()], record);
+                await PetTracker.DB.put(storeConstant, record);
                 break;
             }
 
             case 'delete': {
-                const record = await PetTracker.DB.get(PetTracker.STORES[store.toUpperCase()], recordId);
+                const storeConstant = Sync.getStoreConstant(store);
+                if (!storeConstant) throw new Error(`Unknown store: ${store}`);
+                
+                const record = await PetTracker.DB.get(storeConstant, recordId);
                 if (record?.notionId) {
                     await PetTracker.API.archivePage(record.notionId);
                 }
-                await PetTracker.DB.delete(PetTracker.STORES[store.toUpperCase()], recordId);
+                await PetTracker.DB.delete(storeConstant, recordId);
                 break;
             }
         }

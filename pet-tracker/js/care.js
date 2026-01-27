@@ -396,13 +396,27 @@ const Care = {
             source: 'Scheduled'
         });
 
-        // Update plan's next due
+        // Update plan's next due and queue for sync
         const nextDue = await Care.calculateRollingNextDue(plan);
-        await PetTracker.DB.put(PetTracker.STORES.CARE_PLANS, {
+        const updatedPlan = {
             ...plan,
             nextDue,
-            updatedAt: new Date().toISOString()
+            updatedAt: new Date().toISOString(),
+            synced: false
+        };
+        await PetTracker.DB.put(PetTracker.STORES.CARE_PLANS, updatedPlan);
+        
+        // Queue sync for the care plan update
+        await PetTracker.SyncQueue.add({
+            type: 'update',
+            store: 'carePlans',
+            recordId: plan.id,
+            data: updatedPlan
         });
+        
+        if (PetTracker.Sync?.updatePendingCount) {
+            PetTracker.Sync.updatePendingCount();
+        }
 
         PetTracker.UI.toast('Marked complete', 'success');
         Care.renderUpcoming();
@@ -443,11 +457,25 @@ const Care = {
                 break;
         }
 
-        await PetTracker.DB.put(PetTracker.STORES.CARE_PLANS, {
+        const updatedPlan = {
             ...plan,
             nextDue: current.toISOString().slice(0, 10),
-            updatedAt: new Date().toISOString()
+            updatedAt: new Date().toISOString(),
+            synced: false
+        };
+        await PetTracker.DB.put(PetTracker.STORES.CARE_PLANS, updatedPlan);
+
+        // Queue sync for the care plan update
+        await PetTracker.SyncQueue.add({
+            type: 'update',
+            store: 'carePlans',
+            recordId: plan.id,
+            data: updatedPlan
         });
+
+        if (PetTracker.Sync?.updatePendingCount) {
+            PetTracker.Sync.updatePendingCount();
+        }
 
         PetTracker.UI.toast('Skipped', 'info');
         Care.renderUpcoming();
@@ -490,7 +518,19 @@ const Care = {
                 };
 
                 await PetTracker.DB.put(PetTracker.STORES.EVENT_TYPES, eventType);
+                
+                // Queue for sync to Notion
+                await PetTracker.SyncQueue.add({
+                    type: 'create',
+                    store: 'eventTypes',
+                    recordId: eventType.id,
+                    data: eventType
+                });
             }
+        }
+        
+        if (PetTracker.Sync?.updatePendingCount) {
+            PetTracker.Sync.updatePendingCount();
         }
     },
 
@@ -536,6 +576,14 @@ const Care = {
                 };
 
                 await PetTracker.DB.put(PetTracker.STORES.SCALES, scaleRecord);
+                
+                // Queue scale for sync to Notion
+                await PetTracker.SyncQueue.add({
+                    type: 'create',
+                    store: 'scales',
+                    recordId: scaleRecord.id,
+                    data: scaleRecord
+                });
 
                 // Create scale levels
                 for (const level of scale.levels) {
@@ -549,8 +597,20 @@ const Care = {
                     };
 
                     await PetTracker.DB.put(PetTracker.STORES.SCALE_LEVELS, levelRecord);
+                    
+                    // Queue scale level for sync to Notion
+                    await PetTracker.SyncQueue.add({
+                        type: 'create',
+                        store: 'scaleLevels',
+                        recordId: levelRecord.id,
+                        data: levelRecord
+                    });
                 }
             }
+        }
+        
+        if (PetTracker.Sync?.updatePendingCount) {
+            PetTracker.Sync.updatePendingCount();
         }
     }
 };
