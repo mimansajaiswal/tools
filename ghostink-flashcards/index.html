@@ -20,8 +20,43 @@
     <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
     <link rel="preconnect" href="https://unpkg.com" crossorigin>
 
+    <!-- Tailwind config must be defined before loading the CDN script -->
+    <script>
+        tailwind = {
+            config: {
+                darkMode: ['class', '[data-theme="dark"]'],
+                theme: {
+                    extend: {
+                        colors: {
+                            oatmeal: {
+                                DEFAULT: 'rgb(var(--oatmeal-rgb) / <alpha-value>)',
+                                dark: 'rgb(var(--oatmeal-dark-rgb) / <alpha-value>)',
+                                hover: 'rgb(var(--oatmeal-hover-rgb) / <alpha-value>)'
+                            },
+                            'earth-metal': 'rgb(var(--earth-metal-rgb) / <alpha-value>)',
+                            charcoal: 'rgb(var(--charcoal-rgb) / <alpha-value>)',
+                            'white-linen': 'rgb(var(--linen-rgb) / <alpha-value>)',
+                            'dull-purple': {
+                                DEFAULT: 'rgb(var(--dull-purple-rgb) / <alpha-value>)',
+                                hover: 'rgb(var(--dull-purple-hover-rgb) / <alpha-value>)'
+                            },
+                            'muted-pink': {
+                                DEFAULT: 'rgb(var(--muted-pink-rgb) / <alpha-value>)',
+                                hover: 'rgb(var(--muted-pink-hover-rgb) / <alpha-value>)'
+                            }
+                        },
+                        fontFamily: {
+                            display: ['var(--font-display, "Fraunces")', 'serif'],
+                            sans: ['var(--font-sans, "Sora")', 'system-ui', 'sans-serif']
+                        }
+                    }
+                }
+            }
+        };
+    </script>
+
     <!-- Core Dependencies (Pinned Versions) -->
-    <!-- Tailwind CSS (v3 latest) - No defer (needed for inline config) -->
+    <!-- Tailwind CSS (v3 latest) -->
     <script src="https://cdn.tailwindcss.com"></script>
 
     <!-- Lucide Icons -->
@@ -78,38 +113,6 @@
             root.setAttribute('data-font', font);
             root.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
         })();
-    </script>
-
-    <script>
-        tailwind.config = {
-            darkMode: ['class', '[data-theme="dark"]'],
-            theme: {
-                extend: {
-                    colors: {
-                        oatmeal: {
-                            DEFAULT: 'rgb(var(--oatmeal-rgb) / <alpha-value>)',
-                            dark: 'rgb(var(--oatmeal-dark-rgb) / <alpha-value>)',
-                            hover: 'rgb(var(--oatmeal-hover-rgb) / <alpha-value>)'
-                        },
-                        'earth-metal': 'rgb(var(--earth-metal-rgb) / <alpha-value>)',
-                        charcoal: 'rgb(var(--charcoal-rgb) / <alpha-value>)',
-                        'white-linen': 'rgb(var(--linen-rgb) / <alpha-value>)',
-                        'dull-purple': {
-                            DEFAULT: 'rgb(var(--dull-purple-rgb) / <alpha-value>)',
-                            hover: 'rgb(var(--dull-purple-hover-rgb) / <alpha-value>)'
-                        },
-                        'muted-pink': {
-                            DEFAULT: 'rgb(var(--muted-pink-rgb) / <alpha-value>)',
-                            hover: 'rgb(var(--muted-pink-hover-rgb) / <alpha-value>)'
-                        }
-                    },
-                    fontFamily: {
-                        display: ['var(--font-display, "Fraunces")', 'serif'],
-                        sans: ['var(--font-sans, "Sora")', 'system-ui', 'sans-serif']
-                    }
-                }
-            }
-        }
     </script>
 
     <!-- Application styles -->
@@ -2059,80 +2062,80 @@ async function handleRequest(request, env) {
 
 
     <script>
-            (function () {
-                if (window.__ghostinkStartup) return;
+        (function () {
+            if (window.__ghostinkStartup) return;
 
-                const showStartupError = (detail) => {
-                    const render = () => {
-                        document.body.classList.remove('preinit');
-                        let wrap = document.getElementById('startupError');
-                        if (!wrap) {
-                            wrap = document.createElement('div');
-                            wrap.id = 'startupError';
-                            wrap.style.cssText = [
-                                'position:fixed',
-                                'inset:0',
-                                'display:flex',
-                                'align-items:center',
-                                'justify-content:center',
-                                'padding:24px',
-                                'background:#0f0f12',
-                                'color:#f2f2f4',
-                                'z-index:300'
-                            ].join(';');
-                            const card = document.createElement('div');
-                            card.style.cssText = [
-                                'max-width:520px',
-                                'width:100%',
-                                'background:#15161a',
-                                'border:1px solid #2a2d33',
-                                'border-radius:16px',
-                                'padding:20px 22px',
-                                'font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-                                'font-size:14px',
-                                'line-height:1.4'
-                            ].join(';');
-                            const title = document.createElement('div');
-                            title.style.cssText = 'font-size:16px;font-weight:700;margin-bottom:8px;';
-                            title.textContent = 'GhostInk failed to start';
-                            const body = document.createElement('div');
-                            body.style.cssText = 'opacity:0.9;margin-bottom:10px;';
-                            body.textContent = 'Check your connection, CDN availability, and refresh the page.';
-                            card.appendChild(title);
-                            card.appendChild(body);
-                            wrap.appendChild(card);
-                            document.body.appendChild(wrap);
-                        }
-                        if (detail && wrap.firstChild) {
-                            const detailLine = document.createElement('div');
-                            detailLine.style.cssText = 'opacity:0.6;font-size:12px;word-break:break-word;';
-                            detailLine.textContent = String(detail);
-                            wrap.firstChild.appendChild(detailLine);
-                        }
-                    };
-                    if (document.body) render();
-                    else document.addEventListener('DOMContentLoaded', render, { once: true });
-                };
-
-                const timer = setTimeout(() => {
-                    if (window.__ghostinkStartup?.readyFlag) return;
-                    showStartupError('Startup timeout');
-                }, 12000);
-
-                window.__ghostinkStartup = {
-                    readyFlag: false,
-                    ready() {
-                        this.readyFlag = true;
-                        clearTimeout(timer);
-                        const el = document.getElementById('startupError');
-                        if (el) el.remove();
-                    },
-                    fail(err) {
-                        clearTimeout(timer);
-                        showStartupError(err && err.message ? err.message : 'Startup failed');
+            const showStartupError = (detail) => {
+                const render = () => {
+                    document.body.classList.remove('preinit');
+                    let wrap = document.getElementById('startupError');
+                    if (!wrap) {
+                        wrap = document.createElement('div');
+                        wrap.id = 'startupError';
+                        wrap.style.cssText = [
+                            'position:fixed',
+                            'inset:0',
+                            'display:flex',
+                            'align-items:center',
+                            'justify-content:center',
+                            'padding:24px',
+                            'background:#0f0f12',
+                            'color:#f2f2f4',
+                            'z-index:300'
+                        ].join(';');
+                        const card = document.createElement('div');
+                        card.style.cssText = [
+                            'max-width:520px',
+                            'width:100%',
+                            'background:#15161a',
+                            'border:1px solid #2a2d33',
+                            'border-radius:16px',
+                            'padding:20px 22px',
+                            'font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                            'font-size:14px',
+                            'line-height:1.4'
+                        ].join(';');
+                        const title = document.createElement('div');
+                        title.style.cssText = 'font-size:16px;font-weight:700;margin-bottom:8px;';
+                        title.textContent = 'GhostInk failed to start';
+                        const body = document.createElement('div');
+                        body.style.cssText = 'opacity:0.9;margin-bottom:10px;';
+                        body.textContent = 'Check your connection, CDN availability, and refresh the page.';
+                        card.appendChild(title);
+                        card.appendChild(body);
+                        wrap.appendChild(card);
+                        document.body.appendChild(wrap);
+                    }
+                    if (detail && wrap.firstChild) {
+                        const detailLine = document.createElement('div');
+                        detailLine.style.cssText = 'opacity:0.6;font-size:12px;word-break:break-word;';
+                        detailLine.textContent = String(detail);
+                        wrap.firstChild.appendChild(detailLine);
                     }
                 };
-            })();
+                if (document.body) render();
+                else document.addEventListener('DOMContentLoaded', render, { once: true });
+            };
+
+            const timer = setTimeout(() => {
+                if (window.__ghostinkStartup?.readyFlag) return;
+                showStartupError('Startup timeout');
+            }, 12000);
+
+            window.__ghostinkStartup = {
+                readyFlag: false,
+                ready() {
+                    this.readyFlag = true;
+                    clearTimeout(timer);
+                    const el = document.getElementById('startupError');
+                    if (el) el.remove();
+                },
+                fail(err) {
+                    clearTimeout(timer);
+                    showStartupError(err && err.message ? err.message : 'Startup failed');
+                }
+            };
+        })();
     </script>
 
     <script type="module">

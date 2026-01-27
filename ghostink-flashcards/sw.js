@@ -280,7 +280,10 @@ async function cleanExpiredCacheEntries() {
         cacheTime = metadataMap.get(request.url);
       }
 
-      if (cacheTime && (now - cacheTime > CACHE_EXPIRATION_MS)) {
+      // Use shorter expiration for local assets vs CDN
+      const isLocal = getCacheCategory(request.url) === CACHE_CATEGORIES.LOCAL;
+      const expirationMs = isLocal ? LOCAL_CACHE_EXPIRATION_MS : CACHE_EXPIRATION_MS;
+      if (cacheTime && (now - cacheTime > expirationMs)) {
         await cache.delete(request);
         console.log(`SW: Expired cache entry: ${request.url}`);
       }

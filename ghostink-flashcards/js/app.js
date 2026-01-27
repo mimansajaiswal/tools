@@ -212,7 +212,6 @@ export const App = {
         lastQueueError: null,
         queueLastChangedAt: null,
         lastQueueWarnAt: null,
-        dyContextQueue: [],
         dyContextProcessing: false,
         selectedDeck: null,
         selectedCard: null,
@@ -1019,12 +1018,15 @@ export const App = {
 
         const rawCards = await Storage.getAll('cards');
         let invalidCardStates = 0;
+        const cardsToSave = [];
         for (const c of rawCards) {
             const srsState = parseSrsState(c.srsState || null);
+            let needsSave = false;
             if (srsState.learning.state === 'new' && ((c.reviewHistory || []).length > 0 || c.fsrs?.lastReview || c.sm2?.lastReview)) {
                 srsState.learning.state = 'review';
                 srsState.learning.step = 0;
                 srsState.learning.due = null;
+                needsSave = true;
             }
             const card = {
                 ...c,
@@ -1047,8 +1049,17 @@ export const App = {
                     dueDate: c.sm2?.dueDate ?? c.dueDate ?? null
                 }
             };
-            if (card.srsStateError) invalidCardStates += 1;
+            if (card.srsStateError) {
+                invalidCardStates += 1;
+                needsSave = true;
+                delete card.srsStateError;
+            }
+            if (needsSave) cardsToSave.push(card);
             this.setCard(card);
+        }
+        // Persist corrected SRS states to avoid repeated warnings
+        if (cardsToSave.length > 0) {
+            await Storage.putMany('cards', cardsToSave).catch(() => { });
         }
         const invalidDeckConfigs = this.state.decks.filter(d => d.srsConfigError).length;
         if (invalidDeckConfigs > 0) {
@@ -1067,7 +1078,6 @@ export const App = {
 
         this.state.lastQueueError = (await Storage.getMeta('lastQueueError')) || null;
         this.state.queueLastChangedAt = (await Storage.getMeta('queueLastChangedAt')) || null;
-        this.state.dyContextQueue = (await Storage.getMeta('dyContextQueue')) || [];
         const meta = await Storage.getAll('meta');
         const last = meta.find(m => m.key === 'lastSync');
         if (last) this.state.lastSync = last.value;
@@ -1395,16 +1405,6 @@ export const App = {
             }
         }
 
-        if (Array.isArray(this.state.dyContextQueue)) {
-            this.state.dyContextQueue = this.state.dyContextQueue.map(j => {
-                const next = { ...j };
-                if (hasDeckMap && deckIdMap[next.deckId]) next.deckId = deckIdMap[next.deckId];
-                if (hasCardMap && cardIdMap[next.prevId]) next.prevId = cardIdMap[next.prevId];
-                if (hasCardMap && cardIdMap[next.rootId]) next.rootId = cardIdMap[next.rootId];
-                return next;
-            });
-        }
-
         // Persist updates
         if (deckChanges.length > 0) {
             await Storage.replaceIds('decks', deckChanges);
@@ -1418,7 +1418,6 @@ export const App = {
         if (this.state.session) {
             this.saveSession();
         }
-        await Storage.setMeta('dyContextQueue', this.state.dyContextQueue);
     },
     bind() {
         el('#syncNowBtn').onclick = () => this.syncNow();
@@ -2987,7 +2986,10 @@ export const App = {
         document.body.appendChild(popover);
         this.updateFlagSwatchSelection(popover, card.flag || '');
         const rect = anchor.getBoundingClientRect();
-        popover.style.left = `${Math.min(window.innerWidth - popover.offsetWidth - 8, rect.right - popover.offsetWidth)}px`;
+        // Clamp left so popover stays within viewport
+        const desiredLeft = rect.right - popover.offsetWidth;
+        const clampedLeft = Math.max(8, Math.min(window.innerWidth - popover.offsetWidth - 8, desiredLeft));
+        popover.style.left = `${clampedLeft}px`;
         popover.style.top = `${rect.bottom + 6}px`;
         popover.querySelectorAll('.flag-swatch-btn').forEach(btn => {
             btn.onclick = async () => {
@@ -5147,9 +5149,11 @@ export const App = {
         this.updateCardBackVisibility();
         // Populate review history section
         this.renderCardModalReviewHistory(card);
-        el('#cardModal').classList.remove('hidden');
-        el('#cardModal').classList.add('flex');
-        createIconsInScope(el('#cardModal'));
+        const modal = el('#cardModal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        createIconsInScope(modal);
+        focusTrap.attach(modal);
     },
     renderCardModalReviewHistory(card) {
         const section = el('#cardReviewHistorySection');
@@ -5196,8 +5200,10 @@ export const App = {
         field.classList.toggle('hidden', !show);
     },
     closeCardModal() {
-        el('#cardModal').classList.add('hidden');
-        el('#cardModal').classList.remove('flex');
+        const modal = el('#cardModal');
+        focusTrap.detach();
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
     },
     async saveCardFromModal() {
         let card = this.state.editingCard || this.newCard('', '', '', 'Front-Back');
@@ -5227,7 +5233,9 @@ export const App = {
         card.tags = selectedTags.map(name => ({ name, color: optionMap.get(name) || existingColors.get(name) || 'default' }));
         const orderField = el('#cardOrderField');
         const orderVal = (orderField && orderField.classList.contains('hidden')) ? '' : el('#cardOrderInput').value;
-        card.order = orderVal === '' ? null : Number(orderVal);
+        const parsedOrder = orderVal === '' ? null : Number(orderVal);
+        // Omit order if NaN to avoid sending invalid number to Notion API
+        card.order = Number.isFinite(parsedOrder) ? parsedOrder : null;
         card.marked = el('#cardMarkedInput').checked;
         card.flag = el('#cardFlagInput').value || '';
         const suspendedChecked = el('#cardSuspendedInput').checked;
@@ -5532,7 +5540,18 @@ export const App = {
 
             if (orphans.length > 0) {
                 console.log(`Sweeping ${orphans.length} orphaned cards`);
+                // Collect orphan IDs for sub-item cleanup
+                const orphanIds = new Set(orphans.map(c => c.id));
                 for (const c of orphans) {
+                    // Also remove sub-items of orphaned parents
+                    if (isClozeParent(c) && Array.isArray(c.subCards)) {
+                        for (const subId of c.subCards) {
+                            if (!orphanIds.has(subId)) {
+                                await Storage.delete('cards', subId);
+                                this.removeCard(subId);
+                            }
+                        }
+                    }
                     await Storage.delete('cards', c.id);
                     this.removeCard(c.id);
                 }
@@ -5891,11 +5910,28 @@ export const App = {
             'deck-upsert': [],
             'deck-delete': [],
             'card-upsert': [],
+            'card-upsert-sub': [], // Sub-items deferred until parents sync
             'card-delete': [],
             'block-append': [],
             other: []
         };
+        // Collect parent cards being synced in this batch
+        const parentCardIds = new Set();
         for (const op of rawQueue) {
+            if (op.type === 'card-upsert' && op.payload && isClozeParent(op.payload)) {
+                parentCardIds.add(op.payload.id);
+                if (op.payload.notionId) parentCardIds.add(op.payload.notionId);
+            }
+        }
+        for (const op of rawQueue) {
+            if (op.type === 'card-upsert' && op.payload?.parentCard) {
+                // Defer subcards if their parent is also being synced in this batch
+                const parentRef = op.payload.parentCard;
+                if (this.isTempId(parentRef) || parentCardIds.has(parentRef)) {
+                    buckets['card-upsert-sub'].push(op);
+                    continue;
+                }
+            }
             const bucket = buckets[op.type] || buckets.other;
             bucket.push(op);
         }
@@ -5904,6 +5940,7 @@ export const App = {
             ...buckets['deck-upsert'],
             ...buckets['deck-delete'],
             ...buckets['card-upsert'],
+            ...buckets['card-upsert-sub'], // Process subcards after their parents
             ...buckets['card-delete'],
             ...buckets['block-append'],
             ...buckets.other
@@ -6662,8 +6699,21 @@ export const App = {
             const alg = deck?.algorithm || 'SM-2';
             const lastRating = (alg === 'FSRS' ? card.fsrs?.lastRating : card.sm2?.lastRating) || card.fsrs?.lastRating || card.sm2?.lastRating;
 
-            if (f.again && lastRating !== 'again') return false;
-            if (f.hard && !['again', 'hard'].includes(lastRating)) return false;
+            // Apply again/hard filters: if both selected, show cards matching either
+            const wantsAgain = f.again;
+            const wantsHard = f.hard;
+            if (wantsAgain || wantsHard) {
+                const matchesAgain = lastRating === 'again';
+                const matchesHard = lastRating === 'hard';
+                if (wantsAgain && wantsHard) {
+                    if (!matchesAgain && !matchesHard) return false;
+                } else if (wantsAgain && !matchesAgain) {
+                    return false;
+                } else if (wantsHard && !matchesHard && !matchesAgain) {
+                    // Hard filter includes "again" as more severe
+                    return false;
+                }
+            }
             if (f.addedToday && card.createdAt && new Date(card.createdAt).toDateString() !== now.toDateString()) return false;
             if (f.tags.length && !f.tags.some(t => card.tags.some(ct => ct.name === t))) return false;
             if (f.marked && !card.marked) return false;
@@ -6749,35 +6799,6 @@ export const App = {
             const hasClozeInBack = /\{\{c\d+::.+?\}\}/i.test(card.back || '');
             if (!hasClozeInName && hasClozeInBack) {
                 prompt = card.back;
-            }
-
-            const clozeMatches = (prompt || '').match(/\{\{c\d+::.+?\}\}/gi) || [];
-            const maxIndex = Math.max(0, clozeMatches.length - 1);
-            let clozeIdx = card.activeClozeIndex ?? 0;
-            if (clozeIdx > maxIndex || clozeIdx < 0) {
-                console.warn(`Cloze index ${clozeIdx} out of bounds (max: ${maxIndex}), resetting to 0`);
-                clozeIdx = 0;
-                card.activeClozeIndex = 0;
-                // Check flag BEFORE starting any async operations to prevent race conditions
-                const shouldQueue = !card._clozeIndexFixQueued;
-                if (shouldQueue) {
-                    card._clozeIndexFixQueued = true;
-                }
-                // Persist fix to local storage
-                Storage.put('cards', card)
-                    .then(() => {
-                        // Clear the flag after successful save so future out-of-bounds corrections can be queued
-                        delete card._clozeIndexFixQueued;
-                    })
-                    .catch(e => {
-                        // Clear flag on error so retry is possible
-                        delete card._clozeIndexFixQueued;
-                        console.error('Failed to fix cloze index:', e);
-                    });
-                // Queue sync to Notion only if not already queued
-                if (shouldQueue) {
-                    this.queueOp({ type: 'card-upsert', payload: card });
-                }
             }
 
             // For sub-items, only hide the specific cloze index, reveal all others
@@ -8007,8 +8028,10 @@ export const App = {
             // Create cards from sub-items (use sub.order as ordinal)
             for (const sub of subs) {
                 const cid = ++cidCounter;
-                const ord = sub.order ?? (parseInt(sub.clozeIndexes, 10) - 1) ?? 0;
-                cardStmt.run([cid, nid, deckId, ord, now, 0, 0, 0, ++clozeIdx, 0, 0, 0, 0, 0, 0, 0, 0, ""]);
+                // Parse cloze index; fallback to 0 if NaN
+                const clozeIndex = parseInt(sub.clozeIndexes, 10);
+                const ord = sub.order ?? (Number.isFinite(clozeIndex) ? clozeIndex - 1 : 0);
+                cardStmt.run([cid, nid, deckId, Number.isFinite(ord) ? ord : 0, now, 0, 0, 0, ++clozeIdx, 0, 0, 0, 0, 0, 0, 0, 0, ""]);
             }
         }
 

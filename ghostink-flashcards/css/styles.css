@@ -1218,6 +1218,39 @@ body.preinit {
     box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08);
 }
 
+#toast {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.toast-message {
+    flex: 1;
+}
+
+.toast-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    border: none;
+    background: transparent;
+    color: var(--text-sub);
+    cursor: pointer;
+    border-radius: 4px;
+    opacity: 0.7;
+    transition: opacity 0.15s, background 0.15s;
+}
+
+.toast-close:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.1);
+}
+
+html[data-theme="dark"] .toast-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
 html[data-theme="dark"] #toast,
 html[data-theme="dark"] #tooltip {
     box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04);
