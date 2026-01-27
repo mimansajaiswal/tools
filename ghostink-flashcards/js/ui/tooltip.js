@@ -10,6 +10,8 @@ export const Tooltip = {
     timer: null,
     lastShown: null,
     el: null,
+    isBound: false,
+    lastMouse: null,
 
     /**
      * Ensure tooltip element exists and return it
@@ -24,22 +26,43 @@ export const Tooltip = {
      * Show tooltip for target element
      * @param {HTMLElement} target - Element with data-tip attribute
      */
-    show(target) {
-        if (window.innerWidth <= 640) return; // Don't show tooltips on small screens
+    show(target, pos = null) {
+        const force = !!(pos && pos.force);
+        if (window.innerWidth <= 640 && !force) return; // Don't show tooltips on small screens unless forced
         const tip = target.dataset.tip;
         if (!tip) return;
         const node = this.ensure();
         if (!node) return;
+
+        if (!target.getAttribute('aria-describedby')) {
+            if (!node.id) node.id = 'tooltip';
+            target.setAttribute('aria-describedby', node.id);
+        }
+
         node.textContent = tip;
-        const rect = target.getBoundingClientRect();
+        node.classList.remove('hidden'); // Show to measure
         const pad = 10;
-        const x = Math.min(window.innerWidth - pad, Math.max(pad, rect.left + rect.width / 2));
-        const preferBelow = rect.top < 100; // near top edge: show below to avoid clipping
-        const y = preferBelow ? (rect.bottom + 8) : (rect.top - 8);
-        node.style.left = `${x}px`;
-        node.style.top = `${y}px`;
-        node.style.transform = preferBelow ? 'translate(-50%, 0)' : 'translate(-50%, -100%)';
-        node.classList.remove('hidden');
+        const width = node.offsetWidth;
+        const height = node.offsetHeight;
+        const cursor = pos || this.lastMouse;
+        if (cursor && Number.isFinite(cursor.x) && Number.isFinite(cursor.y)) {
+            let x = cursor.x + 12;
+            let y = cursor.y + 12;
+            x = Math.max(pad, Math.min(window.innerWidth - pad - width, x));
+            y = Math.max(pad, Math.min(window.innerHeight - pad - height, y));
+            node.style.left = `${x}px`;
+            node.style.top = `${y}px`;
+            node.style.transform = 'translate(0, 0)';
+        } else {
+            const rect = target.getBoundingClientRect();
+            let x = rect.left + rect.width / 2;
+            x = Math.max(pad, Math.min(window.innerWidth - pad - width / 2, x));
+            const preferBelow = rect.top < 100;
+            const y = preferBelow ? (rect.bottom + 8) : (rect.top - 8);
+            node.style.left = `${x}px`;
+            node.style.top = `${y}px`;
+            node.style.transform = preferBelow ? 'translate(-50%, 0)' : 'translate(-50%, -100%)';
+        }
         this.lastShown = target;
     },
 
@@ -50,20 +73,28 @@ export const Tooltip = {
         const node = this.ensure();
         if (!node) return;
         node.classList.add('hidden');
-        this.lastShown = null;
+        if (this.lastShown) {
+            this.lastShown.removeAttribute('aria-describedby');
+            this.lastShown = null;
+        }
     },
 
     /**
      * Bind tooltip event listeners to document
      */
     bind() {
+        if (this.isBound) return;
+        this.isBound = true;
+        document.addEventListener('mousemove', (e) => {
+            this.lastMouse = { x: e.clientX, y: e.clientY };
+            if (this.lastShown) this.show(this.lastShown, this.lastMouse);
+        });
         document.addEventListener('mouseover', (e) => {
             const t = e.target.closest('[data-tip]');
             if (!t) return;
-            // Fix 8: Clear pending timer even if showing immediately to prevent stale content
             clearTimeout(this.timer);
-            if (this.lastShown) { this.show(t); return; }
-            this.timer = setTimeout(() => this.show(t), 160);
+            if (this.lastShown) { this.show(t, { x: e.clientX, y: e.clientY }); return; }
+            this.timer = setTimeout(() => this.show(t, { x: e.clientX, y: e.clientY }), 80);
         });
         document.addEventListener('mouseout', (e) => {
             if (!e.relatedTarget || !e.relatedTarget.closest('[data-tip]')) {
@@ -76,5 +107,18 @@ export const Tooltip = {
             if (t) this.show(t);
         });
         document.addEventListener('focusout', () => this.hide());
+        document.addEventListener('click', (e) => {
+            if (window.innerWidth > 640) return;
+            const t = e.target.closest('[data-tip]');
+            if (!t) {
+                this.hide();
+                return;
+            }
+            const isHeatmapCell = t.classList.contains('heatmap-cell') || !!t.closest('.heatmap-cell');
+            if (!isHeatmapCell) return;
+            this.show(t, { x: e.clientX, y: e.clientY, force: true });
+            clearTimeout(this.timer);
+            this.timer = setTimeout(() => this.hide(), 1800);
+        });
     }
 };
