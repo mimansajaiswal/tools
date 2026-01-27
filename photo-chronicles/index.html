@@ -2490,8 +2490,129 @@ async function handleRequest(request, env) {
                 }
             },
 
+            pointers: new Map(),
+            interactionTarget: null,
+            prevPinchDist: 0,
+            prevPinchAngle: 0,
+
+            getDist: (p1, p2) => Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY),
+            getAngle: (p1, p2) => Math.atan2(p2.clientY - p1.clientY, p2.clientX - p1.clientX),
+
+            handlePointerDown: (e) => {
+                if (!App.state.isEntryModalOpen) return;
+                const cvs = document.getElementById('viewfinder');
+                cvs.setPointerCapture(e.pointerId);
+                App.state.pointers.set(e.pointerId, e);
+
+                // Find target segment
+                const rect = cvs.getBoundingClientRect();
+                const x = (e.clientX - rect.left) / rect.width;
+                const y = (e.clientY - rect.top) / rect.height;
+                const layout = App.collageConfigs[App.state.collageMode];
+
+                // Check existing segments first
+                const clickedIdx = layout.findIndex(slot => x >= slot.x && x <= slot.x + slot.w && y >= slot.y && y <= slot.y + slot.h);
+
+                if (clickedIdx !== -1 && App.state.segments[clickedIdx]) {
+                    App.state.interactionTarget = clickedIdx;
+                    App.state.activeSegment = clickedIdx;
+                    // Update UI to show selected segment
+                    document.getElementById('segCurrent').innerText = clickedIdx + 1;
+                } else {
+                    App.state.interactionTarget = null;
+                }
+
+                if (App.state.pointers.size === 2) {
+                    const points = Array.from(App.state.pointers.values());
+                    App.state.prevPinchDist = App.getDist(points[0], points[1]);
+                    App.state.prevPinchAngle = App.getAngle(points[0], points[1]);
+                }
+            },
+
+            handlePointerMove: (e) => {
+                if (!App.state.pointers.has(e.pointerId)) return;
+                App.state.pointers.set(e.pointerId, e);
+
+                const targetIdx = App.state.interactionTarget;
+                if (targetIdx === null || !App.state.segments[targetIdx]) return;
+
+                const seg = App.state.segments[targetIdx];
+                if (!seg.isManipulatable) return;
+
+                const points = Array.from(App.state.pointers.values());
+                const cvs = document.getElementById('viewfinder');
+
+                if (points.length === 1) {
+                    // Pan
+                    const p = points[0];
+                    // Calculate delta from previous event (we need to track prev pos, but pointer event gives movementX/Y which is screen based)
+                    // Better to rely on stored previous event? 
+                    // Let's use movementX/Y scaled to canvas dims
+                    // But movementX is in screen pixels. We need canvas units.
+                    // Scale factor:
+                    const scaleX = cvs.width / cvs.clientWidth;
+                    const scaleY = cvs.height / cvs.clientHeight;
+
+                    // Rotate the movement vector by -rotation to pan in local space? 
+                    // Or just pan in screen space (which updates x/y). 
+                    // x/y are translations applied AFTER rotation in my proposed drawLoop. 
+                    // Wait, usually T * R * S. So Translation is in parent space. 
+                    // So simply adding screen delta (scaled) works for "screen space panning".
+
+                    // However, we want to move the image "under" the frame.
+                    // If we rotate the image 90deg, moving mouse right should move image right visually.
+                    // If we apply translation then rotation, moving x moves it in rotated frame.
+                    // If we apply rotation then translation (unlikely for image center), moving x moves in screen frame.
+                    // My drawLoop plan: translate(cx, cy) -> translate(x, y) -> rotate(r) -> scale(s).
+                    // This means x,y are in UN-ROTATED local space (aligned with screen/slot). 
+                    // So screen movement maps directly to x,y. Good.
+
+                    seg.x += e.movementX * scaleX;
+                    seg.y += e.movementY * scaleY;
+
+                } else if (points.length === 2) {
+                    // Pinch / Rotate
+                    const dist = App.getDist(points[0], points[1]);
+                    const angle = App.getAngle(points[0], points[1]);
+
+                    // Zoom
+                    if (App.state.prevPinchDist > 0) {
+                        const scaleFactor = dist / App.state.prevPinchDist;
+                        seg.scale *= scaleFactor;
+                    }
+
+                    // Rotate
+                    const angleDelta = angle - App.state.prevPinchAngle;
+                    seg.rotation += angleDelta;
+
+                    App.state.prevPinchDist = dist;
+                    App.state.prevPinchAngle = angle;
+                }
+            },
+
+            handlePointerUp: (e) => {
+                App.state.pointers.delete(e.pointerId);
+                if (App.state.pointers.size < 2) {
+                    App.state.prevPinchDist = 0;
+                }
+                if (App.state.pointers.size === 0) {
+                    App.state.interactionTarget = null;
+                }
+            },
+
             initCamera: async () => {
                 const video = document.getElementById('videoSource');
+                const cvs = document.getElementById('viewfinder');
+
+                // Attach pointer events if not already
+                if (!cvs.dataset.listening) {
+                    cvs.addEventListener('pointerdown', App.handlePointerDown);
+                    cvs.addEventListener('pointermove', App.handlePointerMove);
+                    cvs.addEventListener('pointerup', App.handlePointerUp);
+                    cvs.addEventListener('pointercancel', App.handlePointerUp);
+                    cvs.dataset.listening = "true";
+                }
+
                 try {
                     if (App.state.stream) {
                         App.state.stream.getTracks().forEach(t => t.stop());
@@ -2580,36 +2701,60 @@ async function handleRequest(request, env) {
                     const dy = slot.y * H;
                     const dw = slot.w * W;
                     const dh = slot.h * H;
-                    if (idx === App.state.activeSegment) {
-                        if (video.readyState === 4) {
-                            ctx.save();
-                            const vidW = video.videoWidth;
-                            const vidH = video.videoHeight;
-                            const srcRatio = vidW / vidH;
-                            const dstRatio = dw / dh;
-                            let sx, sy, sw, sh;
-                            if (srcRatio > dstRatio) {
-                                sh = vidH; sw = sh * dstRatio; sy = 0; sx = (vidW - sw) / 2;
-                            } else {
-                                sw = vidW; sh = sw / dstRatio; sx = 0; sy = (vidH - sh) / 2;
-                            }
-                            if (App.state.mirrorVideo && App.state.facingMode === 'user') {
-                                ctx.translate(dx + dw, dy);
-                                ctx.scale(-1, 1);
-                                ctx.drawImage(video, sx, sy, sw, sh, 0, 0, dw, dh);
-                            } else {
-                                ctx.drawImage(video, sx, sy, sw, sh, dx, dy, dw, dh);
-                            }
-                            ctx.restore();
+
+                    const seg = App.state.segments[idx];
+
+                    if (seg) {
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.rect(dx, dy, dw, dh);
+                        ctx.clip();
+
+                        if (seg.isManipulatable) {
+                            const cx = dx + dw / 2;
+                            const cy = dy + dh / 2;
+                            ctx.translate(cx, cy);
+                            ctx.translate(seg.x, seg.y);
+                            ctx.rotate(seg.rotation);
+                            ctx.scale(seg.scale, seg.scale);
+                            ctx.drawImage(seg.source, -seg.source.width / 2, -seg.source.height / 2);
+                        } else {
+                            // Legacy canvas
+                            ctx.drawImage(seg, 0, 0, seg.width, seg.height, dx, dy, dw, dh);
                         }
-                    } else if (App.state.segments[idx]) {
-                        ctx.drawImage(App.state.segments[idx], 0, 0, App.state.segments[idx].width, App.state.segments[idx].height, dx, dy, dw, dh);
+                        ctx.restore();
+                    } else if (idx === App.state.activeSegment && video.readyState === 4) {
+                        ctx.save();
+                        const vidW = video.videoWidth;
+                        const vidH = video.videoHeight;
+                        const srcRatio = vidW / vidH;
+                        const dstRatio = dw / dh;
+                        let sx, sy, sw, sh;
+                        if (srcRatio > dstRatio) {
+                            sh = vidH; sw = sh * dstRatio; sy = 0; sx = (vidW - sw) / 2;
+                        } else {
+                            sw = vidW; sh = sw / dstRatio; sx = 0; sy = (vidH - sh) / 2;
+                        }
+                        if (App.state.mirrorVideo && App.state.facingMode === 'user') {
+                            ctx.translate(dx + dw, dy);
+                            ctx.scale(-1, 1);
+                            ctx.drawImage(video, sx, sy, sw, sh, 0, 0, dw, dh);
+                        } else {
+                            ctx.drawImage(video, sx, sy, sw, sh, dx, dy, dw, dh);
+                        }
+                        ctx.restore();
                     } else {
                         ctx.fillStyle = "#111";
                         ctx.fillRect(dx, dy, dw, dh);
                     }
-                    ctx.strokeStyle = "rgba(255,255,255,0.1)";
-                    ctx.lineWidth = 2;
+
+                    if (idx === App.state.activeSegment) {
+                        ctx.strokeStyle = "rgba(145, 127, 179, 0.8)";
+                        ctx.lineWidth = 4;
+                    } else {
+                        ctx.strokeStyle = "rgba(255,255,255,0.1)";
+                        ctx.lineWidth = 2;
+                    }
                     ctx.strokeRect(dx, dy, dw, dh);
                 });
                 App.state.drawLoopHandle = requestAnimationFrame(App.drawLoop);
@@ -2910,49 +3055,86 @@ async function handleRequest(request, env) {
             captureSegment: () => {
                 const video = document.getElementById('videoSource');
                 const canvas = document.createElement('canvas');
-                const baseDims = App.getBaseDimensions(video.videoWidth || App.state.videoDims.width, video.videoHeight || App.state.videoDims.height);
-                const BaseW = baseDims.width;
-                const BaseH = baseDims.height;
-                canvas.width = BaseW;
-                canvas.height = BaseH;
-                const ctx = canvas.getContext('2d');
+
+                // Use full resolution from video or base dims
+                // Actually, let's just capture the full video frame to allow manipulation
                 const vidW = video.videoWidth;
                 const vidH = video.videoHeight;
-                const srcRatio = vidW / vidH;
-                const dstRatio = BaseW / BaseH;
-                let sx, sy, sw, sh;
-                if (srcRatio > dstRatio) { sh = vidH; sw = sh * dstRatio; sy = 0; sx = (vidW - sw) / 2; }
-                else { sw = vidW; sh = sw / dstRatio; sx = 0; sy = (vidH - sh) / 2; }
+                canvas.width = vidW;
+                canvas.height = vidH;
+                const ctx = canvas.getContext('2d');
+
                 if (App.state.mirrorVideo && App.state.facingMode === 'user') {
                     ctx.save();
-                    ctx.translate(BaseW, 0);
+                    ctx.translate(vidW, 0);
                     ctx.scale(-1, 1);
-                    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, BaseW, BaseH);
+                    ctx.drawImage(video, 0, 0, vidW, vidH);
                     ctx.restore();
                 } else {
-                    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, BaseW, BaseH);
+                    ctx.drawImage(video, 0, 0, vidW, vidH);
                 }
-                if (!App.state.captureBase) {
-                    App.state.captureBase = { width: BaseW, height: BaseH };
-                }
-                App.state.segments[App.state.activeSegment] = canvas;
-                const layout = App.collageConfigs[App.state.collageMode];
-                const total = layout.length;
-                let allFilled = true;
-                let nextEmpty = -1;
-                for (let i = 0; i < total; i++) {
-                    if (!App.state.segments[i]) {
-                        allFilled = false;
-                        if (nextEmpty === -1) nextEmpty = i;
-                    }
-                }
-                if (allFilled) {
-                    App.finalizeCollage();
-                } else {
-                    App.state.activeSegment = nextEmpty;
-                    document.getElementById('segCurrent').innerText = App.state.activeSegment + 1;
 
-                }
+                // Convert to Image for manipulation source
+                const img = new Image();
+                img.src = canvas.toDataURL('image/webp', 0.9);
+
+                img.onload = () => {
+                    // Calculate slot dimensions and scale
+                    const baseDims = App.state.captureBase || App.getBaseDimensions(vidW, vidH);
+                    const BaseW = baseDims.width;
+                    const BaseH = baseDims.height;
+
+                    const layout = App.collageConfigs[App.state.collageMode];
+                    const slot = layout[App.state.activeSegment];
+
+                    let multW = 1; let multH = 1;
+                    const mode = App.state.collageMode;
+                    if (mode === 2) multW = 2;
+                    else if (mode === 3) multW = 3;
+                    else if (mode === 4) { multW = 2; multH = 2; }
+                    else if (mode === 5) { multH = 2; }
+                    else if (mode === 6) { multH = 3; }
+                    else if (mode === 7) { multW = 2; multH = 2; }
+
+                    const finalDims = App.getFinalCanvasDimensions(BaseW, BaseH, multW, multH);
+                    const slotPixelW = slot.w * finalDims.width;
+                    const slotPixelH = slot.h * finalDims.height;
+
+                    const scaleW = slotPixelW / vidW;
+                    const scaleH = slotPixelH / vidH;
+                    const scale = Math.max(scaleW, scaleH);
+
+                    App.state.segments[App.state.activeSegment] = {
+                        source: img,
+                        isManipulatable: true,
+                        x: 0,
+                        y: 0,
+                        scale: scale,
+                        rotation: 0,
+                        width: vidW,
+                        height: vidH
+                    };
+
+                    if (!App.state.captureBase) {
+                        App.state.captureBase = { width: BaseW, height: BaseH };
+                    }
+
+                    const total = layout.length;
+                    let allFilled = true;
+                    let nextEmpty = -1;
+                    for (let i = 0; i < total; i++) {
+                        if (!App.state.segments[i]) {
+                            allFilled = false;
+                            if (nextEmpty === -1) nextEmpty = i;
+                        }
+                    }
+                    if (allFilled) {
+                        App.finalizeCollage();
+                    } else {
+                        App.state.activeSegment = nextEmpty;
+                        document.getElementById('segCurrent').innerText = App.state.activeSegment + 1;
+                    }
+                };
             },
 
             finalizeCollage: async () => {
@@ -2986,7 +3168,24 @@ async function handleRequest(request, env) {
                         const dy = slot.y * H;
                         const dw = slot.w * W;
                         const dh = slot.h * H;
-                        ctx.drawImage(seg, 0, 0, seg.width, seg.height, dx, dy, dw, dh);
+
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.rect(dx, dy, dw, dh);
+                        ctx.clip();
+
+                        if (seg.isManipulatable) {
+                            const cx = dx + dw / 2;
+                            const cy = dy + dh / 2;
+                            ctx.translate(cx, cy);
+                            ctx.translate(seg.x, seg.y);
+                            ctx.rotate(seg.rotation);
+                            ctx.scale(seg.scale, seg.scale);
+                            ctx.drawImage(seg.source, -seg.source.width / 2, -seg.source.height / 2);
+                        } else {
+                            ctx.drawImage(seg, 0, 0, seg.width, seg.height, dx, dy, dw, dh);
+                        }
+                        ctx.restore();
                     }
                 });
 
@@ -3056,24 +3255,66 @@ async function handleRequest(request, env) {
                     const img = new Image();
                     img.src = base64;
                     img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        const baseDims = App.getTargetBaseDimensions();
+                        // Calculate slot dimensions
+                        const baseDims = App.state.captureBase || App.getTargetBaseDimensions();
+                        const layout = App.collageConfigs[App.state.collageMode];
+                        const slot = layout[App.state.activeSegment];
+
+                        // We need the absolute dimensions of the slot in the "virtual" canvas
+                        // But wait, the virtual canvas size depends on the mode multW/multH.
+                        // However, simpler approach:
+                        // The 'scale' should be relative to the image itself being drawn into the slot.
+                        // We want the image to COVER the slot.
+                        // We need to know the slot's aspect ratio.
+                        // Slot W relative = slot.w, Slot H relative = slot.h
+                        // But we need the aspect ratio of the slot in pixels.
+                        // Assume BaseW/BaseH is the 1x1 size.
                         const BaseW = baseDims.width;
                         const BaseH = baseDims.height;
-                        canvas.width = BaseW;
-                        canvas.height = BaseH;
-                        const ctx = canvas.getContext('2d');
-                        const srcRatio = img.width / img.height;
-                        const dstRatio = BaseW / BaseH;
-                        let sx, sy, sw, sh;
-                        if (srcRatio > dstRatio) { sh = img.height; sw = sh * dstRatio; sy = 0; sx = (img.width - sw) / 2; }
-                        else { sw = img.width; sh = sw / dstRatio; sx = 0; sy = (img.height - sh) / 2; }
-                        ctx.drawImage(img, sx, sy, sw, sh, 0, 0, BaseW, BaseH);
+
+                        // We need to know the multiplier for the current mode to get true aspect?
+                        // Actually App.getFinalCanvasDimensions does this.
+                        let multW = 1; let multH = 1;
+                        const mode = App.state.collageMode;
+                        if (mode === 2) multW = 2;
+                        else if (mode === 3) multW = 3;
+                        else if (mode === 4) { multW = 2; multH = 2; }
+                        else if (mode === 5) { multH = 2; }
+                        else if (mode === 6) { multH = 3; }
+                        else if (mode === 7) { multW = 2; multH = 2; }
+
+                        // But wait, slot.w is percentage of Final Width.
+                        // So we just need Final Width / Final Height ratio?
+                        // Actually, let's just use the current canvas dimensions if available, or estimate.
+                        // Safest is to use the logic from drawLoop:
+                        const finalDims = App.getFinalCanvasDimensions(BaseW, BaseH, multW, multH);
+                        const slotPixelW = slot.w * finalDims.width;
+                        const slotPixelH = slot.h * finalDims.height;
+
+                        const imgW = img.width;
+                        const imgH = img.height;
+
+                        // Calculate Scale to COVER
+                        const scaleW = slotPixelW / imgW;
+                        const scaleH = slotPixelH / imgH;
+                        const scale = Math.max(scaleW, scaleH);
+
+                        App.state.segments[App.state.activeSegment] = {
+                            source: img,
+                            isManipulatable: true,
+                            x: 0,
+                            y: 0,
+                            scale: scale,
+                            rotation: 0,
+                            width: imgW,
+                            height: imgH
+                        };
+
                         if (!App.state.captureBase) {
                             App.state.captureBase = { width: BaseW, height: BaseH };
                         }
-                        App.state.segments[App.state.activeSegment] = canvas;
-                        const layout = App.collageConfigs[App.state.collageMode];
+
+                        // Auto-advance
                         const total = layout.length;
                         let allFilled = true;
                         let nextEmpty = -1;
@@ -3090,7 +3331,6 @@ async function handleRequest(request, env) {
                             if (nextEmpty !== -1) {
                                 App.state.activeSegment = nextEmpty;
                                 document.getElementById('segCurrent').innerText = App.state.activeSegment + 1;
-
                             }
                         }
                     }
