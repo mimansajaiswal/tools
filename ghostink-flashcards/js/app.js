@@ -187,6 +187,96 @@ const focusTrap = {
     }
 };
 
+// Helper for natural sorting (e.g. 1.1, 1.2, 1.10)
+const naturalCompare = (a, b) => {
+    const sA = (a || '').toString();
+    const sB = (b || '').toString();
+
+    // Split into numbers and non-numbers
+    // "1.1a" -> ["1", ".", "1", "a"]
+    // "1a" -> ["1", "a"]
+    const tokensA = sA.match(/[0-9]+|[^0-9]+/g) || [];
+    const tokensB = sB.match(/[0-9]+|[^0-9]+/g) || [];
+
+    const len = Math.max(tokensA.length, tokensB.length);
+
+    for (let i = 0; i < len; i++) {
+        const t1 = tokensA[i];
+        const t2 = tokensB[i];
+
+        if (t1 === undefined) return -1; // shorter first ("1" < "1a")
+        if (t2 === undefined) return 1;
+
+        // Check if numbers
+        const n1 = Number(t1);
+        const n2 = Number(t2);
+        const isNum1 = !isNaN(n1);
+        const isNum2 = !isNaN(n2);
+
+        if (isNum1 && isNum2) {
+            const diff = n1 - n2;
+            if (diff !== 0) return diff;
+            continue;
+        }
+
+        // If one is number and other is string? 
+        // Standard sort usually puts numbers before strings, but let's check consistent behavior
+        if (isNum1) return -1;
+        if (isNum2) return 1;
+
+        // Both strings (separators like "." or letters like "a")
+        // CUSTOM RULE: letters before dot?
+        // a vs .
+        // standard: . < a
+        // desired: a < .
+
+        const isDot1 = t1 === ".";
+        const isDot2 = t2 === ".";
+
+        if (isDot1 && !isDot2) return 1; // Dot comes AFTER other strings (pushing 1.1 after 1a)
+        if (!isDot1 && isDot2) return -1;
+
+        const cmp = t1.localeCompare(t2);
+        if (cmp !== 0) return cmp;
+    }
+    return 0;
+};
+
+const incrementAlpha = (str) => {
+    const chars = str.split('');
+    let i = chars.length - 1;
+    while (i >= 0) {
+        if (chars[i] !== 'z' && chars[i] !== 'Z') {
+            chars[i] = String.fromCharCode(chars[i].charCodeAt(0) + 1);
+            return chars.join('');
+        }
+        chars[i] = (chars[i] === 'z') ? 'a' : 'A';
+        i--;
+    }
+    return 'a' + chars.join('');
+};
+
+const getNextVariantOrder = (prevOrder, isPrevRoot) => {
+    const s = String(prevOrder).trim();
+    if (!s) return null;
+
+    // If previous card is the root, we always start the suffix (e.g. "1" -> "1a")
+    if (isPrevRoot) {
+        return s + 'a';
+    }
+
+    // If previous card is already a variant (not root), increment the suffix
+    const match = s.match(/([a-z]+)$/i);
+    if (match) {
+        const prefix = s.substring(0, match.index);
+        const alpha = match[1];
+        return prefix + incrementAlpha(alpha);
+    }
+
+    // Fallback if not root but no letters found (append 'a' to start chain)
+    return s + 'a';
+};
+
 // Initialize lightbox on module load
 const lightbox = initLightbox();
 
@@ -324,9 +414,10 @@ export const App = {
         this.state.queueBadgeSig = buildSig();
         this.state.queueBadgeTimer = setInterval(() => {
             const sig = buildSig();
-            if (sig === this.state.queueBadgeSig) return;
+            const queueCountEl = el('#queueCount');
+            const needsQueueRefresh = queueCountEl && queueCountEl.textContent !== String(this.state.queue.size);
+            if (sig === this.state.queueBadgeSig && !needsQueueRefresh) return;
             this.state.queueBadgeSig = sig;
-            el('#queueCount').textContent = String(this.state.queue.size);
             this.renderConnection();
         }, 5000);
     },
@@ -579,16 +670,24 @@ export const App = {
                 return;
             }
             if (mode === 'property') {
-                const maxVal = Number.MAX_SAFE_INTEGER;
                 arr.sort((a, b) => {
-                    const aOrder = typeof a.order === 'number' ? a.order : maxVal;
-                    const bOrder = typeof b.order === 'number' ? b.order : maxVal;
-                    if (aOrder === bOrder) {
+                    const aOrder = (a.order !== null && a.order !== undefined && a.order !== '') ? a.order : null;
+                    const bOrder = (b.order !== null && b.order !== undefined && b.order !== '') ? b.order : null;
+
+                    if (aOrder === null && bOrder === null) {
                         const aKey = a.createdAt || a.id || '';
                         const bKey = b.createdAt || b.id || '';
                         return aKey.localeCompare(bKey);
                     }
-                    return aOrder - bOrder;
+                    if (aOrder === null) return 1;
+                    if (bOrder === null) return -1;
+
+                    const cmp = naturalCompare(aOrder, bOrder);
+                    if (cmp !== 0) return cmp;
+
+                    const aKey = a.createdAt || a.id || '';
+                    const bKey = b.createdAt || b.id || '';
+                    return aKey.localeCompare(bKey);
                 });
                 return;
             }
@@ -2184,6 +2283,8 @@ export const App = {
         const ready = online && workerOk && authOk;
 
         const q2count = this.state.queue.size;
+        const queueCountEl = el('#queueCount');
+        if (queueCountEl) queueCountEl.textContent = String(q2count);
         const pendingSpan = q2count > 0
             ? ` <span class="ml-1 font-mono text-[10px] sm:text-[11px] text-accent ">(${q2count})</span>`
             : '';
@@ -2373,9 +2474,11 @@ export const App = {
                     .filter(Boolean)
                     .filter(sub => this.passFilters(sub, { context: 'library', allowSubItems: true }));
                 subs.sort((a, b) => {
-                    const orderA = Number.isFinite(a.order) ? a.order : parseClozeIndex(a.clozeIndexes);
-                    const orderB = Number.isFinite(b.order) ? b.order : parseClozeIndex(b.clozeIndexes);
-                    if (orderA !== orderB) return orderA - orderB;
+                    const valA = (a.order !== null && a.order !== undefined && a.order !== '') ? a.order : parseClozeIndex(a.clozeIndexes);
+                    const valB = (b.order !== null && b.order !== undefined && b.order !== '') ? b.order : parseClozeIndex(b.clozeIndexes);
+
+                    const cmp = naturalCompare(valA, valB);
+                    if (cmp !== 0) return cmp;
                     return (a.name || '').localeCompare(b.name || '');
                 });
                 return subs;
@@ -3622,9 +3725,10 @@ export const App = {
                 ? allCardsArray
                 : allCardsArray.filter(c => selectedSet.has(c.deckId));
         }
+        const filteredBase = baseCards.filter(c => !isClozeParent(c));
         const cards = includeSuspended
-            ? baseCards
-            : baseCards.filter(c => !c.suspended && !c.leech);
+            ? filteredBase
+            : filteredBase.filter(c => !c.suspended && !c.leech);
 
         const events = [];
         cards.forEach(card => {
@@ -4957,22 +5061,24 @@ export const App = {
         if (!deck) return;
         // Check if this was the selected deck
         const wasSelected = this.state.selectedDeck?.id === deck.id;
+        const deckCards = this.cardsForDeck(deck.id);
         // Remove from study deck filters if it was there
         if (this.state.filters.studyDecks) {
             this.state.filters.studyDecks = this.state.filters.studyDecks.filter(id => id !== deck.id);
         }
 
-        // Mark as archived
-        deck.archived = true;
-
-        // Remove deck and its cards from local storage view (deletion logic remains for UX)
-        // But we queue the upsert with archived=true FIRST so it syncs correctly
-        await Storage.put('decks', deck);
-        this.queueOp({ type: 'deck-upsert', payload: deck });
+        // Archive in Notion (deck + cards), then remove locally
+        if (deck.notionId) {
+            this.queueOp({ type: 'deck-delete', payload: { id: deck.id, notionId: deck.notionId } }, 'deck-delete');
+        }
+        for (const c of deckCards) {
+            if (c?.notionId) {
+                this.queueOp({ type: 'card-delete', payload: { id: c.id, notionId: c.notionId } }, 'deck-delete');
+            }
+        }
 
         await Storage.deleteCardsByDeck(deck.id);
         // Clean from memory using index (efficient)
-        const deckCards = this.cardsForDeck(deck.id);
         // Use a copy since removeCard modifies the index
         for (const c of [...deckCards]) {
             this.removeCard(c.id);
@@ -5117,7 +5223,7 @@ export const App = {
         const tagSearch = el('#cardTagSearch');
         if (tagSearch) tagSearch.value = '';
         this.renderCardTagSelectors();
-        el('#cardOrderInput').value = (typeof card?.order === 'number') ? card.order : '';
+        el('#cardOrderInput').value = (card?.order !== null && card?.order !== undefined) ? card.order : '';
         el('#cardSuspendedInput').checked = card?.suspended ?? false;
         el('#cardLeechInput').checked = card?.leech ?? false;
         const suspendedInput = el('#cardSuspendedInput');
@@ -5236,9 +5342,7 @@ export const App = {
         card.tags = selectedTags.map(name => ({ name, color: optionMap.get(name) || existingColors.get(name) || 'default' }));
         const orderField = el('#cardOrderField');
         const orderVal = (orderField && orderField.classList.contains('hidden')) ? '' : el('#cardOrderInput').value;
-        const parsedOrder = orderVal === '' ? null : Number(orderVal);
-        // Omit order if NaN to avoid sending invalid number to Notion API
-        card.order = Number.isFinite(parsedOrder) ? parsedOrder : null;
+        card.order = (orderVal && orderVal.trim() !== '') ? orderVal.trim() : null;
         card.marked = el('#cardMarkedInput').checked;
         card.flag = el('#cardFlagInput').value || '';
         const suspendedChecked = el('#cardSuspendedInput').checked;
@@ -5316,7 +5420,7 @@ export const App = {
             if (loadingMsg && !el('#loadingOverlay').classList.contains('hidden')) {
                 loadingMsg.textContent = 'Fetching decks...';
             }
-            await this.pullFromNotion();
+            await this.pullFromNotion({ forceFull: true });
             el('#syncProgress').style.width = '100%';
 
             if (loadingMsg && !el('#loadingOverlay').classList.contains('hidden')) {
@@ -5347,15 +5451,17 @@ export const App = {
             }
         }
     },
-    async pullFromNotion() {
+    async pullFromNotion(opts = {}) {
         const { deckSource, cardSource } = this.state.settings;
         if (!deckSource || !cardSource) return;
-        const since = this.state.lastPull;
-        const firstSync = !since;
+        const forceFull = !!opts.forceFull;
+        const since = forceFull ? null : this.state.lastPull;
+        const isFullSync = !since;
+        const firstSync = !this.state.lastPull;
         const localDeckMap = new Map(this.state.decks.map(d => [d.notionId || d.id, d]));
 
         // Deck visibility logic...
-        let deckFilter = { property: 'Archived?', checkbox: { equals: false } };
+        let deckFilter = null;
         if (since) {
             deckFilter = { timestamp: 'last_edited_time', last_edited_time: { on_or_after: since } };
         }
@@ -5364,6 +5470,7 @@ export const App = {
         const decks = await API.queryDatabase(deckSource, deckFilter);
         const deckPages = decks || [];
         const isHiddenDeck = (p) => !!p?.properties?.['Archived?']?.checkbox;
+        const seenDeckNotionIds = new Set(deckPages.map(p => p?.id).filter(Boolean));
         const deletedDeckNotionIds = new Set(deckPages.filter(p => p?.archived).map(p => p.id));
         const hiddenDeckNotionIds = new Set(deckPages.filter(p => !p?.archived && isHiddenDeck(p)).map(p => p.id));
 
@@ -5413,6 +5520,11 @@ export const App = {
         const activeDeckNotionIds = new Set([...existingActiveDeckNotionIds, ...mappedDecks.map(d => d.notionId)]);
         for (const id of hiddenDeckNotionIds) activeDeckNotionIds.delete(id);
         for (const id of deletedDeckNotionIds) activeDeckNotionIds.delete(id);
+        if (isFullSync && seenDeckNotionIds.size > 0) {
+            for (const id of activeDeckNotionIds) {
+                if (!seenDeckNotionIds.has(id)) activeDeckNotionIds.delete(id);
+            }
+        }
 
         // STREAMING CARDS
         let cardFilter = null;
@@ -5421,7 +5533,7 @@ export const App = {
         }
 
         // Mark-and-sweep for full syncs: track seen IDs to detect server-side deletions
-        const seenNotionIds = !since ? new Set() : null;
+        const seenNotionIds = isFullSync ? new Set() : null;
         const clozeParentsToReconcile = new Set();
         let analyticsTouched = false;
         const historiesEqual = (a, b) => {
@@ -5526,7 +5638,7 @@ export const App = {
         }
 
         // Full Sync Sweep: Remove local cards that are no longer on the server
-        if (!since && seenNotionIds) {
+        if (isFullSync && seenNotionIds) {
             const orphans = [];
             // Optimize: Iterate only relevant decks instead of all cards
             for (const deck of this.state.decks) {
@@ -5563,27 +5675,42 @@ export const App = {
         }
 
         // Handle Deck deletions/hiding (cleanup)
-        if (since) {
+        if (since || isFullSync) {
+            const removeDeckLocal = async (deck) => {
+                if (!deck) return;
+                if (this.state.filters.studyDecks) {
+                    this.state.filters.studyDecks = this.state.filters.studyDecks.filter(id => id !== deck.id);
+                }
+                if (Array.isArray(this.state.analyticsDecks)) {
+                    this.state.analyticsDecks = this.state.analyticsDecks.filter(id => id !== deck.id);
+                }
+                if (this.state.selectedDeck?.id === deck.id) {
+                    this.state.selectedDeck = null;
+                }
+                await Storage.delete('decks', deck.id);
+                await Storage.deleteCardsByDeck(deck.id);
+                const deckCards = this.cardsForDeck(deck.id);
+                // Use a copy since removeCard modifies the index
+                for (const c of [...deckCards]) this.removeCard(c.id);
+            };
+
             if (hiddenDeckNotionIds.size > 0) {
                 const toHideDecks = this.state.decks.filter(d => d.notionId && hiddenDeckNotionIds.has(d.notionId));
-                for (const d of toHideDecks) {
-                    await Storage.delete('decks', d.id);
-                    await Storage.deleteCardsByDeck(d.id);
-                    const deckCards = this.cardsForDeck(d.id);
-                    // Use a copy since removeCard modifies the index
-                    for (const c of [...deckCards]) this.removeCard(c.id);
-                }
+                for (const d of toHideDecks) await removeDeckLocal(d);
                 this.state.decks = this.state.decks.filter(d => !hiddenDeckNotionIds.has(d.notionId));
             }
             if (deletedDeckNotionIds.size > 0) {
-                const toDeleteDecks = this.state.decks.filter(d => deletedDeckNotionIds.has(d.notionId));
-                for (const d of toDeleteDecks) {
-                    await Storage.delete('decks', d.id);
-                    await Storage.deleteCardsByDeck(d.id);
-                    const deckCards = this.cardsForDeck(d.id);
-                    for (const c of [...deckCards]) this.removeCard(c.id);
-                }
+                const toDeleteDecks = this.state.decks.filter(d => d.notionId && deletedDeckNotionIds.has(d.notionId));
+                for (const d of toDeleteDecks) await removeDeckLocal(d);
                 this.state.decks = this.state.decks.filter(d => !deletedDeckNotionIds.has(d.notionId));
+            }
+            if (isFullSync && seenDeckNotionIds.size > 0) {
+                const missingDecks = this.state.decks.filter(d => d.notionId && !seenDeckNotionIds.has(d.notionId));
+                if (missingDecks.length > 0) {
+                    for (const d of missingDecks) await removeDeckLocal(d);
+                    const missingIds = new Set(missingDecks.map(d => d.notionId));
+                    this.state.decks = this.state.decks.filter(d => !missingIds.has(d.notionId));
+                }
             }
         }
 
@@ -5693,7 +5820,13 @@ export const App = {
                 const shouldUpdateNotes = !sub.notes;
                 const newNotes = shouldUpdateNotes ? parent.notes : sub.notes;
                 const notesChanged = sub.notes !== newNotes;
-                const contentChanged = sub.name !== newName || sub.back !== newBack || notesChanged || sub.deckId !== parent.deckId;
+
+                const newOrder = (parent.order && String(parent.order).trim())
+                    ? `${String(parent.order).trim().replace(/\.$/, '')}.${idx}`
+                    : null;
+                const orderChanged = sub.order !== newOrder;
+
+                const contentChanged = sub.name !== newName || sub.back !== newBack || notesChanged || sub.deckId !== parent.deckId || orderChanged;
 
                 if (contentChanged || tagsChanged) {
                     sub.name = newName;
@@ -5701,6 +5834,7 @@ export const App = {
                     if (shouldUpdateNotes) sub.notes = parent.notes;
                     sub.tags = newTags;
                     sub.deckId = parent.deckId;
+                    sub.order = newOrder;
                     sub.updatedInApp = true;
                     this.setCard(sub);
                     await Storage.put('cards', sub);
@@ -5787,7 +5921,12 @@ export const App = {
             const newNotes = shouldUpdateNotes ? parent.notes : sub.notes;
             const notesChanged = sub.notes !== newNotes;
 
-            const contentChanged = sub.name !== newName || sub.back !== newBack || notesChanged || sub.deckId !== parent.deckId;
+            const newOrder = (parent.order && String(parent.order).trim())
+                ? `${String(parent.order).trim().replace(/\.$/, '')}.${idx}`
+                : null;
+            const orderChanged = sub.order !== newOrder;
+
+            const contentChanged = sub.name !== newName || sub.back !== newBack || notesChanged || sub.deckId !== parent.deckId || orderChanged;
 
             // Only save if content or tags actually changed
             if (contentChanged || tagsChanged) {
@@ -5796,6 +5935,7 @@ export const App = {
                 if (shouldUpdateNotes) sub.notes = parent.notes;
                 sub.tags = newTags;
                 sub.deckId = parent.deckId; // Ensure deck matches parent
+                sub.order = newOrder;
                 sub.updatedInApp = true;
 
                 // Save update
@@ -6372,7 +6512,12 @@ export const App = {
         const newCard = this.newCard(prevCard.deckId, front, back, prevCard.type || 'Front-Back');
         newCard.notes = notes;
         newCard.tags = (prevCard.tags || []).map(t => ({ name: t.name, color: t.color || 'default' }));
-        if (typeof prevCard.order === 'number') newCard.order = prevCard.order;
+
+        if (prevCard.order) {
+            const isRoot = prevCard.id === rootCard.id;
+            newCard.order = getNextVariantOrder(prevCard.order, isRoot);
+        }
+
         newCard.dyRootCard = rootCard?.id || prevCard.dyRootCard || prevCard.id;
         newCard.dyPrevCard = prevCard.id;
 
@@ -6469,7 +6614,7 @@ export const App = {
                 await Storage.put('meta', { key: 'lastPush', value: this.state.lastPush });
             }
             // Then pull to get updates
-            await this.pullFromNotion();
+            await this.pullFromNotion({ forceFull: true });
             this.state.lastPull = new Date().toISOString();
             await Storage.put('meta', { key: 'lastPull', value: this.state.lastPull });
 
@@ -8673,7 +8818,7 @@ export const App = {
                     ['Flag', 'select'],
                     ['Suspended', 'checkbox'],
                     ['Leech', 'checkbox'],
-                    ['Order', 'number'],
+                    ['Order', 'rich_text'],
                     ['Last Rating', 'select'],
                     ['Last Review', 'date'],
                     ['Due Date', 'date'],
