@@ -3,9 +3,28 @@
  * IndexedDB and localStorage management for decks, cards, settings, and sessions.
  */
 
+const resolveStorageScope = () => {
+    try {
+        const rawPath = location?.pathname || '';
+        const trimmed = rawPath.replace(/\/index\.html$/i, '').replace(/\/$/, '');
+        const parts = trimmed.split('/').filter(Boolean);
+        const last = parts[parts.length - 1] || 'ghostink-flashcards';
+        const normalized = last.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
+        return normalized || 'ghostink-flashcards';
+    } catch (_) {
+        return 'ghostink-flashcards';
+    }
+};
+
+const STORAGE_SCOPE = resolveStorageScope();
+const SETTINGS_KEY = `${STORAGE_SCOPE}_settings_v1`;
+const DB_NAME = `GhostInkDB_${STORAGE_SCOPE}`;
+
 export const Storage = {
     db: null,
-    settingsKey: 'ghostink_settings_v1',
+    dbName: DB_NAME,
+    scope: STORAGE_SCOPE,
+    settingsKey: SETTINGS_KEY,
     sqlReady: null,
     _initPromise: null,
     _isInitialized: false,
@@ -15,7 +34,7 @@ export const Storage = {
         if (this._isInitialized && this.db) return Promise.resolve();
 
         this._initPromise = new Promise((resolve, reject) => {
-            const req = indexedDB.open('GhostInkDB', 5);
+            const req = indexedDB.open(this.dbName, 5);
 
             req.onupgradeneeded = (e) => {
                 const db = e.target.result;
@@ -437,7 +456,8 @@ export const Storage = {
                 authVerified: false,
                 sourcesVerified: false,
                 aiVerified: false,
-                sourcesCache: { deckOptions: [], cardOptions: [] }
+                sourcesCache: { deckOptions: [], cardOptions: [] },
+                sourcesSaved: false
             };
         }
         try {
@@ -473,7 +493,8 @@ export const Storage = {
                 authVerified: false,
                 sourcesVerified: false,
                 aiVerified: false,
-                sourcesCache: { deckOptions: [], cardOptions: [] }
+                sourcesCache: { deckOptions: [], cardOptions: [] },
+                sourcesSaved: false
             };
         }
     },

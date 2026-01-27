@@ -46,9 +46,22 @@
 
     <script>
         (() => {
+            const resolveSettingsKey = () => {
+                try {
+                    const rawPath = location?.pathname || '';
+                    const trimmed = rawPath.replace(/\/index\.html$/i, '').replace(/\/$/, '');
+                    const parts = trimmed.split('/').filter(Boolean);
+                    const last = parts[parts.length - 1] || 'ghostink-flashcards';
+                    const normalized = last.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
+                    return `${normalized || 'ghostink-flashcards'}_settings_v1`;
+                } catch (_) {
+                    return 'ghostink-flashcards_settings_v1';
+                }
+            };
             let raw = null;
             try {
-                raw = localStorage.getItem('ghostink_settings_v1');
+                const key = resolveSettingsKey();
+                raw = localStorage.getItem(key);
             } catch (_) { }
 
             let mode = 'system';
@@ -804,24 +817,23 @@
                 <div id="analyticsTab" class="tab-content hidden space-y-4 md:space-y-5">
                     <!-- Header with filters -->
                     <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                            <div>
-                                <h2 class="font-display text-base sm:text-lg md:text-xl text-[color:var(--text-main)]">
-                                    Analytics</h2>
-                                <p class="text-xs sm:text-sm text-[color:var(--text-sub)] mt-0.5">Your learning progress
-                                    and review patterns</p>
-                            </div>
-                            <div class="flex flex-wrap items-center gap-2">
-                                <div id="analyticsDeckWrap" class="relative">
-                                    <button id="analyticsDeckBtn"
-                                        class="rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] px-3 py-2 text-sm text-[color:var(--text-main)] inline-flex items-center gap-2">
-                                        <span id="analyticsDeckLabel">All decks</span>
-                                        <i data-lucide="chevron-down" class="w-4 h-4 text-[color:var(--text-sub)]"></i>
-                                    </button>
-                                    <div id="analyticsDeckMenu"
-                                        class="analytics-menu analytics-menu-right mt-2 hidden min-w-[210px] rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] shadow-lg p-1 z-50">
-                                    </div>
+                        <div class="flex flex-col gap-3 md:gap-1">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <h2
+                                        class="font-display text-base sm:text-lg md:text-xl text-[color:var(--text-main)]">
+                                        Analytics</h2>
+                                    <p class="text-xs sm:text-sm text-[color:var(--text-sub)] mt-0.5">Your learning
+                                        progress
+                                        and review patterns</p>
                                 </div>
+                                <button id="analyticsResetBtn"
+                                    class="analytics-reset-btn rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] px-2.5 py-1.5 text-[11px] sm:text-xs text-[color:var(--text-main)] inline-flex items-center gap-1.5 hover:bg-surface-muted">
+                                    <i data-lucide="rotate-ccw" class="w-3 h-3 text-[color:var(--text-sub)]"></i>
+                                    Reset
+                                </button>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2 justify-start sm:justify-end">
                                 <div id="analyticsRangeWrap" class="relative">
                                     <button id="analyticsRangeBtn"
                                         class="rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] px-3 py-2 text-sm text-[color:var(--text-main)] inline-flex items-center gap-2">
@@ -829,7 +841,7 @@
                                         <i data-lucide="chevron-down" class="w-4 h-4 text-[color:var(--text-sub)]"></i>
                                     </button>
                                     <div id="analyticsRangeMenu"
-                                        class="analytics-menu analytics-menu-right mt-2 hidden min-w-[190px] rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] shadow-lg p-1 z-50">
+                                        class="analytics-menu analytics-menu-left mt-2 hidden min-w-[190px] rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] shadow-lg p-1 z-50">
                                         <button type="button"
                                             class="analytics-range-option w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-muted"
                                             data-range="all">All time</button>
@@ -865,6 +877,16 @@
                                         </div>
                                     </div>
                                 </div>
+                                <div id="analyticsDeckWrap" class="relative">
+                                    <button id="analyticsDeckBtn"
+                                        class="rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] px-3 py-2 text-sm text-[color:var(--text-main)] inline-flex items-center gap-2">
+                                        <span id="analyticsDeckLabel">All decks</span>
+                                        <i data-lucide="chevron-down" class="w-4 h-4 text-[color:var(--text-sub)]"></i>
+                                    </button>
+                                    <div id="analyticsDeckMenu"
+                                        class="analytics-menu analytics-menu-left mt-2 hidden min-w-[240px] rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] shadow-lg p-1 z-50">
+                                    </div>
+                                </div>
                                 <div id="analyticsFilterWrap" class="relative">
                                     <button id="analyticsFilterBtn"
                                         class="rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] px-3 py-2 text-sm text-[color:var(--text-main)] inline-flex items-center gap-2">
@@ -873,151 +895,143 @@
                                         <i data-lucide="chevron-down" class="w-4 h-4 text-[color:var(--text-sub)]"></i>
                                     </button>
                                     <div id="analyticsFilterMenu"
-                                        class="analytics-menu analytics-menu-right mt-2 hidden min-w-[230px] rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] shadow-lg p-1 z-50">
+                                        class="analytics-menu analytics-menu-left mt-2 hidden min-w-[260px] rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] shadow-lg p-1 z-50">
                                     </div>
                                 </div>
-                                <label class="flex items-center gap-2 text-xs text-[color:var(--text-sub)]">
-                                    <input id="analyticsIncludeSuspended" type="checkbox" class="accent-dull-purple">
-                                    <span>Include suspended</span>
-                                </label>
-                                <button id="analyticsResetBtn"
-                                    class="rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] px-3 py-2 text-xs text-[color:var(--text-main)] inline-flex items-center gap-2 hover:bg-surface-muted">
-                                    <i data-lucide="rotate-ccw" class="w-3 h-3 text-[color:var(--text-sub)]"></i>
-                                    Reset
-                                </button>
                             </div>
                         </div>
-                    </article>
-
-                    <!-- Quick stats row -->
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                            <p class="analytics-stat-label">Today</p>
-                            <div id="analyticsToday" class="mt-1"></div>
-                        </article>
-                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                            <p class="analytics-stat-label">Streaks</p>
-                            <div id="analyticsStreaks" class="mt-1"></div>
-                        </article>
-                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                            <p class="analytics-stat-label">Retention</p>
-                            <div id="analyticsRetention" class="mt-1"></div>
-                        </article>
-                    </div>
-
-                    <!-- Heatmap -->
-                    <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
-                            <div>
-                                <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Activity
-                                    heatmap</h3>
-                                <p class="text-xs text-[color:var(--text-sub)] mt-0.5">Daily review activity</p>
-                            </div>
-                            <div class="flex flex-wrap items-center gap-2 self-start sm:self-auto">
-                                <div
-                                    class="inline-flex rounded-full border border-[color:var(--card-border)] bg-[color:var(--surface)] overflow-hidden">
-                                    <button id="heatmapMetricReviews" type="button"
-                                        class="heatmap-metric-btn is-active px-2.5 py-1 text-[10px] font-mono uppercase tracking-wide">
-                                        Reviews</button>
-                                    <button id="heatmapMetricRating" type="button"
-                                        class="heatmap-metric-btn px-2.5 py-1 text-[10px] font-mono uppercase tracking-wide">
-                                        Avg rating</button>
-                                </div>
-                                <button id="heatmapDownloadBtn"
-                                    class="p-1.5 rounded-lg border border-[color:var(--card-border)] text-[color:var(--text-sub)] hover:text-[color:var(--text-main)] hover:bg-surface-strong transition-all"
-                                    title="Download heatmap PNG">
-                                    <i data-lucide="download" class="w-4 h-4"></i>
-                                </button>
-                                <span id="analyticsStreakBadge" class="analytics-pill"></span>
-                            </div>
-                        </div>
-                        <div id="analyticsHeatmap" class="heatmap-years"></div>
-                        <div class="flex items-center justify-end mt-3">
-                            <div class="heatmap-legend">
-                                <span id="heatmapLegendLow">Fewer reviews</span>
-                                <span class="heatmap-swatch level-0"></span>
-                                <span class="heatmap-swatch level-1"></span>
-                                <span class="heatmap-swatch level-2"></span>
-                                <span class="heatmap-swatch level-3"></span>
-                                <span class="heatmap-swatch level-4"></span>
-                                <span id="heatmapLegendHigh">More reviews</span>
-                            </div>
-                        </div>
-                    </article>
-
-                    <!-- Charts row -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Reviews per day
-                            </h3>
-                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Number of cards reviewed</p>
-                            <div id="analyticsReviewCount" class="chart-scroll"></div>
-                        </article>
-                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Study time</h3>
-                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Minutes spent reviewing</p>
-                            <div id="analyticsReviewTime" class="chart-scroll"></div>
-                        </article>
-                    </div>
-
-                    <!-- Breakdown row -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Answer breakdown
-                            </h3>
-                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">How you rated your recalls</p>
-                            <div id="analyticsAnswerBreakdown"></div>
-                        </article>
-                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Study schedule
-                            </h3>
-                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Reviews by hour of day</p>
-                            <div id="analyticsHourlyBreakdown" class="chart-scroll"></div>
-                        </article>
-                    </div>
-
-                    <!-- Distribution row -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Interval
-                                distribution</h3>
-                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Card scheduling spread</p>
-                            <div id="analyticsIntervalDistribution"></div>
-                        </article>
-                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Difficulty
-                                spread</h3>
-                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Card ease and difficulty factors
-                            </p>
-                            <div id="analyticsEaseDifficulty"></div>
-                        </article>
-                    </div>
-
-                    <!-- Summary row -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Card status</h3>
-                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Overview of your deck</p>
-                            <div id="analyticsCardCounts"></div>
-                        </article>
-                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">True retention
-                            </h3>
-                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Success rate by interval</p>
-                            <div id="analyticsTrueRetention"></div>
-                        </article>
-                    </div>
                 </div>
-            </section>
-        </main>
-        <footer id="footerAttribution" class="hidden px-3 sm:px-5 md:px-10 pb-4 text-[11px] text-muted text-center">
-            Built by <a class="underline text-accent " href="https://mimansajaiswal.github.io" target="_blank"
-                rel="noopener noreferrer">Mimansa Jaiswal</a> · In the <a class="underline text-accent "
-                href="https://mimansajaiswal.github.io/tools/" target="_blank" rel="noopener noreferrer">Tools Made with
-                LLMs</a> · Code: <a class="underline text-accent "
-                href="https://github.com/mimansajaiswal/tools/tree/main/ghostink-flashcards" target="_blank"
-                rel="noopener noreferrer">ghostink-flashcards</a>
-        </footer>
+                </article>
+
+                <!-- Quick stats row -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <article class="card rounded-lg p-4 md:p-5 shadow-soft">
+                        <p class="analytics-stat-label">Today</p>
+                        <div id="analyticsToday" class="mt-1"></div>
+                    </article>
+                    <article class="card rounded-lg p-4 md:p-5 shadow-soft">
+                        <p class="analytics-stat-label">Streaks</p>
+                        <div id="analyticsStreaks" class="mt-1"></div>
+                    </article>
+                    <article class="card rounded-lg p-4 md:p-5 shadow-soft">
+                        <p class="analytics-stat-label">Retention</p>
+                        <div id="analyticsRetention" class="mt-1"></div>
+                    </article>
+                </div>
+
+                <!-- Heatmap -->
+                <article class="card rounded-lg p-4 md:p-5 shadow-soft">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+                        <div>
+                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Activity
+                                heatmap</h3>
+                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5">Daily review activity</p>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                            <div
+                                class="inline-flex rounded-full border border-[color:var(--card-border)] bg-[color:var(--surface)] overflow-hidden">
+                                <button id="heatmapMetricReviews" type="button"
+                                    class="heatmap-metric-btn is-active px-2.5 py-1 text-[10px] font-mono uppercase tracking-wide">
+                                    Reviews</button>
+                                <button id="heatmapMetricRating" type="button"
+                                    class="heatmap-metric-btn px-2.5 py-1 text-[10px] font-mono uppercase tracking-wide">
+                                    Avg rating</button>
+                            </div>
+                            <button id="heatmapDownloadBtn"
+                                class="p-1.5 rounded-lg border border-[color:var(--card-border)] text-[color:var(--text-sub)] hover:text-[color:var(--text-main)] hover:bg-surface-strong transition-all"
+                                title="Download heatmap PNG">
+                                <i data-lucide="download" class="w-4 h-4"></i>
+                            </button>
+                            <span id="analyticsStreakBadge" class="analytics-pill"></span>
+                        </div>
+                    </div>
+                    <div id="analyticsHeatmap" class="heatmap-years"></div>
+                    <div class="flex items-center justify-end mt-3">
+                        <div class="heatmap-legend">
+                            <span id="heatmapLegendLow">Fewer reviews</span>
+                            <span class="heatmap-swatch level-0"></span>
+                            <span class="heatmap-swatch level-1"></span>
+                            <span class="heatmap-swatch level-2"></span>
+                            <span class="heatmap-swatch level-3"></span>
+                            <span class="heatmap-swatch level-4"></span>
+                            <span id="heatmapLegendHigh">More reviews</span>
+                        </div>
+                    </div>
+                </article>
+
+                <!-- Charts row -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                    <article class="card rounded-lg p-4 md:p-5 shadow-soft">
+                        <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Reviews per day
+                        </h3>
+                        <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Number of cards reviewed</p>
+                        <div id="analyticsReviewCount" class="chart-scroll"></div>
+                    </article>
+                    <article class="card rounded-lg p-4 md:p-5 shadow-soft">
+                        <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Study time</h3>
+                        <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Minutes spent reviewing</p>
+                        <div id="analyticsReviewTime" class="chart-scroll"></div>
+                    </article>
+                </div>
+
+                <!-- Breakdown row -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                    <article class="card rounded-lg p-4 md:p-5 shadow-soft">
+                        <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Answer breakdown
+                        </h3>
+                        <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">How you rated your recalls</p>
+                        <div id="analyticsAnswerBreakdown"></div>
+                    </article>
+                    <article class="card rounded-lg p-4 md:p-5 shadow-soft">
+                        <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Study schedule
+                        </h3>
+                        <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Reviews by hour of day</p>
+                        <div id="analyticsHourlyBreakdown" class="chart-scroll"></div>
+                    </article>
+                </div>
+
+                <!-- Distribution row -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                    <article class="card rounded-lg p-4 md:p-5 shadow-soft">
+                        <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Interval
+                            distribution</h3>
+                        <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Card scheduling spread</p>
+                        <div id="analyticsIntervalDistribution"></div>
+                    </article>
+                    <article class="card rounded-lg p-4 md:p-5 shadow-soft">
+                        <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Difficulty
+                            spread</h3>
+                        <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Card ease and difficulty factors
+                        </p>
+                        <div id="analyticsEaseDifficulty"></div>
+                    </article>
+                </div>
+
+                <!-- Summary row -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                    <article class="card rounded-lg p-4 md:p-5 shadow-soft">
+                        <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Card status</h3>
+                        <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Overview of your deck</p>
+                        <div id="analyticsCardCounts"></div>
+                    </article>
+                    <article class="card rounded-lg p-4 md:p-5 shadow-soft">
+                        <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">True retention
+                        </h3>
+                        <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Success rate by interval</p>
+                        <div id="analyticsTrueRetention"></div>
+                    </article>
+                </div>
+    </div>
+    </section>
+    </main>
+    <footer id="footerAttribution" class="hidden px-3 sm:px-5 md:px-10 pb-4 text-[11px] text-muted text-center">
+        Built by <a class="underline text-accent " href="https://mimansajaiswal.github.io" target="_blank"
+            rel="noopener noreferrer">Mimansa Jaiswal</a> · In the <a class="underline text-accent "
+            href="https://mimansajaiswal.github.io/tools/" target="_blank" rel="noopener noreferrer">Tools Made with
+            LLMs</a> · Code: <a class="underline text-accent "
+            href="https://github.com/mimansajaiswal/tools/tree/main/ghostink-flashcards" target="_blank"
+            rel="noopener noreferrer">ghostink-flashcards</a>
+    </footer>
     </div>
 
     <div id="toast" role="status" aria-live="polite"

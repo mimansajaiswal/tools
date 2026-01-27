@@ -104,6 +104,13 @@
     --badge-accent-text: var(--linen);
 }
 
+html,
+body {
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+    max-width: 100%;
+}
+
 body {
     background-color: var(--bg);
     background-image:
@@ -408,6 +415,65 @@ html[data-theme="dark"] .dash {
     background: rgb(var(--dull-purple-rgb) / 0.12);
 }
 
+/* Library cloze rows */
+.cloze-parent-toggle {
+    min-width: 1.5rem;
+    height: 1.5rem;
+    padding: 0 0.35rem;
+    border-radius: 999px;
+    border: 1px solid var(--card-border);
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 10px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease, box-shadow 0.12s ease;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+
+.cloze-parent-toggle:hover {
+    transform: translateY(-1px);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+.cloze-parent-toggle:active {
+    transform: translateY(0);
+}
+
+.cloze-parent-toggle:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.cloze-parent-toggle.is-open {
+    background: var(--accent);
+    color: var(--badge-text);
+}
+
+.cloze-parent-toggle .cloze-toggle-icon,
+.cloze-parent-toggle svg {
+    transition: transform 0.12s ease;
+}
+
+.cloze-sub-row td:first-child {
+    background-image: linear-gradient(to right, var(--border-faint) 0 2px, transparent 2px);
+    background-repeat: no-repeat;
+    background-position: 12px 0;
+}
+
+.cloze-sub-cell {
+    padding-left: 0.2rem;
+}
+
+.cloze-row-main-sub {
+    transform: translateX(16px);
+}
+
 .glass {
     background: var(--surface);
     border: 1px solid var(--card-border);
@@ -472,9 +538,9 @@ kbd {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 30px;
-    height: 30px;
-    border-radius: 10px;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
     border: 1px solid var(--card-border);
     background: var(--surface);
     transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
@@ -490,9 +556,9 @@ kbd {
 }
 
 .flag-swatch {
-    width: 16px;
-    height: 16px;
-    border-radius: 4px;
+    width: 18px;
+    height: 18px;
+    border-radius: 8px;
     border: 1px solid var(--card-border);
     box-sizing: border-box;
 }
@@ -1484,6 +1550,37 @@ body.offline-mode::after {
     right: 0;
 }
 
+.analytics-menu-left {
+    left: 0;
+}
+
+@media (min-width: 640px) {
+    .analytics-menu-left {
+        left: auto;
+        right: 0;
+    }
+}
+
+.analytics-tag-scroll {
+    max-height: 9rem;
+    overflow-y: auto;
+}
+
+.analytics-deck-scroll {
+    max-height: 15rem;
+    overflow-y: auto;
+}
+
+#analyticsDeckMenu {
+    max-width: min(92vw, 320px);
+}
+
+.analytics-deck-name {
+    display: block;
+    white-space: normal;
+    word-break: break-word;
+}
+
 .analytics-submenu-wrap {
     position: relative;
 }
@@ -1840,6 +1937,7 @@ html[data-theme="dark"] .analytics-table tbody tr:hover {
     gap: 12px;
     font-size: 13px;
     color: var(--text-sub);
+    justify-content: center;
 }
 
 .analytics-legend span {
@@ -1862,6 +1960,7 @@ html[data-theme="dark"] .analytics-table tbody tr:hover {
     gap: 20px;
     align-items: center;
     justify-content: center;
+    flex-direction: column;
 }
 
 .analytics-pie-chart {
@@ -1869,6 +1968,11 @@ html[data-theme="dark"] .analytics-table tbody tr:hover {
     align-items: center;
     justify-content: center;
     min-width: 120px;
+}
+
+.analytics-pie-chart svg {
+    width: 120px;
+    height: 120px;
 }
 
 @media (max-width: 639px) {
@@ -1879,6 +1983,20 @@ html[data-theme="dark"] .analytics-table tbody tr:hover {
 
     .analytics-legend {
         align-items: center;
+    }
+}
+
+@media (min-width: 768px) {
+    .analytics-pie-chart svg {
+        width: 150px;
+        height: 150px;
+    }
+}
+
+@media (min-width: 1024px) {
+    .analytics-pie-chart svg {
+        width: 170px;
+        height: 170px;
     }
 }
 

@@ -27,7 +27,8 @@ export const Tooltip = {
      * @param {HTMLElement} target - Element with data-tip attribute
      */
     show(target, pos = null) {
-        if (window.innerWidth <= 640) return; // Don't show tooltips on small screens
+        const force = !!(pos && pos.force);
+        if (window.innerWidth <= 640 && !force) return; // Don't show tooltips on small screens unless forced
         const tip = target.dataset.tip;
         if (!tip) return;
         const node = this.ensure();
@@ -106,5 +107,18 @@ export const Tooltip = {
             if (t) this.show(t);
         });
         document.addEventListener('focusout', () => this.hide());
+        document.addEventListener('click', (e) => {
+            if (window.innerWidth > 640) return;
+            const t = e.target.closest('[data-tip]');
+            if (!t) {
+                this.hide();
+                return;
+            }
+            const isHeatmapCell = t.classList.contains('heatmap-cell') || !!t.closest('.heatmap-cell');
+            if (!isHeatmapCell) return;
+            this.show(t, { x: e.clientX, y: e.clientY, force: true });
+            clearTimeout(this.timer);
+            this.timer = setTimeout(() => this.hide(), 1800);
+        });
     }
 };

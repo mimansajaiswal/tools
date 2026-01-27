@@ -267,7 +267,8 @@ export const App = {
         joystickActive: false,
         joystickHandlers: null,
         queueBadgeTimer: null,
-        queueBadgeSig: ''
+        queueBadgeSig: '',
+        expandedClozeParents: new Set()
     },
     isAiModeSelected() {
         return el('#revisionMode')?.value === 'ai';
@@ -332,6 +333,9 @@ export const App = {
     },
     async loadSession() {
         this.state.session = await Storage.getSession();
+        if (this.state.session) {
+            this.state.activeTab = 'study';
+        }
     },
     saveSession() {
         // Fire-and-forget async save - session is cached in Storage for sync access
@@ -1084,6 +1088,42 @@ export const App = {
             if (Array.isArray(analyticsPrefs.flags)) this.state.analyticsFlags = analyticsPrefs.flags.filter(Boolean);
             if (typeof analyticsPrefs.marked === 'boolean') this.state.analyticsMarked = analyticsPrefs.marked;
         }
+        const uiState = meta.find(m => m.key === 'uiState')?.value;
+        if (uiState && typeof uiState === 'object') {
+            const allowedTabs = new Set(['study', 'library', 'analytics']);
+            if (typeof uiState.activeTab === 'string' && allowedTabs.has(uiState.activeTab)) {
+                this.state.activeTab = uiState.activeTab;
+            }
+            if (typeof uiState.selectedDeckId === 'string') {
+                const deck = this.deckById(uiState.selectedDeckId);
+                if (deck) this.state.selectedDeck = deck;
+            }
+            if (typeof uiState.cardSearch === 'string') this.state.cardSearch = uiState.cardSearch;
+            if (typeof uiState.deckSearch === 'string') this.state.deckSearch = uiState.deckSearch;
+            if (uiState.filters && typeof uiState.filters === 'object') {
+                const f = uiState.filters;
+                this.state.filters = {
+                    ...this.state.filters,
+                    again: !!f.again,
+                    hard: !!f.hard,
+                    addedToday: !!f.addedToday,
+                    tags: Array.isArray(f.tags) ? f.tags.filter(Boolean) : [],
+                    suspended: typeof f.suspended === 'boolean' ? f.suspended : this.state.filters.suspended,
+                    leech: typeof f.leech === 'boolean' ? f.leech : this.state.filters.leech,
+                    marked: !!f.marked,
+                    flag: Array.isArray(f.flag) ? f.flag.filter(Boolean) : (typeof f.flag === 'string' ? f.flag : []),
+                    studyDecks: Array.isArray(f.studyDecks) ? f.studyDecks.filter(Boolean) : []
+                };
+            }
+            if (typeof uiState.analyticsRange === 'string') this.state.analyticsRange = uiState.analyticsRange;
+            if (typeof uiState.analyticsYear === 'string') this.state.analyticsYear = uiState.analyticsYear;
+            if (Array.isArray(uiState.analyticsDecks)) this.state.analyticsDecks = uiState.analyticsDecks.filter(Boolean);
+            if (typeof uiState.analyticsHeatmapMetric === 'string') this.state.analyticsHeatmapMetric = uiState.analyticsHeatmapMetric;
+            if (typeof uiState.analyticsIncludeSuspended === 'boolean') this.state.analyticsIncludeSuspended = uiState.analyticsIncludeSuspended;
+            if (Array.isArray(uiState.analyticsTags)) this.state.analyticsTags = uiState.analyticsTags.filter(Boolean);
+            if (Array.isArray(uiState.analyticsFlags)) this.state.analyticsFlags = uiState.analyticsFlags.filter(Boolean);
+            if (typeof uiState.analyticsMarked === 'boolean') this.state.analyticsMarked = uiState.analyticsMarked;
+        }
     },
     async seedIfEmpty() {
         return;
@@ -1567,9 +1607,8 @@ export const App = {
             if (inDeck || inFilter || inRange) return;
             closeAnalyticsMenus();
         });
-        const analyticsResetBtn = el('#analyticsResetBtn');
-        if (analyticsResetBtn) {
-            analyticsResetBtn.onclick = () => {
+        document.querySelectorAll('.analytics-reset-btn').forEach(btn => {
+            btn.onclick = () => {
                 this.state.analyticsDecks = [];
                 this.state.analyticsRange = 'this-year';
                 this.state.analyticsYear = 'all';
@@ -1581,7 +1620,7 @@ export const App = {
                 this.renderAnalytics();
                 closeAnalyticsMenus();
             };
-        }
+        });
         const analyticsIncludeSuspended = el('#analyticsIncludeSuspended');
         if (analyticsIncludeSuspended) {
             analyticsIncludeSuspended.onchange = (e) => {
@@ -1594,10 +1633,12 @@ export const App = {
             this.state.cardSearch = val;
             this.state.cardLimit = 50;
             this.renderCards();
+            this.persistUiStateDebounced();
         }, 150);
         const debouncedDeckSearch = debounce((val) => {
             this.state.deckSearch = val;
             this.renderDecks();
+            this.persistUiStateDebounced();
         }, 150);
         el('#cardSearchInput').oninput = (e) => debouncedCardSearch(e.target.value);
         el('#libraryDeckSearch').oninput = (e) => debouncedDeckSearch(e.target.value);
@@ -1809,6 +1850,13 @@ export const App = {
             }
         }, true);
         document.addEventListener('click', (e) => {
+            const clozeToggle = e.target.closest('.cloze-parent-toggle');
+            if (clozeToggle) {
+                e.stopPropagation();
+                const parentId = clozeToggle.dataset.parentId;
+                if (parentId) this.toggleClozeParent(parentId);
+                return;
+            }
             // Handle edit deck button click
             const editDeckBtn = e.target.closest('.edit-deck-btn');
             if (editDeckBtn) {
@@ -1852,6 +1900,7 @@ export const App = {
             this.state.settings.cardSource = el('#cardSourceSelect').value;
             this.state.sourcesVerified = !!(this.state.settings.deckSource && this.state.settings.cardSource);
             this.state.settings.sourcesVerified = this.state.sourcesVerified;
+            this.state.settings.sourcesSaved = true;
             Storage.setSettings(this.state.settings);
             this.renderStatus();
             toast('Sources choice saved. Syncing...');
@@ -1949,6 +1998,22 @@ export const App = {
         this.updateActiveFiltersCount();
         createIconsInScope(document.body);
         this.loadAISettings();
+        const cardSearchInput = el('#cardSearchInput');
+        if (cardSearchInput) cardSearchInput.value = this.state.cardSearch || '';
+        const deckSearchInput = el('#libraryDeckSearch');
+        if (deckSearchInput) deckSearchInput.value = this.state.deckSearch || '';
+        const filterAgain = el('#filterAgain');
+        if (filterAgain) filterAgain.checked = !!this.state.filters.again;
+        const filterHard = el('#filterHard');
+        if (filterHard) filterHard.checked = !!this.state.filters.hard;
+        const filterAddedToday = el('#filterAddedToday');
+        if (filterAddedToday) filterAddedToday.checked = !!this.state.filters.addedToday;
+        const filterMarked = el('#filterMarked');
+        if (filterMarked) filterMarked.checked = !!this.state.filters.marked;
+        const filterSuspended = el('#filterSuspended');
+        if (filterSuspended) filterSuspended.checked = !!this.state.filters.suspended;
+        const filterLeech = el('#filterLeech');
+        if (filterLeech) filterLeech.checked = !!this.state.filters.leech;
         // Show/hide STT settings based on whether AI is verified
         const isAiVerified = this.state.settings?.aiVerified;
         el('#sttSettings')?.classList.toggle('hidden', !isAiVerified);
@@ -1973,12 +2038,14 @@ export const App = {
         if (shortcutsSend) shortcutsSend.textContent = `${ctrlSymbol} ${enterSymbol}`;
         const shortcutsMic = el('#shortcutsMic');
         if (shortcutsMic) shortcutsMic.textContent = `${ctrlSymbol} E`;
+        this.switchTab(this.state.activeTab || 'study', { silent: true, skipPersist: true });
     },
     // Tab switching
-    switchTab(tab) {
+    switchTab(tab, opts = {}) {
+        const { silent = false, skipPersist = false } = opts || {};
         // Block library access during active study session
         if (tab === 'library' && this.state.session) {
-            toast('Please stop your study session first to access the library');
+            if (!silent) toast('Please stop your study session first to access the library');
             return;
         }
         document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
@@ -1988,6 +2055,7 @@ export const App = {
         const btnEl = el(`[data-tab="${tab}"]`);
         if (btnEl) btnEl.classList.add('active');
         this.state.activeTab = tab;
+        if (!skipPersist) this.persistUiStateDebounced();
         if (tab === 'analytics') this.renderAnalytics();
         if (tabEl) createIconsInScope(tabEl);
     },
@@ -2017,6 +2085,7 @@ export const App = {
         if (resetBtn) {
             resetBtn.classList.toggle('hidden', count === 0);
         }
+        this.persistUiStateDebounced();
     },
     persistFilterPrefs() {
         const prefs = {
@@ -2032,6 +2101,32 @@ export const App = {
             }
         };
         Storage.setMeta('filterPrefs', prefs).catch(e => console.debug('Storage setMeta filterPrefs failed:', e));
+    },
+    persistUiState() {
+        const uiState = {
+            activeTab: this.state.activeTab,
+            selectedDeckId: this.state.selectedDeck?.id || null,
+            filters: { ...this.state.filters },
+            cardSearch: this.state.cardSearch || '',
+            deckSearch: this.state.deckSearch || '',
+            analyticsRange: this.state.analyticsRange,
+            analyticsYear: this.state.analyticsYear,
+            analyticsDecks: Array.isArray(this.state.analyticsDecks) ? this.state.analyticsDecks : [],
+            analyticsHeatmapMetric: this.state.analyticsHeatmapMetric,
+            analyticsIncludeSuspended: this.state.analyticsIncludeSuspended,
+            analyticsTags: Array.isArray(this.state.analyticsTags) ? this.state.analyticsTags : [],
+            analyticsFlags: Array.isArray(this.state.analyticsFlags) ? this.state.analyticsFlags : [],
+            analyticsMarked: !!this.state.analyticsMarked
+        };
+        Storage.setMeta('uiState', uiState).catch(e => console.debug('Storage setMeta uiState failed:', e));
+    },
+    persistUiStateDebounced() {
+        if (!this._debouncedPersistUiState) {
+            this._debouncedPersistUiState = debounce(() => {
+                this.persistUiState();
+            }, 300);
+        }
+        this._debouncedPersistUiState();
     },
     applyFilterPrefsToUi() {
         const filterSuspended = el('#filterSuspended');
@@ -2239,13 +2334,13 @@ export const App = {
             return dueA - dueB;
         });
 
-        // Apply card name search filter
         const searchQuery = (this.state.cardSearch || '').toLowerCase().trim();
+        const matchesSearch = (card) => {
+            const plainName = (card.name || '').replace(/<[^>]*>/g, '').replace(/\{\{c\d+::(.*?)\}\}/g, '$1').toLowerCase();
+            return plainName.includes(searchQuery);
+        };
         if (searchQuery) {
-            cards = cards.filter(c => {
-                const plainName = (c.name || '').replace(/<[^>]*>/g, '').replace(/\{\{c\d+::(.*?)\}\}/g, '$1').toLowerCase();
-                return plainName.includes(searchQuery);
-            });
+            cards = cards.filter(c => matchesSearch(c));
         }
 
         if (cards.length === 0) {
@@ -2259,10 +2354,44 @@ export const App = {
             if (container) container.classList.remove('hidden');
             if (noCardsMsg) noCardsMsg.classList.add('hidden');
 
+            const expandedParents = this.state.expandedClozeParents || new Set();
+            const displayCards = [];
+
+            const parseClozeIndex = (val) => {
+                if (val === undefined || val === null) return Infinity;
+                const str = String(val);
+                const first = str.split(',')[0];
+                const num = Number(first);
+                return Number.isFinite(num) ? num : Infinity;
+            };
+
+            const buildSubCards = (parent) => {
+                const subIds = Array.isArray(parent.subCards) ? parent.subCards : [];
+                const subs = subIds
+                    .map(id => this.state.cards.get(id))
+                    .filter(Boolean)
+                    .filter(sub => this.passFilters(sub, { context: 'library', allowSubItems: true }));
+                subs.sort((a, b) => {
+                    const orderA = Number.isFinite(a.order) ? a.order : parseClozeIndex(a.clozeIndexes);
+                    const orderB = Number.isFinite(b.order) ? b.order : parseClozeIndex(b.clozeIndexes);
+                    if (orderA !== orderB) return orderA - orderB;
+                    return (a.name || '').localeCompare(b.name || '');
+                });
+                return subs;
+            };
+
+            cards.forEach(c => {
+                displayCards.push({ card: c, isSub: false });
+                if (isClozeParent(c) && expandedParents.has(c.id)) {
+                    const subs = buildSubCards(c);
+                    subs.forEach(sub => displayCards.push({ card: sub, isSub: true, parentId: c.id }));
+                }
+            });
+
             const limit = this.state.cardLimit || 50;
-            const visibleCards = cards.slice(0, limit);
-            const hasMore = cards.length > limit;
-            const remainingCount = cards.length - limit;
+            const visibleCards = displayCards.slice(0, limit);
+            const hasMore = displayCards.length > limit;
+            const remainingCount = displayCards.length - limit;
 
             // Reuse existing rows where possible
             const existingRows = new Map();
@@ -2273,11 +2402,15 @@ export const App = {
             // Build new content using a DocumentFragment
             const frag = document.createDocumentFragment();
 
-            visibleCards.forEach(c => {
+            visibleCards.forEach(item => {
+                const c = item.card;
                 const existingRow = existingRows.get(c.id);
                 const lastUpdated = c._lastUpdated || 0;
+                const isParent = isClozeParent(c);
+                const isSub = isSubItem(c);
 
-                if (existingRow && existingRow.dataset.timestamp == lastUpdated) {
+                const expandedKey = (isParent && expandedParents.has(c.id)) ? '1' : '0';
+                if (existingRow && existingRow.dataset.timestamp == lastUpdated && (existingRow.dataset.expanded || '0') === expandedKey) {
                     // Reuse DOM node if timestamp matches (no changes)
                     frag.appendChild(existingRow);
                     existingRows.delete(c.id); // Mark as used
@@ -2289,6 +2422,9 @@ export const App = {
                 tr.className = 'hover:bg-surface-muted';
                 tr.dataset.cardId = c.id;
                 tr.dataset.timestamp = lastUpdated;
+                tr.dataset.expanded = expandedKey;
+                if (item.isSub) tr.dataset.parentId = item.parentId;
+                if (item.isSub) tr.classList.add('cloze-sub-row');
 
                 // Strip HTML tags and cloze syntax for display, then escape for safety
                 const plainName = (c.name || '').replace(/<[^>]*>/g, '').replace(/\{\{c\d+::(.*?)\}\}/g, '$1');
@@ -2307,18 +2443,15 @@ export const App = {
                 const extraTagLabel = extraTagCount > 0 ? `<span class="text-faint ">+${extraTagCount}</span>` : '';
                 const dueTs = this.getCardDueTs(c, this.state.selectedDeck);
                 const dueDisplay = Number.isFinite(dueTs) ? new Date(dueTs).toLocaleDateString() : '—';
-                const isParent = isClozeParent(c);
-                const isSub = isSubItem(c);
                 const subCount = isParent ? (Array.isArray(c.subCards) ? c.subCards.length : 0) : 0;
+                const expanded = isParent && expandedParents.has(c.id);
                 const hierarchyIcon = isParent
-                    ? `<span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-accent-soft text-accent text-[10px] font-medium" title="${subCount} sub-cards">${subCount}</span>`
-                    : isSub
-                        ? `<i data-lucide="corner-down-right" class="w-3 h-3 text-faint" title="Sub-item #${c.clozeIndexes || '?'}"></i>`
-                        : '';
+                    ? `<button class="cloze-parent-toggle ${expanded ? 'is-open' : ''}" data-parent-id="${c.id}" aria-expanded="${expanded ? 'true' : 'false'}" title="${expanded ? 'Hide sub-cards' : 'Show sub-cards'}"><i data-lucide="chevron-right" class="cloze-toggle-icon w-3 h-3"></i><span class="cloze-toggle-count">${subCount}</span></button>`
+                    : '';
 
                 tr.innerHTML = `
- <td class="py-2 pr-2 text-main">
- <div class="flex items-center gap-2">
+ <td class="py-2 pr-2 text-main ${item.isSub ? 'cloze-sub-cell' : ''}">
+ <div class="flex items-center gap-2 cloze-row-main ${item.isSub ? 'cloze-row-main-sub' : ''}">
  ${hierarchyIcon}
  ${markIcon}
  ${flagIcon}
@@ -2389,6 +2522,15 @@ export const App = {
             createIconsInScope(tbody);
         }
         this.updateCounts();
+        this.persistUiStateDebounced();
+    },
+    toggleClozeParent(parentId) {
+        if (!parentId) return;
+        const expanded = this.state.expandedClozeParents || new Set();
+        if (expanded.has(parentId)) expanded.delete(parentId);
+        else expanded.add(parentId);
+        this.state.expandedClozeParents = expanded;
+        this.renderCards();
     },
     renderStudy() {
         // Ensure we never keep the mic open across cards/screens.
@@ -2613,6 +2755,7 @@ export const App = {
                 this.renderTagFilter();
                 this.renderCards();
                 this.updateActiveFiltersCount();
+                this.persistUiStateDebounced();
             };
         });
 
@@ -2632,6 +2775,7 @@ export const App = {
                 this.renderTagFilter();
                 this.renderCards();
                 this.updateActiveFiltersCount();
+                this.persistUiStateDebounced();
             };
         });
     },
@@ -3166,24 +3310,34 @@ export const App = {
             }
             if (deckMenu) {
                 const allCheck = allSelected ? '<i data-lucide="check" class="w-3 h-3 text-accent"></i>' : '<span class="w-3 h-3"></span>';
+                const deckQuery = (deckMenu.dataset.query || '').trim().toLowerCase();
                 const deckRows = this.state.decks.length
                     ? this.state.decks.map(d => {
                         const active = selectedSet.has(d.id);
+                        const deckName = escapeHtml(d.name);
+                        const deckNameKey = escapeHtml((d.name || '').toLowerCase());
                         return `
- <button type="button" class="analytics-menu-option w-full text-left px-3 py-2 text-sm rounded-md inline-flex items-center justify-between ${active ? 'bg-surface-muted' : 'hover:bg-surface-muted'}" data-deck="${d.id}">
- <span class="truncate">${escapeHtml(d.name)}</span>
- ${active ? '<i data-lucide="check" class="w-3 h-3 text-accent"></i>' : '<span class="w-3 h-3"></span>'}
+ <button type="button" class="analytics-menu-option analytics-deck-option w-full text-left px-3 py-2 text-sm rounded-md inline-flex items-start justify-between gap-2 ${active ? 'bg-surface-muted' : 'hover:bg-surface-muted'}" data-deck="${d.id}" data-deck-name="${deckNameKey}">
+ <span class="analytics-deck-name">${deckName}</span>
+ ${active ? '<i data-lucide="check" class="w-3 h-3 text-accent mt-0.5"></i>' : '<span class="w-3 h-3 mt-0.5"></span>'}
  </button>
  `;
                     }).join('')
                     : '<div class="px-3 py-2 text-xs text-[color:var(--text-sub)]">No decks yet.</div>';
+                const deckSearch = this.state.decks.length ? `
+ <div class="px-3 py-2">
+ <input id="analyticsDeckSearch" type="text" value="${escapeHtml(deckMenu.dataset.query || '')}" placeholder="Search decks"
+ class="w-full rounded-md border border-[color:var(--card-border)] bg-[color:var(--surface)] px-2 py-1.5 text-xs text-[color:var(--text-main)] placeholder:text-[color:var(--text-sub)]">
+ </div>
+ ` : '';
                 deckMenu.innerHTML = `
  <button type="button" class="analytics-menu-option w-full text-left px-3 py-2 text-sm rounded-md inline-flex items-center justify-between ${allSelected ? 'bg-surface-muted' : 'hover:bg-surface-muted'}" data-deck="all">
  <span>No filter (all decks)</span>
  ${allCheck}
  </button>
  ${this.state.decks.length ? '<div class="h-px bg-[color:var(--card-border)] my-1"></div>' : ''}
- ${deckRows}
+ ${deckSearch}
+ ${this.state.decks.length ? '<div class="analytics-deck-scroll scroll-minimal">' + deckRows + '</div>' : deckRows}
  `;
                 deckMenu.querySelectorAll('[data-deck]').forEach(btn => {
                     btn.onclick = (e) => {
@@ -3204,6 +3358,23 @@ export const App = {
                         deckMenu.classList.remove('hidden');
                     };
                 });
+                const deckSearchInput = deckMenu.querySelector('#analyticsDeckSearch');
+                const deckButtons = Array.from(deckMenu.querySelectorAll('.analytics-deck-option'));
+                const applyDeckQuery = (query) => {
+                    const q = (query || '').trim().toLowerCase();
+                    deckButtons.forEach(btn => {
+                        const name = (btn.dataset.deckName || '').toLowerCase();
+                        btn.classList.toggle('hidden', q && !name.includes(q));
+                    });
+                };
+                if (deckSearchInput) {
+                    deckSearchInput.oninput = (e) => {
+                        const q = e.target.value || '';
+                        deckMenu.dataset.query = q;
+                        applyDeckQuery(q);
+                    };
+                    applyDeckQuery(deckSearchInput.value || '');
+                }
             }
             if (filterLabel) {
                 const filterCount = analyticsTags.length + analyticsFlags.length + (analyticsMarked ? 1 : 0);
@@ -3227,24 +3398,27 @@ export const App = {
                     : '<div class="px-3 py-2 text-xs text-[color:var(--text-sub)]">No tags yet.</div>';
 
                 const flagOrder = this.getFlagOrder().filter(f => f);
+                const tagHeaderAction = selectedTags.size > 0
+                    ? `<button type="button" class="analytics-filter-clear-btn rounded-md px-2 text-[10px] font-semibold bg-[color:var(--accent-2)]/10 text-[color:var(--accent-2)] hover:bg-[color:var(--accent-2)]/20" data-analytic-clear-tags="1">Clear</button>`
+                    : '';
+                const flagHeaderAction = selectedFlags.size > 0
+                    ? `<button type="button" class="analytics-filter-clear-btn rounded-md px-2 text-[10px] font-semibold bg-[color:var(--accent-2)]/10 text-[color:var(--accent-2)] hover:bg-[color:var(--accent-2)]/20" data-analytic-clear-flags="1">Clear</button>`
+                    : '';
                 filterMenu.innerHTML = `
- <div class="px-3 py-2 text-[11px] uppercase tracking-wide text-[color:var(--text-sub)]">Tags</div>
- <button type="button" class="analytics-menu-option w-full text-left px-3 py-2 text-sm rounded-md inline-flex items-center justify-between ${selectedTags.size === 0 ? 'bg-surface-muted' : 'hover:bg-surface-muted'}" data-analytic-tag="__all">
- <span>No filter (all tags)</span>
- ${selectedTags.size === 0 ? '<i data-lucide="check" class="w-3 h-3 text-accent"></i>' : '<span class="w-3 h-3"></span>'}
- </button>
- ${tagOptions.length ? '<div class="h-px bg-[color:var(--card-border)] my-1"></div>' : ''}
+ <div class="flex items-center justify-between px-3 py-2">
+ <span class="text-[11px] uppercase tracking-wide text-[color:var(--text-sub)]">Tags</span>
+ ${tagHeaderAction}
+ </div>
  <div class="px-3 py-2">
  <input id="analyticsTagSearch" type="text" value="${escapeHtml(filterMenu.dataset.tagQuery || '')}" placeholder="Search tags"
  class="w-full rounded-md border border-[color:var(--card-border)] bg-[color:var(--surface)] px-2 py-1.5 text-xs text-[color:var(--text-main)] placeholder:text-[color:var(--text-sub)]">
  </div>
- <div class="max-h-44 overflow-auto">${tagRows}</div>
+ <div class="analytics-tag-scroll scroll-minimal">${tagRows}</div>
  <div class="h-px bg-[color:var(--card-border)] my-2"></div>
- <div class="px-3 py-2 text-[11px] uppercase tracking-wide text-[color:var(--text-sub)]">Flags</div>
- <button type="button" class="analytics-menu-option w-full text-left px-3 py-2 text-sm rounded-md inline-flex items-center justify-between ${selectedFlags.size === 0 ? 'bg-surface-muted' : 'hover:bg-surface-muted'}" data-analytic-flag="__all">
- <span>No filter (all flags)</span>
- ${selectedFlags.size === 0 ? '<i data-lucide="check" class="w-3 h-3 text-accent"></i>' : '<span class="w-3 h-3"></span>'}
- </button>
+ <div class="flex items-center justify-between px-3 py-2">
+ <span class="text-[11px] uppercase tracking-wide text-[color:var(--text-sub)]">Flags</span>
+ ${flagHeaderAction}
+ </div>
  <div class="px-3 py-2">
  <div id="analyticsFlagSwatches" class="flag-swatch-row">
  ${flagOrder.map(f => `
@@ -3259,7 +3433,12 @@ export const App = {
  <input id="analyticsMarkedOnly" type="checkbox" class="accent-dull-purple" ${analyticsMarked ? 'checked' : ''}>
  <span>Marked only</span>
  </label>
- <button type="button" class="analytics-menu-option w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-muted" data-analytic-clear="1">Clear filters</button>
+ <label class="flex items-center gap-2 px-3 py-2 text-sm text-[color:var(--text-main)]">
+ <input id="analyticsIncludeSuspended" type="checkbox" class="accent-dull-purple" ${this.state.analyticsIncludeSuspended !== false ? 'checked' : ''}>
+ <span>Include suspended</span>
+ </label>
+ <div class="h-px bg-[color:var(--card-border)] my-2"></div>
+ <button type="button" class="analytics-menu-option w-full text-left px-3 py-2 text-sm rounded-md bg-[color:var(--accent)]/10 text-[color:var(--accent)] hover:bg-[color:var(--accent)]/20" data-analytic-clear="1">Clear filters</button>
  `;
 
                 const flagRow = filterMenu.querySelector('#analyticsFlagSwatches');
@@ -3269,15 +3448,11 @@ export const App = {
                     btn.onclick = (e) => {
                         e.stopPropagation();
                         const raw = btn.dataset.analyticTag || '';
-                        if (raw === '__all') {
-                            this.state.analyticsTags = [];
-                        } else {
-                            const tag = decodeDataAttr(raw);
-                            const next = new Set(this.state.analyticsTags || []);
-                            if (next.has(tag)) next.delete(tag);
-                            else next.add(tag);
-                            this.state.analyticsTags = Array.from(next);
-                        }
+                        const tag = decodeDataAttr(raw);
+                        const next = new Set(this.state.analyticsTags || []);
+                        if (next.has(tag)) next.delete(tag);
+                        else next.add(tag);
+                        this.state.analyticsTags = Array.from(next);
                         this.persistFilterPrefs();
                         this.renderAnalytics();
                         filterMenu.classList.remove('hidden');
@@ -3305,24 +3480,50 @@ export const App = {
                     btn.onclick = (e) => {
                         e.stopPropagation();
                         const raw = btn.dataset.analyticFlag || '';
-                        if (raw === '__all') {
-                            this.state.analyticsFlags = [];
-                        } else {
-                            const next = new Set(this.state.analyticsFlags || []);
-                            if (next.has(raw)) next.delete(raw);
-                            else next.add(raw);
-                            this.state.analyticsFlags = Array.from(next);
-                        }
+                        const next = new Set(this.state.analyticsFlags || []);
+                        if (next.has(raw)) next.delete(raw);
+                        else next.add(raw);
+                        this.state.analyticsFlags = Array.from(next);
                         this.persistFilterPrefs();
                         this.renderAnalytics();
                         filterMenu.classList.remove('hidden');
                     };
                 });
 
+                const clearTagsBtn = filterMenu.querySelector('[data-analytic-clear-tags]');
+                if (clearTagsBtn) {
+                    clearTagsBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        this.state.analyticsTags = [];
+                        this.persistFilterPrefs();
+                        this.renderAnalytics();
+                        filterMenu.classList.remove('hidden');
+                    };
+                }
+                const clearFlagsBtn = filterMenu.querySelector('[data-analytic-clear-flags]');
+                if (clearFlagsBtn) {
+                    clearFlagsBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        this.state.analyticsFlags = [];
+                        this.persistFilterPrefs();
+                        this.renderAnalytics();
+                        filterMenu.classList.remove('hidden');
+                    };
+                }
+
                 const markedToggle = filterMenu.querySelector('#analyticsMarkedOnly');
                 if (markedToggle) {
                     markedToggle.onchange = (e) => {
                         this.state.analyticsMarked = !!e.target.checked;
+                        this.persistFilterPrefs();
+                        this.renderAnalytics();
+                        filterMenu.classList.remove('hidden');
+                    };
+                }
+                const includeSuspendedToggle = filterMenu.querySelector('#analyticsIncludeSuspended');
+                if (includeSuspendedToggle) {
+                    includeSuspendedToggle.onchange = (e) => {
+                        this.state.analyticsIncludeSuspended = !!e.target.checked;
                         this.persistFilterPrefs();
                         this.renderAnalytics();
                         filterMenu.classList.remove('hidden');
@@ -3336,6 +3537,7 @@ export const App = {
                         this.state.analyticsTags = [];
                         this.state.analyticsFlags = [];
                         this.state.analyticsMarked = false;
+                        this.state.analyticsIncludeSuspended = true;
                         this.persistFilterPrefs();
                         this.renderAnalytics();
                         filterMenu.classList.remove('hidden');
@@ -3973,7 +4175,7 @@ export const App = {
                     const weekIndex = Math.floor(idx / 7);
                     const row = ((d.getDay() + 6) % 7) + 2;
                     const title = this.state.analyticsHeatmapMetric === 'rating'
-                        ? `${key}: ${count} card${count === 1 ? '' : 's'} reviewed • avg ${avgRating ? avgRating.toFixed(2) : '—'} • ${distLabel}`
+                        ? `${key}: ${count} card${count === 1 ? '' : 's'} reviewed • Average ${avgRating ? avgRating.toFixed(2) : '—'} • ${distLabel}`
                         : `${key}: ${count} card${count === 1 ? '' : 's'} reviewed`;
                     const outsideClass = inYear && inRange ? '' : ' is-outside';
                     cells.push(`<div class="heatmap-cell level-${level}${outsideClass}" style="grid-column:${weekIndex + 2}; grid-row:${row}" data-tip="${escapeHtml(title)}" tabindex="0"></div>`);
@@ -3999,6 +4201,7 @@ export const App = {
 
         const container = el('#analyticsTab');
         if (container) createIconsInScope(container);
+        this.persistUiStateDebounced();
     },
     buildLocalTagOptions() {
         return Array.from(this.state.tagRegistry.entries())
@@ -6347,6 +6550,7 @@ export const App = {
         this.renderCards();
         this.renderStudy();
         this.renderSelectedDeckBar();
+        this.persistUiStateDebounced();
         // Scroll to cards section
         const cardsSection = el('#cardsSection');
         if (cardsSection) cardsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -6440,6 +6644,7 @@ export const App = {
     passFilters(card, opts = {}) {
         const f = this.state.filters;
         const context = opts.context || 'library';
+        const allowSubItems = opts.allowSubItems === true;
 
         if (context === 'study') {
             // Study Mode: Strict rules
@@ -6471,8 +6676,8 @@ export const App = {
             // Ignore 'again', 'hard', 'tags', 'flag' etc. set in Study tab
             if (f.suspended && card.suspended) return false; // "Hide suspended" checked
             if (f.leech && card.leech) return false;       // "Hide leeches" checked
-            // Hide sub-items by default in library (no toggle available yet)
-            if (isSubItem(card)) return false;
+            // Hide sub-items by default in library unless explicitly allowed
+            if (!allowSubItems && isSubItem(card)) return false;
 
             return true;
         }
@@ -7282,6 +7487,7 @@ export const App = {
         this.renderTagFilter();
         this.renderStudy();
         this.renderCards();
+        this.updateActiveFiltersCount();
     },
     openNotesModal() {
         const card = this.state.selectedCard;
@@ -8262,6 +8468,7 @@ export const App = {
             el('#cardSourceSelect').innerHTML = `<option value=\"\">Select card source</option>` + cardOptions.map(o => `<option value=\"${o.id}\">${o.title}</option>`).join('');
             if (deckOptions.length === 1) this.state.settings.deckSource = deckOptions[0].id;
             if (cardOptions.length === 1) this.state.settings.cardSource = cardOptions[0].id;
+            this.state.settings.sourcesSaved = false;
             Storage.setSettings(this.state.settings);
             if (this.state.settings.deckSource) el('#deckSourceSelect').value = this.state.settings.deckSource;
             if (this.state.settings.cardSource) el('#cardSourceSelect').value = this.state.settings.cardSource;
@@ -8287,8 +8494,24 @@ export const App = {
         el('#cardSourceSelect').innerHTML = `<option value="">Select card source</option>` + cardOptions.map(o => `<option value="${o.id}">${o.title}</option>`).join('');
         if (this.state.settings.deckSource) el('#deckSourceSelect').value = this.state.settings.deckSource;
         if (this.state.settings.cardSource) el('#cardSourceSelect').value = this.state.settings.cardSource;
-        el('#deckSourceSelect').onchange = (e) => { this.state.settings.deckSource = e.target.value; this.state.sourcesVerified = !!(this.state.settings.deckSource && this.state.settings.cardSource); this.state.settings.sourcesVerified = this.state.sourcesVerified; Storage.setSettings(this.state.settings); this.renderStatus(); this.renderGate(); };
-        el('#cardSourceSelect').onchange = (e) => { this.state.settings.cardSource = e.target.value; this.state.sourcesVerified = !!(this.state.settings.deckSource && this.state.settings.cardSource); this.state.settings.sourcesVerified = this.state.sourcesVerified; Storage.setSettings(this.state.settings); this.renderStatus(); this.renderGate(); };
+        el('#deckSourceSelect').onchange = (e) => {
+            this.state.settings.deckSource = e.target.value;
+            this.state.sourcesVerified = !!(this.state.settings.deckSource && this.state.settings.cardSource);
+            this.state.settings.sourcesVerified = this.state.sourcesVerified;
+            this.state.settings.sourcesSaved = false;
+            Storage.setSettings(this.state.settings);
+            this.renderStatus();
+            this.renderGate();
+        };
+        el('#cardSourceSelect').onchange = (e) => {
+            this.state.settings.cardSource = e.target.value;
+            this.state.sourcesVerified = !!(this.state.settings.deckSource && this.state.settings.cardSource);
+            this.state.settings.sourcesVerified = this.state.sourcesVerified;
+            this.state.settings.sourcesSaved = false;
+            Storage.setSettings(this.state.settings);
+            this.renderStatus();
+            this.renderGate();
+        };
     },
     openModal(id) {
         // Delegate to the UI module's openModal function
@@ -8330,8 +8553,8 @@ export const App = {
             Storage.db = null;
         }
         // Delete the entire database and wait for it to complete
-        await new Promise((resolve, reject) => {
-            const req = indexedDB.deleteDatabase('GhostInkDB');
+        const deleteDb = (name) => new Promise((resolve, reject) => {
+            const req = indexedDB.deleteDatabase(name);
             req.onsuccess = resolve;
             req.onerror = reject;
             req.onblocked = () => {
@@ -8339,6 +8562,7 @@ export const App = {
                 resolve();
             };
         });
+        await deleteDb(Storage.dbName);
         // Clear caches used by this app only
         if (typeof caches !== 'undefined') {
             try {
@@ -8365,6 +8589,7 @@ export const App = {
         const hasToken = !!this.state.settings.authToken;
         const authOk = workerOk && hasToken && (this.state.authVerified || this.state.settings.authVerified);
         const hasSources = !!(this.state.settings.deckSource && this.state.settings.cardSource && this.state.sourcesVerified);
+        const sourcesSaved = this.state.settings.sourcesSaved === true;
 
         el('#statusWorker').textContent = `Worker: ${workerOk ? 'verified' : hasWorkerUrl ? 'unverified' : 'missing'}`;
         el('#statusAuth').textContent = `Auth: ${authOk ? 'verified' : workerOk ? (hasToken ? 'unverified' : 'missing') : 'blocked (verify worker)'}`;
@@ -8372,6 +8597,15 @@ export const App = {
 
         const vaultSection = el('#vaultStatusSection');
         if (vaultSection) vaultSection.classList.toggle('hidden', !hasSources);
+
+        const notionDetails = el('#notionSettingsDetails');
+        if (notionDetails && authOk && hasSources && sourcesSaved && !notionDetails.dataset.autoCollapsed) {
+            notionDetails.removeAttribute('open');
+            notionDetails.dataset.autoCollapsed = '1';
+        }
+        if (!sourcesSaved && notionDetails?.dataset.autoCollapsed) {
+            delete notionDetails.dataset.autoCollapsed;
+        }
 
         this.updateSettingsButtons();
         this.renderConnection();
@@ -8587,11 +8821,11 @@ export const App = {
         const renderAscii = (activeCell) => {
             if (!ascii) return;
             const pad2 = (n) => String(n).padStart(2, '0');
-            let out = ' ┌──────────────┐ \n';
-            out += ' │ ┌──────────┐ │ \n';
+            let out = '';
+            out += '┌──────────────┐\n';
+            out += '│ ┌──────────┐ │\n';
             let cell = 1;
             for (let r = 0; r < rows; r++) {
-                let rowStr = ' │ │';
                 const rowArr = [];
                 for (let c = 0; c < cols; c++) {
                     const label = pad2(cell);
@@ -8602,14 +8836,10 @@ export const App = {
                     }
                     cell++;
                 }
-                rowStr += rowArr.join(' ') + '│ │ ';
-                out += rowStr + '\n';
-                if (r < rows - 1) {
-                    out += ' │ │ │ │ \n';
-                }
+                out += `│ │ ${rowArr.join(' ')} │ │\n`;
             }
-            out += ' │ └──────────┘ │ \n';
-            out += ' └──────────────┘ ';
+            out += '│ └──────────┘ │\n';
+            out += '└──────────────┘';
             ascii.innerHTML = out;
         };
 
