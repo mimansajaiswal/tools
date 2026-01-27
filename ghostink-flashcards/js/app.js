@@ -328,7 +328,7 @@ export const App = {
             this.state.queueBadgeSig = sig;
             el('#queueCount').textContent = String(this.state.queue.size);
             this.renderConnection();
-        }, 2000);
+        }, 5000);
     },
     async loadSession() {
         this.state.session = await Storage.getSession();
@@ -1075,6 +1075,7 @@ export const App = {
             const key = this.queueKey(op);
             if (key) this.state.queue.set(key, op);
         }
+        el('#queueCount').textContent = String(this.state.queue.size);
 
         this.state.lastQueueError = (await Storage.getMeta('lastQueueError')) || null;
         this.state.queueLastChangedAt = (await Storage.getMeta('queueLastChangedAt')) || null;
@@ -2282,6 +2283,7 @@ export const App = {
         const tbody = el('#cardTable');
         const noCardsMsg = el('#noCardsMessage');
         const container = el('#cardsContainer');
+        const previousScrollTop = container ? container.scrollTop : 0;
 
         // Cleanup previous observer to prevent memory leaks
         if (this.state.cardListObserver) {
@@ -2490,6 +2492,7 @@ export const App = {
             // This implicitly removes any rows in existingRows that weren't reused (stale/filtered out)
             tbody.innerHTML = '';
             tbody.appendChild(frag);
+            if (container) container.scrollTop = previousScrollTop;
 
             // Re-bind intersection observer if needed
             if (hasMore) {
@@ -6104,7 +6107,7 @@ export const App = {
             }
         }
         this.updateSyncButtonState();
-        this.renderConnection();
+        if (this.state.queue.size === 1) this.renderConnection();
         const delay = (reason === 'rating') ? (5 * 60 * 1000) : 1500;
         this.requestAutoSyncSoon(delay, reason);
     },
