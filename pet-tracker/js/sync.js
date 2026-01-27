@@ -81,7 +81,10 @@ const Sync = {
      */
     updatePendingCount: async () => {
         const pending = await PetTracker.SyncQueue.getPending();
+        const failed = await PetTracker.DB.query(PetTracker.STORES.SYNC_QUEUE, i => i.status === 'failed');
+        
         Sync.pendingCount = pending.length;
+        Sync.failedCount = failed.length;
         Sync.updateSyncUI();
     },
 
@@ -110,6 +113,9 @@ const Sync = {
             } else if (!navigator.onLine) {
                 indicator.innerHTML = '<i data-lucide="cloud-off" class="w-4 h-4"></i>';
                 indicator.title = 'Offline';
+            } else if (Sync.failedCount > 0) {
+                indicator.innerHTML = '<i data-lucide="alert-triangle" class="w-4 h-4 text-muted-pink"></i>';
+                indicator.title = `${Sync.failedCount} failed syncs`;
             } else if (Sync.pendingCount > 0) {
                 indicator.innerHTML = '<i data-lucide="cloud" class="w-4 h-4 text-muted-pink"></i>';
                 indicator.title = `${Sync.pendingCount} pending changes`;
@@ -174,7 +180,7 @@ const Sync = {
             console.log('[Sync] Starting sync cycle...');
 
             // 1. Push local changes
-            await Sync.pushLocalChanges();
+            const { successCount, failCount, lastError } = await Sync.pushLocalChanges();
 
             // 2. Pull remote updates
             await Sync.pullRemoteUpdates();
@@ -186,15 +192,11 @@ const Sync = {
 
             // Only show toast for manual sync
             if (showToast) {
-                PetTracker.UI.toast('Synced', 'success', 2000);
-            }
-
-            // Refresh UI
-            if (PetTracker.App) {
-                await PetTracker.App.loadData();
-                // Only re-render if on dashboard to avoid disrupting user
-                if (PetTracker.App.state.currentView === 'dashboard') {
-                    PetTracker.App.renderDashboard();
+                if (failCount > 0) {
+                    PetTracker.UI.toast(`Sync finished with ${failCount} errors. See console.`, 'error');
+                    console.warn('[Sync] Last error:', lastError);
+                } else {
+                    PetTracker.UI.toast('Synced', 'success', 2000);
                 }
             }
         } catch (e) {
@@ -223,13 +225,20 @@ const Sync = {
         const pending = await PetTracker.SyncQueue.getPending();
         console.log(`[Sync] ${pending.length} pending operations`);
 
+        let successCount = 0;
+        let failCount = 0;
+        let lastError = null;
+
         for (const op of pending) {
             try {
                 await Sync.waitForRateLimit();
                 await Sync.processOperation(op);
                 await PetTracker.SyncQueue.complete(op.id);
+                successCount++;
             } catch (e) {
                 console.error(`[Sync] Operation ${op.id} failed:`, e);
+                lastError = e;
+                failCount++;
 
                 if (e.isRateLimit) {
                     // Wait and retry later
@@ -239,6 +248,8 @@ const Sync = {
                 await PetTracker.SyncQueue.fail(op.id, e.message);
             }
         }
+
+        return { successCount, failCount, lastError };
     },
 
     /**

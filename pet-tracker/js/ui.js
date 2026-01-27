@@ -19,7 +19,7 @@ const UI = {
             warning: 'bg-oatmeal text-charcoal border border-earth-metal'
         };
 
-        toast.className = `px-4 py-3 text-sm font-mono uppercase tracking-wide pointer-events-auto toast-enter ${colors[type] || colors.info}`;
+        toast.className = `px-4 py-3 text-sm font-mono uppercase tracking-wide pointer-events-auto toast-enter break-words whitespace-normal ${colors[type] || colors.info}`;
         toast.textContent = message;
         container.appendChild(toast);
 
@@ -168,12 +168,14 @@ const UI = {
      * Confirmation dialog
      */
     confirm: (message, onConfirm, onCancel = null) => {
+        const modalId = 'confirmModal-' + Date.now();
         const modal = document.createElement('div');
-        modal.className = 'fixed inset-0 z-[100] flex items-center justify-center p-4';
+        modal.id = modalId;
+        modal.className = 'fixed inset-0 z-[110] flex items-center justify-center p-4';
         modal.innerHTML = `
             <div class="absolute inset-0 modal-overlay" data-dismiss></div>
-            <div class="relative bg-white-linen border border-oatmeal max-w-sm w-full p-6 z-10">
-                <p class="text-charcoal mb-6">${message}</p>
+            <div class="relative bg-white-linen border border-oatmeal max-w-sm w-full p-6 z-10 shadow-lg">
+                <p class="text-charcoal mb-6 font-sans text-sm">${message}</p>
                 <div class="flex gap-3 justify-end">
                     <button class="btn-secondary px-4 py-2 font-mono text-xs uppercase" data-action="cancel">Cancel</button>
                     <button class="btn-primary px-4 py-2 font-mono text-xs uppercase" data-action="confirm">Confirm</button>
@@ -304,6 +306,13 @@ const UI = {
         const div = document.createElement('div');
         div.textContent = str;
         return div.innerHTML;
+    },
+
+    /**
+     * Generate unique ID
+     */
+    generateId: () => {
+        return window.PetTracker?.generateId ? window.PetTracker.generateId() : crypto.randomUUID();
     }
 };
 

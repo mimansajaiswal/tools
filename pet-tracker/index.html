@@ -622,42 +622,57 @@
                             <input type="text" id="onboardingProxyToken" class="input-field"
                                 placeholder="Your worker secret token">
                         </div>
-                        <button type="button" onclick="App.showWorkerCode()"
-                            class="btn-secondary px-4 py-2 font-mono text-xs uppercase w-full">
-                            <i data-lucide="code" class="w-4 h-4 inline mr-2"></i>View Worker Code
-                        </button>
+                        <input type="hidden" id="onboardingWorkerVerified" value="false">
+                        <div id="onboardingWorkerStatus" class="hidden"></div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <button type="button" onclick="App.showWorkerCode()"
+                                class="btn-secondary px-3 py-2 font-mono text-xs uppercase">
+                                <i data-lucide="code" class="w-4 h-4 inline mr-2"></i>Code
+                            </button>
+                            <button id="onboardingVerifyWorkerBtn" type="button" onclick="Onboarding.verifyWorker()"
+                                class="btn-primary px-3 py-2 font-mono text-xs uppercase">
+                                <i data-lucide="plug" class="w-4 h-4 inline mr-2"></i>Verify
+                            </button>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Step 3: Notion Connection -->
                 <div id="onboardingStep3" class="onboarding-step hidden">
                     <h3 class="font-serif text-xl text-charcoal mb-4">Connect to Notion</h3>
-                    <p class="text-earth-metal text-sm mb-4">Create an internal integration in Notion and paste your
-                        token here.</p>
+                    <p class="text-earth-metal text-sm mb-4">Connect your workspace and map the required databases.</p>
 
                     <div class="space-y-4">
-                        <div>
-                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Notion Integration
-                                Token *</label>
-                            <input type="password" id="onboardingNotionToken" class="input-field"
-                                placeholder="secret_...">
-                            <p class="text-xs text-earth-metal mt-1">
-                                <a href="https://www.notion.so/my-integrations" target="_blank"
-                                    class="text-dull-purple underline">Create integration</a>
-                                and share your database with it.
-                            </p>
-                        </div>
-                        <div>
-                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Database ID</label>
-                            <input type="text" id="onboardingDatabaseId" class="input-field"
-                                placeholder="32-character ID from database URL">
-                            <p class="text-xs text-earth-metal mt-1">Optional - configure later in settings.</p>
-                        </div>
-                        <button type="button" onclick="Onboarding.testConnection()"
-                            class="btn-secondary px-4 py-2 font-mono text-xs uppercase w-full">
-                            <i data-lucide="wifi" class="w-4 h-4 inline mr-2"></i>Test Connection
+                        <button onclick="Onboarding.startOAuth()"
+                            class="btn-primary w-full px-4 py-2 font-mono text-xs uppercase flex items-center justify-center gap-2">
+                            <i data-lucide="zap" class="w-4 h-4"></i>Connect with Notion
                         </button>
-                        <div id="onboardingConnectionStatus" class="hidden"></div>
+                        
+                        <div class="flex items-center gap-4">
+                            <div class="flex-1 border-t border-oatmeal"></div>
+                            <span class="font-mono text-xs uppercase text-earth-metal">OR</span>
+                            <div class="flex-1 border-t border-oatmeal"></div>
+                        </div>
+
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Manual Token</label>
+                            <input type="password" id="onboardingNotionToken" class="input-field"
+                                placeholder="secret_..." onchange="document.getElementById('onboardingDatabasesVerified').value = 'false'">
+                        </div>
+
+                        <button type="button" onclick="Onboarding.findDatabases()"
+                            class="btn-secondary px-4 py-2 font-mono text-xs uppercase w-full">
+                            <i data-lucide="scan" class="w-4 h-4 inline mr-2"></i>Find Data Sources
+                        </button>
+                        
+                        <div id="onboardingDbList" class="hidden"></div>
+                        <input type="hidden" id="onboardingDatabasesVerified" value="false">
+                        
+                        <button id="onboardingDbVerifyBtn" type="button" onclick="Onboarding.checkDbMapping()"
+                            class="hidden btn-secondary px-4 py-2 font-mono text-xs uppercase w-full mt-2">
+                            <i data-lucide="check-circle" class="w-4 h-4 inline mr-2"></i>Confirm Mapping
+                        </button>
                     </div>
                 </div>
 
@@ -712,9 +727,6 @@
                     <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>Back
                 </button>
                 <div class="flex gap-3 ml-auto">
-                    <button onclick="Onboarding.skip()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
-                        Skip Setup
-                    </button>
                     <button id="onboardingNext" onclick="Onboarding.nextStep()"
                         class="btn-primary px-4 py-2 font-mono text-xs uppercase">
                         Next<i data-lucide="arrow-right" class="w-4 h-4 inline ml-1"></i>
@@ -1178,16 +1190,17 @@ export default {
 
         // Disconnect Google Calendar
         App.disconnectGoogleCalendar = () => {
-            if (!confirm('Disconnect Google Calendar?')) return;
-            const settings = PetTracker.Settings.get();
-            delete settings.gcalAccessToken;
-            delete settings.gcalRefreshToken;
-            delete settings.gcalUserEmail;
-            settings.gcalEnabled = false;
-            settings.gcalCalendarId = '';
-            PetTracker.Settings.set(settings);
-            App.updateGcalUI();
-            PetTracker.UI.toast('Google Calendar disconnected', 'success');
+            PetTracker.UI.confirm('Disconnect Google Calendar?', () => {
+                const settings = PetTracker.Settings.get();
+                delete settings.gcalAccessToken;
+                delete settings.gcalRefreshToken;
+                delete settings.gcalUserEmail;
+                settings.gcalEnabled = false;
+                settings.gcalCalendarId = '';
+                PetTracker.Settings.set(settings);
+                App.updateGcalUI();
+                PetTracker.UI.toast('Google Calendar disconnected', 'success');
+            });
         };
 
         // Update Google Calendar UI based on connection status

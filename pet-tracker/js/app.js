@@ -606,8 +606,10 @@ const App = {
         PetTracker.Settings.setActivePet(petId);
         App.state.activePetId = petId;
 
-        // For now, just show a toast
-        PetTracker.UI.toast(`Viewing ${pet.name}`, 'info');
+        // Render detailed view if needed, but for now filtering is handled by Pets.renderList or dashboard logic
+        // This function primarily sets the active context.
+        // The UI update should happen where this is called from or by triggering a render.
+        // If this is just setting context, no toast is needed.
     },
 
     /**

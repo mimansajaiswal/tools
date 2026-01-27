@@ -518,7 +518,6 @@ Parse the following input:`;
         AI.markEdited(entryId);
 
         // For now, show inline edit - could be expanded to full modal
-        PetTracker.UI.toast('Entry marked as edited', 'info');
     },
 
     /**
@@ -694,7 +693,6 @@ Parse the following input:`;
         await AI.updateQueueCount();
         AI.renderQueueIndicator();
         AI.showQueueModal();
-        PetTracker.UI.toast('Item removed from queue', 'success');
     },
 
     /**

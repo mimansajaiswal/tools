@@ -427,6 +427,7 @@ const Settings = {
     },
 
     isOnboardingDone: () => localStorage.getItem(Settings.KEYS.ONBOARDING_DONE) === 'true',
+    setOnboardingDone: (done) => done ? localStorage.setItem(Settings.KEYS.ONBOARDING_DONE, 'true') : localStorage.removeItem(Settings.KEYS.ONBOARDING_DONE),
     completeOnboarding: () => localStorage.setItem(Settings.KEYS.ONBOARDING_DONE, 'true'),
     getLastSync: () => localStorage.getItem(Settings.KEYS.LAST_SYNC),
     setLastSync: (ts = new Date().toISOString()) => localStorage.setItem(Settings.KEYS.LAST_SYNC, ts),
