@@ -187,6 +187,96 @@ const focusTrap = {
     }
 };
 
+// Helper for natural sorting (e.g. 1.1, 1.2, 1.10)
+const naturalCompare = (a, b) => {
+    const sA = (a || '').toString();
+    const sB = (b || '').toString();
+
+    // Split into numbers and non-numbers
+    // "1.1a" -> ["1", ".", "1", "a"]
+    // "1a" -> ["1", "a"]
+    const tokensA = sA.match(/[0-9]+|[^0-9]+/g) || [];
+    const tokensB = sB.match(/[0-9]+|[^0-9]+/g) || [];
+
+    const len = Math.max(tokensA.length, tokensB.length);
+
+    for (let i = 0; i < len; i++) {
+        const t1 = tokensA[i];
+        const t2 = tokensB[i];
+
+        if (t1 === undefined) return -1; // shorter first ("1" < "1a")
+        if (t2 === undefined) return 1;
+
+        // Check if numbers
+        const n1 = Number(t1);
+        const n2 = Number(t2);
+        const isNum1 = !isNaN(n1);
+        const isNum2 = !isNaN(n2);
+
+        if (isNum1 && isNum2) {
+            const diff = n1 - n2;
+            if (diff !== 0) return diff;
+            continue;
+        }
+
+        // If one is number and other is string? 
+        // Standard sort usually puts numbers before strings, but let's check consistent behavior
+        if (isNum1) return -1;
+        if (isNum2) return 1;
+
+        // Both strings (separators like "." or letters like "a")
+        // CUSTOM RULE: letters before dot?
+        // a vs .
+        // standard: . < a
+        // desired: a < .
+
+        const isDot1 = t1 === ".";
+        const isDot2 = t2 === ".";
+
+        if (isDot1 && !isDot2) return 1; // Dot comes AFTER other strings (pushing 1.1 after 1a)
+        if (!isDot1 && isDot2) return -1;
+
+        const cmp = t1.localeCompare(t2);
+        if (cmp !== 0) return cmp;
+    }
+    return 0;
+};
+
+const incrementAlpha = (str) => {
+    const chars = str.split('');
+    let i = chars.length - 1;
+    while (i >= 0) {
+        if (chars[i] !== 'z' && chars[i] !== 'Z') {
+            chars[i] = String.fromCharCode(chars[i].charCodeAt(0) + 1);
+            return chars.join('');
+        }
+        chars[i] = (chars[i] === 'z') ? 'a' : 'A';
+        i--;
+    }
+    return 'a' + chars.join('');
+};
+
+const getNextVariantOrder = (prevOrder, isPrevRoot) => {
+    const s = String(prevOrder).trim();
+    if (!s) return null;
+
+    // If previous card is the root, we always start the suffix (e.g. "1" -> "1a")
+    if (isPrevRoot) {
+        return s + 'a';
+    }
+
+    // If previous card is already a variant (not root), increment the suffix
+    const match = s.match(/([a-z]+)$/i);
+    if (match) {
+        const prefix = s.substring(0, match.index);
+        const alpha = match[1];
+        return prefix + incrementAlpha(alpha);
+    }
+
+    // Fallback if not root but no letters found (append 'a' to start chain)
+    return s + 'a';
+};
+
 // Initialize lightbox on module load
 const lightbox = initLightbox();
 
@@ -580,16 +670,24 @@ export const App = {
                 return;
             }
             if (mode === 'property') {
-                const maxVal = Number.MAX_SAFE_INTEGER;
                 arr.sort((a, b) => {
-                    const aOrder = typeof a.order === 'number' ? a.order : maxVal;
-                    const bOrder = typeof b.order === 'number' ? b.order : maxVal;
-                    if (aOrder === bOrder) {
+                    const aOrder = (a.order !== null && a.order !== undefined && a.order !== '') ? a.order : null;
+                    const bOrder = (b.order !== null && b.order !== undefined && b.order !== '') ? b.order : null;
+
+                    if (aOrder === null && bOrder === null) {
                         const aKey = a.createdAt || a.id || '';
                         const bKey = b.createdAt || b.id || '';
                         return aKey.localeCompare(bKey);
                     }
-                    return aOrder - bOrder;
+                    if (aOrder === null) return 1;
+                    if (bOrder === null) return -1;
+
+                    const cmp = naturalCompare(aOrder, bOrder);
+                    if (cmp !== 0) return cmp;
+
+                    const aKey = a.createdAt || a.id || '';
+                    const bKey = b.createdAt || b.id || '';
+                    return aKey.localeCompare(bKey);
                 });
                 return;
             }
@@ -2376,9 +2474,11 @@ export const App = {
                     .filter(Boolean)
                     .filter(sub => this.passFilters(sub, { context: 'library', allowSubItems: true }));
                 subs.sort((a, b) => {
-                    const orderA = Number.isFinite(a.order) ? a.order : parseClozeIndex(a.clozeIndexes);
-                    const orderB = Number.isFinite(b.order) ? b.order : parseClozeIndex(b.clozeIndexes);
-                    if (orderA !== orderB) return orderA - orderB;
+                    const valA = (a.order !== null && a.order !== undefined && a.order !== '') ? a.order : parseClozeIndex(a.clozeIndexes);
+                    const valB = (b.order !== null && b.order !== undefined && b.order !== '') ? b.order : parseClozeIndex(b.clozeIndexes);
+
+                    const cmp = naturalCompare(valA, valB);
+                    if (cmp !== 0) return cmp;
                     return (a.name || '').localeCompare(b.name || '');
                 });
                 return subs;
@@ -5123,7 +5223,7 @@ export const App = {
         const tagSearch = el('#cardTagSearch');
         if (tagSearch) tagSearch.value = '';
         this.renderCardTagSelectors();
-        el('#cardOrderInput').value = (typeof card?.order === 'number') ? card.order : '';
+        el('#cardOrderInput').value = (card?.order !== null && card?.order !== undefined) ? card.order : '';
         el('#cardSuspendedInput').checked = card?.suspended ?? false;
         el('#cardLeechInput').checked = card?.leech ?? false;
         const suspendedInput = el('#cardSuspendedInput');
@@ -5242,9 +5342,7 @@ export const App = {
         card.tags = selectedTags.map(name => ({ name, color: optionMap.get(name) || existingColors.get(name) || 'default' }));
         const orderField = el('#cardOrderField');
         const orderVal = (orderField && orderField.classList.contains('hidden')) ? '' : el('#cardOrderInput').value;
-        const parsedOrder = orderVal === '' ? null : Number(orderVal);
-        // Omit order if NaN to avoid sending invalid number to Notion API
-        card.order = Number.isFinite(parsedOrder) ? parsedOrder : null;
+        card.order = (orderVal && orderVal.trim() !== '') ? orderVal.trim() : null;
         card.marked = el('#cardMarkedInput').checked;
         card.flag = el('#cardFlagInput').value || '';
         const suspendedChecked = el('#cardSuspendedInput').checked;
@@ -6401,7 +6499,12 @@ export const App = {
         const newCard = this.newCard(prevCard.deckId, front, back, prevCard.type || 'Front-Back');
         newCard.notes = notes;
         newCard.tags = (prevCard.tags || []).map(t => ({ name: t.name, color: t.color || 'default' }));
-        if (typeof prevCard.order === 'number') newCard.order = prevCard.order;
+
+        if (prevCard.order) {
+            const isRoot = prevCard.id === rootCard.id;
+            newCard.order = getNextVariantOrder(prevCard.order, isRoot);
+        }
+
         newCard.dyRootCard = rootCard?.id || prevCard.dyRootCard || prevCard.id;
         newCard.dyPrevCard = prevCard.id;
 
