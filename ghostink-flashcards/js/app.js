@@ -324,9 +324,10 @@ export const App = {
         this.state.queueBadgeSig = buildSig();
         this.state.queueBadgeTimer = setInterval(() => {
             const sig = buildSig();
-            if (sig === this.state.queueBadgeSig) return;
+            const queueCountEl = el('#queueCount');
+            const needsQueueRefresh = queueCountEl && queueCountEl.textContent !== String(this.state.queue.size);
+            if (sig === this.state.queueBadgeSig && !needsQueueRefresh) return;
             this.state.queueBadgeSig = sig;
-            el('#queueCount').textContent = String(this.state.queue.size);
             this.renderConnection();
         }, 5000);
     },
@@ -2184,6 +2185,8 @@ export const App = {
         const ready = online && workerOk && authOk;
 
         const q2count = this.state.queue.size;
+        const queueCountEl = el('#queueCount');
+        if (queueCountEl) queueCountEl.textContent = String(q2count);
         const pendingSpan = q2count > 0
             ? ` <span class="ml-1 font-mono text-[10px] sm:text-[11px] text-accent ">(${q2count})</span>`
             : '';
@@ -3622,9 +3625,10 @@ export const App = {
                 ? allCardsArray
                 : allCardsArray.filter(c => selectedSet.has(c.deckId));
         }
+        const filteredBase = baseCards.filter(c => !isClozeParent(c));
         const cards = includeSuspended
-            ? baseCards
-            : baseCards.filter(c => !c.suspended && !c.leech);
+            ? filteredBase
+            : filteredBase.filter(c => !c.suspended && !c.leech);
 
         const events = [];
         cards.forEach(card => {
@@ -4957,22 +4961,24 @@ export const App = {
         if (!deck) return;
         // Check if this was the selected deck
         const wasSelected = this.state.selectedDeck?.id === deck.id;
+        const deckCards = this.cardsForDeck(deck.id);
         // Remove from study deck filters if it was there
         if (this.state.filters.studyDecks) {
             this.state.filters.studyDecks = this.state.filters.studyDecks.filter(id => id !== deck.id);
         }
 
-        // Mark as archived
-        deck.archived = true;
-
-        // Remove deck and its cards from local storage view (deletion logic remains for UX)
-        // But we queue the upsert with archived=true FIRST so it syncs correctly
-        await Storage.put('decks', deck);
-        this.queueOp({ type: 'deck-upsert', payload: deck });
+        // Archive in Notion (deck + cards), then remove locally
+        if (deck.notionId) {
+            this.queueOp({ type: 'deck-delete', payload: { id: deck.id, notionId: deck.notionId } }, 'deck-delete');
+        }
+        for (const c of deckCards) {
+            if (c?.notionId) {
+                this.queueOp({ type: 'card-delete', payload: { id: c.id, notionId: c.notionId } }, 'deck-delete');
+            }
+        }
 
         await Storage.deleteCardsByDeck(deck.id);
         // Clean from memory using index (efficient)
-        const deckCards = this.cardsForDeck(deck.id);
         // Use a copy since removeCard modifies the index
         for (const c of [...deckCards]) {
             this.removeCard(c.id);
@@ -5316,7 +5322,7 @@ export const App = {
             if (loadingMsg && !el('#loadingOverlay').classList.contains('hidden')) {
                 loadingMsg.textContent = 'Fetching decks...';
             }
-            await this.pullFromNotion();
+            await this.pullFromNotion({ forceFull: true });
             el('#syncProgress').style.width = '100%';
 
             if (loadingMsg && !el('#loadingOverlay').classList.contains('hidden')) {
@@ -5347,15 +5353,17 @@ export const App = {
             }
         }
     },
-    async pullFromNotion() {
+    async pullFromNotion(opts = {}) {
         const { deckSource, cardSource } = this.state.settings;
         if (!deckSource || !cardSource) return;
-        const since = this.state.lastPull;
-        const firstSync = !since;
+        const forceFull = !!opts.forceFull;
+        const since = forceFull ? null : this.state.lastPull;
+        const isFullSync = !since;
+        const firstSync = !this.state.lastPull;
         const localDeckMap = new Map(this.state.decks.map(d => [d.notionId || d.id, d]));
 
         // Deck visibility logic...
-        let deckFilter = { property: 'Archived?', checkbox: { equals: false } };
+        let deckFilter = null;
         if (since) {
             deckFilter = { timestamp: 'last_edited_time', last_edited_time: { on_or_after: since } };
         }
@@ -5364,6 +5372,7 @@ export const App = {
         const decks = await API.queryDatabase(deckSource, deckFilter);
         const deckPages = decks || [];
         const isHiddenDeck = (p) => !!p?.properties?.['Archived?']?.checkbox;
+        const seenDeckNotionIds = new Set(deckPages.map(p => p?.id).filter(Boolean));
         const deletedDeckNotionIds = new Set(deckPages.filter(p => p?.archived).map(p => p.id));
         const hiddenDeckNotionIds = new Set(deckPages.filter(p => !p?.archived && isHiddenDeck(p)).map(p => p.id));
 
@@ -5413,6 +5422,11 @@ export const App = {
         const activeDeckNotionIds = new Set([...existingActiveDeckNotionIds, ...mappedDecks.map(d => d.notionId)]);
         for (const id of hiddenDeckNotionIds) activeDeckNotionIds.delete(id);
         for (const id of deletedDeckNotionIds) activeDeckNotionIds.delete(id);
+        if (isFullSync && seenDeckNotionIds.size > 0) {
+            for (const id of activeDeckNotionIds) {
+                if (!seenDeckNotionIds.has(id)) activeDeckNotionIds.delete(id);
+            }
+        }
 
         // STREAMING CARDS
         let cardFilter = null;
@@ -5421,7 +5435,7 @@ export const App = {
         }
 
         // Mark-and-sweep for full syncs: track seen IDs to detect server-side deletions
-        const seenNotionIds = !since ? new Set() : null;
+        const seenNotionIds = isFullSync ? new Set() : null;
         const clozeParentsToReconcile = new Set();
         let analyticsTouched = false;
         const historiesEqual = (a, b) => {
@@ -5526,7 +5540,7 @@ export const App = {
         }
 
         // Full Sync Sweep: Remove local cards that are no longer on the server
-        if (!since && seenNotionIds) {
+        if (isFullSync && seenNotionIds) {
             const orphans = [];
             // Optimize: Iterate only relevant decks instead of all cards
             for (const deck of this.state.decks) {
@@ -5563,27 +5577,42 @@ export const App = {
         }
 
         // Handle Deck deletions/hiding (cleanup)
-        if (since) {
+        if (since || isFullSync) {
+            const removeDeckLocal = async (deck) => {
+                if (!deck) return;
+                if (this.state.filters.studyDecks) {
+                    this.state.filters.studyDecks = this.state.filters.studyDecks.filter(id => id !== deck.id);
+                }
+                if (Array.isArray(this.state.analyticsDecks)) {
+                    this.state.analyticsDecks = this.state.analyticsDecks.filter(id => id !== deck.id);
+                }
+                if (this.state.selectedDeck?.id === deck.id) {
+                    this.state.selectedDeck = null;
+                }
+                await Storage.delete('decks', deck.id);
+                await Storage.deleteCardsByDeck(deck.id);
+                const deckCards = this.cardsForDeck(deck.id);
+                // Use a copy since removeCard modifies the index
+                for (const c of [...deckCards]) this.removeCard(c.id);
+            };
+
             if (hiddenDeckNotionIds.size > 0) {
                 const toHideDecks = this.state.decks.filter(d => d.notionId && hiddenDeckNotionIds.has(d.notionId));
-                for (const d of toHideDecks) {
-                    await Storage.delete('decks', d.id);
-                    await Storage.deleteCardsByDeck(d.id);
-                    const deckCards = this.cardsForDeck(d.id);
-                    // Use a copy since removeCard modifies the index
-                    for (const c of [...deckCards]) this.removeCard(c.id);
-                }
+                for (const d of toHideDecks) await removeDeckLocal(d);
                 this.state.decks = this.state.decks.filter(d => !hiddenDeckNotionIds.has(d.notionId));
             }
             if (deletedDeckNotionIds.size > 0) {
-                const toDeleteDecks = this.state.decks.filter(d => deletedDeckNotionIds.has(d.notionId));
-                for (const d of toDeleteDecks) {
-                    await Storage.delete('decks', d.id);
-                    await Storage.deleteCardsByDeck(d.id);
-                    const deckCards = this.cardsForDeck(d.id);
-                    for (const c of [...deckCards]) this.removeCard(c.id);
-                }
+                const toDeleteDecks = this.state.decks.filter(d => d.notionId && deletedDeckNotionIds.has(d.notionId));
+                for (const d of toDeleteDecks) await removeDeckLocal(d);
                 this.state.decks = this.state.decks.filter(d => !deletedDeckNotionIds.has(d.notionId));
+            }
+            if (isFullSync && seenDeckNotionIds.size > 0) {
+                const missingDecks = this.state.decks.filter(d => d.notionId && !seenDeckNotionIds.has(d.notionId));
+                if (missingDecks.length > 0) {
+                    for (const d of missingDecks) await removeDeckLocal(d);
+                    const missingIds = new Set(missingDecks.map(d => d.notionId));
+                    this.state.decks = this.state.decks.filter(d => !missingIds.has(d.notionId));
+                }
             }
         }
 
@@ -6469,7 +6498,7 @@ export const App = {
                 await Storage.put('meta', { key: 'lastPush', value: this.state.lastPush });
             }
             // Then pull to get updates
-            await this.pullFromNotion();
+            await this.pullFromNotion({ forceFull: true });
             this.state.lastPull = new Date().toISOString();
             await Storage.put('meta', { key: 'lastPull', value: this.state.lastPull });
 
