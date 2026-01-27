@@ -5820,7 +5820,13 @@ export const App = {
                 const shouldUpdateNotes = !sub.notes;
                 const newNotes = shouldUpdateNotes ? parent.notes : sub.notes;
                 const notesChanged = sub.notes !== newNotes;
-                const contentChanged = sub.name !== newName || sub.back !== newBack || notesChanged || sub.deckId !== parent.deckId;
+
+                const newOrder = (parent.order && String(parent.order).trim())
+                    ? `${String(parent.order).trim().replace(/\.$/, '')}.${idx}`
+                    : null;
+                const orderChanged = sub.order !== newOrder;
+
+                const contentChanged = sub.name !== newName || sub.back !== newBack || notesChanged || sub.deckId !== parent.deckId || orderChanged;
 
                 if (contentChanged || tagsChanged) {
                     sub.name = newName;
@@ -5828,6 +5834,7 @@ export const App = {
                     if (shouldUpdateNotes) sub.notes = parent.notes;
                     sub.tags = newTags;
                     sub.deckId = parent.deckId;
+                    sub.order = newOrder;
                     sub.updatedInApp = true;
                     this.setCard(sub);
                     await Storage.put('cards', sub);
@@ -5914,7 +5921,12 @@ export const App = {
             const newNotes = shouldUpdateNotes ? parent.notes : sub.notes;
             const notesChanged = sub.notes !== newNotes;
 
-            const contentChanged = sub.name !== newName || sub.back !== newBack || notesChanged || sub.deckId !== parent.deckId;
+            const newOrder = (parent.order && String(parent.order).trim())
+                ? `${String(parent.order).trim().replace(/\.$/, '')}.${idx}`
+                : null;
+            const orderChanged = sub.order !== newOrder;
+
+            const contentChanged = sub.name !== newName || sub.back !== newBack || notesChanged || sub.deckId !== parent.deckId || orderChanged;
 
             // Only save if content or tags actually changed
             if (contentChanged || tagsChanged) {
@@ -5923,6 +5935,7 @@ export const App = {
                 if (shouldUpdateNotes) sub.notes = parent.notes;
                 sub.tags = newTags;
                 sub.deckId = parent.deckId; // Ensure deck matches parent
+                sub.order = newOrder;
                 sub.updatedInApp = true;
 
                 // Save update
@@ -8805,7 +8818,7 @@ export const App = {
                     ['Flag', 'select'],
                     ['Suspended', 'checkbox'],
                     ['Leech', 'checkbox'],
-                    ['Order', 'number'],
+                    ['Order', 'rich_text'],
                     ['Last Rating', 'select'],
                     ['Last Review', 'date'],
                     ['Due Date', 'date'],

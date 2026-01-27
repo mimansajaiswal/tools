@@ -613,7 +613,7 @@ export const NotionMapper = {
             sm2,
             syncId: page.id,
             updatedInApp: p['Updated In-App']?.checkbox || false,
-            order: p['Order']?.rich_text?.[0]?.plain_text || null,
+            order: (p['Order']?.rich_text || []).map(t => t.plain_text).join('') || null,
             reviewHistory: parseReviewHistory(reviewHistoryText),
             ankiGuid: p['Anki GUID']?.rich_text?.[0]?.plain_text || '',
             ankiNoteType: p['Anki Note Type']?.select?.name || '',
