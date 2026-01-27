@@ -903,138 +903,137 @@
                                 </div>
                             </div>
                         </div>
-                </div>
-                </article>
+                    </article>
 
-                <!-- Quick stats row -->
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                        <p class="analytics-stat-label">Today</p>
-                        <div id="analyticsToday" class="mt-1"></div>
-                    </article>
-                    <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                        <p class="analytics-stat-label">Streaks</p>
-                        <div id="analyticsStreaks" class="mt-1"></div>
-                    </article>
-                    <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                        <p class="analytics-stat-label">Retention</p>
-                        <div id="analyticsRetention" class="mt-1"></div>
-                    </article>
-                </div>
+                    <!-- Quick stats row -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
+                            <p class="analytics-stat-label">Today</p>
+                            <div id="analyticsToday" class="mt-1"></div>
+                        </article>
+                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
+                            <p class="analytics-stat-label">Streaks</p>
+                            <div id="analyticsStreaks" class="mt-1"></div>
+                        </article>
+                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
+                            <p class="analytics-stat-label">Retention</p>
+                            <div id="analyticsRetention" class="mt-1"></div>
+                        </article>
+                    </div>
 
-                <!-- Heatmap -->
-                <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
-                        <div>
-                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Activity
-                                heatmap</h3>
-                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5">Daily review activity</p>
-                        </div>
-                        <div class="flex flex-wrap items-center gap-2 self-start sm:self-auto">
-                            <div
-                                class="inline-flex rounded-full border border-[color:var(--card-border)] bg-[color:var(--surface)] overflow-hidden">
-                                <button id="heatmapMetricReviews" type="button"
-                                    class="heatmap-metric-btn is-active px-2.5 py-1 text-[10px] font-mono uppercase tracking-wide">
-                                    Reviews</button>
-                                <button id="heatmapMetricRating" type="button"
-                                    class="heatmap-metric-btn px-2.5 py-1 text-[10px] font-mono uppercase tracking-wide">
-                                    Avg rating</button>
+                    <!-- Heatmap -->
+                    <article class="card rounded-lg p-4 md:p-5 shadow-soft">
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+                            <div>
+                                <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Activity
+                                    heatmap</h3>
+                                <p class="text-xs text-[color:var(--text-sub)] mt-0.5">Daily review activity</p>
                             </div>
-                            <button id="heatmapDownloadBtn"
-                                class="p-1.5 rounded-lg border border-[color:var(--card-border)] text-[color:var(--text-sub)] hover:text-[color:var(--text-main)] hover:bg-surface-strong transition-all"
-                                title="Download heatmap PNG">
-                                <i data-lucide="download" class="w-4 h-4"></i>
-                            </button>
-                            <span id="analyticsStreakBadge" class="analytics-pill"></span>
+                            <div class="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                                <div
+                                    class="inline-flex rounded-full border border-[color:var(--card-border)] bg-[color:var(--surface)] overflow-hidden">
+                                    <button id="heatmapMetricReviews" type="button"
+                                        class="heatmap-metric-btn is-active px-2.5 py-1 text-[10px] font-mono uppercase tracking-wide">
+                                        Reviews</button>
+                                    <button id="heatmapMetricRating" type="button"
+                                        class="heatmap-metric-btn px-2.5 py-1 text-[10px] font-mono uppercase tracking-wide">
+                                        Avg rating</button>
+                                </div>
+                                <button id="heatmapDownloadBtn"
+                                    class="p-1.5 rounded-lg border border-[color:var(--card-border)] text-[color:var(--text-sub)] hover:text-[color:var(--text-main)] hover:bg-surface-strong transition-all"
+                                    title="Download heatmap PNG">
+                                    <i data-lucide="download" class="w-4 h-4"></i>
+                                </button>
+                                <span id="analyticsStreakBadge" class="analytics-pill"></span>
+                            </div>
                         </div>
-                    </div>
-                    <div id="analyticsHeatmap" class="heatmap-years"></div>
-                    <div class="flex items-center justify-end mt-3">
-                        <div class="heatmap-legend">
-                            <span id="heatmapLegendLow">Fewer reviews</span>
-                            <span class="heatmap-swatch level-0"></span>
-                            <span class="heatmap-swatch level-1"></span>
-                            <span class="heatmap-swatch level-2"></span>
-                            <span class="heatmap-swatch level-3"></span>
-                            <span class="heatmap-swatch level-4"></span>
-                            <span id="heatmapLegendHigh">More reviews</span>
+                        <div id="analyticsHeatmap" class="heatmap-years"></div>
+                        <div class="flex items-center justify-end mt-3">
+                            <div class="heatmap-legend">
+                                <span id="heatmapLegendLow">Fewer reviews</span>
+                                <span class="heatmap-swatch level-0"></span>
+                                <span class="heatmap-swatch level-1"></span>
+                                <span class="heatmap-swatch level-2"></span>
+                                <span class="heatmap-swatch level-3"></span>
+                                <span class="heatmap-swatch level-4"></span>
+                                <span id="heatmapLegendHigh">More reviews</span>
+                            </div>
                         </div>
+                    </article>
+
+                    <!-- Charts row -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
+                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Reviews per day
+                            </h3>
+                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Number of cards reviewed</p>
+                            <div id="analyticsReviewCount" class="chart-scroll"></div>
+                        </article>
+                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
+                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Study time</h3>
+                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Minutes spent reviewing</p>
+                            <div id="analyticsReviewTime" class="chart-scroll"></div>
+                        </article>
                     </div>
-                </article>
 
-                <!-- Charts row -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                    <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                        <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Reviews per day
-                        </h3>
-                        <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Number of cards reviewed</p>
-                        <div id="analyticsReviewCount" class="chart-scroll"></div>
-                    </article>
-                    <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                        <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Study time</h3>
-                        <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Minutes spent reviewing</p>
-                        <div id="analyticsReviewTime" class="chart-scroll"></div>
-                    </article>
-                </div>
+                    <!-- Breakdown row -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
+                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Answer breakdown
+                            </h3>
+                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">How you rated your recalls</p>
+                            <div id="analyticsAnswerBreakdown"></div>
+                        </article>
+                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
+                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Study schedule
+                            </h3>
+                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Reviews by hour of day</p>
+                            <div id="analyticsHourlyBreakdown" class="chart-scroll"></div>
+                        </article>
+                    </div>
 
-                <!-- Breakdown row -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                    <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                        <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Answer breakdown
-                        </h3>
-                        <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">How you rated your recalls</p>
-                        <div id="analyticsAnswerBreakdown"></div>
-                    </article>
-                    <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                        <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Study schedule
-                        </h3>
-                        <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Reviews by hour of day</p>
-                        <div id="analyticsHourlyBreakdown" class="chart-scroll"></div>
-                    </article>
-                </div>
+                    <!-- Distribution row -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
+                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Interval
+                                distribution</h3>
+                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Card scheduling spread</p>
+                            <div id="analyticsIntervalDistribution"></div>
+                        </article>
+                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
+                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Difficulty
+                                spread</h3>
+                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Card ease and difficulty factors
+                            </p>
+                            <div id="analyticsEaseDifficulty"></div>
+                        </article>
+                    </div>
 
-                <!-- Distribution row -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                    <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                        <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Interval
-                            distribution</h3>
-                        <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Card scheduling spread</p>
-                        <div id="analyticsIntervalDistribution"></div>
-                    </article>
-                    <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                        <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Difficulty
-                            spread</h3>
-                        <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Card ease and difficulty factors
-                        </p>
-                        <div id="analyticsEaseDifficulty"></div>
-                    </article>
+                    <!-- Summary row -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
+                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Card status</h3>
+                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Overview of your deck</p>
+                            <div id="analyticsCardCounts"></div>
+                        </article>
+                        <article class="card rounded-lg p-4 md:p-5 shadow-soft">
+                            <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">True retention
+                            </h3>
+                            <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Success rate by interval</p>
+                            <div id="analyticsTrueRetention"></div>
+                        </article>
+                    </div>
                 </div>
-
-                <!-- Summary row -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                    <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                        <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">Card status</h3>
-                        <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Overview of your deck</p>
-                        <div id="analyticsCardCounts"></div>
-                    </article>
-                    <article class="card rounded-lg p-4 md:p-5 shadow-soft">
-                        <h3 class="font-display text-sm sm:text-base text-[color:var(--text-main)]">True retention
-                        </h3>
-                        <p class="text-xs text-[color:var(--text-sub)] mt-0.5 mb-3">Success rate by interval</p>
-                        <div id="analyticsTrueRetention"></div>
-                    </article>
-                </div>
-    </div>
-    </section>
-    </main>
-    <footer id="footerAttribution" class="hidden px-3 sm:px-5 md:px-10 pb-4 text-[11px] text-muted text-center">
-        Built by <a class="underline text-accent " href="https://mimansajaiswal.github.io" target="_blank"
-            rel="noopener noreferrer">Mimansa Jaiswal</a> · In the <a class="underline text-accent "
-            href="https://mimansajaiswal.github.io/tools/" target="_blank" rel="noopener noreferrer">Tools Made with
-            LLMs</a> · Code: <a class="underline text-accent "
-            href="https://github.com/mimansajaiswal/tools/tree/main/ghostink-flashcards" target="_blank"
-            rel="noopener noreferrer">ghostink-flashcards</a>
-    </footer>
+            </section>
+        </main>
+        <footer id="footerAttribution" class="hidden px-3 sm:px-5 md:px-10 pb-4 text-[11px] text-muted text-center">
+            Built by <a class="underline text-accent " href="https://mimansajaiswal.github.io" target="_blank"
+                rel="noopener noreferrer">Mimansa Jaiswal</a> · In the <a class="underline text-accent "
+                href="https://mimansajaiswal.github.io/tools/" target="_blank" rel="noopener noreferrer">Tools Made with
+                LLMs</a> · Code: <a class="underline text-accent "
+                href="https://github.com/mimansajaiswal/tools/tree/main/ghostink-flashcards" target="_blank"
+                rel="noopener noreferrer">ghostink-flashcards</a>
+        </footer>
     </div>
 
     <div id="toast" role="status" aria-live="polite"
