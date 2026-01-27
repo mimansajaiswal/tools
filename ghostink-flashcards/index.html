@@ -1190,7 +1190,7 @@
                                 </div>
                                 <div class="rounded-lg bg-surface-strong p-3">
                                     <p class="text-muted text-[10px] uppercase tracking-wider font-semibold">
-                                        Cards cached</p>
+                                        Entries cached</p>
                                     <p id="cardCount" class="text-xl font-semibold text-main ">0</p>
                                 </div>
                                 <div class="rounded-lg bg-surface p-3 border border-weak">
@@ -1863,8 +1863,8 @@ async function handleRequest(request, env) {
                 </div>
                 <div id="cardOrderField" class="space-y-2 hidden">
                     <label class="text-xs text-sub">Order</label>
-                    <input id="cardOrderInput" type="number" placeholder="Optional number"
-                        class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2">
+                    <input id="cardOrderInput" type="text" placeholder="Optional (e.g. 1.1)"
+                        class="w-full rounded-md border border-[color:var(--card-border)] bg-[color:var(--surface)] px-3 py-2 text-sm text-[color:var(--text-main)] placeholder:text-[color:var(--text-sub)] focus:border-blue-500 focus:outline-none transition-colors">
                 </div>
                 <div id="cardSuspendedLeechField" class="space-y-2 hidden">
                     <label class="text-xs text-sub">Suspended / Leech</label>

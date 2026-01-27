@@ -168,7 +168,9 @@ export const createSubItem = (parent, clozeIndex, deckId, makeTempId) => {
         flag: '',
         suspended: 0,
         leech: false,
-        order: clozeIndex - 1, // 0-indexed order
+        order: (parent.order && String(parent.order).trim())
+            ? `${String(parent.order).trim()}.${clozeIndex}`
+            : null,
         parentCard: parent.id,
         subCards: [],
         clozeIndexes: String(clozeIndex),
