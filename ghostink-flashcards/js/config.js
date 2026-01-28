@@ -154,19 +154,29 @@ Return ONLY a single JSON object with keys: "front", "back", "notes". No extra t
 Context (available variables):
 - Root front: {{root_front}}
 - Root back: {{root_back}}
+- Root notes: {{root_notes}}
 - Previous front: {{prev_front}}
 - Previous back: {{prev_back}}
+- Previous notes: {{prev_notes}}
+- Deck name: {{deck_name}}
 - Tags: {{tags}}
 - Card type: {{card_type}}
 
 Guidelines:
 - Identify the exact target item the learner is trying to memorize (word, phrase, definition, mechanism, formula, etc.).
+- Use the provided tags ({{tags}}) to understand the domain or subject matter.
 - The new variant MUST still test the same target item; do not shift to a different concept.
 - Compare root vs previous to gauge how far the learner has progressed. The new variant should be one small step harder than previous (not a huge jump).
 - Keep the same domain and core idea; do NOT change the subject.
 - Avoid repeating the exact same phrasing from the previous card.
 - If input contains images, embeds, or URLs, ignore them (do not copy or invent images/links).
 - Keep length concise and similar to the previous card unless difficulty requires a small increase in complexity.
+
+Variant Tracking (Important):
+- Check 'Previous notes' for a variant number (e.g., "Variant 1").
+- If 'Previous notes' contains a variant number "Variant X", the new note MUST start with "Variant X+1".
+- If 'Previous notes' does NOT contain a variant number, the new note MUST start with "Variant 1".
+- Use this variant number (N) to gauge distance from root. Adjust difficulty: higher N = harder/more active recall.
 
 Output rules:
 - If card_type is "Front-Back":
@@ -176,10 +186,10 @@ Output rules:
   - front MUST include valid cloze markup (e.g., {{c1::...}}).
   - Prefer 1–2 cloze deletions max; do not reveal the answer elsewhere in the sentence.
   - back can be empty or a brief explanation.
-- notes = a short learning hint or meta-note (not the full answer).
+- notes = "Variant N: [Your short hint or meta-note here]"
 
 Return format example (not content):
-{"front":"...","back":"...","notes":"..."}`;
+{"front":"...","back":"...","notes":"Variant 2: hint..."}`;
 
 // DOM helper
 export const el = (sel) => document.querySelector(sel);
