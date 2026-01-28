@@ -447,11 +447,19 @@
                 <div data-tab-panel="settings" data-panel="ai" class="hidden space-y-4">
                     <div>
                         <label class="font-mono text-xs uppercase text-earth-metal block mb-1">AI Provider</label>
-                        <select id="settingsAiProvider" class="select-field">
+                        <select id="settingsAiProvider" class="select-field" onchange="App.toggleAiEndpoint?.()">
                             <option value="openai">OpenAI</option>
                             <option value="anthropic">Anthropic</option>
+                            <option value="google">Google Gemini</option>
                             <option value="custom">Custom Endpoint</option>
                         </select>
+                    </div>
+                    <div id="aiEndpointField" class="hidden">
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Custom Endpoint
+                            URL</label>
+                        <input type="url" id="settingsAiEndpoint" class="input-field"
+                            placeholder="https://your-api.com/v1/chat/completions">
+                        <p class="text-xs text-earth-metal mt-1">OpenAI-compatible API endpoint</p>
                     </div>
                     <div>
                         <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Model</label>
@@ -648,7 +656,7 @@
                             class="btn-primary w-full px-4 py-2 font-mono text-xs uppercase flex items-center justify-center gap-2">
                             <i data-lucide="zap" class="w-4 h-4"></i>Connect with Notion
                         </button>
-                        
+
                         <div class="flex items-center gap-4">
                             <div class="flex-1 border-t border-oatmeal"></div>
                             <span class="font-mono text-xs uppercase text-earth-metal">OR</span>
@@ -658,17 +666,18 @@
                         <div>
                             <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Manual Token</label>
                             <input type="password" id="onboardingNotionToken" class="input-field"
-                                placeholder="secret_..." onchange="document.getElementById('onboardingDatabasesVerified').value = 'false'">
+                                placeholder="secret_..."
+                                onchange="document.getElementById('onboardingDatabasesVerified').value = 'false'">
                         </div>
 
                         <button type="button" onclick="Onboarding.findDatabases()"
                             class="btn-secondary px-4 py-2 font-mono text-xs uppercase w-full">
                             <i data-lucide="scan" class="w-4 h-4 inline mr-2"></i>Find Data Sources
                         </button>
-                        
+
                         <div id="onboardingDbList" class="hidden"></div>
                         <input type="hidden" id="onboardingDatabasesVerified" value="false">
-                        
+
                         <button id="onboardingDbVerifyBtn" type="button" onclick="Onboarding.checkDbMapping()"
                             class="hidden btn-secondary px-4 py-2 font-mono text-xs uppercase w-full mt-2">
                             <i data-lucide="check-circle" class="w-4 h-4 inline mr-2"></i>Confirm Mapping
@@ -1166,12 +1175,13 @@ export default {
                 aiProvider: document.getElementById('settingsAiProvider')?.value || 'openai',
                 aiModel: document.getElementById('settingsAiModel')?.value || 'gpt-4o-mini',
                 aiApiKey: document.getElementById('settingsAiApiKey')?.value || '',
+                aiEndpoint: document.getElementById('settingsAiEndpoint')?.value || '',
                 todoistEnabled: document.getElementById('settingsTodoistEnabled')?.checked || false,
                 todoistToken: document.getElementById('settingsTodoistToken')?.value || '',
                 gcalEnabled: document.getElementById('settingsGcalEnabled')?.checked || false,
                 gcalCalendarId: document.getElementById('settingsGcalCalendarId')?.value || ''
             };
-            
+
             // Get data source mappings if visible
             const mappingDiv = document.getElementById('dataSourceMapping');
             if (mappingDiv && !mappingDiv.classList.contains('hidden')) {
@@ -1349,14 +1359,26 @@ export default {
                 document.getElementById('settingsAiProvider').value = s.aiProvider || 'openai';
                 document.getElementById('settingsAiModel').value = s.aiModel || 'gpt-4o-mini';
                 document.getElementById('settingsAiApiKey').value = s.aiApiKey || '';
+                document.getElementById('settingsAiEndpoint').value = s.aiEndpoint || '';
                 document.getElementById('settingsTodoistEnabled').checked = s.todoistEnabled || false;
                 document.getElementById('settingsTodoistToken').value = s.todoistToken || '';
                 document.getElementById('settingsGcalEnabled').checked = s.gcalEnabled || false;
                 document.getElementById('settingsGcalCalendarId').value = s.gcalCalendarId || '';
                 // Update Google Calendar UI
                 setTimeout(() => App.updateGcalUI(), 100);
+                // Update AI endpoint visibility
+                setTimeout(() => App.toggleAiEndpoint?.(), 100);
             }
         });
+
+        // Toggle AI endpoint field visibility based on provider
+        App.toggleAiEndpoint = () => {
+            const provider = document.getElementById('settingsAiProvider')?.value;
+            const field = document.getElementById('aiEndpointField');
+            if (field) {
+                field.classList.toggle('hidden', provider !== 'custom');
+            }
+        };
     </script>
 </body>
 

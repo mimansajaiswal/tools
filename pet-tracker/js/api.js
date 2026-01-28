@@ -171,20 +171,20 @@ const API = {
             const state = settings.oauthClientId; // Pass client ID as state for the worker to use
             const redirectUri = new URL('oauth/callback', settings.workerUrl).toString(); // Worker handles callback
             const authUrl = `https://api.notion.com/v1/oauth/authorize?client_id=${settings.oauthClientId}&response_type=code&owner=user&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
-            
+
             // We use the centralized handler in practice, but if using the worker directly:
             // window.open(authUrl, 'NotionAuth', 'width=600,height=600');
-            
+
             // Using the centralized handler approach from index.html:
             const returnUrl = encodeURIComponent(window.location.href);
             const handlerUrl = `https://notion-oauth-handler.mimansa-jaiswal.workers.dev/notion/auth?from=${returnUrl}`;
-            
+
             // For Onboarding, we can use a popup or redirect. Popup is better for preserving state.
             const width = 600;
             const height = 600;
             const left = (window.innerWidth - width) / 2;
             const top = (window.innerHeight - height) / 2;
-            
+
             const popup = window.open(
                 handlerUrl,
                 'NotionAuth',

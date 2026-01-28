@@ -44,13 +44,21 @@ const Media = {
 
     /**
      * Load an image file into an HTMLImageElement
+     * Note: Revokes object URL after load to prevent memory leaks
      */
     loadImage: (file) => {
         return new Promise((resolve, reject) => {
             const img = new Image();
-            img.onload = () => resolve(img);
-            img.onerror = reject;
-            img.src = URL.createObjectURL(file);
+            const objectUrl = URL.createObjectURL(file);
+            img.onload = () => {
+                URL.revokeObjectURL(objectUrl);
+                resolve(img);
+            };
+            img.onerror = (e) => {
+                URL.revokeObjectURL(objectUrl);
+                reject(e);
+            };
+            img.src = objectUrl;
         });
     },
 

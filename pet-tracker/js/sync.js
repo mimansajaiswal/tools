@@ -100,7 +100,7 @@ const Sync = {
     updatePendingCount: async () => {
         const pending = await PetTracker.SyncQueue.getPending();
         const failed = await PetTracker.DB.query(PetTracker.STORES.SYNC_QUEUE, i => i.status === 'failed');
-        
+
         Sync.pendingCount = pending.length;
         Sync.failedCount = failed.length;
         Sync.updateSyncUI();
@@ -208,6 +208,9 @@ const Sync = {
 
             console.log('[Sync] Sync complete');
 
+            // Trigger Google Calendar and Todoist sync after main sync
+            await Sync.syncIntegrations();
+
             // Only show toast for manual sync
             if (showToast) {
                 if (failCount > 0) {
@@ -286,7 +289,7 @@ const Sync = {
             case 'create': {
                 const storeConstant = Sync.getStoreConstant(store);
                 if (!storeConstant) throw new Error(`Unknown store: ${store}`);
-                
+
                 const properties = Sync.toNotionProperties(store, data);
                 const result = await PetTracker.API.createPage(dataSourceId, properties);
 
@@ -303,7 +306,7 @@ const Sync = {
             case 'update': {
                 const storeConstant = Sync.getStoreConstant(store);
                 if (!storeConstant) throw new Error(`Unknown store: ${store}`);
-                
+
                 const record = await PetTracker.DB.get(storeConstant, recordId);
                 if (!record?.notionId) {
                     throw new Error('No Notion ID for update');
@@ -319,7 +322,7 @@ const Sync = {
             case 'delete': {
                 const storeConstant = Sync.getStoreConstant(store);
                 if (!storeConstant) throw new Error(`Unknown store: ${store}`);
-                
+
                 const record = await PetTracker.DB.get(storeConstant, recordId);
                 if (record?.notionId) {
                     await PetTracker.API.archivePage(record.notionId);
@@ -523,6 +526,50 @@ const Sync = {
                     'Notes': P.richText(data.notes)
                 };
 
+            case 'scales':
+                return {
+                    'Name': P.title(data.name),
+                    'Value Type': P.select(data.valueType),
+                    'Unit': P.richText(data.unit),
+                    'Notes': P.richText(data.notes)
+                };
+
+            case 'scaleLevels':
+                return {
+                    'Name': P.title(data.name),
+                    'Scale': P.relation(data.scaleId ? [data.scaleId] : []),
+                    'Order': P.number(data.order),
+                    'Color': P.select(data.color),
+                    'Numeric Value': P.number(data.numericValue),
+                    'Description': P.richText(data.description)
+                };
+
+            case 'careItems':
+                return {
+                    'Name': P.title(data.name),
+                    'Type': P.select(data.type),
+                    'Default Dose': P.richText(data.defaultDose),
+                    'Default Unit': P.select(data.defaultUnit),
+                    'Default Route': P.select(data.defaultRoute),
+                    'Linked Event Type': P.relation(data.linkedEventTypeId ? [data.linkedEventTypeId] : []),
+                    'Related Pets': P.relation(data.relatedPetIds),
+                    'Active Start': P.date(data.activeStart),
+                    'Active End': P.date(data.activeEnd),
+                    'Notes': P.richText(data.notes),
+                    'Active': P.checkbox(data.active)
+                };
+
+            case 'contacts':
+                return {
+                    'Name': P.title(data.name),
+                    'Role': P.select(data.role),
+                    'Phone': P.richText(data.phone),
+                    'Email': P.richText(data.email),
+                    'Address': P.richText(data.address),
+                    'Notes': P.richText(data.notes),
+                    'Related Pets': P.relation(data.relatedPetIds)
+                };
+
             default:
                 console.warn(`[Sync] No property mapping for store: ${store}`);
                 return {};
@@ -680,6 +727,46 @@ const Sync = {
             default:
                 console.warn(`[Sync] No extraction mapping for store: ${store}`);
                 return { updatedAt: page.last_edited_time };
+        }
+    },
+
+    /**
+     * Sync integrations (Google Calendar, Todoist)
+     * Called automatically after main sync completes
+     */
+    syncIntegrations: async () => {
+        const settings = PetTracker.Settings.get();
+
+        // Sync to Google Calendar if enabled
+        if (settings.gcalEnabled && settings.gcalAccessToken && settings.gcalCalendarId) {
+            try {
+                // Get recently created/updated events that need to be synced to GCal
+                const events = await PetTracker.DB.getAll(PetTracker.STORES.EVENTS);
+                const recentEvents = events.filter(e =>
+                    e.synced && !e.googleCalendarEventId &&
+                    new Date(e.updatedAt) > new Date(Date.now() - 24 * 60 * 60 * 1000)
+                );
+
+                for (const event of recentEvents.slice(0, 10)) {
+                    if (typeof GoogleCalendar !== 'undefined') {
+                        await GoogleCalendar.syncEvent(event);
+                    }
+                }
+                console.log(`[Sync] Synced ${recentEvents.length} events to Google Calendar`);
+            } catch (e) {
+                console.warn('[Sync] Google Calendar sync error:', e);
+            }
+        }
+
+        // Sync Todoist if enabled
+        if (settings.todoistEnabled && settings.todoistToken) {
+            try {
+                if (typeof Todoist !== 'undefined') {
+                    await Todoist.sync();
+                }
+            } catch (e) {
+                console.warn('[Sync] Todoist sync error:', e);
+            }
         }
     }
 };

@@ -80,8 +80,10 @@ const CalendarExport = {
             lines.push(`DTSTART:${CalendarExport.formatICSDate(startDate)}`);
             if (event.endDate) {
                 lines.push(`DTEND:${CalendarExport.formatICSDate(new Date(event.endDate))}`);
-            } else if (event.durationMinutes) {
-                const endDate = new Date(startDate.getTime() + event.durationMinutes * 60000);
+            } else if (event.duration || event.durationMinutes) {
+                // Use duration (in minutes) if available
+                const durationMins = event.duration || event.durationMinutes;
+                const endDate = new Date(startDate.getTime() + durationMins * 60000);
                 lines.push(`DTEND:${CalendarExport.formatICSDate(endDate)}`);
             } else {
                 // Default 1 hour duration
@@ -564,8 +566,10 @@ const GoogleCalendar = {
             gcalEvent.start = { dateTime: event.startDate };
             if (event.endDate) {
                 gcalEvent.end = { dateTime: event.endDate };
-            } else if (event.durationMinutes) {
-                const endDate = new Date(new Date(event.startDate).getTime() + event.durationMinutes * 60000);
+            } else if (event.duration || event.durationMinutes) {
+                // Use duration (in minutes) if available
+                const durationMins = event.duration || event.durationMinutes;
+                const endDate = new Date(new Date(event.startDate).getTime() + durationMins * 60000);
                 gcalEvent.end = { dateTime: endDate.toISOString() };
             } else {
                 const endDate = new Date(new Date(event.startDate).getTime() + 3600000);

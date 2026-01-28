@@ -129,16 +129,22 @@ const Events = {
 
     /**
      * Get events for a date range
+     * Note: endDate is treated as end-of-day to include same-day timed events
      */
     getForDateRange: async (startDate, endDate) => {
-        const start = new Date(startDate).getTime();
-        const end = new Date(endDate).getTime();
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        const startTime = start.getTime();
+
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999); // End of day to include same-day events
+        const endTime = end.getTime();
 
         return PetTracker.DB.query(
             PetTracker.STORES.EVENTS,
             e => {
                 const eventDate = new Date(e.startDate).getTime();
-                return eventDate >= start && eventDate <= end;
+                return eventDate >= startTime && eventDate <= endTime;
             }
         );
     },

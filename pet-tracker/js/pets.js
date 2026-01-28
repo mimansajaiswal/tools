@@ -90,7 +90,7 @@ const Pets = {
             PetTracker.STORES.EVENTS,
             e => e.petIds?.includes(id)
         );
-        
+
         for (const event of events) {
             await PetTracker.SyncQueue.add({
                 type: 'delete',

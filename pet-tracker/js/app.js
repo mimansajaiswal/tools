@@ -177,6 +177,11 @@ const App = {
                 App.renderDashboard();
                 break;
             case 'calendar':
+                // Initialize calendar if not already done (restores view preference)
+                if (typeof Calendar !== 'undefined' && !Calendar._initialized) {
+                    Calendar.init();
+                    Calendar._initialized = true;
+                }
                 Calendar.render();
                 break;
             case 'upcoming':
@@ -210,9 +215,26 @@ const App = {
                 App.state.eventTypes = await PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES);
             }
 
+            // Populate pet filter dropdowns
+            App.populatePetFilters();
+
             console.log(`[App] Loaded ${App.state.pets.length} pets, ${App.state.eventTypes.length} event types`);
         } catch (e) {
             console.error('[App] Error loading data:', e);
+        }
+    },
+
+    /**
+     * Populate pet filter dropdowns in sidebar
+     */
+    populatePetFilters: () => {
+        const desktopFilter = document.getElementById('petFilterDesktop');
+        if (desktopFilter) {
+            const activePet = App.state.activePetId || '';
+            desktopFilter.innerHTML = '<option value="">All Pets</option>' +
+                App.state.pets.map(p =>
+                    `<option value="${p.id}" ${p.id === activePet ? 'selected' : ''}>${PetTracker.UI.escapeHtml(p.name)}</option>`
+                ).join('');
         }
     },
 
@@ -300,6 +322,11 @@ const App = {
             return;
         }
 
+        if (!eventTypeId) {
+            PetTracker.UI.toast('Please select an event type', 'error');
+            return;
+        }
+
         const eventType = App.state.eventTypes.find(t => t.id === eventTypeId);
         const eventData = {
             title: eventType?.name || 'Event',
@@ -307,10 +334,29 @@ const App = {
             eventTypeId: eventTypeId || null,
             startDate: time ? `${date}T${time}:00` : date,
             notes: notes || '',
-            value: value ? parseFloat(value) : null
+            value: value ? parseFloat(value) : null,
+            media: []
         };
 
         try {
+            // Process pending attachments
+            if (App.state.pendingAttachments.length > 0) {
+                PetTracker.UI.showLoading('Processing attachments...');
+                const processedMedia = await Media.processAndStoreMedia(App.state.pendingAttachments);
+
+                // Store media info for the event
+                eventData.media = processedMedia
+                    .filter(m => !m.error)
+                    .map(m => ({
+                        id: m.id,
+                        type: m.type,
+                        name: m.originalName,
+                        size: m.uploadSize || m.originalSize
+                    }));
+
+                PetTracker.UI.hideLoading();
+            }
+
             if (editId) {
                 await Events.update(editId, eventData);
                 PetTracker.UI.toast('Event updated', 'success');
@@ -496,6 +542,8 @@ const App = {
 
         const pets = App.state.pets;
         const events = await PetTracker.DB.getAll(PetTracker.STORES.EVENTS);
+        // Sort events by date descending for "Recent Activity"
+        events.sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
         const recentEvents = events.slice(0, 10);
 
         if (pets.length === 0) {
@@ -606,10 +654,60 @@ const App = {
         PetTracker.Settings.setActivePet(petId);
         App.state.activePetId = petId;
 
-        // Render detailed view if needed, but for now filtering is handled by Pets.renderList or dashboard logic
-        // This function primarily sets the active context.
-        // The UI update should happen where this is called from or by triggering a render.
-        // If this is just setting context, no toast is needed.
+        // Navigate to pets view and show the pet detail
+        App.showView('pets');
+        Pets.showDetail(petId);
+    },
+
+    /**
+     * Filter by pet (sidebar filter)
+     */
+    filterByPet: (petId) => {
+        App.state.activePetId = petId || null;
+        PetTracker.Settings.setActivePet(petId || null);
+
+        // Update filter dropdowns to match
+        const desktopFilter = document.getElementById('petFilterDesktop');
+        const mobileFilter = document.getElementById('petFilterMobile');
+        if (desktopFilter) desktopFilter.value = petId || '';
+        if (mobileFilter) mobileFilter.value = petId || '';
+
+        // Re-render current view
+        if (App.state.currentView === 'dashboard') {
+            App.renderDashboard();
+        } else if (App.state.currentView === 'calendar') {
+            Calendar.state.filters.petIds = petId ? [petId] : [];
+            Calendar.render();
+        }
+    },
+
+    /**
+     * Toggle mobile menu
+     */
+    toggleMobileMenu: () => {
+        const sidebar = document.querySelector('aside');
+        if (!sidebar) return;
+
+        // Create overlay if doesn't exist
+        let overlay = document.getElementById('mobileMenuOverlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'mobileMenuOverlay';
+            overlay.className = 'fixed inset-0 bg-charcoal/50 z-40 md:hidden hidden';
+            overlay.onclick = () => App.toggleMobileMenu();
+            document.body.appendChild(overlay);
+        }
+
+        const isOpen = !sidebar.classList.contains('hidden');
+
+        if (isOpen) {
+            sidebar.classList.add('hidden');
+            overlay.classList.add('hidden');
+        } else {
+            sidebar.classList.remove('hidden');
+            sidebar.classList.add('fixed', 'inset-y-0', 'left-0', 'z-50');
+            overlay.classList.remove('hidden');
+        }
     },
 
     /**

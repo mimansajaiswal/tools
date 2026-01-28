@@ -246,6 +246,26 @@ const Care = {
         return upcoming;
     },
 
+    // State for upcoming view filters
+    upcomingFilters: {
+        petId: null,
+        horizon: 30,
+        categories: []
+    },
+
+    /**
+     * Toggle category filter for upcoming view
+     */
+    toggleCategoryFilter: (category) => {
+        const idx = Care.upcomingFilters.categories.indexOf(category);
+        if (idx >= 0) {
+            Care.upcomingFilters.categories.splice(idx, 1);
+        } else {
+            Care.upcomingFilters.categories.push(category);
+        }
+        Care.renderUpcoming();
+    },
+
     /**
      * Render upcoming view
      */
@@ -253,7 +273,25 @@ const Care = {
         const container = document.querySelector('[data-view="upcoming"]');
         if (!container) return;
 
-        const upcoming = await Care.getUpcoming({ horizon: 60 });
+        // Get filter values from dropdowns if they exist (preserve state)
+        const petFilter = document.getElementById('upcomingPetFilter');
+        const horizonFilter = document.getElementById('upcomingHorizon');
+
+        if (petFilter) {
+            Care.upcomingFilters.petId = petFilter.value || null;
+        }
+        if (horizonFilter) {
+            Care.upcomingFilters.horizon = parseInt(horizonFilter.value) || 30;
+        }
+
+        // Build filter options
+        const filterOptions = {
+            horizon: Care.upcomingFilters.horizon,
+            petIds: Care.upcomingFilters.petId ? [Care.upcomingFilters.petId] : [],
+            categories: Care.upcomingFilters.categories
+        };
+
+        const upcoming = await Care.getUpcoming(filterOptions);
 
         // Group by category
         const byCategory = {};
@@ -277,22 +315,26 @@ const Care = {
                             `).join('')}
                         </select>
                         <select id="upcomingHorizon" onchange="Care.renderUpcoming()" class="select-field text-xs py-1 px-2">
-                            <option value="7">7 days</option>
-                            <option value="14">14 days</option>
-                            <option value="30" selected>30 days</option>
-                            <option value="60">60 days</option>
+                            <option value="7" ${Care.upcomingFilters.horizon === 7 ? 'selected' : ''}>7 days</option>
+                            <option value="14" ${Care.upcomingFilters.horizon === 14 ? 'selected' : ''}>14 days</option>
+                            <option value="30" ${Care.upcomingFilters.horizon === 30 ? 'selected' : ''}>30 days</option>
+                            <option value="60" ${Care.upcomingFilters.horizon === 60 ? 'selected' : ''}>60 days</option>
                         </select>
                     </div>
                 </div>
 
                 <!-- Category filters -->
                 <div class="flex flex-wrap gap-2">
-                    ${categories.map(cat => `
-                        <button onclick="Care.toggleCategoryFilter('${cat}')" 
-                                class="badge ${byCategory[cat]?.length ? 'badge-accent' : 'badge-light'} cursor-pointer">
-                            ${cat} (${byCategory[cat]?.length || 0})
-                        </button>
-                    `).join('')}
+                    ${categories.map(cat => {
+            const isActive = Care.upcomingFilters.categories.includes(cat);
+            const count = byCategory[cat]?.length || 0;
+            return `
+                            <button onclick="Care.toggleCategoryFilter('${cat}')" 
+                                    class="badge ${isActive ? 'badge-accent' : 'badge-light'} cursor-pointer">
+                                ${cat} (${count})
+                            </button>
+                        `;
+        }).join('')}
                 </div>
 
                 <!-- Upcoming list -->
@@ -405,7 +447,7 @@ const Care = {
             synced: false
         };
         await PetTracker.DB.put(PetTracker.STORES.CARE_PLANS, updatedPlan);
-        
+
         // Queue sync for the care plan update
         await PetTracker.SyncQueue.add({
             type: 'update',
@@ -413,7 +455,7 @@ const Care = {
             recordId: plan.id,
             data: updatedPlan
         });
-        
+
         if (PetTracker.Sync?.updatePendingCount) {
             PetTracker.Sync.updatePendingCount();
         }
@@ -518,7 +560,7 @@ const Care = {
                 };
 
                 await PetTracker.DB.put(PetTracker.STORES.EVENT_TYPES, eventType);
-                
+
                 // Queue for sync to Notion
                 await PetTracker.SyncQueue.add({
                     type: 'create',
@@ -528,7 +570,7 @@ const Care = {
                 });
             }
         }
-        
+
         if (PetTracker.Sync?.updatePendingCount) {
             PetTracker.Sync.updatePendingCount();
         }
@@ -576,7 +618,7 @@ const Care = {
                 };
 
                 await PetTracker.DB.put(PetTracker.STORES.SCALES, scaleRecord);
-                
+
                 // Queue scale for sync to Notion
                 await PetTracker.SyncQueue.add({
                     type: 'create',
@@ -597,7 +639,7 @@ const Care = {
                     };
 
                     await PetTracker.DB.put(PetTracker.STORES.SCALE_LEVELS, levelRecord);
-                    
+
                     // Queue scale level for sync to Notion
                     await PetTracker.SyncQueue.add({
                         type: 'create',
@@ -608,7 +650,7 @@ const Care = {
                 }
             }
         }
-        
+
         if (PetTracker.Sync?.updatePendingCount) {
             PetTracker.Sync.updatePendingCount();
         }
