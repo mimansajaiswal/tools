@@ -5847,7 +5847,18 @@ export const App = {
                 else currentSubs.push(q);
             }
 
-            const { toCreate, toKeep, toSuspend } = reconcileSubItems(parent, currentSubs);
+            const { toCreate, toKeep, toSuspend, parsedIndices } = reconcileSubItems(parent, currentSubs);
+
+            // Sync parsed clozeIndexes back to parent if they were inferred from text
+            if (parsedIndices.size > 0) {
+                const newClozeIndexes = Array.from(parsedIndices).sort((a, b) => a - b).join(',');
+                if (parent.clozeIndexes !== newClozeIndexes) {
+                    parent.clozeIndexes = newClozeIndexes;
+                    this.setCard(parent);
+                    await Storage.put('cards', parent);
+                    this.queueOp({ type: 'card-upsert', payload: parent });
+                }
+            }
 
             const createdSubs = [];
             for (const idx of toCreate) {
@@ -5953,7 +5964,19 @@ export const App = {
 
         const subsMap = new Map(allSubs.map(s => [s.id, s]));
 
-        const { toCreate, toKeep, toSuspend } = reconcileSubItems(parent, allSubs);
+        const { toCreate, toKeep, toSuspend, parsedIndices } = reconcileSubItems(parent, allSubs);
+
+        // Sync parsed clozeIndexes back to parent if they were inferred from text
+        if (parsedIndices.size > 0) {
+            const newClozeIndexes = Array.from(parsedIndices).sort((a, b) => a - b).join(',');
+            if (parent.clozeIndexes !== newClozeIndexes) {
+                parent.clozeIndexes = newClozeIndexes;
+                this.setCard(parent);
+                await Storage.put('cards', parent);
+                this.queueOp({ type: 'card-upsert', payload: parent });
+            }
+        }
+
         // Skip if nothing to do (no creates, no suspends, and no existing subs to update)
         if (toCreate.length === 0 && toSuspend.length === 0 && toKeep.length === 0) {
             parent._lastClozeReconcile = new Date().toISOString();
