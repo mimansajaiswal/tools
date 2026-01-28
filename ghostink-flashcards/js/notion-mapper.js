@@ -308,9 +308,15 @@ export const markdownToNotionRichText = (markdown) => {
         if (tag === 'PRE') {
             // Get raw text content, preserving whitespace for code blocks
             const codeEl = el.querySelector('code');
+            let lang = '';
+            if (codeEl && codeEl.className) {
+                const match = codeEl.className.match(/language-(\w+)/);
+                if (match) lang = match[1];
+            }
             const content = codeEl ? codeEl.textContent : el.textContent;
             if (content) {
-                pushText(content, mergeAnn(curAnn, { code: true }), curLink);
+                // Store as text with backticks so it survives round-trip as a block
+                pushText('```' + lang + '\n' + content + '\n```', curAnn, curLink);
             }
             pushNewline(curAnn, curLink);
             return;

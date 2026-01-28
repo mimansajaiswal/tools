@@ -69,6 +69,7 @@
     <!-- KaTeX for equations -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.27/dist/katex.min.css">
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.27/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.27/dist/contrib/auto-render.min.js"></script>
 
     <!-- GLightbox (CSS before JS) -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/glightbox@3.3.1/dist/css/glightbox.min.css" />
@@ -136,7 +137,10 @@
             <div class="flex items-center gap-1 sm:gap-1.5 md:gap-2 shrink-0 header-actions">
                 <div id="connectionBadge"
                     class="px-2.5 py-1 rounded text-[10px] sm:text-xs font-mono uppercase tracking-wide bg-[color:var(--surface-strong)] border border-[color:var(--card-border)] text-[color:var(--text-main)] hidden md:block">
-                    Offline ready</div>
+                    <span id="connectionBadgeText">Offline ready</span><i id="connectionBadgeIcon"
+                        data-lucide="cloud-check"
+                        class="hidden inline-block w-3.5 h-3.5 align-text-bottom ml-1 text-accent"></i>
+                </div>
                 <!-- Desktop-only options -->
                 <div class="hidden sm:flex items-center gap-0.5 sm:gap-1 pill-toggle rounded-md px-1 sm:px-2 py-1">
                     <button class="p-1 rounded-full theme-btn" data-theme="light" data-tip="Light theme"
@@ -193,7 +197,7 @@
             </div>
             <!-- Mobile expanded menu -->
             <div id="mobileMoreMenu"
-                class="hidden w-full pt-2 pb-1 border-t border-[color:var(--card-border)] mt-2 flex-wrap gap-2 sm:hidden">
+                class="hidden w-full pt-2 pb-1 border-t border-[color:var(--card-border)] mt-2 flex-wrap gap-2 sm:hidden justify-end">
                 <div class="flex items-center gap-1 pill-toggle rounded-md px-2 py-1">
                     <button class="p-1 rounded-full theme-btn" data-theme="light" aria-label="Light theme"><i
                             data-lucide="sun" class="w-4 h-4"></i></button>
@@ -1352,7 +1356,8 @@
                                         + border</span>
                                 </div>
                                 <pre id="fabGridAscii"
-                                    class="font-mono text-[8px] leading-[1.05] text-muted bg-surface-muted border border-weak rounded-lg p-2 overflow-hidden whitespace-pre"></pre>
+                                    class="font-mono text-[11px] leading-[1.15] text-muted bg-surface-muted border border-weak rounded-lg p-2 overflow-hidden whitespace-pre"
+                                    style="-webkit-text-size-adjust: 100%;"></pre>
                                 <p class="text-[10px] text-muted ">Pick a number from the
                                     grid
                                     (1 = top-left, 15 = bottom-right). Applies on screens ≤ 640px wide.</p>
@@ -1693,8 +1698,13 @@ async function handleRequest(request, env) {
                                 class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{root_front}}</span>
                             <span class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{root_back}}</span>
                             <span
+                                class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{root_notes}}</span>
+                            <span
                                 class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{prev_front}}</span>
                             <span class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{prev_back}}</span>
+                            <span
+                                class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{prev_notes}}</span>
+                            <span class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{deck_name}}</span>
                             <span class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{tags}}</span>
                             <span class="px-2 py-1 rounded-lg bg-surface-muted italic text-accent ">{{card_type}}</span>
                         </div>
@@ -1770,6 +1780,11 @@ async function handleRequest(request, env) {
             <div class="flex items-center justify-between mb-3">
                 <h3 class="modal-title font-display text-lg" id="cardModalTitle">New card</h3>
                 <div class="flex items-center gap-2">
+                    <button id="openCardNotionBtn" aria-label="Open in Notion"
+                        class="p-1.5 rounded-lg border border-card text-main hover:bg-surface-strong hidden"
+                        title="Open page in Notion">
+                        <i data-lucide="external-link" class="w-4 h-4"></i>
+                    </button>
                     <button id="saveCardTopBtn" aria-label="Save card"
                         class="group p-1.5 rounded-lg border border-card text-main hover:bg-surface-strong">
                         <i data-lucide="save"

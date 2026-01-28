@@ -152,7 +152,9 @@ export const transformClozeForSubItem = (text, targetIndex) => {
  */
 export const createSubItem = (parent, clozeIndex, deckId, makeTempId) => {
     const now = new Date().toISOString();
-    const due = SRS.getDueDate(0);
+    // Only set due date if parent has one (is already in learning/review)
+    const parentHasDue = parent.fsrs?.dueDate || parent.sm2?.dueDate;
+    const due = parentHasDue ? SRS.getDueDate(0) : null;
     const transformedName = transformClozeForSubItem(parent.name, clozeIndex);
     const transformedBack = parent.back || '';
     return {
