@@ -112,14 +112,19 @@ export const reconcileSubItems = (parent, existingSubItems) => {
     }
 
     // Sub-items that no longer match any index in parent
-    for (const sub of existingSubItems) {
-        const idx = parseInt(sub.clozeIndexes, 10);
-        if (!indices.has(idx) && !sub.suspended && !duplicatesToSuspend.includes(sub.id)) {
-            toSuspend.push(sub.id);
+    // Only suspend orphaned sub-items if we actually found valid indices in the parent.
+    // If indices is empty but sub-items exist, the parent likely has malformed/missing
+    // cloze syntax - don't mass-suspend in that case.
+    if (indices.size > 0) {
+        for (const sub of existingSubItems) {
+            const idx = parseInt(sub.clozeIndexes, 10);
+            if (!indices.has(idx) && !sub.suspended && !duplicatesToSuspend.includes(sub.id)) {
+                toSuspend.push(sub.id);
+            }
         }
     }
 
-    return { toCreate, toKeep, toSuspend };
+    return { toCreate, toKeep, toSuspend, parsedIndices: indices };
 };
 
 /**
