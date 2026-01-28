@@ -120,7 +120,20 @@ const safeMarkdownParse = (md) => {
     try {
         ensureMarkedConfigured();
         if (typeof marked === 'undefined') return escapeHtml(md);
-        return marked.parse(md, { breaks: true, gfm: true });
+        // Protect notion-equation spans from markdown processing (prevent _ and * from being interpreted)
+        const eqPlaceholders = [];
+        const protectedMd = md.replace(/<span class="notion-equation">([^<]*)<\/span>/g, (match, expr) => {
+            const idx = eqPlaceholders.length;
+            eqPlaceholders.push(expr);
+            return `\x00EQ${idx}EQ\x00`;
+        });
+        let html = marked.parse(protectedMd, { breaks: true, gfm: true });
+        // Restore equation spans with original (unmangled) expressions
+        html = html.replace(/\x00EQ(\d+)EQ\x00/g, (_, idx) => {
+            const expr = eqPlaceholders[parseInt(idx, 10)] || '';
+            return `<span class="notion-equation">${expr}</span>`;
+        });
+        return html;
     } catch (e) {
         console.error('Markdown parse error:', e);
         return md; // Return raw markdown on failure
@@ -895,9 +908,11 @@ export const App = {
             // This catches "Skip" actions where data was modified
             const card = this.cardById(queueItem.cardId);
             if (card && card._pendingSave) {
+                // Clone the card data before async ops to avoid stale references
+                const cardSnapshot = JSON.parse(JSON.stringify(card));
+                delete card._pendingSave;
                 Storage.put('cards', card).then(() => {
-                    delete card._pendingSave;
-                    this.queueOp({ type: 'card-upsert', payload: card });
+                    this.queueOp({ type: 'card-upsert', payload: cardSnapshot });
                 }).catch(e => console.error('Failed to save skipped card:', e));
             }
 
@@ -2287,7 +2302,7 @@ export const App = {
         const q2count = this.state.queue.size;
         const queueCountEl = el('#queueCount');
         if (queueCountEl) queueCountEl.textContent = String(q2count);
-        const pendingSuffix = q2count > 0 ? ` (${q2count})` : '';
+        const pendingSuffix = q2count > 0 ? ` <span class="text-accent" style="font-family: monospace;">(${q2count})</span>` : '';
         const q2ind = el('#q2syncIndicator');
         const q2val = el('#q2syncCount');
         if (q2ind && q2val) {
@@ -2329,7 +2344,7 @@ export const App = {
             showIcon = true;
         }
 
-        if (badgeText) badgeText.textContent = text;
+        if (badgeText) badgeText.innerHTML = text;
         if (badgeIcon) badgeIcon.classList.toggle('hidden', !showIcon);
 
         badge.className = ready
