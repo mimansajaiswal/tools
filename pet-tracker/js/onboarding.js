@@ -269,10 +269,15 @@ const Onboarding = {
         try {
             PetTracker.UI.showLoading('Scanning Notion data sources...');
 
-            // 1. Search for all data sources
-            // API requires 'data_source' instead of 'database' for this version
-            const searchRes = await PetTracker.API.search('', { property: 'object', value: 'data_source' });
-            const dataSources = searchRes.results || [];
+            // 1. Search for all data sources (try 'database' first, fallback to 'data_source')
+            let searchRes;
+            try {
+                searchRes = await PetTracker.API.search('', { property: 'object', value: 'database' });
+            } catch (e) {
+                // Fallback to data_source if database doesn't work
+                searchRes = await PetTracker.API.search('', { property: 'object', value: 'data_source' });
+            }
+            const dataSources = searchRes?.results || [];
 
             if (dataSources.length === 0) {
                 throw new Error('No data sources found. Please ensure you have created the databases and shared them with your integration.');

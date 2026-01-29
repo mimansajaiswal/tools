@@ -110,19 +110,8 @@ const App = {
      * Setup global event listeners
      */
     setupEventListeners: () => {
-        // Global keyboard shortcuts
+        // Global keyboard shortcuts (Escape handled by UI.handleModalKeydown)
         document.addEventListener('keydown', (e) => {
-            // Escape closes modals
-            if (e.key === 'Escape') {
-                const openModal = document.querySelector('[id$="Modal"]:not(.hidden)');
-                if (openModal) {
-                    if (openModal.id === 'addEventModal') {
-                        App.confirmCloseAddModal();
-                    } else {
-                        PetTracker.UI.closeModal(openModal.id);
-                    }
-                }
-            }
             // Ctrl/Cmd + N opens add modal
             if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
                 e.preventDefault();
@@ -287,7 +276,7 @@ const App = {
 
         // Set defaults
         const dateInput = document.getElementById('addEventDate');
-        if (dateInput) dateInput.value = prefill.date || new Date().toISOString().slice(0, 10);
+        if (dateInput) dateInput.value = prefill.date || PetTracker.UI.localDateYYYYMMDD();
 
         const timeInput = document.getElementById('addEventTime');
         if (timeInput) timeInput.value = prefill.time || new Date().toTimeString().slice(0, 5);
@@ -530,6 +519,53 @@ const App = {
      * Open settings modal
      */
     openSettings: () => {
+        const settings = PetTracker.Settings.get();
+        
+        // Populate connection tab
+        const workerUrl = document.getElementById('settingsWorkerUrl');
+        if (workerUrl) workerUrl.value = settings.workerUrl || '';
+        
+        const proxyToken = document.getElementById('settingsProxyToken');
+        if (proxyToken) proxyToken.value = settings.proxyToken || '';
+        
+        const notionToken = document.getElementById('settingsNotionToken');
+        if (notionToken) notionToken.value = settings.notionToken || '';
+        
+        // Populate database tab
+        const databaseId = document.getElementById('settingsDatabaseId');
+        if (databaseId) databaseId.value = settings.databaseId || '';
+        
+        // Populate AI tab
+        const aiProvider = document.getElementById('settingsAiProvider');
+        if (aiProvider) aiProvider.value = settings.aiProvider || 'openai';
+        
+        const aiModel = document.getElementById('settingsAiModel');
+        if (aiModel) aiModel.value = settings.aiModel || '';
+        
+        const aiApiKey = document.getElementById('settingsAiApiKey');
+        if (aiApiKey) aiApiKey.value = settings.aiApiKey || '';
+        
+        const aiEndpoint = document.getElementById('settingsAiEndpoint');
+        if (aiEndpoint) aiEndpoint.value = settings.aiEndpoint || '';
+        
+        App.toggleAiEndpoint();
+        
+        // Populate Todoist tab
+        const todoistEnabled = document.getElementById('settingsTodoistEnabled');
+        if (todoistEnabled) todoistEnabled.checked = settings.todoistEnabled || false;
+        
+        const todoistToken = document.getElementById('settingsTodoistToken');
+        if (todoistToken) todoistToken.value = settings.todoistToken || '';
+        
+        // Populate GCal tab
+        const gcalEnabled = document.getElementById('settingsGcalEnabled');
+        if (gcalEnabled) gcalEnabled.checked = settings.gcalEnabled || false;
+        
+        const gcalCalendarId = document.getElementById('settingsGcalCalendarId');
+        if (gcalCalendarId) gcalCalendarId.value = settings.gcalCalendarId || '';
+        
+        App.updateGcalUI();
+        
         PetTracker.UI.openModal('settingsModal');
     },
 
@@ -698,12 +734,15 @@ const App = {
             document.body.appendChild(overlay);
         }
 
-        const isOpen = !sidebar.classList.contains('hidden');
+        const isOpen = sidebar.classList.contains('fixed');
 
         if (isOpen) {
+            // Close menu - remove fixed positioning
+            sidebar.classList.remove('fixed', 'inset-y-0', 'left-0', 'z-50');
             sidebar.classList.add('hidden');
             overlay.classList.add('hidden');
         } else {
+            // Open menu - add fixed positioning for mobile
             sidebar.classList.remove('hidden');
             sidebar.classList.add('fixed', 'inset-y-0', 'left-0', 'z-50');
             overlay.classList.remove('hidden');
@@ -776,13 +815,14 @@ const App = {
     },
 
     /**
-     * Handle OAuth return - check for accessToken or gcalAccessToken in URL params
+     * Handle OAuth return - check for accessToken or gcalAccessToken in URL params or hash
      */
     handleOAuthReturn: () => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const notionToken = urlParams.get('accessToken');
-        const gcalToken = urlParams.get('gcalAccessToken');
-        const gcalEmail = urlParams.get('gcalEmail');
+        const hashParams = new URLSearchParams(window.location.hash.replace('#', '?'));
+        const searchParams = new URLSearchParams(window.location.search);
+        const notionToken = hashParams.get('token') || searchParams.get('token') || searchParams.get('accessToken');
+        const gcalToken = hashParams.get('gcalAccessToken') || searchParams.get('gcalAccessToken');
+        const gcalEmail = hashParams.get('gcalEmail') || searchParams.get('gcalEmail');
 
         let handled = false;
 
@@ -810,10 +850,222 @@ const App = {
         }
 
         if (handled) {
-            window.history.replaceState({}, document.title, window.location.pathname);
+            try {
+                window.history.replaceState({}, document.title, window.location.pathname);
+            } catch (e) {
+                console.warn('History replaceState failed:', e);
+            }
         }
 
         return handled;
+    },
+
+    /**
+     * Save settings from settings modal
+     */
+    saveSettings: () => {
+        const settings = {
+            workerUrl: document.getElementById('settingsWorkerUrl')?.value?.trim() || '',
+            proxyToken: document.getElementById('settingsProxyToken')?.value?.trim() || '',
+            notionToken: document.getElementById('settingsNotionToken')?.value?.trim() || '',
+            databaseId: document.getElementById('settingsDatabaseId')?.value?.trim() || '',
+            aiProvider: document.getElementById('settingsAiProvider')?.value || 'openai',
+            aiModel: document.getElementById('settingsAiModel')?.value?.trim() || '',
+            aiApiKey: document.getElementById('settingsAiApiKey')?.value?.trim() || '',
+            aiEndpoint: document.getElementById('settingsAiEndpoint')?.value?.trim() || '',
+            todoistEnabled: document.getElementById('settingsTodoistEnabled')?.checked || false,
+            todoistToken: document.getElementById('settingsTodoistToken')?.value?.trim() || '',
+            gcalEnabled: document.getElementById('settingsGcalEnabled')?.checked || false,
+            gcalCalendarId: document.getElementById('settingsGcalCalendarId')?.value || ''
+        };
+
+        // Save database mappings if present
+        const dsMapping = {};
+        ['Pets', 'Events', 'EventTypes', 'CareItems', 'CarePlans', 'Contacts', 'Scales', 'ScaleLevels'].forEach(key => {
+            const el = document.getElementById(`dsMap${key}`);
+            if (el?.value) {
+                const storeKey = key.charAt(0).toLowerCase() + key.slice(1);
+                dsMapping[storeKey] = el.value;
+            }
+        });
+        
+        if (Object.keys(dsMapping).length > 0) {
+            settings.dataSources = dsMapping;
+        }
+
+        PetTracker.Settings.set(settings);
+        PetTracker.UI.toast('Settings saved', 'success');
+        PetTracker.UI.closeModal('settingsModal');
+    },
+
+    /**
+     * Test Notion connection
+     */
+    testConnection: async () => {
+        // Save current inputs first
+        const workerUrl = document.getElementById('settingsWorkerUrl')?.value?.trim();
+        const notionToken = document.getElementById('settingsNotionToken')?.value?.trim();
+        const proxyToken = document.getElementById('settingsProxyToken')?.value?.trim();
+
+        if (!workerUrl) {
+            PetTracker.UI.toast('Please enter Worker URL', 'error');
+            return;
+        }
+
+        if (!notionToken) {
+            PetTracker.UI.toast('Please enter Notion token', 'error');
+            return;
+        }
+
+        // Save temporarily for API call
+        PetTracker.Settings.set({ workerUrl, notionToken, proxyToken });
+
+        try {
+            PetTracker.UI.showLoading('Testing connection...');
+            const user = await PetTracker.API.verifyConnection();
+            PetTracker.UI.hideLoading();
+            PetTracker.UI.toast(`Connected as ${user?.name || 'User'}`, 'success');
+        } catch (e) {
+            PetTracker.UI.hideLoading();
+            PetTracker.UI.toast('Connection failed: ' + e.message, 'error');
+        }
+    },
+
+    /**
+     * Scan for data sources (databases) in Notion
+     */
+    scanDataSources: async () => {
+        const settings = PetTracker.Settings.get();
+        if (!settings.workerUrl || !settings.notionToken) {
+            PetTracker.UI.toast('Configure connection first', 'error');
+            return;
+        }
+
+        try {
+            PetTracker.UI.showLoading('Scanning data sources...');
+            
+            // Search for databases (try both 'database' and 'data_source' filter values)
+            let searchRes;
+            try {
+                searchRes = await PetTracker.API.search('', { property: 'object', value: 'database' });
+            } catch (e) {
+                // Fall back to data_source if database doesn't work
+                searchRes = await PetTracker.API.search('', { property: 'object', value: 'data_source' });
+            }
+            
+            const dataSources = searchRes?.results || [];
+
+            if (dataSources.length === 0) {
+                PetTracker.UI.hideLoading();
+                PetTracker.UI.toast('No databases found. Share databases with your integration.', 'warning');
+                return;
+            }
+
+            // Populate mapping dropdowns
+            const dsContainer = document.getElementById('dataSourceMapping');
+            if (dsContainer) {
+                dsContainer.classList.remove('hidden');
+                
+                const dbOptions = dataSources.map(ds => ({
+                    id: ds.id,
+                    name: ds.title?.[0]?.plain_text || ds.name || 'Untitled'
+                }));
+
+                const optionsHtml = '<option value="">Select...</option>' +
+                    dbOptions.map(db => `<option value="${db.id}">${PetTracker.UI.escapeHtml(db.name)}</option>`).join('');
+
+                ['Pets', 'Events', 'EventTypes', 'CareItems', 'CarePlans', 'Contacts', 'Scales', 'ScaleLevels'].forEach(key => {
+                    const el = document.getElementById(`dsMap${key}`);
+                    if (el) {
+                        el.innerHTML = optionsHtml;
+                        // Try to auto-select by name match
+                        const match = dbOptions.find(db => 
+                            db.name.toLowerCase().replace(/\s+/g, '').includes(key.toLowerCase().replace(/\s+/g, ''))
+                        );
+                        if (match) el.value = match.id;
+                    }
+                });
+            }
+
+            PetTracker.UI.hideLoading();
+            PetTracker.UI.toast(`Found ${dataSources.length} databases`, 'success');
+
+        } catch (e) {
+            PetTracker.UI.hideLoading();
+            PetTracker.UI.toast('Scan failed: ' + e.message, 'error');
+        }
+    },
+
+    /**
+     * Toggle AI endpoint field visibility
+     */
+    toggleAiEndpoint: () => {
+        const provider = document.getElementById('settingsAiProvider')?.value;
+        const endpointField = document.getElementById('aiEndpointField');
+        if (endpointField) {
+            endpointField.classList.toggle('hidden', provider !== 'custom');
+        }
+    },
+
+    /**
+     * Start Google Calendar OAuth
+     */
+    startGoogleOAuth: () => {
+        const workerUrl = PetTracker.Settings.get().workerUrl;
+        if (!workerUrl) {
+            PetTracker.UI.toast('Configure Worker URL first', 'error');
+            return;
+        }
+
+        const returnUrl = encodeURIComponent(new URL('index.html', window.location.href).toString());
+        window.location.href = `https://notion-oauth-handler.mimansa-jaiswal.workers.dev/gcal/auth?from=${returnUrl}`;
+    },
+
+    /**
+     * Update Google Calendar UI state
+     */
+    updateGcalUI: () => {
+        const settings = PetTracker.Settings.get();
+        const statusEl = document.getElementById('gcalConnectionStatus');
+        const selectSection = document.getElementById('gcalCalendarSelect');
+        const disconnectSection = document.getElementById('gcalDisconnectSection');
+
+        if (settings.gcalAccessToken) {
+            if (statusEl) {
+                statusEl.textContent = settings.gcalUserEmail 
+                    ? `Connected as ${settings.gcalUserEmail}` 
+                    : 'Connected';
+                statusEl.classList.add('text-dull-purple');
+            }
+            if (selectSection) selectSection.classList.remove('hidden');
+            if (disconnectSection) disconnectSection.classList.remove('hidden');
+        } else {
+            if (statusEl) {
+                statusEl.textContent = 'Not connected';
+                statusEl.classList.remove('text-dull-purple');
+            }
+            if (selectSection) selectSection.classList.add('hidden');
+            if (disconnectSection) disconnectSection.classList.add('hidden');
+        }
+    },
+
+    /**
+     * Disconnect Google Calendar
+     */
+    disconnectGoogleCalendar: () => {
+        PetTracker.UI.confirm(
+            'Disconnect Google Calendar? Events will no longer sync.',
+            () => {
+                PetTracker.Settings.set({
+                    gcalEnabled: false,
+                    gcalAccessToken: '',
+                    gcalCalendarId: '',
+                    gcalUserEmail: ''
+                });
+                App.updateGcalUI();
+                PetTracker.UI.toast('Google Calendar disconnected', 'success');
+            }
+        );
     }
 };
 

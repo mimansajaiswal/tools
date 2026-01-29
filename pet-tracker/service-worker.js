@@ -1,8 +1,25 @@
-const CACHE_NAME = 'pet-tracker-v2';
+const CACHE_NAME = 'pet-tracker-v3';
 const STATIC_ASSETS = [
     './',
     './index.html',
-    './manifest.webmanifest'
+    './manifest.webmanifest',
+    './css/styles.css',
+    './js/storage.js',
+    './js/ui.js',
+    './js/api.js',
+    './js/sync.js',
+    './js/pets.js',
+    './js/events.js',
+    './js/calendar.js',
+    './js/care.js',
+    './js/media.js',
+    './js/ai.js',
+    './js/todoist.js',
+    './js/calendar-export.js',
+    './js/analytics.js',
+    './js/contacts.js',
+    './js/onboarding.js',
+    './js/app.js'
 ];
 
 self.addEventListener('install', (event) => {
@@ -30,14 +47,16 @@ self.addEventListener('fetch', (event) => {
 
     const url = new URL(event.request.url);
 
-    // Skip caching for API calls
+    // Skip caching for API calls and external resources
     if (url.hostname !== location.hostname) {
         return;
     }
 
     event.respondWith(
-        caches.match(event.request).then((cached) => {
-            const fetched = fetch(event.request).then((response) => {
+        (async () => {
+            const cached = await caches.match(event.request);
+            try {
+                const response = await fetch(event.request);
                 if (response.ok) {
                     const clone = response.clone();
                     caches.open(CACHE_NAME).then((cache) => {
@@ -45,10 +64,19 @@ self.addEventListener('fetch', (event) => {
                     });
                 }
                 return response;
-            }).catch(() => cached);
-
-            return cached || fetched;
-        })
+            } catch (e) {
+                // Network failed, return cached or offline fallback
+                if (cached) {
+                    return cached;
+                }
+                // Return a proper offline response
+                return new Response('Offline - content not cached', {
+                    status: 503,
+                    statusText: 'Service Unavailable',
+                    headers: { 'Content-Type': 'text/plain' }
+                });
+            }
+        })()
     );
 });
 

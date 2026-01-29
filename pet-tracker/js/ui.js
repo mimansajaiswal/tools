@@ -313,6 +313,24 @@ const UI = {
      */
     generateId: () => {
         return window.PetTracker?.generateId ? window.PetTracker.generateId() : crypto.randomUUID();
+    },
+
+    /**
+     * Get local date in YYYY-MM-DD format (avoids timezone issues from toISOString)
+     */
+    localDateYYYYMMDD: (date = new Date()) => {
+        const d = date instanceof Date ? date : new Date(date);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
+    },
+
+    /**
+     * Get today's date in YYYY-MM-DD format (local timezone)
+     */
+    todayYYYYMMDD: () => {
+        return UI.localDateYYYYMMDD(new Date());
     }
 };
 

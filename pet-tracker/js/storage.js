@@ -398,6 +398,10 @@ const Settings = {
         aiEndpoint: '',
         todoistEnabled: false,
         todoistToken: '',
+        gcalEnabled: false,
+        gcalAccessToken: '',
+        gcalCalendarId: '',
+        gcalUserEmail: '',
         uploadCapMb: 5,
         defaultPetId: null,
         calendarView: 'month',
@@ -416,7 +420,12 @@ const Settings = {
 
     set: (updates) => {
         const current = Settings.get();
-        const merged = { ...current, ...updates };
+        // Deep merge for nested objects like dataSources
+        const merged = {
+            ...current,
+            ...updates,
+            dataSources: { ...(current.dataSources || {}), ...(updates.dataSources || {}) }
+        };
         localStorage.setItem(Settings.KEYS.SETTINGS, JSON.stringify(merged));
         return merged;
     },

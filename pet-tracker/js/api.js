@@ -23,7 +23,7 @@ const API = {
 
         const headers = {
             'Authorization': `Bearer ${notionToken.trim()}`,
-            'Notion-Version': '2025-09-03'
+            'Notion-Version': '2022-06-28'
         };
 
         if (!(body instanceof FormData)) {

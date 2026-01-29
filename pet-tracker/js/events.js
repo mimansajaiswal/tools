@@ -301,9 +301,9 @@ const Events = {
                 </div>
                 <div class="flex gap-2">
                     ${days.map(date => {
-            const dateStr = date.toISOString().slice(0, 10);
+            const dateStr = PetTracker.UI.localDateYYYYMMDD(date);
             const isStamped = stampDates.has(dateStr);
-            const isToday = dateStr === today.toISOString().slice(0, 10);
+            const isToday = dateStr === PetTracker.UI.localDateYYYYMMDD(today);
 
             return `
                             <button class="stamp-day ${isStamped ? 'stamp-day-active' : ''} ${isToday ? 'stamp-day-today' : ''}"

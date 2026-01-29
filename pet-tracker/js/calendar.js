@@ -125,7 +125,7 @@ const Calendar = {
         const daysInMonth = lastDay.getDate();
 
         const today = new Date();
-        const todayStr = today.toISOString().slice(0, 10);
+        const todayStr = PetTracker.UI.localDateYYYYMMDD(today);
 
         // Group events by date
         const eventsByDate = {};
@@ -219,7 +219,7 @@ const Calendar = {
         weekStart.setDate(currentDate.getDate() - currentDate.getDay());
 
         const today = new Date();
-        const todayStr = today.toISOString().slice(0, 10);
+        const todayStr = PetTracker.UI.localDateYYYYMMDD(today);
 
         const days = [];
         for (let i = 0; i < 7; i++) {
@@ -242,7 +242,7 @@ const Calendar = {
             <div class="calendar-week">
                 <div class="grid grid-cols-7 gap-2">
                     ${days.map(date => {
-            const dateStr = date.toISOString().slice(0, 10);
+            const dateStr = PetTracker.UI.localDateYYYYMMDD(date);
             const isToday = dateStr === todayStr;
             const dayEvents = eventsByDate[dateStr] || [];
 
@@ -306,7 +306,7 @@ const Calendar = {
         });
 
         const dates = Object.keys(grouped).sort();
-        const today = new Date().toISOString().slice(0, 10);
+        const today = PetTracker.UI.localDateYYYYMMDD();
 
         if (dates.length === 0) {
             return PetTracker.UI.emptyState('calendar', 'No events', 'Events will appear here');

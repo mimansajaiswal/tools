@@ -56,7 +56,7 @@ const Care = {
             scheduleType: data.scheduleType || 'Fixed',
             intervalValue: data.intervalValue || 1,
             intervalUnit: data.intervalUnit || 'Days',
-            anchorDate: data.anchorDate || new Date().toISOString().slice(0, 10),
+            anchorDate: data.anchorDate || PetTracker.UI.localDateYYYYMMDD(),
             dueTime: data.dueTime || null,
             timeOfDayPreference: data.timeOfDayPreference || 'Any',
             windowBefore: data.windowBefore || 0,
@@ -132,7 +132,7 @@ const Care = {
             }
         }
 
-        return nextDue.toISOString().slice(0, 10);
+        return PetTracker.UI.localDateYYYYMMDD(nextDue);
     },
 
     /**
@@ -176,7 +176,7 @@ const Care = {
                 break;
         }
 
-        return lastDate.toISOString().slice(0, 10);
+        return PetTracker.UI.localDateYYYYMMDD(lastDate);
     },
 
     /**
@@ -477,7 +477,7 @@ const Care = {
             petIds: plan.petIds,
             eventTypeId: plan.eventTypeId,
             careItemId: plan.careItemId,
-            startDate: plan.nextDue || new Date().toISOString().slice(0, 10),
+            startDate: plan.nextDue || PetTracker.UI.localDateYYYYMMDD(),
             status: 'Missed',
             source: 'Scheduled'
         });
@@ -501,7 +501,7 @@ const Care = {
 
         const updatedPlan = {
             ...plan,
-            nextDue: current.toISOString().slice(0, 10),
+            nextDue: PetTracker.UI.localDateYYYYMMDD(current),
             updatedAt: new Date().toISOString(),
             synced: false
         };
