@@ -387,7 +387,6 @@ const Settings = {
         authMode: 'token',
         notionToken: '',
         notionOAuthData: null,
-        databaseId: '',
         dataSources: {
             pets: '', events: '', eventTypes: '', scales: '',
             scaleLevels: '', careItems: '', carePlans: '', contacts: ''
@@ -432,7 +431,9 @@ const Settings = {
 
     isConnected: () => {
         const s = Settings.get();
-        return !!(s.workerUrl && (s.notionToken || s.notionOAuthData) && s.databaseId);
+        // Check for dataSources mapping (at least pets and events should be mapped)
+        const hasDataSources = s.dataSources && (s.dataSources.pets || s.dataSources.events);
+        return !!(s.workerUrl && (s.notionToken || s.notionOAuthData) && hasDataSources);
     },
 
     isOnboardingDone: () => localStorage.getItem(Settings.KEYS.ONBOARDING_DONE) === 'true',

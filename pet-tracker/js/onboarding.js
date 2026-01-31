@@ -11,11 +11,14 @@ const Onboarding = {
      * Initialize onboarding
      */
     init: () => {
-        Onboarding.currentStep = 1;
+        // Restore step if returning from OAuth redirect
+        const settings = PetTracker.Settings.get();
+        if (settings.onboardingInProgress && settings.onboardingStep) {
+            Onboarding.currentStep = settings.onboardingStep;
+        } else {
+            Onboarding.currentStep = 1;
+        }
         Onboarding.updateUI();
-
-        // Restore step if possible (e.g. after refresh)
-        // But for safety, start at 1 or where we left off if clearly marked
     },
 
     /**
@@ -233,28 +236,40 @@ const Onboarding = {
     },
 
     /**
-     * Start OAuth Flow
+     * Start OAuth Flow - uses redirect-based approach like ghostink
      */
-    startOAuth: async () => {
-        try {
-            const token = await PetTracker.API.startOAuth();
-            if (token) {
-                document.getElementById('onboardingNotionToken').value = token;
-                PetTracker.Settings.set({ notionToken: token });
-                PetTracker.UI.toast('Authenticated with Notion', 'success');
-                // Auto-trigger database search
-                setTimeout(() => Onboarding.findDatabases(), 500);
-            }
-        } catch (e) {
-            PetTracker.UI.toast('Auth failed: ' + e.message, 'error');
+    startOAuth: () => {
+        // Get worker URL from onboarding input if available
+        const workerUrl = document.getElementById('onboardingWorkerUrl')?.value?.trim();
+        const proxyToken = document.getElementById('onboardingProxyToken')?.value?.trim();
+
+        // Save current settings before redirect
+        if (workerUrl) {
+            PetTracker.Settings.set({ workerUrl, proxyToken: proxyToken || '' });
         }
+
+        // Mark that we're in onboarding and save current step so we can resume after OAuth return
+        PetTracker.Settings.set({
+            onboardingInProgress: true,
+            onboardingStep: Onboarding.currentStep
+        });
+
+        // Build return URL with full path so OAuth handler knows where to redirect
+        const returnUrl = encodeURIComponent(new URL('index.html', window.location.href).toString());
+
+        // Redirect to centralized OAuth handler
+        window.location.href = `https://notion-oauth-handler.mimansa-jaiswal.workers.dev/auth/login?from=${returnUrl}`;
     },
 
     /**
      * Search and Map Databases
      */
     findDatabases: async () => {
-        const token = document.getElementById('onboardingNotionToken')?.value;
+        // Get token from input field or from settings (after OAuth return)
+        const inputToken = document.getElementById('onboardingNotionToken')?.value;
+        const settingsToken = PetTracker.Settings.get().notionToken;
+        const token = inputToken || settingsToken;
+
         if (!token) {
             PetTracker.UI.toast('Token required', 'error');
             return;
@@ -263,21 +278,20 @@ const Onboarding = {
         // Save token to settings so API calls work
         PetTracker.Settings.set({ notionToken: token });
 
+        // Also populate the input field if it was empty
+        const tokenField = document.getElementById('onboardingNotionToken');
+        if (tokenField && !tokenField.value) {
+            tokenField.value = token;
+        }
+
         const container = document.getElementById('onboardingDbList');
         const verifyBtn = document.getElementById('onboardingDbVerifyBtn');
 
         try {
             PetTracker.UI.showLoading('Scanning Notion data sources...');
 
-            // 1. Search for all data sources (try 'database' first, fallback to 'data_source')
-            let searchRes;
-            try {
-                searchRes = await PetTracker.API.search('', { property: 'object', value: 'database' });
-            } catch (e) {
-                // Fallback to data_source if database doesn't work
-                searchRes = await PetTracker.API.search('', { property: 'object', value: 'data_source' });
-            }
-            const dataSources = searchRes?.results || [];
+            // 1. List all data sources using paginated search (like ghostink)
+            const dataSources = await PetTracker.API.listDatabases();
 
             if (dataSources.length === 0) {
                 throw new Error('No data sources found. Please ensure you have created the databases and shared them with your integration.');
@@ -372,7 +386,7 @@ const Onboarding = {
             });
 
             // Save to settings
-            PetTracker.Settings.set({ dataSources, databaseId: dataSources.pets }); // Use pets DB ID as main ID for ref
+            PetTracker.Settings.set({ dataSources });
 
             document.getElementById('onboardingDatabasesVerified').value = 'true';
             PetTracker.UI.toast('Mapping complete', 'success');
@@ -401,14 +415,20 @@ const Onboarding = {
             const petSpecies = document.getElementById('onboardingPetSpecies')?.value;
             const petColor = document.getElementById('onboardingPetColor')?.value;
 
+            let pet = null;
             if (petName) {
-                await Pets.save({
+                pet = await Pets.save({
                     name: petName,
                     species: petSpecies || 'Dog',
                     color: petColor || '#8b7b8e',
                     status: 'Active',
                     isPrimary: true
                 });
+            }
+
+            // Create sample events if sample data was checked
+            if (createSample && pet) {
+                await Onboarding.createSampleEvents(pet.id);
             }
 
             // Mark onboarding complete
@@ -421,6 +441,11 @@ const Onboarding = {
             // Reload data and show dashboard
             await App.loadData();
             App.showView('dashboard');
+
+            // Trigger sync after all data is saved
+            if (PetTracker.Sync?.run) {
+                setTimeout(() => PetTracker.Sync.run(true), 500);
+            }
 
         } catch (e) {
             console.error('[Onboarding] Error:', e);
@@ -472,7 +497,67 @@ const Onboarding = {
             PetTracker.Sync.updatePendingCount();
         }
 
-        console.log('[Onboarding] Sample data created');
+        PetTracker.UI.toast('Sample data created', 'success', 2000);
+    },
+
+    /**
+     * Create sample events for the pet
+     */
+    createSampleEvents: async (petId) => {
+        // Get event types to reference
+        const eventTypes = await PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES);
+        const walkType = eventTypes.find(et => et.name === 'Walk');
+        const weightType = eventTypes.find(et => et.name === 'Weight');
+        const vetType = eventTypes.find(et => et.name === 'Vet Visit');
+
+        const now = new Date();
+        const sampleEvents = [
+            {
+                title: 'Morning walk',
+                petIds: [petId],
+                eventTypeId: walkType?.id || null,
+                startDate: new Date(now - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+                status: 'Completed',
+                duration: 30,
+                notes: 'Great walk around the neighborhood!'
+            },
+            {
+                title: 'Weight check',
+                petIds: [petId],
+                eventTypeId: weightType?.id || null,
+                startDate: new Date(now - 24 * 60 * 60 * 1000).toISOString(), // Yesterday
+                status: 'Completed',
+                value: 25,
+                unit: 'lb'
+            },
+            {
+                title: 'Annual checkup',
+                petIds: [petId],
+                eventTypeId: vetType?.id || null,
+                startDate: new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString(), // 1 week ago
+                status: 'Completed',
+                notes: 'All vaccinations up to date. Healthy!'
+            }
+        ];
+
+        for (const eventData of sampleEvents) {
+            const event = {
+                id: PetTracker.generateId(),
+                ...eventData,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                synced: false
+            };
+
+            await PetTracker.DB.put(PetTracker.STORES.EVENTS, event);
+
+            await PetTracker.SyncQueue.add({
+                type: 'create',
+                store: 'events',
+                recordId: event.id,
+                data: event
+            });
+        }
     }
 };
 

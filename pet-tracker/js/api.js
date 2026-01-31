@@ -23,7 +23,7 @@ const API = {
 
         const headers = {
             'Authorization': `Bearer ${notionToken.trim()}`,
-            'Notion-Version': '2022-06-28'
+            'Notion-Version': '2025-09-03'
         };
 
         if (!(body instanceof FormData)) {
@@ -61,14 +61,14 @@ const API = {
     },
 
     /**
-     * Get database info
+     * Get data source info (2025-09-03 API)
      */
-    getDatabase: async (databaseId) => {
-        return API.request('GET', `/databases/${databaseId}`);
+    getDataSource: async (dataSourceId) => {
+        return API.request('GET', `/data_sources/${dataSourceId}`);
     },
 
     /**
-     * Query a database/data source
+     * Query a data source (2025-09-03 API)
      */
     queryDatabase: async (dataSourceId, filter = null, sorts = null, startCursor = null) => {
         const body = {};
@@ -76,15 +76,15 @@ const API = {
         if (sorts) body.sorts = sorts;
         if (startCursor) body.start_cursor = startCursor;
 
-        return API.request('POST', `/databases/${dataSourceId}/query`, body);
+        return API.request('POST', `/data_sources/${dataSourceId}/query`, body);
     },
 
     /**
-     * Create a page (record) in a data source
+     * Create a page (record) in a data source (2025-09-03 API)
      */
     createPage: async (dataSourceId, properties, children = []) => {
         const body = {
-            parent: { database_id: dataSourceId },
+            parent: { type: 'data_source_id', data_source_id: dataSourceId },
             properties
         };
         if (children.length > 0) body.children = children;
@@ -155,6 +155,24 @@ const API = {
         };
         if (filter) body.filter = filter;
         return API.request('POST', '/search', body);
+    },
+
+    /**
+     * List all databases/data sources with pagination (like ghostink)
+     */
+    listDatabases: async () => {
+        const results = [];
+        let cursor = null;
+        let hasMore = true;
+        while (hasMore) {
+            const body = { filter: { value: 'data_source', property: 'object' } };
+            if (cursor) body.start_cursor = cursor;
+            const res = await API.requestWithRetry('POST', '/search', body);
+            results.push(...(res.results || []));
+            hasMore = res.has_more;
+            cursor = res.next_cursor;
+        }
+        return results;
     },
 
     /**

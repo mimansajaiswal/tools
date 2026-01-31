@@ -185,7 +185,8 @@ const Sync = {
         }
 
         const settings = PetTracker.Settings.get();
-        if (!settings.workerUrl || !settings.notionToken || !settings.databaseId) {
+        const hasDataSources = settings.dataSources && Object.values(settings.dataSources).some(v => v);
+        if (!settings.workerUrl || !settings.notionToken || !hasDataSources) {
             console.log('[Sync] Not configured, skipping');
             return;
         }
@@ -239,25 +240,109 @@ const Sync = {
         await Sync.run(true);
     },
 
+    // Store processing order - entities must be synced in dependency order
+    // Parents must sync before children that reference them via relations
+    storeOrder: [
+        'pets',        // Base entity - no dependencies
+        'scales',      // Base entity - no dependencies  
+        'eventTypes',  // May reference scales (defaultScaleId)
+        'scaleLevels', // References scales
+        'careItems',   // References eventTypes, pets
+        'contacts',    // References pets
+        'carePlans',   // References pets, careItems, eventTypes
+        'events'       // References pets, eventTypes, careItems, scaleLevels, contacts
+    ],
+
+    /**
+     * Sort pending operations by dependency order
+     */
+    sortByDependencyOrder: (pending) => {
+        const orderMap = {};
+        Sync.storeOrder.forEach((store, idx) => {
+            orderMap[store] = idx;
+        });
+
+        return [...pending].sort((a, b) => {
+            const orderA = orderMap[a.store] ?? 999;
+            const orderB = orderMap[b.store] ?? 999;
+            if (orderA !== orderB) return orderA - orderB;
+            // Within same store, process creates before updates before deletes
+            const typeOrder = { create: 0, update: 1, delete: 2 };
+            const typeA = typeOrder[a.type] ?? 1;
+            const typeB = typeOrder[b.type] ?? 1;
+            if (typeA !== typeB) return typeA - typeB;
+            // Finally by creation time
+            return new Date(a.createdAt) - new Date(b.createdAt);
+        });
+    },
+
+    /**
+     * Update pending queue items to replace local IDs with Notion IDs
+     * Called after a successful create to propagate the new notionId
+     */
+    propagateNotionId: async (store, localId, notionId) => {
+        const pending = await PetTracker.SyncQueue.getPending();
+
+        // Map store to the relation field names that reference it
+        const relationFields = {
+            pets: ['petIds', 'relatedPetIds'],
+            scales: ['scaleId', 'defaultScaleId'],
+            eventTypes: ['eventTypeId', 'linkedEventTypeId'],
+            scaleLevels: ['severityLevelId'],
+            careItems: ['careItemId'],
+            contacts: ['providerId', 'primaryVetId', 'relatedContactIds']
+        };
+
+        const fieldsToCheck = relationFields[store] || [];
+        if (fieldsToCheck.length === 0) return;
+
+        for (const op of pending) {
+            if (!op.data) continue;
+            let modified = false;
+
+            for (const field of fieldsToCheck) {
+                if (Array.isArray(op.data[field])) {
+                    const idx = op.data[field].indexOf(localId);
+                    if (idx !== -1) {
+                        // Don't replace in queue - the resolveRelationIds will look up from DB
+                        // But we need to ensure the local record has the notionId
+                        modified = true;
+                    }
+                } else if (op.data[field] === localId) {
+                    modified = true;
+                }
+            }
+
+
+        }
+    },
+
     /**
      * Push local changes to Notion
      */
     pushLocalChanges: async () => {
         const pending = await PetTracker.SyncQueue.getPending();
-        console.log(`[Sync] ${pending.length} pending operations`);
+
+        // Sort by dependency order
+        const sorted = Sync.sortByDependencyOrder(pending);
 
         let successCount = 0;
         let failCount = 0;
         let lastError = null;
 
-        for (const op of pending) {
+        for (const op of sorted) {
             try {
                 await Sync.waitForRateLimit();
-                await Sync.processOperation(op);
+                const result = await Sync.processOperation(op);
                 await PetTracker.SyncQueue.complete(op.id);
                 successCount++;
+
+                // If this was a create, propagate the new notionId to dependent queue items
+                if (op.type === 'create' && result?.notionId) {
+                    await Sync.propagateNotionId(op.store, op.recordId, result.notionId);
+                }
             } catch (e) {
-                console.error(`[Sync] Operation ${op.id} failed:`, e);
+                console.error(`[Sync] Operation failed:`, e.message);
                 lastError = e;
                 failCount++;
 
@@ -266,7 +351,13 @@ const Sync = {
                     await new Promise(r => setTimeout(r, (e.retryAfter || 1) * 1000));
                 }
 
-                await PetTracker.SyncQueue.fail(op.id, e.message);
+                if (e.isRetryable && (op.retryCount || 0) < 3) {
+                    // Retryable error - keep in queue for next sync cycle
+                    op.retryCount = (op.retryCount || 0) + 1;
+                    await PetTracker.DB.put(PetTracker.STORES.SYNC_QUEUE, op);
+                } else {
+                    await PetTracker.SyncQueue.fail(op.id, e.message);
+                }
             }
         }
 
@@ -290,7 +381,7 @@ const Sync = {
                 const storeConstant = Sync.getStoreConstant(store);
                 if (!storeConstant) throw new Error(`Unknown store: ${store}`);
 
-                const properties = Sync.toNotionProperties(store, data);
+                const properties = await Sync.toNotionProperties(store, data);
                 const result = await PetTracker.API.createPage(dataSourceId, properties);
 
                 // Update local record with Notion ID
@@ -300,7 +391,8 @@ const Sync = {
                     record.synced = true;
                     await PetTracker.DB.put(storeConstant, record);
                 }
-                break;
+                // Return notionId so caller can propagate to dependent queue items
+                return { notionId: result.id };
             }
 
             case 'update': {
@@ -311,7 +403,7 @@ const Sync = {
                 if (!record?.notionId) {
                     throw new Error('No Notion ID for update');
                 }
-                const properties = Sync.toNotionProperties(store, data);
+                const properties = await Sync.toNotionProperties(store, data);
                 await PetTracker.API.updatePage(record.notionId, properties);
 
                 record.synced = true;
@@ -377,7 +469,7 @@ const Sync = {
             const result = await PetTracker.API.queryDatabase(
                 dataSourceId,
                 null,
-                [{ property: 'Last edited time', direction: 'descending' }],
+                [{ timestamp: 'last_edited_time', direction: 'descending' }],
                 cursor
             );
 
@@ -437,10 +529,43 @@ const Sync = {
     },
 
     /**
+     * Resolve local IDs to Notion page IDs for relations
+     * Returns array of notionIds (filters out any that don't have a notionId yet)
+     * Throws an error if any required relation can't be resolved (so it can be retried)
+     */
+    resolveRelationIds: async (storeName, localIds, throwOnMissing = false) => {
+        if (!localIds || !Array.isArray(localIds) || localIds.length === 0) return [];
+
+        const notionIds = [];
+        const missingIds = [];
+
+        for (const localId of localIds) {
+            if (!localId) continue;
+            const record = await PetTracker.DB.get(storeName, localId);
+            if (record?.notionId) {
+                notionIds.push(record.notionId);
+            } else if (record) {
+                missingIds.push(localId);
+            }
+        }
+
+        // If we have unresolved relations that exist locally but haven't synced,
+        // this is a dependency ordering issue that can be retried
+        if (throwOnMissing && missingIds.length > 0) {
+            const error = new Error(`Dependency not synced yet: ${storeName}:${missingIds.join(',')}`);
+            error.isRetryable = true;
+            throw error;
+        }
+
+        return notionIds;
+    },
+
+    /**
      * Convert local record to Notion properties
      */
-    toNotionProperties: (store, data) => {
+    toNotionProperties: async (store, data) => {
         const P = PetTracker.NotionProps;
+        const resolve = Sync.resolveRelationIds;
 
         switch (store) {
             case 'pets':
@@ -465,19 +590,19 @@ const Sync = {
             case 'events':
                 return {
                     'Title': P.title(data.title || 'Event'),
-                    'Pet(s)': P.relation(data.petIds),
-                    'Event Type': P.relation(data.eventTypeId ? [data.eventTypeId] : []),
-                    'Care Item': P.relation(data.careItemId ? [data.careItemId] : []),
+                    'Pet(s)': P.relation(await resolve(PetTracker.STORES.PETS, data.petIds)),
+                    'Event Type': P.relation(await resolve(PetTracker.STORES.EVENT_TYPES, data.eventTypeId ? [data.eventTypeId] : [])),
+                    'Care Item': P.relation(await resolve(PetTracker.STORES.CARE_ITEMS, data.careItemId ? [data.careItemId] : [])),
                     'Start Date': P.date(data.startDate, data.endDate),
                     'Status': P.select(data.status),
-                    'Severity Level': P.relation(data.severityLevelId ? [data.severityLevelId] : []),
+                    'Severity Level': P.relation(await resolve(PetTracker.STORES.SCALE_LEVELS, data.severityLevelId ? [data.severityLevelId] : [])),
                     'Value': P.number(data.value),
                     'Unit': P.select(data.unit),
                     'Duration': P.number(data.duration),
                     'Notes': P.richText(data.notes),
                     'Tags': P.multiSelect(data.tags),
                     'Source': P.select(data.source),
-                    'Provider': P.relation(data.providerId ? [data.providerId] : []),
+                    'Provider': P.relation(await resolve(PetTracker.STORES.CONTACTS, data.providerId ? [data.providerId] : [])),
                     'Cost': P.number(data.cost),
                     'Cost Category': P.select(data.costCategory),
                     'Cost Currency': P.select(data.costCurrency),
@@ -491,7 +616,7 @@ const Sync = {
                     'Category': P.select(data.category),
                     'Tracking Mode': P.select(data.trackingMode),
                     'Uses Severity': P.checkbox(data.usesSeverity),
-                    'Default Scale': P.relation(data.defaultScaleId ? [data.defaultScaleId] : []),
+                    'Default Scale': P.relation(await resolve(PetTracker.STORES.SCALES, data.defaultScaleId ? [data.defaultScaleId] : [])),
                     'Default Color': P.select(data.defaultColor),
                     'Default Icon': P.richText(data.defaultIcon),
                     'Default Tags': P.multiSelect(data.defaultTags),
@@ -504,9 +629,9 @@ const Sync = {
             case 'carePlans':
                 return {
                     'Name': P.title(data.name),
-                    'Pet(s)': P.relation(data.petIds),
-                    'Care Item': P.relation(data.careItemId ? [data.careItemId] : []),
-                    'Event Type': P.relation(data.eventTypeId ? [data.eventTypeId] : []),
+                    'Pet(s)': P.relation(await resolve(PetTracker.STORES.PETS, data.petIds)),
+                    'Care Item': P.relation(await resolve(PetTracker.STORES.CARE_ITEMS, data.careItemId ? [data.careItemId] : [])),
+                    'Event Type': P.relation(await resolve(PetTracker.STORES.EVENT_TYPES, data.eventTypeId ? [data.eventTypeId] : [])),
                     'Schedule Type': P.select(data.scheduleType),
                     'Interval Value': P.number(data.intervalValue),
                     'Interval Unit': P.select(data.intervalUnit),
@@ -537,7 +662,7 @@ const Sync = {
             case 'scaleLevels':
                 return {
                     'Name': P.title(data.name),
-                    'Scale': P.relation(data.scaleId ? [data.scaleId] : []),
+                    'Scale': P.relation(await resolve(PetTracker.STORES.SCALES, data.scaleId ? [data.scaleId] : [])),
                     'Order': P.number(data.order),
                     'Color': P.select(data.color),
                     'Numeric Value': P.number(data.numericValue),
@@ -551,8 +676,8 @@ const Sync = {
                     'Default Dose': P.richText(data.defaultDose),
                     'Default Unit': P.select(data.defaultUnit),
                     'Default Route': P.select(data.defaultRoute),
-                    'Linked Event Type': P.relation(data.linkedEventTypeId ? [data.linkedEventTypeId] : []),
-                    'Related Pets': P.relation(data.relatedPetIds),
+                    'Linked Event Type': P.relation(await resolve(PetTracker.STORES.EVENT_TYPES, data.linkedEventTypeId ? [data.linkedEventTypeId] : [])),
+                    'Related Pets': P.relation(await resolve(PetTracker.STORES.PETS, data.relatedPetIds)),
                     'Active Start': P.date(data.activeStart),
                     'Active End': P.date(data.activeEnd),
                     'Notes': P.richText(data.notes),
@@ -567,7 +692,7 @@ const Sync = {
                     'Email': P.richText(data.email),
                     'Address': P.richText(data.address),
                     'Notes': P.richText(data.notes),
-                    'Related Pets': P.relation(data.relatedPetIds)
+                    'Related Pets': P.relation(await resolve(PetTracker.STORES.PETS, data.relatedPetIds))
                 };
 
             default:

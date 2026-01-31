@@ -499,7 +499,7 @@ const Pets = {
                         ${recentEvents.length === 0 ? `
                             <p class="text-earth-metal text-sm py-4">No events recorded</p>
                         ` : recentEvents.map(event => `
-                            <div class="card p-3 flex items-center gap-3">
+                            <div class="card card-hover p-3 flex items-center gap-3 cursor-pointer" onclick="Calendar.showEventDetail('${event.id}')">
                                 <div class="w-8 h-8 bg-oatmeal flex items-center justify-center">
                                     <i data-lucide="activity" class="w-4 h-4 text-earth-metal"></i>
                                 </div>

@@ -520,52 +520,56 @@ const App = {
      */
     openSettings: () => {
         const settings = PetTracker.Settings.get();
-        
+
         // Populate connection tab
         const workerUrl = document.getElementById('settingsWorkerUrl');
         if (workerUrl) workerUrl.value = settings.workerUrl || '';
-        
+
         const proxyToken = document.getElementById('settingsProxyToken');
         if (proxyToken) proxyToken.value = settings.proxyToken || '';
-        
+
         const notionToken = document.getElementById('settingsNotionToken');
         if (notionToken) notionToken.value = settings.notionToken || '';
-        
-        // Populate database tab
-        const databaseId = document.getElementById('settingsDatabaseId');
-        if (databaseId) databaseId.value = settings.databaseId || '';
-        
+
         // Populate AI tab
         const aiProvider = document.getElementById('settingsAiProvider');
         if (aiProvider) aiProvider.value = settings.aiProvider || 'openai';
-        
+
         const aiModel = document.getElementById('settingsAiModel');
         if (aiModel) aiModel.value = settings.aiModel || '';
-        
+
         const aiApiKey = document.getElementById('settingsAiApiKey');
         if (aiApiKey) aiApiKey.value = settings.aiApiKey || '';
-        
+
         const aiEndpoint = document.getElementById('settingsAiEndpoint');
         if (aiEndpoint) aiEndpoint.value = settings.aiEndpoint || '';
-        
+
         App.toggleAiEndpoint();
-        
+
         // Populate Todoist tab
         const todoistEnabled = document.getElementById('settingsTodoistEnabled');
         if (todoistEnabled) todoistEnabled.checked = settings.todoistEnabled || false;
-        
+
         const todoistToken = document.getElementById('settingsTodoistToken');
         if (todoistToken) todoistToken.value = settings.todoistToken || '';
-        
+
         // Populate GCal tab
         const gcalEnabled = document.getElementById('settingsGcalEnabled');
         if (gcalEnabled) gcalEnabled.checked = settings.gcalEnabled || false;
-        
+
         const gcalCalendarId = document.getElementById('settingsGcalCalendarId');
         if (gcalCalendarId) gcalCalendarId.value = settings.gcalCalendarId || '';
-        
+
         App.updateGcalUI();
-        
+
+        // Show data source mappings if they exist
+        const hasDataSources = settings.dataSources && Object.values(settings.dataSources).some(v => v);
+        const mappingDiv = document.getElementById('dataSourceMapping');
+        if (mappingDiv && hasDataSources) {
+            mappingDiv.classList.remove('hidden');
+            // Populate the dropdowns with current values (user needs to scan to get options)
+        }
+
         PetTracker.UI.openModal('settingsModal');
     },
 
@@ -624,18 +628,24 @@ const App = {
                     <div class="mt-3 space-y-2">
                         ${recentEvents.length === 0 ? `
                             <p class="text-earth-metal text-sm py-4">No recent activity</p>
-                        ` : recentEvents.map(event => `
-                            <div class="card p-3 flex items-center gap-3">
-                                <div class="w-8 h-8 bg-oatmeal flex items-center justify-center">
-                                    <i data-lucide="activity" class="w-4 h-4 text-earth-metal"></i>
+                        ` : recentEvents.map(event => {
+            const pet = pets.find(p => event.petIds?.includes(p.id));
+            const eventType = App.state.eventTypes?.find(t => t.id === event.eventTypeId);
+            return `
+                            <div class="card card-hover p-3 flex items-center gap-3 cursor-pointer" onclick="Calendar.showEventDetail('${event.id}')">
+                                <div class="w-10 h-10 bg-oatmeal flex items-center justify-center flex-shrink-0" style="${pet?.color ? `border-left: 3px solid ${pet.color}` : ''}">
+                                    <i data-lucide="${eventType?.defaultIcon || 'activity'}" class="w-4 h-4 text-earth-metal"></i>
                                 </div>
                                 <div class="flex-1 min-w-0">
                                     <p class="text-sm text-charcoal truncate">${PetTracker.UI.escapeHtml(event.title || 'Event')}</p>
-                                    <p class="meta-row text-xs">${PetTracker.UI.formatRelative(event.startDate)}</p>
+                                    <p class="meta-row text-xs">
+                                        ${pet ? `<span class="meta-value">${PetTracker.UI.escapeHtml(pet.name)}</span><span class="meta-separator">·</span>` : ''}
+                                        <span>${PetTracker.UI.formatRelative(event.startDate)}</span>
+                                    </p>
                                 </div>
                                 <span class="badge ${event.status === 'Completed' ? 'badge-accent' : 'badge-light'}">${event.status}</span>
                             </div>
-                        `).join('')}
+                        `}).join('')}
                     </div>
                 </div>
             </div>
@@ -831,7 +841,23 @@ const App = {
             PetTracker.UI.toast('Connected to Notion!', 'success');
 
             const settings = PetTracker.Settings.get();
-            if (settings.workerUrl) {
+
+            // If we were in onboarding, populate the token field and trigger database scan
+            if (settings.onboardingInProgress) {
+                setTimeout(() => {
+                    // Populate the token field in onboarding
+                    const tokenField = document.getElementById('onboardingNotionToken');
+                    if (tokenField) tokenField.value = notionToken;
+
+                    // Clear the flag but keep the step
+                    PetTracker.Settings.set({ onboardingInProgress: false });
+
+                    // Trigger database scan
+                    if (typeof Onboarding !== 'undefined' && Onboarding.findDatabases) {
+                        Onboarding.findDatabases();
+                    }
+                }, 300);
+            } else if (settings.workerUrl) {
                 setTimeout(() => App.scanDataSources(), 500);
             }
             handled = true;
@@ -864,11 +890,21 @@ const App = {
      * Save settings from settings modal
      */
     saveSettings: () => {
+        // Collect data source mappings
+        const dataSources = {};
+        ['Pets', 'Events', 'EventTypes', 'CareItems', 'CarePlans', 'Contacts', 'Scales', 'ScaleLevels'].forEach(key => {
+            const el = document.getElementById(`dsMap${key}`);
+            if (el?.value) {
+                const storeKey = key.charAt(0).toLowerCase() + key.slice(1);
+                dataSources[storeKey] = el.value;
+            }
+        });
+
         const settings = {
             workerUrl: document.getElementById('settingsWorkerUrl')?.value?.trim() || '',
             proxyToken: document.getElementById('settingsProxyToken')?.value?.trim() || '',
             notionToken: document.getElementById('settingsNotionToken')?.value?.trim() || '',
-            databaseId: document.getElementById('settingsDatabaseId')?.value?.trim() || '',
+            dataSources,
             aiProvider: document.getElementById('settingsAiProvider')?.value || 'openai',
             aiModel: document.getElementById('settingsAiModel')?.value?.trim() || '',
             aiApiKey: document.getElementById('settingsAiApiKey')?.value?.trim() || '',
@@ -878,20 +914,6 @@ const App = {
             gcalEnabled: document.getElementById('settingsGcalEnabled')?.checked || false,
             gcalCalendarId: document.getElementById('settingsGcalCalendarId')?.value || ''
         };
-
-        // Save database mappings if present
-        const dsMapping = {};
-        ['Pets', 'Events', 'EventTypes', 'CareItems', 'CarePlans', 'Contacts', 'Scales', 'ScaleLevels'].forEach(key => {
-            const el = document.getElementById(`dsMap${key}`);
-            if (el?.value) {
-                const storeKey = key.charAt(0).toLowerCase() + key.slice(1);
-                dsMapping[storeKey] = el.value;
-            }
-        });
-        
-        if (Object.keys(dsMapping).length > 0) {
-            settings.dataSources = dsMapping;
-        }
 
         PetTracker.Settings.set(settings);
         PetTracker.UI.toast('Settings saved', 'success');
@@ -943,17 +965,9 @@ const App = {
 
         try {
             PetTracker.UI.showLoading('Scanning data sources...');
-            
-            // Search for databases (try both 'database' and 'data_source' filter values)
-            let searchRes;
-            try {
-                searchRes = await PetTracker.API.search('', { property: 'object', value: 'database' });
-            } catch (e) {
-                // Fall back to data_source if database doesn't work
-                searchRes = await PetTracker.API.search('', { property: 'object', value: 'data_source' });
-            }
-            
-            const dataSources = searchRes?.results || [];
+
+            // List all data sources using paginated search (like ghostink)
+            const dataSources = await PetTracker.API.listDatabases();
 
             if (dataSources.length === 0) {
                 PetTracker.UI.hideLoading();
@@ -965,7 +979,7 @@ const App = {
             const dsContainer = document.getElementById('dataSourceMapping');
             if (dsContainer) {
                 dsContainer.classList.remove('hidden');
-                
+
                 const dbOptions = dataSources.map(ds => ({
                     id: ds.id,
                     name: ds.title?.[0]?.plain_text || ds.name || 'Untitled'
@@ -979,7 +993,7 @@ const App = {
                     if (el) {
                         el.innerHTML = optionsHtml;
                         // Try to auto-select by name match
-                        const match = dbOptions.find(db => 
+                        const match = dbOptions.find(db =>
                             db.name.toLowerCase().replace(/\s+/g, '').includes(key.toLowerCase().replace(/\s+/g, ''))
                         );
                         if (match) el.value = match.id;
@@ -1032,8 +1046,8 @@ const App = {
 
         if (settings.gcalAccessToken) {
             if (statusEl) {
-                statusEl.textContent = settings.gcalUserEmail 
-                    ? `Connected as ${settings.gcalUserEmail}` 
+                statusEl.textContent = settings.gcalUserEmail
+                    ? `Connected as ${settings.gcalUserEmail}`
                     : 'Connected';
                 statusEl.classList.add('text-dull-purple');
             }
