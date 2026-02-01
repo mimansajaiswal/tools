@@ -331,6 +331,141 @@ const UI = {
      */
     todayYYYYMMDD: () => {
         return UI.localDateYYYYMMDD(new Date());
+    },
+
+    /**
+     * Render an icon (lucide icon name or image URL)
+     * @param {Object|null} icon - Icon object with type and name/url
+     * @param {string} fallbackIcon - Lucide icon name to use if no icon
+     * @param {string} size - CSS class for size (e.g., 'w-5 h-5')
+     * @returns {string} HTML string
+     */
+    renderIcon: (icon, fallbackIcon = 'file', size = 'w-5 h-5') => {
+        if (!icon) {
+            return `<i data-lucide="${fallbackIcon}" class="${size} text-earth-metal"></i>`;
+        }
+        if (icon.type === 'lucide') {
+            return `<i data-lucide="${icon.name}" class="${size} text-earth-metal"></i>`;
+        }
+        if (icon.type === 'emoji') {
+            return `<span class="${size} flex items-center justify-center text-base">${icon.emoji}</span>`;
+        }
+        if (icon.type === 'external' || icon.type === 'file' || icon.type === 'image') {
+            return `<img src="${icon.url}" alt="" class="${size} object-cover rounded-sm">`;
+        }
+        return `<i data-lucide="${fallbackIcon}" class="${size} text-earth-metal"></i>`;
+    },
+
+    /**
+     * Default icons for pet species (Lucide icon names)
+     */
+    speciesIcons: {
+        'Dog': 'dog',
+        'Cat': 'cat',
+        'Bird': 'bird',
+        'Fish': 'fish',
+        'Rabbit': 'rabbit',
+        'Reptile': 'turtle',
+        'Hamster': 'rat',
+        'Guinea Pig': 'rat',
+        'Other': 'paw-print'
+    },
+
+    /**
+     * Get default icon for a pet based on species
+     */
+    getSpeciesIcon: (species) => {
+        return UI.speciesIcons[species] || 'paw-print';
+    },
+
+    /**
+     * Common Lucide icons for pets and activities
+     */
+    petIcons: [
+        'dog', 'cat', 'bird', 'fish', 'rabbit', 'turtle', 'rat', 'bug', 'paw-print',
+        'heart', 'star', 'crown', 'sparkles', 'flame', 'zap', 'sun', 'moon', 'cloud'
+    ],
+
+    activityIcons: [
+        'activity', 'pill', 'syringe', 'stethoscope', 'thermometer', 'heart-pulse',
+        'footprints', 'scale', 'utensils', 'droplet', 'bath', 'scissors', 'brush',
+        'bed', 'home', 'car', 'plane', 'calendar', 'clock', 'check-circle'
+    ],
+
+    /**
+     * Show icon picker dropdown
+     * @param {string} targetInputId - ID of hidden input to store the selected icon
+     * @param {string} previewId - ID of element to update with preview
+     * @param {string} category - 'pet' or 'activity' to show relevant icons
+     * @param {Function} onSelect - Callback when icon is selected
+     */
+    showIconPicker: (targetInputId, previewId, category = 'pet', onSelect = null) => {
+        // Remove existing picker
+        const existing = document.getElementById('iconPickerDropdown');
+        if (existing) existing.remove();
+
+        const target = document.getElementById(targetInputId);
+        const preview = document.getElementById(previewId);
+        if (!target || !preview) return;
+
+        const rect = preview.getBoundingClientRect();
+        const icons = category === 'activity' ? UI.activityIcons : UI.petIcons;
+        
+        const picker = document.createElement('div');
+        picker.id = 'iconPickerDropdown';
+        picker.className = 'fixed z-[120] bg-white-linen border border-oatmeal shadow-lg p-3 max-w-[280px]';
+        picker.style.top = `${Math.min(rect.bottom + 4, window.innerHeight - 300)}px`;
+        picker.style.left = `${Math.max(rect.left, 8)}px`;
+        picker.innerHTML = `
+            <p class="font-mono text-[10px] uppercase text-earth-metal mb-2">Choose Icon</p>
+            <div class="grid grid-cols-6 gap-1 mb-3">
+                ${icons.map(iconName => `
+                    <button type="button" class="w-9 h-9 flex items-center justify-center hover:bg-oatmeal/50 border border-transparent hover:border-earth-metal/30 transition-fast" data-icon="${iconName}" title="${iconName}">
+                        <i data-lucide="${iconName}" class="w-5 h-5 text-charcoal"></i>
+                    </button>
+                `).join('')}
+            </div>
+            <div class="flex gap-2 border-t border-oatmeal pt-2">
+                <button type="button" class="btn-secondary flex-1 py-1.5 text-xs font-mono uppercase" onclick="PetTracker.UI.clearIcon('${targetInputId}', '${previewId}')">Clear</button>
+                <button type="button" class="btn-secondary flex-1 py-1.5 text-xs font-mono uppercase" onclick="document.getElementById('iconPickerDropdown')?.remove()">Close</button>
+            </div>
+        `;
+
+        document.body.appendChild(picker);
+        if (window.lucide) lucide.createIcons();
+
+        // Handle icon button clicks
+        picker.querySelectorAll('[data-icon]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const iconName = btn.dataset.icon;
+                target.value = JSON.stringify({ type: 'lucide', name: iconName });
+                preview.innerHTML = `<i data-lucide="${iconName}" class="w-6 h-6 text-charcoal"></i>`;
+                picker.remove();
+                if (window.lucide) lucide.createIcons();
+                if (onSelect) onSelect({ type: 'lucide', name: iconName });
+            });
+        });
+
+        // Close when clicking outside
+        const closeHandler = (e) => {
+            if (!picker.contains(e.target) && !preview.contains(e.target)) {
+                picker.remove();
+                document.removeEventListener('click', closeHandler);
+            }
+        };
+        setTimeout(() => document.addEventListener('click', closeHandler), 0);
+    },
+
+    /**
+     * Clear icon selection
+     */
+    clearIcon: (targetInputId, previewId, fallbackIcon = 'image-plus') => {
+        const target = document.getElementById(targetInputId);
+        const preview = document.getElementById(previewId);
+        if (target) target.value = '';
+        if (preview) preview.innerHTML = `<i data-lucide="${fallbackIcon}" class="w-6 h-6 text-earth-metal"></i>`;
+        document.getElementById('iconPickerDropdown')?.remove();
+        if (window.lucide) lucide.createIcons();
     }
 };
 

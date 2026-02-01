@@ -314,7 +314,21 @@ const NotionExtract = {
     files: (prop) => (prop?.files || []).map(f => ({
         name: f.name,
         url: f.file?.url || f.external?.url || ''
-    }))
+    })),
+    // Extract page icon (emoji or external URL)
+    icon: (page) => {
+        if (!page?.icon) return null;
+        if (page.icon.type === 'emoji') {
+            return { type: 'emoji', emoji: page.icon.emoji };
+        }
+        if (page.icon.type === 'external') {
+            return { type: 'external', url: page.icon.external?.url };
+        }
+        if (page.icon.type === 'file') {
+            return { type: 'file', url: page.icon.file?.url };
+        }
+        return null;
+    }
 };
 
 // Export

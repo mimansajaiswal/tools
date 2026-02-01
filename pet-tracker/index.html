@@ -780,9 +780,19 @@
                 </button>
             </div>
             <form id="addPetForm" class="p-4 space-y-4">
-                <div>
-                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Name *</label>
-                    <input type="text" id="addPetName" class="input-field" required placeholder="Pet name">
+                <div class="flex gap-4 items-start">
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Icon</label>
+                        <button type="button" id="addPetIconPreview" onclick="PetTracker.UI.showIconPicker('addPetIcon', 'addPetIconPreview', 'pet')"
+                            class="w-12 h-12 bg-oatmeal border border-earth-metal/30 flex items-center justify-center hover:bg-oatmeal/70 transition-fast cursor-pointer">
+                            <i data-lucide="image-plus" class="w-6 h-6 text-earth-metal"></i>
+                        </button>
+                        <input type="hidden" id="addPetIcon">
+                    </div>
+                    <div class="flex-1">
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Name *</label>
+                        <input type="text" id="addPetName" class="input-field" required placeholder="Pet name">
+                    </div>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>

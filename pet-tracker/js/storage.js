@@ -378,7 +378,8 @@ const Settings = {
         SETTINGS: LS_PREFIX + 'settings',
         LAST_SYNC: LS_PREFIX + 'last_sync',
         ACTIVE_PET: LS_PREFIX + 'active_pet',
-        ONBOARDING_DONE: LS_PREFIX + 'onboarding_done'
+        ONBOARDING_DONE: LS_PREFIX + 'onboarding_done',
+        UI_STATE: LS_PREFIX + 'ui_state'
     },
 
     defaults: {
@@ -443,6 +444,25 @@ const Settings = {
     setLastSync: (ts = new Date().toISOString()) => localStorage.setItem(Settings.KEYS.LAST_SYNC, ts),
     getActivePet: () => localStorage.getItem(Settings.KEYS.ACTIVE_PET),
     setActivePet: (id) => id ? localStorage.setItem(Settings.KEYS.ACTIVE_PET, id) : localStorage.removeItem(Settings.KEYS.ACTIVE_PET),
+
+    // UI State persistence
+    getUIState: () => {
+        try {
+            const raw = localStorage.getItem(Settings.KEYS.UI_STATE);
+            return raw ? JSON.parse(raw) : {};
+        } catch (e) {
+            return {};
+        }
+    },
+    setUIState: (updates) => {
+        const current = Settings.getUIState();
+        const merged = { ...current, ...updates };
+        localStorage.setItem(Settings.KEYS.UI_STATE, JSON.stringify(merged));
+        return merged;
+    },
+    clearUIState: () => {
+        localStorage.removeItem(Settings.KEYS.UI_STATE);
+    },
 
     // Clear only pettracker_ prefixed keys
     clear: () => {

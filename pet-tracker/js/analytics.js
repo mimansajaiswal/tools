@@ -107,13 +107,7 @@ const Analytics = {
                     <div id="adherenceStats" class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4"></div>
                 </div>
 
-                <!-- Activity Heatmap -->
-                <div class="card p-4">
-                    ${PetTracker.UI.sectionHeader(4, 'Activity by Time of Day')}
-                    <div id="heatmapContainer" class="mt-4">
-                        <canvas id="heatmapChart" height="150"></canvas>
-                    </div>
-                </div>
+
             </div>
         `;
 
@@ -122,7 +116,6 @@ const Analytics = {
         // Render charts after DOM is ready
         await Analytics.renderWeightChart(events);
         await Analytics.renderAdherenceStats();
-        await Analytics.renderHeatmap(events);
     },
 
     /**
@@ -423,87 +416,6 @@ const Analytics = {
                 <p class="text-xs text-earth-metal mt-1">${stat.actual}/${stat.expected} in 30 days</p>
             </div>
         `).join('');
-    },
-
-    /**
-     * Render activity heatmap by hour of day
-     */
-    renderHeatmap: async (allEvents) => {
-        const canvas = document.getElementById('heatmapChart');
-        if (!canvas) return;
-
-        // Filter events
-        let events = allEvents.filter(e => e.startDate?.includes('T'));
-        if (Analytics.state.selectedPetId) {
-            events = events.filter(e => e.petIds?.includes(Analytics.state.selectedPetId));
-        }
-
-        if (events.length === 0) {
-            const container = document.getElementById('heatmapContainer');
-            if (container) container.innerHTML = '<p class="text-earth-metal text-sm">No timed events recorded</p>';
-            return;
-        }
-
-        // Count events by hour
-        const hourCounts = new Array(24).fill(0);
-        events.forEach(e => {
-            const hour = new Date(e.startDate).getHours();
-            hourCounts[hour]++;
-        });
-
-        const ctx = canvas.getContext('2d');
-        const labels = Array.from({ length: 24 }, (_, i) =>
-            i === 0 ? '12am' : i < 12 ? `${i}am` : i === 12 ? '12pm' : `${i - 12}pm`
-        );
-
-        // Destroy existing chart
-        if (window.heatmapChartInstance) {
-            window.heatmapChartInstance.destroy();
-        }
-
-        window.heatmapChartInstance = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels,
-                datasets: [{
-                    label: 'Events',
-                    data: hourCounts,
-                    backgroundColor: hourCounts.map(count => {
-                        const max = Math.max(...hourCounts);
-                        const intensity = max > 0 ? count / max : 0;
-                        return `rgba(139, 123, 142, ${0.2 + intensity * 0.8})`;
-                    }),
-                    borderColor: '#8b7b8e',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false }
-                },
-                scales: {
-                    x: {
-                        ticks: {
-                            font: { family: '"JetBrains Mono"', size: 9 },
-                            color: '#6b6357',
-                            maxRotation: 0
-                        },
-                        grid: { display: false }
-                    },
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            font: { family: '"JetBrains Mono"', size: 10 },
-                            color: '#6b6357',
-                            stepSize: 1
-                        },
-                        grid: { color: 'rgba(212, 200, 184, 0.5)' }
-                    }
-                }
-            }
-        });
     }
 };
 

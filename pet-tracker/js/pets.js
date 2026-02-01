@@ -26,6 +26,7 @@ const Pets = {
             color: petData.color || '#8b7b8e',
             isPrimary: petData.isPrimary || false,
             photo: petData.photo || [],
+            icon: petData.icon || null,
             primaryVetId: petData.primaryVetId || null,
             relatedContactIds: petData.relatedContactIds || [],
             createdAt: new Date().toISOString(),
@@ -218,15 +219,23 @@ const Pets = {
         const age = Pets.calculateAge(pet.birthDate);
         const ageStr = age !== null ? `${age}y` : '';
 
+        // Determine what to show in the avatar area: photo > icon > species default
+        const speciesIcon = PetTracker.UI.getSpeciesIcon(pet.species);
+        let avatarContent;
+        if (pet.photo?.[0]?.url) {
+            avatarContent = `<img src="${pet.photo[0].url}" alt="${PetTracker.UI.escapeHtml(pet.name)}" class="w-full h-full object-cover">`;
+        } else if (pet.icon) {
+            avatarContent = PetTracker.UI.renderIcon(pet.icon, speciesIcon, 'w-7 h-7');
+        } else {
+            avatarContent = `<i data-lucide="${speciesIcon}" class="w-7 h-7 text-earth-metal"></i>`;
+        }
+
         return `
             <div class="card card-hover p-4 ${onClick ? 'cursor-pointer' : ''}" 
                  ${onClick ? `onclick="${onClick}('${pet.id}')"` : ''}>
                 <div class="flex items-center gap-3">
                     <div class="w-14 h-14 bg-oatmeal flex items-center justify-center flex-shrink-0 overflow-hidden">
-                        ${pet.photo?.[0]?.url
-                ? `<img src="${pet.photo[0].url}" alt="${PetTracker.UI.escapeHtml(pet.name)}" class="w-full h-full object-cover">`
-                : `<i data-lucide="paw-print" class="w-7 h-7 text-earth-metal"></i>`
-            }
+                        ${avatarContent}
                     </div>
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-2">
@@ -260,6 +269,9 @@ const Pets = {
     renderList: async () => {
         const container = document.querySelector('[data-view="pets"]');
         if (!container) return;
+
+        // Clear pet detail state when going back to list
+        PetTracker.Settings.setUIState({ viewingPetId: null });
 
         const pets = await Pets.getAll();
 
@@ -298,10 +310,17 @@ const Pets = {
         document.getElementById('addPetColor').value = '#8b7b8e';
         document.getElementById('addPetForm').dataset.editId = '';
 
+        // Reset icon
+        const iconInput = document.getElementById('addPetIcon');
+        const iconPreview = document.getElementById('addPetIconPreview');
+        if (iconInput) iconInput.value = '';
+        if (iconPreview) iconPreview.innerHTML = `<i data-lucide="image-plus" class="w-6 h-6 text-earth-metal"></i>`;
+
         const header = document.querySelector('#addPetModal .section-header');
         if (header) header.textContent = 'Add Pet';
 
         PetTracker.UI.openModal('addPetModal');
+        if (window.lucide) lucide.createIcons();
     },
 
     /**
@@ -320,10 +339,22 @@ const Pets = {
         document.getElementById('addPetNotes').value = pet.notes || '';
         document.getElementById('addPetForm').dataset.editId = id;
 
+        // Populate icon field
+        const iconInput = document.getElementById('addPetIcon');
+        const iconPreview = document.getElementById('addPetIconPreview');
+        if (pet.icon && iconInput && iconPreview) {
+            iconInput.value = JSON.stringify(pet.icon);
+            iconPreview.innerHTML = PetTracker.UI.renderIcon(pet.icon, 'image-plus', 'w-6 h-6');
+        } else if (iconInput && iconPreview) {
+            iconInput.value = '';
+            iconPreview.innerHTML = `<i data-lucide="image-plus" class="w-6 h-6 text-earth-metal"></i>`;
+        }
+
         const header = document.querySelector('#addPetModal .section-header');
         if (header) header.textContent = 'Edit Pet';
 
         PetTracker.UI.openModal('addPetModal');
+        if (window.lucide) lucide.createIcons();
     },
 
     /**
@@ -333,6 +364,17 @@ const Pets = {
         const form = document.getElementById('addPetForm');
         const editId = form?.dataset.editId;
 
+        // Parse icon from hidden input
+        let icon = null;
+        const iconValue = document.getElementById('addPetIcon')?.value;
+        if (iconValue) {
+            try {
+                icon = JSON.parse(iconValue);
+            } catch (e) {
+                console.warn('[Pets] Error parsing icon:', e);
+            }
+        }
+
         const data = {
             name: document.getElementById('addPetName')?.value?.trim(),
             species: document.getElementById('addPetSpecies')?.value || null,
@@ -340,7 +382,8 @@ const Pets = {
             breed: document.getElementById('addPetBreed')?.value?.trim() || '',
             birthDate: document.getElementById('addPetBirthDate')?.value || null,
             color: document.getElementById('addPetColor')?.value || '#8b7b8e',
-            notes: document.getElementById('addPetNotes')?.value?.trim() || ''
+            notes: document.getElementById('addPetNotes')?.value?.trim() || '',
+            icon
         };
 
         if (!data.name) {
@@ -378,6 +421,9 @@ const Pets = {
 
         PetTracker.Settings.setActivePet(id);
         App.state.activePetId = id;
+
+        // Save UI state - viewing pet detail
+        PetTracker.Settings.setUIState({ viewingPetId: id });
 
         // Get pet's events
         const events = await PetTracker.DB.query(
@@ -427,10 +473,16 @@ const Pets = {
                 <div class="card p-6">
                     <div class="flex flex-col md:flex-row gap-6">
                         <div class="w-32 h-32 bg-oatmeal flex items-center justify-center flex-shrink-0 overflow-hidden">
-                            ${pet.photo?.[0]?.url
-                ? `<img src="${pet.photo[0].url}" alt="${PetTracker.UI.escapeHtml(pet.name)}" class="w-full h-full object-cover">`
-                : `<i data-lucide="paw-print" class="w-16 h-16 text-earth-metal"></i>`
-            }
+                            ${(() => {
+                                const speciesIcon = PetTracker.UI.getSpeciesIcon(pet.species);
+                                if (pet.photo?.[0]?.url) {
+                                    return `<img src="${pet.photo[0].url}" alt="${PetTracker.UI.escapeHtml(pet.name)}" class="w-full h-full object-cover">`;
+                                } else if (pet.icon) {
+                                    return PetTracker.UI.renderIcon(pet.icon, speciesIcon, 'w-16 h-16');
+                                } else {
+                                    return `<i data-lucide="${speciesIcon}" class="w-16 h-16 text-earth-metal"></i>`;
+                                }
+                            })()}
                         </div>
                         <div class="flex-1">
                             <div class="flex items-center gap-3 mb-2">
@@ -498,10 +550,21 @@ const Pets = {
                     <div class="mt-3 space-y-2">
                         ${recentEvents.length === 0 ? `
                             <p class="text-earth-metal text-sm py-4">No events recorded</p>
-                        ` : recentEvents.map(event => `
+                        ` : recentEvents.map(event => {
+                            const eventType = App.state.eventTypes.find(t => t.id === event.eventTypeId);
+                            const defaultIcon = eventType?.defaultIcon || 'activity';
+                            let iconHtml;
+                            if (event.icon) {
+                                iconHtml = PetTracker.UI.renderIcon(event.icon, defaultIcon, 'w-4 h-4');
+                            } else if (eventType?.icon) {
+                                iconHtml = PetTracker.UI.renderIcon(eventType.icon, defaultIcon, 'w-4 h-4');
+                            } else {
+                                iconHtml = `<i data-lucide="${defaultIcon}" class="w-4 h-4 text-earth-metal"></i>`;
+                            }
+                            return `
                             <div class="card card-hover p-3 flex items-center gap-3 cursor-pointer" onclick="Calendar.showEventDetail('${event.id}')">
                                 <div class="w-8 h-8 bg-oatmeal flex items-center justify-center">
-                                    <i data-lucide="activity" class="w-4 h-4 text-earth-metal"></i>
+                                    ${iconHtml}
                                 </div>
                                 <div class="flex-1 min-w-0">
                                     <p class="text-sm text-charcoal truncate">${PetTracker.UI.escapeHtml(event.title || 'Event')}</p>
@@ -509,7 +572,7 @@ const Pets = {
                                 </div>
                                 <span class="badge ${event.status === 'Completed' ? 'badge-accent' : 'badge-light'}">${event.status}</span>
                             </div>
-                        `).join('')}
+                        `}).join('')}
                     </div>
                 </div>
             </div>

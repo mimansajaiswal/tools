@@ -489,13 +489,18 @@ const Sync = {
         const notionId = page.id;
         const storeName = PetTracker.STORES[storeKey];
 
-        // Check if we have this record locally
-        const local = await PetTracker.DB.getByNotionId(storeName, notionId);
+        // Check if we have this record locally by notionId
+        let local = await PetTracker.DB.getByNotionId(storeName, notionId);
 
         // Convert from Notion format
         const remote = Sync.fromNotionPage(store, page);
         remote.notionId = notionId;
         remote.synced = true;
+        // Extract page icon if available
+        const icon = PetTracker.NotionExtract.icon(page);
+        if (icon) {
+            remote.icon = icon;
+        }
 
         if (page.archived) {
             // Remote was deleted
@@ -503,6 +508,21 @@ const Sync = {
                 await PetTracker.DB.delete(storeName, local.id);
             }
             return;
+        }
+
+        // If no local match by notionId, try to find by name (prevent duplicates)
+        // This handles the case where a record was created locally but not synced yet
+        if (!local && remote.name) {
+            const allRecords = await PetTracker.DB.getAll(storeName);
+            const matchByName = allRecords.find(r => 
+                r.name === remote.name && !r.notionId
+            );
+            if (matchByName) {
+                // Found a local record with same name that hasn't synced yet
+                // Link it to the Notion record instead of creating a duplicate
+                local = matchByName;
+                console.log(`[Sync] Matched ${store} by name: "${remote.name}"`);
+            }
         }
 
         if (!local) {
@@ -517,6 +537,11 @@ const Sync = {
             if (remoteTime > localTime) {
                 remote.id = local.id;
                 await PetTracker.DB.put(storeName, remote);
+            } else if (!local.notionId) {
+                // Local is newer but has no notionId - just add the notionId
+                local.notionId = notionId;
+                local.synced = true;
+                await PetTracker.DB.put(storeName, local);
             }
         }
     },

@@ -55,7 +55,8 @@ const App = {
             App.showOnboarding();
         } else {
             await App.loadData();
-            App.showView('dashboard');
+            // Restore UI state from localStorage
+            await App.restoreUIState();
         }
 
         // Online/offline handling
@@ -125,13 +126,28 @@ const App = {
                 App.showView(btn.dataset.nav);
             });
         });
+
+        // Handle browser back/forward navigation
+        window.addEventListener('popstate', (e) => {
+            if (e.state?.view) {
+                App.showView(e.state.view, false);
+            } else {
+                // Check URL for view param
+                const url = new URL(window.location.href);
+                const view = url.searchParams.get('view') || 'dashboard';
+                App.showView(view, false);
+            }
+        });
     },
 
     /**
      * Show a view
      */
-    showView: (viewName) => {
+    showView: (viewName, pushHistory = true) => {
         App.state.currentView = viewName;
+
+        // Save UI state
+        PetTracker.Settings.setUIState({ currentView: viewName });
 
         // Update nav active states
         document.querySelectorAll('[data-nav]').forEach(btn => {
@@ -156,6 +172,13 @@ const App = {
         };
         const headerTitle = document.getElementById('headerTitle');
         if (headerTitle) headerTitle.textContent = titles[viewName] || viewName;
+
+        // Push to browser history for back/forward navigation
+        if (pushHistory) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('view', viewName);
+            window.history.pushState({ view: viewName }, '', url.toString());
+        }
 
         // Refresh icons
         if (window.lucide) lucide.createIcons();
@@ -225,6 +248,35 @@ const App = {
                     `<option value="${p.id}" ${p.id === activePet ? 'selected' : ''}>${PetTracker.UI.escapeHtml(p.name)}</option>`
                 ).join('');
         }
+    },
+
+    /**
+     * Restore UI state from localStorage
+     */
+    restoreUIState: async () => {
+        const uiState = PetTracker.Settings.getUIState();
+        const currentView = uiState.currentView || 'dashboard';
+        
+        // Restore pet filter if saved
+        if (uiState.filterPetId) {
+            App.state.activePetId = uiState.filterPetId;
+            const desktopFilter = document.getElementById('petFilterDesktop');
+            if (desktopFilter) desktopFilter.value = uiState.filterPetId;
+        }
+        
+        // Show the saved view (don't push to history on restore)
+        App.showView(currentView, false);
+        
+        // If we were viewing a specific pet, restore that
+        if (currentView === 'pets' && uiState.viewingPetId) {
+            const pet = await Pets.get(uiState.viewingPetId);
+            if (pet) {
+                // Small delay to let the view render first
+                setTimeout(() => Pets.showDetail(uiState.viewingPetId), 50);
+            }
+        }
+        
+        console.log('[App] Restored UI state:', { currentView, viewingPetId: uiState.viewingPetId, filterPetId: uiState.filterPetId });
     },
 
     /**
@@ -602,11 +654,22 @@ const App = {
                 <div>
                     ${PetTracker.UI.sectionHeader(1, 'Your Pets')}
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-3">
-                        ${pets.map(pet => `
+                        ${pets.map(pet => {
+                            // Determine pet avatar: photo > icon > species default
+                            const speciesIcon = PetTracker.UI.getSpeciesIcon(pet.species);
+                            let petAvatarHtml;
+                            if (pet.photo?.[0]?.url) {
+                                petAvatarHtml = `<img src="${pet.photo[0].url}" alt="${PetTracker.UI.escapeHtml(pet.name)}" class="w-full h-full object-cover">`;
+                            } else if (pet.icon) {
+                                petAvatarHtml = PetTracker.UI.renderIcon(pet.icon, speciesIcon, 'w-6 h-6');
+                            } else {
+                                petAvatarHtml = `<i data-lucide="${speciesIcon}" class="w-6 h-6 text-earth-metal"></i>`;
+                            }
+                            return `
                             <div class="card card-hover p-4 cursor-pointer" onclick="App.showPetDetail('${pet.id}')">
                                 <div class="flex items-center gap-3">
-                                    <div class="w-12 h-12 bg-oatmeal flex items-center justify-center">
-                                        <i data-lucide="paw-print" class="w-6 h-6 text-earth-metal"></i>
+                                    <div class="w-12 h-12 bg-oatmeal flex items-center justify-center overflow-hidden">
+                                        ${petAvatarHtml}
                                     </div>
                                     <div class="flex-1 min-w-0">
                                         <h3 class="font-serif text-lg text-charcoal truncate">${PetTracker.UI.escapeHtml(pet.name)}</h3>
@@ -618,7 +681,7 @@ const App = {
                                     <div class="pet-dot" style="background-color: ${pet.color || '#8b7b8e'}"></div>
                                 </div>
                             </div>
-                        `).join('')}
+                        `}).join('')}
                     </div>
                 </div>
 
@@ -631,10 +694,20 @@ const App = {
                         ` : recentEvents.map(event => {
             const pet = pets.find(p => event.petIds?.includes(p.id));
             const eventType = App.state.eventTypes?.find(t => t.id === event.eventTypeId);
+            // Determine event icon: event.icon > eventType.icon > lucide fallback
+            const defaultIcon = eventType?.defaultIcon || 'activity';
+            let eventIconHtml;
+            if (event.icon) {
+                eventIconHtml = PetTracker.UI.renderIcon(event.icon, defaultIcon, 'w-4 h-4');
+            } else if (eventType?.icon) {
+                eventIconHtml = PetTracker.UI.renderIcon(eventType.icon, defaultIcon, 'w-4 h-4');
+            } else {
+                eventIconHtml = `<i data-lucide="${defaultIcon}" class="w-4 h-4 text-earth-metal"></i>`;
+            }
             return `
                             <div class="card card-hover p-3 flex items-center gap-3 cursor-pointer" onclick="Calendar.showEventDetail('${event.id}')">
                                 <div class="w-10 h-10 bg-oatmeal flex items-center justify-center flex-shrink-0" style="${pet?.color ? `border-left: 3px solid ${pet.color}` : ''}">
-                                    <i data-lucide="${eventType?.defaultIcon || 'activity'}" class="w-4 h-4 text-earth-metal"></i>
+                                    ${eventIconHtml}
                                 </div>
                                 <div class="flex-1 min-w-0">
                                     <p class="text-sm text-charcoal truncate">${PetTracker.UI.escapeHtml(event.title || 'Event')}</p>
@@ -711,6 +784,9 @@ const App = {
     filterByPet: (petId) => {
         App.state.activePetId = petId || null;
         PetTracker.Settings.setActivePet(petId || null);
+        
+        // Save to UI state
+        PetTracker.Settings.setUIState({ filterPetId: petId || null });
 
         // Update filter dropdowns to match
         const desktopFilter = document.getElementById('petFilterDesktop');

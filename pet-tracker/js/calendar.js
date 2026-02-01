@@ -19,8 +19,20 @@ const Calendar = {
      * Initialize calendar
      */
     init: () => {
-        Calendar.state.view = PetTracker.Settings.get().calendarView || 'month';
-        Calendar.state.currentDate = new Date();
+        const uiState = PetTracker.Settings.getUIState();
+        Calendar.state.view = uiState.calendarView || PetTracker.Settings.get().calendarView || 'month';
+        
+        // Restore calendar date if saved
+        if (uiState.calendarDate) {
+            Calendar.state.currentDate = new Date(uiState.calendarDate);
+        } else {
+            Calendar.state.currentDate = new Date();
+        }
+        
+        // Restore calendar pet filter if saved
+        if (uiState.calendarFilterPetId) {
+            Calendar.state.filters.petIds = [uiState.calendarFilterPetId];
+        }
     },
 
     /**
@@ -430,6 +442,7 @@ const Calendar = {
         } else {
             currentDate.setMonth(currentDate.getMonth() - 1);
         }
+        Calendar.saveState();
         Calendar.render();
     },
 
@@ -445,6 +458,7 @@ const Calendar = {
         } else {
             currentDate.setMonth(currentDate.getMonth() + 1);
         }
+        Calendar.saveState();
         Calendar.render();
     },
 
@@ -453,7 +467,18 @@ const Calendar = {
      */
     goToToday: () => {
         Calendar.state.currentDate = new Date();
+        Calendar.saveState();
         Calendar.render();
+    },
+
+    /**
+     * Save calendar state to localStorage
+     */
+    saveState: () => {
+        PetTracker.Settings.setUIState({
+            calendarView: Calendar.state.view,
+            calendarDate: Calendar.state.currentDate.toISOString()
+        });
     },
 
     /**
@@ -462,6 +487,11 @@ const Calendar = {
     setView: (view) => {
         Calendar.state.view = view;
         PetTracker.Settings.set({ calendarView: view });
+        // Save to UI state as well
+        PetTracker.Settings.setUIState({ 
+            calendarView: view,
+            calendarDate: Calendar.state.currentDate.toISOString()
+        });
         Calendar.render();
     },
 
@@ -484,6 +514,8 @@ const Calendar = {
         } else {
             Calendar.state.filters.petIds = [];
         }
+        // Save filter state
+        PetTracker.Settings.setUIState({ calendarFilterPetId: petFilter?.value || null });
         Calendar.render();
     },
 
@@ -496,6 +528,17 @@ const Calendar = {
 
         const pet = App.state.pets.find(p => p.id === event.petIds?.[0]);
         const eventType = App.state.eventTypes.find(t => t.id === event.eventTypeId);
+
+        // Determine icon to show
+        const defaultIcon = eventType?.defaultIcon || 'activity';
+        let iconHtml;
+        if (event.icon) {
+            iconHtml = PetTracker.UI.renderIcon(event.icon, defaultIcon, 'w-6 h-6');
+        } else if (eventType?.icon) {
+            iconHtml = PetTracker.UI.renderIcon(eventType.icon, defaultIcon, 'w-6 h-6');
+        } else {
+            iconHtml = `<i data-lucide="${defaultIcon}" class="w-6 h-6 text-earth-metal"></i>`;
+        }
 
         // Create a simple drawer/modal for event detail
         const drawer = document.createElement('div');
@@ -511,7 +554,12 @@ const Calendar = {
                     </button>
                 </div>
                 <div class="p-4 space-y-4">
-                    <h3 class="font-serif text-xl text-charcoal">${PetTracker.UI.escapeHtml(event.title || 'Event')}</h3>
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-oatmeal flex items-center justify-center flex-shrink-0">
+                            ${iconHtml}
+                        </div>
+                        <h3 class="font-serif text-xl text-charcoal">${PetTracker.UI.escapeHtml(event.title || 'Event')}</h3>
+                    </div>
                     
                     <div class="meta-row text-sm">
                         ${pet ? `
@@ -542,7 +590,7 @@ const Calendar = {
                         ${event.source ? `<span class="badge badge-light">${event.source}</span>` : ''}
                     </div>
 
-                    ${event.value !== null ? `
+                    ${event.value !== null && event.value !== undefined ? `
                         <div class="meta-row text-sm">
                             <span class="meta-label">VALUE:</span>
                             <span class="meta-value">${event.value} ${event.unit || ''}</span>
