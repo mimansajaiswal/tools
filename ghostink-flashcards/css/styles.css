@@ -850,6 +850,12 @@ html[data-theme="dark"] .notion-color-red-background {
 }
 
 /* Minimal markdown typography (works without Tailwind Typography plugin) */
+.md-content {
+    overflow-x: auto;
+    max-width: 100%;
+    padding-left: 4px;
+}
+
 .md-content :is(p, ul, ol, pre, blockquote, table) {
     margin: 0.65rem 0;
 }
@@ -874,12 +880,12 @@ html[data-theme="dark"] .notion-color-red-background {
 }
 
 .md-content ul {
-    padding-left: 1.2rem;
+    padding-left: 1.5rem;
     list-style: disc;
 }
 
 .md-content ol {
-    padding-left: 1.2rem;
+    padding-left: 1.5rem;
     list-style: decimal;
 }
 

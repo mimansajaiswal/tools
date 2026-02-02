@@ -120,7 +120,20 @@ const safeMarkdownParse = (md) => {
     try {
         ensureMarkedConfigured();
         if (typeof marked === 'undefined') return escapeHtml(md);
-        return marked.parse(md);
+        // Protect notion-equation spans from markdown processing (prevent _ and * from being interpreted)
+        const eqPlaceholders = [];
+        const protectedMd = md.replace(/<span class="notion-equation">([^<]*)<\/span>/g, (match, expr) => {
+            const idx = eqPlaceholders.length;
+            eqPlaceholders.push(expr);
+            return `\x00EQ${idx}EQ\x00`;
+        });
+        let html = marked.parse(protectedMd, { breaks: true, gfm: true });
+        // Restore equation spans with original (unmangled) expressions
+        html = html.replace(/\x00EQ(\d+)EQ\x00/g, (_, idx) => {
+            const expr = eqPlaceholders[parseInt(idx, 10)] || '';
+            return `<span class="notion-equation">${expr}</span>`;
+        });
+        return html;
     } catch (e) {
         console.error('Markdown parse error:', e);
         return md; // Return raw markdown on failure
@@ -414,9 +427,7 @@ export const App = {
         this.state.queueBadgeSig = buildSig();
         this.state.queueBadgeTimer = setInterval(() => {
             const sig = buildSig();
-            const queueCountEl = el('#queueCount');
-            const needsQueueRefresh = queueCountEl && queueCountEl.textContent !== String(this.state.queue.size);
-            if (sig === this.state.queueBadgeSig && !needsQueueRefresh) return;
+            if (sig === this.state.queueBadgeSig) return;
             this.state.queueBadgeSig = sig;
             this.renderConnection();
         }, 5000);
@@ -620,7 +631,7 @@ export const App = {
         this.updateMobileFab();
     },
     generateCardQueue(deckIds, includeNonDue = false, opts = {}) {
-        const { precomputeReverse = true } = opts || {};
+        const { precomputeReverse = true, isCram = false } = opts || {};
         const validIds = (deckIds || []).filter(id => !!this.deckById(id));
         const selectedDeckIds = [...new Set(validIds)];
         if (selectedDeckIds.length === 0) return [];
@@ -789,7 +800,9 @@ export const App = {
                 ? (el('#noScheduleChanges')?.checked ?? true)
                 : false;
 
-        const cardQueue = this.generateCardQueue(deckIds, includeNonDue);
+        const cardQueue = this.generateCardQueue(deckIds, includeNonDue, {
+            isCram: cardSelectionMode === 'cram'
+        });
 
         if (cardQueue.length === 0) {
             if (includeNonDue) {
@@ -895,9 +908,11 @@ export const App = {
             // This catches "Skip" actions where data was modified
             const card = this.cardById(queueItem.cardId);
             if (card && card._pendingSave) {
+                // Clone the card data before async ops to avoid stale references
+                const cardSnapshot = JSON.parse(JSON.stringify(card));
+                delete card._pendingSave;
                 Storage.put('cards', card).then(() => {
-                    delete card._pendingSave;
-                    this.queueOp({ type: 'card-upsert', payload: card });
+                    this.queueOp({ type: 'card-upsert', payload: cardSnapshot });
                 }).catch(e => console.error('Failed to save skipped card:', e));
             }
 
@@ -2275,6 +2290,8 @@ export const App = {
     },
     renderConnection() {
         const badge = el('#connectionBadge');
+        const badgeText = el('#connectionBadgeText');
+        const badgeIcon = el('#connectionBadgeIcon');
         const online = navigator.onLine;
         const hasWorkerUrl = !!this.state.settings.workerUrl;
         const workerOk = hasWorkerUrl && this.state.workerVerified;
@@ -2285,9 +2302,7 @@ export const App = {
         const q2count = this.state.queue.size;
         const queueCountEl = el('#queueCount');
         if (queueCountEl) queueCountEl.textContent = String(q2count);
-        const pendingSpan = q2count > 0
-            ? ` <span class="ml-1 font-mono text-[10px] sm:text-[11px] text-accent ">(${q2count})</span>`
-            : '';
+        const pendingSuffix = q2count > 0 ? ` <span class="text-accent" style="font-family: monospace;">(${q2count})</span>` : '';
         const q2ind = el('#q2syncIndicator');
         const q2val = el('#q2syncCount');
         if (q2ind && q2val) {
@@ -2309,28 +2324,39 @@ export const App = {
             if (parts.length) badge.dataset.tip = parts.join(' | ');
         }
 
+        let text = '';
+        let showIcon = false;
+
         if (!online) {
-            badge.innerHTML = `Offline${pendingSpan}`;
-            badge.className = 'px-3 py-1 rounded-full pill text-xs bg-surface-strong border border-card text-main';
-            this.updateSyncButtonState();
-            return;
+            text = `Offline${pendingSuffix}`;
+        } else if (!hasWorkerUrl) {
+            text = `Online · add worker URL${pendingSuffix}`;
+        } else if (!workerOk) {
+            text = `Online · verify worker${pendingSuffix}`;
+        } else if (!hasToken) {
+            text = `Online · set token${pendingSuffix}`;
+        } else if (!authOk) {
+            text = `Online · verify token${pendingSuffix}`;
+        } else if (q2count > 0) {
+            text = `Online${pendingSuffix}`;
+        } else {
+            text = 'Online';
+            showIcon = true;
         }
 
-        if (!hasWorkerUrl) {
-            badge.innerHTML = `Online · add worker URL${pendingSpan}`;
-        } else if (!workerOk) {
-            badge.innerHTML = `Online · verify worker${pendingSpan}`;
-        } else if (!hasToken) {
-            badge.innerHTML = `Online · set token${pendingSpan}`;
-        } else if (!authOk) {
-            badge.innerHTML = `Online · verify token${pendingSpan}`;
-        } else {
-            badge.innerHTML = q2count > 0 ? `Online${pendingSpan}` : 'Online · Notion ready';
-        }
+        if (badgeText) badgeText.innerHTML = text;
+        if (badgeIcon) badgeIcon.classList.toggle('hidden', !showIcon);
+
         badge.className = ready
             ? 'px-3 py-1 rounded-full pill text-xs bg-surface border border-card text-main'
             : 'px-3 py-1 rounded-full pill text-xs bg-surface-strong border border-card text-main';
         this.updateSyncButtonState();
+    },
+    renderConnectionDebounced() {
+        if (!this._debouncedRenderConnection) {
+            this._debouncedRenderConnection = debounce(() => this.renderConnection(), 500);
+        }
+        this._debouncedRenderConnection();
     },
     renderDecks() {
         const grid = el('#deckGrid');
@@ -4786,7 +4812,7 @@ export const App = {
         const dyEnabled = el('#deckDynamicContextInput');
         const dyFields = el('#dyContextFields');
         const dyPromptInput = el('#deckDyPromptInput');
-        const dyVars = ['root_front', 'root_back', 'prev_front', 'prev_back', 'tags', 'card_type'];
+        const dyVars = ['root_front', 'root_back', 'root_notes', 'prev_front', 'prev_back', 'prev_notes', 'deck_name', 'tags', 'card_type'];
         if (dyEnabled) dyEnabled.checked = !!deck?.dynamicContext;
         if (dyPromptInput) {
             const rawDy = deck?.dyAiPrompt ?? '';
@@ -5210,6 +5236,16 @@ export const App = {
         if (!this.isReady()) { this.openSettings(); return; }
         this.state.editingCard = card || null;
         el('#cardModalTitle').textContent = card ? 'Edit card' : 'New card';
+        const notionBtn = el('#openCardNotionBtn');
+        if (notionBtn) {
+            notionBtn.classList.toggle('hidden', !card || !card.notionId);
+            notionBtn.onclick = () => {
+                if (card && card.notionId) {
+                    const url = `https://www.notion.so/${card.notionId.replace(/-/g, '')}`;
+                    window.open(url, '_blank', 'noopener,noreferrer');
+                }
+            };
+        }
         const deckSelect = el('#cardDeckInput');
         deckSelect.innerHTML = this.state.decks.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
         deckSelect.value = card?.deckId || this.state.selectedDeck?.id || this.state.decks[0]?.id;
@@ -5487,6 +5523,18 @@ export const App = {
             .filter(p => !p?.archived && !isHiddenDeck(p))
             .map(d => NotionMapper.deckFrom(d));
 
+        // Queue sync for inferred 'Order Mode' (defaulting to 'None')
+        for (const p of deckPages) {
+            if (p?.archived || isHiddenDeck(p)) continue;
+            const rawOrder = p.properties['Order Mode']?.select?.name;
+            if (!rawOrder) {
+                const mapped = mappedDecks.find(d => d.notionId === p.id);
+                if (mapped) {
+                    this.queueOp({ type: 'deck-upsert', payload: mapped }, 'inferred-order');
+                }
+            }
+        }
+
         const decksToNormalize = new Set();
 
         for (const d of mappedDecks) {
@@ -5585,6 +5633,18 @@ export const App = {
             // Map and filter chunk
             // Pass `this.state.decks` (latest) to `cardFrom` to resolve relations
             const chunkMapped = results.filter(p => !p?.archived).map(c => NotionMapper.cardFrom(c, this.state.decks)).filter(Boolean);
+
+            // Queue sync for inferred card types (Notion missing type -> App inferred it)
+            results.forEach(p => {
+                if (p?.archived) return;
+                const rawType = p.properties['Card Type']?.select?.name;
+                if (!rawType) {
+                    const mapped = chunkMapped.find(c => c.notionId === p.id);
+                    if (mapped) {
+                        this.queueOp({ type: 'card-upsert', payload: mapped }, 'inferred-type');
+                    }
+                }
+            });
 
             // Filter by active decks
             const chunkFiltered = chunkMapped.filter(c => {
@@ -5787,7 +5847,18 @@ export const App = {
                 else currentSubs.push(q);
             }
 
-            const { toCreate, toKeep, toSuspend } = reconcileSubItems(parent, currentSubs);
+            const { toCreate, toKeep, toSuspend, parsedIndices } = reconcileSubItems(parent, currentSubs);
+
+            // Sync parsed clozeIndexes back to parent if they were inferred from text
+            if (parsedIndices.size > 0) {
+                const newClozeIndexes = Array.from(parsedIndices).sort((a, b) => a - b).join(',');
+                if (parent.clozeIndexes !== newClozeIndexes) {
+                    parent.clozeIndexes = newClozeIndexes;
+                    this.setCard(parent);
+                    await Storage.put('cards', parent);
+                    this.queueOp({ type: 'card-upsert', payload: parent });
+                }
+            }
 
             const createdSubs = [];
             for (const idx of toCreate) {
@@ -5893,7 +5964,19 @@ export const App = {
 
         const subsMap = new Map(allSubs.map(s => [s.id, s]));
 
-        const { toCreate, toKeep, toSuspend } = reconcileSubItems(parent, allSubs);
+        const { toCreate, toKeep, toSuspend, parsedIndices } = reconcileSubItems(parent, allSubs);
+
+        // Sync parsed clozeIndexes back to parent if they were inferred from text
+        if (parsedIndices.size > 0) {
+            const newClozeIndexes = Array.from(parsedIndices).sort((a, b) => a - b).join(',');
+            if (parent.clozeIndexes !== newClozeIndexes) {
+                parent.clozeIndexes = newClozeIndexes;
+                this.setCard(parent);
+                await Storage.put('cards', parent);
+                this.queueOp({ type: 'card-upsert', payload: parent });
+            }
+        }
+
         // Skip if nothing to do (no creates, no suspends, and no existing subs to update)
         if (toCreate.length === 0 && toSuspend.length === 0 && toKeep.length === 0) {
             parent._lastClozeReconcile = new Date().toISOString();
@@ -6247,7 +6330,7 @@ export const App = {
             }
         }
         this.updateSyncButtonState();
-        if (this.state.queue.size === 1) this.renderConnection();
+        this.renderConnectionDebounced();
         const delay = (reason === 'rating') ? (5 * 60 * 1000) : 1500;
         this.requestAutoSyncSoon(delay, reason);
     },
@@ -6453,15 +6536,18 @@ export const App = {
         }
         return allGood && activeCount > 0;
     },
-    buildDyContextPrompt(promptTemplate, rootCard, prevCard) {
+    buildDyContextPrompt(promptTemplate, rootCard, prevCard, deck) {
         const root = this.getDyContextCardContent(rootCard);
         const prev = this.getDyContextCardContent(prevCard);
         const tags = (prevCard?.tags || []).map(t => t?.name).filter(Boolean).join(', ');
         return this.applyTemplateVars(promptTemplate, {
             root_front: root.front || '',
             root_back: root.back || '',
+            root_notes: rootCard?.notes || '',
             prev_front: prev.front || '',
             prev_back: prev.back || '',
+            prev_notes: prevCard?.notes || '',
+            deck_name: deck?.name || '',
             tags,
             card_type: prevCard?.type || ''
         });
@@ -6494,7 +6580,7 @@ export const App = {
     },
     async generateDyContextVariant(prevCard, rootCard, deck, dyConfig, { includeSubCards = false } = {}) {
         if (!prevCard || !deck || !dyConfig) return;
-        const prompt = this.buildDyContextPrompt(dyConfig.prompt, rootCard, prevCard);
+        const prompt = this.buildDyContextPrompt(dyConfig.prompt, rootCard, prevCard, deck);
         const raw = await this.callAI(dyConfig.provider, dyConfig.model, prompt, dyConfig.key);
         const parsed = this.parseDyContextJson(raw);
         if (!parsed || typeof parsed.front !== 'string') {
@@ -7718,7 +7804,7 @@ export const App = {
         };
 
         // Queue the block append operation
-        this.queueOp({
+        await this.queueOp({
             type: 'block-append',
             payload: {
                 pageId: card.notionId,
@@ -8943,9 +9029,9 @@ export const App = {
 
         // Border offset
         const borderX = 0.12;
-        const borderY = 0.12;
+        const borderY = 0.06;
         const activeW = 0.76;
-        const activeH = 0.76;
+        const activeH = 0.88;
 
         // Center X % = border + (col * (activeW / 3)) + half_col
         const colW = activeW / 3;
@@ -9594,6 +9680,23 @@ export const App = {
             }, 100);
             return;
         }
+
+        // Use auto-render if available (handles $$...$$ blocks and $...$ inline with better newlines support)
+        if (typeof renderMathInElement === 'function') {
+            try {
+                renderMathInElement(container, {
+                    delimiters: [
+                        { left: '$$', right: '$$', display: true },
+                        { left: '$', right: '$', display: false },
+                        { left: '\\(', right: '\\)', display: false },
+                        { left: '\\[', right: '\\]', display: true }
+                    ],
+                    throwOnError: false
+                });
+            } catch (e) { console.error('KaTeX auto-render error:', e); }
+        }
+
+        // Fallback/Legacy: Render specific Notion equation blocks that might not be caught by delimiters
         container.querySelectorAll('.notion-equation').forEach(span => {
             // Skip already-rendered equations
             if (span.querySelector('.katex')) return;
