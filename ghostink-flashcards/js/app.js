@@ -148,6 +148,21 @@ const safeHistoryReplace = (data, title, url) => {
     }
 };
 
+// Normalize content for comparison to avoid false positives from formatting differences.
+// This handles whitespace variations in equation spans and other minor differences.
+const normalizeContentForComparison = (content) => {
+    if (!content) return '';
+    return content
+        // Normalize whitespace inside span tags
+        .replace(/<span\s+class=/g, '<span class=')
+        // Normalize equation span whitespace
+        .replace(/<span class="notion-equation">\s*/g, '<span class="notion-equation">')
+        .replace(/\s*<\/span>/g, '</span>')
+        // Collapse multiple spaces
+        .replace(/\s+/g, ' ')
+        .trim();
+};
+
 const createIconsInScope = (container) => {
     if (typeof lucide === 'undefined') return;
     if (container && container.querySelectorAll) {
@@ -5890,14 +5905,17 @@ export const App = {
                 const tagsChanged = JSON.stringify(sub.tags || []) !== JSON.stringify(newTags);
                 const shouldUpdateNotes = !sub.notes;
                 const newNotes = shouldUpdateNotes ? parent.notes : sub.notes;
-                const notesChanged = sub.notes !== newNotes;
+                const notesChanged = normalizeContentForComparison(sub.notes) !== normalizeContentForComparison(newNotes);
 
                 const newOrder = (parent.order && String(parent.order).trim())
                     ? `${String(parent.order).trim().replace(/\.$/, '')}.${idx}`
                     : null;
                 const orderChanged = sub.order !== newOrder;
 
-                const contentChanged = sub.name !== newName || sub.back !== newBack || notesChanged || sub.deckId !== parent.deckId || orderChanged;
+                // Use normalized comparison for content with equations to avoid false positives
+                const nameChanged = normalizeContentForComparison(sub.name) !== normalizeContentForComparison(newName);
+                const backChanged = normalizeContentForComparison(sub.back) !== normalizeContentForComparison(newBack);
+                const contentChanged = nameChanged || backChanged || notesChanged || sub.deckId !== parent.deckId || orderChanged;
 
                 if (contentChanged || tagsChanged) {
                     sub.name = newName;
@@ -6002,14 +6020,17 @@ export const App = {
             // Notes logic: Only overwrite if sub-card notes are empty
             const shouldUpdateNotes = !sub.notes;
             const newNotes = shouldUpdateNotes ? parent.notes : sub.notes;
-            const notesChanged = sub.notes !== newNotes;
+            const notesChanged = normalizeContentForComparison(sub.notes) !== normalizeContentForComparison(newNotes);
 
             const newOrder = (parent.order && String(parent.order).trim())
                 ? `${String(parent.order).trim().replace(/\.$/, '')}.${idx}`
                 : null;
             const orderChanged = sub.order !== newOrder;
 
-            const contentChanged = sub.name !== newName || sub.back !== newBack || notesChanged || sub.deckId !== parent.deckId || orderChanged;
+            // Use normalized comparison for content with equations to avoid false positives
+            const nameChanged = normalizeContentForComparison(sub.name) !== normalizeContentForComparison(newName);
+            const backChanged = normalizeContentForComparison(sub.back) !== normalizeContentForComparison(newBack);
+            const contentChanged = nameChanged || backChanged || notesChanged || sub.deckId !== parent.deckId || orderChanged;
 
             // Only save if content or tags actually changed
             if (contentChanged || tagsChanged) {
@@ -7038,13 +7059,32 @@ export const App = {
             // For sub-items, only hide the specific cloze index, reveal all others
             const subItemIndex = isSubItem(card) ? parseInt(card.clozeIndexes, 10) : null;
 
+            // Protect equation spans from cloze regex - they may contain braces like x^{2}
+            const eqPlaceholders = [];
+            let protectedPrompt = prompt.replace(/<span class="notion-equation">([\s\S]*?)<\/span>/g, (match) => {
+                const idx = eqPlaceholders.length;
+                eqPlaceholders.push(match);
+                return `\x00EQ${idx}\x00`;
+            });
+
+            // Helper to safely escape content while preserving equation placeholders
+            const safeEscapePreservingEquations = (content) => {
+                if (!content) return '';
+                // The equation placeholders are already in the content, just escape around them
+                const parts = content.split(/(\x00EQ\d+\x00)/g);
+                return parts.map(part => {
+                    if (/^\x00EQ\d+\x00$/.test(part)) return part; // Keep placeholder as-is
+                    return escapeHtml(part);
+                }).join('');
+            };
+
             // Uses a non-greedy match with proper handling of nested content
-            const processed = prompt.replace(/\{\{c(\d+)::((?:[^{}]|\{(?!\{)|\}(?!\}))*?)(?:::((?:[^{}]|\{(?!\{)|\}(?!\}))*?))?\}\}/g, (match, num, answer, hint) => {
+            let processed = protectedPrompt.replace(/\{\{c(\d+)::((?:[^{}]|\{(?!\{)|\}(?!\}))*?)(?:::((?:[^{}]|\{(?!\{)|\}(?!\}))*?))?\}\}/g, (match, num, answer, hint) => {
                 const clozeNum = parseInt(num, 10);
                 // The hint (if present) is the 3rd capture group after the optional :::
-                // Escape both hint and answer to prevent XSS attacks
-                const safeAnswer = escapeHtml(answer);
-                const safeHint = hint ? escapeHtml(hint) : null;
+                // Escape content for XSS but preserve equation spans for KaTeX rendering
+                const safeAnswer = safeEscapePreservingEquations(answer);
+                const safeHint = hint ? safeEscapePreservingEquations(hint) : null;
 
                 // For sub-items: only hide the specific cloze index, reveal others
                 if (subItemIndex !== null && clozeNum !== subItemIndex) {
@@ -7055,6 +7095,9 @@ export const App = {
                 const displayHint = safeHint ? `[${safeHint}]` : '[...]';
                 return `<span class="cloze-blank"><span class="cloze-placeholder">${displayHint}</span><span class="cloze-answer">${safeAnswer}</span></span>`;
             });
+
+            // Restore equation spans
+            processed = processed.replace(/\x00EQ(\d+)\x00/g, (_, idx) => eqPlaceholders[parseInt(idx, 10)]);
             return safeMarkdownParse(processed);
         }
         return safeMarkdownParse(prompt);

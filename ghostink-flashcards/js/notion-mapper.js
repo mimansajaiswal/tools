@@ -141,9 +141,59 @@ export const markdownToNotionRichText = (markdown) => {
 
     if (raw.length > MAX_INPUT_CHARS) return safePlain(raw);
 
+    // Protect special characters from being misinterpreted:
+    // 1. Escape angle brackets in non-HTML contexts (e.g., "<<backtrack>>" → stripped by DOM)
+    // 2. Protect tildes (e.g., "~2 bytes" can be mangled by some parsers)
+    // Use placeholders that won't appear in normal text.
+    const LT_PLACEHOLDER = '\u0000LT\u0000';
+    const GT_PLACEHOLDER = '\u0000GT\u0000';
+    const TILDE_PLACEHOLDER = '\u0000TILDE\u0000';
+
+    // Protect our known safe HTML patterns first
+    const protectedPatterns = [];
+
+    // 1. Protect notion equation/color spans
+    let preprocessed = raw.replace(/<span\s+class="notion-(equation|color-[^"]+)">([\s\S]*?)<\/span>/gi, (match) => {
+        const idx = protectedPatterns.length;
+        protectedPatterns.push(match);
+        return `\u0000PROT${idx}\u0000`;
+    });
+
+    // 2. Protect underline tags
+    preprocessed = preprocessed.replace(/<\/?u>/gi, (match) => {
+        const idx = protectedPatterns.length;
+        protectedPatterns.push(match);
+        return `\u0000PROT${idx}\u0000`;
+    });
+
+    // 3. Protect markdown links [text](url)
+    preprocessed = preprocessed.replace(/\[([^\]]*)\]\(([^)]*)\)/g, (match) => {
+        const idx = protectedPatterns.length;
+        protectedPatterns.push(match);
+        return `\u0000PROT${idx}\u0000`;
+    });
+
+    // 4. Protect inline code with backticks (may contain < or >)
+    preprocessed = preprocessed.replace(/`[^`]+`/g, (match) => {
+        const idx = protectedPatterns.length;
+        protectedPatterns.push(match);
+        return `\u0000PROT${idx}\u0000`;
+    });
+
+    // Protect tildes - they can be stripped or misinterpreted during HTML parsing
+    preprocessed = preprocessed.replace(/~/g, TILDE_PLACEHOLDER);
+
+    // Now escape ALL remaining angle brackets - anything not protected is likely user content
+    // that would be incorrectly parsed as HTML (e.g., <<backtrack>>, <something>)
+    preprocessed = preprocessed.replace(/</g, LT_PLACEHOLDER);
+    preprocessed = preprocessed.replace(/>/g, GT_PLACEHOLDER);
+
+    // Restore protected patterns
+    preprocessed = preprocessed.replace(/\u0000PROT(\d+)\u0000/g, (_, idx) => protectedPatterns[parseInt(idx, 10)]);
+
     let html;
     try {
-        html = marked.parse(raw, {
+        html = marked.parse(preprocessed, {
             gfm: true,
             breaks: true
         });
@@ -151,6 +201,11 @@ export const markdownToNotionRichText = (markdown) => {
         console.error('marked.parse failed; falling back to plain text:', e);
         return safePlain(raw);
     }
+
+    // Restore placeholders back to original characters
+    html = html.replace(new RegExp(TILDE_PLACEHOLDER, 'g'), '~');
+    html = html.replace(new RegExp(LT_PLACEHOLDER, 'g'), '&lt;');
+    html = html.replace(new RegExp(GT_PLACEHOLDER, 'g'), '&gt;');
 
     let doc;
     let parser;
@@ -664,13 +719,25 @@ export const NotionMapper = {
         srsState.sm2.interval = card.sm2?.interval ?? srsState.sm2.interval;
         srsState.sm2.repetitions = card.sm2?.repetitions ?? srsState.sm2.repetitions;
 
+        // Normalize content for comparison to handle equation formatting differences
+        const normalizeForCompare = (s) => {
+            if (!s) return '';
+            return s
+                .replace(/<span\s+class=/g, '<span class=')
+                .replace(/<span class="notion-equation">\s*/g, '<span class="notion-equation">')
+                .replace(/\s*<\/span>/g, '</span>')
+                .replace(/\s+/g, ' ')
+                .trim();
+        };
+
         // Helper to get rich_text: use original if content unchanged, else convert markdown
         const getRichText = (field, content, originalRichText) => {
             // If we have original rich_text and content hasn't been edited in app
             if (originalRichText && originalRichText.length > 0 && !card.updatedInApp) {
                 // Check if content matches original (convert original back to markdown and compare)
                 const originalMarkdown = richToMarkdown(originalRichText);
-                if (content === originalMarkdown) {
+                // Use normalized comparison to avoid false positives from formatting differences
+                if (normalizeForCompare(content) === normalizeForCompare(originalMarkdown)) {
                     // Content unchanged - use original rich_text to preserve colors/equations
                     return originalRichText;
                 }
