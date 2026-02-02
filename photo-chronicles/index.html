@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Photo Chronicles</title>
-    <meta name="theme-color" content="#917FB3">
+    <meta name="theme-color" content="#857593">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Photo Chronicles">
@@ -19,9 +19,9 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@0.561.0/dist/umd/lucide.min.js"></script>
 
-    <!-- Font: DM Serif Display (Headers) & Inter (Body) -->
+    <!-- Fonts: Space Grotesk (Headers/Labels) & Inter (Body) -->
     <link
-        href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;700&family=Kalam:wght@400;700&family=DM+Serif+Display&family=Inter:wght@300;400;500;600&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap"
         rel="stylesheet">
 
     <!-- Tailwind Config for Custom Palette -->
@@ -30,19 +30,19 @@
             theme: {
                 extend: {
                     colors: {
-                        oatmeal: '#F3F0E6',
-                        'oatmeal-dark': '#E6E2D6',
-                        'earth-metal': '#4A4A4A',
-                        charcoal: '#2D2D2D',
-                        'white-linen': '#FAF9F6',
-                        'dull-purple': '#917FB3',
-                        'dull-purple-hover': '#7A6A9A',
-                        'muted-pink': '#D8A7B1',
-                        'muted-pink-dim': '#C696A0'
+                        oatmeal: '#E8E2D9',
+                        'oatmeal-dark': '#D9D2C7',
+                        'earth-metal': '#5C5650',
+                        charcoal: '#2C2926',
+                        'white-linen': '#F8F6F3',
+                        'dull-purple': '#857593',
+                        'dull-purple-hover': '#6E6180',
+                        'muted-pink': '#C4A3AA',
+                        'muted-pink-dim': '#B3929A'
                     },
                     fontFamily: {
-                        serif: ['"DM Serif Display"', 'serif'],
-                        sans: ['Inter', 'sans-serif'],
+                        display: ['"Space Grotesk"', 'system-ui', 'sans-serif'],
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
                     }
                 }
             }
@@ -52,27 +52,20 @@
     <style>
         /* Custom Scrollbar */
         ::-webkit-scrollbar {
-            width: 6px;
+            width: 5px;
         }
 
         ::-webkit-scrollbar-track {
-            background: #F3F0E6;
+            background: transparent;
         }
 
         ::-webkit-scrollbar-thumb {
-            background: #D8A7B1;
-            border-radius: 4px;
+            background: #D9D2C7;
+            border-radius: 2px;
         }
 
         ::-webkit-scrollbar-thumb:hover {
-            background: #917FB3;
-        }
-
-        /* Utility */
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.4);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.5);
+            background: #857593;
         }
 
         /* Camera Overlay Transition */
@@ -83,8 +76,8 @@
 
         /* Loader */
         .loader {
-            border: 3px solid #f3f3f3;
-            border-top: 3px solid #917FB3;
+            border: 2px solid #D9D2C7;
+            border-top: 2px solid #857593;
             border-radius: 50%;
             width: 20px;
             height: 20px;
@@ -128,19 +121,79 @@
             word-wrap: break-word;
         }
 
-        /* Grid Lines */
-        .grid-line {
-            position: absolute;
-            pointer-events: none;
+        /* Section Label Style */
+        .section-label {
+            font-family: 'Space Grotesk', system-ui, sans-serif;
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            background: #2C2926;
+            color: #F8F6F3;
+            padding: 5px 12px;
+            display: inline-block;
         }
 
-        /* First-visit blurb */
+        /* Entry card */
+        .entry-card {
+            transition: border-color 0.15s ease;
+        }
+
+        .entry-card:hover {
+            border-color: #857593;
+        }
+
+        /* Welcome blurb */
         .welcome-blurb {
-            font-family: 'Caveat', 'Inter', sans-serif;
-            font-style: italic;
-            color: #917FB3;
-            font-size: 1.15rem;
-            line-height: 1.45;
+            font-family: 'Space Grotesk', system-ui, sans-serif;
+            color: #857593;
+            font-size: 0.9rem;
+            line-height: 1.7;
+        }
+
+        /* Button base */
+        .btn-primary {
+            background: #2C2926;
+            color: #F8F6F3;
+            transition: background 0.15s ease;
+        }
+
+        .btn-primary:hover {
+            background: #1a1816;
+        }
+
+        .btn-secondary {
+            background: #857593;
+            color: #F8F6F3;
+            transition: background 0.15s ease;
+        }
+
+        .btn-secondary:hover {
+            background: #6E6180;
+        }
+
+        /* Form inputs */
+        input,
+        textarea,
+        select {
+            border-radius: 6px;
+        }
+
+        /* Mobile bottom nav improved */
+        @media (max-width: 767px) {
+            .mobile-nav-btn {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 2px;
+                font-size: 10px;
+                padding: 8px 12px;
+            }
+        }
+
+        /* Disable browser default touch behaviors on viewfinder canvas */
+        #viewfinder {
+            touch-action: none;
         }
     </style>
 </head>
@@ -160,13 +213,15 @@
         class="order-2 md:order-1 w-full md:w-64 h-16 md:h-full flex-shrink-0 flex flex-row md:flex-col border-t md:border-t-0 md:border-r border-oatmeal-dark bg-oatmeal/50 transition-all duration-300 justify-between z-20">
 
         <!-- Logo Area -->
-        <div class="hidden md:flex h-16 px-6 border-b border-oatmeal-dark items-center gap-3 flex-shrink-0">
-            <div class="w-8 h-8 rounded-full bg-dull-purple flex items-center justify-center text-white-linen">
-                <i data-lucide="history" class="w-5 h-5"></i>
+        <div class="hidden md:flex h-14 px-5 border-b border-oatmeal-dark items-center gap-3 flex-shrink-0">
+            <div class="w-7 h-7 bg-dull-purple flex items-center justify-center text-white-linen">
+                <i data-lucide="camera" class="w-4 h-4"></i>
             </div>
             <div class="flex flex-col">
-                <h1 class="font-serif text-lg text-charcoal tracking-wide leading-none">Photo Chronicles</h1>
-                <span class="text-[9px] uppercase tracking-widest text-earth-metal/60">with Notion</span>
+                <h1 class="font-display text-base font-semibold text-charcoal tracking-tight leading-none">Photo
+                    Chronicles</h1>
+                <span class="text-[9px] uppercase tracking-wider text-earth-metal/50 font-medium mt-0.5">Notion
+                    Sync</span>
             </div>
         </div>
 
@@ -176,43 +231,45 @@
                 <!-- Diaries injected here -->
             </div>
             <!-- Data Safety Notice (Sidebar) -->
-            <div
-                class="p-4 text-[10px] text-earth-metal/50 leading-tight border-t border-oatmeal-dark/50 bg-oatmeal/30">
+            <div class="p-3 text-[10px] text-earth-metal/40 leading-relaxed border-t border-oatmeal-dark bg-oatmeal/20">
                 <i data-lucide="info" class="w-3 h-3 inline mb-0.5 mr-1"></i>
                 This app stores the last 25 images locally for fast loading. Data is safely synced to Notion.
                 <br><br>
-                <strong>Note:</strong> Images shown here are compressed thumbnails. For full quality, please check your
-                Notion data source.
+                <span class="font-display font-medium text-earth-metal/50">Note:</span> Images shown here are compressed
+                thumbnails. For full quality, please check your Notion data source.
             </div>
         </div>
 
         <!-- Mobile Nav Items (Only visible on small screens) -->
-        <div class="md:hidden flex w-full justify-around items-center px-4">
-            <button onclick="App.openModal('settingsModal')" class="p-2 text-earth-metal hover:text-dull-purple"
-                aria-label="Open settings">
-                <i data-lucide="settings" class="w-6 h-6"></i>
+        <div class="md:hidden flex w-full justify-around items-center px-2 h-full">
+            <button onclick="App.openModal('settingsModal')"
+                class="mobile-nav-btn text-earth-metal hover:text-dull-purple" aria-label="Open settings">
+                <i data-lucide="settings" class="w-5 h-5"></i>
+                <span class="font-display font-medium">Settings</span>
             </button>
             <button onclick="App.initNewEntry()" aria-label="Add entry"
-                class="p-3 -mt-6 bg-dull-purple text-white rounded-full shadow-lg border-4 border-oatmeal">
-                <i data-lucide="plus" class="w-6 h-6"></i>
+                class="mobile-nav-btn bg-charcoal text-white-linen px-5 py-2 hover:bg-dull-purple">
+                <i data-lucide="plus" class="w-5 h-5"></i>
+                <span class="font-display font-medium">New Entry</span>
             </button>
-            <button onclick="App.attemptNewDiary()" class="p-2 text-earth-metal hover:text-dull-purple"
+            <button onclick="App.attemptNewDiary()" class="mobile-nav-btn text-earth-metal hover:text-dull-purple"
                 aria-label="Create new diary">
-                <i data-lucide="book-plus" class="w-6 h-6"></i>
+                <i data-lucide="book-plus" class="w-5 h-5"></i>
+                <span class="font-display font-medium">New Diary</span>
             </button>
         </div>
 
         <!-- Sidebar Footer (Desktop) -->
-        <div class="hidden md:block p-4 border-t border-oatmeal-dark space-y-2 flex-shrink-0">
+        <div class="hidden md:block p-3 border-t border-oatmeal-dark space-y-1.5 flex-shrink-0">
             <button onclick="App.attemptNewDiary()"
-                class="w-full flex items-center justify-start gap-3 p-2 rounded-lg hover:bg-white-linen text-dull-purple transition-colors">
-                <i data-lucide="plus-circle" class="w-5 h-5"></i>
-                <span class="font-medium">New Diary</span>
+                class="w-full flex items-center justify-start gap-2.5 p-2.5 hover:bg-white-linen text-dull-purple transition-colors font-display text-sm font-medium">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                <span>New Diary</span>
             </button>
             <button onclick="App.openModal('settingsModal')"
-                class="w-full flex items-center justify-start gap-3 p-2 rounded-lg hover:bg-white-linen text-earth-metal transition-colors">
-                <i data-lucide="settings" class="w-5 h-5"></i>
-                <span class="font-medium">Settings</span>
+                class="w-full flex items-center justify-start gap-2.5 p-2.5 hover:bg-white-linen text-earth-metal transition-colors font-display text-sm">
+                <i data-lucide="settings" class="w-4 h-4"></i>
+                <span>Settings</span>
             </button>
         </div>
     </aside>
@@ -222,33 +279,34 @@
 
         <!-- Header -->
         <header
-            class="h-16 border-b border-oatmeal-dark flex items-center justify-between px-4 md:px-6 bg-oatmeal/80 backdrop-blur-sm z-10 flex-shrink-0">
-            <div class="flex items-center gap-3 overflow-hidden">
+            class="h-14 border-b border-oatmeal-dark flex items-center justify-between px-4 md:px-5 bg-white-linen z-10 flex-shrink-0">
+            <div class="flex items-center gap-2.5 overflow-hidden">
                 <!-- Mobile Diary Switcher Trigger -->
                 <button id="mobileDiaryToggleBtn" onclick="App.toggleMobileDiaryMenu(event)"
                     aria-label="Toggle diary list"
-                    class="md:hidden bg-white border border-oatmeal-dark shadow-sm w-9 h-9 rounded-lg text-earth-metal hover:bg-white-linen transition-colors flex items-center justify-center mr-1">
+                    class="md:hidden border border-oatmeal-dark w-8 h-8 text-earth-metal hover:bg-oatmeal transition-colors flex items-center justify-center">
                     <i data-lucide="library" class="w-4 h-4"></i>
                 </button>
 
-                <h2 id="activeDiaryTitle" class="font-serif text-xl md:text-2xl text-charcoal truncate">Select a Diary
-                </h2>
+                <h2 id="activeDiaryTitle"
+                    class="font-display text-lg md:text-xl font-semibold text-charcoal truncate tracking-tight">Select a
+                    Diary</h2>
                 <span id="syncStatus"
-                    class="hidden flex-shrink-0 text-[10px] px-2 py-1 rounded-full bg-white border border-oatmeal-dark text-earth-metal items-center gap-1">
-                    <span class="w-2 h-2 rounded-full bg-gray-400"></span>
+                    class="hidden flex-shrink-0 text-[9px] px-2 py-0.5 bg-oatmeal text-earth-metal items-center gap-1 font-display font-medium uppercase tracking-wide">
+                    <span class="w-1.5 h-1.5 rounded-full bg-earth-metal/40"></span>
                     <span>Init</span>
                 </span>
             </div>
 
             <div class="flex items-center gap-2">
                 <button onclick="SyncManager.syncCurrentDiary()" title="Refresh Sync" aria-label="Refresh sync"
-                    class="bg-white border border-oatmeal-dark shadow-sm w-9 h-9 rounded-lg text-earth-metal hover:bg-white-linen transition-colors flex items-center justify-center">
+                    class="border border-oatmeal-dark w-8 h-8 text-earth-metal hover:bg-oatmeal transition-colors flex items-center justify-center">
                     <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                 </button>
                 <!-- Desktop Add Button -->
                 <button id="addEntryBtn" onclick="App.initNewEntry()"
-                    class="hidden md:flex bg-dull-purple hover:bg-dull-purple-hover text-white-linen px-4 py-2 rounded-lg shadow-sm transition-all items-center gap-2">
-                    <i data-lucide="pen-tool" class="w-4 h-4"></i>
+                    class="hidden md:flex bg-charcoal hover:bg-dull-purple text-white-linen px-4 py-2 transition-colors items-center gap-2 font-display text-sm font-medium">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
                     <span>Add Entry</span>
                 </button>
             </div>
@@ -256,7 +314,7 @@
 
         <!-- Mobile Diary Menu (Dropdown/Sheet) -->
         <div id="mobileDiaryMenu"
-            class="md:hidden hidden absolute top-16 left-0 w-full bg-white-linen shadow-xl border-b border-oatmeal-dark z-20 max-h-[60vh] overflow-y-auto">
+            class="md:hidden hidden absolute top-14 left-0 w-full bg-white-linen border-b border-oatmeal-dark z-20 max-h-[60vh] overflow-y-auto">
             <div class="p-2" id="mobileDiaryList">
                 <!-- Diaries injected here -->
             </div>
@@ -273,15 +331,14 @@
 
     <!-- 1. Settings Modal -->
     <div id="settingsModal" role="dialog" aria-modal="true"
-        class="fixed inset-0 bg-charcoal/20 backdrop-blur-sm hidden items-center justify-center z-50 p-4"
+        class="fixed inset-0 bg-charcoal/30 hidden items-center justify-center z-50 p-4"
         onclick="if(event.target===this) App.closeModal('settingsModal')">
-        <div
-            class="bg-white-linen w-full max-w-md p-6 rounded-xl shadow-xl border border-oatmeal-dark relative max-h-full overflow-y-auto">
+        <div class="bg-white-linen w-full max-w-md p-6 border border-oatmeal-dark relative max-h-full overflow-y-auto">
             <button onclick="App.closeModal('settingsModal')" aria-label="Close settings"
-                class="absolute top-4 right-4 text-earth-metal/50 hover:text-earth-metal">
+                class="absolute top-4 right-4 text-earth-metal/50 hover:text-charcoal">
                 <i data-lucide="x" class="w-5 h-5"></i>
             </button>
-            <h3 class="font-serif text-xl mb-4 text-charcoal">Settings</h3>
+            <h3 class="font-display text-lg font-semibold mb-4 text-charcoal tracking-tight">Settings</h3>
 
             <!-- Connection Status Indicator -->
             <div id="connectionStatus" class="mb-6"></div>
@@ -289,109 +346,108 @@
             <div class="space-y-6">
 
                 <!-- Data Source Instructions (Before Proxy) -->
-                <div
-                    class="bg-dull-purple/5 border border-dull-purple/20 p-3 rounded text-xs text-earth-metal leading-relaxed">
-                    <p class="font-bold mb-1">Required Notion Data Source Format:</p>
-                    <p class="text-[11px] mb-2 opacity-80">Columns: Name (title), Tags (multi-select), Date (date),
+                <div class="bg-oatmeal border-l-2 border-dull-purple p-3 text-xs text-earth-metal leading-relaxed">
+                    <p class="font-display font-semibold mb-1 text-charcoal">Required Notion Data Source Format:</p>
+                    <p class="text-[11px] mb-2 opacity-70">Columns: Name (title), Tags (multi-select), Date (date),
                         Files (media), Notes (text).</p>
                     <p>
                         Need a template? <a
                             href="https://mimansajaiswal-embedded-dbs.notion.site/photo-chronicles-template?v=2b423941af7b8019977c000c05dd66cf"
                             target="_blank"
-                            class="text-dull-purple underline hover:text-dull-purple-hover font-bold">Duplicate this
+                            class="text-dull-purple underline hover:text-charcoal font-semibold">Duplicate this
                             one</a> and add your own tags to start.
                     </p>
                 </div>
 
                 <!-- 1. Proxy Settings (Step 1) -->
-                <div class="space-y-3 bg-oatmeal/30 p-3 rounded border border-oatmeal-dark/50 relative">
-                    <span
-                        class="absolute -top-2.5 left-2 bg-white-linen text-[10px] font-bold px-1 text-dull-purple">STEP
-                        1: PROXY</span>
+                <div class="space-y-3 bg-oatmeal/40 p-4 border border-oatmeal-dark relative">
+                    <span class="section-label absolute -top-3 left-3">STEP 1: PROXY</span>
 
-                    <div>
+                    <div class="pt-2">
                         <div class="flex justify-between items-center mb-1">
-                            <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal">API Proxy
-                                Worker URL</label>
+                            <label
+                                class="block text-[10px] font-display font-semibold uppercase tracking-wider text-earth-metal">API
+                                Proxy Worker URL</label>
                             <button onclick="App.openModal('workerHelpModal')" aria-label="Worker setup help"
-                                class="text-dull-purple hover:text-charcoal" title="How to set up Worker">
-                                <i data-lucide="info" class="w-4 h-4"></i>
+                                class="text-earth-metal/50 hover:text-charcoal" title="How to set up Worker">
+                                <i data-lucide="info" class="w-3.5 h-3.5"></i>
                             </button>
                         </div>
                         <input type="text" id="settingWorkerUrl" placeholder="https://..."
                             oninput="App.onSettingInput()"
-                            class="w-full bg-oatmeal border border-oatmeal-dark rounded p-2 text-sm mb-2">
+                            class="w-full bg-white-linen border border-oatmeal-dark p-2.5 text-sm mb-2">
                     </div>
                     <div>
-                        <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal mb-1">Proxy
+                        <label
+                            class="block text-[10px] font-display font-semibold uppercase tracking-wider text-earth-metal mb-1">Proxy
                             Secret (Optional)</label>
                         <input type="password" id="settingProxyToken" placeholder="ALL_CORS_PROXY_MATCH_TOKEN"
                             oninput="App.onSettingInput()"
-                            class="w-full bg-oatmeal border border-oatmeal-dark rounded p-2 text-sm mb-2">
+                            class="w-full bg-white-linen border border-oatmeal-dark p-2.5 text-sm mb-2">
                     </div>
                     <button onclick="App.verifyWorker()" id="verifyWorkerBtn"
-                        class="w-full bg-dull-purple/10 hover:bg-dull-purple/20 text-dull-purple border border-dull-purple/20 py-2 rounded text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2">
+                        class="w-full bg-dull-purple hover:bg-dull-purple-hover text-white-linen py-2.5 text-xs font-display font-semibold uppercase tracking-wider transition-colors flex items-center justify-center gap-2">
                         Verify Proxy
                     </button>
                 </div>
 
                 <!-- 2. Authentication (Step 2) -->
                 <div id="authSection"
-                    class="bg-oatmeal/50 p-4 rounded-lg border border-oatmeal-dark relative opacity-50 pointer-events-none transition-opacity">
-                    <span
-                        class="absolute -top-2.5 left-2 bg-white-linen text-[10px] font-bold px-1 text-earth-metal">STEP
-                        2: AUTH</span>
+                    class="bg-oatmeal/40 p-4 border border-oatmeal-dark relative opacity-50 pointer-events-none transition-opacity">
+                    <span class="section-label absolute -top-3 left-3">STEP 2: AUTH</span>
 
-                    <div class="flex justify-between items-center mb-2 mt-1">
+                    <div class="flex justify-between items-center mb-2 mt-3">
                         <label
-                            class="block text-xs font-bold uppercase tracking-wider text-earth-metal">Authentication</label>
+                            class="block text-[10px] font-display font-semibold uppercase tracking-wider text-earth-metal">Authentication</label>
                         <a href="https://developers.notion.com/docs/create-a-notion-integration#create-your-integration-in-notion"
-                            target="_blank" class="text-dull-purple hover:text-charcoal" title="How to get a token">
-                            <i data-lucide="info" class="w-4 h-4"></i>
+                            target="_blank" class="text-earth-metal/50 hover:text-charcoal" title="How to get a token">
+                            <i data-lucide="info" class="w-3.5 h-3.5"></i>
                         </a>
                     </div>
                     <div class="flex gap-2 mb-2">
                         <button onclick="App.saveBeforeOAuth()"
-                            class="flex-1 bg-charcoal text-white-linen py-2 rounded flex items-center justify-center gap-2 hover:bg-black transition-colors shadow-sm group">
-                            <i data-lucide="zap"
-                                class="w-4 h-4 text-yellow-400 group-hover:text-yellow-300 transition-colors"></i>
-                            <span class="text-sm font-medium">Connect via OAuth</span>
+                            class="flex-1 bg-muted-pink text-white-linen py-2.5 flex items-center justify-center gap-2 hover:bg-muted-pink-dim transition-colors group">
+                            <i data-lucide="zap" class="w-4 h-4 text-white-linen"></i>
+                            <span class="text-sm font-display font-medium">Connect via OAuth</span>
                         </button>
                     </div>
                     <div class="relative flex py-2 items-center">
-                        <div class="flex-grow border-t border-oatmeal-dark/50"></div>
+                        <div class="flex-grow border-t border-oatmeal-dark"></div>
                         <span
-                            class="flex-shrink-0 mx-2 text-[10px] text-earth-metal/40 font-bold uppercase tracking-widest">OR
+                            class="flex-shrink-0 mx-2 text-[9px] text-earth-metal/50 font-display font-semibold uppercase tracking-widest">OR
                             MANUAL KEY</span>
-                        <div class="flex-grow border-t border-oatmeal-dark/50"></div>
+                        <div class="flex-grow border-t border-oatmeal-dark"></div>
                     </div>
 
                     <!-- Updated Manual Key Input with Verify Button -->
                     <div class="flex gap-2">
                         <input type="password" id="settingAuthToken" placeholder="Paste 'secret_...' token here"
                             oninput="App.onSettingInput()"
-                            class="flex-1 bg-white-linen border border-oatmeal-dark rounded p-2 text-xs outline-none text-earth-metal placeholder-earth-metal/30">
+                            class="flex-1 bg-white-linen border border-oatmeal-dark p-2.5 text-xs outline-none text-earth-metal placeholder-earth-metal/30">
                         <button onclick="App.testManualConnection(this)"
-                            class="bg-dull-purple/10 text-dull-purple hover:bg-dull-purple hover:text-white text-xs font-medium px-3 rounded transition-colors border border-dull-purple/20">
+                            class="bg-dull-purple text-white-linen hover:bg-dull-purple-hover text-xs font-display font-medium px-4 transition-colors">
                             Verify Key
                         </button>
                     </div>
                 </div>
 
                 <!-- 3. Upload Limits -->
-                <div class="space-y-2 bg-oatmeal/30 p-3 rounded border border-oatmeal-dark/50">
-                    <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal">Upload Size
-                        Cap</label>
-                    <div class="text-[11px] text-earth-metal/70">Default is 5MB (Notion free plan). Paid plans allow up
+                <div class="space-y-2 bg-oatmeal/40 p-4 border border-oatmeal-dark">
+                    <label
+                        class="block text-[10px] font-display font-semibold uppercase tracking-wider text-earth-metal">Upload
+                        Size Cap</label>
+                    <div class="text-[11px] text-earth-metal/60">Default is 5MB (Notion free plan). Paid plans allow up
                         to 20MB.</div>
-                    <div class="flex flex-col gap-2 text-xs">
-                        <label class="flex items-center gap-2">
-                            <input type="radio" name="uploadCapMb" value="5" onchange="App.setUploadCap(this.value)">
-                            <span>5 MB (Free plan)</span>
+                    <div class="flex flex-col gap-2 text-xs mt-2">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="uploadCapMb" value="5" onchange="App.setUploadCap(this.value)"
+                                class="accent-dull-purple">
+                            <span class="font-display">5 MB (Free plan)</span>
                         </label>
-                        <label class="flex items-center gap-2">
-                            <input type="radio" name="uploadCapMb" value="20" onchange="App.setUploadCap(this.value)">
-                            <span>20 MB (Paid plan)</span>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="uploadCapMb" value="20" onchange="App.setUploadCap(this.value)"
+                                class="accent-dull-purple">
+                            <span class="font-display">20 MB (Paid plan)</span>
                         </label>
                     </div>
                 </div>
@@ -399,14 +455,14 @@
 
             <details class="group mt-8 border-t border-oatmeal-dark pt-4">
                 <summary
-                    class="text-xs font-bold uppercase tracking-wider text-red-800 mb-2 cursor-pointer list-none flex items-center gap-2 outline-none">
+                    class="text-[10px] font-display font-semibold uppercase tracking-wider text-red-700 mb-2 cursor-pointer list-none flex items-center gap-2 outline-none">
                     <span class="flex-1">Danger Zone</span>
                     <i data-lucide="chevron-down"
-                        class="w-4 h-4 text-red-800 group-open:rotate-180 transition-transform"></i>
+                        class="w-4 h-4 text-red-700 group-open:rotate-180 transition-transform"></i>
                 </summary>
                 <div class="pt-2">
                     <button onclick="App.resetApp()"
-                        class="w-full border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 py-2 rounded text-xs font-medium flex items-center justify-center gap-2 transition-colors">
+                        class="w-full border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 py-2.5 text-xs font-display font-medium flex items-center justify-center gap-2 transition-colors">
                         <i data-lucide="trash" class="w-3 h-3"></i> Reset App & Clear Cache
                     </button>
                 </div>
@@ -414,7 +470,7 @@
 
             <div class="mt-6 flex justify-end items-center gap-3">
                 <button onclick="App.saveSettings()" id="saveSettingsBtn" disabled
-                    class="px-4 py-2 rounded bg-dull-purple text-white-linen hover:bg-dull-purple-hover font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-opacity">Save
+                    class="px-5 py-2.5 bg-dull-purple text-white-linen hover:bg-dull-purple-hover font-display font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Save
                     Settings</button>
             </div>
         </div>
@@ -424,10 +480,9 @@
     <div id="workerHelpModal" role="dialog" aria-modal="true"
         class="fixed inset-0 bg-charcoal/20 backdrop-blur-sm hidden items-center justify-center z-[60] p-4"
         onclick="if(event.target===this) App.closeModal('workerHelpModal')">
-        <div
-            class="bg-white-linen w-full max-w-2xl h-[80vh] p-6 rounded-xl shadow-2xl border border-oatmeal-dark flex flex-col">
+        <div class="bg-white-linen w-full max-w-2xl h-[80vh] p-6 border border-oatmeal-dark flex flex-col">
             <div class="flex justify-between items-center mb-4 border-b border-oatmeal-dark pb-2">
-                <h3 class="font-serif text-xl text-charcoal">Setup Cloudflare Worker</h3>
+                <h3 class="font-display text-lg font-semibold text-charcoal tracking-tight">Setup Cloudflare Worker</h3>
                 <button onclick="App.closeModal('workerHelpModal')" aria-label="Close worker help"
                     class="text-earth-metal/50 hover:text-earth-metal">
                     <i data-lucide="x" class="w-6 h-6"></i>
@@ -523,14 +578,15 @@ async function handleRequest(request, env) {
 
     <!-- 3. New Diary Modal (Revamped) -->
     <div id="newDiaryModal" role="dialog" aria-modal="true"
-        class="fixed inset-0 bg-charcoal/20 backdrop-blur-sm hidden items-center justify-center z-50 p-4"
+        class="fixed inset-0 bg-charcoal/30 hidden items-center justify-center z-50 p-4"
         onclick="if(event.target===this) App.closeModal('newDiaryModal')">
         <div
-            class="bg-white-linen w-full max-w-md p-6 rounded-xl shadow-xl border border-oatmeal-dark overflow-visible flex flex-col h-[500px]">
+            class="bg-white-linen w-full max-w-md p-6 border border-oatmeal-dark overflow-visible flex flex-col h-[500px]">
             <div class="flex justify-between items-center mb-4 flex-shrink-0">
-                <h3 class="font-serif text-xl text-charcoal">New Diary</h3>
+                <h3 class="font-display text-lg font-semibold text-charcoal tracking-tight">New Diary</h3>
                 <button onclick="App.scanForDataSources()"
-                    class="text-xs text-dull-purple hover:underline flex items-center gap-1" id="refreshDbBtn">
+                    class="text-xs text-earth-metal hover:text-charcoal flex items-center gap-1 font-display"
+                    id="refreshDbBtn">
                     <i data-lucide="refresh-cw" class="w-3 h-3"></i> Refresh
                 </button>
             </div>
@@ -539,11 +595,12 @@ async function handleRequest(request, env) {
 
                 <!-- Searchable Dropdown -->
                 <div class="relative">
-                    <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal mb-1">Select Notion
-                        Data Source</label>
+                    <label
+                        class="block text-[10px] font-display font-semibold uppercase tracking-wider text-earth-metal mb-1">Select
+                        Notion Data Source</label>
 
                     <!-- Info Text Moved Here -->
-                    <div class="text-[10px] text-earth-metal/60 mb-3 leading-tight">
+                    <div class="text-[10px] text-earth-metal/50 mb-3 leading-tight">
                         Only showing datasources with required columns: Name (title), Date (date), Tags (multi-select),
                         Notes (text), Files (media).
                     </div>
@@ -551,33 +608,33 @@ async function handleRequest(request, env) {
                     <div class="relative">
                         <input type="text" id="dbSearchInput" placeholder="Search Data Sources..."
                             onfocus="App.toggleDbDropdown(true)" onkeyup="App.filterDbList(event)"
-                            class="w-full bg-oatmeal border border-oatmeal-dark rounded p-2 text-sm focus:ring-2 focus:ring-dull-purple/50 outline-none"
+                            class="w-full bg-white-linen border border-oatmeal-dark p-2.5 text-sm focus:border-dull-purple outline-none"
                             autocomplete="off">
                         <i data-lucide="chevron-down"
-                            class="absolute right-3 top-3 w-4 h-4 text-earth-metal/50 pointer-events-none"></i>
+                            class="absolute right-3 top-3 w-4 h-4 text-earth-metal/40 pointer-events-none"></i>
                     </div>
 
                     <!-- Dropdown List -->
                     <div id="dbDropdownList"
-                        class="hidden absolute top-full left-0 w-full mt-1 bg-white shadow-xl rounded-lg border border-oatmeal-dark max-h-60 overflow-y-auto z-50">
+                        class="hidden absolute top-full left-0 w-full mt-1 bg-white-linen border border-oatmeal-dark max-h-60 overflow-y-auto z-50">
                         <!-- Items injected here -->
-                        <div class="p-4 text-center text-xs text-earth-metal/50">Type to search...</div>
+                        <div class="p-4 text-center text-xs text-earth-metal/50 font-display">Type to search...</div>
                     </div>
                 </div>
 
                 <!-- Selected DB Info -->
-                <div id="selectedDbInfo" class="hidden bg-dull-purple/5 p-3 rounded border border-dull-purple/20 mt-4">
-                    <div class="text-xs font-bold text-dull-purple uppercase tracking-wider mb-1">Selected</div>
-                    <div class="font-serif text-lg text-charcoal" id="previewDbTitle"></div>
-                    <div class="text-xs text-earth-metal/70 mt-1 line-clamp-2" id="previewDbDesc"></div>
+                <div id="selectedDbInfo" class="hidden bg-oatmeal border-l-2 border-dull-purple p-3 mt-4">
+                    <div class="section-label mb-2">Selected</div>
+                    <div class="font-display text-base font-semibold text-charcoal" id="previewDbTitle"></div>
+                    <div class="text-xs text-earth-metal/60 mt-1 line-clamp-2" id="previewDbDesc"></div>
                 </div>
             </div>
 
             <div class="mt-6 flex justify-end gap-3 flex-shrink-0 pt-4 border-t border-oatmeal-dark">
                 <button onclick="App.closeModal('newDiaryModal')"
-                    class="px-4 py-2 rounded text-earth-metal hover:bg-oatmeal">Cancel</button>
+                    class="px-4 py-2 text-earth-metal hover:bg-oatmeal font-display text-sm">Cancel</button>
                 <button onclick="App.createDiary()"
-                    class="px-4 py-2 rounded bg-dull-purple text-white-linen hover:bg-dull-purple-hover">Create
+                    class="px-5 py-2 bg-charcoal text-white-linen hover:bg-dull-purple font-display font-medium text-sm">Create
                     Diary</button>
             </div>
         </div>
@@ -585,18 +642,18 @@ async function handleRequest(request, env) {
 
     <!-- 4. Delete Confirmation Modal -->
     <div id="deleteModal" role="dialog" aria-modal="true"
-        class="fixed inset-0 bg-charcoal/20 backdrop-blur-sm hidden items-center justify-center z-[70] p-4"
+        class="fixed inset-0 bg-charcoal/30 hidden items-center justify-center z-[70] p-4"
         onclick="if(event.target===this) App.closeModal('deleteModal')">
-        <div class="bg-white-linen w-full max-w-sm p-6 rounded-xl shadow-xl border border-oatmeal-dark">
-            <h3 class="font-serif text-lg text-charcoal mb-2">Delete Entry?</h3>
-            <p class="text-sm text-earth-metal/80 mb-6">This will remove the entry from your <b>local storage</b> AND
+        <div class="bg-white-linen w-full max-w-sm p-6 border border-oatmeal-dark">
+            <h3 class="font-display text-lg font-semibold text-charcoal mb-2 tracking-tight">Delete Entry?</h3>
+            <p class="text-sm text-earth-metal/70 mb-6">This will remove the entry from your <b>local storage</b> AND
                 <b>Notion</b>. This action cannot be undone.
             </p>
             <div class="flex justify-end gap-3">
                 <button onclick="App.closeModal('deleteModal')"
-                    class="px-4 py-2 rounded text-earth-metal hover:bg-oatmeal text-sm">Cancel</button>
+                    class="px-4 py-2 text-earth-metal hover:bg-oatmeal text-sm font-display">Cancel</button>
                 <button onclick="App.executeDelete()"
-                    class="px-4 py-2 rounded bg-red-500 text-white hover:bg-red-600 text-sm font-medium">Delete
+                    class="px-5 py-2 bg-red-600 text-white hover:bg-red-700 text-sm font-display font-medium">Delete
                     Everywhere</button>
             </div>
         </div>
@@ -604,48 +661,50 @@ async function handleRequest(request, env) {
 
     <!-- 6. Reset Confirmation Modal (New) -->
     <div id="resetConfirmationModal" role="dialog" aria-modal="true"
-        class="fixed inset-0 bg-charcoal/20 backdrop-blur-sm hidden items-center justify-center z-[80] p-4"
+        class="fixed inset-0 bg-charcoal/30 hidden items-center justify-center z-[80] p-4"
         onclick="if(event.target===this) App.closeModal('resetConfirmationModal')">
-        <div class="bg-white-linen w-full max-w-sm p-6 rounded-xl shadow-xl border border-red-200">
+        <div class="bg-white-linen w-full max-w-sm p-6 border border-red-300">
             <div class="flex items-center gap-3 mb-2 text-red-700">
-                <i data-lucide="alert-triangle" class="w-6 h-6"></i>
-                <h3 class="font-serif text-lg">Reset App?</h3>
+                <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+                <h3 class="font-display text-lg font-semibold tracking-tight">Reset App?</h3>
             </div>
-            <p class="text-sm text-earth-metal/80 mb-6 leading-relaxed">
+            <p class="text-sm text-earth-metal/70 mb-6 leading-relaxed">
                 This will <b>disconnect Notion</b> and <b>delete all local settings & cache</b>.
                 <br><br>
                 Your data stored in Notion will stay safe, but you will need to reconnect to see it again.
             </p>
             <div class="flex justify-end gap-3">
                 <button onclick="App.closeModal('resetConfirmationModal')"
-                    class="px-4 py-2 rounded text-earth-metal hover:bg-oatmeal text-sm">Cancel</button>
+                    class="px-4 py-2 text-earth-metal hover:bg-oatmeal text-sm font-display">Cancel</button>
                 <button onclick="App.executeReset()"
-                    class="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700 text-sm font-medium shadow-md hover:shadow-lg transition-all">Yes,
-                    Reset Everything</button>
+                    class="px-5 py-2 bg-red-600 text-white hover:bg-red-700 text-sm font-display font-medium">Yes, Reset
+                    Everything</button>
             </div>
         </div>
     </div>
 
     <!-- 5. Entry Modal (Live Composite Layout) -->
     <div id="entryModal" role="dialog" aria-modal="true"
-        class="fixed inset-0 bg-white-linen z-50 hidden flex-col overflow-hidden">
+        class="fixed inset-0 bg-oatmeal z-50 hidden flex-col overflow-hidden">
 
         <!-- Close Button -->
         <button onclick="App.closeModal('entryModal')" aria-label="Close entry"
-            class="absolute top-4 left-4 z-50 bg-black/50 text-white p-2 rounded-full backdrop-blur-sm hover:bg-black/70 transition">
-            <i data-lucide="x" class="w-6 h-6"></i>
+            class="absolute top-4 left-4 z-50 bg-charcoal text-white-linen p-2 hover:bg-dull-purple transition">
+            <i data-lucide="x" class="w-5 h-5"></i>
         </button>
 
-        <div id="entryLoadingOverlay" class="absolute inset-0 bg-white/80 z-50 hidden items-center justify-center">
+        <div id="entryLoadingOverlay"
+            class="absolute inset-0 bg-white-linen/90 z-50 hidden items-center justify-center">
             <div class="flex flex-col items-center gap-3 text-earth-metal">
-                <div class="loader w-8 h-8 border-4 border-dull-purple border-t-transparent rounded-full"></div>
-                <span id="entryLoadingText" class="text-xs font-semibold tracking-wide uppercase">Processing...</span>
+                <div class="loader w-8 h-8 border-2"></div>
+                <span id="entryLoadingText"
+                    class="text-xs font-display font-semibold tracking-wide uppercase">Processing...</span>
             </div>
         </div>
 
         <!-- Top Section: Camera Viewfinder (Canvas-based) -->
         <div id="cameraSection"
-            class="relative w-full h-[40%] md:h-[50%] max-h-[600px] bg-zinc-100 flex-shrink-0 flex items-center justify-center overflow-hidden group">
+            class="relative w-full h-[40%] md:h-[50%] max-h-[600px] bg-charcoal/5 flex-shrink-0 flex items-center justify-center overflow-hidden group">
 
             <!-- Hidden Video Source -->
             <video id="videoSource" autoplay playsinline class="hidden"></video>
@@ -762,70 +821,203 @@ async function handleRequest(request, env) {
                     </div>
                 </div>
             </div>
+
+            <!-- Image Manipulation Controls (shown when segment has image) -->
+            <div id="imageManipControls"
+                class="hidden absolute top-4 right-4 z-40 flex flex-col gap-2 bg-black/60 backdrop-blur-md rounded-xl p-2">
+                <!-- Rotation Slider -->
+                <div class="flex items-center gap-2 px-2">
+                    <i data-lucide="rotate-cw" class="w-4 h-4 text-white/70"></i>
+                    <input type="range" id="rotationSlider" min="-180" max="180" step="1" value="0"
+                        class="w-20 h-1 bg-white/30 rounded-lg appearance-none cursor-pointer accent-dull-purple"
+                        oninput="App.setSegmentRotation(this.value)">
+                    <span id="rotationValue" class="text-[10px] text-white/70 w-8 text-right">0°</span>
+                </div>
+                <!-- Zoom Slider -->
+                <div class="flex items-center gap-2 px-2">
+                    <i data-lucide="zoom-in" class="w-4 h-4 text-white/70"></i>
+                    <input type="range" id="zoomSlider" min="0.5" max="3" step="0.05" value="1"
+                        class="w-20 h-1 bg-white/30 rounded-lg appearance-none cursor-pointer accent-dull-purple"
+                        oninput="App.setSegmentZoom(this.value)">
+                    <span id="zoomValue" class="text-[10px] text-white/70 w-8 text-right">1.0x</span>
+                </div>
+                <!-- Action Buttons -->
+                <div class="flex justify-center gap-1 pt-1 border-t border-white/20">
+                    <button onclick="App.flipSegmentHorizontal()" title="Flip Horizontal"
+                        class="p-2 hover:bg-white/20 rounded text-white">
+                        <i data-lucide="flip-horizontal" class="w-4 h-4"></i>
+                    </button>
+                    <button onclick="App.flipSegmentVertical()" title="Flip Vertical"
+                        class="p-2 hover:bg-white/20 rounded text-white">
+                        <i data-lucide="flip-vertical" class="w-4 h-4"></i>
+                    </button>
+                    <button onclick="App.resetSegmentTransform()" title="Reset"
+                        class="p-2 hover:bg-white/20 rounded text-white">
+                        <i data-lucide="undo-2" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
         </div>
 
         <!-- Bottom Section: Form (Scrollable) -->
-        <div id="formSection" class="flex-1 bg-white-linen p-6 md:p-8 overflow-y-auto w-full md:max-w-2xl md:mx-auto">
+        <div id="formSection" class="flex-1 bg-white-linen p-5 md:p-8 overflow-y-auto w-full md:max-w-2xl md:mx-auto">
             <div class="space-y-5 pb-20">
 
                 <!-- Taken Photo Preview & Retake UI (Hidden by default) -->
                 <div id="takenPhotoUI" class="hidden flex-col gap-3 mb-4">
-                    <div class="w-full h-64 bg-oatmeal rounded-lg overflow-hidden relative shadow-sm group cursor-pointer"
+                    <div class="w-full h-64 bg-oatmeal overflow-hidden relative group cursor-pointer border border-oatmeal-dark"
                         onclick="App.handleCollageClick(event)">
                         <img id="smallPreview" class="w-full h-full object-contain">
                         <!-- Hint overlay -->
                         <div
-                            class="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-xs font-bold pointer-events-none">
-                            Click segment to retake
+                            class="absolute inset-0 bg-charcoal/30 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-xs font-display font-medium pointer-events-none">
+                            Click segment to edit
                         </div>
                     </div>
                     <div class="flex justify-center gap-2">
                         <button onclick="App.retakeAll()"
-                            class="text-xs bg-charcoal text-white px-4 py-2 rounded-full hover:bg-black flex items-center gap-2 transition">
+                            class="text-xs bg-muted-pink text-white-linen px-4 py-2 hover:bg-muted-pink-dim flex items-center gap-2 transition font-display font-medium">
                             <i data-lucide="refresh-cw" class="w-3 h-3"></i> Retake All
                         </button>
                     </div>
                 </div>
 
+                <!-- Segment Edit Overlay (Hidden by default) -->
+                <div id="segmentEditOverlay"
+                    class="hidden fixed inset-0 bg-charcoal/80 z-50 flex items-center justify-center p-4 overflow-y-auto">
+                    <div class="bg-white-linen w-full max-w-sm p-5 space-y-4 my-auto">
+                        <div class="flex justify-between items-center">
+                            <h3 class="font-display font-semibold text-charcoal">Edit Segment <span
+                                    id="editSegmentNum">1</span></h3>
+                            <button onclick="App.closeSegmentEdit()" class="text-earth-metal hover:text-charcoal">
+                                <i data-lucide="x" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+
+                        <!-- Live Preview -->
+                        <div class="w-full aspect-square bg-charcoal overflow-hidden border border-oatmeal-dark">
+                            <canvas id="segEditPreview" class="w-full h-full object-contain"></canvas>
+                        </div>
+
+                        <!-- Zoom -->
+                        <div>
+                            <label
+                                class="block text-[10px] font-display font-semibold uppercase tracking-wider text-earth-metal mb-1.5">Zoom</label>
+                            <div class="flex items-center gap-2">
+                                <input type="range" id="segEditZoom" min="0.5" max="3" step="0.05" value="1"
+                                    oninput="App.setEditSegmentZoom(this.value)" class="flex-1 accent-dull-purple">
+                                <span id="segEditZoomVal" class="text-xs font-display w-10 text-right">1.0x</span>
+                            </div>
+                        </div>
+
+                        <!-- Rotate -->
+                        <div>
+                            <label
+                                class="block text-[10px] font-display font-semibold uppercase tracking-wider text-earth-metal mb-1.5">Rotate</label>
+                            <div class="flex items-center gap-2">
+                                <input type="range" id="segEditRotation" min="-180" max="180" step="1" value="0"
+                                    oninput="App.setEditSegmentRotation(this.value)" class="flex-1 accent-dull-purple">
+                                <span id="segEditRotationVal" class="text-xs font-display w-10 text-right">0°</span>
+                            </div>
+                        </div>
+
+                        <!-- Framing X (Left/Right) -->
+                        <div>
+                            <label
+                                class="block text-[10px] font-display font-semibold uppercase tracking-wider text-earth-metal mb-1.5">Framing
+                                X (Left ↔ Right)</label>
+                            <div class="flex items-center gap-2">
+                                <input type="range" id="segEditPanX" min="-300" max="300" step="1" value="0"
+                                    oninput="App.setEditSegmentPanX(this.value)" class="flex-1 accent-dull-purple">
+                                <span id="segEditPanXVal" class="text-xs font-display w-10 text-right">0</span>
+                            </div>
+                        </div>
+
+                        <!-- Framing Y (Up/Down) -->
+                        <div>
+                            <label
+                                class="block text-[10px] font-display font-semibold uppercase tracking-wider text-earth-metal mb-1.5">Framing
+                                Y (Up ↔ Down)</label>
+                            <div class="flex items-center gap-2">
+                                <input type="range" id="segEditPanY" min="-300" max="300" step="1" value="0"
+                                    oninput="App.setEditSegmentPanY(this.value)" class="flex-1 accent-dull-purple">
+                                <span id="segEditPanYVal" class="text-xs font-display w-10 text-right">0</span>
+                            </div>
+                        </div>
+
+                        <!-- Flip buttons -->
+                        <div class="flex gap-2 justify-center">
+                            <button onclick="App.flipEditSegmentH()"
+                                class="flex-1 p-2 bg-oatmeal hover:bg-oatmeal-dark transition flex items-center justify-center gap-1 text-xs font-display">
+                                <i data-lucide="flip-horizontal" class="w-4 h-4"></i> Flip H
+                            </button>
+                            <button onclick="App.flipEditSegmentV()"
+                                class="flex-1 p-2 bg-oatmeal hover:bg-oatmeal-dark transition flex items-center justify-center gap-1 text-xs font-display">
+                                <i data-lucide="flip-vertical" class="w-4 h-4"></i> Flip V
+                            </button>
+                        </div>
+
+                        <!-- Action buttons -->
+                        <div class="flex gap-2 pt-2 border-t border-oatmeal-dark">
+                            <button onclick="App.resetEditSegment()"
+                                class="flex-1 p-2 bg-oatmeal hover:bg-oatmeal-dark transition text-xs font-display font-medium flex items-center justify-center gap-1">
+                                <i data-lucide="rotate-ccw" class="w-3 h-3"></i> Reset
+                            </button>
+                            <button onclick="App.retakeEditSegment()"
+                                class="flex-1 p-2 bg-muted-pink text-white-linen hover:bg-muted-pink-dim transition text-xs font-display font-medium flex items-center justify-center gap-1">
+                                <i data-lucide="camera" class="w-3 h-3"></i> Retake
+                            </button>
+                            <button onclick="App.applySegmentEdit()"
+                                class="flex-1 p-2 bg-dull-purple text-white-linen hover:bg-dull-purple-hover transition text-xs font-display font-medium flex items-center justify-center gap-1">
+                                <i data-lucide="check" class="w-3 h-3"></i> Done
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Title -->
                 <div>
-                    <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal mb-1">Title</label>
+                    <label
+                        class="block text-[10px] font-display font-semibold uppercase tracking-wider text-earth-metal mb-1.5">Title</label>
                     <input type="text" id="entryTitle"
-                        class="w-full bg-oatmeal border-none rounded-lg p-3 focus:ring-2 focus:ring-dull-purple/50 outline-none text-lg font-serif"
+                        class="w-full bg-oatmeal border border-oatmeal-dark p-3 focus:border-dull-purple outline-none text-base font-display font-medium"
                         placeholder="Untitled Entry">
                 </div>
 
                 <!-- Date -->
                 <div>
-                    <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal mb-1">Date</label>
+                    <label
+                        class="block text-[10px] font-display font-semibold uppercase tracking-wider text-earth-metal mb-1.5">Date</label>
                     <input type="datetime-local" id="entryDate"
-                        class="w-full bg-oatmeal border-none rounded-lg p-3 focus:ring-2 focus:ring-dull-purple/50 outline-none text-sm text-charcoal">
+                        class="w-full bg-oatmeal border border-oatmeal-dark p-3 focus:border-dull-purple outline-none text-sm text-charcoal">
                 </div>
 
                 <!-- Notes -->
                 <div>
-                    <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal mb-1">Notes</label>
+                    <label
+                        class="block text-[10px] font-display font-semibold uppercase tracking-wider text-earth-metal mb-1.5">Notes</label>
                     <textarea id="entryNotes"
-                        class="w-full bg-oatmeal border-none rounded-lg p-4 h-32 focus:ring-2 focus:ring-dull-purple/50 outline-none resize-none placeholder-earth-metal/30 leading-relaxed"
+                        class="w-full bg-oatmeal border border-oatmeal-dark p-3 h-32 focus:border-dull-purple outline-none resize-none placeholder-earth-metal/40 leading-relaxed"
                         placeholder="What did you see today?"></textarea>
                 </div>
 
                 <!-- Tags -->
                 <div>
-                    <div class="flex justify-between items-center mb-1">
-                        <label class="block text-xs font-bold uppercase tracking-wider text-earth-metal">Tags</label>
+                    <div class="flex justify-between items-center mb-1.5">
+                        <label
+                            class="block text-[10px] font-display font-semibold uppercase tracking-wider text-earth-metal">Tags</label>
                         <button onclick="SyncManager.fetchTags(false)"
-                            class="text-[10px] text-dull-purple hover:underline flex items-center gap-1">
+                            class="text-[10px] text-earth-metal/60 hover:text-charcoal flex items-center gap-1 font-display">
                             <i data-lucide="refresh-ccw" class="w-3 h-3"></i> Refresh
                         </button>
                     </div>
                     <div class="flex flex-wrap gap-2 mb-2" id="activeTags"></div>
                     <div class="relative">
                         <input type="text" id="tagInput" placeholder="Add a tag..."
-                            class="w-full bg-oatmeal border-none rounded-lg p-3 focus:ring-2 focus:ring-dull-purple/50 outline-none"
+                            class="w-full bg-oatmeal border border-oatmeal-dark p-3 focus:border-dull-purple outline-none"
                             onkeyup="App.handleTagInput(event)" onfocus="App.handleTagInput(event)">
                         <div id="tagSuggestions"
-                            class="absolute top-full left-0 w-full bg-white shadow-lg rounded mt-1 z-10 hidden max-h-32 overflow-y-auto border border-oatmeal-dark">
+                            class="absolute top-full left-0 w-full bg-white-linen border border-oatmeal-dark mt-1 z-10 hidden max-h-32 overflow-y-auto">
                         </div>
                     </div>
                 </div>
@@ -833,9 +1025,9 @@ async function handleRequest(request, env) {
                 <!-- Save Button -->
                 <div class="pt-4 flex justify-end">
                     <button onclick="App.saveEntry()" id="saveEntryBtn" disabled
-                        class="bg-charcoal hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed text-white-linen px-8 py-3 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 text-base font-medium">
+                        class="bg-charcoal hover:bg-dull-purple disabled:opacity-50 disabled:cursor-not-allowed text-white-linen px-8 py-3 transition-colors flex items-center justify-center gap-2 text-sm font-display font-semibold">
                         <span>Save Entry</span>
-                        <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                        <i data-lucide="arrow-right" class="w-4 h-4"></i>
                     </button>
                 </div>
             </div>
@@ -2159,17 +2351,17 @@ async function handleRequest(request, env) {
                     menu.classList.remove('hidden');
                     list.innerHTML = '';
                     if (App.state.diaries.length === 0) {
-                        list.innerHTML = `<div class="p-4 text-center text-xs text-earth-metal/50">No diaries yet.</div>`;
+                        list.innerHTML = `<div class="p-4 text-center text-xs text-earth-metal/40 font-display">No diaries yet.</div>`;
                     } else {
                         App.state.diaries.forEach(diary => {
                             const isActive = diary.id === App.state.activeDiaryId;
                             const div = document.createElement('div');
-                            div.className = `p-3 rounded-lg cursor-pointer flex items-center justify-between mb-1 ${isActive ? 'bg-oatmeal-dark/30 font-bold text-dull-purple' : 'hover:bg-white'}`;
+                            div.className = `p-3 cursor-pointer flex items-center justify-between mb-0.5 border-l-2 font-display text-sm ${isActive ? 'bg-oatmeal border-dull-purple font-semibold text-charcoal' : 'border-transparent hover:bg-oatmeal hover:border-oatmeal-dark text-earth-metal'}`;
                             div.onclick = () => {
                                 App.selectDiary(diary.id);
                                 menu.classList.add('hidden');
                             };
-                            div.innerHTML = `<span>${diary.title}</span> ${isActive ? '<i data-lucide="check" class="w-4 h-4"></i>' : ''}`;
+                            div.innerHTML = `<span>${diary.title}</span> ${isActive ? '<i data-lucide="check" class="w-4 h-4 text-dull-purple"></i>' : ''}`;
                             list.appendChild(div);
                         });
                         lucide.createIcons();
@@ -2182,9 +2374,9 @@ async function handleRequest(request, env) {
             showToast: (message, type = 'info') => {
                 const container = document.getElementById('toastContainer');
                 const el = document.createElement('div');
-                let bg = type === 'success' ? 'bg-oatmeal border-green-500' : (type === 'error' ? 'bg-white border-red-500' : 'bg-white-linen border-dull-purple');
+                let bg = type === 'success' ? 'bg-white-linen border-dull-purple' : (type === 'error' ? 'bg-white-linen border-red-600' : 'bg-white-linen border-charcoal');
                 let icon = type === 'success' ? 'check-circle' : (type === 'error' ? 'alert-circle' : 'info');
-                el.className = `toast-enter pointer-events-auto p-4 rounded shadow-md flex gap-3 text-sm ${bg} border-l-4 transition-all`;
+                el.className = `toast-enter pointer-events-auto p-4 flex gap-3 text-sm ${bg} border-l-2 transition-all font-display`;
                 el.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5 mt-0.5"></i><div class="flex-1">${message}</div>`;
                 container.appendChild(el);
                 lucide.createIcons();
@@ -2196,7 +2388,7 @@ async function handleRequest(request, env) {
                 const container = document.getElementById('diaryListContainer');
                 container.innerHTML = '';
                 if (App.state.diaries.length === 0) {
-                    container.innerHTML = `<div class="text-xs text-center text-earth-metal/50 mt-4">No diaries yet.</div>`;
+                    container.innerHTML = `<div class="text-xs text-center text-earth-metal/40 mt-4 font-display">No diaries yet.</div>`;
                     return;
                 }
                 App.state.diaries.forEach(diary => {
@@ -2204,11 +2396,11 @@ async function handleRequest(request, env) {
                     const div = document.createElement('div');
                     const count = diary.entries.length;
                     const countDisplay = count > 50 ? "50+" : count;
-                    div.className = `p-3 rounded-lg cursor-pointer flex flex-col gap-1 transition-colors ${isActive ? 'bg-white-linen shadow-sm border border-oatmeal-dark' : 'hover:bg-oatmeal-dark/50'}`;
+                    div.className = `p-3 cursor-pointer flex flex-col gap-0.5 transition-colors border-l-2 ${isActive ? 'bg-white-linen border-dull-purple' : 'border-transparent hover:bg-oatmeal-dark/30 hover:border-oatmeal-dark'}`;
                     div.onclick = () => App.selectDiary(diary.id);
                     div.innerHTML = `
-                        <div class="font-medium text-charcoal truncate">${diary.title}</div>
-                        <div class="text-[10px] text-earth-metal/60">${countDisplay} entries</div>
+                        <div class="font-display font-medium text-sm text-charcoal truncate">${diary.title}</div>
+                        <div class="text-[9px] text-earth-metal/50 font-display uppercase tracking-wide">${countDisplay} entries</div>
                     `;
                     container.appendChild(div);
                 });
@@ -2222,26 +2414,26 @@ async function handleRequest(request, env) {
                 if (!isConnected) {
                     gallery.innerHTML = `
                         <div class="h-full flex flex-col items-center justify-center text-center gap-4">
-                            <div class="bg-dull-purple/10 p-4 rounded-full"><i data-lucide="plug" class="w-10 h-10 text-dull-purple"></i></div>
+                            <div class="bg-dull-purple p-4"><i data-lucide="plug" class="w-8 h-8 text-white-linen"></i></div>
                             <div>
-                                <h3 class="font-serif text-2xl text-charcoal mb-2">Welcome to Photo Chronicles</h3>
+                                <h3 class="font-display text-xl font-semibold text-charcoal mb-2 tracking-tight">Welcome to Photo Chronicles</h3>
                                 <p class="welcome-blurb max-w-md mx-auto mb-3">Photo Chronicles is your cozy, camera-first diary that turns daily snaps into a living timeline—auto-sorted, timestamped, and synced privately to Notion so memories stay safe and easy to revisit.</p>
-                                <p class="text-earth-metal/60 max-w-xs mx-auto mb-6">Connect your Notion workspace to start tracking.</p>
-                                <button onclick="App.openModal('settingsModal')" class="bg-charcoal text-white px-6 py-3 rounded-lg font-medium hover:bg-black transition">Connect to Notion</button>
+                                <p class="text-earth-metal/50 max-w-xs mx-auto mb-6 text-sm">Connect your Notion workspace to start tracking.</p>
+                                <button onclick="App.openModal('settingsModal')" class="bg-charcoal text-white-linen px-6 py-3 font-display font-medium hover:bg-dull-purple transition">Connect to Notion</button>
                             </div>
                         </div>`;
                 } else if (!hasDiaries) {
                     gallery.innerHTML = `
                         <div class="h-full flex flex-col items-center justify-center text-center gap-4">
-                            <div class="bg-oatmeal-dark p-4 rounded-full"><i data-lucide="book-plus" class="w-10 h-10 text-earth-metal"></i></div>
+                            <div class="bg-muted-pink p-4"><i data-lucide="book-plus" class="w-8 h-8 text-white-linen"></i></div>
                             <div>
-                                <h3 class="font-serif text-2xl text-charcoal mb-2">You're Connected!</h3>
-                                <p class="text-earth-metal/60 max-w-xs mx-auto mb-6">Create your first diary to link a Notion data source.</p>
-                                <button onclick="App.attemptNewDiary()" class="bg-dull-purple text-white px-6 py-3 rounded-lg font-medium hover:bg-dull-purple-hover transition">Create First Diary</button>
+                                <h3 class="font-display text-xl font-semibold text-charcoal mb-2 tracking-tight">You're Connected!</h3>
+                                <p class="text-earth-metal/50 max-w-xs mx-auto mb-6 text-sm">Create your first diary to link a Notion data source.</p>
+                                <button onclick="App.attemptNewDiary()" class="bg-charcoal text-white-linen px-6 py-3 font-display font-medium hover:bg-dull-purple transition">Create First Diary</button>
                             </div>
                         </div>`;
                 } else {
-                    gallery.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-center text-earth-metal/60"><i data-lucide="book-open" class="w-12 h-12 mb-4 opacity-50"></i><p>Select a diary.</p></div>`;
+                    gallery.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-center text-earth-metal/50"><i data-lucide="book-open" class="w-10 h-10 mb-4 opacity-40"></i><p class="font-display">Select a diary.</p></div>`;
                 }
                 lucide.createIcons();
             },
@@ -2283,7 +2475,7 @@ async function handleRequest(request, env) {
 
                 displayEntries.forEach(entry => {
                     const card = document.createElement('div');
-                    card.className = "relative group bg-white-linen rounded-lg overflow-hidden shadow-sm border border-oatmeal-dark hover:shadow-md transition-shadow flex flex-col";
+                    card.className = "entry-card relative group bg-white-linen overflow-hidden border border-oatmeal-dark flex flex-col";
 
                     const imgSrc = imageMap.get(entry.id);
                     const imgHtml = imgSrc
@@ -2294,7 +2486,7 @@ async function handleRequest(request, env) {
 
                     const deleteBtn = `
                         <div class="absolute top-1 right-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10">
-                            <button onclick="event.stopPropagation(); App.confirmDelete('${diary.id}', '${entry.id}')" class="bg-white/80 hover:bg-white text-red-500 p-1.5 rounded-full shadow-sm backdrop-blur-sm transition">
+                            <button onclick="event.stopPropagation(); App.confirmDelete('${diary.id}', '${entry.id}')" class="bg-white-linen hover:bg-muted-pink hover:text-white-linen text-muted-pink-dim p-1.5 transition">
                                 <i data-lucide="trash-2" class="w-3 h-3"></i>
                             </button>
                         </div>
@@ -2303,12 +2495,12 @@ async function handleRequest(request, env) {
                     card.innerHTML = `
                         ${deleteBtn}
                         ${imgHtml}
-                        <div class="p-2 flex flex-col gap-1">
+                        <div class="p-2.5 flex flex-col gap-1">
                             <div class="flex justify-between items-center">
-                                <span class="text-[10px] font-mono text-earth-metal/60 truncate">${UTILS.formatDate(entry.date)}</span>
-                                <div class="w-1.5 h-1.5 rounded-full ${entry.synced ? 'bg-green-400' : 'bg-amber-400'}" title="${entry.synced ? 'Synced' : 'Local'}"></div>
+                                <span class="text-[9px] font-display text-earth-metal/50 truncate uppercase tracking-wide">${UTILS.formatDate(entry.date)}</span>
+                                <div class="w-1.5 h-1.5 ${entry.synced ? 'bg-dull-purple' : 'bg-muted-pink'}" title="${entry.synced ? 'Synced' : 'Local'}"></div>
                             </div>
-                            <h4 class="font-bold text-xs text-charcoal truncate leading-tight">${dispTitle}</h4>
+                            <h4 class="font-display font-semibold text-xs text-charcoal truncate leading-tight">${dispTitle}</h4>
                         </div>
                     `;
                     grid.appendChild(card);
@@ -2320,7 +2512,7 @@ async function handleRequest(request, env) {
                     : "End of entries. (Thumbnails only - check Notion for full quality)";
                 let footer = document.createElement('div');
                 footer.id = 'galleryFooter';
-                footer.className = "text-center text-xs text-earth-metal/40 py-8";
+                footer.className = "text-center text-[10px] text-earth-metal/40 py-8 font-display uppercase tracking-wide";
                 footer.innerText = footerMsg;
                 gallery.appendChild(footer);
 
@@ -2364,6 +2556,7 @@ async function handleRequest(request, env) {
                 document.getElementById('takenPhotoUI').classList.remove('flex');
                 document.getElementById('takenPhotoUI').classList.add('hidden');
                 document.getElementById('cameraSection').classList.remove('hidden');
+                document.getElementById('imageManipControls').classList.add('hidden');
 
                 const diary = App.state.diaries.find(d => d.id === App.state.activeDiaryId);
                 if (!diary) return App.showToast("Create a diary first.", "error");
@@ -2494,15 +2687,18 @@ async function handleRequest(request, env) {
             interactionTarget: null,
             prevPinchDist: 0,
             prevPinchAngle: 0,
+            prevPinchCenter: null,
+            lastPointerPos: null,
 
             getDist: (p1, p2) => Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY),
             getAngle: (p1, p2) => Math.atan2(p2.clientY - p1.clientY, p2.clientX - p1.clientX),
+            getCenter: (p1, p2) => ({ x: (p1.clientX + p2.clientX) / 2, y: (p1.clientY + p2.clientY) / 2 }),
 
             handlePointerDown: (e) => {
                 if (!App.state.isEntryModalOpen) return;
                 const cvs = document.getElementById('viewfinder');
                 cvs.setPointerCapture(e.pointerId);
-                App.state.pointers.set(e.pointerId, e);
+                App.state.pointers.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY, pointerId: e.pointerId });
 
                 // Find target segment
                 const rect = cvs.getBoundingClientRect();
@@ -2516,22 +2712,29 @@ async function handleRequest(request, env) {
                 if (clickedIdx !== -1 && App.state.segments[clickedIdx]) {
                     App.state.interactionTarget = clickedIdx;
                     App.state.activeSegment = clickedIdx;
-                    // Update UI to show selected segment
                     document.getElementById('segCurrent').innerText = clickedIdx + 1;
+                    App.updateManipControlsVisibility();
                 } else {
                     App.state.interactionTarget = null;
                 }
+
+                // Store initial position for single-finger pan
+                App.state.lastPointerPos = { x: e.clientX, y: e.clientY };
 
                 if (App.state.pointers.size === 2) {
                     const points = Array.from(App.state.pointers.values());
                     App.state.prevPinchDist = App.getDist(points[0], points[1]);
                     App.state.prevPinchAngle = App.getAngle(points[0], points[1]);
+                    App.state.prevPinchCenter = App.getCenter(points[0], points[1]);
                 }
             },
 
             handlePointerMove: (e) => {
                 if (!App.state.pointers.has(e.pointerId)) return;
-                App.state.pointers.set(e.pointerId, e);
+
+                const oldPointer = App.state.pointers.get(e.pointerId);
+                const newPointer = { clientX: e.clientX, clientY: e.clientY, pointerId: e.pointerId };
+                App.state.pointers.set(e.pointerId, newPointer);
 
                 const targetIdx = App.state.interactionTarget;
                 if (targetIdx === null || !App.state.segments[targetIdx]) return;
@@ -2541,52 +2744,48 @@ async function handleRequest(request, env) {
 
                 const points = Array.from(App.state.pointers.values());
                 const cvs = document.getElementById('viewfinder');
+                const scaleX = cvs.width / cvs.clientWidth;
+                const scaleY = cvs.height / cvs.clientHeight;
 
                 if (points.length === 1) {
-                    // Pan
-                    const p = points[0];
-                    // Calculate delta from previous event (we need to track prev pos, but pointer event gives movementX/Y which is screen based)
-                    // Better to rely on stored previous event? 
-                    // Let's use movementX/Y scaled to canvas dims
-                    // But movementX is in screen pixels. We need canvas units.
-                    // Scale factor:
-                    const scaleX = cvs.width / cvs.clientWidth;
-                    const scaleY = cvs.height / cvs.clientHeight;
-
-                    // Rotate the movement vector by -rotation to pan in local space? 
-                    // Or just pan in screen space (which updates x/y). 
-                    // x/y are translations applied AFTER rotation in my proposed drawLoop. 
-                    // Wait, usually T * R * S. So Translation is in parent space. 
-                    // So simply adding screen delta (scaled) works for "screen space panning".
-
-                    // However, we want to move the image "under" the frame.
-                    // If we rotate the image 90deg, moving mouse right should move image right visually.
-                    // If we apply translation then rotation, moving x moves it in rotated frame.
-                    // If we apply rotation then translation (unlikely for image center), moving x moves in screen frame.
-                    // My drawLoop plan: translate(cx, cy) -> translate(x, y) -> rotate(r) -> scale(s).
-                    // This means x,y are in UN-ROTATED local space (aligned with screen/slot). 
-                    // So screen movement maps directly to x,y. Good.
-
-                    seg.x += e.movementX * scaleX;
-                    seg.y += e.movementY * scaleY;
+                    // Single finger pan
+                    const dx = e.clientX - oldPointer.clientX;
+                    const dy = e.clientY - oldPointer.clientY;
+                    seg.x += dx * scaleX;
+                    seg.y += dy * scaleY;
 
                 } else if (points.length === 2) {
-                    // Pinch / Rotate
+                    // Pinch to zoom/rotate + two-finger pan
                     const dist = App.getDist(points[0], points[1]);
                     const angle = App.getAngle(points[0], points[1]);
+                    const center = App.getCenter(points[0], points[1]);
 
                     // Zoom
                     if (App.state.prevPinchDist > 0) {
                         const scaleFactor = dist / App.state.prevPinchDist;
                         seg.scale *= scaleFactor;
+                        // Clamp scale
+                        seg.scale = Math.max(0.1, Math.min(seg.scale, 10));
                     }
 
                     // Rotate
                     const angleDelta = angle - App.state.prevPinchAngle;
                     seg.rotation += angleDelta;
 
+                    // Pan (two-finger drag)
+                    if (App.state.prevPinchCenter) {
+                        const dx = center.x - App.state.prevPinchCenter.x;
+                        const dy = center.y - App.state.prevPinchCenter.y;
+                        seg.x += dx * scaleX;
+                        seg.y += dy * scaleY;
+                    }
+
                     App.state.prevPinchDist = dist;
                     App.state.prevPinchAngle = angle;
+                    App.state.prevPinchCenter = center;
+
+                    // Update UI sliders to reflect changes
+                    App.updateManipControlsVisibility();
                 }
             },
 
@@ -2594,9 +2793,13 @@ async function handleRequest(request, env) {
                 App.state.pointers.delete(e.pointerId);
                 if (App.state.pointers.size < 2) {
                     App.state.prevPinchDist = 0;
+                    App.state.prevPinchAngle = 0;
+                    App.state.prevPinchCenter = null;
                 }
                 if (App.state.pointers.size === 0) {
                     App.state.interactionTarget = null;
+                    App.state.lastPointerPos = null;
+                    App.updateManipControlsVisibility();
                 }
             },
 
@@ -2716,7 +2919,9 @@ async function handleRequest(request, env) {
                             ctx.translate(cx, cy);
                             ctx.translate(seg.x, seg.y);
                             ctx.rotate(seg.rotation);
-                            ctx.scale(seg.scale, seg.scale);
+                            const flipScaleX = seg.flipH ? -1 : 1;
+                            const flipScaleY = seg.flipV ? -1 : 1;
+                            ctx.scale(seg.scale * flipScaleX, seg.scale * flipScaleY);
                             ctx.drawImage(seg.source, -seg.source.width / 2, -seg.source.height / 2);
                         } else {
                             // Legacy canvas
@@ -2886,9 +3091,9 @@ async function handleRequest(request, env) {
             renderTags: () => {
                 const container = document.getElementById('activeTags');
                 container.innerHTML = App.state.currentTags.map(t => `
-                    <span class="bg-oatmeal border border-oatmeal-dark text-dull-purple px-2 py-1 rounded text-xs flex items-center gap-1">
+                    <span class="bg-dull-purple text-white-linen px-2.5 py-1 text-xs flex items-center gap-1.5 font-display">
                         ${t}
-                        <button onclick="App.removeTag('${t}')" class="hover:text-red-500"><i data-lucide="x" class="w-3 h-3"></i></button>
+                        <button onclick="App.removeTag('${t}')" class="hover:text-muted-pink"><i data-lucide="x" class="w-3 h-3"></i></button>
                     </span>
                 `).join('');
                 lucide.createIcons();
@@ -3110,7 +3315,10 @@ async function handleRequest(request, env) {
                         x: 0,
                         y: 0,
                         scale: scale,
+                        baseScale: scale,
                         rotation: 0,
+                        flipH: false,
+                        flipV: false,
                         width: vidW,
                         height: vidH
                     };
@@ -3134,6 +3342,7 @@ async function handleRequest(request, env) {
                         App.state.activeSegment = nextEmpty;
                         document.getElementById('segCurrent').innerText = App.state.activeSegment + 1;
                     }
+                    App.updateManipControlsVisibility();
                 };
             },
 
@@ -3180,7 +3389,9 @@ async function handleRequest(request, env) {
                             ctx.translate(cx, cy);
                             ctx.translate(seg.x, seg.y);
                             ctx.rotate(seg.rotation);
-                            ctx.scale(seg.scale, seg.scale);
+                            const flipScaleX = seg.flipH ? -1 : 1;
+                            const flipScaleY = seg.flipV ? -1 : 1;
+                            ctx.scale(seg.scale * flipScaleX, seg.scale * flipScaleY);
                             ctx.drawImage(seg.source, -seg.source.width / 2, -seg.source.height / 2);
                         } else {
                             ctx.drawImage(seg, 0, 0, seg.width, seg.height, dx, dy, dw, dh);
@@ -3200,6 +3411,7 @@ async function handleRequest(request, env) {
                     App.state.capturedImage = await UTILS.processImage(highResBase, 640, 0.72);
 
                     document.getElementById('cameraSection').classList.add('hidden');
+                    document.getElementById('imageManipControls').classList.add('hidden');
                     document.getElementById('smallPreview').src = App.state.capturedImage; // Show low res preview
                     document.getElementById('takenPhotoUI').classList.remove('hidden');
                     document.getElementById('takenPhotoUI').classList.add('flex');
@@ -3212,17 +3424,283 @@ async function handleRequest(request, env) {
             },
 
             handleCollageClick: (e) => {
-                if (App.state.collageMode === 1) return;
-                const img = e.target;
+                // Use the smallPreview image element, not e.target (which could be overlay div)
+                const img = document.getElementById('smallPreview');
+                if (!img) return;
                 const rect = img.getBoundingClientRect();
                 const x = (e.clientX - rect.left) / rect.width;
                 const y = (e.clientY - rect.top) / rect.height;
                 const layout = App.collageConfigs[App.state.collageMode];
                 const clickedIdx = layout.findIndex(slot => x >= slot.x && x <= slot.x + slot.w && y >= slot.y && y <= slot.y + slot.h);
-                if (clickedIdx !== -1) {
-                    App.state.activeSegment = clickedIdx;
-                    App.retakePartial();
+                if (clickedIdx !== -1 && App.state.segments[clickedIdx]) {
+                    App.openSegmentEdit(clickedIdx);
                 }
+            },
+
+            editingSegmentIdx: null,
+            segEditAnimFrame: null,
+
+            openSegmentEdit: (idx) => {
+                const seg = App.state.segments[idx];
+                if (!seg || !seg.isManipulatable) return;
+
+                App.state.editingSegmentIdx = idx;
+                document.getElementById('editSegmentNum').textContent = idx + 1;
+
+                // Set current values
+                const zoomRatio = seg.scale / seg.baseScale;
+                const rotDeg = Math.round((seg.rotation * 180) / Math.PI);
+
+                document.getElementById('segEditZoom').value = zoomRatio;
+                document.getElementById('segEditZoomVal').textContent = zoomRatio.toFixed(1) + 'x';
+                document.getElementById('segEditRotation').value = rotDeg;
+                document.getElementById('segEditRotationVal').textContent = rotDeg + '°';
+                document.getElementById('segEditPanX').value = seg.x;
+                document.getElementById('segEditPanXVal').textContent = Math.round(seg.x);
+                document.getElementById('segEditPanY').value = seg.y;
+                document.getElementById('segEditPanYVal').textContent = Math.round(seg.y);
+
+                document.getElementById('segmentEditOverlay').classList.remove('hidden');
+                lucide.createIcons();
+
+                // Start live preview loop
+                App.startSegEditPreview();
+            },
+
+            closeSegmentEdit: () => {
+                App.stopSegEditPreview();
+                document.getElementById('segmentEditOverlay').classList.add('hidden');
+                App.state.editingSegmentIdx = null;
+                // Regenerate preview
+                App.regeneratePreview();
+            },
+
+            startSegEditPreview: () => {
+                const render = () => {
+                    App.renderSegEditPreview();
+                    App.state.segEditAnimFrame = requestAnimationFrame(render);
+                };
+                render();
+            },
+
+            stopSegEditPreview: () => {
+                if (App.state.segEditAnimFrame) {
+                    cancelAnimationFrame(App.state.segEditAnimFrame);
+                    App.state.segEditAnimFrame = null;
+                }
+            },
+
+            renderSegEditPreview: () => {
+                const idx = App.state.editingSegmentIdx;
+                if (idx === null) return;
+                const seg = App.state.segments[idx];
+                if (!seg || !seg.isManipulatable) return;
+
+                const canvas = document.getElementById('segEditPreview');
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+
+                // Get the slot dimensions for this segment
+                const layout = App.collageConfigs[App.state.collageMode];
+                const slot = layout[idx];
+                const mode = App.state.collageMode;
+                const baseDims = App.state.captureBase || App.getTargetBaseDimensions();
+                let multW = 1, multH = 1;
+                if (mode === 2) multW = 2;
+                else if (mode === 3) multW = 3;
+                else if (mode === 4) { multW = 2; multH = 2; }
+                else if (mode === 5) { multH = 2; }
+                else if (mode === 6) { multH = 3; }
+                else if (mode === 7) { multW = 2; multH = 2; }
+                const dims = App.getFinalCanvasDimensions(baseDims.width, baseDims.height, multW, multH);
+                const slotW = slot.w * dims.width;
+                const slotH = slot.h * dims.height;
+
+                // Set canvas to match slot aspect ratio
+                const previewSize = 300;
+                const slotAspect = slotW / slotH;
+                if (slotAspect >= 1) {
+                    canvas.width = previewSize;
+                    canvas.height = previewSize / slotAspect;
+                } else {
+                    canvas.height = previewSize;
+                    canvas.width = previewSize * slotAspect;
+                }
+
+                const W = canvas.width;
+                const H = canvas.height;
+                const scaleRatio = W / slotW;
+
+                ctx.fillStyle = "#1a1a1a";
+                ctx.fillRect(0, 0, W, H);
+
+                // Draw the segment with transforms
+                ctx.save();
+                const cx = W / 2;
+                const cy = H / 2;
+                ctx.translate(cx, cy);
+                ctx.translate(seg.x * scaleRatio, seg.y * scaleRatio);
+                ctx.rotate(seg.rotation);
+                const flipScaleX = seg.flipH ? -1 : 1;
+                const flipScaleY = seg.flipV ? -1 : 1;
+                ctx.scale(seg.scale * scaleRatio * flipScaleX, seg.scale * scaleRatio * flipScaleY);
+                ctx.drawImage(seg.source, -seg.source.width / 2, -seg.source.height / 2);
+                ctx.restore();
+
+                // Draw border
+                ctx.strokeStyle = "rgba(133, 117, 147, 0.8)";
+                ctx.lineWidth = 2;
+                ctx.strokeRect(0, 0, W, H);
+            },
+
+            setEditSegmentZoom: (val) => {
+                const idx = App.state.editingSegmentIdx;
+                if (idx === null) return;
+                const seg = App.state.segments[idx];
+                if (!seg || !seg.isManipulatable) return;
+                const r = parseFloat(val);
+                seg.scale = seg.baseScale * r;
+                document.getElementById('segEditZoomVal').textContent = r.toFixed(2) + 'x';
+            },
+
+            setEditSegmentRotation: (val) => {
+                const idx = App.state.editingSegmentIdx;
+                if (idx === null) return;
+                const seg = App.state.segments[idx];
+                if (!seg || !seg.isManipulatable) return;
+                seg.rotation = (parseFloat(val) * Math.PI) / 180;
+                document.getElementById('segEditRotationVal').textContent = val + '°';
+            },
+
+            setEditSegmentPanX: (val) => {
+                const idx = App.state.editingSegmentIdx;
+                if (idx === null) return;
+                const seg = App.state.segments[idx];
+                if (!seg || !seg.isManipulatable) return;
+                seg.x = parseFloat(val);
+                document.getElementById('segEditPanXVal').textContent = Math.round(seg.x);
+            },
+
+            setEditSegmentPanY: (val) => {
+                const idx = App.state.editingSegmentIdx;
+                if (idx === null) return;
+                const seg = App.state.segments[idx];
+                if (!seg || !seg.isManipulatable) return;
+                seg.y = parseFloat(val);
+                document.getElementById('segEditPanYVal').textContent = Math.round(seg.y);
+            },
+
+            flipEditSegmentH: () => {
+                const idx = App.state.editingSegmentIdx;
+                if (idx === null) return;
+                const seg = App.state.segments[idx];
+                if (!seg || !seg.isManipulatable) return;
+                seg.flipH = !seg.flipH;
+            },
+
+            flipEditSegmentV: () => {
+                const idx = App.state.editingSegmentIdx;
+                if (idx === null) return;
+                const seg = App.state.segments[idx];
+                if (!seg || !seg.isManipulatable) return;
+                seg.flipV = !seg.flipV;
+            },
+
+            resetEditSegment: () => {
+                const idx = App.state.editingSegmentIdx;
+                if (idx === null) return;
+                const seg = App.state.segments[idx];
+                if (!seg || !seg.isManipulatable) return;
+                seg.x = 0;
+                seg.y = 0;
+                seg.rotation = 0;
+                seg.scale = seg.baseScale;
+                seg.flipH = false;
+                seg.flipV = false;
+                // Update sliders
+                document.getElementById('segEditZoom').value = 1;
+                document.getElementById('segEditZoomVal').textContent = '1.00x';
+                document.getElementById('segEditRotation').value = 0;
+                document.getElementById('segEditRotationVal').textContent = '0°';
+                document.getElementById('segEditPanX').value = 0;
+                document.getElementById('segEditPanXVal').textContent = '0';
+                document.getElementById('segEditPanY').value = 0;
+                document.getElementById('segEditPanYVal').textContent = '0';
+            },
+
+            retakeEditSegment: () => {
+                const idx = App.state.editingSegmentIdx;
+                if (idx === null) return;
+                App.stopSegEditPreview();
+                App.state.activeSegment = idx;
+                App.state.segments[idx] = null;
+                document.getElementById('segmentEditOverlay').classList.add('hidden');
+                App.state.editingSegmentIdx = null;
+                App.retakePartial();
+            },
+
+            applySegmentEdit: () => {
+                App.closeSegmentEdit();
+            },
+
+            regeneratePreview: async () => {
+                // Re-render the collage to smallPreview after edits
+                const layout = App.collageConfigs[App.state.collageMode];
+                const tempCanvas = document.createElement('canvas');
+                const mode = App.state.collageMode;
+                const baseDims = App.state.captureBase || App.getTargetBaseDimensions();
+                const BaseW = baseDims.width;
+                const BaseH = baseDims.height;
+                let multW = 1, multH = 1;
+                if (mode === 2) multW = 2;
+                else if (mode === 3) multW = 3;
+                else if (mode === 4) { multW = 2; multH = 2; }
+                else if (mode === 5) { multH = 2; }
+                else if (mode === 6) { multH = 3; }
+                else if (mode === 7) { multW = 2; multH = 2; }
+                const dims = App.getFinalCanvasDimensions(BaseW, BaseH, multW, multH);
+                const W = dims.width;
+                const H = dims.height;
+                tempCanvas.width = W;
+                tempCanvas.height = H;
+                const ctx = tempCanvas.getContext('2d');
+                ctx.fillStyle = "black";
+                ctx.fillRect(0, 0, W, H);
+
+                layout.forEach((slot, idx) => {
+                    const seg = App.state.segments[idx];
+                    if (seg) {
+                        const dx = slot.x * W;
+                        const dy = slot.y * H;
+                        const dw = slot.w * W;
+                        const dh = slot.h * H;
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.rect(dx, dy, dw, dh);
+                        ctx.clip();
+                        if (seg.isManipulatable) {
+                            const cx = dx + dw / 2;
+                            const cy = dy + dh / 2;
+                            ctx.translate(cx, cy);
+                            ctx.translate(seg.x, seg.y);
+                            ctx.rotate(seg.rotation);
+                            const flipScaleX = seg.flipH ? -1 : 1;
+                            const flipScaleY = seg.flipV ? -1 : 1;
+                            ctx.scale(seg.scale * flipScaleX, seg.scale * flipScaleY);
+                            ctx.drawImage(seg.source, -seg.source.width / 2, -seg.source.height / 2);
+                        } else {
+                            ctx.drawImage(seg, 0, 0, seg.width, seg.height, dx, dy, dw, dh);
+                        }
+                        ctx.restore();
+                    }
+                });
+
+                // Generate preview and high-res versions
+                const highResBase = tempCanvas.toDataURL('image/webp', 0.96);
+                const capBytes = App.getUploadCapBytes();
+                App.state.capturedImageHighRes = await UTILS.compressToLimit(highResBase, { maxBytes: capBytes });
+                App.state.capturedImage = await UTILS.processImage(highResBase, 640, 0.72);
+                document.getElementById('smallPreview').src = App.state.capturedImage;
             },
 
             retakePartial: () => {
@@ -3232,6 +3710,7 @@ async function handleRequest(request, env) {
                 App.initCamera();
 
                 document.getElementById('segCurrent').innerText = App.state.activeSegment + 1;
+                App.updateManipControlsVisibility();
             },
 
             retakeAll: () => {
@@ -3241,12 +3720,78 @@ async function handleRequest(request, env) {
                 document.getElementById('takenPhotoUI').classList.add('hidden');
                 document.getElementById('takenPhotoUI').classList.remove('flex');
                 document.getElementById('cameraSection').classList.remove('hidden');
+                document.getElementById('imageManipControls').classList.add('hidden');
                 document.getElementById('saveEntryBtn').disabled = true;
                 App.initCamera();
                 App.setCollageMode(App.state.collageMode);
             },
 
             retakePhoto: () => { App.retakeAll(); },
+
+            updateManipControlsVisibility: () => {
+                const seg = App.state.segments[App.state.activeSegment];
+                const controls = document.getElementById('imageManipControls');
+                if (seg && seg.isManipulatable) {
+                    controls.classList.remove('hidden');
+                    const rotSlider = document.getElementById('rotationSlider');
+                    const zoomSlider = document.getElementById('zoomSlider');
+                    const rotVal = document.getElementById('rotationValue');
+                    const zoomVal = document.getElementById('zoomValue');
+                    const rotDeg = Math.round((seg.rotation * 180) / Math.PI);
+                    rotSlider.value = rotDeg;
+                    rotVal.textContent = rotDeg + '°';
+                    const zoomRatio = seg.scale / seg.baseScale;
+                    zoomSlider.value = zoomRatio;
+                    zoomVal.textContent = zoomRatio.toFixed(1) + 'x';
+                    lucide.createIcons();
+                } else {
+                    controls.classList.add('hidden');
+                }
+            },
+
+            setSegmentRotation: (deg) => {
+                const seg = App.state.segments[App.state.activeSegment];
+                if (seg && seg.isManipulatable) {
+                    seg.rotation = (parseFloat(deg) * Math.PI) / 180;
+                    document.getElementById('rotationValue').textContent = deg + '°';
+                }
+            },
+
+            setSegmentZoom: (ratio) => {
+                const seg = App.state.segments[App.state.activeSegment];
+                if (seg && seg.isManipulatable) {
+                    const r = parseFloat(ratio);
+                    seg.scale = seg.baseScale * r;
+                    document.getElementById('zoomValue').textContent = r.toFixed(1) + 'x';
+                }
+            },
+
+            flipSegmentHorizontal: () => {
+                const seg = App.state.segments[App.state.activeSegment];
+                if (seg && seg.isManipulatable) {
+                    seg.flipH = !seg.flipH;
+                }
+            },
+
+            flipSegmentVertical: () => {
+                const seg = App.state.segments[App.state.activeSegment];
+                if (seg && seg.isManipulatable) {
+                    seg.flipV = !seg.flipV;
+                }
+            },
+
+            resetSegmentTransform: () => {
+                const seg = App.state.segments[App.state.activeSegment];
+                if (seg && seg.isManipulatable) {
+                    seg.x = 0;
+                    seg.y = 0;
+                    seg.rotation = 0;
+                    seg.scale = seg.baseScale;
+                    seg.flipH = false;
+                    seg.flipV = false;
+                    App.updateManipControlsVisibility();
+                }
+            },
 
             handleFileUpload: async (e) => {
                 const file = e.target.files[0];
@@ -3305,7 +3850,10 @@ async function handleRequest(request, env) {
                             x: 0,
                             y: 0,
                             scale: scale,
+                            baseScale: scale,
                             rotation: 0,
+                            flipH: false,
+                            flipV: false,
                             width: imgW,
                             height: imgH
                         };
@@ -3333,6 +3881,7 @@ async function handleRequest(request, env) {
                                 document.getElementById('segCurrent').innerText = App.state.activeSegment + 1;
                             }
                         }
+                        App.updateManipControlsVisibility();
                     }
                 }
             },
