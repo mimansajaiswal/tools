@@ -137,7 +137,18 @@ export const reconcileSubItems = (parent, existingSubItems) => {
  */
 export const transformClozeForSubItem = (text, targetIndex) => {
     if (!text) return '';
-    return text.replace(/\{\{\s*c(\d+)::(.*?)\}\}/gis, (match, idx, content) => {
+
+    // Protect equation spans from cloze regex - they may contain braces like x^{2}
+    // which would break the non-greedy (.*?) match
+    const eqPlaceholders = [];
+    let safeText = text.replace(/<span class="notion-equation">([\s\S]*?)<\/span>/g, (match) => {
+        const idx = eqPlaceholders.length;
+        eqPlaceholders.push(match);
+        return `\x00EQ${idx}\x00`;
+    });
+
+    // Process clozes
+    safeText = safeText.replace(/\{\{\s*c(\d+)::(.*?)\}\}/gis, (match, idx, content) => {
         const clozeIdx = parseInt(idx, 10);
         if (clozeIdx === targetIndex) {
             return `{{c${targetIndex}::${content}}}`;
@@ -145,6 +156,9 @@ export const transformClozeForSubItem = (text, targetIndex) => {
         // Reveal other clozes
         return content;
     });
+
+    // Restore equation spans
+    return safeText.replace(/\x00EQ(\d+)\x00/g, (_, idx) => eqPlaceholders[parseInt(idx, 10)]);
 };
 
 /**

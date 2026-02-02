@@ -90,6 +90,7 @@
     --control-border: rgb(var(--earth-metal-rgb) / 0.2);
     --control-hover: color-mix(in srgb, var(--surface) 70%, var(--oatmeal) 30%);
     --control-active: color-mix(in srgb, var(--dull-purple) 18%, var(--surface) 82%);
+    --row-hover: color-mix(in srgb, var(--surface) 75%, var(--oatmeal) 25%);
 
     --grid-line: rgb(var(--earth-metal-rgb) / 0.08);
     --grid-line-strong: rgb(var(--earth-metal-rgb) / 0.14);
@@ -178,6 +179,19 @@ body {
 
 .bg-surface-muted {
     background: var(--surface-muted);
+}
+
+/* Library table row hover */
+#cardTable tr {
+    transition: background-color 0.15s ease;
+}
+
+#cardTable tr:hover {
+    background-color: var(--row-hover);
+}
+
+#cardTable tr.cloze-sub-row:hover {
+    background-color: var(--row-hover);
 }
 
 .bg-card {
@@ -300,6 +314,7 @@ html[data-theme="dark"] body {
     --control-border: rgb(var(--earth-metal-rgb) / 0.16);
     --control-hover: color-mix(in srgb, var(--surface) 65%, var(--oatmeal) 35%);
     --control-active: color-mix(in srgb, var(--dull-purple) 24%, var(--surface) 76%);
+    --row-hover: color-mix(in srgb, var(--surface) 88%, var(--oatmeal) 12%);
 
     --grid-line: rgb(var(--earth-metal-rgb) / 0.11);
     --grid-line-strong: rgb(var(--earth-metal-rgb) / 0.18);
