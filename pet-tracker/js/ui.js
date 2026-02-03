@@ -410,7 +410,7 @@ const UI = {
 
         const rect = preview.getBoundingClientRect();
         const icons = category === 'activity' ? UI.activityIcons : UI.petIcons;
-        
+
         const picker = document.createElement('div');
         picker.id = 'iconPickerDropdown';
         picker.className = 'fixed z-[120] bg-white-linen border border-oatmeal shadow-lg p-3 max-w-[280px]';

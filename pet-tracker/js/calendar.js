@@ -21,14 +21,14 @@ const Calendar = {
     init: () => {
         const uiState = PetTracker.Settings.getUIState();
         Calendar.state.view = uiState.calendarView || PetTracker.Settings.get().calendarView || 'month';
-        
+
         // Restore calendar date if saved
         if (uiState.calendarDate) {
             Calendar.state.currentDate = new Date(uiState.calendarDate);
         } else {
             Calendar.state.currentDate = new Date();
         }
-        
+
         // Restore calendar pet filter if saved
         if (uiState.calendarFilterPetId) {
             Calendar.state.filters.petIds = [uiState.calendarFilterPetId];
@@ -488,7 +488,7 @@ const Calendar = {
         Calendar.state.view = view;
         PetTracker.Settings.set({ calendarView: view });
         // Save to UI state as well
-        PetTracker.Settings.setUIState({ 
+        PetTracker.Settings.setUIState({
             calendarView: view,
             calendarDate: Calendar.state.currentDate.toISOString()
         });

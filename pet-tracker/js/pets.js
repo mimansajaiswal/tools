@@ -474,15 +474,15 @@ const Pets = {
                     <div class="flex flex-col md:flex-row gap-6">
                         <div class="w-32 h-32 bg-oatmeal flex items-center justify-center flex-shrink-0 overflow-hidden">
                             ${(() => {
-                                const speciesIcon = PetTracker.UI.getSpeciesIcon(pet.species);
-                                if (pet.photo?.[0]?.url) {
-                                    return `<img src="${pet.photo[0].url}" alt="${PetTracker.UI.escapeHtml(pet.name)}" class="w-full h-full object-cover">`;
-                                } else if (pet.icon) {
-                                    return PetTracker.UI.renderIcon(pet.icon, speciesIcon, 'w-16 h-16');
-                                } else {
-                                    return `<i data-lucide="${speciesIcon}" class="w-16 h-16 text-earth-metal"></i>`;
-                                }
-                            })()}
+                const speciesIcon = PetTracker.UI.getSpeciesIcon(pet.species);
+                if (pet.photo?.[0]?.url) {
+                    return `<img src="${pet.photo[0].url}" alt="${PetTracker.UI.escapeHtml(pet.name)}" class="w-full h-full object-cover">`;
+                } else if (pet.icon) {
+                    return PetTracker.UI.renderIcon(pet.icon, speciesIcon, 'w-16 h-16');
+                } else {
+                    return `<i data-lucide="${speciesIcon}" class="w-16 h-16 text-earth-metal"></i>`;
+                }
+            })()}
                         </div>
                         <div class="flex-1">
                             <div class="flex items-center gap-3 mb-2">
@@ -551,17 +551,17 @@ const Pets = {
                         ${recentEvents.length === 0 ? `
                             <p class="text-earth-metal text-sm py-4">No events recorded</p>
                         ` : recentEvents.map(event => {
-                            const eventType = App.state.eventTypes.find(t => t.id === event.eventTypeId);
-                            const defaultIcon = eventType?.defaultIcon || 'activity';
-                            let iconHtml;
-                            if (event.icon) {
-                                iconHtml = PetTracker.UI.renderIcon(event.icon, defaultIcon, 'w-4 h-4');
-                            } else if (eventType?.icon) {
-                                iconHtml = PetTracker.UI.renderIcon(eventType.icon, defaultIcon, 'w-4 h-4');
-                            } else {
-                                iconHtml = `<i data-lucide="${defaultIcon}" class="w-4 h-4 text-earth-metal"></i>`;
-                            }
-                            return `
+                const eventType = App.state.eventTypes.find(t => t.id === event.eventTypeId);
+                const defaultIcon = eventType?.defaultIcon || 'activity';
+                let iconHtml;
+                if (event.icon) {
+                    iconHtml = PetTracker.UI.renderIcon(event.icon, defaultIcon, 'w-4 h-4');
+                } else if (eventType?.icon) {
+                    iconHtml = PetTracker.UI.renderIcon(eventType.icon, defaultIcon, 'w-4 h-4');
+                } else {
+                    iconHtml = `<i data-lucide="${defaultIcon}" class="w-4 h-4 text-earth-metal"></i>`;
+                }
+                return `
                             <div class="card card-hover p-3 flex items-center gap-3 cursor-pointer" onclick="Calendar.showEventDetail('${event.id}')">
                                 <div class="w-8 h-8 bg-oatmeal flex items-center justify-center">
                                     ${iconHtml}

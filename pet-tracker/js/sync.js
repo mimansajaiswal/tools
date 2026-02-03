@@ -514,7 +514,7 @@ const Sync = {
         // This handles the case where a record was created locally but not synced yet
         if (!local && remote.name) {
             const allRecords = await PetTracker.DB.getAll(storeName);
-            const matchByName = allRecords.find(r => 
+            const matchByName = allRecords.find(r =>
                 r.name === remote.name && !r.notionId
             );
             if (matchByName) {

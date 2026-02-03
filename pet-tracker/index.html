@@ -125,6 +125,11 @@
                 <i data-lucide="users" class="w-5 h-5" aria-hidden="true"></i>
                 <span class="font-mono text-xs uppercase">Contacts</span>
             </button>
+            <button data-nav="setup"
+                class="w-full flex items-center gap-3 px-3 py-2 text-left text-earth-metal hover:bg-oatmeal/30 transition-fast">
+                <i data-lucide="sliders-horizontal" class="w-5 h-5" aria-hidden="true"></i>
+                <span class="font-mono text-xs uppercase">Setup</span>
+            </button>
         </nav>
 
         <!-- Sidebar Footer -->
@@ -201,6 +206,7 @@
             <div data-view="analytics" class="hidden"></div>
             <div data-view="pets" class="hidden"></div>
             <div data-view="contacts" class="hidden"></div>
+            <div data-view="setup" class="hidden"></div>
         </div>
 
         <!-- Bottom Nav (Mobile) -->
@@ -214,17 +220,17 @@
                 <i data-lucide="calendar" class="w-5 h-5"></i>
                 <span class="font-mono text-[9px] uppercase">Calendar</span>
             </button>
-            <button data-nav="upcoming" class="flex flex-col items-center gap-1 p-2 text-earth-metal">
-                <i data-lucide="clock" class="w-5 h-5"></i>
-                <span class="font-mono text-[9px] uppercase">Upcoming</span>
-            </button>
             <button data-nav="pets" class="flex flex-col items-center gap-1 p-2 text-earth-metal">
                 <i data-lucide="paw-print" class="w-5 h-5"></i>
                 <span class="font-mono text-[9px] uppercase">Pets</span>
             </button>
-            <button onclick="App.openSettings()" class="flex flex-col items-center gap-1 p-2 text-earth-metal">
-                <i data-lucide="settings" class="w-5 h-5"></i>
-                <span class="font-mono text-[9px] uppercase">Settings</span>
+            <button data-nav="setup" class="flex flex-col items-center gap-1 p-2 text-earth-metal">
+                <i data-lucide="sliders-horizontal" class="w-5 h-5"></i>
+                <span class="font-mono text-[9px] uppercase">Setup</span>
+            </button>
+            <button onclick="App.toggleMobileMenu()" class="flex flex-col items-center gap-1 p-2 text-earth-metal">
+                <i data-lucide="menu" class="w-5 h-5"></i>
+                <span class="font-mono text-[9px] uppercase">More</span>
             </button>
         </nav>
     </main>
@@ -579,10 +585,11 @@
                 <div class="flex items-center justify-between">
                     <span class="section-header">Setup Wizard</span>
                     <div id="onboardingSteps" class="flex gap-1">
-                        <span class="w-8 h-1 bg-dull-purple" data-step="1"></span>
-                        <span class="w-8 h-1 bg-oatmeal" data-step="2"></span>
-                        <span class="w-8 h-1 bg-oatmeal" data-step="3"></span>
-                        <span class="w-8 h-1 bg-oatmeal" data-step="4"></span>
+                        <span class="w-6 h-1 bg-dull-purple" data-step="1"></span>
+                        <span class="w-6 h-1 bg-oatmeal" data-step="2"></span>
+                        <span class="w-6 h-1 bg-oatmeal" data-step="3"></span>
+                        <span class="w-6 h-1 bg-oatmeal" data-step="4"></span>
+                        <span class="w-6 h-1 bg-oatmeal" data-step="5"></span>
                     </div>
                 </div>
             </div>
@@ -707,8 +714,110 @@
                     </div>
                 </div>
 
-                <!-- Step 4: First Pet & Sample Data -->
+                <!-- Step 4: Customize Tracking -->
                 <div id="onboardingStep4" class="onboarding-step hidden">
+                    <h3 class="font-serif text-xl text-charcoal mb-2">Customize What to Track</h3>
+                    <p class="text-earth-metal text-sm mb-4">Select the events, scales, and care items you want to
+                        track. You can always add more later.</p>
+
+                    <div class="space-y-5">
+                        <!-- Event Types Multi-Select -->
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-2">
+                                <i data-lucide="activity" class="w-3 h-3 inline mr-1"></i>Event Types
+                            </label>
+                            <div id="onboardingEventTypesDropdown" class="multiselect-dropdown"
+                                data-multiselect="eventTypes">
+                                <button type="button"
+                                    class="multiselect-trigger input-field flex items-center justify-between"
+                                    onclick="Onboarding.toggleDropdown('eventTypes')">
+                                    <span class="multiselect-label text-sm text-earth-metal">Select event
+                                        types...</span>
+                                    <i data-lucide="chevron-down"
+                                        class="w-4 h-4 text-earth-metal transition-transform"></i>
+                                </button>
+                                <div
+                                    class="multiselect-menu hidden absolute z-20 mt-1 w-full bg-white-linen border border-oatmeal shadow-lg max-h-48 overflow-y-auto">
+                                    <div class="p-2 border-b border-oatmeal">
+                                        <label
+                                            class="flex items-center gap-2 cursor-pointer text-xs text-dull-purple font-medium">
+                                            <input type="checkbox" class="multiselect-all"
+                                                onchange="Onboarding.toggleAll('eventTypes', this.checked)">
+                                            Select All
+                                        </label>
+                                    </div>
+                                    <div class="multiselect-options p-1"></div>
+                                </div>
+                            </div>
+                            <p class="text-[10px] text-earth-metal mt-1">Track medications, symptoms, vet visits,
+                                activities, and more</p>
+                        </div>
+
+                        <!-- Scales Multi-Select -->
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-2">
+                                <i data-lucide="gauge" class="w-3 h-3 inline mr-1"></i>Scales & Severity Levels
+                            </label>
+                            <div id="onboardingScalesDropdown" class="multiselect-dropdown" data-multiselect="scales">
+                                <button type="button"
+                                    class="multiselect-trigger input-field flex items-center justify-between"
+                                    onclick="Onboarding.toggleDropdown('scales')">
+                                    <span class="multiselect-label text-sm text-earth-metal">Select scales...</span>
+                                    <i data-lucide="chevron-down"
+                                        class="w-4 h-4 text-earth-metal transition-transform"></i>
+                                </button>
+                                <div
+                                    class="multiselect-menu hidden absolute z-20 mt-1 w-full bg-white-linen border border-oatmeal shadow-lg max-h-48 overflow-y-auto">
+                                    <div class="p-2 border-b border-oatmeal">
+                                        <label
+                                            class="flex items-center gap-2 cursor-pointer text-xs text-dull-purple font-medium">
+                                            <input type="checkbox" class="multiselect-all"
+                                                onchange="Onboarding.toggleAll('scales', this.checked)">
+                                            Select All
+                                        </label>
+                                    </div>
+                                    <div class="multiselect-options p-1"></div>
+                                </div>
+                            </div>
+                            <p class="text-[10px] text-earth-metal mt-1">Rate symptom severity, activity levels, mood,
+                                and appetite</p>
+                        </div>
+
+                        <!-- Care Items Multi-Select -->
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-2">
+                                <i data-lucide="heart-handshake" class="w-3 h-3 inline mr-1"></i>Care Items
+                            </label>
+                            <div id="onboardingCareItemsDropdown" class="multiselect-dropdown"
+                                data-multiselect="careItems">
+                                <button type="button"
+                                    class="multiselect-trigger input-field flex items-center justify-between"
+                                    onclick="Onboarding.toggleDropdown('careItems')">
+                                    <span class="multiselect-label text-sm text-earth-metal">Select care items...</span>
+                                    <i data-lucide="chevron-down"
+                                        class="w-4 h-4 text-earth-metal transition-transform"></i>
+                                </button>
+                                <div
+                                    class="multiselect-menu hidden absolute z-20 mt-1 w-full bg-white-linen border border-oatmeal shadow-lg max-h-48 overflow-y-auto">
+                                    <div class="p-2 border-b border-oatmeal">
+                                        <label
+                                            class="flex items-center gap-2 cursor-pointer text-xs text-dull-purple font-medium">
+                                            <input type="checkbox" class="multiselect-all"
+                                                onchange="Onboarding.toggleAll('careItems', this.checked)">
+                                            Select All
+                                        </label>
+                                    </div>
+                                    <div class="multiselect-options p-1"></div>
+                                </div>
+                            </div>
+                            <p class="text-[10px] text-earth-metal mt-1">Medications, vaccines, and procedures for your
+                                pet</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 5: First Pet & Sample Events -->
+                <div id="onboardingStep5" class="onboarding-step hidden">
                     <h3 class="font-serif text-xl text-charcoal mb-4">Add Your First Pet</h3>
                     <p class="text-earth-metal text-sm mb-4">Let's add your pet to get started. You can add more later.
                     </p>
@@ -738,13 +847,16 @@
                             </div>
                         </div>
 
-                        <div class="border border-oatmeal p-4 bg-oatmeal/10">
+                        <div class="border border-oatmeal p-4 bg-oatmeal/10 space-y-3">
                             <label class="flex items-center gap-3 cursor-pointer">
-                                <input type="checkbox" id="onboardingCreateSample" checked class="w-4 h-4">
+                                <input type="checkbox" id="onboardingCreateSampleEvents" checked class="w-4 h-4">
                                 <div>
-                                    <span class="text-sm text-charcoal font-medium">Create sample data</span>
-                                    <p class="text-xs text-earth-metal">Add example event types, scales, and care items
-                                        to explore the app</p>
+                                    <span class="text-sm text-charcoal font-medium flex items-center gap-2">
+                                        <i data-lucide="calendar-check" class="w-4 h-4 text-dull-purple"></i>
+                                        Add sample events
+                                    </span>
+                                    <p class="text-xs text-earth-metal">Create example events like walks and checkups to
+                                        explore the app</p>
                                 </div>
                             </label>
                         </div>
@@ -783,7 +895,8 @@
                 <div class="flex gap-4 items-start">
                     <div>
                         <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Icon</label>
-                        <button type="button" id="addPetIconPreview" onclick="PetTracker.UI.showIconPicker('addPetIcon', 'addPetIconPreview', 'pet')"
+                        <button type="button" id="addPetIconPreview"
+                            onclick="PetTracker.UI.showIconPicker('addPetIcon', 'addPetIconPreview', 'pet')"
                             class="w-12 h-12 bg-oatmeal border border-earth-metal/30 flex items-center justify-center hover:bg-oatmeal/70 transition-fast cursor-pointer">
                             <i data-lucide="image-plus" class="w-6 h-6 text-earth-metal"></i>
                         </button>
