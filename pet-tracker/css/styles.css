@@ -255,6 +255,15 @@
     border-bottom-color: #2d2926;
 }
 
+/* Mobile-friendly tabs */
+@media (max-width: 640px) {
+    .tab-nav {
+        padding: 8px 12px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+}
+
 /* Modal Overlay */
 .modal-overlay {
     background: rgba(45, 41, 38, 0.5);
@@ -345,6 +354,47 @@ textarea:focus-visible {
 @media (max-width: 767px) {
     .hide-mobile {
         display: none !important;
+    }
+}
+
+/* Mobile Menu */
+.mobile-menu-open {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    z-index: 50 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    width: 280px !important;
+    max-width: 85vw !important;
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15);
+    transform: translateX(0);
+    transition: transform 0.2s ease-out;
+    height: 100vh !important;
+    height: 100dvh !important;
+}
+
+.mobile-menu-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(45, 41, 38, 0.5);
+    z-index: 40;
+    opacity: 1;
+    transition: opacity 0.2s ease-out;
+}
+
+.mobile-menu-overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+@media (min-width: 768px) {
+    .mobile-menu-open {
+        position: relative !important;
+        width: 16rem !important;
+        max-width: none !important;
+        box-shadow: none;
     }
 }
 
@@ -732,4 +782,48 @@ a:focus-visible,
 
 .multiselect-tag button:hover {
     color: #2d2926;
+}
+
+/* ========== RESPONSIVE IMPROVEMENTS ========== */
+
+/* Smaller modals on mobile */
+@media (max-width: 640px) {
+
+    /* Form grid fixes */
+    .grid.grid-cols-2 {
+        grid-template-columns: 1fr;
+    }
+
+    .grid.grid-cols-3 {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    /* Make modal padding smaller on mobile */
+    [role="dialog"] form,
+    [role="dialog"] .p-4 {
+        padding: 12px;
+    }
+
+    /* Smaller section headers */
+    .section-header {
+        font-size: 9px;
+        padding: 3px 6px;
+    }
+
+    /* More compact button groups */
+    .flex.gap-3 {
+        gap: 8px;
+    }
+
+    /* Ensure multiselect menu stays within viewport */
+    .multiselect-menu {
+        max-width: calc(100vw - 32px);
+    }
+}
+
+/* Ensure bottom nav stays visible */
+@media (max-width: 767px) {
+    main {
+        padding-bottom: env(safe-area-inset-bottom);
+    }
 }

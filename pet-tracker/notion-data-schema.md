@@ -1,6 +1,6 @@
 # Notion Data Schema for Pet Tracker
 
-This document details the schema for the 8 Notion databases required for the Pet Tracker application. 
+This document details the schema for the 6 Notion databases required for the Pet Tracker application. 
 All property names are **case-sensitive** and must match exactly for the API integration to function.
 
 ## 1. Data Source: `Pets`
@@ -38,7 +38,6 @@ The central log of all activities (meds, vets, walks, etc.).
 | **Title** | Title | **Required** | - |
 | **Pet(s)** | Relation | **Required** | `Pets` (Property: *Events* or One-way) |
 | **Event Type** | Relation | **Required** | `Event Types` (Property: *Events* or One-way) |
-| **Care Item** | Relation | Optional (specifics) | `Care Items` (Property: `Related Events`) |
 | **Start Date** | Date | **Required** | - |
 | **End Date** | Date | Optional | - |
 | **Status** | Select | `Planned`, `Completed`, `Missed` | - |
@@ -76,6 +75,29 @@ Templates for events (e.g., "Medication Given", "Weight Check").
 | **Default Value Kind** | Select | `None`, `Weight`, `Dose`, `Duration`, `Severity`, `Other` | - |
 | **Default Unit** | Select | User defined units | - |
 | **Correlation Group** | Select | e.g., "Meds", "Symptoms" | - |
+| **Is Recurring** | Checkbox | Whether this event type has a recurring schedule | - |
+| **Schedule Type** | Select | `Fixed`, `Rolling`, `One-off` | - |
+| **Interval Value** | Number | Interval between occurrences | - |
+| **Interval Unit** | Select | `Days`, `Weeks`, `Months`, `Years` | - |
+| **Anchor Date** | Date | Schedule start date | - |
+| **Due Time** | Text | HH:mm format | - |
+| **Time of Day Preference** | Select | `Morning`, `Afternoon`, `Evening`, `Night`, `Any` | - |
+| **Window Before** | Number | Days grace period before due | - |
+| **Window After** | Number | Days grace period after due | - |
+| **End Date** | Date | When schedule ends | - |
+| **End After Occurrences** | Number | Stop after N occurrences | - |
+| **Next Due** | Date | Computed/cached next due date | - |
+| **Todoist Sync** | Checkbox | Sync to Todoist | - |
+| **Todoist Project** | Text | Todoist project name | - |
+| **Todoist Labels** | Text | Todoist labels | - |
+| **Todoist Lead Time** | Number | Days before to create task | - |
+| **Default Dose** | Text | For medications | - |
+| **Default Route** | Select | `Oral`, `Topical`, `Injection`, `Other` | - |
+| **Active** | Checkbox | Is this event type currently active | - |
+| **Active Start** | Date | When to start showing | - |
+| **Active End** | Date | When to stop showing | - |
+| **Files** | Files | Attachments (prescriptions, etc.) | - |
+| **Related Pets** | Relation | Pets this applies to | `Pets` (Property: *Event Types* or One-way) |
 
 ---
 
@@ -105,58 +127,7 @@ The individual steps in a scale (e.g., "Mild", "Severe").
 
 ---
 
-## 6. Data Source: `Care Items`
-Specific items tracked (e.g., "Apoquel 16mg", "Rabies Vaccine").
-
-| Property Name | Type | Options / Details | Relation Target (Reciprocal Property) |
-| :--- | :--- | :--- | :--- |
-| **Name** | Title | **Required** | - |
-| **Type** | Select | `Medication`, `Vaccine`, `Habit`, `Procedure`, `Condition` | - |
-| **Default Dose** | Text | - | - |
-| **Default Unit** | Select | User defined units | - |
-| **Default Route** | Select | e.g. Oral, Topical | - |
-| **Linked Event Type** | Relation | - | `Event Types` (Property: *Linked Care Items* or One-way) |
-| **Related Pets** | Relation | - | `Pets` (Property: *Care Items* or One-way) |
-| **Related Events** | Relation | - | `Events` (Property: `Care Item`) |
-| **Active Start** | Date | - | - |
-| **Active End** | Date | - | - |
-| **Notes** | Rich text | - | - |
-| **Files** | Files | - | - |
-| **Active** | Checkbox | - | - |
-
----
-
-## 7. Data Source: `Care Plans`
-Schedules and reminders (e.g., "Give Heartworm meds every 30 days").
-
-| Property Name | Type | Options / Details | Relation Target (Reciprocal Property) |
-| :--- | :--- | :--- | :--- |
-| **Name** | Title | **Required** | - |
-| **Pet(s)** | Relation | - | `Pets` (Property: *Care Plans* or One-way) |
-| **Care Item** | Relation | - | `Care Items` (Property: *Care Plans* or One-way) |
-| **Event Type** | Relation | - | `Event Types` (Property: *Care Plans* or One-way) |
-| **Schedule Type** | Select | `Fixed`, `Rolling`, `One-off` | - |
-| **Interval Value** | Number | - | - |
-| **Interval Unit** | Select | `Days`, `Weeks`, `Months`, `Years` | - |
-| **Anchor Date** | Date | - | - |
-| **Due Time** | Text | HH:mm format | - |
-| **Time of Day Preference** | Select | `Morning`, `Afternoon`, `Evening`, `Night`, `Any` | - |
-| **Window Before** | Number | Days | - |
-| **Window After** | Number | Days | - |
-| **End Date** | Date | - | - |
-| **End After Occurrences** | Number | - | - |
-| **Timezone** | Text | IANA (e.g., America/New_York) | - |
-| **Next Due** | Date | Computed/Stored | - |
-| **Upcoming Category** | Select | `Habit`, `Medication`, `Vaccine`, `Vet Visit`, `Other` | - |
-| **Todoist Sync** | Checkbox | - | - |
-| **Todoist Project** | Text | - | - |
-| **Todoist Labels** | Text | - | - |
-| **Todoist Lead Time** | Number | Days | - |
-| **Notes** | Rich text | - | - |
-
----
-
-## 8. Data Source: `Contacts`
+## 6. Data Source: `Contacts`
 Address book for vets, sitters, etc.
 
 | Property Name | Type | Options / Details | Relation Target (Reciprocal Property) |

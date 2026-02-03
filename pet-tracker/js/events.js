@@ -13,7 +13,6 @@ const Events = {
             title: eventData.title || 'Event',
             petIds: Array.isArray(eventData.petIds) ? eventData.petIds : [eventData.petIds].filter(Boolean),
             eventTypeId: eventData.eventTypeId || null,
-            careItemId: eventData.careItemId || null,
             startDate: eventData.startDate,
             endDate: eventData.endDate || null,
             status: eventData.status || 'Completed',

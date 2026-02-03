@@ -124,6 +124,8 @@ const App = {
         document.querySelectorAll('[data-nav]').forEach(btn => {
             btn.addEventListener('click', () => {
                 App.showView(btn.dataset.nav);
+                // Close mobile menu after navigation
+                App.closeMobileMenu();
             });
         });
 
@@ -168,6 +170,7 @@ const App = {
             analytics: 'Analytics',
             pets: 'Pets',
             contacts: 'Contacts',
+            setup: 'Setup',
             settings: 'Settings'
         };
         const headerTitle = document.getElementById('headerTitle');
@@ -207,6 +210,9 @@ const App = {
                 break;
             case 'contacts':
                 Contacts.renderList();
+                break;
+            case 'setup':
+                Setup.render();
                 break;
         }
     },
@@ -815,24 +821,35 @@ const App = {
         if (!overlay) {
             overlay = document.createElement('div');
             overlay.id = 'mobileMenuOverlay';
-            overlay.className = 'fixed inset-0 bg-charcoal/50 z-40 md:hidden hidden';
+            overlay.className = 'mobile-menu-overlay hidden';
             overlay.onclick = () => App.toggleMobileMenu();
             document.body.appendChild(overlay);
         }
 
-        const isOpen = sidebar.classList.contains('fixed');
+        const isOpen = sidebar.classList.contains('mobile-menu-open');
 
         if (isOpen) {
-            // Close menu - remove fixed positioning
-            sidebar.classList.remove('fixed', 'inset-y-0', 'left-0', 'z-50');
-            sidebar.classList.add('hidden');
+            // Close menu
+            sidebar.classList.remove('mobile-menu-open');
             overlay.classList.add('hidden');
+            document.body.style.overflow = '';
         } else {
-            // Open menu - add fixed positioning for mobile
-            sidebar.classList.remove('hidden');
-            sidebar.classList.add('fixed', 'inset-y-0', 'left-0', 'z-50');
+            // Open menu
+            sidebar.classList.add('mobile-menu-open');
             overlay.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
         }
+    },
+
+    /**
+     * Close mobile menu (helper for navigation clicks)
+     */
+    closeMobileMenu: () => {
+        const sidebar = document.querySelector('aside');
+        const overlay = document.getElementById('mobileMenuOverlay');
+        if (sidebar) sidebar.classList.remove('mobile-menu-open');
+        if (overlay) overlay.classList.add('hidden');
+        document.body.style.overflow = '';
     },
 
     /**
@@ -880,21 +897,20 @@ const App = {
     /**
      * Start Notion OAuth flow using centralized OAuth handler
      * Uses redirect-based flow with return URL for multi-app support on same domain
+     * Matches the approach used in ghostink-flashcards
      */
     startNotionOAuth: () => {
+        // Save any current settings before redirect
         const workerUrl = document.getElementById('settingsWorkerUrl')?.value?.trim();
         const proxyToken = document.getElementById('settingsProxyToken')?.value?.trim();
-
-        if (!workerUrl) {
-            PetTracker.UI.toast('Please enter Worker URL first', 'error');
-            return;
+        if (workerUrl) {
+            PetTracker.Settings.set({ workerUrl, proxyToken });
         }
 
-        // Save current settings before redirect
-        PetTracker.Settings.set({ workerUrl, proxyToken });
+        PetTracker.UI.showLoading('Starting Notion sign-in...');
 
         // Build return URL with full path so OAuth handler knows where to redirect
-        const returnUrl = encodeURIComponent(new URL('index.html', window.location.href).toString());
+        const returnUrl = encodeURIComponent(window.location.href);
 
         // Redirect to centralized OAuth handler with return URL
         window.location.href = `https://notion-oauth-handler.mimansa-jaiswal.workers.dev/auth/login?from=${returnUrl}`;

@@ -459,7 +459,7 @@ const Onboarding = {
     },
 
     /**
-     * Start OAuth Flow
+     * Start OAuth Flow using centralized OAuth handler (matches ghostink approach)
      */
     startOAuth: () => {
         const workerUrl = document.getElementById('onboardingWorkerUrl')?.value?.trim();
@@ -469,17 +469,18 @@ const Onboarding = {
             PetTracker.Settings.set({ workerUrl, proxyToken: proxyToken || '' });
         }
 
-        const settings = PetTracker.Settings.get();
-        const redirectUri = encodeURIComponent(settings.workerUrl + '/oauth/callback');
-        const clientId = '1662a458-d0a4-803f-bd66-fb0a5a0a1cc7';
-
         PetTracker.Settings.set({
             onboardingInProgress: true,
             onboardingStep: 3
         });
 
-        const authUrl = `https://api.notion.com/v1/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&owner=user`;
-        window.location.href = authUrl;
+        PetTracker.UI.showLoading('Starting Notion sign-in...');
+
+        // Build return URL so OAuth handler knows where to redirect after auth
+        const returnUrl = encodeURIComponent(window.location.href);
+
+        // Redirect to centralized OAuth handler (same as ghostink)
+        window.location.href = `https://notion-oauth-handler.mimansa-jaiswal.workers.dev/auth/login?from=${returnUrl}`;
     },
 
     /**

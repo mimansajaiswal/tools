@@ -1,134 +1,48 @@
 /**
  * Pet Tracker - Care Module
- * Care Items, Care Plans, Scales, and Upcoming view
+ * Recurring event types, Scales, and Upcoming view
+ * (Simplified: scheduling is now on Event Types, not separate Care Plans)
  */
 
 const Care = {
     /**
-     * Create a care item
+     * Calculate next due date for a recurring event type
      */
-    createItem: async (data) => {
-        const item = {
-            id: PetTracker.generateId(),
-            name: data.name,
-            type: data.type || 'Medication',
-            defaultDose: data.defaultDose || '',
-            defaultUnit: data.defaultUnit || null,
-            defaultRoute: data.defaultRoute || null,
-            linkedEventTypeId: data.linkedEventTypeId || null,
-            relatedPetIds: data.relatedPetIds || [],
-            activeStart: data.activeStart || null,
-            activeEnd: data.activeEnd || null,
-            notes: data.notes || '',
-            files: data.files || [],
-            active: data.active !== false,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            synced: false
-        };
+    calculateNextDue: (eventType) => {
+        if (!eventType.isRecurring) return null;
 
-        await PetTracker.DB.put(PetTracker.STORES.CARE_ITEMS, item);
-        await PetTracker.SyncQueue.add({
-            type: 'create',
-            store: 'careItems',
-            recordId: item.id,
-            data: item
-        });
-
-        // Update sync UI
-        if (PetTracker.Sync?.updatePendingCount) {
-            PetTracker.Sync.updatePendingCount();
-        }
-
-        return item;
-    },
-
-    /**
-     * Create a care plan
-     */
-    createPlan: async (data) => {
-        const plan = {
-            id: PetTracker.generateId(),
-            name: data.name,
-            petIds: data.petIds || [],
-            careItemId: data.careItemId || null,
-            eventTypeId: data.eventTypeId || null,
-            scheduleType: data.scheduleType || 'Fixed',
-            intervalValue: data.intervalValue || 1,
-            intervalUnit: data.intervalUnit || 'Days',
-            anchorDate: data.anchorDate || PetTracker.UI.localDateYYYYMMDD(),
-            dueTime: data.dueTime || null,
-            timeOfDayPreference: data.timeOfDayPreference || 'Any',
-            windowBefore: data.windowBefore || 0,
-            windowAfter: data.windowAfter || 0,
-            endDate: data.endDate || null,
-            endAfterOccurrences: data.endAfterOccurrences || null,
-            timezone: data.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
-            nextDue: data.nextDue || null,
-            upcomingCategory: data.upcomingCategory || 'Other',
-            todoistSync: data.todoistSync || false,
-            todoistProject: data.todoistProject || '',
-            todoistLabels: data.todoistLabels || '',
-            todoistLeadTime: data.todoistLeadTime || 1,
-            notes: data.notes || '',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            synced: false
-        };
-
-        // Calculate next due
-        plan.nextDue = Care.calculateNextDue(plan);
-
-        await PetTracker.DB.put(PetTracker.STORES.CARE_PLANS, plan);
-        await PetTracker.SyncQueue.add({
-            type: 'create',
-            store: 'carePlans',
-            recordId: plan.id,
-            data: plan
-        });
-
-        // Update sync UI
-        if (PetTracker.Sync?.updatePendingCount) {
-            PetTracker.Sync.updatePendingCount();
-        }
-
-        return plan;
-    },
-
-    /**
-     * Calculate next due date for a care plan
-     */
-    calculateNextDue: (plan) => {
         const now = new Date();
 
-        if (plan.scheduleType === 'One-off') {
-            return plan.anchorDate;
+        if (eventType.scheduleType === 'One-off') {
+            return eventType.anchorDate;
         }
 
-        if (plan.scheduleType === 'Rolling') {
-            // For rolling, we need to find the last completed event
-            // This is async, so for now return anchor date
-            return plan.anchorDate;
+        if (eventType.scheduleType === 'Rolling') {
+            return eventType.anchorDate;
         }
 
         // Fixed schedule
-        const anchor = new Date(plan.anchorDate);
+        if (!eventType.anchorDate) return null;
+
+        const anchor = new Date(eventType.anchorDate);
         let nextDue = new Date(anchor);
 
         while (nextDue <= now) {
-            switch (plan.intervalUnit) {
+            switch (eventType.intervalUnit) {
                 case 'Days':
-                    nextDue.setDate(nextDue.getDate() + plan.intervalValue);
+                    nextDue.setDate(nextDue.getDate() + (eventType.intervalValue || 1));
                     break;
                 case 'Weeks':
-                    nextDue.setDate(nextDue.getDate() + (plan.intervalValue * 7));
+                    nextDue.setDate(nextDue.getDate() + ((eventType.intervalValue || 1) * 7));
                     break;
                 case 'Months':
-                    nextDue.setMonth(nextDue.getMonth() + plan.intervalValue);
+                    nextDue.setMonth(nextDue.getMonth() + (eventType.intervalValue || 1));
                     break;
                 case 'Years':
-                    nextDue.setFullYear(nextDue.getFullYear() + plan.intervalValue);
+                    nextDue.setFullYear(nextDue.getFullYear() + (eventType.intervalValue || 1));
                     break;
+                default:
+                    nextDue.setDate(nextDue.getDate() + 1);
             }
         }
 
@@ -138,21 +52,19 @@ const Care = {
     /**
      * Calculate next due for rolling schedule (needs last event)
      */
-    calculateRollingNextDue: async (plan) => {
-        if (plan.scheduleType !== 'Rolling') {
-            return Care.calculateNextDue(plan);
+    calculateRollingNextDue: async (eventType) => {
+        if (eventType.scheduleType !== 'Rolling') {
+            return Care.calculateNextDue(eventType);
         }
 
-        // Find last completed event for this care plan
+        // Find last completed event for this event type
         const events = await PetTracker.DB.query(
             PetTracker.STORES.EVENTS,
-            e => e.careItemId === plan.careItemId &&
-                e.status === 'Completed' &&
-                plan.petIds.some(id => e.petIds?.includes(id))
+            e => e.eventTypeId === eventType.id && e.status === 'Completed'
         );
 
         if (events.length === 0) {
-            return plan.anchorDate;
+            return eventType.anchorDate;
         }
 
         // Sort by date descending
@@ -161,18 +73,18 @@ const Care = {
         const lastDate = new Date(lastEvent.startDate);
 
         // Add interval
-        switch (plan.intervalUnit) {
+        switch (eventType.intervalUnit) {
             case 'Days':
-                lastDate.setDate(lastDate.getDate() + plan.intervalValue);
+                lastDate.setDate(lastDate.getDate() + (eventType.intervalValue || 1));
                 break;
             case 'Weeks':
-                lastDate.setDate(lastDate.getDate() + (plan.intervalValue * 7));
+                lastDate.setDate(lastDate.getDate() + ((eventType.intervalValue || 1) * 7));
                 break;
             case 'Months':
-                lastDate.setMonth(lastDate.getMonth() + plan.intervalValue);
+                lastDate.setMonth(lastDate.getMonth() + (eventType.intervalValue || 1));
                 break;
             case 'Years':
-                lastDate.setFullYear(lastDate.getFullYear() + plan.intervalValue);
+                lastDate.setFullYear(lastDate.getFullYear() + (eventType.intervalValue || 1));
                 break;
         }
 
@@ -180,62 +92,68 @@ const Care = {
     },
 
     /**
-     * Get upcoming items from care plans
+     * Get upcoming items from recurring event types
      */
     getUpcoming: async (options = {}) => {
         const {
-            horizon = 30, // days
+            horizon = 30,
             petIds = [],
             categories = []
         } = options;
 
-        const plans = await PetTracker.DB.getAll(PetTracker.STORES.CARE_PLANS);
+        const eventTypes = await PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES);
+        const recurringTypes = eventTypes.filter(et => et.isRecurring && et.active !== false);
+
         const now = new Date();
         const endDate = new Date(now);
         endDate.setDate(endDate.getDate() + horizon);
 
         const upcoming = [];
 
-        for (const plan of plans) {
+        for (const eventType of recurringTypes) {
             // Filter by pet if specified
-            if (petIds.length > 0 && !plan.petIds.some(id => petIds.includes(id))) {
-                continue;
+            if (petIds.length > 0 && eventType.relatedPetIds?.length > 0) {
+                if (!eventType.relatedPetIds.some(id => petIds.includes(id))) {
+                    continue;
+                }
             }
 
             // Filter by category if specified
-            if (categories.length > 0 && !categories.includes(plan.upcomingCategory)) {
+            if (categories.length > 0 && !categories.includes(eventType.category)) {
                 continue;
             }
 
             // Calculate next due
             let nextDue;
-            if (plan.scheduleType === 'Rolling') {
-                nextDue = await Care.calculateRollingNextDue(plan);
+            if (eventType.scheduleType === 'Rolling') {
+                nextDue = await Care.calculateRollingNextDue(eventType);
             } else {
-                nextDue = Care.calculateNextDue(plan);
+                nextDue = Care.calculateNextDue(eventType);
             }
+
+            if (!nextDue) continue;
 
             const dueDate = new Date(nextDue);
 
             // Check if within horizon
             if (dueDate <= endDate) {
-                // Check if plan has ended
-                if (plan.endDate && new Date(plan.endDate) < now) {
+                // Check if schedule has ended
+                if (eventType.endDate && new Date(eventType.endDate) < now) {
                     continue;
                 }
 
                 upcoming.push({
-                    planId: plan.id,
-                    planName: plan.name,
-                    petIds: plan.petIds,
-                    careItemId: plan.careItemId,
-                    eventTypeId: plan.eventTypeId,
-                    category: plan.upcomingCategory,
+                    eventTypeId: eventType.id,
+                    eventTypeName: eventType.name,
+                    petIds: eventType.relatedPetIds || [],
+                    category: eventType.category,
                     dueDate: nextDue,
-                    dueTime: plan.dueTime,
-                    windowBefore: plan.windowBefore,
-                    windowAfter: plan.windowAfter,
-                    isOverdue: dueDate < now
+                    dueTime: eventType.dueTime,
+                    windowBefore: eventType.windowBefore,
+                    windowAfter: eventType.windowAfter,
+                    isOverdue: dueDate < now,
+                    icon: eventType.defaultIcon,
+                    color: eventType.defaultColor
                 });
             }
         }
@@ -248,212 +166,147 @@ const Care = {
 
     // State for upcoming view filters
     upcomingFilters: {
-        petId: null,
         horizon: 30,
+        petIds: [],
         categories: []
     },
 
     /**
-     * Toggle category filter for upcoming view
-     */
-    toggleCategoryFilter: (category) => {
-        const idx = Care.upcomingFilters.categories.indexOf(category);
-        if (idx >= 0) {
-            Care.upcomingFilters.categories.splice(idx, 1);
-        } else {
-            Care.upcomingFilters.categories.push(category);
-        }
-        Care.renderUpcoming();
-    },
-
-    /**
-     * Render upcoming view
+     * Render upcoming care view
      */
     renderUpcoming: async () => {
         const container = document.querySelector('[data-view="upcoming"]');
         if (!container) return;
 
-        // Get filter values from dropdowns if they exist (preserve state)
-        const petFilter = document.getElementById('upcomingPetFilter');
-        const horizonFilter = document.getElementById('upcomingHorizon');
+        const upcoming = await Care.getUpcoming(Care.upcomingFilters);
+        const pets = await PetTracker.DB.getAll(PetTracker.STORES.PETS);
+        const petsById = Object.fromEntries(pets.map(p => [p.id, p]));
 
-        if (petFilter) {
-            Care.upcomingFilters.petId = petFilter.value || null;
-        }
-        if (horizonFilter) {
-            Care.upcomingFilters.horizon = parseInt(horizonFilter.value) || 30;
-        }
-
-        // Build filter options
-        const filterOptions = {
-            horizon: Care.upcomingFilters.horizon,
-            petIds: Care.upcomingFilters.petId ? [Care.upcomingFilters.petId] : [],
-            categories: Care.upcomingFilters.categories
-        };
-
-        const upcoming = await Care.getUpcoming(filterOptions);
-
-        // Group by category
-        const byCategory = {};
-        upcoming.forEach(item => {
-            const cat = item.category || 'Other';
-            if (!byCategory[cat]) byCategory[cat] = [];
-            byCategory[cat].push(item);
-        });
-
-        const categories = ['Medication', 'Vaccine', 'Vet Visit', 'Habit', 'Other'];
-
-        container.innerHTML = `
-            <div class="p-4 space-y-6">
-                <div class="flex items-center justify-between">
-                    ${PetTracker.UI.sectionHeader(1, 'Upcoming')}
-                    <div class="flex gap-2">
-                        <select id="upcomingPetFilter" onchange="Care.renderUpcoming()" class="select-field text-xs py-1 px-2">
-                            <option value="">All Pets</option>
-                            ${App.state.pets.map(p => `
-                                <option value="${p.id}">${PetTracker.UI.escapeHtml(p.name)}</option>
-                            `).join('')}
-                        </select>
-                        <select id="upcomingHorizon" onchange="Care.renderUpcoming()" class="select-field text-xs py-1 px-2">
-                            <option value="7" ${Care.upcomingFilters.horizon === 7 ? 'selected' : ''}>7 days</option>
-                            <option value="14" ${Care.upcomingFilters.horizon === 14 ? 'selected' : ''}>14 days</option>
-                            <option value="30" ${Care.upcomingFilters.horizon === 30 ? 'selected' : ''}>30 days</option>
-                            <option value="60" ${Care.upcomingFilters.horizon === 60 ? 'selected' : ''}>60 days</option>
-                        </select>
+        let html = `
+            <div class="p-4 md:p-6 max-w-4xl mx-auto">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h2 class="font-serif text-2xl text-charcoal">Upcoming Care</h2>
+                        <p class="text-sm text-earth-metal mt-1">Scheduled events from recurring event types</p>
                     </div>
                 </div>
 
-                <!-- Category filters -->
-                <div class="flex flex-wrap gap-2">
-                    ${categories.map(cat => {
-            const isActive = Care.upcomingFilters.categories.includes(cat);
-            const count = byCategory[cat]?.length || 0;
-            return `
-                            <button onclick="Care.toggleCategoryFilter('${cat}')" 
-                                    class="badge ${isActive ? 'badge-accent' : 'badge-light'} cursor-pointer">
-                                ${cat} (${count})
-                            </button>
-                        `;
-        }).join('')}
+                <!-- Filters -->
+                <div class="flex flex-wrap gap-3 mb-6">
+                    <select onchange="Care.upcomingFilters.horizon = parseInt(this.value); Care.renderUpcoming();" 
+                            class="select-field text-sm">
+                        <option value="7" ${Care.upcomingFilters.horizon === 7 ? 'selected' : ''}>Next 7 days</option>
+                        <option value="14" ${Care.upcomingFilters.horizon === 14 ? 'selected' : ''}>Next 14 days</option>
+                        <option value="30" ${Care.upcomingFilters.horizon === 30 ? 'selected' : ''}>Next 30 days</option>
+                        <option value="90" ${Care.upcomingFilters.horizon === 90 ? 'selected' : ''}>Next 90 days</option>
+                    </select>
                 </div>
+        `;
 
-                <!-- Upcoming list -->
-                ${upcoming.length === 0 ? `
-                    ${PetTracker.UI.emptyState('calendar-check', 'All caught up!', 'No upcoming items in this time range')}
-                ` : `
-                    <div class="space-y-3">
-                        ${upcoming.map(item => {
-            const pets = item.petIds.map(id => App.state.pets.find(p => p.id === id)).filter(Boolean);
-            const dueDate = new Date(item.dueDate);
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-
-            const diffDays = Math.floor((dueDate - today) / (1000 * 60 * 60 * 24));
-            let dueLabel = '';
-            if (diffDays < 0) {
-                dueLabel = `${Math.abs(diffDays)} days overdue`;
-            } else if (diffDays === 0) {
-                dueLabel = 'Due today';
-            } else if (diffDays === 1) {
-                dueLabel = 'Due tomorrow';
-            } else {
-                dueLabel = `Due in ${diffDays} days`;
+        if (upcoming.length === 0) {
+            html += `
+                <div class="border border-oatmeal p-8 text-center">
+                    <i data-lucide="calendar-check" class="w-12 h-12 text-oatmeal mx-auto mb-4"></i>
+                    <p class="text-earth-metal">No upcoming scheduled items</p>
+                    <p class="text-xs text-earth-metal mt-2">Add recurring schedules to event types in Setup → Event Types</p>
+                </div>
+            `;
+        } else {
+            // Group by date
+            const byDate = {};
+            for (const item of upcoming) {
+                const key = item.dueDate;
+                if (!byDate[key]) byDate[key] = [];
+                byDate[key].push(item);
             }
 
-            const categoryIcon = {
-                'Medication': 'pill',
-                'Vaccine': 'syringe',
-                'Vet Visit': 'stethoscope',
-                'Habit': 'repeat',
-                'Other': 'calendar'
-            }[item.category] || 'calendar';
+            for (const [date, items] of Object.entries(byDate)) {
+                const dateObj = new Date(date);
+                const isToday = date === PetTracker.UI.localDateYYYYMMDD();
+                const isTomorrow = date === PetTracker.UI.localDateYYYYMMDD(new Date(Date.now() + 86400000));
 
-            return `
-                                <div class="card p-4 ${item.isOverdue ? 'border-muted-pink' : ''}">
-                                    <div class="flex items-start gap-4">
-                                        <div class="w-10 h-10 bg-oatmeal flex items-center justify-center flex-shrink-0">
-                                            <i data-lucide="${categoryIcon}" class="w-5 h-5 text-earth-metal"></i>
-                                        </div>
-                                        <div class="flex-1 min-w-0">
-                                            <div class="flex items-center gap-2 mb-1">
-                                                <h4 class="font-serif text-lg text-charcoal truncate">${PetTracker.UI.escapeHtml(item.planName)}</h4>
-                                                <span class="badge badge-light text-[9px]">${item.category}</span>
-                                            </div>
-                                            <p class="meta-row text-xs">
-                                                ${pets.map(p => `<span class="meta-value">${PetTracker.UI.escapeHtml(p.name)}</span>`).join('<span class="meta-separator">,</span> ')}
-                                            </p>
-                                            <p class="text-sm ${item.isOverdue ? 'text-muted-pink font-medium' : 'text-earth-metal'} mt-1">
-                                                ${dueLabel}
-                                                ${item.dueTime ? ` at ${item.dueTime}` : ''}
-                                            </p>
-                                        </div>
-                                        <div class="flex flex-col gap-2">
-                                            <button onclick="Care.markComplete('${item.planId}')" 
-                                                    class="btn-primary px-3 py-1 font-mono text-xs uppercase">
-                                                <i data-lucide="check" class="w-3 h-3 inline mr-1"></i>Done
-                                            </button>
-                                            <button onclick="Care.skipOnce('${item.planId}')" 
-                                                    class="btn-secondary px-3 py-1 font-mono text-xs uppercase">
-                                                Skip
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            `;
-        }).join('')}
-                    </div>
-                `}
+                let dateLabel = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                if (isToday) dateLabel = 'Today';
+                if (isTomorrow) dateLabel = 'Tomorrow';
 
-                <!-- Add Care Plan button -->
-                <div class="pt-4 border-t border-oatmeal">
-                    <button onclick="Care.showAddPlanModal()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
-                        <i data-lucide="plus" class="w-4 h-4 inline mr-2"></i>Add Care Plan
-                    </button>
-                </div>
-            </div>
-        `;
+                html += `
+                    <div class="mb-6">
+                        <h3 class="font-mono text-xs uppercase text-earth-metal mb-2 ${items[0].isOverdue ? 'text-muted-pink' : ''}">${dateLabel}</h3>
+                        <div class="space-y-2">
+                `;
+
+                for (const item of items) {
+                    const petNames = (item.petIds || []).map(id => petsById[id]?.name || '').filter(Boolean).join(', ');
+                    const colorHex = Setup?.availableColors?.find(c => c.value === item.color)?.hex || '#6b6357';
+
+                    html += `
+                        <div class="flex items-center gap-3 p-4 border border-oatmeal ${item.isOverdue ? 'border-muted-pink bg-muted-pink/5' : ''} hover:border-dull-purple transition-fast">
+                            <div class="w-10 h-10 flex items-center justify-center" style="background: ${colorHex}20; color: ${colorHex}">
+                                <i data-lucide="${item.icon || 'calendar'}" class="w-5 h-5"></i>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm text-charcoal font-medium truncate">${PetTracker.UI.escapeHtml(item.eventTypeName)}</p>
+                                <p class="text-xs text-earth-metal">
+                                    ${item.category || 'Other'}${petNames ? ` • ${petNames}` : ''}
+                                    ${item.dueTime ? ` • ${item.dueTime}` : ''}
+                                </p>
+                            </div>
+                            <div class="flex gap-2">
+                                <button onclick="Care.markComplete('${item.eventTypeId}')" 
+                                        class="btn-primary px-3 py-1 font-mono text-[10px] uppercase">
+                                    Done
+                                </button>
+                                <button onclick="Care.skipOnce('${item.eventTypeId}')" 
+                                        class="btn-secondary px-3 py-1 font-mono text-[10px] uppercase">
+                                    Skip
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                html += `</div></div>`;
+            }
+        }
+
+        html += `</div>`;
+        container.innerHTML = html;
 
         if (window.lucide) lucide.createIcons();
     },
 
     /**
-     * Mark a care plan item as complete
+     * Mark a recurring event type item as complete (create event)
      */
-    markComplete: async (planId) => {
-        const plan = await PetTracker.DB.get(PetTracker.STORES.CARE_PLANS, planId);
-        if (!plan) return;
+    markComplete: async (eventTypeId) => {
+        const eventType = await PetTracker.DB.get(PetTracker.STORES.EVENT_TYPES, eventTypeId);
+        if (!eventType) return;
 
         // Create completed event
-        const careItem = plan.careItemId
-            ? await PetTracker.DB.get(PetTracker.STORES.CARE_ITEMS, plan.careItemId)
-            : null;
-
         await Events.create({
-            title: careItem?.name || plan.name,
-            petIds: plan.petIds,
-            eventTypeId: plan.eventTypeId,
-            careItemId: plan.careItemId,
+            title: eventType.name,
+            petIds: eventType.relatedPetIds || [],
+            eventTypeId: eventType.id,
             startDate: new Date().toISOString(),
             status: 'Completed',
             source: 'Scheduled'
         });
 
-        // Update plan's next due and queue for sync
-        const nextDue = await Care.calculateRollingNextDue(plan);
-        const updatedPlan = {
-            ...plan,
+        // Update event type's next due and queue for sync
+        const nextDue = await Care.calculateRollingNextDue(eventType);
+        const updatedEventType = {
+            ...eventType,
             nextDue,
             updatedAt: new Date().toISOString(),
             synced: false
         };
-        await PetTracker.DB.put(PetTracker.STORES.CARE_PLANS, updatedPlan);
+        await PetTracker.DB.put(PetTracker.STORES.EVENT_TYPES, updatedEventType);
 
-        // Queue sync for the care plan update
         await PetTracker.SyncQueue.add({
             type: 'update',
-            store: 'carePlans',
-            recordId: plan.id,
-            data: updatedPlan
+            store: 'eventTypes',
+            recordId: eventType.id,
+            data: updatedEventType
         });
 
         if (PetTracker.Sync?.updatePendingCount) {
@@ -467,52 +320,50 @@ const Care = {
     /**
      * Skip once (advance to next occurrence)
      */
-    skipOnce: async (planId) => {
-        const plan = await PetTracker.DB.get(PetTracker.STORES.CARE_PLANS, planId);
-        if (!plan) return;
+    skipOnce: async (eventTypeId) => {
+        const eventType = await PetTracker.DB.get(PetTracker.STORES.EVENT_TYPES, eventTypeId);
+        if (!eventType) return;
 
         // Create a missed event
         await Events.create({
-            title: plan.name,
-            petIds: plan.petIds,
-            eventTypeId: plan.eventTypeId,
-            careItemId: plan.careItemId,
-            startDate: plan.nextDue || PetTracker.UI.localDateYYYYMMDD(),
+            title: eventType.name,
+            petIds: eventType.relatedPetIds || [],
+            eventTypeId: eventType.id,
+            startDate: eventType.nextDue || PetTracker.UI.localDateYYYYMMDD(),
             status: 'Missed',
             source: 'Scheduled'
         });
 
         // Advance next due by one interval
-        const current = new Date(plan.nextDue || new Date());
-        switch (plan.intervalUnit) {
+        const current = new Date(eventType.nextDue || new Date());
+        switch (eventType.intervalUnit) {
             case 'Days':
-                current.setDate(current.getDate() + plan.intervalValue);
+                current.setDate(current.getDate() + (eventType.intervalValue || 1));
                 break;
             case 'Weeks':
-                current.setDate(current.getDate() + (plan.intervalValue * 7));
+                current.setDate(current.getDate() + ((eventType.intervalValue || 1) * 7));
                 break;
             case 'Months':
-                current.setMonth(current.getMonth() + plan.intervalValue);
+                current.setMonth(current.getMonth() + (eventType.intervalValue || 1));
                 break;
             case 'Years':
-                current.setFullYear(current.getFullYear() + plan.intervalValue);
+                current.setFullYear(current.getFullYear() + (eventType.intervalValue || 1));
                 break;
         }
 
-        const updatedPlan = {
-            ...plan,
+        const updatedEventType = {
+            ...eventType,
             nextDue: PetTracker.UI.localDateYYYYMMDD(current),
             updatedAt: new Date().toISOString(),
             synced: false
         };
-        await PetTracker.DB.put(PetTracker.STORES.CARE_PLANS, updatedPlan);
+        await PetTracker.DB.put(PetTracker.STORES.EVENT_TYPES, updatedEventType);
 
-        // Queue sync for the care plan update
         await PetTracker.SyncQueue.add({
             type: 'update',
-            store: 'carePlans',
-            recordId: plan.id,
-            data: updatedPlan
+            store: 'eventTypes',
+            recordId: eventType.id,
+            data: updatedEventType
         });
 
         if (PetTracker.Sync?.updatePendingCount) {
@@ -521,14 +372,6 @@ const Care = {
 
         PetTracker.UI.toast('Skipped', 'info');
         Care.renderUpcoming();
-    },
-
-    /**
-     * Show add care plan modal
-     */
-    showAddPlanModal: () => {
-        // For now, show a simple prompt - full modal to be added later
-        PetTracker.UI.toast('Care Plan modal coming soon', 'info');
     },
 
     /**
@@ -554,6 +397,7 @@ const Care = {
                 const eventType = {
                     id: PetTracker.generateId(),
                     ...et,
+                    active: true,
                     createdAt: new Date().toISOString(),
                     updatedAt: new Date().toISOString(),
                     synced: false
@@ -561,7 +405,6 @@ const Care = {
 
                 await PetTracker.DB.put(PetTracker.STORES.EVENT_TYPES, eventType);
 
-                // Queue for sync to Notion
                 await PetTracker.SyncQueue.add({
                     type: 'create',
                     store: 'eventTypes',
@@ -619,7 +462,6 @@ const Care = {
 
                 await PetTracker.DB.put(PetTracker.STORES.SCALES, scaleRecord);
 
-                // Queue scale for sync to Notion
                 await PetTracker.SyncQueue.add({
                     type: 'create',
                     store: 'scales',
@@ -640,7 +482,6 @@ const Care = {
 
                     await PetTracker.DB.put(PetTracker.STORES.SCALE_LEVELS, levelRecord);
 
-                    // Queue scale level for sync to Notion
                     await PetTracker.SyncQueue.add({
                         type: 'create',
                         store: 'scaleLevels',

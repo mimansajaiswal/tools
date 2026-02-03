@@ -15,8 +15,6 @@ const STORES = {
     EVENT_TYPES: 'eventTypes',
     SCALES: 'scales',
     SCALE_LEVELS: 'scaleLevels',
-    CARE_ITEMS: 'careItems',
-    CARE_PLANS: 'carePlans',
     CONTACTS: 'contacts',
     SYNC_QUEUE: 'syncQueue',
     MEDIA: 'media',
@@ -390,7 +388,7 @@ const Settings = {
         notionOAuthData: null,
         dataSources: {
             pets: '', events: '', eventTypes: '', scales: '',
-            scaleLevels: '', careItems: '', carePlans: '', contacts: ''
+            scaleLevels: '', contacts: ''
         },
         aiProvider: 'openai',
         aiModel: 'gpt-4o-mini',

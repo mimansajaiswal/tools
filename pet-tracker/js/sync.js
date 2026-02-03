@@ -22,8 +22,6 @@ const Sync = {
         'pets': 'PETS',
         'events': 'EVENTS',
         'eventTypes': 'EVENT_TYPES',
-        'careItems': 'CARE_ITEMS',
-        'carePlans': 'CARE_PLANS',
         'contacts': 'CONTACTS',
         'scales': 'SCALES',
         'scaleLevels': 'SCALE_LEVELS'
@@ -247,10 +245,8 @@ const Sync = {
         'scales',      // Base entity - no dependencies  
         'eventTypes',  // May reference scales (defaultScaleId)
         'scaleLevels', // References scales
-        'careItems',   // References eventTypes, pets
         'contacts',    // References pets
-        'carePlans',   // References pets, careItems, eventTypes
-        'events'       // References pets, eventTypes, careItems, scaleLevels, contacts
+        'events'       // References pets, eventTypes, scaleLevels, contacts
     ],
 
     /**
@@ -289,7 +285,6 @@ const Sync = {
             scales: ['scaleId', 'defaultScaleId'],
             eventTypes: ['eventTypeId', 'linkedEventTypeId'],
             scaleLevels: ['severityLevelId'],
-            careItems: ['careItemId'],
             contacts: ['providerId', 'primaryVetId', 'relatedContactIds']
         };
 
@@ -438,8 +433,6 @@ const Sync = {
             { store: 'eventTypes', storeKey: 'EVENT_TYPES' },
             { store: 'scales', storeKey: 'SCALES' },
             { store: 'scaleLevels', storeKey: 'SCALE_LEVELS' },
-            { store: 'careItems', storeKey: 'CARE_ITEMS' },
-            { store: 'carePlans', storeKey: 'CARE_PLANS' },
             { store: 'contacts', storeKey: 'CONTACTS' }
         ];
 
@@ -617,7 +610,6 @@ const Sync = {
                     'Title': P.title(data.title || 'Event'),
                     'Pet(s)': P.relation(await resolve(PetTracker.STORES.PETS, data.petIds)),
                     'Event Type': P.relation(await resolve(PetTracker.STORES.EVENT_TYPES, data.eventTypeId ? [data.eventTypeId] : [])),
-                    'Care Item': P.relation(await resolve(PetTracker.STORES.CARE_ITEMS, data.careItemId ? [data.careItemId] : [])),
                     'Start Date': P.date(data.startDate, data.endDate),
                     'Status': P.select(data.status),
                     'Severity Level': P.relation(await resolve(PetTracker.STORES.SCALE_LEVELS, data.severityLevelId ? [data.severityLevelId] : [])),
@@ -648,15 +640,8 @@ const Sync = {
                     'Allow Attachments': P.checkbox(data.allowAttachments),
                     'Default Value Kind': P.select(data.defaultValueKind),
                     'Default Unit': P.select(data.defaultUnit),
-                    'Correlation Group': P.select(data.correlationGroup)
-                };
-
-            case 'carePlans':
-                return {
-                    'Name': P.title(data.name),
-                    'Pet(s)': P.relation(await resolve(PetTracker.STORES.PETS, data.petIds)),
-                    'Care Item': P.relation(await resolve(PetTracker.STORES.CARE_ITEMS, data.careItemId ? [data.careItemId] : [])),
-                    'Event Type': P.relation(await resolve(PetTracker.STORES.EVENT_TYPES, data.eventTypeId ? [data.eventTypeId] : [])),
+                    'Correlation Group': P.select(data.correlationGroup),
+                    'Is Recurring': P.checkbox(data.isRecurring),
                     'Schedule Type': P.select(data.scheduleType),
                     'Interval Value': P.number(data.intervalValue),
                     'Interval Unit': P.select(data.intervalUnit),
@@ -666,14 +651,18 @@ const Sync = {
                     'Window Before': P.number(data.windowBefore),
                     'Window After': P.number(data.windowAfter),
                     'End Date': P.date(data.endDate),
-                    'Timezone': P.richText(data.timezone),
+                    'End After Occurrences': P.number(data.endAfterOccurrences),
                     'Next Due': P.date(data.nextDue),
-                    'Upcoming Category': P.select(data.upcomingCategory),
                     'Todoist Sync': P.checkbox(data.todoistSync),
                     'Todoist Project': P.richText(data.todoistProject),
                     'Todoist Labels': P.richText(data.todoistLabels),
                     'Todoist Lead Time': P.number(data.todoistLeadTime),
-                    'Notes': P.richText(data.notes)
+                    'Default Dose': P.richText(data.defaultDose),
+                    'Default Route': P.select(data.defaultRoute),
+                    'Active': P.checkbox(data.active),
+                    'Active Start': P.date(data.activeStart),
+                    'Active End': P.date(data.activeEnd),
+                    'Related Pets': P.relation(await resolve(PetTracker.STORES.PETS, data.relatedPetIds))
                 };
 
             case 'scales':
@@ -692,21 +681,6 @@ const Sync = {
                     'Color': P.select(data.color),
                     'Numeric Value': P.number(data.numericValue),
                     'Description': P.richText(data.description)
-                };
-
-            case 'careItems':
-                return {
-                    'Name': P.title(data.name),
-                    'Type': P.select(data.type),
-                    'Default Dose': P.richText(data.defaultDose),
-                    'Default Unit': P.select(data.defaultUnit),
-                    'Default Route': P.select(data.defaultRoute),
-                    'Linked Event Type': P.relation(await resolve(PetTracker.STORES.EVENT_TYPES, data.linkedEventTypeId ? [data.linkedEventTypeId] : [])),
-                    'Related Pets': P.relation(await resolve(PetTracker.STORES.PETS, data.relatedPetIds)),
-                    'Active Start': P.date(data.activeStart),
-                    'Active End': P.date(data.activeEnd),
-                    'Notes': P.richText(data.notes),
-                    'Active': P.checkbox(data.active)
                 };
 
             case 'contacts':
@@ -762,7 +736,6 @@ const Sync = {
                     title: E.title(props['Title']),
                     petIds: E.relation(props['Pet(s)']),
                     eventTypeId: E.relation(props['Event Type'])?.[0] || null,
-                    careItemId: E.relation(props['Care Item'])?.[0] || null,
                     startDate: E.date(props['Start Date']),
                     endDate: E.dateEnd(props['Start Date']),
                     status: E.select(props['Status']),
@@ -796,15 +769,7 @@ const Sync = {
                     defaultValueKind: E.select(props['Default Value Kind']),
                     defaultUnit: E.select(props['Default Unit']),
                     correlationGroup: E.select(props['Correlation Group']),
-                    updatedAt: page.last_edited_time
-                };
-
-            case 'carePlans':
-                return {
-                    name: E.title(props['Name']),
-                    petIds: E.relation(props['Pet(s)']),
-                    careItemId: E.relation(props['Care Item'])?.[0] || null,
-                    eventTypeId: E.relation(props['Event Type'])?.[0] || null,
+                    isRecurring: E.checkbox(props['Is Recurring']),
                     scheduleType: E.select(props['Schedule Type']),
                     intervalValue: E.number(props['Interval Value']),
                     intervalUnit: E.select(props['Interval Unit']),
@@ -814,14 +779,18 @@ const Sync = {
                     windowBefore: E.number(props['Window Before']),
                     windowAfter: E.number(props['Window After']),
                     endDate: E.date(props['End Date']),
-                    timezone: E.richText(props['Timezone']),
+                    endAfterOccurrences: E.number(props['End After Occurrences']),
                     nextDue: E.date(props['Next Due']),
-                    upcomingCategory: E.select(props['Upcoming Category']),
                     todoistSync: E.checkbox(props['Todoist Sync']),
                     todoistProject: E.richText(props['Todoist Project']),
                     todoistLabels: E.richText(props['Todoist Labels']),
                     todoistLeadTime: E.number(props['Todoist Lead Time']),
-                    notes: E.richText(props['Notes']),
+                    defaultDose: E.richText(props['Default Dose']),
+                    defaultRoute: E.select(props['Default Route']),
+                    active: E.checkbox(props['Active']),
+                    activeStart: E.date(props['Active Start']),
+                    activeEnd: E.date(props['Active End']),
+                    relatedPetIds: E.relation(props['Related Pets']),
                     updatedAt: page.last_edited_time
                 };
 
@@ -854,23 +823,6 @@ const Sync = {
                     color: E.select(props['Color']),
                     numericValue: E.number(props['Numeric Value']),
                     description: E.richText(props['Description']),
-                    updatedAt: page.last_edited_time
-                };
-
-            case 'careItems':
-                return {
-                    name: E.title(props['Name']),
-                    type: E.select(props['Type']),
-                    defaultDose: E.richText(props['Default Dose']),
-                    defaultUnit: E.select(props['Default Unit']),
-                    defaultRoute: E.select(props['Default Route']),
-                    linkedEventTypeId: E.relation(props['Linked Event Type'])?.[0] || null,
-                    relatedPetIds: E.relation(props['Related Pets']),
-                    activeStart: E.date(props['Active Start']),
-                    activeEnd: E.date(props['Active End']),
-                    notes: E.richText(props['Notes']),
-                    files: E.files(props['Files']),
-                    active: E.checkbox(props['Active']),
                     updatedAt: page.last_edited_time
                 };
 
