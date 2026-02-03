@@ -4038,7 +4038,10 @@ async function handleRequest(request, env) {
                 }
                 if (id === 'entryModal') {
                     App.state.isEntryModalOpen = true;
-                    if (!App.state.stream) App.initCamera();
+                    const streamStopped = App.state.stream
+                        ? App.state.stream.getTracks().every(t => t.readyState === 'ended')
+                        : true;
+                    if (!App.state.stream || streamStopped) App.initCamera();
                     App.startDrawLoop();
                 }
                 lucide.createIcons();
@@ -4052,7 +4055,10 @@ async function handleRequest(request, env) {
                     }
                     App.state.isEntryModalOpen = false;
                     App.stopDrawLoop();
-                    if (App.state.stream) App.state.stream.getTracks().forEach(t => t.stop());
+                    if (App.state.stream) {
+                        App.state.stream.getTracks().forEach(t => t.stop());
+                        App.state.stream = null;
+                    }
                     if (App.state.ghostImageIsObjectUrl && App.state.ghostImageUrl) {
                         URL.revokeObjectURL(App.state.ghostImageUrl);
                     }
