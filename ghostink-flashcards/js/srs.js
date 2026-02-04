@@ -7,6 +7,7 @@ import {
     fsrsW,
     DEFAULT_DESIRED_RETENTION,
     MAX_INTERVAL,
+    DAY_START_HOUR,
     ratingsMap,
     clamp2,
     constrainDifficulty,
@@ -85,6 +86,25 @@ export const nextShortTermStability = (w, s, ratingName) => {
 export const normalizeRating = (name) => name ? name.toLowerCase() : null;
 export const displayRating = (name) => name ? name.charAt(0).toUpperCase() + name.slice(1).toLowerCase() : null;
 
+const ratingCodeToName = (code) => {
+    if (code === ratingsMap.again) return 'again';
+    if (code === ratingsMap.hard) return 'hard';
+    if (code === ratingsMap.good) return 'good';
+    if (code === ratingsMap.easy) return 'easy';
+    return null;
+};
+
+const normalizeRatingCode = (rating) => {
+    if (rating === null || rating === undefined || rating === '') return null;
+    if (Number.isFinite(rating)) {
+        const code = Math.round(Number(rating));
+        return code >= ratingsMap.again && code <= ratingsMap.easy ? code : null;
+    }
+    const name = normalizeRating(String(rating));
+    if (!name) return ratingsMap.good;
+    return ratingsMap[name] || ratingsMap.good;
+};
+
 export const detectCardType = (name = '', back = '') => {
     const text = `${name} ${back}`.toLowerCase();
     const hasCloze = /\{\{c\d+::.+?\}\}/i.test(text);
@@ -103,14 +123,14 @@ export const SRS = {
      */
     getDueDate(intervalDays) {
         const date = new Date();
-        // If current time is before 4 AM, we are still in the previous "study day"
-        if (date.getHours() < 4) {
+        // If current time is before the study day boundary, we are still in the previous "study day"
+        if (date.getHours() < DAY_START_HOUR) {
             date.setDate(date.getDate() - 1);
         }
 
         const daysToAdd = Math.round(intervalDays);
         date.setDate(date.getDate() + daysToAdd);
-        date.setHours(4, 0, 0, 0);
+        date.setHours(DAY_START_HOUR, 0, 0, 0);
         return date.toISOString();
     },
 
@@ -215,6 +235,158 @@ export const SRS = {
 };
 
 // FSRS optimization helpers
+export const simulateFsrsReviewAtTs = (state, ts, ratingCode, w) => {
+    if (!Number.isFinite(ts)) return null;
+    const ratingName = ratingCodeToName(ratingCode) || 'good';
+    const lastReviewTs = Number.isFinite(state.lastReviewTs) ? state.lastReviewTs : null;
+    const isNew = lastReviewTs === null;
+
+    let newD, newS, retr;
+    if (isNew) {
+        // Learning/init step: we don't score loss here; just set initial state.
+        newD = initDifficulty(w, ratingName);
+        newS = initStability(w, ratingName);
+        retr = 1;
+    } else {
+        const elapsed = Math.max(0.01, (ts - lastReviewTs) / 86400000);
+        const r = forgettingCurve(w, elapsed, state.stability);
+        newD = nextDifficulty(w, state.difficulty, ratingName);
+        if (ratingName === 'again') {
+            newS = nextForgetStability(w, state.difficulty, state.stability, r);
+        } else if (elapsed < 1) {
+            newS = nextShortTermStability(w, state.stability, ratingName);
+        } else {
+            newS = nextRecallStability(w, state.difficulty, state.stability, r, ratingName);
+        }
+        retr = Math.max(0, Math.min(1, +r.toFixed(6)));
+    }
+    return {
+        nextState: {
+            difficulty: newD,
+            stability: newS,
+            lastReviewTs: ts
+        },
+        retrievability: retr,
+        isNew
+    };
+};
+
+export const buildFsrsTrainingPayload = (cards, { maxCards = 400, maxReviewsPerCard = null } = {}) => {
+    const candidates = [];
+    const list = Array.isArray(cards) ? cards : [];
+
+    for (const c of list) {
+        const history = Array.isArray(c.reviewHistory) ? c.reviewHistory : [];
+        if (history.length < 2) continue;
+        const cleaned = [];
+        for (const e of history) {
+            if (!e) continue;
+            const ratingCode = normalizeRatingCode(e.rating);
+            if (!ratingCode) continue;
+            const ts = Number.isFinite(e._ts)
+                ? e._ts
+                : (e.at ? new Date(e.at).getTime() : NaN);
+            if (!Number.isFinite(ts)) continue;
+            cleaned.push({ ts, ratingCode });
+        }
+        if (cleaned.length < 2) continue;
+        cleaned.sort((a, b) => a.ts - b.ts);
+        const trimmed = (Number.isFinite(maxReviewsPerCard) && maxReviewsPerCard > 0 && cleaned.length > maxReviewsPerCard)
+            ? cleaned.slice(-maxReviewsPerCard)
+            : cleaned;
+        candidates.push({
+            id: c.id,
+            history: trimmed,
+            lastTs: trimmed[trimmed.length - 1]?.ts || 0
+        });
+    }
+
+    if (candidates.length === 0) {
+        return {
+            ratings: new Uint8Array(0),
+            timestamps: new Float64Array(0),
+            lengths: new Uint32Array(0),
+            totalReviews: 0,
+            cardCount: 0
+        };
+    }
+
+    // Deterministic ordering: most recently reviewed cards first, then by id
+    candidates.sort((a, b) => {
+        if (b.lastTs !== a.lastTs) return b.lastTs - a.lastTs;
+        return String(a.id).localeCompare(String(b.id));
+    });
+
+    const chosen = candidates.slice(0, maxCards);
+    const lengths = new Uint32Array(chosen.length);
+    let total = 0;
+    for (let i = 0; i < chosen.length; i++) {
+        const len = chosen[i].history.length;
+        lengths[i] = len;
+        total += len;
+    }
+
+    const ratings = new Uint8Array(total);
+    const timestamps = new Float64Array(total);
+    let offset = 0;
+    for (const item of chosen) {
+        for (const step of item.history) {
+            ratings[offset] = step.ratingCode;
+            timestamps[offset] = step.ts;
+            offset++;
+        }
+    }
+
+    return {
+        ratings,
+        timestamps,
+        lengths,
+        totalReviews: total,
+        cardCount: chosen.length
+    };
+};
+
+export const fsrsLogLossPreprocessed = (payload, weights) => {
+    if (!payload || !payload.lengths || !payload.ratings || !payload.timestamps) {
+        return { loss: Number.POSITIVE_INFINITY, n: 0 };
+    }
+    const w = constrainWeights(weights);
+    const eps = 1e-6;
+    const { ratings, timestamps, lengths } = payload;
+
+    let n = 0;
+    let loss = 0;
+    let offset = 0;
+    for (let i = 0; i < lengths.length; i++) {
+        const len = lengths[i];
+        if (!len) continue;
+        const state = {
+            difficulty: initDifficulty(w, 'good'),
+            stability: initStability(w, 'good'),
+            lastReviewTs: null
+        };
+        for (let j = 0; j < len; j++) {
+            const idx = offset + j;
+            const ratingCode = ratings[idx];
+            const ts = timestamps[idx];
+            const sim = simulateFsrsReviewAtTs(state, ts, ratingCode, w);
+            if (!sim) continue;
+            if (!sim.isNew) {
+                const y = ratingCode === ratingsMap.again ? 0 : 1;
+                const p = Math.min(1 - eps, Math.max(eps, sim.retrievability));
+                loss += -(y * Math.log(p) + (1 - y) * Math.log(1 - p));
+                n++;
+            }
+            state.difficulty = sim.nextState.difficulty;
+            state.stability = sim.nextState.stability;
+            state.lastReviewTs = sim.nextState.lastReviewTs;
+        }
+        offset += len;
+    }
+    if (n === 0) return { loss: Number.POSITIVE_INFINITY, n: 0 };
+    return { loss, n };
+};
+
 export const simulateFsrsReviewAt = (state, { at, rating }, w) => {
     const now = new Date(at);
     if (!Number.isFinite(now.getTime())) return null;
@@ -292,4 +464,51 @@ export const fsrsLogLoss = (trainingSet, weights) => {
     }
     if (n === 0) return Number.POSITIVE_INFINITY;
     return loss / n;
+};
+
+// Dev-only helper: compare scheduling vs optimization simulation on the same history.
+export const devCheckFsrsParity = (history, weights = fsrsW, epsilon = 1e-6) => {
+    const steps = Array.isArray(history) ? history : [];
+    const w = constrainWeights(weights);
+    const out = { ok: true, mismatches: [] };
+    const schedState = {
+        difficulty: initDifficulty(w, 'good'),
+        stability: initStability(w, 'good'),
+        lastReview: null
+    };
+    const optState = {
+        difficulty: initDifficulty(w, 'good'),
+        stability: initStability(w, 'good'),
+        lastReviewTs: null
+    };
+
+    for (let i = 0; i < steps.length; i++) {
+        const step = steps[i];
+        const ratingCode = normalizeRatingCode(step?.rating);
+        const ts = Number.isFinite(step?._ts)
+            ? step._ts
+            : (step?.at ? new Date(step.at).getTime() : NaN);
+        if (!ratingCode || !Number.isFinite(ts)) continue;
+
+        const simSched = simulateFsrsReviewAt(schedState, { at: step.at, rating: step.rating }, w);
+        const simOpt = simulateFsrsReviewAtTs(optState, ts, ratingCode, w);
+        if (!simSched || !simOpt) continue;
+
+        const dDiff = Math.abs(simSched.nextState.difficulty - simOpt.nextState.difficulty);
+        const sDiff = Math.abs(simSched.nextState.stability - simOpt.nextState.stability);
+        const rDiff = Math.abs(simSched.retrievability - simOpt.retrievability);
+        if (dDiff > epsilon || sDiff > epsilon || rDiff > epsilon) {
+            out.ok = false;
+            out.mismatches.push({ index: i, dDiff, sDiff, rDiff });
+        }
+
+        schedState.difficulty = simSched.nextState.difficulty;
+        schedState.stability = simSched.nextState.stability;
+        schedState.lastReview = simSched.nextState.lastReview;
+
+        optState.difficulty = simOpt.nextState.difficulty;
+        optState.stability = simOpt.nextState.stability;
+        optState.lastReviewTs = simOpt.nextState.lastReviewTs;
+    }
+    return out;
 };

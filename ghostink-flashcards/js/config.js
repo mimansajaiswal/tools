@@ -8,6 +8,9 @@ export const SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes background tick
 export const MIN_PULL_INTERVAL_MS = 3 * 60 * 1000; // pull at most every 3 minutes
 export const MIN_PUSH_INTERVAL_MS = 30 * 1000; // push at most every 30 seconds
 
+// Daily scheduling boundary (local time)
+export const DAY_START_HOUR = 4;
+
 // Logging configuration
 const LOG_LEVELS = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3, NONE: 4 };
 const CURRENT_LOG_LEVEL = LOG_LEVELS.INFO; // Change to DEBUG for development

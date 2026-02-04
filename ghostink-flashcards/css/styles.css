@@ -421,7 +421,7 @@ html[data-theme="dark"] .dash {
 
 .selected-deck-pill .remove-deck-btn,
 .tag-pill .remove-tag {
-    color: var(--text-sub);
+    color: var(--text-sub-strong);
 }
 
 .selected-deck-pill .remove-deck-btn:hover,
@@ -429,6 +429,8 @@ html[data-theme="dark"] .dash {
     color: var(--text-main);
     background: rgb(var(--dull-purple-rgb) / 0.12);
 }
+
+
 
 /* Library cloze rows */
 .cloze-parent-toggle {

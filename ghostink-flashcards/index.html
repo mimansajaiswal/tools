@@ -465,7 +465,7 @@
                                         class="text-sm md:text-base text-main font-medium">Session: 0/0</span>
                                 </div>
                                 <div id="previewBadge"
-                                    class="hidden text-[11px] px-2 py-1 rounded-lg bg-accent-soft text-accent border border-[color:var(--accent)]/60">
+                                    class="hidden text-[11px] px-2 py-1 rounded-lg bg-accent-soft text-accent border border-[color:color-mix(in_srgb,var(--accent)_60%,var(--card-border))]">
                                     Preview mode: no scheduling changes
                                 </div>
                                 <button id="abandonSessionBtn"
@@ -492,10 +492,22 @@
                                     class="text-xs text-accent hover:underline hidden">Reset</button>
                             </div>
 
+                            <div id="studyFiltersBanner"
+                                class="hidden mb-3 md:mb-4 px-3 py-2 rounded-lg bg-accent-soft text-accent border border-[color:color-mix(in_srgb,var(--accent)_40%,var(--card-border))] text-xs flex items-center justify-between gap-2">
+                                <span>Study filters are active.</span>
+                                <button id="studyFiltersBannerBtn" type="button"
+                                    class="text-[11px] font-medium underline hover:text-[color:var(--accent-2)]">Review
+                                    filters</button>
+                            </div>
+
                             <!-- Always visible: Decks + Mode -->
                             <div class="space-y-3">
                                 <div>
-                                    <label class="text-xs text-sub block mb-2">Study from decks</label>
+                                    <div class="flex items-center justify-between mb-2">
+                                        <label class="text-xs text-sub">Study from decks</label>
+                                        <button id="filterDeckClear" type="button"
+                                            class="text-[11px] text-accent hover:underline">Clear</button>
+                                    </div>
                                     <div class="relative">
                                         <input id="deckSearchInput" type="text" placeholder="Search decks..."
                                             maxlength="100"
@@ -573,7 +585,11 @@
                                         <span>Added today</span>
                                     </label>
                                     <div class="col-span-2">
-                                        <label class="text-xs text-sub">Tags</label>
+                                        <div class="flex items-center justify-between">
+                                            <label class="text-xs text-sub">Tags</label>
+                                            <button id="filterTagClear" type="button"
+                                                class="text-[11px] text-accent hover:underline">Clear</button>
+                                        </div>
                                         <div class="relative">
                                             <input id="filterTagSearch" type="text" placeholder="Search tags"
                                                 maxlength="100"
@@ -623,11 +639,8 @@
                                         <p class="text-[10px] text-muted mt-1">Select one or more to filter. Empty = all
                                             flags.</p>
                                     </div>
-                                    <button id="resetFiltersMobile"
-                                        class="col-span-2 sm:hidden text-xs text-accent hover:underline text-center py-2">Reset
-                                        all filters</button>
                                     <button id="resetFiltersAll"
-                                        class="col-span-2 hidden sm:block text-xs text-accent hover:underline text-center py-2">Reset
+                                        class="col-span-2 text-xs text-accent hover:underline text-center py-2">Reset
                                         all filters</button>
                                 </div>
                             </div>
@@ -1075,7 +1088,7 @@
         class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[220]">
         <div class="card rounded-lg p-5 w-full max-w-sm shadow-soft">
             <p id="confirmModalTitle" class="modal-title font-display text-lg mb-2">Confirm delete</p>
-            <p class="text-sm text-sub ">This removes it locally and syncs deletion to
+            <p id="confirmModalBody" class="text-sm text-sub ">This removes it locally and syncs deletion to
                 Notion.</p>
             <div class="flex justify-end gap-2 mt-4">
                 <button id="cancelDelete"
@@ -1106,7 +1119,7 @@
                     <li>Cards will appear as new again</li>
                 </ul>
                 <div
-                    class="p-3 rounded-lg bg-accent-2-soft border border-[color:var(--accent-2)]/60 flex items-start gap-2">
+                    class="p-3 rounded-lg bg-accent-2-soft border border-[color:color-mix(in_srgb,var(--accent-2)_60%,transparent)] flex items-start gap-2">
                     <i data-lucide="cloud-upload" class="w-4 h-4 text-accent-2 mt-0.5 shrink-0"></i>
                     <p class="text-sub text-xs">These changes will be synced to Notion. This
                         action cannot be
@@ -1310,7 +1323,8 @@
                             </div>
                             <div class="w-full h-2 bg-surface-strong rounded-full overflow-hidden">
                                 <div id="syncProgress"
-                                    class="h-2 bg-[color:var(--accent)]/60 w-0 transition-all duration-500"></div>
+                                    class="h-2 bg-[color:color-mix(in_srgb,var(--accent)_60%,transparent)] w-0 transition-all duration-500">
+                                </div>
                             </div>
                         </div>
                     </details>
@@ -1754,7 +1768,7 @@ async function handleRequest(request, env) {
                         placeholder="0.212, 1.2931, ..."></textarea>
                     <div class="flex items-center justify-between gap-2 mt-2">
                         <button id="optimizeFsrsBtn"
-                            class="px-3 py-2 rounded-lg border border-weak text-main text-xs hover:bg-surface-muted ">
+                            class="px-3 py-2 rounded-lg bg-accent-soft text-accent text-xs font-medium border border-[color:color-mix(in_srgb,var(--accent)_55%,var(--card-border))] hover:bg-[color:color-mix(in_srgb,var(--accent)_35%,var(--surface))] hover:border-[color:color-mix(in_srgb,var(--accent)_80%,var(--card-border))] transition-colors">
                             Optimize FSRS weights
                         </button>
                         <span class="text-[10px] text-muted">Uses this deck’s review history</span>
@@ -1765,7 +1779,7 @@ async function handleRequest(request, env) {
             </div>
             <div class="flex justify-end gap-2 mt-4">
                 <button id="archiveDeckBtn"
-                    class="px-3 py-2 rounded-lg border border-weak text-main text-sm hidden">Archive
+                    class="px-3 py-2 rounded-lg bg-accent-soft text-accent text-sm border border-[color:color-mix(in_srgb,var(--accent)_55%,var(--card-border))] hover:bg-[color:color-mix(in_srgb,var(--accent)_35%,var(--surface))] hover:border-[color:color-mix(in_srgb,var(--accent)_80%,var(--card-border))] transition-colors hidden">Archive
                     deck</button>
                 <button id="saveDeckBtn"
                     class="px-4 py-2 rounded-lg bg-[color:var(--accent)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--accent-hover)] transition-all">Save</button>
@@ -2020,7 +2034,7 @@ async function handleRequest(request, env) {
         class="fixed inset-0 bg-[color:var(--overlay-bg)] backdrop-blur-sm hidden items-center justify-center p-4 z-[220]">
         <div class="card rounded-lg p-5 w-full max-w-sm shadow-soft">
             <div class="flex items-center gap-3 mb-3">
-                <div class="p-2 rounded-full bg-[color:var(--accent-2)]/20">
+                <div class="p-2 rounded-full bg-[color:color-mix(in_srgb,var(--accent-2)_20%,transparent)]">
                     <i data-lucide="alert-triangle" class="w-5 h-5 text-accent-2"></i>
                 </div>
                 <h3 class="modal-title font-display text-lg">Reset GhostInk?</h3>
