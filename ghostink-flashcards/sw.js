@@ -1,4 +1,4 @@
-const CACHE_VERSION = 14;
+const CACHE_VERSION = 15;
 const CACHE_NAME = `ghostink-cache-v${CACHE_VERSION}`;
 const CACHE_PREFIX = 'ghostink-cache-';
 
@@ -27,6 +27,8 @@ const LOCAL_ASSETS = [
   './js/storage.js',
   './js/api.js',
   './js/srs.js',
+  './js/fsrs-optimizer.js',
+  './js/fsrs-optimizer-worker.js',
   './js/notion-mapper.js',
   './js/ui/index.js',
   './js/ui/toast.js',
