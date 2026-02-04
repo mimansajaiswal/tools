@@ -11,6 +11,7 @@ import {
     fsrsW,
     DEFAULT_DESIRED_RETENTION,
     MAX_INTERVAL,
+    DAY_START_HOUR,
     ratingsMap,
     DEFAULT_LEECH_LAPSE_THRESHOLD,
     DEFAULT_AI_PROMPT,
@@ -49,10 +50,10 @@ import {
     normalizeRating,
     displayRating,
     detectCardType,
-    simulateFsrsReviewAt,
-    buildFsrsTrainingSet,
-    fsrsLogLoss
+    buildFsrsTrainingPayload
 } from './srs.js';
+
+import { runFsrsOptimization } from './fsrs-optimizer.js';
 
 import {
     NotionMapper,
@@ -318,6 +319,8 @@ export const App = {
         tagRegistry: new Map(),
         deckStats: new Map(),
         cardsVersion: 0,
+        fsrsTrainingCache: new Map(),
+        optimizing: { active: false, deckId: null, startedAt: null },
         studyDeckCache: null,
         dueIndex: new Map(),
         cardMeta: new Map(),
@@ -386,6 +389,12 @@ export const App = {
         queueBadgeTimer: null,
         queueBadgeSig: '',
         expandedClozeParents: new Set()
+    },
+    confirmResolve: null,
+    confirmDefaults: {
+        title: 'Confirm delete',
+        body: 'This removes it locally and syncs deletion to Notion.',
+        confirmLabel: 'Delete'
     },
     isAiModeSelected() {
         return el('#revisionMode')?.value === 'ai';
@@ -788,6 +797,10 @@ export const App = {
         });
     },
     startSession() {
+        if (this.state.optimizing?.active) {
+            toast('Optimization in progress — please wait');
+            return;
+        }
 
         // Default to all decks if none selected
         let deckIds = this.state.filters.studyDecks || [];
@@ -1039,7 +1052,7 @@ export const App = {
  </div>
  <div class="flex flex-col gap-3 items-center">
  <div class="flex flex-col items-center">
- <button id="restartAllCardsBtn" class="px-4 py-2 bg-[color:var(--accent)] text-[color:var(--badge-text)] rounded-lg text-sm hover:bg-[color:var(--accent)]/90 transition">
+ <button id="restartAllCardsBtn" class="px-4 py-2 bg-[color:var(--accent)] text-[color:var(--badge-text)] rounded-lg text-sm hover:bg-[color:color-mix(in_srgb,var(--accent)_90%,transparent)] transition">
  Restart
  </button>
  <label class="flex items-center gap-2 text-[11px] text-sub mt-2">
@@ -1601,10 +1614,24 @@ export const App = {
                     }
                 }
             }
+            this.updateActiveFiltersCount();
         };
         if (cardSelectionMode) {
             cardSelectionMode.onchange = toggleNoScheduleUI;
             toggleNoScheduleUI();
+        }
+        if (noScheduleChk) {
+            noScheduleChk.onchange = () => this.updateActiveFiltersCount();
+        }
+        const filtersBannerBtn = el('#studyFiltersBannerBtn');
+        if (filtersBannerBtn) {
+            filtersBannerBtn.onclick = () => {
+                this.setFiltersPanelOpen(true);
+                const content = el('#filtersContent');
+                if (content && content.scrollIntoView) {
+                    content.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            };
         }
         el('#revealBtn').onclick = () => this.reveal();
         el('#skipCard').onclick = () => this.nextCard();
@@ -1776,8 +1803,6 @@ export const App = {
         el('#filterAddedToday').onchange = (e) => { this.state.filters.addedToday = e.target.checked; this.renderCards(); this.updateActiveFiltersCount(); };
         // Tag filter handled via renderTagFilter()
         el('#resetFilters').onclick = () => this.resetFilters();
-        const resetMobile = el('#resetFiltersMobile');
-        if (resetMobile) resetMobile.onclick = () => this.resetFilters();
         const resetAll = el('#resetFiltersAll');
         if (resetAll) resetAll.onclick = () => this.resetFilters();
         const filterTagInput = el('#filterTagSearch');
@@ -1838,6 +1863,28 @@ export const App = {
                 if (filterFlagSwatches) this.updateFlagSwatchMulti(filterFlagSwatches, []);
                 this.renderCards();
                 this.updateActiveFiltersCount();
+            };
+        }
+        const filterDeckClear = el('#filterDeckClear');
+        if (filterDeckClear) {
+            filterDeckClear.onclick = () => {
+                this.state.filters.studyDecks = [];
+                this.state.studyNonDue = false;
+                const deckInput = el('#deckSearchInput');
+                if (deckInput) deckInput.value = '';
+                this.renderStudyDeckSelection();
+                this.renderStudy();
+                this.updateActiveFiltersCount();
+            };
+        }
+        const filterTagClear = el('#filterTagClear');
+        if (filterTagClear) {
+            filterTagClear.onclick = () => {
+                this.state.filters.tags = [];
+                this.renderTagFilter();
+                this.renderCards();
+                this.updateActiveFiltersCount();
+                this.persistUiStateDebounced();
             };
         }
         const unsuspendAllBtn = el('#unsuspendAllBtn');
@@ -2047,7 +2094,7 @@ export const App = {
         el('#toggleDangerZone').onclick = () => this.toggleDangerZone();
         el('#resetConfirmModal').addEventListener('click', (e) => { if (e.target === el('#resetConfirmModal')) this.closeModal('resetConfirmModal'); });
         this.updateSettingsButtons();
-        window.addEventListener('keydown', (e) => { if (e.key === 'Escape') { this.closeSettings(); this.closeModal('workerHelpModal'); this.closeDeckModal(); this.closeCardModal(); this.closeModal('confirmModal'); this.closeModal('aiSettingsRequiredModal'); this.closeModal('notesModal'); this.closeModal('addBlockModal'); this.closeModal('shortcutsModal'); } });
+        window.addEventListener('keydown', (e) => { if (e.key === 'Escape') { this.closeSettings(); this.closeModal('workerHelpModal'); this.closeDeckModal(); this.closeCardModal(); this.closeConfirmModal(false); this.closeModal('aiSettingsRequiredModal'); this.closeModal('notesModal'); this.closeModal('addBlockModal'); this.closeModal('shortcutsModal'); } });
         el('#settingsModal').addEventListener('click', (e) => { if (e.target === el('#settingsModal')) this.closeSettings(); });
         el('#workerHelpModal').addEventListener('click', (e) => { if (e.target === el('#workerHelpModal')) this.closeModal('workerHelpModal'); });
         el('#revisionMode').onchange = (e) => {
@@ -2106,9 +2153,9 @@ export const App = {
             this.toggleMicRecording();
         };
         if (fabSend) fabSend.onclick = () => { if (!this.state.aiLocked) this.submitToAI(); };
-        el('#confirmDelete').onclick = () => this.performDelete();
-        el('#cancelDelete').onclick = () => this.closeModal('confirmModal');
-        el('#confirmModal').addEventListener('click', (e) => { if (e.target === el('#confirmModal')) this.closeModal('confirmModal'); });
+        el('#confirmDelete').onclick = () => this.closeConfirmModal(true);
+        el('#cancelDelete').onclick = () => this.closeConfirmModal(false);
+        el('#confirmModal').addEventListener('click', (e) => { if (e.target === el('#confirmModal')) this.closeConfirmModal(false); });
         el('#deckModal').addEventListener('click', (e) => { if (e.target === el('#deckModal')) this.closeDeckModal(); });
         el('#cardModal').addEventListener('click', (e) => { if (e.target === el('#cardModal')) this.closeCardModal(); });
     },
@@ -2172,6 +2219,10 @@ export const App = {
     // Tab switching
     switchTab(tab, opts = {}) {
         const { silent = false, skipPersist = false } = opts || {};
+        if (this.state.optimizing?.active) {
+            if (!silent) toast('Optimization in progress — please wait');
+            return;
+        }
         // Block library access during active study session
         if (tab === 'library' && this.state.session) {
             if (!silent) toast('Please stop your study session first to access the library');
@@ -2186,17 +2237,46 @@ export const App = {
         this.state.activeTab = tab;
         if (!skipPersist) this.persistUiStateDebounced();
         if (tab === 'analytics') this.renderAnalytics();
+        if (tab === 'study') this.updateFiltersBanner();
         if (tabEl) createIconsInScope(tabEl);
     },
     // Toggle filters panel
-    toggleFiltersPanel() {
+    setFiltersPanelOpen(open) {
         const content = el('#filtersContent');
         const chevron = el('#filtersChevron');
         const text = el('#moreOptionsText');
+        if (!content) return;
+        const isHidden = content.classList.contains('hidden');
+        if (open && isHidden) {
+            content.classList.remove('hidden');
+            if (chevron) chevron.style.transform = 'rotate(180deg)';
+            if (text) text.textContent = 'Less options';
+        } else if (!open && !isHidden) {
+            content.classList.add('hidden');
+            if (chevron) chevron.style.transform = '';
+            if (text) text.textContent = 'More options';
+        }
+    },
+    toggleFiltersPanel() {
+        const content = el('#filtersContent');
         const isHidden = content && content.classList.contains('hidden');
-        if (content) content.classList.toggle('hidden');
-        if (chevron) chevron.style.transform = isHidden ? 'rotate(180deg)' : '';
-        if (text) text.textContent = isHidden ? 'Less options' : 'More options';
+        this.setFiltersPanelOpen(!!isHidden);
+    },
+    shouldKeepFiltersPanelOpen() {
+        const f = this.state.filters || {};
+        if (f.again || f.hard || f.addedToday) return true;
+        if (f.tags && f.tags.length > 0) return true;
+        if (f.marked) return true;
+        if (Array.isArray(f.flag) ? f.flag.length > 0 : !!f.flag) return true;
+        const mode = el('#cardSelectionMode')?.value || 'due';
+        if (mode !== 'due') return true;
+        return false;
+    },
+    updateFiltersBanner() {
+        const banner = el('#studyFiltersBanner');
+        if (!banner) return;
+        const active = this.shouldKeepFiltersPanelOpen();
+        banner.classList.toggle('hidden', !active);
     },
     // Update active filters count (for reset button visibility)
     updateActiveFiltersCount() {
@@ -2207,13 +2287,31 @@ export const App = {
         if (f.addedToday) count++;
         if (f.tags && f.tags.length > 0) count++;
         if (f.marked) count++;
-        if (Array.isArray(f.flag) ? f.flag.length > 0 : !!f.flag) count++;
+        const hasFlags = Array.isArray(f.flag) ? f.flag.length > 0 : !!f.flag;
+        if (hasFlags) count++;
         if (f.studyDecks && f.studyDecks.length > 0) count++;
         // Show reset button if any filters are active
         const resetBtn = el('#resetFilters');
         if (resetBtn) {
             resetBtn.classList.toggle('hidden', count === 0);
         }
+        const resetAll = el('#resetFiltersAll');
+        if (resetAll) {
+            resetAll.classList.toggle('hidden', count === 0);
+        }
+        const flagClear = el('#filterFlagClear');
+        if (flagClear) {
+            flagClear.classList.toggle('hidden', !hasFlags);
+        }
+        const deckClear = el('#filterDeckClear');
+        if (deckClear) {
+            deckClear.classList.toggle('hidden', !(f.studyDecks && f.studyDecks.length > 0));
+        }
+        const tagClear = el('#filterTagClear');
+        if (tagClear) {
+            tagClear.classList.toggle('hidden', !(f.tags && f.tags.length > 0));
+        }
+        this.updateFiltersBanner();
         this.persistUiStateDebounced();
     },
     persistFilterPrefs() {
@@ -2775,7 +2873,7 @@ export const App = {
  <div class="text-center py-4">
  <p class="text-sub text-sm mb-3">No cards are due for review right now.</p>
  <p class="text-muted text-xs mb-4">${nonDueCount} card${nonDueCount === 1 ? '' : 's'} available for extra practice.</p>
- <button id="studyNonDueBtn" class="px-4 py-2 bg-[color:var(--accent)] text-[color:var(--badge-text)] rounded-lg text-sm hover:bg-[color:var(--accent)]/90 transition">
+ <button id="studyNonDueBtn" class="px-4 py-2 bg-[color:var(--accent)] text-[color:var(--badge-text)] rounded-lg text-sm hover:bg-[color:color-mix(in_srgb,var(--accent)_90%,transparent)] transition">
  Practice non-due cards
  </button>
  </div>
@@ -2880,6 +2978,8 @@ export const App = {
 
         const allTags = Array.from(this.state.tagRegistry.keys()).sort((a, b) => a.localeCompare(b));
         const selected = new Set(this.state.filters.tags || []);
+        const clearBtn = el('#filterTagClear');
+        if (clearBtn) clearBtn.classList.toggle('hidden', selected.size === 0);
         const query = (input.value || '').toLowerCase();
         const options = allTags.filter(name => name.toLowerCase().includes(query));
 
@@ -3548,10 +3648,10 @@ export const App = {
 
                 const flagOrder = this.getFlagOrder().filter(f => f);
                 const tagHeaderAction = selectedTags.size > 0
-                    ? `<button type="button" class="analytics-filter-clear-btn rounded-md px-2 text-[10px] font-semibold bg-[color:var(--accent-2)]/10 text-[color:var(--accent-2)] hover:bg-[color:var(--accent-2)]/20" data-analytic-clear-tags="1">Clear</button>`
+                    ? `<button type="button" class="analytics-filter-clear-btn rounded-md px-2 text-[10px] font-semibold bg-[color:color-mix(in_srgb,var(--accent-2)_10%,transparent)] text-[color:var(--accent-2)] hover:bg-[color:color-mix(in_srgb,var(--accent-2)_20%,transparent)]" data-analytic-clear-tags="1">Clear</button>`
                     : '';
                 const flagHeaderAction = selectedFlags.size > 0
-                    ? `<button type="button" class="analytics-filter-clear-btn rounded-md px-2 text-[10px] font-semibold bg-[color:var(--accent-2)]/10 text-[color:var(--accent-2)] hover:bg-[color:var(--accent-2)]/20" data-analytic-clear-flags="1">Clear</button>`
+                    ? `<button type="button" class="analytics-filter-clear-btn rounded-md px-2 text-[10px] font-semibold bg-[color:color-mix(in_srgb,var(--accent-2)_10%,transparent)] text-[color:var(--accent-2)] hover:bg-[color:color-mix(in_srgb,var(--accent-2)_20%,transparent)]" data-analytic-clear-flags="1">Clear</button>`
                     : '';
                 filterMenu.innerHTML = `
  <div class="flex items-center justify-between px-3 py-2">
@@ -3587,7 +3687,7 @@ export const App = {
  <span>Include suspended</span>
  </label>
  <div class="h-px bg-[color:var(--card-border)] my-2"></div>
- <button type="button" class="analytics-menu-option w-full text-left px-3 py-2 text-sm rounded-md bg-[color:var(--accent)]/10 text-[color:var(--accent)] hover:bg-[color:var(--accent)]/20" data-analytic-clear="1">Clear filters</button>
+ <button type="button" class="analytics-menu-option w-full text-left px-3 py-2 text-sm rounded-md bg-[color:color-mix(in_srgb,var(--accent)_10%,transparent)] text-[color:var(--accent)] hover:bg-[color:color-mix(in_srgb,var(--accent)_20%,transparent)]" data-analytic-clear="1">Clear filters</button>
  `;
 
                 const flagRow = filterMenu.querySelector('#analyticsFlagSwatches');
@@ -4887,135 +4987,131 @@ export const App = {
         focusTrap.attach(modal);
     },
     async optimizeFsrsWeightsForDeck(deck) {
+        if (this.state.session) {
+            toast('Stop your study session before optimizing');
+            return;
+        }
+        if (this.state.optimizing?.active) {
+            toast('Optimization already in progress');
+            return;
+        }
+
         const cards = this.cardsForDeck(deck.id);
-        const trainingSet = buildFsrsTrainingSet(cards);
-        const totalEvents = trainingSet.reduce((acc, x) => acc + x.history.length, 0);
-        if (trainingSet.length < 10 || totalEvents < 50) {
-            toast('Not enough review history to optimize (need ~50+ reviews)');
+        const cache = this.state.fsrsTrainingCache.get(deck.id);
+        let payload = cache && cache.version === this.state.cardsVersion ? cache.payload : null;
+        if (!payload) {
+            payload = buildFsrsTrainingPayload(cards, { maxCards: 400 });
+            this.state.fsrsTrainingCache.set(deck.id, { version: this.state.cardsVersion, payload });
+        }
+
+        const totalEvents = payload.totalReviews || 0;
+        const cardCount = payload.cardCount || 0;
+        if (cardCount === 0 || totalEvents === 0) {
+            toast('No review history to optimize');
             return;
         }
-        if (!confirm(`Optimize FSRS weights for "${deck.name}"?\n\nThis uses your review history for this deck and can take ~10–60 seconds.`)) {
-            return;
-        }
+        const confirmed = await this.openConfirmModal({
+            title: `Optimize FSRS weights for "${deck.name}"?`,
+            body: 'This uses your review history for this deck and can take ~10–60 seconds.',
+            confirmLabel: 'Optimize'
+        });
+        if (!confirmed) return;
 
         const optimizeBtn = el('#optimizeFsrsBtn');
         if (optimizeBtn) optimizeBtn.disabled = true;
-        const startedOnline = navigator.onLine;
+        this.state.optimizing = { active: true, deckId: deck.id, startedAt: Date.now() };
 
-        // Cancellation flag
-        let cancelled = false;
+        const startedOnline = navigator.onLine;
+        const controller = new AbortController();
         const cancelOptimization = () => {
-            cancelled = true;
+            controller.abort();
             toast('Optimization cancelled');
         };
 
+        const beforeUnload = (e) => {
+            e.preventDefault();
+            e.returnValue = '';
+            return '';
+        };
+
+        const offlineHandler = () => {
+            if (startedOnline) {
+                controller.abort();
+                toast('Network disconnected — optimization cancelled');
+            }
+        };
+
+        window.addEventListener('beforeunload', beforeUnload);
+        if (startedOnline) window.addEventListener('offline', offlineHandler);
+
         try {
             const start = constrainWeights(Array.isArray(deck.srsConfig?.fsrs?.weights) && deck.srsConfig.fsrs.weights.length === 21 ? deck.srsConfig.fsrs.weights : fsrsW);
-            showLoading('Optimizing FSRS weights...', `Using ${trainingSet.length} cards (~${totalEvents} reviews)`, cancelOptimization);
-            setLoadingProgress(0, `0% • iter 0/220`);
+            showLoading('Optimizing FSRS weights...', `Using ${cardCount} cards (~${totalEvents} reviews)`, cancelOptimization);
+            setLoadingProgress(0, `0% • iter 0`);
             await new Promise(r => setTimeout(r, 0));
 
-            const alpha = 0.602;
-            const gamma = 0.101;
-            const a0 = 0.12;
-            const c0 = 0.06;
-            const iters = 220;
+            const formatEta = (ms) => {
+                if (!Number.isFinite(ms) || ms <= 0) return null;
+                const totalSec = Math.max(1, Math.round(ms / 1000));
+                const hrs = Math.floor(totalSec / 3600);
+                const mins = Math.floor((totalSec % 3600) / 60);
+                const secs = totalSec % 60;
+                if (hrs > 0) return `${hrs}h ${mins}m`;
+                if (mins > 0) return `${mins}m ${secs}s`;
+                return `${secs}s`;
+            };
 
-            // Convergence detection parameters
-            const CONVERGENCE_THRESHOLD = 0.0001;
-            const STAGNANT_ITERS_TO_CONVERGE = 15;
-
-            let w = start.slice();
-            let bestW = w.slice();
-            let bestLoss = fsrsLogLoss(trainingSet, bestW);
-            let prevBestLoss = bestLoss;
-            let stagnantCount = 0;
-
-            for (let k = 0; k < iters; k++) {
-                // Check for cancellation
-                if (cancelled) {
+            const progress = ({ iter, iters, bestLoss, converged, etaMs, mode, workerCount }) => {
+                const pct = iters ? ((iter / iters) * 100) : 0;
+                if (converged) {
+                    setLoadingProgress(100, `Converged at iter ${iter}`);
                     return;
                 }
-                if (startedOnline && !navigator.onLine) {
-                    cancelled = true;
-                    toast('Network disconnected — optimization cancelled');
-                    return;
-                }
+                const lossLabel = Number.isFinite(bestLoss) ? bestLoss.toFixed(4) : 'n/a';
+                const etaLabel = formatEta(etaMs);
+                const modeLabel = mode === 'worker'
+                    ? `MT x${workerCount || 1}`
+                    : 'ST';
+                const label = iters
+                    ? `${Math.round(pct)}% • iter ${iter}/${iters} • best logloss ${lossLabel}${etaLabel ? ` • ETA ${etaLabel}` : ''} • ${modeLabel}`
+                    : `Iter ${iter} • best logloss ${lossLabel}${etaLabel ? ` • ETA ${etaLabel}` : ''} • ${modeLabel}`;
+                setLoadingProgress(pct, label);
+            };
 
-                const ak = a0 / Math.pow(k + 1, alpha);
-                const ck = c0 / Math.pow(k + 1, gamma);
-                const delta = new Array(21);
-                const scale = new Array(21);
-                for (let i = 0; i < 21; i++) {
-                    delta[i] = Math.random() < 0.5 ? -1 : 1;
-                    scale[i] = Math.abs(w[i]) + 1;
+            const result = await runFsrsOptimization({
+                payload,
+                startWeights: start,
+                onProgress: progress,
+                signal: controller.signal,
+                options: {
+                    seedKey: `${deck.id}:${this.state.cardsVersion}`,
+                    workerCount: Math.max(1, Math.min(navigator?.hardwareConcurrency || 2, 4))
                 }
-                const wPlus = w.map((v, i) => v + ck * delta[i] * scale[i]);
-                const wMinus = w.map((v, i) => v - ck * delta[i] * scale[i]);
-                const lossPlus = fsrsLogLoss(trainingSet, wPlus);
-                const lossMinus = fsrsLogLoss(trainingSet, wMinus);
-                if (!Number.isFinite(lossPlus) || !Number.isFinite(lossMinus)) {
-                    // If we wandered into invalid space, reset toward best.
-                    w = bestW.slice();
-                    continue;
-                }
-                const gHat = new Array(21);
-                for (let i = 0; i < 21; i++) {
-                    const denom = 2 * ck * delta[i] * scale[i];
-                    gHat[i] = (lossPlus - lossMinus) / denom;
-                }
+            });
 
-                // Gradient step
-                w = constrainWeights(w.map((v, i) => v - ak * gHat[i]));
-                const curLoss = fsrsLogLoss(trainingSet, w);
-                if (curLoss < bestLoss) {
-                    bestLoss = curLoss;
-                    bestW = w.slice();
-                }
+            if (controller.signal.aborted) return;
 
-                // Convergence check: if best loss hasn't improved significantly for N iterations, stop early
-                if (Math.abs(bestLoss - prevBestLoss) < CONVERGENCE_THRESHOLD) {
-                    stagnantCount++;
-                    if (stagnantCount >= STAGNANT_ITERS_TO_CONVERGE) {
-                        showLoading('Optimizing FSRS weights...', `Converged early at iter ${k + 1}/${iters}`, cancelOptimization);
-                        setLoadingProgress(100, `Converged at iter ${k + 1}`);
-                        break;
-                    }
-                } else {
-                    stagnantCount = 0;
-                    prevBestLoss = bestLoss;
-                }
+            setLoadingProgress(100, `100% • iter ${result.iterations}/${result.iterations}`);
 
-                if (k % 10 === 0) {
-                    showLoading('Optimizing FSRS weights...', `Iter ${k + 1}/${iters} • best logloss ${bestLoss.toFixed(4)}`, cancelOptimization);
-                    setLoadingProgress(((k + 1) / iters) * 100, `${Math.round(((k + 1) / iters) * 100)}% • iter ${k + 1}/${iters}`);
-                    await new Promise(r => {
-                        if (typeof requestIdleCallback === 'function') {
-                            requestIdleCallback(r, { timeout: 50 });
-                        } else {
-                            setTimeout(r, 0);
-                        }
-                    });
-                }
-            }
-
-            // Final cancellation check
-            if (cancelled) {
-                return;
-            }
-
-            setLoadingProgress(100, `100% • iter ${iters}/${iters}`);
-
-            const rounded = bestW.map(n => +n.toFixed(4));
+            const rounded = result.bestWeights.map(n => +n.toFixed(4));
             // Update modal fields (user still presses Save to persist/sync).
             deck.srsConfig = parseSrsConfig(deck.srsConfig || null, deck.algorithm);
             deck.srsConfig.fsrs.weights = rounded;
             const paramsInput = el('#deckFsrsParams');
             if (paramsInput) paramsInput.value = rounded.join(', ');
-            toast(`Optimized FSRS weights loaded (best logloss ${bestLoss.toFixed(4)}). Press Save to apply.`);
+            const bestLossLabel = Number.isFinite(result.bestLoss) ? result.bestLoss.toFixed(4) : 'n/a';
+            toast(`Optimized FSRS weights loaded (best logloss ${bestLossLabel}). Press Save to apply.`);
+        } catch (err) {
+            if (err?.name !== 'AbortError') {
+                console.error('FSRS optimization failed', err);
+                toast('Optimization failed — see console for details');
+            }
         } finally {
             hideLoading();
             if (optimizeBtn) optimizeBtn.disabled = false;
+            this.state.optimizing = { active: false, deckId: null, startedAt: null };
+            window.removeEventListener('beforeunload', beforeUnload);
+            if (startedOnline) window.removeEventListener('offline', offlineHandler);
         }
     },
     editDeck(deckId) {
@@ -5434,7 +5530,16 @@ export const App = {
         const card = this.state.editingCard;
         if (!card) return;
         this.pendingDelete = { type: 'card', id: card.id, notionId: card.notionId };
-        this.openModal('confirmModal');
+        const confirmed = await this.openConfirmModal({
+            title: 'Confirm delete',
+            body: 'This removes it locally and syncs deletion to Notion.',
+            confirmLabel: 'Delete'
+        });
+        if (!confirmed) {
+            this.pendingDelete = null;
+            return;
+        }
+        await this.performDelete();
     },
     async syncNow() {
         if (!navigator.onLine) {
@@ -7436,7 +7541,7 @@ export const App = {
             .join('|');
     },
     getEffectiveNowMs(now = new Date()) {
-        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 4, 0, 0, 0);
+        const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), DAY_START_HOUR, 0, 0, 0);
         const effectiveNow = now < start ? start : now;
         return effectiveNow.getTime();
     },
@@ -8822,6 +8927,32 @@ export const App = {
         // Delegate to the UI module's closeModal function
         uiCloseModal(id);
     },
+    openConfirmModal({ title, body, confirmLabel } = {}) {
+        const titleEl = el('#confirmModalTitle');
+        const bodyEl = el('#confirmModalBody');
+        const confirmBtn = el('#confirmDelete');
+        if (titleEl) titleEl.textContent = title || this.confirmDefaults.title;
+        if (bodyEl) bodyEl.textContent = body || this.confirmDefaults.body;
+        if (confirmBtn) confirmBtn.textContent = confirmLabel || this.confirmDefaults.confirmLabel;
+
+        if (this.confirmResolve) {
+            // Resolve any previous pending confirm as canceled.
+            try { this.confirmResolve(false); } catch (_) { }
+        }
+
+        this.openModal('confirmModal');
+        return new Promise(resolve => {
+            this.confirmResolve = resolve;
+        });
+    },
+    closeConfirmModal(confirmed = false) {
+        this.closeModal('confirmModal');
+        if (this.confirmResolve) {
+            const resolve = this.confirmResolve;
+            this.confirmResolve = null;
+            resolve(!!confirmed);
+        }
+    },
     async copyWorkerCode() {
         const code = el('#workerCodeBlock').innerText;
         try {
@@ -10025,7 +10156,6 @@ export const App = {
         return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     },
     async performDelete() {
-        this.closeModal('confirmModal');
         const target = this.pendingDelete;
         if (!target) return;
         if (target.type === 'card') {
