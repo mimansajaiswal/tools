@@ -32,26 +32,26 @@ const Onboarding = {
         { id: 'hydration', name: 'Hydration', icon: 'glass-water', description: 'Monitor water intake', levels: ['Low', 'Normal', 'High'] }
     ],
 
-    defaultCareItems: [
-        { id: 'heartworm', name: 'Heartworm Prevention', type: 'Medication', icon: 'heart', description: 'Monthly heartworm medication', defaultDose: '1 tablet' },
-        { id: 'flea-tick', name: 'Flea & Tick Prevention', type: 'Medication', icon: 'bug', description: 'Flea and tick treatment', defaultDose: '1 application' },
-        { id: 'rabies', name: 'Rabies Vaccine', type: 'Vaccine', icon: 'shield', description: 'Required rabies vaccination' },
-        { id: 'dhpp', name: 'DHPP/FVRCP Vaccine', type: 'Vaccine', icon: 'shield-check', description: 'Core combination vaccine' },
-        { id: 'bordetella', name: 'Bordetella Vaccine', type: 'Vaccine', icon: 'shield-plus', description: 'Kennel cough prevention' },
-        { id: 'annual-checkup', name: 'Annual Checkup', type: 'Procedure', icon: 'clipboard-check', description: 'Yearly wellness exam' },
-        { id: 'dental-cleaning', name: 'Dental Cleaning', type: 'Procedure', icon: 'sparkles', description: 'Professional dental care' },
-        { id: 'bloodwork', name: 'Bloodwork', type: 'Procedure', icon: 'test-tube', description: 'Blood tests and panels' },
-        { id: 'nail-trim', name: 'Nail Trim', type: 'Grooming', icon: 'scissors', description: 'Regular nail maintenance' },
-        { id: 'bath', name: 'Bath', type: 'Grooming', icon: 'bath', description: 'Bathing and cleaning' },
-        { id: 'deworming', name: 'Deworming', type: 'Medication', icon: 'pill', description: 'Intestinal parasite prevention' },
-        { id: 'supplements', name: 'Supplements', type: 'Medication', icon: 'capsule', description: 'Vitamins and supplements' }
+    // Recurring event types (previously "Care Items" - now merged into event types)
+    recurringEventTypes: [
+        { id: 'heartworm', name: 'Heartworm Prevention', category: 'Medication', icon: 'heart', color: 'blue', description: 'Monthly heartworm medication', isRecurring: true, intervalValue: 1, intervalUnit: 'Months', defaultDose: '1 tablet' },
+        { id: 'flea-tick', name: 'Flea & Tick Prevention', category: 'Medication', icon: 'bug', color: 'green', description: 'Flea and tick treatment', isRecurring: true, intervalValue: 1, intervalUnit: 'Months', defaultDose: '1 application' },
+        { id: 'rabies', name: 'Rabies Vaccine', category: 'Vaccine', icon: 'shield', color: 'teal', description: 'Required rabies vaccination', isRecurring: true, intervalValue: 1, intervalUnit: 'Years' },
+        { id: 'dhpp', name: 'DHPP/FVRCP Vaccine', category: 'Vaccine', icon: 'shield-check', color: 'teal', description: 'Core combination vaccine', isRecurring: true, intervalValue: 1, intervalUnit: 'Years' },
+        { id: 'bordetella', name: 'Bordetella Vaccine', category: 'Vaccine', icon: 'shield-plus', color: 'teal', description: 'Kennel cough prevention', isRecurring: true, intervalValue: 1, intervalUnit: 'Years' },
+        { id: 'annual-checkup', name: 'Annual Checkup', category: 'Vet Visit', icon: 'clipboard-check', color: 'purple', description: 'Yearly wellness exam', isRecurring: true, intervalValue: 1, intervalUnit: 'Years' },
+        { id: 'dental-cleaning', name: 'Dental Cleaning', category: 'Vet Visit', icon: 'sparkles', color: 'purple', description: 'Professional dental care', isRecurring: true, intervalValue: 1, intervalUnit: 'Years' },
+        { id: 'bloodwork', name: 'Bloodwork', category: 'Vet Visit', icon: 'test-tube', color: 'purple', description: 'Blood tests and panels', isRecurring: true, intervalValue: 1, intervalUnit: 'Years' },
+        { id: 'nail-trim', name: 'Nail Trim', category: 'Grooming', icon: 'scissors', color: 'pink', description: 'Regular nail maintenance', isRecurring: true, intervalValue: 2, intervalUnit: 'Weeks' },
+        { id: 'bath', name: 'Bath', category: 'Grooming', icon: 'bath', color: 'pink', description: 'Bathing and cleaning', isRecurring: true, intervalValue: 1, intervalUnit: 'Months' },
+        { id: 'deworming', name: 'Deworming', category: 'Medication', icon: 'pill', color: 'blue', description: 'Intestinal parasite prevention', isRecurring: true, intervalValue: 3, intervalUnit: 'Months' }
     ],
 
     // Selected items storage
     selections: {
         eventTypes: [],
         scales: [],
-        careItems: []
+        recurringTypes: []
     },
 
     /**
@@ -68,7 +68,7 @@ const Onboarding = {
         // Pre-select recommended items
         Onboarding.selections.eventTypes = ['medication', 'symptom', 'vet-visit', 'walk', 'weight', 'vaccine'];
         Onboarding.selections.scales = ['symptom-severity', 'activity-level'];
-        Onboarding.selections.careItems = ['heartworm', 'flea-tick', 'rabies', 'annual-checkup'];
+        Onboarding.selections.recurringTypes = ['heartworm', 'flea-tick', 'rabies', 'annual-checkup'];
 
         Onboarding.updateUI();
     },
@@ -168,7 +168,7 @@ const Onboarding = {
     initMultiSelects: () => {
         Onboarding.populateDropdown('eventTypes', Onboarding.defaultEventTypes);
         Onboarding.populateDropdown('scales', Onboarding.defaultScales);
-        Onboarding.populateDropdown('careItems', Onboarding.defaultCareItems);
+        Onboarding.populateDropdown('recurringTypes', Onboarding.recurringEventTypes);
 
         // Close dropdowns when clicking outside
         document.addEventListener('click', Onboarding.handleOutsideClick);
@@ -237,6 +237,11 @@ const Onboarding = {
         if (!isOpen) {
             menu.classList.remove('hidden');
             trigger?.setAttribute('aria-expanded', 'true');
+
+            // Auto-scroll to make dropdown visible
+            setTimeout(() => {
+                dropdown.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 50);
         }
     },
 
@@ -274,7 +279,7 @@ const Onboarding = {
     toggleAll: (type, checked) => {
         const items = type === 'eventTypes' ? Onboarding.defaultEventTypes :
             type === 'scales' ? Onboarding.defaultScales :
-                Onboarding.defaultCareItems;
+                Onboarding.recurringEventTypes;
 
         if (checked) {
             Onboarding.selections[type] = items.map(i => i.id);
@@ -299,7 +304,7 @@ const Onboarding = {
     updateSelectAllState: (type) => {
         const items = type === 'eventTypes' ? Onboarding.defaultEventTypes :
             type === 'scales' ? Onboarding.defaultScales :
-                Onboarding.defaultCareItems;
+                Onboarding.recurringEventTypes;
 
         const dropdown = document.querySelector(`[data-multiselect="${type}"]`);
         const selectAllCheckbox = dropdown?.querySelector('.multiselect-all');
@@ -319,12 +324,14 @@ const Onboarding = {
         const count = Onboarding.selections[type].length;
 
         if (count === 0) {
-            label.innerHTML = `Select ${type === 'eventTypes' ? 'event types' : type}...`;
+            const labelText = type === 'eventTypes' ? 'event types' :
+                type === 'scales' ? 'scales' : 'recurring items';
+            label.innerHTML = `Select ${labelText}...`;
             label.className = 'multiselect-label text-sm text-earth-metal';
         } else {
             const items = type === 'eventTypes' ? Onboarding.defaultEventTypes :
                 type === 'scales' ? Onboarding.defaultScales :
-                    Onboarding.defaultCareItems;
+                    Onboarding.recurringEventTypes;
 
             const selectedNames = Onboarding.selections[type]
                 .map(id => items.find(i => i.id === id)?.name)
@@ -483,8 +490,18 @@ const Onboarding = {
         window.location.href = `https://notion-oauth-handler.mimansa-jaiswal.workers.dev/auth/login?from=${returnUrl}`;
     },
 
+    // Expected properties for each database type to help with matching
+    expectedProperties: {
+        'Pets': ['Name', 'Species', 'Breed'],
+        'Events': ['Title', 'Pet(s)', 'Event Type', 'Start Date'],
+        'Event Types': ['Name', 'Category', 'Tracking Mode'],
+        'Scales': ['Name', 'Value Type'],
+        'Scale Levels': ['Name', 'Scale', 'Order'],
+        'Contacts': ['Name', 'Role', 'Phone']
+    },
+
     /**
-     * Find and list Notion databases
+     * Find and list Notion databases with smart matching
      */
     findDatabases: async () => {
         const token = document.getElementById('onboardingNotionToken')?.value?.trim();
@@ -503,28 +520,53 @@ const Onboarding = {
 
             const dataSources = await PetTracker.API.listDatabases();
 
-            const dbOptions = dataSources.map(db => ({
-                id: db.id,
-                name: db.title?.[0]?.plain_text || db.name || 'Untitled'
-            }));
+            // Extract database info with properties
+            const dbOptions = dataSources.map(db => {
+                const propNames = Object.keys(db.properties || {});
+                return {
+                    id: db.id,
+                    name: db.title?.[0]?.plain_text || db.name || 'Untitled',
+                    properties: propNames
+                };
+            });
 
-            const required = ['Pets', 'Events', 'Event Types', 'Scales', 'Scale Levels', 'Care Items', 'Care Plans', 'Contacts'];
-            const mapping = {};
+            // Required databases (simplified - no Care Items/Plans)
+            const required = ['Pets', 'Events', 'Event Types', 'Scales', 'Scale Levels', 'Contacts'];
+
+            // Find matching databases for each type
+            const matchedDbs = {};
+            required.forEach(reqName => {
+                const expectedProps = Onboarding.expectedProperties[reqName] || [];
+                matchedDbs[reqName] = dbOptions.filter(db => {
+                    // Check if database has at least 2 expected properties
+                    const matchCount = expectedProps.filter(prop =>
+                        db.properties.some(p => p.toLowerCase() === prop.toLowerCase())
+                    ).length;
+                    return matchCount >= Math.min(2, expectedProps.length);
+                });
+            });
 
             let html = '<div class="space-y-2 mt-4">';
             html += '<p class="text-xs text-earth-metal mb-2">Map your databases:</p>';
 
             required.forEach(reqName => {
-                const selectedId = mapping[reqName] || '';
-                const options = dbOptions.map(db =>
-                    `<option value="${db.id}" ${db.id === selectedId ? 'selected' : ''}>${PetTracker.UI.escapeHtml(db.name)}</option>`
+                const matchingDbs = matchedDbs[reqName];
+                const autoSelect = matchingDbs.length === 1 ? matchingDbs[0].id : '';
+
+                // Only show matching databases in dropdown
+                const options = matchingDbs.map(db =>
+                    `<option value="${db.id}" ${db.id === autoSelect ? 'selected' : ''}>${PetTracker.UI.escapeHtml(db.name)}</option>`
                 ).join('');
+
+                const hasMatches = matchingDbs.length > 0;
+                const statusIcon = autoSelect ? '✓' : (hasMatches ? '' : '⚠');
+                const statusClass = autoSelect ? 'text-dull-purple' : (hasMatches ? '' : 'text-muted-pink');
 
                 html += `
                     <div class="grid grid-cols-3 gap-2 items-center">
-                        <label class="text-[10px] font-mono uppercase text-earth-metal text-right">${reqName}</label>
+                        <label class="text-[10px] font-mono uppercase text-earth-metal text-right ${statusClass}">${statusIcon} ${reqName}</label>
                         <select class="col-span-2 select-field text-xs py-1" data-source="${reqName}" onchange="Onboarding.checkDbMapping()">
-                            <option value="">-- Select --</option>
+                            <option value="">${hasMatches ? '-- Select --' : '-- No matches found --'}</option>
                             ${options}
                         </select>
                     </div>
@@ -570,8 +612,6 @@ const Onboarding = {
                 'Event Types': 'eventTypes',
                 'Scales': 'scales',
                 'Scale Levels': 'scaleLevels',
-                'Care Items': 'careItems',
-                'Care Plans': 'carePlans',
                 'Contacts': 'contacts'
             };
 
@@ -742,21 +782,29 @@ const Onboarding = {
             }
         }
 
-        // Create selected care items
-        for (const id of Onboarding.selections.careItems) {
-            const template = Onboarding.defaultCareItems.find(c => c.id === id);
+        // Create selected recurring event types (merged from care items)
+        for (const id of Onboarding.selections.recurringTypes) {
+            const template = Onboarding.recurringEventTypes.find(c => c.id === id);
             if (!template) continue;
 
             const existing = await PetTracker.DB.query(
-                PetTracker.STORES.CARE_ITEMS,
-                c => c.name === template.name
+                PetTracker.STORES.EVENT_TYPES,
+                e => e.name === template.name
             );
 
             if (existing.length === 0) {
-                const careItem = {
+                const eventType = {
                     id: PetTracker.generateId(),
                     name: template.name,
-                    type: template.type,
+                    category: template.category,
+                    trackingMode: 'Stamp',
+                    defaultIcon: template.icon,
+                    defaultColor: template.color,
+                    isRecurring: true,
+                    scheduleType: 'Fixed',
+                    intervalValue: template.intervalValue,
+                    intervalUnit: template.intervalUnit,
+                    anchorDate: PetTracker.UI.localDateYYYYMMDD(),
                     defaultDose: template.defaultDose || '',
                     active: true,
                     createdAt: new Date().toISOString(),
@@ -764,12 +812,12 @@ const Onboarding = {
                     synced: false
                 };
 
-                await PetTracker.DB.put(PetTracker.STORES.CARE_ITEMS, careItem);
+                await PetTracker.DB.put(PetTracker.STORES.EVENT_TYPES, eventType);
                 await PetTracker.SyncQueue.add({
                     type: 'create',
-                    store: 'careItems',
-                    recordId: careItem.id,
-                    data: careItem
+                    store: 'eventTypes',
+                    recordId: eventType.id,
+                    data: eventType
                 });
             }
         }
@@ -780,49 +828,64 @@ const Onboarding = {
     },
 
     /**
-     * Create sample events for the pet
+     * Create sample events for the pet - only for selected event types
      */
     createSampleEvents: async (petId) => {
         const eventTypes = await PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES);
-        const walkType = eventTypes.find(et => et.name === 'Walk');
-        const weightType = eventTypes.find(et => et.name === 'Weight');
-        const vetType = eventTypes.find(et => et.name === 'Vet Visit');
+        const selectedTypeNames = Onboarding.selections.eventTypes
+            .map(id => Onboarding.defaultEventTypes.find(t => t.id === id)?.name)
+            .filter(Boolean);
 
         const now = new Date();
         const sampleEvents = [];
 
-        if (walkType) {
-            sampleEvents.push({
+        // Sample event configs mapped by event type name
+        const sampleConfigs = {
+            'Walk': {
                 title: 'Morning walk',
-                petIds: [petId],
-                eventTypeId: walkType.id,
                 startDate: new Date(now - 2 * 60 * 60 * 1000).toISOString(),
                 status: 'Completed',
                 duration: 30,
                 notes: 'Great walk around the neighborhood!'
-            });
-        }
-
-        if (weightType) {
-            sampleEvents.push({
+            },
+            'Weight': {
                 title: 'Weight check',
-                petIds: [petId],
-                eventTypeId: weightType.id,
                 startDate: new Date(now - 24 * 60 * 60 * 1000).toISOString(),
                 status: 'Completed',
                 value: 25,
                 unit: 'lb'
-            });
-        }
-
-        if (vetType) {
-            sampleEvents.push({
+            },
+            'Vet Visit': {
                 title: 'Annual checkup',
-                petIds: [petId],
-                eventTypeId: vetType.id,
                 startDate: new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString(),
                 status: 'Completed',
                 notes: 'All vaccinations up to date. Healthy!'
+            },
+            'Medication Given': {
+                title: 'Morning medication',
+                startDate: new Date(now - 4 * 60 * 60 * 1000).toISOString(),
+                status: 'Completed',
+                notes: 'Gave daily medication'
+            },
+            'Feeding': {
+                title: 'Breakfast',
+                startDate: new Date(now - 6 * 60 * 60 * 1000).toISOString(),
+                status: 'Completed',
+                notes: '1 cup of kibble'
+            }
+        };
+
+        // Only create sample events for event types the user selected
+        for (const eventType of eventTypes) {
+            if (!selectedTypeNames.includes(eventType.name)) continue;
+
+            const config = sampleConfigs[eventType.name];
+            if (!config) continue;
+
+            sampleEvents.push({
+                ...config,
+                petIds: [petId],
+                eventTypeId: eventType.id
             });
         }
 

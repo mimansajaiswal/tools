@@ -353,7 +353,12 @@
                     <!-- OAuth Section -->
                     <div class="border border-oatmeal p-4 space-y-3">
                         <span class="font-mono text-xs uppercase text-earth-metal">Notion OAuth (Recommended)</span>
-                        <button onclick="App.startNotionOAuth()"
+                        <div id="notionConnectionStatus"
+                            class="hidden p-2 bg-dull-purple/10 border border-dull-purple text-sm text-charcoal">
+                            <i data-lucide="check-circle" class="w-4 h-4 inline mr-1 text-dull-purple"></i>
+                            <span id="notionConnectionStatusText">Connected via OAuth</span>
+                        </div>
+                        <button id="notionConnectBtn" onclick="App.startNotionOAuth()"
                             class="btn-primary w-full px-4 py-2 font-mono text-xs uppercase flex items-center justify-center gap-2">
                             <i data-lucide="zap" class="w-4 h-4"></i>Connect with Notion
                         </button>
@@ -407,7 +412,7 @@
                         </button>
                     </div>
 
-                    <div id="dataSourceMapping" class="space-y-3 hidden">
+                    <div id="dataSourceMapping" class="space-y-3">
                         <span class="font-mono text-xs uppercase text-earth-metal">Data Source Mapping</span>
                         <div class="grid grid-cols-2 gap-3">
                             <div>
@@ -423,16 +428,6 @@
                                 <label class="font-mono text-[10px] uppercase text-earth-metal block mb-1">Event
                                     Types</label>
                                 <select id="dsMapEventTypes" class="select-field text-sm"></select>
-                            </div>
-                            <div>
-                                <label class="font-mono text-[10px] uppercase text-earth-metal block mb-1">Care
-                                    Items</label>
-                                <select id="dsMapCareItems" class="select-field text-sm"></select>
-                            </div>
-                            <div>
-                                <label class="font-mono text-[10px] uppercase text-earth-metal block mb-1">Care
-                                    Plans</label>
-                                <select id="dsMapCarePlans" class="select-field text-sm"></select>
                             </div>
                             <div>
                                 <label
@@ -790,17 +785,18 @@
                                 and appetite</p>
                         </div>
 
-                        <!-- Care Items Multi-Select -->
+                        <!-- Recurring Items Multi-Select (Merged Care Items) -->
                         <div>
                             <label class="font-mono text-xs uppercase text-earth-metal block mb-2">
-                                <i data-lucide="heart-handshake" class="w-3 h-3 inline mr-1"></i>Care Items
+                                <i data-lucide="repeat" class="w-3 h-3 inline mr-1"></i>Recurring Items
                             </label>
-                            <div id="onboardingCareItemsDropdown" class="multiselect-dropdown"
-                                data-multiselect="careItems">
+                            <div id="onboardingRecurringTypesDropdown" class="multiselect-dropdown"
+                                data-multiselect="recurringTypes">
                                 <button type="button"
                                     class="multiselect-trigger input-field flex items-center justify-between"
-                                    onclick="Onboarding.toggleDropdown('careItems')">
-                                    <span class="multiselect-label text-sm text-earth-metal">Select care items...</span>
+                                    onclick="Onboarding.toggleDropdown('recurringTypes')">
+                                    <span class="multiselect-label text-sm text-earth-metal">Select recurring
+                                        items...</span>
                                     <i data-lucide="chevron-down"
                                         class="w-4 h-4 text-earth-metal transition-transform"></i>
                                 </button>
@@ -810,15 +806,15 @@
                                         <label
                                             class="flex items-center gap-2 cursor-pointer text-xs text-dull-purple font-medium">
                                             <input type="checkbox" class="multiselect-all"
-                                                onchange="Onboarding.toggleAll('careItems', this.checked)">
+                                                onchange="Onboarding.toggleAll('recurringTypes', this.checked)">
                                             Select All
                                         </label>
                                     </div>
                                     <div class="multiselect-options p-1"></div>
                                 </div>
                             </div>
-                            <p class="text-[10px] text-earth-metal mt-1">Medications, vaccines, and procedures for your
-                                pet</p>
+                            <p class="text-[10px] text-earth-metal mt-1">Scheduled medications, vaccines, and grooming
+                                with automatic reminders</p>
                         </div>
                     </div>
                 </div>

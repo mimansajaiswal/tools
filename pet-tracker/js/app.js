@@ -589,6 +589,25 @@ const App = {
         const notionToken = document.getElementById('settingsNotionToken');
         if (notionToken) notionToken.value = settings.notionToken || '';
 
+        // Show OAuth connection status
+        const connectionStatus = document.getElementById('notionConnectionStatus');
+        const connectionText = document.getElementById('notionConnectionStatusText');
+        const connectBtn = document.getElementById('notionConnectBtn');
+
+        if (connectionStatus && connectionText) {
+            if (settings.notionOAuthData || settings.authMode === 'oauth') {
+                connectionStatus.classList.remove('hidden');
+                connectionText.textContent = 'Connected via OAuth';
+                if (connectBtn) connectBtn.textContent = 'Reconnect with Notion';
+            } else if (settings.notionToken) {
+                connectionStatus.classList.remove('hidden');
+                connectionText.textContent = 'Connected via Integration Token';
+                connectionStatus.className = 'p-2 bg-oatmeal/50 border border-oatmeal text-sm text-charcoal';
+            } else {
+                connectionStatus.classList.add('hidden');
+            }
+        }
+
         // Populate AI tab
         const aiProvider = document.getElementById('settingsAiProvider');
         if (aiProvider) aiProvider.value = settings.aiProvider || 'openai';
@@ -620,15 +639,39 @@ const App = {
 
         App.updateGcalUI();
 
-        // Show data source mappings if they exist
+        // Show data source mappings and populate with saved values
         const hasDataSources = settings.dataSources && Object.values(settings.dataSources).some(v => v);
-        const mappingDiv = document.getElementById('dataSourceMapping');
-        if (mappingDiv && hasDataSources) {
-            mappingDiv.classList.remove('hidden');
-            // Populate the dropdowns with current values (user needs to scan to get options)
+        if (hasDataSources) {
+            // Populate the dropdowns with current values as placeholder options
+            const storeMap = {
+                'Pets': 'pets',
+                'Events': 'events',
+                'EventTypes': 'eventTypes',
+                'Contacts': 'contacts',
+                'Scales': 'scales',
+                'ScaleLevels': 'scaleLevels'
+            };
+
+            Object.entries(storeMap).forEach(([key, store]) => {
+                const el = document.getElementById(`dsMap${key}`);
+                const savedId = settings.dataSources[store];
+                if (el && savedId) {
+                    // Add the saved value as an option if dropdown is empty
+                    if (el.options.length === 0 || !Array.from(el.options).some(o => o.value === savedId)) {
+                        const opt = document.createElement('option');
+                        opt.value = savedId;
+                        opt.text = `(Saved: ${savedId.slice(0, 8)}...)`;
+                        opt.selected = true;
+                        el.appendChild(opt);
+                    } else {
+                        el.value = savedId;
+                    }
+                }
+            });
         }
 
         PetTracker.UI.openModal('settingsModal');
+        if (window.lucide) lucide.createIcons();
     },
 
     /**
@@ -982,9 +1025,9 @@ const App = {
      * Save settings from settings modal
      */
     saveSettings: () => {
-        // Collect data source mappings
+        // Collect data source mappings (6 databases after simplification)
         const dataSources = {};
-        ['Pets', 'Events', 'EventTypes', 'CareItems', 'CarePlans', 'Contacts', 'Scales', 'ScaleLevels'].forEach(key => {
+        ['Pets', 'Events', 'EventTypes', 'Contacts', 'Scales', 'ScaleLevels'].forEach(key => {
             const el = document.getElementById(`dsMap${key}`);
             if (el?.value) {
                 const storeKey = key.charAt(0).toLowerCase() + key.slice(1);
@@ -1080,7 +1123,7 @@ const App = {
                 const optionsHtml = '<option value="">Select...</option>' +
                     dbOptions.map(db => `<option value="${db.id}">${PetTracker.UI.escapeHtml(db.name)}</option>`).join('');
 
-                ['Pets', 'Events', 'EventTypes', 'CareItems', 'CarePlans', 'Contacts', 'Scales', 'ScaleLevels'].forEach(key => {
+                ['Pets', 'Events', 'EventTypes', 'Contacts', 'Scales', 'ScaleLevels'].forEach(key => {
                     const el = document.getElementById(`dsMap${key}`);
                     if (el) {
                         el.innerHTML = optionsHtml;

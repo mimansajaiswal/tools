@@ -128,12 +128,6 @@ const Setup = {
             case 'scales':
                 await Setup.renderScales(container);
                 break;
-            case 'careItems':
-                await Setup.renderCareItems(container);
-                break;
-            case 'carePlans':
-                await Setup.renderCarePlans(container);
-                break;
         }
 
         if (window.lucide) lucide.createIcons();
