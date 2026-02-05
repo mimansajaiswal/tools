@@ -7,37 +7,81 @@ const Setup = {
     currentTab: 'eventTypes',
     editingId: null,
 
-    // Common Lucide icons for pet tracking (subset for icon picker)
+    // Common Lucide icons for pet tracking (expanded set)
     availableIcons: [
         // Health & Medical
         'pill', 'syringe', 'stethoscope', 'thermometer', 'heart', 'heart-pulse', 'activity',
-        'bandage', 'cross', 'plus-circle', 'alert-circle', 'alert-triangle',
-        // Symptoms
-        'droplet', 'droplets', 'wind', 'cloud', 'flame', 'snowflake', 'zap',
-        // Body & Wellness  
-        'eye', 'ear', 'hand', 'bone', 'brain', 'lungs',
-        // Activities
-        'footprints', 'paw-print', 'dog', 'cat', 'bird', 'fish', 'rabbit',
-        'dumbbell', 'timer', 'clock', 'sun', 'moon', 'sunrise', 'sunset',
+        'bandage', 'cross', 'plus-circle', 'alert-circle', 'alert-triangle', 'circle-alert',
+        'hospital', 'ambulance', 'baby', 'accessibility', 'heart-off', 'heart-handshake',
+        // Symptoms & Body
+        'droplet', 'droplets', 'wind', 'cloud', 'flame', 'snowflake', 'zap', 'tornado',
+        'eye', 'eye-off', 'ear', 'ear-off', 'hand', 'bone', 'brain', 'scan', 'skull',
+        'waypoints', 'spline', 'orbit',
+        // Animals & Pets
+        'paw-print', 'dog', 'cat', 'bird', 'fish', 'rabbit', 'turtle', 'rat', 'squirrel',
+        'bug', 'snail', 'worm', 'shell', 'feather', 'egg',
+        // Activities & Exercise
+        'footprints', 'dumbbell', 'timer', 'clock', 'alarm-clock', 'hourglass',
+        'sun', 'moon', 'sunrise', 'sunset', 'cloud-sun', 'cloud-moon',
+        'mountain', 'trees', 'tree-pine', 'tent', 'compass', 'route', 'map',
+        'bike', 'waves', 'sailboat', 'anchor',
         // Food & Nutrition
-        'utensils', 'cookie', 'apple', 'carrot', 'beef', 'egg', 'milk', 'cup-soda',
-        'glass-water', 'coffee',
+        'utensils', 'cookie', 'apple', 'carrot', 'beef', 'milk', 'cup-soda',
+        'glass-water', 'coffee', 'pizza', 'salad', 'soup', 'sandwich', 'popcorn',
+        'cherry', 'grape', 'citrus', 'banana', 'cake', 'candy', 'ice-cream-cone',
+        'wheat', 'croissant', 'drumstick', 'fish-symbol',
         // Grooming & Care
         'scissors', 'sparkles', 'spray-can', 'bath', 'shower-head', 'brush',
+        'shirt', 'glasses', 'watch', 'crown', 'gem', 'palette', 'paintbrush',
+        'eraser', 'pipette', 'hand-metal',
         // Emotions & Behavior
-        'smile', 'frown', 'meh', 'angry', 'laugh', 'heart-crack', 'heart-handshake',
+        'smile', 'frown', 'meh', 'angry', 'laugh', 'heart-crack', 'annoyed',
+        'circle-user', 'ghost', 'skull', 'party-popper',
         // Tracking & Measurement
         'scale', 'ruler', 'gauge', 'chart-line', 'chart-bar', 'trending-up', 'trending-down',
-        // General
-        'calendar', 'calendar-check', 'clipboard', 'clipboard-check', 'file-text', 'notebook',
-        'camera', 'image', 'video', 'mic', 'phone', 'mail',
-        'home', 'map-pin', 'navigation', 'car', 'plane',
-        'shield', 'shield-check', 'shield-plus', 'lock', 'key',
-        'star', 'award', 'trophy', 'medal', 'crown', 'gift',
-        'check', 'check-circle', 'x', 'x-circle', 'info', 'help-circle',
-        'refresh-cw', 'repeat', 'undo', 'redo',
-        'test-tube', 'microscope', 'dna', 'bug', 'leaf', 'flower',
-        'gamepad-2', 'puzzle', 'toy-brick', 'blocks'
+        'target', 'crosshair', 'radar', 'signal', 'bar-chart', 'pie-chart', 'line-chart',
+        // Scheduling & Time
+        'calendar', 'calendar-check', 'calendar-days', 'calendar-clock', 'calendar-plus',
+        'calendar-x', 'calendar-heart', 'calendar-range', 'clock-1', 'clock-12',
+        'repeat', 'repeat-1', 'repeat-2', 'refresh-cw', 'refresh-ccw', 'rotate-cw',
+        // Documents & Notes
+        'clipboard', 'clipboard-check', 'clipboard-list', 'clipboard-plus',
+        'file-text', 'file-check', 'file-heart', 'file-warning',
+        'notebook', 'book', 'book-open', 'bookmark', 'tag', 'tags',
+        // Media & Communication
+        'camera', 'image', 'video', 'mic', 'phone', 'mail', 'message-circle',
+        'bell', 'bell-ring', 'bell-off', 'megaphone', 'radio', 'tv', 'monitor',
+        // Location & Travel
+        'home', 'map-pin', 'map-pinned', 'navigation', 'car', 'plane', 'train',
+        'bus', 'truck', 'building', 'building-2', 'hotel', 'store', 'warehouse',
+        'globe', 'globe-2', 'earth',
+        // Safety & Security
+        'shield', 'shield-check', 'shield-plus', 'shield-alert', 'shield-off',
+        'lock', 'unlock', 'key', 'key-round', 'fingerprint', 'scan-face',
+        // Achievement & Rewards
+        'star', 'award', 'trophy', 'medal', 'crown', 'gift', 'badge', 'badge-check',
+        'thumbs-up', 'thumbs-down', 'hand-heart', 'sparkle',
+        // Status & Actions
+        'check', 'check-circle', 'check-check', 'circle-check', 'circle-x',
+        'x', 'x-circle', 'info', 'help-circle', 'circle-help', 'circle-dot',
+        'circle-pause', 'circle-play', 'circle-stop',
+        'undo', 'redo', 'arrow-up', 'arrow-down', 'arrow-left', 'arrow-right',
+        // Science & Lab
+        'test-tube', 'test-tubes', 'microscope', 'dna', 'atom', 'flask-conical',
+        'beaker', 'leaf', 'flower', 'flower-2', 'clover', 'sprout',
+        // Toys & Play
+        'gamepad-2', 'puzzle', 'toy-brick', 'blocks', 'dice-1', 'dice-5',
+        'volleyball',
+        // Household
+        'bed', 'lamp', 'sofa', 'armchair', 'door-open', 'door-closed',
+        'fence', 'trash', 'trash-2', 'recycle', 'box', 'package',
+        // Weather
+        'cloud-rain', 'cloud-snow', 'cloud-lightning', 'rainbow', 'umbrella',
+        'thermometer-sun', 'thermometer-snowflake',
+        // Misc
+        'circle', 'square', 'triangle', 'hexagon', 'octagon', 'pentagon',
+        'hash', 'at-sign', 'asterisk', 'infinity', 'percent', 'dollar-sign',
+        'lightbulb', 'lamp-desk', 'flashlight', 'wand', 'wand-2'
     ],
 
     // Color options
@@ -137,6 +181,9 @@ const Setup = {
 
     renderEventTypes: async (container) => {
         const eventTypes = await PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES);
+        const scales = await PetTracker.DB.getAll(PetTracker.STORES.SCALES);
+        const scalesById = Object.fromEntries(scales.map(s => [s.id, s]));
+
         eventTypes.sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name));
 
         // Group by category
@@ -180,6 +227,9 @@ const Setup = {
 
                 for (const et of grouped[category]) {
                     const colorObj = Setup.availableColors.find(c => c.value === et.defaultColor) || { hex: '#6b6357' };
+                    const scaleName = et.defaultScaleId && scalesById[et.defaultScaleId] ? scalesById[et.defaultScaleId].name : null;
+                    const severityText = et.usesSeverity ? (scaleName ? `Uses ${scaleName}` : 'Uses Severity (no scale set)') : '';
+
                     html += `
                         <div class="flex items-center gap-3 p-3 border border-oatmeal hover:border-dull-purple transition-fast cursor-pointer" onclick="Setup.showEventTypeModal('${et.id}')">
                             <div class="w-10 h-10 flex items-center justify-center" style="background: ${colorObj.hex}20; color: ${colorObj.hex}">
@@ -187,7 +237,7 @@ const Setup = {
                             </div>
                             <div class="flex-1 min-w-0">
                                 <p class="text-sm text-charcoal font-medium truncate">${PetTracker.UI.escapeHtml(et.name)}</p>
-                                <p class="text-xs text-earth-metal">${et.trackingMode || 'Stamp'}${et.usesSeverity ? ' • Uses Severity' : ''}</p>
+                                <p class="text-xs text-earth-metal">${et.trackingMode || 'Stamp'}${severityText ? ' • ' + severityText : ''}</p>
                             </div>
                             <button onclick="event.stopPropagation(); Setup.deleteEventType('${et.id}')" class="p-2 text-earth-metal hover:text-muted-pink">
                                 <i data-lucide="trash-2" class="w-4 h-4"></i>
@@ -212,7 +262,18 @@ const Setup = {
             defaultColor: 'purple',
             usesSeverity: false,
             allowAttachments: false,
-            defaultValueKind: null
+            defaultValueKind: null,
+            isRecurring: false,
+            scheduleType: 'Fixed',
+            intervalValue: 1,
+            intervalUnit: 'Months',
+            anchorDate: PetTracker.UI.localDateYYYYMMDD(),
+            endDate: '',
+            dueTime: '',
+            defaultDose: '',
+            windowBefore: 0,
+            windowAfter: 0,
+            relatedPetIds: []
         };
 
         if (id) {
@@ -223,13 +284,18 @@ const Setup = {
         const modal = document.getElementById('eventTypeModal');
         if (!modal) return;
 
-        // Populate form
+        // Populate form - basic fields
         document.getElementById('eventTypeName').value = data.name;
         document.getElementById('eventTypeCategory').value = data.category;
+        Setup.initCategoryCombobox(data.category);
         document.getElementById('eventTypeTrackingMode').value = data.trackingMode;
         document.getElementById('eventTypeUsesSeverity').checked = data.usesSeverity;
         document.getElementById('eventTypeAllowAttachments').checked = data.allowAttachments;
         document.getElementById('eventTypeValueKind').value = data.defaultValueKind || '';
+
+        // Populate and show scale selector
+        await Setup.populateScaleDropdown(data.defaultScaleId || null);
+        Setup.toggleScaleSelector();
 
         // Set icon and color
         Setup.selectedIcon = data.defaultIcon || 'circle';
@@ -237,17 +303,99 @@ const Setup = {
         Setup.renderIconPicker('eventTypeIconPicker', Setup.selectedIcon);
         Setup.renderColorPicker('eventTypeColorPicker', Setup.selectedColor);
 
+        // Populate recurring fields
+        document.getElementById('eventTypeIsRecurring').checked = data.isRecurring || false;
+        document.getElementById('eventTypeScheduleType').value = data.scheduleType || 'Fixed';
+        document.getElementById('eventTypeIntervalValue').value = data.intervalValue || 1;
+        document.getElementById('eventTypeIntervalUnit').value = data.intervalUnit || 'Months';
+        document.getElementById('eventTypeAnchorDate').value = data.anchorDate || PetTracker.UI.localDateYYYYMMDD();
+        document.getElementById('eventTypeEndDate').value = data.endDate || '';
+        document.getElementById('eventTypeDueTime').value = data.dueTime || '';
+        document.getElementById('eventTypeDefaultDose').value = data.defaultDose || '';
+        document.getElementById('eventTypeWindowBefore').value = data.windowBefore || 0;
+        document.getElementById('eventTypeWindowAfter').value = data.windowAfter || 0;
+
+        // Toggle recurring fields visibility
+        Setup.toggleRecurringFields();
+
+        // Populate pet checkboxes
+        await Setup.populatePetCheckboxes(data.relatedPetIds || []);
+
         // Update modal title
         document.getElementById('eventTypeModalTitle').textContent = id ? 'Edit Event Type' : 'Add Event Type';
 
         PetTracker.UI.openModal('eventTypeModal');
     },
 
+    toggleRecurringFields: () => {
+        const isRecurring = document.getElementById('eventTypeIsRecurring').checked;
+        const fields = document.getElementById('eventTypeRecurringFields');
+        if (fields) {
+            fields.classList.toggle('hidden', !isRecurring);
+        }
+        if (window.lucide) lucide.createIcons();
+    },
+
+    toggleScaleSelector: () => {
+        const usesSeverity = document.getElementById('eventTypeUsesSeverity').checked;
+        const container = document.getElementById('eventTypeScaleSelector');
+        if (container) {
+            container.classList.toggle('hidden', !usesSeverity);
+        }
+    },
+
+    populateScaleDropdown: async (selectedScaleId = null) => {
+        const select = document.getElementById('eventTypeDefaultScale');
+        if (!select) return;
+
+        const scales = await PetTracker.DB.getAll(PetTracker.STORES.SCALES);
+
+        let html = '<option value="">-- Select Scale --</option>';
+        for (const scale of scales) {
+            const selected = scale.id === selectedScaleId ? 'selected' : '';
+            html += `<option value="${scale.id}" ${selected}>${PetTracker.UI.escapeHtml(scale.name)}</option>`;
+        }
+
+        select.innerHTML = html;
+    },
+
+    toggleScaleValueTypeHelp: () => {
+        const valueType = document.getElementById('scaleValueType').value;
+        const labelsHelp = document.getElementById('scaleLabelsHelp');
+        const numericHelp = document.getElementById('scaleNumericHelp');
+
+        if (labelsHelp && numericHelp) {
+            labelsHelp.classList.toggle('hidden', valueType !== 'Labels');
+            numericHelp.classList.toggle('hidden', valueType !== 'Numeric');
+        }
+    },
+
+    populatePetCheckboxes: async (selectedPetIds = []) => {
+        const container = document.getElementById('eventTypePetCheckboxes');
+        if (!container) return;
+
+        const pets = await PetTracker.DB.getAll(PetTracker.STORES.PETS);
+
+        if (pets.length === 0) {
+            container.innerHTML = '<p class="text-xs text-earth-metal">No pets added yet</p>';
+            return;
+        }
+
+        container.innerHTML = pets.map(p => `
+            <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" name="eventTypePets" value="${p.id}" 
+                    ${selectedPetIds.includes(p.id) ? 'checked' : ''} class="w-4 h-4">
+                <span class="text-sm">${PetTracker.UI.escapeHtml(p.name)}</span>
+            </label>
+        `).join('');
+    },
+
     saveEventType: async () => {
         const name = document.getElementById('eventTypeName').value.trim();
-        const category = document.getElementById('eventTypeCategory').value;
+        const category = document.getElementById('eventTypeCategory').value.trim() || 'Other';
         const trackingMode = document.getElementById('eventTypeTrackingMode').value;
         const usesSeverity = document.getElementById('eventTypeUsesSeverity').checked;
+        const defaultScaleId = usesSeverity ? (document.getElementById('eventTypeDefaultScale').value || null) : null;
         const allowAttachments = document.getElementById('eventTypeAllowAttachments').checked;
         const defaultValueKind = document.getElementById('eventTypeValueKind').value || null;
 
@@ -265,6 +413,7 @@ const Setup = {
             defaultIcon: Setup.selectedIcon || 'circle',
             defaultColor: Setup.selectedColor || 'purple',
             usesSeverity,
+            defaultScaleId,
             allowAttachments,
             defaultValueKind,
             updatedAt: now,
@@ -308,6 +457,99 @@ const Setup = {
 
         App.state.eventTypes = await PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES);
         Setup.renderTabContent();
+    },
+
+    // ============ CATEGORY COMBOBOX ============
+
+    initCategoryCombobox: (initialValue = '') => {
+        const input = document.getElementById('eventTypeCategory');
+        const dropdown = document.getElementById('eventTypeCategoryDropdown');
+        if (!input || !dropdown) return;
+
+        input.value = initialValue;
+
+        const showDropdown = () => {
+            Setup.renderCategoryOptions(input.value);
+            dropdown.classList.add('open');
+        };
+
+        const hideDropdown = () => {
+            dropdown.classList.remove('open');
+        };
+
+        input.addEventListener('focus', showDropdown);
+        input.addEventListener('input', () => Setup.renderCategoryOptions(input.value));
+
+        input.addEventListener('blur', (e) => {
+            setTimeout(() => hideDropdown(), 150);
+        });
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                hideDropdown();
+                input.blur();
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                const highlighted = dropdown.querySelector('.highlighted');
+                if (highlighted) highlighted.click();
+            } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                const options = dropdown.querySelectorAll('.combobox-option');
+                if (options.length === 0) return;
+
+                const current = dropdown.querySelector('.highlighted');
+                let idx = Array.from(options).indexOf(current);
+
+                if (e.key === 'ArrowDown') {
+                    idx = idx < options.length - 1 ? idx + 1 : 0;
+                } else {
+                    idx = idx > 0 ? idx - 1 : options.length - 1;
+                }
+
+                options.forEach(o => o.classList.remove('highlighted'));
+                options[idx].classList.add('highlighted');
+                options[idx].scrollIntoView({ block: 'nearest' });
+            }
+        });
+
+        Setup.renderCategoryOptions(initialValue);
+    },
+
+    renderCategoryOptions: (filter = '') => {
+        const dropdown = document.getElementById('eventTypeCategoryDropdown');
+        if (!dropdown) return;
+
+        const filterLower = filter.toLowerCase().trim();
+        const filtered = Setup.eventCategories.filter(c =>
+            c.toLowerCase().includes(filterLower)
+        );
+
+        let html = '';
+
+        filtered.forEach((cat, idx) => {
+            html += `<div class="combobox-option${idx === 0 ? ' highlighted' : ''}" data-value="${cat}">${cat}</div>`;
+        });
+
+        const exactMatch = Setup.eventCategories.some(c => c.toLowerCase() === filterLower);
+        if (filterLower && !exactMatch) {
+            html += `<div class="combobox-option add-new" data-value="${filter.trim()}" data-add="true">Add "${filter.trim()}"</div>`;
+        }
+
+        dropdown.innerHTML = html;
+
+        dropdown.querySelectorAll('.combobox-option').forEach(opt => {
+            opt.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                const value = opt.dataset.value;
+                document.getElementById('eventTypeCategory').value = value;
+
+                if (opt.dataset.add === 'true' && !Setup.eventCategories.includes(value)) {
+                    Setup.eventCategories.push(value);
+                }
+
+                dropdown.classList.remove('open');
+            });
+        });
     },
 
     // ============ SCALES ============

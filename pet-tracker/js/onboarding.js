@@ -7,16 +7,16 @@ const Onboarding = {
     currentStep: 1,
     totalSteps: 5,
 
-    // Default options with icons for selection
+    // Default event types for ad-hoc logging (not scheduled/recurring)
     defaultEventTypes: [
-        { id: 'medication', name: 'Medication Given', category: 'Medication', icon: 'pill', color: 'blue', description: 'Track when medications are administered' },
+        { id: 'medication', name: 'Medication Given', category: 'Medication', icon: 'pill', color: 'blue', description: 'Log when any medication is given' },
         { id: 'symptom', name: 'Symptom', category: 'Symptom', icon: 'alert-circle', color: 'red', description: 'Log symptoms and health concerns' },
-        { id: 'vet-visit', name: 'Vet Visit', category: 'Vet Visit', icon: 'stethoscope', color: 'purple', description: 'Record veterinary appointments' },
+        { id: 'vet-visit', name: 'Vet Visit', category: 'Vet Visit', icon: 'stethoscope', color: 'purple', description: 'Log any vet appointment (ad-hoc)' },
         { id: 'walk', name: 'Walk', category: 'Activity', icon: 'footprints', color: 'green', description: 'Track daily walks and exercise' },
-        { id: 'weight', name: 'Weight', category: 'Weight', icon: 'scale', color: 'orange', description: 'Monitor weight changes' },
-        { id: 'vaccine', name: 'Vaccine', category: 'Vaccine', icon: 'syringe', color: 'teal', description: 'Track vaccinations' },
+        { id: 'weight', name: 'Weight', category: 'Weight', icon: 'scale', color: 'orange', description: 'Record weight measurements' },
+        { id: 'vaccine', name: 'Vaccine Given', category: 'Vaccine', icon: 'syringe', color: 'teal', description: 'Log any vaccine given (ad-hoc)' },
         { id: 'feeding', name: 'Feeding', category: 'Nutrition', icon: 'utensils', color: 'amber', description: 'Log meals and food intake' },
-        { id: 'grooming', name: 'Grooming', category: 'Grooming', icon: 'scissors', color: 'pink', description: 'Track grooming sessions' },
+        { id: 'grooming', name: 'Grooming', category: 'Grooming', icon: 'scissors', color: 'pink', description: 'Log grooming sessions (ad-hoc)' },
         { id: 'bathroom', name: 'Bathroom', category: 'Health', icon: 'droplet', color: 'cyan', description: 'Monitor bathroom habits' },
         { id: 'sleep', name: 'Sleep', category: 'Wellness', icon: 'moon', color: 'indigo', description: 'Track sleep patterns' },
         { id: 'training', name: 'Training', category: 'Activity', icon: 'award', color: 'yellow', description: 'Log training sessions' },
@@ -32,19 +32,19 @@ const Onboarding = {
         { id: 'hydration', name: 'Hydration', icon: 'glass-water', description: 'Monitor water intake', levels: ['Low', 'Normal', 'High'] }
     ],
 
-    // Recurring event types (previously "Care Items" - now merged into event types)
+    // Recurring/scheduled event types - these have automatic reminders
     recurringEventTypes: [
-        { id: 'heartworm', name: 'Heartworm Prevention', category: 'Medication', icon: 'heart', color: 'blue', description: 'Monthly heartworm medication', isRecurring: true, intervalValue: 1, intervalUnit: 'Months', defaultDose: '1 tablet' },
-        { id: 'flea-tick', name: 'Flea & Tick Prevention', category: 'Medication', icon: 'bug', color: 'green', description: 'Flea and tick treatment', isRecurring: true, intervalValue: 1, intervalUnit: 'Months', defaultDose: '1 application' },
-        { id: 'rabies', name: 'Rabies Vaccine', category: 'Vaccine', icon: 'shield', color: 'teal', description: 'Required rabies vaccination', isRecurring: true, intervalValue: 1, intervalUnit: 'Years' },
-        { id: 'dhpp', name: 'DHPP/FVRCP Vaccine', category: 'Vaccine', icon: 'shield-check', color: 'teal', description: 'Core combination vaccine', isRecurring: true, intervalValue: 1, intervalUnit: 'Years' },
-        { id: 'bordetella', name: 'Bordetella Vaccine', category: 'Vaccine', icon: 'shield-plus', color: 'teal', description: 'Kennel cough prevention', isRecurring: true, intervalValue: 1, intervalUnit: 'Years' },
-        { id: 'annual-checkup', name: 'Annual Checkup', category: 'Vet Visit', icon: 'clipboard-check', color: 'purple', description: 'Yearly wellness exam', isRecurring: true, intervalValue: 1, intervalUnit: 'Years' },
-        { id: 'dental-cleaning', name: 'Dental Cleaning', category: 'Vet Visit', icon: 'sparkles', color: 'purple', description: 'Professional dental care', isRecurring: true, intervalValue: 1, intervalUnit: 'Years' },
-        { id: 'bloodwork', name: 'Bloodwork', category: 'Vet Visit', icon: 'test-tube', color: 'purple', description: 'Blood tests and panels', isRecurring: true, intervalValue: 1, intervalUnit: 'Years' },
-        { id: 'nail-trim', name: 'Nail Trim', category: 'Grooming', icon: 'scissors', color: 'pink', description: 'Regular nail maintenance', isRecurring: true, intervalValue: 2, intervalUnit: 'Weeks' },
-        { id: 'bath', name: 'Bath', category: 'Grooming', icon: 'bath', color: 'pink', description: 'Bathing and cleaning', isRecurring: true, intervalValue: 1, intervalUnit: 'Months' },
-        { id: 'deworming', name: 'Deworming', category: 'Medication', icon: 'pill', color: 'blue', description: 'Intestinal parasite prevention', isRecurring: true, intervalValue: 3, intervalUnit: 'Months' }
+        { id: 'heartworm', name: 'Heartworm Prevention', category: 'Medication', icon: 'heart', color: 'blue', description: 'Scheduled monthly (auto-reminders)', isRecurring: true, intervalValue: 1, intervalUnit: 'Months', defaultDose: '1 tablet' },
+        { id: 'flea-tick', name: 'Flea & Tick Prevention', category: 'Medication', icon: 'bug', color: 'green', description: 'Scheduled monthly (auto-reminders)', isRecurring: true, intervalValue: 1, intervalUnit: 'Months', defaultDose: '1 application' },
+        { id: 'rabies', name: 'Rabies Vaccine', category: 'Vaccine', icon: 'shield', color: 'teal', description: 'Scheduled yearly (auto-reminders)', isRecurring: true, intervalValue: 1, intervalUnit: 'Years' },
+        { id: 'dhpp', name: 'DHPP/FVRCP Vaccine', category: 'Vaccine', icon: 'shield-check', color: 'teal', description: 'Scheduled yearly (auto-reminders)', isRecurring: true, intervalValue: 1, intervalUnit: 'Years' },
+        { id: 'bordetella', name: 'Bordetella Vaccine', category: 'Vaccine', icon: 'shield-plus', color: 'teal', description: 'Scheduled yearly (auto-reminders)', isRecurring: true, intervalValue: 1, intervalUnit: 'Years' },
+        { id: 'annual-checkup', name: 'Annual Checkup', category: 'Vet Visit', icon: 'clipboard-check', color: 'purple', description: 'Scheduled yearly (auto-reminders)', isRecurring: true, intervalValue: 1, intervalUnit: 'Years' },
+        { id: 'dental-cleaning', name: 'Dental Cleaning', category: 'Vet Visit', icon: 'sparkles', color: 'purple', description: 'Scheduled yearly (auto-reminders)', isRecurring: true, intervalValue: 1, intervalUnit: 'Years' },
+        { id: 'bloodwork', name: 'Bloodwork', category: 'Vet Visit', icon: 'test-tube', color: 'purple', description: 'Scheduled yearly (auto-reminders)', isRecurring: true, intervalValue: 1, intervalUnit: 'Years' },
+        { id: 'nail-trim', name: 'Nail Trim', category: 'Grooming', icon: 'scissors', color: 'pink', description: 'Scheduled every 2 weeks (auto-reminders)', isRecurring: true, intervalValue: 2, intervalUnit: 'Weeks' },
+        { id: 'bath', name: 'Bath', category: 'Grooming', icon: 'bath', color: 'pink', description: 'Scheduled monthly (auto-reminders)', isRecurring: true, intervalValue: 1, intervalUnit: 'Months' },
+        { id: 'deworming', name: 'Deworming', category: 'Medication', icon: 'pill', color: 'blue', description: 'Scheduled every 3 months (auto-reminders)', isRecurring: true, intervalValue: 3, intervalUnit: 'Months' }
     ],
 
     // Selected items storage
@@ -238,9 +238,23 @@ const Onboarding = {
             menu.classList.remove('hidden');
             trigger?.setAttribute('aria-expanded', 'true');
 
-            // Auto-scroll to make dropdown visible
+            // Auto-scroll to make dropdown visible within the modal
             setTimeout(() => {
-                dropdown.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                // Find the scrollable form container (has overflow-y-auto)
+                const scrollableContainer = dropdown.closest('form') || dropdown.closest('.modal-content');
+
+                if (scrollableContainer) {
+                    const menuRect = menu.getBoundingClientRect();
+                    const containerRect = scrollableContainer.getBoundingClientRect();
+
+                    if (menuRect.bottom > containerRect.bottom) {
+                        // Scroll to show the dropdown menu
+                        const scrollAmount = menuRect.bottom - containerRect.bottom + 20;
+                        scrollableContainer.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+                    }
+                } else {
+                    dropdown.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
             }, 50);
         }
     },
@@ -490,14 +504,32 @@ const Onboarding = {
         window.location.href = `https://notion-oauth-handler.mimansa-jaiswal.workers.dev/auth/login?from=${returnUrl}`;
     },
 
-    // Expected properties for each database type to help with matching
-    expectedProperties: {
-        'Pets': ['Name', 'Species', 'Breed'],
-        'Events': ['Title', 'Pet(s)', 'Event Type', 'Start Date'],
-        'Event Types': ['Name', 'Category', 'Tracking Mode'],
-        'Scales': ['Name', 'Value Type'],
-        'Scale Levels': ['Name', 'Scale', 'Order'],
-        'Contacts': ['Name', 'Role', 'Phone']
+    // Required properties for each database type - ALL must be present
+    requiredProperties: {
+        'Pets': [
+            'Name', 'Species', 'Breed', 'Sex', 'Birth Date', 'Adoption Date', 'Status',
+            'Microchip ID', 'Photo', 'Tags', 'Notes', 'Primary Vet', 'Related Contacts',
+            'Target Weight Min', 'Target Weight Max', 'Weight Unit', 'Color', 'Icon', 'Is Primary'
+        ],
+        'Events': [
+            'Title', 'Pet(s)', 'Event Type', 'Start Date', 'End Date', 'Status',
+            'Severity Level', 'Value', 'Unit', 'Duration', 'Notes', 'Media', 'Tags',
+            'Source', 'Provider', 'Cost', 'Cost Category', 'Cost Currency',
+            'Todoist Task ID', 'Client Updated At'
+        ],
+        'Event Types': [
+            'Name', 'Category', 'Tracking Mode', 'Uses Severity', 'Default Scale',
+            'Default Color', 'Default Icon', 'Default Tags', 'Allow Attachments',
+            'Default Value Kind', 'Default Unit', 'Correlation Group', 'Is Recurring',
+            'Schedule Type', 'Interval Value', 'Interval Unit', 'Anchor Date', 'Due Time',
+            'Time of Day Preference', 'Window Before', 'Window After', 'End Date',
+            'End After Occurrences', 'Next Due', 'Todoist Sync', 'Todoist Project',
+            'Todoist Labels', 'Todoist Lead Time', 'Default Dose', 'Default Route',
+            'Active', 'Active Start', 'Active End', 'Related Pets'
+        ],
+        'Scales': ['Name', 'Value Type', 'Unit', 'Notes'],
+        'Scale Levels': ['Name', 'Scale', 'Order', 'Color', 'Numeric Value', 'Description'],
+        'Contacts': ['Name', 'Role', 'Phone', 'Email', 'Address', 'Notes', 'Related Pets']
     },
 
     /**
@@ -533,16 +565,15 @@ const Onboarding = {
             // Required databases (simplified - no Care Items/Plans)
             const required = ['Pets', 'Events', 'Event Types', 'Scales', 'Scale Levels', 'Contacts'];
 
-            // Find matching databases for each type
+            // Find matching databases for each type - ALL required properties must be present
             const matchedDbs = {};
             required.forEach(reqName => {
-                const expectedProps = Onboarding.expectedProperties[reqName] || [];
+                const requiredProps = Onboarding.requiredProperties[reqName] || [];
                 matchedDbs[reqName] = dbOptions.filter(db => {
-                    // Check if database has at least 2 expected properties
-                    const matchCount = expectedProps.filter(prop =>
+                    // Check if database has ALL required properties
+                    return requiredProps.every(prop =>
                         db.properties.some(p => p.toLowerCase() === prop.toLowerCase())
-                    ).length;
-                    return matchCount >= Math.min(2, expectedProps.length);
+                    );
                 });
             });
 
@@ -601,7 +632,25 @@ const Onboarding = {
         const mapping = {};
 
         selects.forEach(sel => {
-            if (!sel.value) allSet = false;
+            const label = sel.closest('.grid')?.querySelector('label');
+            if (!sel.value) {
+                allSet = false;
+                // Update label to show warning
+                if (label) {
+                    label.classList.remove('text-dull-purple');
+                    label.classList.add('text-muted-pink');
+                    const text = label.textContent.replace(/^[✓⚠]\s*/, '');
+                    label.textContent = `⚠ ${text}`;
+                }
+            } else {
+                // Update label to show checkmark
+                if (label) {
+                    label.classList.remove('text-muted-pink');
+                    label.classList.add('text-dull-purple');
+                    const text = label.textContent.replace(/^[✓⚠]\s*/, '');
+                    label.textContent = `✓ ${text}`;
+                }
+            }
             mapping[sel.dataset.source] = sel.value;
         });
 
@@ -616,13 +665,22 @@ const Onboarding = {
             };
 
             const dataSources = {};
+            const dataSourceNames = {};
+
             Object.keys(mapping).forEach(key => {
                 if (storeMapping[key]) {
-                    dataSources[storeMapping[key]] = mapping[key];
+                    const storeKey = storeMapping[key];
+                    dataSources[storeKey] = mapping[key];
+
+                    // Get the selected option's text (database name)
+                    const select = document.querySelector(`#onboardingDbList select[data-source="${key}"]`);
+                    if (select && select.selectedIndex >= 0) {
+                        dataSourceNames[storeKey] = select.options[select.selectedIndex].text;
+                    }
                 }
             });
 
-            PetTracker.Settings.set({ dataSources });
+            PetTracker.Settings.set({ dataSources, dataSourceNames });
             document.getElementById('onboardingDatabasesVerified').value = 'true';
             PetTracker.UI.toast('Mapping complete', 'success');
         } else {
@@ -692,43 +750,9 @@ const Onboarding = {
      * Create selected data based on user choices
      */
     createSelectedData: async () => {
-        // Create selected event types
-        for (const id of Onboarding.selections.eventTypes) {
-            const template = Onboarding.defaultEventTypes.find(t => t.id === id);
-            if (!template) continue;
+        // First, create selected scales so we can reference them from event types
+        const createdScales = {};
 
-            const existing = await PetTracker.DB.query(
-                PetTracker.STORES.EVENT_TYPES,
-                e => e.name === template.name
-            );
-
-            if (existing.length === 0) {
-                const eventType = {
-                    id: PetTracker.generateId(),
-                    name: template.name,
-                    category: template.category,
-                    trackingMode: template.category === 'Activity' ? 'Timed' : 'Stamp',
-                    defaultIcon: template.icon,
-                    defaultColor: template.color,
-                    usesSeverity: template.category === 'Symptom',
-                    allowAttachments: template.category === 'Vet Visit',
-                    defaultValueKind: template.name === 'Walk' ? 'Duration' : template.name === 'Weight' ? 'Weight' : null,
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                    synced: false
-                };
-
-                await PetTracker.DB.put(PetTracker.STORES.EVENT_TYPES, eventType);
-                await PetTracker.SyncQueue.add({
-                    type: 'create',
-                    store: 'eventTypes',
-                    recordId: eventType.id,
-                    data: eventType
-                });
-            }
-        }
-
-        // Create selected scales
         for (const id of Onboarding.selections.scales) {
             const template = Onboarding.defaultScales.find(s => s.id === id);
             if (!template) continue;
@@ -756,6 +780,8 @@ const Onboarding = {
                     data: scale
                 });
 
+                createdScales[id] = scale.id;
+
                 // Create scale levels
                 const colors = ['yellow', 'orange', 'red', 'purple'];
                 for (let i = 0; i < template.levels.length; i++) {
@@ -779,6 +805,54 @@ const Onboarding = {
                         data: level
                     });
                 }
+            } else {
+                // Scale already exists, store its ID for reference
+                createdScales[id] = existing[0].id;
+            }
+        }
+
+        // Create selected event types (now scales exist, so we can reference them)
+        for (const id of Onboarding.selections.eventTypes) {
+            const template = Onboarding.defaultEventTypes.find(t => t.id === id);
+            if (!template) continue;
+
+            const existing = await PetTracker.DB.query(
+                PetTracker.STORES.EVENT_TYPES,
+                e => e.name === template.name
+            );
+
+            if (existing.length === 0) {
+                // Determine which scale to use for this event type
+                let defaultScaleId = null;
+                if (template.category === 'Symptom' && createdScales['symptom-severity']) {
+                    defaultScaleId = createdScales['symptom-severity'];
+                } else if (template.category === 'Activity' && createdScales['activity-level']) {
+                    defaultScaleId = createdScales['activity-level'];
+                }
+
+                const eventType = {
+                    id: PetTracker.generateId(),
+                    name: template.name,
+                    category: template.category,
+                    trackingMode: template.category === 'Activity' ? 'Timed' : 'Stamp',
+                    defaultIcon: template.icon,
+                    defaultColor: template.color,
+                    usesSeverity: template.category === 'Symptom',
+                    defaultScaleId: defaultScaleId,
+                    allowAttachments: template.category === 'Vet Visit',
+                    defaultValueKind: template.name === 'Walk' ? 'Duration' : template.name === 'Weight' ? 'Weight' : null,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    synced: false
+                };
+
+                await PetTracker.DB.put(PetTracker.STORES.EVENT_TYPES, eventType);
+                await PetTracker.SyncQueue.add({
+                    type: 'create',
+                    store: 'eventTypes',
+                    recordId: eventType.id,
+                    data: eventType
+                });
             }
         }
 

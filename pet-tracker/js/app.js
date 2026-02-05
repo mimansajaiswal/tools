@@ -226,10 +226,11 @@ const App = {
             App.state.eventTypes = await PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES);
             App.state.activePetId = PetTracker.Settings.getActivePet();
 
-            // Create default event types if none exist
+            // Create default scales and event types if none exist
             if (App.state.eventTypes.length === 0) {
-                await Care.createDefaultEventTypes();
+                // Create scales first so event types can reference them
                 await Care.createDefaultScales();
+                await Care.createDefaultEventTypes();
                 App.state.eventTypes = await PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES);
             }
 
@@ -330,6 +331,16 @@ const App = {
                 App.state.eventTypes.map(t =>
                     `<option value="${t.id}" ${t.id === prefill.type ? 'selected' : ''}>${t.name}</option>`
                 ).join('');
+
+            // Add event listener for event type change to update severity selector
+            typeSelect.onchange = () => App.updateSeveritySelector(typeSelect.value);
+
+            // Trigger initial update if prefill.type is set
+            if (prefill.type) {
+                App.updateSeveritySelector(prefill.type, prefill.severityLevelId);
+            } else {
+                App.updateSeveritySelector(null);
+            }
         }
 
         // Set defaults
@@ -350,6 +361,43 @@ const App = {
     },
 
     /**
+     * Update severity selector based on event type
+     */
+    updateSeveritySelector: async (eventTypeId, selectedLevelId = null) => {
+        const container = document.getElementById('addEventSeverityContainer');
+        const select = document.getElementById('addEventSeverity');
+
+        if (!container || !select) return;
+
+        // Hide by default
+        container.classList.add('hidden');
+        select.innerHTML = '<option value="">-- Select Level --</option>';
+
+        if (!eventTypeId) return;
+
+        const eventType = App.state.eventTypes.find(t => t.id === eventTypeId);
+        if (!eventType || !eventType.usesSeverity || !eventType.defaultScaleId) return;
+
+        // Get scale levels for this scale
+        const levels = await PetTracker.DB.query(
+            PetTracker.STORES.SCALE_LEVELS,
+            l => l.scaleId === eventType.defaultScaleId
+        );
+
+        if (levels.length === 0) return;
+
+        // Sort by order
+        levels.sort((a, b) => (a.order || 0) - (b.order || 0));
+
+        // Populate dropdown
+        select.innerHTML = '<option value="">-- Select Level --</option>' +
+            levels.map(l => `<option value="${l.id}" ${l.id === selectedLevelId ? 'selected' : ''}>${PetTracker.UI.escapeHtml(l.name)}</option>`).join('');
+
+        // Show container
+        container.classList.remove('hidden');
+    },
+
+    /**
      * Save event from Add modal
      */
     saveEvent: async () => {
@@ -363,6 +411,7 @@ const App = {
         const time = document.getElementById('addEventTime')?.value;
         const notes = document.getElementById('addEventNotes')?.value;
         const value = document.getElementById('addEventValue')?.value;
+        const severityLevelId = document.getElementById('addEventSeverity')?.value || null;
 
         if (!petId || !date) {
             PetTracker.UI.toast('Please fill required fields', 'error');
@@ -382,6 +431,7 @@ const App = {
             startDate: time ? `${date}T${time}:00` : date,
             notes: notes || '',
             value: value ? parseFloat(value) : null,
+            severityLevelId: severityLevelId || null,
             media: []
         };
 
@@ -641,34 +691,36 @@ const App = {
 
         // Show data source mappings and populate with saved values
         const hasDataSources = settings.dataSources && Object.values(settings.dataSources).some(v => v);
-        if (hasDataSources) {
-            // Populate the dropdowns with current values as placeholder options
-            const storeMap = {
-                'Pets': 'pets',
-                'Events': 'events',
-                'EventTypes': 'eventTypes',
-                'Contacts': 'contacts',
-                'Scales': 'scales',
-                'ScaleLevels': 'scaleLevels'
-            };
+        const dataSourceNames = settings.dataSourceNames || {};
 
-            Object.entries(storeMap).forEach(([key, store]) => {
-                const el = document.getElementById(`dsMap${key}`);
-                const savedId = settings.dataSources[store];
-                if (el && savedId) {
-                    // Add the saved value as an option if dropdown is empty
-                    if (el.options.length === 0 || !Array.from(el.options).some(o => o.value === savedId)) {
-                        const opt = document.createElement('option');
-                        opt.value = savedId;
-                        opt.text = `(Saved: ${savedId.slice(0, 8)}...)`;
-                        opt.selected = true;
-                        el.appendChild(opt);
-                    } else {
-                        el.value = savedId;
-                    }
-                }
-            });
-        }
+        const storeMap = {
+            'Pets': 'pets',
+            'Events': 'events',
+            'EventTypes': 'eventTypes',
+            'Contacts': 'contacts',
+            'Scales': 'scales',
+            'ScaleLevels': 'scaleLevels'
+        };
+
+        // Always populate dropdowns with saved values (showing names)
+        Object.entries(storeMap).forEach(([key, store]) => {
+            const el = document.getElementById(`dsMap${key}`);
+            if (!el) return;
+
+            const savedId = settings.dataSources?.[store];
+            const savedName = dataSourceNames[store];
+
+            // Clear existing options
+            el.innerHTML = '<option value="">Select...</option>';
+
+            if (savedId) {
+                const opt = document.createElement('option');
+                opt.value = savedId;
+                opt.text = savedName || `Database (${savedId.slice(0, 8)}...)`;
+                opt.selected = true;
+                el.appendChild(opt);
+            }
+        });
 
         PetTracker.UI.openModal('settingsModal');
         if (window.lucide) lucide.createIcons();
@@ -1027,11 +1079,25 @@ const App = {
     saveSettings: () => {
         // Collect data source mappings (6 databases after simplification)
         const dataSources = {};
+        const dataSourceNames = {};
+        const storeKeyMap = {
+            'Pets': 'pets',
+            'Events': 'events',
+            'EventTypes': 'eventTypes',
+            'Contacts': 'contacts',
+            'Scales': 'scales',
+            'ScaleLevels': 'scaleLevels'
+        };
+
         ['Pets', 'Events', 'EventTypes', 'Contacts', 'Scales', 'ScaleLevels'].forEach(key => {
             const el = document.getElementById(`dsMap${key}`);
             if (el?.value) {
-                const storeKey = key.charAt(0).toLowerCase() + key.slice(1);
+                const storeKey = storeKeyMap[key];
                 dataSources[storeKey] = el.value;
+                // Save the selected option's text (database name)
+                if (el.selectedIndex >= 0) {
+                    dataSourceNames[storeKey] = el.options[el.selectedIndex].text;
+                }
             }
         });
 
@@ -1040,6 +1106,7 @@ const App = {
             proxyToken: document.getElementById('settingsProxyToken')?.value?.trim() || '',
             notionToken: document.getElementById('settingsNotionToken')?.value?.trim() || '',
             dataSources,
+            dataSourceNames,
             aiProvider: document.getElementById('settingsAiProvider')?.value || 'openai',
             aiModel: document.getElementById('settingsAiModel')?.value?.trim() || '',
             aiApiKey: document.getElementById('settingsAiApiKey')?.value?.trim() || '',
@@ -1110,29 +1177,87 @@ const App = {
                 return;
             }
 
+            // Build database options with property info for smart matching
+            const dbOptions = dataSources.map(ds => ({
+                id: ds.id,
+                name: ds.title?.[0]?.plain_text || ds.name || 'Untitled',
+                properties: Object.keys(ds.properties || {})
+            }));
+
+            // Required properties - ALL must be present
+            const requiredProps = {
+                'Pets': [
+                    'Name', 'Species', 'Breed', 'Sex', 'Birth Date', 'Adoption Date', 'Status',
+                    'Microchip ID', 'Photo', 'Tags', 'Notes', 'Primary Vet', 'Related Contacts',
+                    'Target Weight Min', 'Target Weight Max', 'Weight Unit', 'Color', 'Icon', 'Is Primary'
+                ],
+                'Events': [
+                    'Title', 'Pet(s)', 'Event Type', 'Start Date', 'End Date', 'Status',
+                    'Severity Level', 'Value', 'Unit', 'Duration', 'Notes', 'Media', 'Tags',
+                    'Source', 'Provider', 'Cost', 'Cost Category', 'Cost Currency',
+                    'Todoist Task ID', 'Client Updated At'
+                ],
+                'EventTypes': [
+                    'Name', 'Category', 'Tracking Mode', 'Uses Severity', 'Default Scale',
+                    'Default Color', 'Default Icon', 'Default Tags', 'Allow Attachments',
+                    'Default Value Kind', 'Default Unit', 'Correlation Group', 'Is Recurring',
+                    'Schedule Type', 'Interval Value', 'Interval Unit', 'Anchor Date', 'Due Time',
+                    'Time of Day Preference', 'Window Before', 'Window After', 'End Date',
+                    'End After Occurrences', 'Next Due', 'Todoist Sync', 'Todoist Project',
+                    'Todoist Labels', 'Todoist Lead Time', 'Default Dose', 'Default Route',
+                    'Active', 'Active Start', 'Active End', 'Related Pets'
+                ],
+                'Scales': ['Name', 'Value Type', 'Unit', 'Notes'],
+                'ScaleLevels': ['Name', 'Scale', 'Order', 'Color', 'Numeric Value', 'Description'],
+                'Contacts': ['Name', 'Role', 'Phone', 'Email', 'Address', 'Notes', 'Related Pets']
+            };
+
+            const storeKeyMap = {
+                'Pets': 'pets',
+                'Events': 'events',
+                'EventTypes': 'eventTypes',
+                'Contacts': 'contacts',
+                'Scales': 'scales',
+                'ScaleLevels': 'scaleLevels'
+            };
+
             // Populate mapping dropdowns
             const dsContainer = document.getElementById('dataSourceMapping');
             if (dsContainer) {
                 dsContainer.classList.remove('hidden');
 
-                const dbOptions = dataSources.map(ds => ({
-                    id: ds.id,
-                    name: ds.title?.[0]?.plain_text || ds.name || 'Untitled'
-                }));
-
-                const optionsHtml = '<option value="">Select...</option>' +
-                    dbOptions.map(db => `<option value="${db.id}">${PetTracker.UI.escapeHtml(db.name)}</option>`).join('');
-
                 ['Pets', 'Events', 'EventTypes', 'Contacts', 'Scales', 'ScaleLevels'].forEach(key => {
                     const el = document.getElementById(`dsMap${key}`);
-                    if (el) {
-                        el.innerHTML = optionsHtml;
-                        // Try to auto-select by name match
-                        const match = dbOptions.find(db =>
-                            db.name.toLowerCase().replace(/\s+/g, '').includes(key.toLowerCase().replace(/\s+/g, ''))
+                    if (!el) return;
+
+                    const storeKey = storeKeyMap[key];
+                    const savedId = settings.dataSources?.[storeKey];
+                    const props = requiredProps[key] || [];
+
+                    // Filter to matching databases - ALL required props must be present
+                    const matchingDbs = dbOptions.filter(db => {
+                        return props.every(prop =>
+                            db.properties.some(p => p.toLowerCase() === prop.toLowerCase())
                         );
-                        if (match) el.value = match.id;
+                    });
+
+                    // Build options HTML
+                    let optionsHtml = '<option value="">Select...</option>';
+
+                    // Add matching databases
+                    matchingDbs.forEach(db => {
+                        const selected = db.id === savedId ? 'selected' : '';
+                        optionsHtml += `<option value="${db.id}" ${selected}>${PetTracker.UI.escapeHtml(db.name)}</option>`;
+                    });
+
+                    // If saved DB not in matching list, add it separately
+                    if (savedId && !matchingDbs.some(db => db.id === savedId)) {
+                        const savedDb = dbOptions.find(db => db.id === savedId);
+                        const savedName = savedDb?.name || settings.dataSourceNames?.[storeKey] || `(Saved: ${savedId.slice(0, 8)}...)`;
+                        optionsHtml += `<option value="${savedId}" selected>${PetTracker.UI.escapeHtml(savedName)}</option>`;
                     }
+
+                    el.innerHTML = optionsHtml;
                 });
             }
 

@@ -267,6 +267,12 @@
                         <input type="time" id="addEventTime" class="input-field">
                     </div>
                 </div>
+                <div id="addEventSeverityContainer" class="hidden">
+                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Severity/Rating</label>
+                    <select id="addEventSeverity" class="select-field">
+                        <option value="">-- Select Level --</option>
+                    </select>
+                </div>
                 <div>
                     <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Value</label>
                     <input type="number" id="addEventValue" class="input-field" placeholder="e.g., weight, dose">
@@ -335,8 +341,9 @@
                     <div>
                         <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Proxy Token
                             (optional)</label>
-                        <input type="password" id="settingsProxyToken" class="input-field"
-                            placeholder="Optional auth token" autocomplete="off">
+                        <input type="text" id="settingsProxyToken" class="input-field masked-input"
+                            placeholder="Optional auth token" autocomplete="off" data-lpignore="true"
+                            data-form-type="other">
                     </div>
 
                     <!-- Template Link -->
@@ -380,7 +387,8 @@
                         <div>
                             <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Notion Integration
                                 Token</label>
-                            <input type="password" id="settingsNotionToken" class="input-field" placeholder="secret_..."
+                            <input type="text" id="settingsNotionToken" class="input-field masked-input"
+                                placeholder="secret_..." autocomplete="off" data-lpignore="true" data-form-type="other"
                                 autocomplete="off">
                             <p class="text-xs text-earth-metal mt-1">From your Notion integration settings</p>
                         </div>
@@ -477,7 +485,8 @@
                     </div>
                     <div>
                         <label class="font-mono text-xs uppercase text-earth-metal block mb-1">API Key</label>
-                        <input type="password" id="settingsAiApiKey" class="input-field" placeholder="Your API key"
+                        <input type="text" id="settingsAiApiKey" class="input-field masked-input"
+                            placeholder="Your API key" autocomplete="off" data-lpignore="true" data-form-type="other"
                             autocomplete="off">
                     </div>
                 </div>
@@ -491,8 +500,9 @@
                     </div>
                     <div>
                         <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Todoist API Token</label>
-                        <input type="password" id="settingsTodoistToken" class="input-field"
-                            placeholder="Your Todoist token" autocomplete="off">
+                        <input type="text" id="settingsTodoistToken" class="input-field masked-input" autocomplete="off"
+                            data-lpignore="true" data-form-type="other" placeholder="Your Todoist token"
+                            autocomplete="off">
                     </div>
                 </div>
 
@@ -639,7 +649,8 @@
                         <div>
                             <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Proxy Token
                                 (optional)</label>
-                            <input type="text" id="onboardingProxyToken" class="input-field"
+                            <input type="text" id="onboardingProxyToken" class="input-field masked-input"
+                                autocomplete="off" data-lpignore="true" data-form-type="other"
                                 placeholder="Your worker secret token">
                         </div>
                         <input type="hidden" id="onboardingWorkerVerified" value="false">
@@ -689,8 +700,9 @@
 
                         <div>
                             <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Manual Token</label>
-                            <input type="password" id="onboardingNotionToken" class="input-field"
-                                placeholder="secret_..." autocomplete="off"
+                            <input type="text" id="onboardingNotionToken" class="input-field masked-input"
+                                autocomplete="off" data-lpignore="true" data-form-type="other" placeholder="secret_..."
+                                autocomplete="off"
                                 onchange="document.getElementById('onboardingDatabasesVerified').value = 'false'">
                         </div>
 
@@ -726,7 +738,7 @@
                         <!-- Event Types Multi-Select -->
                         <div>
                             <label class="font-mono text-xs uppercase text-earth-metal block mb-2">
-                                <i data-lucide="activity" class="w-3 h-3 inline mr-1"></i>Event Types
+                                <i data-lucide="activity" class="w-3 h-3 inline mr-1"></i>Event Types (Ad-hoc Logging)
                             </label>
                             <div id="onboardingEventTypesDropdown" class="multiselect-dropdown"
                                 data-multiselect="eventTypes">
@@ -751,8 +763,8 @@
                                     <div class="multiselect-options p-1"></div>
                                 </div>
                             </div>
-                            <p class="text-[10px] text-earth-metal mt-1">Track medications, symptoms, vet visits,
-                                activities, and more</p>
+                            <p class="text-[10px] text-earth-metal mt-1">For manual logging as-needed (not scheduled)
+                            </p>
                         </div>
 
                         <!-- Scales Multi-Select -->
@@ -785,10 +797,10 @@
                                 and appetite</p>
                         </div>
 
-                        <!-- Recurring Items Multi-Select (Merged Care Items) -->
+                        <!-- Recurring Items Multi-Select (Scheduled with reminders) -->
                         <div>
                             <label class="font-mono text-xs uppercase text-earth-metal block mb-2">
-                                <i data-lucide="repeat" class="w-3 h-3 inline mr-1"></i>Recurring Items
+                                <i data-lucide="repeat" class="w-3 h-3 inline mr-1"></i>Scheduled Items (Auto-reminders)
                             </label>
                             <div id="onboardingRecurringTypesDropdown" class="multiselect-dropdown"
                                 data-multiselect="recurringTypes">
@@ -813,8 +825,8 @@
                                     <div class="multiselect-options p-1"></div>
                                 </div>
                             </div>
-                            <p class="text-[10px] text-earth-metal mt-1">Scheduled medications, vaccines, and grooming
-                                with automatic reminders</p>
+                            <p class="text-[10px] text-earth-metal mt-1">Vaccines, medications, and appointments with
+                                automatic due date tracking</p>
                         </div>
                     </div>
                 </div>
@@ -1190,19 +1202,11 @@
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Category</label>
-                        <select id="eventTypeCategory" class="select-field">
-                            <option value="Symptom">Symptom</option>
-                            <option value="Medication">Medication</option>
-                            <option value="Vaccine">Vaccine</option>
-                            <option value="Vet Visit">Vet Visit</option>
-                            <option value="Activity">Activity</option>
-                            <option value="Weight">Weight</option>
-                            <option value="Nutrition">Nutrition</option>
-                            <option value="Grooming">Grooming</option>
-                            <option value="Wellness">Wellness</option>
-                            <option value="Health">Health</option>
-                            <option value="Other">Other</option>
-                        </select>
+                        <div class="combobox-container" id="eventTypeCategoryCombobox">
+                            <input type="text" id="eventTypeCategory" class="input-field combobox-input"
+                                placeholder="Select or type category" autocomplete="off">
+                            <div class="combobox-dropdown" id="eventTypeCategoryDropdown"></div>
+                        </div>
                     </div>
                     <div>
                         <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Tracking Mode</label>
@@ -1224,16 +1228,111 @@
                         <option value="Temperature">Temperature</option>
                     </select>
                 </div>
-                <div class="flex flex-wrap gap-4">
+                <div class="space-y-3">
                     <label class="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" id="eventTypeUsesSeverity" class="w-4 h-4">
-                        <span class="text-sm">Uses Severity Scale</span>
+                        <input type="checkbox" id="eventTypeUsesSeverity" class="w-4 h-4"
+                            onchange="Setup.toggleScaleSelector()">
+                        <span class="text-sm">Uses Severity/Rating Scale</span>
                     </label>
+                    <div id="eventTypeScaleSelector" class="hidden pl-6">
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Default Scale</label>
+                        <select id="eventTypeDefaultScale" class="select-field">
+                            <option value="">-- Select Scale --</option>
+                        </select>
+                        <p class="text-xs text-earth-metal mt-1">When logging this event type, user will select from
+                            this scale's levels</p>
+                    </div>
                     <label class="flex items-center gap-2 cursor-pointer">
                         <input type="checkbox" id="eventTypeAllowAttachments" class="w-4 h-4">
                         <span class="text-sm">Allow Attachments</span>
                     </label>
                 </div>
+
+                <!-- Recurring Schedule Section -->
+                <div class="border border-oatmeal p-4 space-y-4">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="eventTypeIsRecurring" class="w-4 h-4"
+                            onchange="Setup.toggleRecurringFields()">
+                        <span class="text-sm font-medium">
+                            <i data-lucide="repeat" class="w-4 h-4 inline mr-1"></i>
+                            Recurring Schedule (Auto-reminders)
+                        </span>
+                    </label>
+                    <div id="eventTypeRecurringFields" class="hidden space-y-4 pt-2 border-t border-oatmeal mt-3">
+                        <p class="text-xs text-earth-metal">Events with recurring schedules appear in Upcoming Care with
+                            auto-reminders.</p>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Schedule Type</label>
+                            <select id="eventTypeScheduleType" class="select-field">
+                                <option value="Fixed">Fixed (from anchor date)</option>
+                                <option value="Rolling">Rolling (from last completion)</option>
+                                <option value="One-off">One-off (single occurrence)</option>
+                            </select>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Repeat
+                                    Every</label>
+                                <input type="number" id="eventTypeIntervalValue" class="input-field" value="1" min="1">
+                            </div>
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Interval
+                                    Unit</label>
+                                <select id="eventTypeIntervalUnit" class="select-field">
+                                    <option value="Days">Days</option>
+                                    <option value="Weeks">Weeks</option>
+                                    <option value="Months" selected>Months</option>
+                                    <option value="Years">Years</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Anchor/Start
+                                    Date</label>
+                                <input type="date" id="eventTypeAnchorDate" class="input-field">
+                            </div>
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">End Date
+                                    (optional)</label>
+                                <input type="date" id="eventTypeEndDate" class="input-field">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Preferred
+                                    Time</label>
+                                <input type="time" id="eventTypeDueTime" class="input-field">
+                            </div>
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Default
+                                    Dose/Amount</label>
+                                <input type="text" id="eventTypeDefaultDose" class="input-field"
+                                    placeholder="e.g., 1 tablet">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Window Before
+                                    (days)</label>
+                                <input type="number" id="eventTypeWindowBefore" class="input-field" value="0" min="0"
+                                    placeholder="Days before due">
+                            </div>
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Window After
+                                    (days)</label>
+                                <input type="number" id="eventTypeWindowAfter" class="input-field" value="0" min="0"
+                                    placeholder="Days after due">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Assign to Pets
+                                (optional)</label>
+                            <div id="eventTypePetCheckboxes" class="flex flex-wrap gap-3 mt-2"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="flex gap-3 justify-end pt-4 border-t border-oatmeal">
                     <button type="button" onclick="PetTracker.UI.closeModal('eventTypeModal')"
                         class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Cancel</button>
@@ -1263,12 +1362,22 @@
                 </div>
                 <div>
                     <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Value Type</label>
-                    <select id="scaleValueType" class="select-field">
-                        <option value="Labels">Labels (Low, Medium, High)</option>
-                        <option value="Numeric">Numeric (1-10)</option>
+                    <select id="scaleValueType" class="select-field" onchange="Setup.toggleScaleValueTypeHelp()">
+                        <option value="Labels">Labels (named options)</option>
+                        <option value="Numeric">Numeric (number range)</option>
                     </select>
                 </div>
-                <p class="text-xs text-earth-metal">After creating the scale, you can add levels to it.</p>
+                <div id="scaleValueTypeHelp" class="border border-oatmeal p-3 bg-oatmeal/10">
+                    <p id="scaleLabelsHelp" class="text-xs text-earth-metal">
+                        <strong>Labels:</strong> User picks from named options like "Mild", "Moderate", "Severe".
+                        Each level has a numeric value for ordering and analytics.
+                    </p>
+                    <p id="scaleNumericHelp" class="text-xs text-earth-metal hidden">
+                        <strong>Numeric:</strong> User picks from a number scale (e.g., 1-5 or 1-10).
+                        Add levels for each number with optional labels.
+                    </p>
+                </div>
+                <p class="text-xs text-earth-metal">After creating the scale, add levels to define the options.</p>
                 <div class="flex gap-3 justify-end pt-4 border-t border-oatmeal">
                     <button type="button" onclick="PetTracker.UI.closeModal('scaleModal')"
                         class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Cancel</button>

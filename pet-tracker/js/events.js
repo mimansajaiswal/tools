@@ -249,6 +249,11 @@ const Events = {
         const notesInput = document.getElementById('addEventNotes');
         if (notesInput) notesInput.value = event.notes || '';
 
+        // Set severity (trigger update based on event type, then select the saved value)
+        if (event.eventTypeId) {
+            await App.updateSeveritySelector(event.eventTypeId, event.severityLevelId);
+        }
+
         // Update header
         const header = document.querySelector('#addEventModal .section-header');
         if (header) header.textContent = 'Edit Event';

@@ -662,7 +662,7 @@ const Sync = {
                     'Active': P.checkbox(data.active),
                     'Active Start': P.date(data.activeStart),
                     'Active End': P.date(data.activeEnd),
-                    'Related Pets': P.relation(await resolve(PetTracker.STORES.PETS, data.relatedPetIds))
+                    'Related Pets': P.relation(await resolve(PetTracker.STORES.PETS, data.relatedPetIds || []))
                 };
 
             case 'scales':
@@ -691,7 +691,7 @@ const Sync = {
                     'Email': P.richText(data.email),
                     'Address': P.richText(data.address),
                     'Notes': P.richText(data.notes),
-                    'Related Pets': P.relation(await resolve(PetTracker.STORES.PETS, data.relatedPetIds))
+                    'Related Pets': P.relation(await resolve(PetTracker.STORES.PETS, data.relatedPetIds || []))
                 };
 
             default:

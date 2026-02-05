@@ -390,6 +390,10 @@ const Settings = {
             pets: '', events: '', eventTypes: '', scales: '',
             scaleLevels: '', contacts: ''
         },
+        dataSourceNames: {
+            pets: '', events: '', eventTypes: '', scales: '',
+            scaleLevels: '', contacts: ''
+        },
         aiProvider: 'openai',
         aiModel: 'gpt-4o-mini',
         aiApiKey: '',
@@ -418,11 +422,12 @@ const Settings = {
 
     set: (updates) => {
         const current = Settings.get();
-        // Deep merge for nested objects like dataSources
+        // Deep merge for nested objects like dataSources and dataSourceNames
         const merged = {
             ...current,
             ...updates,
-            dataSources: { ...(current.dataSources || {}), ...(updates.dataSources || {}) }
+            dataSources: { ...(current.dataSources || {}), ...(updates.dataSources || {}) },
+            dataSourceNames: { ...(current.dataSourceNames || {}), ...(updates.dataSourceNames || {}) }
         };
         localStorage.setItem(Settings.KEYS.SETTINGS, JSON.stringify(merged));
         return merged;

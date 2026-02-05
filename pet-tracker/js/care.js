@@ -376,11 +376,19 @@ const Care = {
 
     /**
      * Create default event types (for first-run)
+     * Note: Call createDefaultScales() first so scales exist to reference
      */
     createDefaultEventTypes: async () => {
+        // Find the Symptom Severity scale if it exists
+        const symptomScales = await PetTracker.DB.query(
+            PetTracker.STORES.SCALES,
+            s => s.name === 'Symptom Severity'
+        );
+        const symptomScaleId = symptomScales.length > 0 ? symptomScales[0].id : null;
+
         const defaults = [
             { name: 'Medication Given', category: 'Medication', trackingMode: 'Stamp', defaultIcon: 'pill', defaultColor: 'blue' },
-            { name: 'Symptom', category: 'Symptom', trackingMode: 'Stamp', usesSeverity: true, defaultIcon: 'alert-circle', defaultColor: 'red' },
+            { name: 'Symptom', category: 'Symptom', trackingMode: 'Stamp', usesSeverity: true, defaultScaleId: symptomScaleId, defaultIcon: 'alert-circle', defaultColor: 'red' },
             { name: 'Vet Visit', category: 'Vet Visit', trackingMode: 'Timed', allowAttachments: true, defaultIcon: 'stethoscope', defaultColor: 'purple' },
             { name: 'Walk', category: 'Activity', trackingMode: 'Timed', defaultValueKind: 'Duration', defaultIcon: 'footprints', defaultColor: 'green' },
             { name: 'Weight', category: 'Weight', trackingMode: 'Stamp', defaultValueKind: 'Weight', defaultIcon: 'scale', defaultColor: 'orange' },

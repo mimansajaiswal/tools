@@ -1,5 +1,11 @@
 /* Pet Tracker Custom Styles */
 
+/* Masked input - shows dots like password but not treated as password by browsers */
+.masked-input {
+    -webkit-text-security: disc;
+    text-security: disc;
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
     width: 6px;
@@ -201,6 +207,64 @@
 
 .select-field:focus {
     border-color: #8b7b8e;
+}
+
+/* Combobox Styles */
+.combobox-container {
+    position: relative;
+}
+
+.combobox-input {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b6357' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 32px;
+}
+
+.combobox-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #f8f6f3;
+    border: 1px solid #d4c8b8;
+    border-top: none;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 100;
+    display: none;
+}
+
+.combobox-dropdown.open {
+    display: block;
+}
+
+.combobox-option {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    color: #2d2926;
+}
+
+.combobox-option:hover,
+.combobox-option.highlighted {
+    background: #e8e4de;
+}
+
+.combobox-option.add-new {
+    border-top: 1px solid #d4c8b8;
+    color: #8b7b8e;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.combobox-option.add-new::before {
+    content: '+';
+    font-weight: bold;
 }
 
 /* Badge Styles */
