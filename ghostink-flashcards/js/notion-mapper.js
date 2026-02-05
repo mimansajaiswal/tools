@@ -28,7 +28,7 @@ export const toRichTextChunks = (text) => {
     const MAX_ITEMS = 100;
     const chunks = [];
     for (let i = 0; i < str.length && chunks.length < MAX_ITEMS; i += MAX_CHARS) {
-        chunks.push({ text: { content: str.slice(i, i + MAX_CHARS) } });
+        chunks.push({ type: 'text', text: { content: str.slice(i, i + MAX_CHARS) } });
     }
     return chunks;
 };

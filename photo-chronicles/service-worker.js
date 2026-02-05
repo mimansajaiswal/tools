@@ -1,4 +1,4 @@
-const CACHE_NAME = 'photo-chronicles-cache-v9';
+const CACHE_NAME = 'photo-chronicles-cache-v11';
 const OFFLINE_ASSETS = [
   './',
   './index.html',
@@ -8,7 +8,7 @@ const OFFLINE_ASSETS = [
   './icons/icon-512.png',
   'https://cdn.tailwindcss.com',
   'https://unpkg.com/lucide@0.561.0/dist/umd/lucide.min.js',
-  'https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=DM+Serif+Display&family=Inter:wght@300;400;500;600&display=swap'
+  'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap'
 ];
 
 const CDN_ORIGINS = [
@@ -78,7 +78,9 @@ self.addEventListener('fetch', (event) => {
       if (cached) return cached;
       try {
         const response = await fetch(request);
-        if (response && response.ok) cache.put(request, response.clone());
+        if (response && (response.ok || response.type === 'opaque')) {
+          cache.put(request, response.clone());
+        }
         return response;
       } catch (err) {
         throw err;

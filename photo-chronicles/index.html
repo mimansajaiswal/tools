@@ -195,6 +195,107 @@
         #viewfinder {
             touch-action: none;
         }
+
+        /* Header Sync Widget */
+        .sync-status {
+            min-width: 128px;
+            max-width: 160px;
+            padding: 5px 8px 6px;
+            border: 1px solid #D9D2C7;
+            background: rgba(248, 246, 243, 0.85);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            transition: border-color 0.2s ease, background 0.2s ease;
+        }
+
+        .sync-status-meta {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-family: 'Space Grotesk', system-ui, sans-serif;
+            font-size: 9px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #5C5650;
+        }
+
+        .sync-status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 9999px;
+            background: #B8B0A4;
+            transition: background 0.2s ease;
+            flex-shrink: 0;
+        }
+
+        .sync-status-icon {
+            display: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 9999px;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            line-height: 1;
+            font-weight: 700;
+            color: #fff;
+            background: #857593;
+            flex-shrink: 0;
+        }
+
+        .sync-status-track {
+            width: 100%;
+            height: 3px;
+            background: #E8E2D9;
+            overflow: hidden;
+        }
+
+        .sync-status-bar {
+            display: block;
+            width: 0%;
+            height: 100%;
+            background: #857593;
+            transition: width 0.35s ease, background 0.2s ease;
+        }
+
+        .sync-status[data-state="syncing"] {
+            border-color: #C8BECF;
+            background: rgba(133, 117, 147, 0.08);
+        }
+
+        .sync-status[data-state="syncing"] .sync-status-dot {
+            background: #857593;
+        }
+
+        .sync-status[data-state="synced"] {
+            border-color: #B8AFC1;
+            background: rgba(133, 117, 147, 0.12);
+        }
+
+        .sync-status[data-state="synced"] .sync-status-dot {
+            display: none;
+        }
+
+        .sync-status[data-state="synced"] .sync-status-icon {
+            display: inline-flex;
+        }
+
+        .sync-status[data-state="synced"] .sync-status-track {
+            display: none;
+        }
+
+        .sync-status[data-state="offline"],
+        .sync-status[data-state="error"] {
+            border-color: #E7C0C0;
+            background: rgba(251, 235, 235, 0.75);
+        }
+
+        .sync-status[data-state="offline"] .sync-status-dot,
+        .sync-status[data-state="error"] .sync-status-dot {
+            background: #C24D4D;
+        }
     </style>
 </head>
 
@@ -253,9 +354,9 @@
                 <span class="font-display font-medium">New Entry</span>
             </button>
             <button onclick="App.attemptNewDiary()" class="mobile-nav-btn text-earth-metal hover:text-dull-purple"
-                aria-label="Create new diary">
+                aria-label="Link diary">
                 <i data-lucide="book-plus" class="w-5 h-5"></i>
-                <span class="font-display font-medium">New Diary</span>
+                <span class="font-display font-medium">Link Diary</span>
             </button>
         </div>
 
@@ -264,7 +365,7 @@
             <button onclick="App.attemptNewDiary()"
                 class="w-full flex items-center justify-start gap-2.5 p-2.5 hover:bg-white-linen text-dull-purple transition-colors font-display text-sm font-medium">
                 <i data-lucide="plus" class="w-4 h-4"></i>
-                <span>New Diary</span>
+                <span>Link Diary</span>
             </button>
             <button onclick="App.openModal('settingsModal')"
                 class="w-full flex items-center justify-start gap-2.5 p-2.5 hover:bg-white-linen text-earth-metal transition-colors font-display text-sm">
@@ -291,11 +392,16 @@
                 <h2 id="activeDiaryTitle"
                     class="font-display text-lg md:text-xl font-semibold text-charcoal truncate tracking-tight">Select a
                     Diary</h2>
-                <span id="syncStatus"
-                    class="hidden flex-shrink-0 text-[9px] px-2 py-0.5 bg-oatmeal text-earth-metal items-center gap-1 font-display font-medium uppercase tracking-wide">
-                    <span class="w-1.5 h-1.5 rounded-full bg-earth-metal/40"></span>
-                    <span>Init</span>
-                </span>
+                <div id="syncStatus" data-state="idle" class="sync-status hidden sm:flex flex-shrink-0">
+                    <div class="sync-status-meta">
+                        <span id="syncStatusDot" class="sync-status-dot"></span>
+                        <span id="syncStatusIcon" class="sync-status-icon" aria-hidden="true">✓</span>
+                        <span id="syncStatusText">Init</span>
+                    </div>
+                    <div class="sync-status-track">
+                        <span id="syncStatusBar" class="sync-status-bar"></span>
+                    </div>
+                </div>
             </div>
 
             <div class="flex items-center gap-2">
@@ -343,7 +449,7 @@
             <!-- Connection Status Indicator -->
             <div id="connectionStatus" class="mb-6"></div>
 
-            <div class="space-y-6">
+            <form id="settingsForm" onsubmit="event.preventDefault()" autocomplete="off" class="space-y-6">
 
                 <!-- Data Source Instructions (Before Proxy) -->
                 <div class="bg-oatmeal border-l-2 border-dull-purple p-3 text-xs text-earth-metal leading-relaxed">
@@ -382,10 +488,10 @@
                             class="block text-[10px] font-display font-semibold uppercase tracking-wider text-earth-metal mb-1">Proxy
                             Secret (Optional)</label>
                         <input type="password" id="settingProxyToken" placeholder="ALL_CORS_PROXY_MATCH_TOKEN"
-                            oninput="App.onSettingInput()"
+                            autocomplete="off" oninput="App.onSettingInput()"
                             class="w-full bg-white-linen border border-oatmeal-dark p-2.5 text-sm mb-2">
                     </div>
-                    <button onclick="App.verifyWorker()" id="verifyWorkerBtn"
+                    <button type="button" onclick="App.verifyWorker()" id="verifyWorkerBtn"
                         class="w-full bg-dull-purple hover:bg-dull-purple-hover text-white-linen py-2.5 text-xs font-display font-semibold uppercase tracking-wider transition-colors flex items-center justify-center gap-2">
                         Verify Proxy
                     </button>
@@ -405,7 +511,7 @@
                         </a>
                     </div>
                     <div class="flex gap-2 mb-2">
-                        <button onclick="App.saveBeforeOAuth()"
+                        <button type="button" onclick="App.saveBeforeOAuth()"
                             class="flex-1 bg-muted-pink text-white-linen py-2.5 flex items-center justify-center gap-2 hover:bg-muted-pink-dim transition-colors group">
                             <i data-lucide="zap" class="w-4 h-4 text-white-linen"></i>
                             <span class="text-sm font-display font-medium">Connect via OAuth</span>
@@ -422,9 +528,9 @@
                     <!-- Updated Manual Key Input with Verify Button -->
                     <div class="flex gap-2">
                         <input type="password" id="settingAuthToken" placeholder="Paste 'secret_...' token here"
-                            oninput="App.onSettingInput()"
+                            autocomplete="off" oninput="App.onSettingInput()"
                             class="flex-1 bg-white-linen border border-oatmeal-dark p-2.5 text-xs outline-none text-earth-metal placeholder-earth-metal/30">
-                        <button onclick="App.testManualConnection(this)"
+                        <button type="button" onclick="App.testManualConnection(this)"
                             class="bg-dull-purple text-white-linen hover:bg-dull-purple-hover text-xs font-display font-medium px-4 transition-colors">
                             Verify Key
                         </button>
@@ -451,7 +557,7 @@
                         </label>
                     </div>
                 </div>
-            </div>
+            </form>
 
             <details class="group mt-8 border-t border-oatmeal-dark pt-4">
                 <summary
@@ -495,8 +601,9 @@
                             class="text-dull-purple underline">Cloudflare Workers</a> and create a new Worker.</li>
                     <li>Copy the code below and paste it into the Worker editor (replace default code).</li>
                     <li>Save and Deploy.</li>
-                    <li>(Optional) In Worker Settings > Variables, add <code>ALL_CORS_PROXY_MATCH_TOKEN</code> with a
-                        secret password.</li>
+                    <li>(Optional) In Worker Settings > Variables, add <code>ALL_CORS_PROXY_MATCH_TOKEN</code>. Then
+                        send
+                        that value as <code>X-Proxy-Token</code> (query <code>?token=</code> still supported).</li>
                     <li>Copy your Worker's URL (e.g., <code>https://my-proxy.user.workers.dev</code>) and paste it into
                         the app settings.</li>
                 </ol>
@@ -506,84 +613,122 @@
                         Code</button>
                     <pre id="workerCodeBlock"
                         class="bg-charcoal text-white-linen p-4 rounded text-xs font-mono overflow-x-auto">
-export default {
-  async fetch(request, env) {
-      return await handleRequest(request, env);
-  },
-};
+function getAllowedOrigins(env) {
+  const raw = (env.ALLOWED_ORIGINS || "https://mimansajaiswal.github.io").trim();
+  return raw.split(",").map((s) => s.trim()).filter(Boolean);
+}
 
-function getCorsHeaders(request) {
+function isLocalDevOrigin(origin) {
+  if (!origin) return false;
+  try {
+    const parsed = new URL(origin);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+    return parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
+  } catch (_) {
+    return false;
+  }
+}
+
+function isAllowedOrigin(origin, allowed) {
+  if (!origin) return false;
+  return allowed.includes(origin) || isLocalDevOrigin(origin);
+}
+
+function getCorsHeaders(request, env) {
+  const origin = request.headers.get("Origin");
+  const allowed = getAllowedOrigins(env);
+  const allowOrigin = isAllowedOrigin(origin, allowed) ? origin : allowed[0];
   return {
-      "Access-Control-Allow-Origin": request.headers.get("Origin") || "*",
-      "Access-Control-Allow-Methods": "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization, Notion-Version",
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Methods": "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, Notion-Version, X-Proxy-Token",
+    "Vary": "Origin",
   };
 }
 
-function handleOptions(request) {
-  return new Response(null, {
-      headers: getCorsHeaders(request),
+function withCors(request, env, response) {
+  const cors = getCorsHeaders(request, env);
+  const out = new Response(response.body, response);
+  for (const [key, value] of Object.entries(cors)) out.headers.set(key, value);
+  out.headers.set("Cache-Control", "no-store");
+  return out;
+}
+
+function unauthorized(request, env) {
+  return withCors(request, env, new Response("Unauthorized", { status: 403 }));
+}
+
+function getProxyToken(request) {
+  const url = new URL(request.url);
+  return request.headers.get("X-Proxy-Token") || url.searchParams.get("token");
+}
+
+function buildProxyRequest(targetUrl, request) {
+  const headers = new Headers();
+  for (const [key, value] of request.headers.entries()) {
+    const k = key.toLowerCase();
+    if (k === "host") continue;
+    if (k === "cookie") continue;
+    if (k.startsWith("cf-")) continue;
+    if (k === "x-proxy-token") continue;
+    headers.set(key, value);
+  }
+
+  return new Request(targetUrl, {
+    method: request.method,
+    headers,
+    body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
+    redirect: "follow",
   });
 }
 
-function withCors(request, response) {
-  const corsHeaders = getCorsHeaders(request);
-  const newResponse = new Response(response.body, response);
-  for (const [key, value] of Object.entries(corsHeaders)) {
-      newResponse.headers.set(key, value);
-  }
-  newResponse.headers.append("Vary", "Origin");
-  return newResponse;
-}
+export default {
+  async fetch(request, env) {
+    if (request.method === "OPTIONS") {
+      return new Response(null, { headers: getCorsHeaders(request, env) });
+    }
 
-async function handleRequest(request, env) {
-  if (request.method === "OPTIONS") {
-      return handleOptions(request);
-  }
+    const url = new URL(request.url);
+    const requiredToken = (env.ALL_CORS_PROXY_MATCH_TOKEN || "").trim();
+    if (requiredToken) {
+      const provided = getProxyToken(request);
+      if (!provided || provided !== requiredToken) return unauthorized(request, env);
+    }
 
-  const url = new URL(request.url);
-  const requiredToken = (env.ALL_CORS_PROXY_MATCH_TOKEN || "").trim();
+    const targetUrlParam = url.searchParams.get("url");
+    if (!targetUrlParam) {
+      return withCors(request, env, new Response("Missing url parameter", { status: 400 }));
+    }
 
-  if (requiredToken !== "") {
-      const providedToken = url.searchParams.get("token");
-      if (providedToken !== requiredToken) {
-          return withCors(request, new Response("Unauthorized", { status: 403 }));
-      }
-      url.searchParams.delete("token");
-  }
-
-  const targetUrlParam = url.searchParams.get("url");
-  if (!targetUrlParam) {
-      return withCors(request, new Response("Missing url parameter", { status: 400 }));
-  }
-
-  let targetUrl;
-  try {
+    let targetUrl;
+    try {
       targetUrl = new URL(targetUrlParam).toString();
-  } catch (err) {
-      return withCors(request, new Response("Invalid target URL", { status: 400 }));
-  }
+    } catch (_) {
+      return withCors(request, env, new Response("Invalid target URL", { status: 400 }));
+    }
 
-  const modifiedRequest = new Request(targetUrl, request);
-  modifiedRequest.headers.set("Origin", new URL(targetUrl).origin);
-
-  const response = await fetch(modifiedRequest);
-  return withCors(request, response);
-}
+    try {
+      const upstream = await fetch(buildProxyRequest(targetUrl, request));
+      return withCors(request, env, upstream);
+    } catch (e) {
+      return withCors(request, env, new Response(`Upstream request failed: ${e?.message || "unknown error"}`, { status: 502 }));
+    }
+  },
+};
                     </pre>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- 3. New Diary Modal (Revamped) -->
+    <!-- 3. Link Diary Modal -->
     <div id="newDiaryModal" role="dialog" aria-modal="true"
         class="fixed inset-0 bg-charcoal/30 hidden items-center justify-center z-50 p-4"
         onclick="if(event.target===this) App.closeModal('newDiaryModal')">
         <div
             class="bg-white-linen w-full max-w-md p-6 border border-oatmeal-dark overflow-visible flex flex-col h-[500px]">
             <div class="flex justify-between items-center mb-4 flex-shrink-0">
-                <h3 class="font-display text-lg font-semibold text-charcoal tracking-tight">New Diary</h3>
+                <h3 class="font-display text-lg font-semibold text-charcoal tracking-tight">Link Diary</h3>
                 <button onclick="App.scanForDataSources()"
                     class="text-xs text-earth-metal hover:text-charcoal flex items-center gap-1 font-display"
                     id="refreshDbBtn">
@@ -634,7 +779,7 @@ async function handleRequest(request, env) {
                 <button onclick="App.closeModal('newDiaryModal')"
                     class="px-4 py-2 text-earth-metal hover:bg-oatmeal font-display text-sm">Cancel</button>
                 <button onclick="App.createDiary()"
-                    class="px-5 py-2 bg-charcoal text-white-linen hover:bg-dull-purple font-display font-medium text-sm">Create
+                    class="px-5 py-2 bg-charcoal text-white-linen hover:bg-dull-purple font-display font-medium text-sm">Link
                     Diary</button>
             </div>
         </div>
@@ -1037,6 +1182,11 @@ async function handleRequest(request, env) {
     <!-- JAVASCRIPT LOGIC -->
     <script>
         const PWA_CACHE_PREFIX = 'photo-chronicles-cache';
+        const LOCAL_SYNCED_ENTRY_LIMIT = 25;
+        const NOTE_RICH_TEXT_CHUNK_SIZE = 1900;
+        const NOTE_RICH_TEXT_MAX_CHUNKS = 100;
+        const OAUTH_HANDLER_URL = 'https://notion-oauth-handler.mimansa-jaiswal.workers.dev';
+        const OAUTH_DEV_PASSWORD_KEY = 'oauth_dev_password';
 
         const registerServiceWorker = () => {
             if (!('serviceWorker' in navigator)) return;
@@ -1077,7 +1227,39 @@ async function handleRequest(request, env) {
         const UTILS = {
             id: () => Math.random().toString(36).substr(2, 9),
             now: () => new Date().toISOString(),
+            hash: (value) => {
+                const input = String(value || '');
+                let hash = 0;
+                for (let i = 0; i < input.length; i++) {
+                    hash = ((hash << 5) - hash) + input.charCodeAt(i);
+                    hash |= 0;
+                }
+                return Math.abs(hash).toString(36);
+            },
             normalizeTag: (tag) => (tag || '').trim().toLowerCase(),
+            plainTextFromRichText: (items) => {
+                if (!Array.isArray(items) || items.length === 0) return "";
+                return items.map((x) => x?.plain_text || x?.text?.content || "").join("");
+            },
+            truncateText: (value, max = 2000) => {
+                const text = String(value || "");
+                if (text.length <= max) return text;
+                return text.slice(0, max);
+            },
+            chunkText: (value, chunkSize = NOTE_RICH_TEXT_CHUNK_SIZE, maxChunks = NOTE_RICH_TEXT_MAX_CHUNKS) => {
+                const text = String(value || "");
+                if (!text) return [];
+                const chunks = [];
+                for (let i = 0; i < text.length && chunks.length < maxChunks; i += chunkSize) {
+                    chunks.push(text.slice(i, i + chunkSize));
+                }
+                return chunks;
+            },
+            toNotionRichText: (value) => {
+                const normalized = String(value || "").replace(/\r\n/g, '\n');
+                if (!normalized.trim()) return [];
+                return UTILS.chunkText(normalized).map((content) => ({ text: { content } }));
+            },
             sanitizeFilename: (name) => (name || 'photo')
                 .toString()
                 .replace(/[^a-z0-9-_]+/gi, '_')
@@ -1272,7 +1454,15 @@ async function handleRequest(request, env) {
                     return fallback;
                 }
             },
-            setSettings: (s) => localStorage.setItem('chronicles_settings', JSON.stringify(s)),
+            setSettings: (s) => {
+                const prev = Storage.getSettings();
+                localStorage.setItem('chronicles_settings', JSON.stringify(s));
+                const prevToken = (prev.authToken || '').trim();
+                const nextToken = (s.authToken || '').trim();
+                if (prevToken !== nextToken) {
+                    Storage.clearAllDataSourceCaches();
+                }
+            },
             getData: () => {
                 try {
                     const raw = localStorage.getItem('chronicles_data');
@@ -1293,29 +1483,178 @@ async function handleRequest(request, env) {
             },
 
             // Cache for valid Notion data sources
-            getCachedDataSources: () => {
+            dataSourceCachePrefix: 'chronicles_ds_cache:',
+            getDataSourceCacheKey: (settings = null) => {
+                const s = settings || Storage.getSettings();
+                const token = (s.authToken || '').trim();
+                const scope = token ? UTILS.hash(token) : 'anon';
+                return `${Storage.dataSourceCachePrefix}${scope}`;
+            },
+            getCachedDataSources: (settings = null) => {
+                const cacheKey = Storage.getDataSourceCacheKey(settings);
                 try {
-                    const raw = localStorage.getItem('chronicles_ds_cache');
+                    const raw = localStorage.getItem(cacheKey);
                     return raw ? JSON.parse(raw) : [];
                 } catch (e) {
-                    localStorage.setItem('chronicles_ds_cache', JSON.stringify([]));
+                    localStorage.setItem(cacheKey, JSON.stringify([]));
                     return [];
                 }
             },
-            setCachedDataSources: (sources) => localStorage.setItem('chronicles_ds_cache', JSON.stringify(sources)),
+            setCachedDataSources: (sources, settings = null) => {
+                const cacheKey = Storage.getDataSourceCacheKey(settings);
+                localStorage.setItem(cacheKey, JSON.stringify(sources));
+            },
+            clearAllDataSourceCaches: () => {
+                const keysToRemove = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && key.startsWith(Storage.dataSourceCachePrefix)) {
+                        keysToRemove.push(key);
+                    }
+                }
+                keysToRemove.forEach((key) => localStorage.removeItem(key));
+            },
+            cleanupEntryAssets: (entry) => {
+                if (!entry || !ImageStore.isAvailable()) return;
+                if (entry.photoKey) {
+                    ImageStore.del(entry.photoKey).catch(() => { });
+                }
+                if (entry.uploadKey) {
+                    ImageStore.del(entry.uploadKey).catch(() => { });
+                }
+            },
+            cleanupReplacedEntryAssets: (oldEntry, newEntry) => {
+                if (!oldEntry) return;
+                const changedPhoto = oldEntry.photoKey && oldEntry.photoKey !== newEntry?.photoKey;
+                const changedUpload = oldEntry.uploadKey && oldEntry.uploadKey !== newEntry?.uploadKey;
+                if (changedPhoto || changedUpload) {
+                    Storage.cleanupEntryAssets({
+                        photoKey: changedPhoto ? oldEntry.photoKey : null,
+                        uploadKey: changedUpload ? oldEntry.uploadKey : null
+                    });
+                }
+            },
+            pruneDiaryEntries: (diary, maxSyncedEntries = LOCAL_SYNCED_ENTRY_LIMIT) => {
+                if (!diary || !Array.isArray(diary.entries)) return [];
+                const pendingEntryIds = new Set(diary.pendingEntries || []);
+                const pendingDeleteEntryIds = new Set((diary.pendingDeleteOps || []).map((op) => op.entryId).filter(Boolean));
+                const protectedEntries = [];
+                const syncedCandidates = [];
+                const evicted = [];
+
+                for (const entry of diary.entries) {
+                    const isProtected = pendingEntryIds.has(entry.id) || !entry.synced || pendingDeleteEntryIds.has(entry.id);
+                    if (isProtected) {
+                        protectedEntries.push(entry);
+                        continue;
+                    }
+                    if (entry.deletedLocally) {
+                        evicted.push(entry);
+                        continue;
+                    }
+                    syncedCandidates.push(entry);
+                }
+
+                syncedCandidates.sort((a, b) => new Date(b.date) - new Date(a.date));
+                const keptSynced = syncedCandidates.slice(0, maxSyncedEntries);
+                const trimmedSynced = syncedCandidates.slice(maxSyncedEntries);
+                evicted.push(...trimmedSynced);
+
+                const merged = [...protectedEntries, ...keptSynced];
+                merged.sort((a, b) => new Date(b.date) - new Date(a.date));
+                diary.entries = merged;
+
+                evicted.forEach(Storage.cleanupEntryAssets);
+                return evicted;
+            },
 
             saveDiary: (diary) => {
                 const data = Storage.getData();
                 data.push(diary);
                 Storage.setData(data);
             },
-            deleteEntry: (diaryId, entryId) => {
+            removeEntry: (diaryId, entryId) => {
                 const data = Storage.getData();
                 const diary = data.find(d => d.id === diaryId);
+                let removed = null;
                 if (diary) {
-                    diary.entries = diary.entries.filter(e => e.id !== entryId);
+                    const idx = diary.entries.findIndex(e => e.id === entryId);
+                    if (idx > -1) {
+                        removed = diary.entries[idx];
+                        diary.entries.splice(idx, 1);
+                    }
                     Storage.setData(data);
                 }
+                return removed;
+            },
+            deleteEntry: (diaryId, entryId) => {
+                const removed = Storage.removeEntry(diaryId, entryId);
+                if (removed) Storage.cleanupEntryAssets(removed);
+                return removed;
+            },
+            markEntryDeletedLocally: (diaryId, entryId) => {
+                const data = Storage.getData();
+                const diary = data.find(d => d.id === diaryId);
+                if (!diary) return null;
+                const entry = diary.entries.find(e => e.id === entryId);
+                if (!entry) return null;
+                entry.deletedLocally = true;
+                entry.lastDeleteAttempt = UTILS.now();
+                Storage.setData(data);
+                return entry;
+            },
+            queuePendingDelete: (diaryId, op) => {
+                const data = Storage.getData();
+                const diary = data.find(d => d.id === diaryId);
+                if (!diary || !op?.notionId) return;
+                if (!Array.isArray(diary.pendingDeleteOps)) diary.pendingDeleteOps = [];
+                const exists = diary.pendingDeleteOps.some((x) => x.notionId === op.notionId);
+                if (!exists) {
+                    diary.pendingDeleteOps.push({
+                        entryId: op.entryId || null,
+                        notionId: op.notionId,
+                        createdAt: op.createdAt || UTILS.now()
+                    });
+                    Storage.setData(data);
+                }
+            },
+            clearPendingDelete: (diaryId, notionId) => {
+                const data = Storage.getData();
+                const diary = data.find(d => d.id === diaryId);
+                if (!diary || !Array.isArray(diary.pendingDeleteOps) || !notionId) return;
+                diary.pendingDeleteOps = diary.pendingDeleteOps.filter((op) => op.notionId !== notionId);
+                Storage.setData(data);
+            },
+            getPendingDeletes: (diaryId) => {
+                const diary = Storage.getData().find(d => d.id === diaryId);
+                return Array.isArray(diary?.pendingDeleteOps) ? diary.pendingDeleteOps : [];
+            },
+            finalizeDeletedEntry: (diaryId, entryId, notionId) => {
+                const data = Storage.getData();
+                const diary = data.find(d => d.id === diaryId);
+                if (!diary) return null;
+                if (!Array.isArray(diary.pendingDeleteOps)) diary.pendingDeleteOps = [];
+                if (notionId) {
+                    diary.pendingDeleteOps = diary.pendingDeleteOps.filter((op) => op.notionId !== notionId);
+                }
+                let removed = null;
+                if (entryId) {
+                    const idx = diary.entries.findIndex((e) => e.id === entryId);
+                    if (idx > -1) {
+                        removed = diary.entries[idx];
+                        diary.entries.splice(idx, 1);
+                    }
+                }
+                if (!removed && notionId) {
+                    const idx = diary.entries.findIndex((e) => e.notionId === notionId);
+                    if (idx > -1) {
+                        removed = diary.entries[idx];
+                        diary.entries.splice(idx, 1);
+                    }
+                }
+                Storage.setData(data);
+                if (removed) Storage.cleanupEntryAssets(removed);
+                return removed;
             },
             saveEntry: (diaryId, entry) => {
                 const data = Storage.getData();
@@ -1324,15 +1663,19 @@ async function handleRequest(request, env) {
                     diary.entries.unshift(entry);
                     const unique = [];
                     const map = new Map();
+                    const dedupeEvicted = [];
                     for (const item of diary.entries) {
                         const dedupeKey = item.notionId ? `notion:${item.notionId}` : `local:${item.id}`;
                         if (!map.has(dedupeKey)) {
                             map.set(dedupeKey, true);
                             unique.push(item);
+                        } else {
+                            dedupeEvicted.push(item);
                         }
                     }
-                    // Limit to 25 entries to save local storage space
-                    diary.entries = unique.slice(0, 25);
+                    diary.entries = unique;
+                    dedupeEvicted.forEach(Storage.cleanupEntryAssets);
+                    Storage.pruneDiaryEntries(diary, LOCAL_SYNCED_ENTRY_LIMIT);
                     entry.tags.forEach(t => {
                         if (!diary.tags.includes(t)) diary.tags.push(t);
                     });
@@ -1346,6 +1689,16 @@ async function handleRequest(request, env) {
                 if (entry) {
                     entry.synced = status;
                     if (notionId) entry.notionId = notionId;
+                    Storage.setData(data);
+                }
+            },
+            updateEntryClientId: (diaryId, entryId, clientEntryId) => {
+                if (!clientEntryId) return;
+                const data = Storage.getData();
+                const diary = data.find(d => d.id === diaryId);
+                const entry = diary?.entries.find(e => e.id === entryId);
+                if (entry && !entry.clientEntryId) {
+                    entry.clientEntryId = clientEntryId;
                     Storage.setData(data);
                 }
             },
@@ -1440,9 +1793,9 @@ async function handleRequest(request, env) {
 
                 const fetchUrl = new URL(cleanWorkerUrl);
                 fetchUrl.searchParams.append('url', target);
-                if (cleanToken) fetchUrl.searchParams.append('token', cleanToken);
 
                 const headers = { 'Authorization': `Bearer ${cleanAuth}`, 'Notion-Version': '2025-09-03' };
+                if (cleanToken) headers['X-Proxy-Token'] = cleanToken;
                 if (!(body instanceof FormData)) {
                     headers['Content-Type'] = 'application/json';
                     body = body ? JSON.stringify(body) : null;
@@ -1476,13 +1829,14 @@ async function handleRequest(request, env) {
             uploadFileContent: async (uploadUrl, fileBlob) => {
                 const { workerUrl, authToken, proxyToken } = Storage.getSettings();
                 const cleanWorkerUrl = workerUrl.trim().replace(/\/$/, '');
+                const cleanToken = proxyToken ? proxyToken.trim() : null;
                 const fetchUrl = new URL(cleanWorkerUrl);
                 fetchUrl.searchParams.append('url', uploadUrl);
-                if (proxyToken) fetchUrl.searchParams.append('token', proxyToken);
 
                 const formData = new FormData();
                 formData.append("file", fileBlob, "photo.jpg");
                 const headers = { 'Authorization': `Bearer ${authToken}`, 'Notion-Version': '2025-09-03' };
+                if (cleanToken) headers['X-Proxy-Token'] = cleanToken;
 
                 const res = await fetch(fetchUrl.toString(), { method: 'POST', headers, body: formData });
                 if (!res.ok) throw new Error(`Upload Failed`);
@@ -1510,47 +1864,83 @@ async function handleRequest(request, env) {
 
         const SyncManager = {
             statusEl: null,
+            statusTextEl: null,
+            statusBarEl: null,
+            hideTimer: null,
             tagSyncQueues: new Map(),
             tagSyncTimers: new Map(),
             retryTimers: new Map(),
+            clientIdPropertyReady: new Set(),
             isSyncing: false,
             init: () => {
                 SyncManager.statusEl = document.getElementById('syncStatus');
-                window.addEventListener('online', SyncManager.syncCurrentDiary);
-                if (App.state.activeDiaryId) SyncManager.syncCurrentDiary();
+                SyncManager.statusTextEl = document.getElementById('syncStatusText');
+                SyncManager.statusBarEl = document.getElementById('syncStatusBar');
+                window.addEventListener('online', SyncManager.syncAllDiaries);
+                SyncManager.syncAllDiaries();
             },
             updateUI: (status) => {
-                if (!SyncManager.statusEl) return;
-                SyncManager.statusEl.classList.remove('hidden', 'flex');
-                const textSpan = SyncManager.statusEl.querySelector('span:last-child');
-                const dot = SyncManager.statusEl.querySelector('span:first-child');
+                const statusEl = SyncManager.statusEl;
+                if (!statusEl) return;
+                statusEl.classList.remove('hidden');
+                if (SyncManager.hideTimer) {
+                    clearTimeout(SyncManager.hideTimer);
+                    SyncManager.hideTimer = null;
+                }
+
+                const textEl = SyncManager.statusTextEl;
+                const barEl = SyncManager.statusBarEl;
+
+                const setState = (state, label, progress, color) => {
+                    statusEl.setAttribute('data-state', state);
+                    if (textEl) textEl.innerText = label;
+                    if (barEl) {
+                        barEl.style.width = `${progress}%`;
+                        if (color) barEl.style.background = color;
+                    }
+                };
 
                 if (status === 'syncing') {
-                    dot.className = "loader w-2 h-2 border-earth-metal";
-                    textSpan.innerText = "Syncing...";
+                    setState('syncing', 'Syncing', 72, '#857593');
                 } else if (status === 'offline') {
-                    dot.className = "w-2 h-2 rounded-full bg-red-400";
-                    textSpan.innerText = "Offline";
+                    setState('offline', 'Offline', 24, '#C24D4D');
                 } else if (status === 'synced') {
-                    dot.className = "w-2 h-2 rounded-full bg-green-400";
-                    textSpan.innerText = "Synced";
-                    setTimeout(() => SyncManager.statusEl.classList.add('hidden'), 3000);
+                    setState('synced', 'Synced', 100, '#857593');
                 } else {
-                    dot.className = "w-2 h-2 rounded-full bg-red-600";
-                    textSpan.innerText = "Error";
+                    setState('error', 'Error', 100, '#C24D4D');
                 }
             },
-
+            withSyncLock: async (fn) => {
+                if (SyncManager.isSyncing) return false;
+                SyncManager.isSyncing = true;
+                try {
+                    await fn();
+                } finally {
+                    SyncManager.isSyncing = false;
+                }
+                return true;
+            },
+            getDiariesWithPendingWork: () => {
+                const data = Storage.getData();
+                return data
+                    .filter((diary) => {
+                        const pendingEntries = Array.isArray(diary.pendingEntries) && diary.pendingEntries.length > 0;
+                        const pendingDeletes = Array.isArray(diary.pendingDeleteOps) && diary.pendingDeleteOps.length > 0;
+                        const unsynced = (diary.entries || []).some((entry) => !entry.synced && !entry.deletedLocally);
+                        return pendingEntries || pendingDeletes || unsynced;
+                    })
+                    .map((diary) => diary.id);
+            },
             fetchTags: async (silent = false) => {
                 const diaryId = App.state.activeDiaryId;
                 if (!diaryId) return;
                 const diary = Storage.getData().find(d => d.id === diaryId);
+                if (!diary?.dataSourceId) return;
 
                 try {
                     if (!silent) App.showToast("Fetching tags...", "info");
                     const res = await API.request('GET', `/data_sources/${diary.dataSourceId}`);
                     const properties = res.properties || {};
-
                     if (properties["Tags"] && properties["Tags"].multi_select) {
                         const options = properties["Tags"].multi_select.options.map(o => o.name);
                         Storage.replaceDiaryTags(diaryId, options);
@@ -1587,174 +1977,234 @@ async function handleRequest(request, env) {
                 if (SyncManager.retryTimers.has(diaryId)) return;
                 const timer = setTimeout(() => {
                     SyncManager.retryTimers.delete(diaryId);
-                    SyncManager.syncCurrentDiary();
+                    SyncManager.syncAllDiaries();
                 }, 15000);
                 SyncManager.retryTimers.set(diaryId, timer);
             },
-
+            syncAllDiaries: async () => {
+                const activeDiaryId = App.state.activeDiaryId;
+                if (!activeDiaryId && SyncManager.getDiariesWithPendingWork().length === 0) return;
+                await SyncManager.withSyncLock(async () => {
+                    if (!navigator.onLine) {
+                        if (activeDiaryId) SyncManager.updateUI('offline');
+                        return;
+                    }
+                    const pendingDiaryIds = SyncManager.getDiariesWithPendingWork();
+                    const orderedDiaryIds = [...new Set([activeDiaryId, ...pendingDiaryIds].filter(Boolean))];
+                    for (const diaryId of orderedDiaryIds) {
+                        const includePull = diaryId === activeDiaryId;
+                        const showUi = diaryId === activeDiaryId;
+                        await SyncManager.syncDiary(diaryId, { includePull, showUi });
+                    }
+                });
+            },
             syncCurrentDiary: async () => {
-                if (!navigator.onLine) { SyncManager.updateUI('offline'); return; }
                 const diaryId = App.state.activeDiaryId;
                 if (!diaryId) return;
+                await SyncManager.withSyncLock(async () => {
+                    await SyncManager.syncDiary(diaryId, { includePull: true, showUi: true });
+                });
+            },
+            syncDiary: async (diaryId, options = {}) => {
+                if (!diaryId) return;
+                const includePull = options.includePull !== false;
+                const showUi = options.showUi === true;
 
                 let diary = Storage.getData().find(d => d.id === diaryId);
                 if (!diary || !diary.dataSourceId) return;
-                if (SyncManager.isSyncing) return;
-                SyncManager.isSyncing = true;
+                if (!navigator.onLine) {
+                    if (showUi) SyncManager.updateUI('offline');
+                    return;
+                }
 
-                SyncManager.updateUI('syncing');
-                App.state.isLoading = true;
-                App.renderDiaryView();
+                if (showUi) {
+                    SyncManager.updateUI('syncing');
+                    App.state.isLoading = true;
+                    App.renderDiaryView();
+                }
 
                 try {
-                    // 1. PUSH
+                    await SyncManager.syncPendingDeletes(diaryId);
+                    diary = Storage.getData().find(d => d.id === diaryId);
+                    if (!diary) return;
+
                     const pendingIds = Storage.getPendingEntries(diaryId);
-                    const pendingEntries = pendingIds.map(id => diary.entries.find(e => e.id === id)).filter(Boolean);
-                    const unsynced = diary.entries.filter(e => !e.synced);
+                    const pendingEntries = pendingIds
+                        .map((id) => diary.entries.find((e) => e.id === id))
+                        .filter((entry) => entry && !entry.deletedLocally);
+                    const unsynced = (diary.entries || []).filter((entry) => !entry.synced && !entry.deletedLocally);
                     const pushQueue = [];
                     const pushSeen = new Set();
                     for (const item of [...pendingEntries, ...unsynced]) {
                         if (!item) continue;
-                        const key = item.notionId ? `notion:${item.notionId}` : `local:${item.id}`;
-                        if (pushSeen.has(key)) continue;
-                        pushSeen.add(key);
+                        const dedupe = item.notionId
+                            ? `notion:${item.notionId}`
+                            : `client:${item.clientEntryId || item.id}`;
+                        if (pushSeen.has(dedupe)) continue;
+                        pushSeen.add(dedupe);
                         pushQueue.push(item);
                     }
+
                     for (const entry of pushQueue) {
+                        if (!entry.clientEntryId) {
+                            const generatedClientId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+                                ? crypto.randomUUID()
+                                : `entry-${entry.id}-${Date.now()}`;
+                            Storage.updateEntryClientId(diaryId, entry.id, generatedClientId);
+                            entry.clientEntryId = generatedClientId;
+                        }
                         try {
-                            // Ensure we push the high res if we have it, or the current local one
-                            // Note: In saveEntry we now save LOW res to disk, but we should attempt to keep High Res in memory if possible?
-                            // Actually, simplistic approach: if unsynced, just push what we have. 
-                            // If user refreshed page, high res is gone, but local low res is better than nothing.
-                            // Ideally app stays open.
                             const notionId = await SyncManager.pushEntryToNotion(diary.dataSourceId, entry);
                             Storage.updateEntrySyncStatus(diaryId, entry.id, true, notionId);
                             Storage.clearPendingEntry(diaryId, entry.id);
                             App.state.diaries = Storage.getData();
                         } catch (err) {
                             console.error("Failed to push entry", entry, err);
-                            App.showToast(`Sync failed for entry "${entry.title}".`, "error");
                             Storage.queuePendingEntry(diaryId, entry.id);
                             SyncManager.scheduleRetry(diaryId);
+                            if (showUi) {
+                                App.showToast(`Sync failed for entry "${entry.title}".`, "error");
+                            }
                         }
                     }
 
-                    // 2. PULL (Updated to Limit 25 & Process Images)
-                    const fetchLimit = 25; // Reduced as requested
-                    let payload = {
-                        page_size: fetchLimit,
-                        sorts: [{ property: 'Date', direction: 'descending' }]
-                    };
+                    if (includePull) {
+                        const payload = {
+                            page_size: LOCAL_SYNCED_ENTRY_LIMIT,
+                            sorts: [{ property: 'Date', direction: 'descending' }]
+                        };
+                        const response = await API.request('POST', `/data_sources/${diary.dataSourceId}/query`, payload);
+                        const currentData = Storage.getData();
+                        const activeDiary = currentData.find((d) => d.id === diaryId);
+                        if (!activeDiary) return;
+                        const pendingDeleteNotionIds = new Set(
+                            (activeDiary.pendingDeleteOps || []).map((op) => op.notionId).filter(Boolean)
+                        );
 
-                    const response = await API.request('POST', `/data_sources/${diary.dataSourceId}/query`, payload);
+                        for (const page of response.results) {
+                            const props = page.properties || {};
+                            const clientEntryIdFromNotion = UTILS.plainTextFromRichText(props["Client Entry ID"]?.rich_text);
+                            const localIndex = activeDiary.entries.findIndex((entry) => (
+                                entry.notionId === page.id ||
+                                (clientEntryIdFromNotion && entry.clientEntryId === clientEntryIdFromNotion)
+                            ));
+                            const existingEntry = localIndex > -1 ? activeDiary.entries[localIndex] : null;
+                            if (pendingDeleteNotionIds.has(page.id) || existingEntry?.deletedLocally) {
+                                continue;
+                            }
 
-                    const currentData = Storage.getData();
-                    const activeDiary = currentData.find(d => d.id === diaryId);
+                            const getDate = (p) => p?.date?.start || UTILS.now();
+                            const getTags = (p) => p?.multi_select?.map(x => x.name) || [];
+                            const notesContent = UTILS.plainTextFromRichText(props.Notes?.rich_text);
+                            const titleContent = UTILS.plainTextFromRichText(props.Name?.title) || "(No Title)";
 
-                    // We need to iterate and potentially fetch images
-                    // Using for...of loop to handle async image processing sequentially/parallel-ish
+                            let notionPhotoUrl = null;
+                            if (props.Files?.files?.length > 0) {
+                                const f = props.Files.files[0];
+                                notionPhotoUrl = f.file?.url || f.external?.url;
+                            }
 
-                    for (const page of response.results) {
-                        const localIndex = activeDiary.entries.findIndex(e => e.notionId === page.id);
+                            let localPhotoData = null;
+                            let photoKey = existingEntry?.photoKey || null;
+                            const entryId = existingEntry ? existingEntry.id : UTILS.id();
+                            if (existingEntry?.photoDataURL && existingEntry.photoDataURL.startsWith('data:')) {
+                                localPhotoData = existingEntry.photoDataURL;
+                            }
 
-                        const props = page.properties;
-                        const getDate = (p) => p?.date?.start || UTILS.now();
-                        const getTags = (p) => p?.multi_select?.map(x => x.name) || [];
-                        const notesContent = props.Notes?.rich_text?.[0]?.plain_text || "";
-                        const titleContent = props.Name?.title?.[0]?.plain_text || "(No Title)";
-
-                        let notionPhotoUrl = null;
-                        if (props.Files?.files?.length > 0) {
-                            const f = props.Files.files[0];
-                            notionPhotoUrl = f.file?.url || f.external?.url;
-                        }
-
-                        // Check if we need to download the image
-                        let localPhotoData = null;
-                        const existingEntry = localIndex > -1 ? activeDiary.entries[localIndex] : null;
-                        let photoKey = existingEntry?.photoKey || null;
-                        const entryId = existingEntry ? existingEntry.id : UTILS.id();
-
-                        // If we have a local entry with a dataURL, keep it unless forced update (logic simplified here: keep local if exists)
-                        if (existingEntry && existingEntry.photoDataURL && existingEntry.photoDataURL.startsWith('data:')) {
-                            localPhotoData = existingEntry.photoDataURL;
-                        }
-
-                        // If no local photo but notion has one, fetch and compress it
-                        if (!localPhotoData && !photoKey && notionPhotoUrl) {
-                            try {
-                                // Using the worker proxy to fetch image if needed to avoid strict CORS on signed URLs, 
-                                // but usually signed S3 URLs are okay if origin is handled. 
-                                // We'll try direct first, if that fails, we can't easily use the proxy for binary without encoding tweaks.
-                                // Let's try UTILS.processImage directly on the URL.
-                                const previewData = await UTILS.processImage(notionPhotoUrl, 640, 0.72);
-                                if (ImageStore.isAvailable()) {
-                                    const key = `entry_${entryId}_preview`;
-                                    try {
-                                        await ImageStore.set(key, UTILS.dataURLtoBlob(previewData));
-                                        photoKey = key;
-                                    } catch (storeErr) {
-                                        if (storeErr?.isQuotaExceeded) {
-                                            localPhotoData = previewData;
-                                            App.showToast("Storage full; keeping preview in memory only.", "error");
-                                        } else {
-                                            throw storeErr;
+                            if (!localPhotoData && !photoKey && notionPhotoUrl) {
+                                try {
+                                    const previewData = await UTILS.processImage(notionPhotoUrl, 640, 0.72);
+                                    if (ImageStore.isAvailable()) {
+                                        const key = `entry_${entryId}_preview`;
+                                        try {
+                                            await ImageStore.set(key, UTILS.dataURLtoBlob(previewData));
+                                            photoKey = key;
+                                        } catch (storeErr) {
+                                            if (storeErr?.isQuotaExceeded) {
+                                                localPhotoData = previewData;
+                                                if (showUi) App.showToast("Storage full; keeping preview in memory only.", "error");
+                                            } else {
+                                                throw storeErr;
+                                            }
                                         }
+                                    } else {
+                                        localPhotoData = previewData;
                                     }
-                                } else {
-                                    localPhotoData = previewData;
+                                } catch (err) {
+                                    console.warn("Failed to download/process image from Notion", err);
+                                    localPhotoData = null;
                                 }
-                            } catch (err) {
-                                console.warn("Failed to download/process image from Notion", err);
-                                // Avoid storing expiring signed URLs as permanent fallbacks.
-                                localPhotoData = null;
+                            }
+
+                            const syncedEntry = {
+                                id: entryId,
+                                clientEntryId: clientEntryIdFromNotion || existingEntry?.clientEntryId || `entry-${entryId}`,
+                                notionId: page.id,
+                                date: getDate(props.Date),
+                                title: titleContent,
+                                notes: notesContent,
+                                tags: getTags(props.Tags),
+                                photoDataURL: localPhotoData,
+                                photoKey: photoKey,
+                                synced: true,
+                                deletedLocally: false
+                            };
+
+                            if (localIndex > -1) {
+                                Storage.cleanupReplacedEntryAssets(existingEntry, syncedEntry);
+                                activeDiary.entries[localIndex] = syncedEntry;
+                            } else {
+                                activeDiary.entries.push(syncedEntry);
                             }
                         }
 
-                        const syncedEntry = {
-                            id: entryId,
-                            notionId: page.id,
-                            date: getDate(props.Date),
-                            title: titleContent,
-                            notes: notesContent,
-                            tags: getTags(props.Tags),
-                            photoDataURL: localPhotoData,
-                            photoKey: photoKey,
-                            synced: true
-                        };
-
-                        if (localIndex > -1) {
-                            activeDiary.entries[localIndex] = syncedEntry;
-                        } else {
-                            activeDiary.entries.push(syncedEntry);
-                        }
+                        activeDiary.entries.sort((a, b) => new Date(b.date) - new Date(a.date));
+                        Storage.pruneDiaryEntries(activeDiary, LOCAL_SYNCED_ENTRY_LIMIT);
+                        Storage.setData(currentData);
+                        App.state.diaries = currentData;
+                        await SyncManager.fetchTags(true);
                     }
+                    await SyncManager.syncPendingTags(diaryId);
 
-                    // Sort and Limit
-                    activeDiary.entries.sort((a, b) => new Date(b.date) - new Date(a.date));
-                    if (activeDiary.entries.length > 25) {
-                        activeDiary.entries = activeDiary.entries.slice(0, 25);
-                    }
-
-                    Storage.setData(currentData);
-                    App.state.diaries = currentData;
-
-                    SyncManager.updateUI('synced');
-                    SyncManager.fetchTags(true);
-                    SyncManager.syncPendingTags(diaryId);
-
+                    if (showUi) SyncManager.updateUI('synced');
                 } catch (e) {
                     console.error("Sync Error", e);
-                    SyncManager.updateUI('error');
-                    if (e.message.includes("CORS") || e.message.includes("Network Error")) App.showToast(e.message, 'error');
+                    if (showUi) {
+                        SyncManager.updateUI('error');
+                        if (e.message.includes("CORS") || e.message.includes("Network Error")) {
+                            App.showToast(e.message, 'error');
+                        }
+                    }
+                    SyncManager.scheduleRetry(diaryId);
                 } finally {
-                    App.state.isLoading = false;
-                    App.renderDiaryView();
-                    App.renderSidebar();
-                    SyncManager.isSyncing = false;
+                    if (showUi) {
+                        App.state.isLoading = false;
+                        App.renderDiaryView();
+                        App.renderSidebar();
+                    }
                 }
             },
-
+            syncPendingDeletes: async (diaryId) => {
+                const pendingDeletes = Storage.getPendingDeletes(diaryId);
+                for (const op of pendingDeletes) {
+                    if (!op?.notionId) continue;
+                    try {
+                        await API.request('PATCH', `/pages/${op.notionId}`, { archived: true });
+                        const removed = Storage.finalizeDeletedEntry(diaryId, op.entryId, op.notionId);
+                        if (removed?.id) App.revokeEntryImageCache(removed.id);
+                    } catch (err) {
+                        const msg = String(err?.message || '').toLowerCase();
+                        if (msg.includes('not found') || msg.includes('could not find')) {
+                            const removed = Storage.finalizeDeletedEntry(diaryId, op.entryId, op.notionId);
+                            if (removed?.id) App.revokeEntryImageCache(removed.id);
+                            continue;
+                        }
+                        console.error("Pending delete failed", op, err);
+                        SyncManager.scheduleRetry(diaryId);
+                    }
+                }
+                App.state.diaries = Storage.getData();
+            },
             syncPendingTags: async (diaryId) => {
                 const diary = Storage.getData().find(d => d.id === diaryId);
                 const pending = diary?.pendingTags || [];
@@ -1762,7 +2212,6 @@ async function handleRequest(request, env) {
                     await SyncManager.addTagToNotion(diaryId, tag, { silent: true, fromQueue: true });
                 }
             },
-
             addTagToNotion: async (diaryId, tag, options = {}) => {
                 const diary = Storage.getData().find(d => d.id === diaryId);
                 const cleanTag = tag ? tag.trim() : '';
@@ -1802,11 +2251,70 @@ async function handleRequest(request, env) {
                     if (!options.silent) App.showToast("Couldn't update tags in Notion. Will retry later.", "error");
                 }
             },
-
+            ensureClientEntryIdProperty: async (dbId) => {
+                if (SyncManager.clientIdPropertyReady.has(dbId)) return true;
+                try {
+                    const ds = await API.request('GET', `/data_sources/${dbId}`);
+                    const properties = ds.properties || {};
+                    if (properties["Client Entry ID"]) {
+                        if (properties["Client Entry ID"].type === 'rich_text') {
+                            SyncManager.clientIdPropertyReady.add(dbId);
+                            return true;
+                        }
+                        return false;
+                    }
+                    await API.request('PATCH', `/data_sources/${dbId}`, {
+                        properties: {
+                            "Client Entry ID": { rich_text: {} }
+                        }
+                    });
+                    SyncManager.clientIdPropertyReady.add(dbId);
+                    return true;
+                } catch (err) {
+                    console.warn("Client Entry ID property setup failed", err);
+                    return false;
+                }
+            },
+            findExistingPageByClientEntryId: async (dbId, clientEntryId) => {
+                if (!clientEntryId) return null;
+                try {
+                    const res = await API.request('POST', `/data_sources/${dbId}/query`, {
+                        page_size: 1,
+                        filter: {
+                            property: "Client Entry ID",
+                            rich_text: { equals: clientEntryId }
+                        }
+                    });
+                    return res.results?.[0]?.id || null;
+                } catch (err) {
+                    return null;
+                }
+            },
+            buildEntryProperties: (entry, uploadedFileId = null) => {
+                const titleToSend = UTILS.truncateText(entry.title || "Untitled Entry", 2000);
+                const properties = {
+                    "Name": { "title": [{ "text": { "content": titleToSend } }] },
+                    "Date": { "date": { "start": entry.date } },
+                    "Notes": { "rich_text": UTILS.toNotionRichText(entry.notes) },
+                    "Tags": { "multi_select": (entry.tags || []).map((t) => ({ "name": t })) }
+                };
+                if (entry.clientEntryId) {
+                    properties["Client Entry ID"] = {
+                        "rich_text": [{ "text": { "content": entry.clientEntryId } }]
+                    };
+                }
+                if (uploadedFileId) {
+                    properties["Files"] = {
+                        "files": [{ "type": "file_upload", "file_upload": { "id": uploadedFileId } }]
+                    };
+                }
+                return properties;
+            },
             pushEntryToNotion: async (dbId, entry) => {
                 let uploadedFileId = null;
+                const clientEntryId = entry.clientEntryId || `entry-${entry.id || UTILS.id()}`;
+                entry.clientEntryId = clientEntryId;
 
-                // Prefer stored upload blob, then preview blob/data URL as fallback.
                 const uploadBlob = await App.getUploadBlob(entry);
                 if (uploadBlob) {
                     try {
@@ -1821,17 +2329,14 @@ async function handleRequest(request, env) {
                     }
                 }
 
-                const titleToSend = entry.title || "Untitled Entry";
-
-                const properties = {
-                    "Name": { "title": [{ "text": { "content": titleToSend } }] },
-                    "Date": { "date": { "start": entry.date } },
-                    "Notes": { "rich_text": [{ "text": { "content": entry.notes } }] },
-                    "Tags": { "multi_select": entry.tags.map(t => ({ "name": t })) }
-                };
-
-                if (uploadedFileId) {
-                    properties["Files"] = { "files": [{ "type": "file_upload", "file_upload": { "id": uploadedFileId } }] };
+                const supportsClientId = await SyncManager.ensureClientEntryIdProperty(dbId);
+                const properties = SyncManager.buildEntryProperties(entry, uploadedFileId);
+                if (supportsClientId) {
+                    const existingId = await SyncManager.findExistingPageByClientEntryId(dbId, clientEntryId);
+                    if (existingId) {
+                        await API.request('PATCH', `/pages/${existingId}`, { properties });
+                        return existingId;
+                    }
                 }
 
                 const res = await API.request('POST', '/pages', {
@@ -1905,6 +2410,7 @@ async function handleRequest(request, env) {
             },
             tagMatch: (list, tag) => list.find(t => UTILS.normalizeTag(t) === UTILS.normalizeTag(tag)),
             hasTag: (list, tag) => !!App.tagMatch(list, tag),
+            getVisibleEntries: (diary) => (diary?.entries || []).filter((entry) => !entry.deletedLocally),
             getUploadCapBytes: () => {
                 const s = Storage.getSettings();
                 const mb = Number(s.uploadCapMb) || 5;
@@ -2135,13 +2641,20 @@ async function handleRequest(request, env) {
                 }
 
                 const urlParams = new URLSearchParams(window.location.search);
-                const newAuth = urlParams.get('accessToken');
+                const hashParams = new URLSearchParams((window.location.hash || '').replace(/^#/, ''));
+                const newAuth = hashParams.get('accessToken') || urlParams.get('accessToken');
 
                 if (newAuth) {
                     const settings = Storage.getSettings();
                     const newSettings = { ...settings, authToken: newAuth };
                     Storage.setSettings(newSettings);
-                    window.history.replaceState({}, document.title, window.location.pathname);
+                    const cleanUrl = new URL(window.location.href);
+                    cleanUrl.searchParams.delete('accessToken');
+                    cleanUrl.searchParams.delete('botId');
+                    cleanUrl.searchParams.delete('workspaceName');
+                    cleanUrl.searchParams.delete('workspaceIcon');
+                    cleanUrl.hash = '';
+                    window.history.replaceState({}, document.title, cleanUrl.pathname + cleanUrl.search);
                     App.showToast(`Connected! Scanning data sources...`, 'success');
                     if (newSettings.workerUrl) App.scanForDataSources(newSettings);
                 }
@@ -2216,7 +2729,7 @@ async function handleRequest(request, env) {
                             title: src.title?.[0]?.plain_text || "Untitled Data Source",
                             description: src.description?.[0]?.plain_text || ""
                         }));
-                    Storage.setCachedDataSources(validSources);
+                    Storage.setCachedDataSources(validSources, settings);
                     App.state.cachedDataSources = validSources;
                     if (document.getElementById('newDiaryModal').classList.contains('flex')) {
                         App.renderDbDropdownItems(validSources);
@@ -2294,7 +2807,7 @@ async function handleRequest(request, env) {
                     App.openModal('settingsModal');
                 } else {
                     App.openModal('newDiaryModal');
-                    const cached = Storage.getCachedDataSources();
+                    const cached = Storage.getCachedDataSources(s);
                     App.state.cachedDataSources = cached;
                     if (cached.length > 0) {
                         App.renderDbDropdownItems(cached);
@@ -2314,6 +2827,8 @@ async function handleRequest(request, env) {
                     description: db.description,
                     tags: [],
                     pendingTags: [],
+                    pendingEntries: [],
+                    pendingDeleteOps: [],
                     entries: [],
                     cameraConfig: {
                         facingMode: App.state.facingMode,
@@ -2325,7 +2840,7 @@ async function handleRequest(request, env) {
                 App.state.diaries = Storage.getData();
                 App.closeModal('newDiaryModal');
                 App.selectDiary(newDiary.id);
-                App.showToast("Diary Created!", "success");
+                App.showToast("Diary Linked!", "success");
             },
 
             resetApp: () => {
@@ -2334,7 +2849,8 @@ async function handleRequest(request, env) {
 
             executeReset: async () => {
                 try {
-                    ['chronicles_settings', 'chronicles_data', 'chronicles_ds_cache'].forEach(k => localStorage.removeItem(k));
+                    Storage.clearAllDataSourceCaches();
+                    ['chronicles_settings', 'chronicles_data', 'chronicles_last_diary'].forEach(k => localStorage.removeItem(k));
                     await clearPwaData();
                     window.location.href = window.location.pathname;
                 } catch (e) {
@@ -2394,7 +2910,7 @@ async function handleRequest(request, env) {
                 App.state.diaries.forEach(diary => {
                     const isActive = diary.id === App.state.activeDiaryId;
                     const div = document.createElement('div');
-                    const count = diary.entries.length;
+                    const count = App.getVisibleEntries(diary).length;
                     const countDisplay = count > 50 ? "50+" : count;
                     div.className = `p-3 cursor-pointer flex flex-col gap-0.5 transition-colors border-l-2 ${isActive ? 'bg-white-linen border-dull-purple' : 'border-transparent hover:bg-oatmeal-dark/30 hover:border-oatmeal-dark'}`;
                     div.onclick = () => App.selectDiary(diary.id);
@@ -2428,8 +2944,8 @@ async function handleRequest(request, env) {
                             <div class="bg-muted-pink p-4"><i data-lucide="book-plus" class="w-8 h-8 text-white-linen"></i></div>
                             <div>
                                 <h3 class="font-display text-xl font-semibold text-charcoal mb-2 tracking-tight">You're Connected!</h3>
-                                <p class="text-earth-metal/50 max-w-xs mx-auto mb-6 text-sm">Create your first diary to link a Notion data source.</p>
-                                <button onclick="App.attemptNewDiary()" class="bg-charcoal text-white-linen px-6 py-3 font-display font-medium hover:bg-dull-purple transition">Create First Diary</button>
+                                <p class="text-earth-metal/50 max-w-xs mx-auto mb-6 text-sm">Select an existing Notion data source to link your first diary.</p>
+                                <button onclick="App.attemptNewDiary()" class="bg-charcoal text-white-linen px-6 py-3 font-display font-medium hover:bg-dull-purple transition">Link First Diary</button>
                             </div>
                         </div>`;
                 } else {
@@ -2442,11 +2958,12 @@ async function handleRequest(request, env) {
                 const diary = App.state.diaries.find(d => d.id === App.state.activeDiaryId);
                 const gallery = document.getElementById('entryGallery');
                 const title = document.getElementById('activeDiaryTitle');
+                const visibleEntries = App.getVisibleEntries(diary);
 
                 if (!diary) return;
                 title.innerText = diary.title;
 
-                if (App.state.isLoading && diary.entries.length === 0) {
+                if (App.state.isLoading && visibleEntries.length === 0) {
                     gallery.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-center text-earth-metal/60">
                         <div class="loader w-8 h-8 border-4 border-dull-purple border-t-transparent rounded-full mb-4"></div>
                         <p>Loading entries...</p>
@@ -2455,15 +2972,14 @@ async function handleRequest(request, env) {
                     return;
                 }
 
-                if (diary.entries.length === 0) {
+                if (visibleEntries.length === 0) {
                     gallery.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-center text-earth-metal/60"><i data-lucide="camera" class="w-12 h-12 mb-4 opacity-50"></i><p>Empty.</p></div>`;
                     lucide.createIcons();
                     App.clearImageUrlCache();
                     return;
                 }
 
-                // Limit to 25 entries display if more exist (safety)
-                const displayEntries = diary.entries.slice(0, 25);
+                const displayEntries = visibleEntries.slice(0, LOCAL_SYNCED_ENTRY_LIMIT);
                 const imageMap = await App.loadEntryImages(displayEntries);
 
                 // Clear gallery after async work to prevent race condition duplicates
@@ -2507,7 +3023,7 @@ async function handleRequest(request, env) {
                 });
                 gallery.appendChild(grid);
 
-                const footerMsg = diary.entries.length >= 25
+                const footerMsg = visibleEntries.length >= LOCAL_SYNCED_ENTRY_LIMIT
                     ? "Showing last 25 entries. (Thumbnails only - check Notion for full quality)"
                     : "End of entries. (Thumbnails only - check Notion for full quality)";
                 let footer = document.createElement('div');
@@ -2559,11 +3075,11 @@ async function handleRequest(request, env) {
                 document.getElementById('imageManipControls').classList.add('hidden');
 
                 const diary = App.state.diaries.find(d => d.id === App.state.activeDiaryId);
-                if (!diary) return App.showToast("Create a diary first.", "error");
+                if (!diary) return App.showToast("Select a diary first.", "error");
                 App.applyDiaryCameraConfig(diary);
 
                 const toggleBtn = document.getElementById('ghostToggleBtn');
-                const lastEntryWithPhoto = diary.entries.find(e => e.photoDataURL || e.photoKey);
+                const lastEntryWithPhoto = App.getVisibleEntries(diary).find(e => e.photoDataURL || e.photoKey);
                 const ghostImg = document.getElementById('ghostOverlay');
                 const ghostCfg = App.getDiaryCameraConfig(diary);
                 App.state.ghostOpacity = ghostCfg.ghostOpacity;
@@ -3118,23 +3634,21 @@ async function handleRequest(request, env) {
                 const entry = diary?.entries.find(e => e.id === entryId);
                 const notionId = entry?.notionId;
                 App.revokeEntryImageCache(entryId);
-                if (entry && ImageStore.isAvailable()) {
-                    if (entry.photoKey) await ImageStore.del(entry.photoKey);
-                    if (entry.uploadKey) await ImageStore.del(entry.uploadKey);
+                if (notionId) {
+                    const marked = Storage.markEntryDeletedLocally(diaryId, entryId);
+                    Storage.clearPendingEntry(diaryId, entryId);
+                    Storage.queuePendingDelete(diaryId, { entryId, notionId, createdAt: UTILS.now() });
+                    if (marked) Storage.cleanupEntryAssets(marked);
+                } else {
+                    Storage.deleteEntry(diaryId, entryId);
                 }
-                Storage.deleteEntry(diaryId, entryId);
                 App.state.diaries = Storage.getData();
                 App.renderDiaryView();
                 App.renderSidebar();
                 App.showToast("Deleted locally", "success");
                 if (notionId) {
-                    try {
-                        await API.request('PATCH', `/pages/${notionId}`, { archived: true });
-                        App.showToast("Deleted from Notion", "success");
-                    } catch (e) {
-                        console.error("Notion delete failed", e);
-                        App.showToast("Failed to delete from Notion", "error");
-                    }
+                    App.showToast("Delete queued for Notion sync.", "info");
+                    SyncManager.syncCurrentDiary();
                 }
             },
 
@@ -3187,6 +3701,7 @@ async function handleRequest(request, env) {
 
                     const newEntry = {
                         id: entryId,
+                        clientEntryId: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `entry-${entryId}-${Date.now()}`,
                         date: date,
                         title: title,
                         notes: notes,
@@ -3197,38 +3712,21 @@ async function handleRequest(request, env) {
                         uploadKey: uploadKey,
                         uploadDataURL: uploadDataURL,
                         synced: false,
-                        notionId: null
+                        notionId: null,
+                        deletedLocally: false
                     };
 
                     Storage.saveEntry(App.state.activeDiaryId, newEntry);
+                    Storage.queuePendingEntry(App.state.activeDiaryId, newEntry.id);
                     App.state.diaries = Storage.getData();
 
                     App.closeModal('entryModal', { force: true });
                     App.renderDiaryView();
                     App.showToast("Saved locally", 'success');
-
-                    // For sync, we temporarily attach the High Res image to the entry object in memory 
-                    // so the push function uses it, but we don't save it to localStorage
-                    // Or we can just pass it directly if we restructure sync. 
-                    // Simplest hack: Modify the entry object in memory before calling sync
-                    const entryForSync = { ...newEntry, photoDataURL: photoToUpload };
-
-                    // We need to manually trigger push for this specific entry with high res data
-                    // Because SyncManager reads from Storage (which has low res)
-                    // So we bypass standard sync loop for this new entry
-                    try {
-                        SyncManager.updateUI('syncing');
-                        const notionId = await SyncManager.pushEntryToNotion(diary.dataSourceId, entryForSync);
-                        Storage.updateEntrySyncStatus(App.state.activeDiaryId, newEntry.id, true, notionId);
-                        SyncManager.updateUI('synced');
-                        App.state.diaries = Storage.getData();
-                        App.renderDiaryView();
-                    } catch (e) {
-                        console.error("Immediate sync failed", e);
-                        SyncManager.updateUI('error');
-                        // It will retry later with low res version from storage, which is acceptable fallback
-                        Storage.queuePendingEntry(App.state.activeDiaryId, newEntry.id);
-                        SyncManager.scheduleRetry(App.state.activeDiaryId);
+                    if (navigator.onLine) {
+                        SyncManager.syncCurrentDiary();
+                    } else {
+                        SyncManager.updateUI('offline');
                     }
                 } finally {
                     App.setEntryLoading(false);
@@ -3970,9 +4468,10 @@ async function handleRequest(request, env) {
                     return;
                 }
                 fetchUrl.searchParams.append('url', 'https://api.notion.com/v1/users/me');
-                if (proxyToken) fetchUrl.searchParams.append('token', proxyToken);
                 try {
-                    const res = await fetch(fetchUrl.toString());
+                    const headers = {};
+                    if (proxyToken) headers['X-Proxy-Token'] = proxyToken;
+                    const res = await fetch(fetchUrl.toString(), { headers });
                     if (res.ok || res.status === 401) {
                         App.showToast("Proxy Verified!", "success");
                         const current = Storage.getSettings();
@@ -3988,14 +4487,46 @@ async function handleRequest(request, env) {
                     btn.disabled = false;
                 }
             },
-            saveBeforeOAuth: () => {
+            isLocalDevPage: () => {
+                const host = window.location.hostname;
+                return host === 'localhost' || host === '127.0.0.1';
+            },
+            saveBeforeOAuth: async () => {
                 const workerUrl = document.getElementById('settingWorkerUrl').value;
                 const proxyToken = document.getElementById('settingProxyToken').value;
                 const current = Storage.getSettings();
                 Storage.setSettings({ ...current, workerUrl, proxyToken });
-                // Send the full, canonical URL for this page so the worker can redirect back here after OAuth
-                const returnUrl = encodeURIComponent(new URL('index.html', window.location.href).toString());
-                window.location.href = `https://notion-oauth-handler.mimansa-jaiswal.workers.dev/auth/login?from=${returnUrl}`;
+                const returnTo = new URL('index.html', window.location.href).toString();
+                const loginUrl = new URL(`${OAUTH_HANDLER_URL}/auth/login`);
+                loginUrl.searchParams.set('from', returnTo);
+
+                if (App.isLocalDevPage()) {
+                    const devPassword = localStorage.getItem(OAUTH_DEV_PASSWORD_KEY);
+                    if (!devPassword) {
+                        App.showToast("Set localStorage oauth_dev_password for localhost OAuth", "error");
+                        return;
+                    }
+                    try {
+                        const unlockResponse = await fetch(`${OAUTH_HANDLER_URL}/auth/dev-unlock`, {
+                            method: 'POST',
+                            headers: { 'X-OAuth-Dev-Password': devPassword }
+                        });
+                        if (!unlockResponse.ok) {
+                            const body = await unlockResponse.text();
+                            throw new Error(body || `Status ${unlockResponse.status}`);
+                        }
+                        const unlock = await unlockResponse.json();
+                        if (!unlock?.unlockToken) {
+                            throw new Error("Missing unlock token");
+                        }
+                        loginUrl.searchParams.set('dev_unlock', unlock.unlockToken);
+                    } catch (e) {
+                        App.showToast(`OAuth dev unlock failed: ${e.message || 'unknown error'}`, "error");
+                        return;
+                    }
+                }
+
+                window.location.href = loginUrl.toString();
             },
             testManualConnection: async (btn) => {
                 const workerUrl = document.getElementById('settingWorkerUrl').value;
