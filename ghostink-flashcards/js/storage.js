@@ -19,6 +19,69 @@ const resolveStorageScope = () => {
 const STORAGE_SCOPE = resolveStorageScope();
 const SETTINGS_KEY = `${STORAGE_SCOPE}_settings_v1`;
 const DB_NAME = `GhostInkDB_${STORAGE_SCOPE}`;
+const SETTINGS_VERSION = 1;
+const DEFAULT_SETTINGS = Object.freeze({
+    settingsVersion: SETTINGS_VERSION,
+    workerUrl: '',
+    proxyToken: '',
+    authToken: '',
+    deckSource: '',
+    cardSource: '',
+    aiProvider: '',
+    aiModel: '',
+    aiKey: '',
+    dyUseJudgeAi: false,
+    dyProvider: '',
+    dyModel: '',
+    dyKey: '',
+    dyVerified: false,
+    sttProvider: '',
+    sttModel: '',
+    sttKey: '',
+    sttPrompt: '',
+    sttVerified: false,
+    sttPermissionWarmed: false,
+    themeMode: 'system',
+    fontMode: 'mono',
+    fabEnabled: true,
+    fabPos: null,
+    workerVerified: false,
+    authVerified: false,
+    sourcesVerified: false,
+    aiVerified: false,
+    sourcesCache: { deckOptions: [], cardOptions: [] },
+    sourcesSaved: false
+});
+
+const normalizeSettings = (raw = {}) => {
+    const candidate = (raw && typeof raw === 'object') ? raw : {};
+    const merged = {
+        ...DEFAULT_SETTINGS,
+        ...candidate,
+        settingsVersion: SETTINGS_VERSION
+    };
+    const cache = candidate.sourcesCache && typeof candidate.sourcesCache === 'object' ? candidate.sourcesCache : {};
+    merged.sourcesCache = {
+        deckOptions: Array.isArray(cache.deckOptions) ? cache.deckOptions : [],
+        cardOptions: Array.isArray(cache.cardOptions) ? cache.cardOptions : []
+    };
+    merged.dyUseJudgeAi = merged.dyUseJudgeAi === true;
+    merged.fabEnabled = merged.fabEnabled !== false;
+    merged.workerVerified = merged.workerVerified === true;
+    merged.authVerified = merged.authVerified === true;
+    merged.sourcesVerified = merged.sourcesVerified === true;
+    merged.aiVerified = merged.aiVerified === true;
+    merged.dyVerified = merged.dyVerified === true;
+    merged.sttVerified = merged.sttVerified === true;
+    merged.sttPermissionWarmed = merged.sttPermissionWarmed === true;
+    if (candidate.sourcesSaved === undefined) {
+        merged.sourcesSaved = !!(merged.deckSource && merged.cardSource && merged.sourcesVerified);
+    } else {
+        merged.sourcesSaved = merged.sourcesSaved === true;
+    }
+    if (merged.fabPos && typeof merged.fabPos !== 'object') merged.fabPos = null;
+    return merged;
+};
 
 export const Storage = {
     db: null,
@@ -143,6 +206,7 @@ export const Storage = {
         if (typeof card.id !== 'string' || !card.id) return { valid: false, error: 'Card must have a valid id' };
         if (typeof card.deckId !== 'string' || !card.deckId) return { valid: false, error: 'Card must have a valid deckId' };
         if (typeof card.name !== 'string') return { valid: false, error: 'Card must have a name' };
+        if (!Array.isArray(card.reviewHistory)) return { valid: false, error: 'Card reviewHistory must be an array' };
         return { valid: true };
     },
 
@@ -204,6 +268,7 @@ export const Storage = {
                 }
                 let completed = 0;
                 let errors = 0;
+                const failedKeys = [];
                 keys.forEach(key => {
                     const delReq = store.delete(key);
                     delReq.onsuccess = () => {
@@ -212,7 +277,10 @@ export const Storage = {
                     };
                     delReq.onerror = () => {
                         errors++;
-                        if (completed + errors === keys.length) resolve(keys);
+                        failedKeys.push(key);
+                        if (completed + errors === keys.length) {
+                            reject(new Error(`Failed to delete ${failedKeys.length} card(s) for deck ${deckId}`));
+                        }
                     };
                 });
             };
@@ -427,80 +495,17 @@ export const Storage = {
 
     getSettings() {
         const raw = localStorage.getItem(this.settingsKey);
-        if (!raw) {
-            return {
-                workerUrl: '',
-                proxyToken: '',
-                authToken: '',
-                deckSource: '',
-                cardSource: '',
-                aiProvider: '',
-                aiModel: '',
-                aiKey: '',
-                dyUseJudgeAi: false,
-                dyProvider: '',
-                dyModel: '',
-                dyKey: '',
-                dyVerified: false,
-                sttProvider: '',
-                sttModel: '',
-                sttKey: '',
-                sttPrompt: '',
-                sttVerified: false,
-                sttPermissionWarmed: false,
-                themeMode: 'system',
-                fontMode: 'mono',
-                fabEnabled: true,
-                fabPos: null,
-                workerVerified: false,
-                authVerified: false,
-                sourcesVerified: false,
-                aiVerified: false,
-                sourcesCache: { deckOptions: [], cardOptions: [] },
-                sourcesSaved: false
-            };
-        }
+        if (!raw) return normalizeSettings();
         try {
-            const parsed = JSON.parse(raw);
-            return parsed;
+            return normalizeSettings(JSON.parse(raw));
         } catch (e) {
             console.error('Failed to parse settings, resetting to defaults:', e);
-            return {
-                workerUrl: '',
-                proxyToken: '',
-                authToken: '',
-                deckSource: '',
-                cardSource: '',
-                aiProvider: '',
-                aiModel: '',
-                aiKey: '',
-                dyUseJudgeAi: false,
-                dyProvider: '',
-                dyModel: '',
-                dyKey: '',
-                dyVerified: false,
-                sttProvider: '',
-                sttModel: '',
-                sttKey: '',
-                sttPrompt: '',
-                sttVerified: false,
-                sttPermissionWarmed: false,
-                themeMode: 'system',
-                fontMode: 'mono',
-                fabEnabled: true,
-                fabPos: null,
-                workerVerified: false,
-                authVerified: false,
-                sourcesVerified: false,
-                aiVerified: false,
-                sourcesCache: { deckOptions: [], cardOptions: [] },
-                sourcesSaved: false
-            };
+            return normalizeSettings();
         }
     },
 
     setSettings(newSettings) {
-        localStorage.setItem(this.settingsKey, JSON.stringify(newSettings));
+        localStorage.setItem(this.settingsKey, JSON.stringify(normalizeSettings(newSettings)));
     },
 
     _validateSession(session) {

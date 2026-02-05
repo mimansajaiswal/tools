@@ -39,8 +39,8 @@ export const API = {
             const cleanWorker = workerUrl.trim().replace(/\/$/, '');
             const fetchUrl = new URL(cleanWorker);
             fetchUrl.searchParams.append('url', `https://api.notion.com/v1${endpoint}`);
-            if (proxyToken) fetchUrl.searchParams.append('token', proxyToken.trim());
             const headers = { 'Authorization': `Bearer ${authToken.trim()}`, 'Notion-Version': '2025-09-03' };
+            if (proxyToken) headers['X-Proxy-Token'] = proxyToken.trim();
             let payload = body;
             if (body && !(body instanceof FormData)) {
                 headers['Content-Type'] = 'application/json';
@@ -57,6 +57,19 @@ export const API = {
                 error.status = res.status;
                 error.endpoint = endpoint;
                 error.method = method;
+                const retryAfter = res.headers.get('Retry-After');
+                if (retryAfter) {
+                    const secs = Number(retryAfter);
+                    if (Number.isFinite(secs) && secs > 0) {
+                        error.retryAfterMs = Math.ceil(secs * 1000);
+                    } else {
+                        const at = Date.parse(retryAfter);
+                        if (Number.isFinite(at)) {
+                            const waitMs = Math.max(0, at - Date.now());
+                            if (waitMs > 0) error.retryAfterMs = waitMs;
+                        }
+                    }
+                }
                 throw error;
             }
             return await res.json();
@@ -72,7 +85,9 @@ export const API = {
                 lastError = e;
                 // Retry on rate limit (429) or server errors (5xx)
                 if (e.status === 429 || (e.status >= 500 && e.status < 600)) {
-                    const delay = Math.pow(2, i) * 1000;  // 1s, 2s, 4s
+                    const delay = e.status === 429 && Number.isFinite(e.retryAfterMs)
+                        ? e.retryAfterMs
+                        : Math.pow(2, i) * 1000;  // 1s, 2s, 4s
                     console.warn(`API request failed (${e.status}), retrying in ${delay}ms...`, e.message);
                     await new Promise(r => setTimeout(r, delay));
                 } else {

@@ -34,6 +34,8 @@ import {
 import { Storage } from './storage.js';
 import { API } from './api.js';
 
+const OAUTH_DEV_PASSWORD_KEY = 'oauth_dev_password';
+
 import {
     SRS,
     getDecay,
@@ -1111,18 +1113,17 @@ export const App = {
     },
     captureOAuth() {
         const hashParams = new URLSearchParams(location.hash.replace('#', '?'));
-        const searchParams = new URLSearchParams(location.search);
-        const token = hashParams.get('token') || searchParams.get('token') || searchParams.get('accessToken');
+        const token = hashParams.get('token') || hashParams.get('accessToken');
         if (token) {
             this.state.settings.authToken = token;
-            this.state.authVerified = true;
-            this.state.settings.authVerified = true;
+            this.state.authVerified = false;
+            this.state.settings.authVerified = false;
             Storage.setSettings(this.state.settings);
             toast('Notion token captured');
             safeHistoryReplace({}, document.title, location.pathname);
             this.openSettings();
             if (this.state.settings.workerUrl) {
-                this.scanSources();
+                this.verifyAuth().catch(() => { });
             } else {
                 toast('Add worker URL then scan sources');
             }
@@ -1164,6 +1165,7 @@ export const App = {
         for (const c of rawCards) {
             const srsState = parseSrsState(c.srsState || null);
             let needsSave = false;
+            if (!Array.isArray(c.reviewHistory)) needsSave = true;
             if (srsState.learning.state === 'new' && ((c.reviewHistory || []).length > 0 || c.fsrs?.lastReview || c.sm2?.lastReview)) {
                 srsState.learning.state = 'review';
                 srsState.learning.step = 0;
@@ -1173,6 +1175,7 @@ export const App = {
             const card = {
                 ...c,
                 suspended: c.suspended ? 1 : 0,
+                reviewHistory: Array.isArray(c.reviewHistory) ? c.reviewHistory : [],
                 srsState,
                 fsrs: {
                     difficulty: c.fsrs?.difficulty ?? srsState.fsrs.difficulty,
@@ -2409,7 +2412,7 @@ export const App = {
         const hasWorkerUrl = !!this.state.settings.workerUrl;
         const workerOk = hasWorkerUrl && this.state.workerVerified;
         const hasToken = !!this.state.settings.authToken;
-        const authOk = workerOk && hasToken;
+        const authOk = workerOk && hasToken && (this.state.authVerified || this.state.settings.authVerified);
         const ready = online && workerOk && authOk;
 
         const q2count = this.state.queue.size;
@@ -8612,8 +8615,9 @@ export const App = {
         try {
             const url = new URL(workerUrl.replace(/\/$/, ''));
             url.searchParams.append('url', 'https://api.notion.com/v1/users/me');
-            if (proxyToken) url.searchParams.append('token', proxyToken);
-            const res = await fetch(url.toString());
+            const headers = {};
+            if (proxyToken) headers['X-Proxy-Token'] = proxyToken;
+            const res = await fetch(url.toString(), { headers });
             if (res.ok || res.status === 401) {
                 toast('Worker reachable');
                 this.state.settings.workerUrl = workerUrl;
@@ -8643,16 +8647,34 @@ export const App = {
         const proxyToken = (el('#settingProxyToken').value.trim()) || this.state.settings.proxyToken;
         const authVal = (el('#settingAuthToken').value.trim()) || this.state.settings.authToken;
         if (!authVal) return toast('Add Notion token');
-        this.state.settings.workerUrl = workerUrl;
-        this.state.settings.proxyToken = proxyToken;
-        this.state.settings.authToken = authVal;
-        this.state.authVerified = true;
-        this.state.settings.authVerified = true;
-        Storage.setSettings(this.state.settings);
-        toast('Token saved');
-        this.renderStatus();
-        this.renderGate();
-        await this.scanSources();
+        try {
+            showLoading('Verifying Notion token...', 'Checking access with Notion.');
+            await API.request('GET', '/users/me', null, {
+                workerUrl,
+                proxyToken,
+                authToken: authVal
+            });
+            this.state.settings.workerUrl = workerUrl;
+            this.state.settings.proxyToken = proxyToken;
+            this.state.settings.authToken = authVal;
+            this.state.authVerified = true;
+            this.state.settings.authVerified = true;
+            Storage.setSettings(this.state.settings);
+            toast('Token verified');
+            this.renderStatus();
+            this.renderGate();
+            await this.scanSources();
+        } catch (e) {
+            console.error('Token verification failed:', e);
+            this.state.authVerified = false;
+            this.state.settings.authVerified = false;
+            Storage.setSettings(this.state.settings);
+            this.renderStatus();
+            this.renderGate();
+            toast('Token verification failed');
+        } finally {
+            hideLoading();
+        }
     },
     async verifyAiSettings() {
         if (!navigator.onLine) {
@@ -8842,12 +8864,40 @@ export const App = {
         if (provider === 'gemini') return 'gemini-2.0-flash';
         return '';
     },
-    startOAuth() {
+    async startOAuth() {
         if (!this.state.settings.workerUrl) return toast('Add worker URL first');
         this.saveSettings();
         showLoading('Starting Notion sign-in...', 'Redirecting to Notion authorization.');
+        const oauthBase = 'https://notion-oauth-handler.mimansa-jaiswal.workers.dev';
         const here = encodeURIComponent(window.location.href);
-        window.location.href = `https://notion-oauth-handler.mimansa-jaiswal.workers.dev/auth/login?from=${here}`;
+        const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+        try {
+            if (isLocal) {
+                const devPassword = (localStorage.getItem(OAUTH_DEV_PASSWORD_KEY) || '').trim();
+                if (!devPassword) {
+                    hideLoading();
+                    toast(`Set localStorage.${OAUTH_DEV_PASSWORD_KEY} first`);
+                    return;
+                }
+                const unlockRes = await fetch(`${oauthBase}/auth/dev-unlock`, {
+                    method: 'POST',
+                    headers: { 'X-OAuth-Dev-Password': devPassword }
+                });
+                if (!unlockRes.ok) {
+                    const msg = await unlockRes.text().catch(() => '');
+                    throw new Error(msg || `Dev unlock failed (${unlockRes.status})`);
+                }
+                const data = await unlockRes.json();
+                const unlockToken = (data?.unlockToken || '').trim();
+                if (!unlockToken) throw new Error('Dev unlock token missing');
+                window.location.href = `${oauthBase}/auth/login?from=${here}&dev_unlock=${encodeURIComponent(unlockToken)}`;
+                return;
+            }
+            window.location.href = `${oauthBase}/auth/login?from=${here}`;
+        } catch (e) {
+            hideLoading();
+            toast(`OAuth start failed: ${e?.message || 'unknown error'}`);
+        }
     },
     async scanSources() {
         if (!navigator.onLine) {
@@ -9043,9 +9093,12 @@ export const App = {
     },
     async validateDb(dbOrId, type) {
         try {
-            const meta = typeof dbOrId === 'string'
+            let meta = typeof dbOrId === 'string'
                 ? await API.getDatabase(dbOrId)
                 : dbOrId;
+            if (!meta?.properties && meta?.id) {
+                meta = await API.getDatabase(meta.id);
+            }
             const props = meta?.properties || {};
             const has = (name, kind) => props[name]?.type === kind;
             if (type === 'deck') {
@@ -9057,6 +9110,8 @@ export const App = {
                     ['New Card Limit', 'number'],
                     ['Reverse Mode Enabled', 'checkbox'],
                     ['Dynamic Context?', 'checkbox'],
+                    ['Anki Metadata', 'rich_text'],
+                    ['AI Revision Prompt', 'rich_text'],
                     ['DyContext AI Prompt', 'rich_text'],
                     ['Created In-App', 'checkbox'],
                     ['Archived?', 'checkbox'],
@@ -9084,6 +9139,9 @@ export const App = {
                     ['Due Date', 'date'],
                     ['Updated In-App', 'checkbox'],
                     ['Review History', 'rich_text'],
+                    ['Anki GUID', 'rich_text'],
+                    ['Anki Note Type', 'select'],
+                    ['Anki Fields JSON', 'rich_text'],
                     ['Cloze Indexes', 'rich_text'],
                     ['SRS State', 'rich_text'],
                     ['Cloze Parent Card', 'relation'],
@@ -9144,12 +9202,13 @@ export const App = {
         try {
             const url = new URL(s.workerUrl.replace(/\/$/, ''));
             url.searchParams.append('url', 'https://api.notion.com/v1/users/me');
-            if (s.proxyToken) url.searchParams.append('token', s.proxyToken);
+            const headers = {};
+            if (s.proxyToken) headers['X-Proxy-Token'] = s.proxyToken;
 
             // Add timeout to prevent hanging on unstable networks
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 3000);
-            const res = await fetch(url.toString(), { signal: controller.signal });
+            const res = await fetch(url.toString(), { signal: controller.signal, headers });
             clearTimeout(timeout);
 
             if (res.ok || res.status === 401) {
@@ -9319,10 +9378,11 @@ export const App = {
     isReady() {
         const s = this.state.settings;
         const hasSettings = !!(s.workerUrl && s.authToken && s.deckSource && s.cardSource);
+        const hasSavedSources = s.sourcesSaved === true;
         // If offline, trust the stored settings (assume they were verified before)
-        if (!navigator.onLine && hasSettings) return true;
+        if (!navigator.onLine && hasSettings && hasSavedSources) return true;
         // If online, require full verification
-        return hasSettings && s.workerVerified && (s.authVerified || this.state.authVerified) && s.sourcesVerified;
+        return hasSettings && hasSavedSources && s.workerVerified && (s.authVerified || this.state.authVerified) && s.sourcesVerified;
     },
     loadAISettings() {
         const s = Storage.getSettings();

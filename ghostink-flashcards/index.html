@@ -1552,7 +1552,8 @@
                     <li>Open <a class="text-accent underline" href="https://workers.cloudflare.com/"
                             target="_blank">Cloudflare Workers</a> and create a new Worker.</li>
                     <li>Replace its contents with the code below, save, and deploy.</li>
-                    <li>(Optional) Add variable <code>ALL_CORS_PROXY_MATCH_TOKEN</code> to require a token.</li>
+                    <li>(Optional) Add variable <code>ALL_CORS_PROXY_MATCH_TOKEN</code> to require
+                        <code>X-Proxy-Token</code> (query <code>?token=</code> still accepted).</li>
                     <li>Paste the Worker URL into Settings.</li>
                 </ol>
                 <div class="relative">
@@ -1560,70 +1561,108 @@
                         class="absolute top-2 right-2 bg-surface hover:bg-white px-2 py-1 rounded text-xs shadow text-main font-bold ">Copy</button>
                     <pre id="workerCodeBlock"
                         class="bg-[color:var(--badge-bg)] text-[color:var(--badge-text)] p-4 rounded text-xs font-mono overflow-x-auto">
-export default {
- async fetch(request, env) {
- return await handleRequest(request, env);
- },
-};
+function getAllowedOrigins(env) {
+ const raw = (env.ALLOWED_ORIGINS || "https://mimansajaiswal.github.io").trim();
+ return raw.split(",").map((s) => s.trim()).filter(Boolean);
+}
 
-function getCorsHeaders(request) {
+function isLocalDevOrigin(origin) {
+ if (!origin) return false;
+ try {
+ const parsed = new URL(origin);
+ if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+ return parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
+ } catch (_) {
+ return false;
+ }
+}
+
+function isAllowedOrigin(origin, allowed) {
+ if (!origin) return false;
+ return allowed.includes(origin) || isLocalDevOrigin(origin);
+}
+
+function getCorsHeaders(request, env) {
+ const origin = request.headers.get("Origin");
+ const allowed = getAllowedOrigins(env);
+ const allowOrigin = isAllowedOrigin(origin, allowed) ? origin : allowed[0];
  return {
- "Access-Control-Allow-Origin": request.headers.get("Origin") || "*",
+ "Access-Control-Allow-Origin": allowOrigin,
  "Access-Control-Allow-Methods": "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS",
- "Access-Control-Allow-Headers": "Content-Type, Authorization, Notion-Version",
+ "Access-Control-Allow-Headers": "Content-Type, Authorization, Notion-Version, X-Proxy-Token",
+ "Vary": "Origin",
  };
 }
 
-function handleOptions(request) {
- return new Response(null, {
- headers: getCorsHeaders(request),
+function withCors(request, env, response) {
+ const cors = getCorsHeaders(request, env);
+ const out = new Response(response.body, response);
+ for (const [key, value] of Object.entries(cors)) out.headers.set(key, value);
+ out.headers.set("Cache-Control", "no-store");
+ return out;
+}
+
+function unauthorized(request, env) {
+ return withCors(request, env, new Response("Unauthorized", { status: 403 }));
+}
+
+function getProxyToken(request) {
+ const url = new URL(request.url);
+ return request.headers.get("X-Proxy-Token") || url.searchParams.get("token");
+}
+
+function buildProxyRequest(targetUrl, request) {
+ const headers = new Headers();
+ for (const [key, value] of request.headers.entries()) {
+ const k = key.toLowerCase();
+ if (k === "host") continue;
+ if (k === "cookie") continue;
+ if (k.startsWith("cf-")) continue;
+ if (k === "x-proxy-token") continue;
+ headers.set(key, value);
+ }
+
+ return new Request(targetUrl, {
+ method: request.method,
+ headers,
+ body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
+ redirect: "follow",
  });
 }
 
-function withCors(request, response) {
- const corsHeaders = getCorsHeaders(request);
- const newResponse = new Response(response.body, response);
- for (const [key, value] of Object.entries(corsHeaders)) {
- newResponse.headers.set(key, value);
- }
- newResponse.headers.append("Vary", "Origin");
- return newResponse;
-}
-
-async function handleRequest(request, env) {
+export default {
+ async fetch(request, env) {
  if (request.method === "OPTIONS") {
- return handleOptions(request);
+ return new Response(null, { headers: getCorsHeaders(request, env) });
  }
 
  const url = new URL(request.url);
  const requiredToken = (env.ALL_CORS_PROXY_MATCH_TOKEN || "").trim();
-
- if (requiredToken !== "") {
- const providedToken = url.searchParams.get("token");
- if (providedToken !== requiredToken) {
- return withCors(request, new Response("Unauthorized", { status: 403 }));
- }
- url.searchParams.delete("token");
+ if (requiredToken) {
+ const provided = getProxyToken(request);
+ if (!provided || provided !== requiredToken) return unauthorized(request, env);
  }
 
  const targetUrlParam = url.searchParams.get("url");
  if (!targetUrlParam) {
- return withCors(request, new Response("Missing url parameter", { status: 400 }));
+ return withCors(request, env, new Response("Missing url parameter", { status: 400 }));
  }
 
  let targetUrl;
  try {
  targetUrl = new URL(targetUrlParam).toString();
- } catch (err) {
- return withCors(request, new Response("Invalid target URL", { status: 400 }));
+ } catch (_) {
+ return withCors(request, env, new Response("Invalid target URL", { status: 400 }));
  }
 
- const modifiedRequest = new Request(targetUrl, request);
- modifiedRequest.headers.set("Origin", new URL(targetUrl).origin);
-
- const response = await fetch(modifiedRequest);
- return withCors(request, response);
-}
+ try {
+ const upstream = await fetch(buildProxyRequest(targetUrl, request));
+ return withCors(request, env, upstream);
+ } catch (e) {
+ return withCors(request, env, new Response(`Upstream request failed: ${e?.message || "unknown error"}`, { status: 502 }));
+ }
+ },
+};
  </pre>
                 </div>
             </div>
