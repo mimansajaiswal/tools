@@ -30,7 +30,6 @@ const AI = {
     buildPrompt: async () => {
         const pets = await PetTracker.DB.getAll(PetTracker.STORES.PETS);
         const eventTypes = await PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES);
-        const careItems = await PetTracker.DB.getAll(PetTracker.STORES.CARE_ITEMS);
         const scales = await PetTracker.DB.getAll(PetTracker.STORES.SCALES);
         const scaleLevels = await PetTracker.DB.getAll(PetTracker.STORES.SCALE_LEVELS);
 
@@ -38,6 +37,9 @@ const AI = {
         const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
         const primaryPet = pets.find(p => p.isPrimary) || pets[0];
+
+        // Event types that are recurring (for scheduling context)
+        const recurringTypes = eventTypes.filter(t => t.isRecurring);
 
         return `You are a pet health tracking assistant. Parse the user's natural language input into structured event entries.
 
@@ -51,10 +53,10 @@ ${pets.map(p => `- "${p.name}" (ID: ${p.id}, Species: ${p.species || 'Unknown'})
 Primary pet for ambiguous entries: ${primaryPet ? `"${primaryPet.name}"` : 'None set'}
 
 ## Event Types
-${eventTypes.map(t => `- "${t.name}" (Category: ${t.category}, Mode: ${t.trackingMode}${t.usesSeverity ? ', Uses Severity' : ''})`).join('\n') || '- No event types configured'}
+${eventTypes.map(t => `- "${t.name}" (Category: ${t.category}, Mode: ${t.trackingMode}${t.usesSeverity ? ', Uses Severity' : ''}${t.isRecurring ? ', Recurring' : ''})`).join('\n') || '- No event types configured'}
 
-## Care Items (Medications, Vaccines, etc.)
-${careItems.map(c => `- "${c.name}" (Type: ${c.type})`).join('\n') || '- No care items configured'}
+## Recurring Event Types (Medications, Vaccines, Scheduled Care)
+${recurringTypes.map(t => `- "${t.name}" (Every ${t.intervalValue || 1} ${t.intervalUnit || 'days'})`).join('\n') || '- No recurring event types configured'}
 
 ## Severity Scales
 ${scales.map(s => {
@@ -66,7 +68,7 @@ ${scales.map(s => {
 1. Parse the input into one or more event entries
 2. If multiple pets are mentioned (e.g., "Luna and Max"), create SEPARATE entries for each pet
 3. If pet name is ambiguous or not mentioned, use the primary pet
-4. Match event types and care items by name (case-insensitive)
+4. Match event types by name (case-insensitive)
 5. For dates, interpret relative terms (today, yesterday, this morning, etc.)
 6. For severity, match to configured scale levels
 7. Include confidence score (0.0-1.0) based on clarity of input
@@ -78,7 +80,6 @@ ${scales.map(s => {
       "title": "Event title",
       "petName": "Pet name as typed",
       "eventType": "Event type name",
-      "careItem": "Care item name or null",
       "date": "YYYY-MM-DD",
       "time": "HH:mm or null",
       "status": "Completed",
@@ -358,7 +359,6 @@ Parse the following input:`;
     saveAll: async () => {
         const pets = await PetTracker.DB.getAll(PetTracker.STORES.PETS);
         const eventTypes = await PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES);
-        const careItems = await PetTracker.DB.getAll(PetTracker.STORES.CARE_ITEMS);
 
         const toSave = AI.state.entries.filter(e => !AI.state.deletedEntries.has(e._id));
         let saved = 0;
@@ -379,11 +379,6 @@ Parse the following input:`;
                     t.name.toLowerCase() === entry.eventType?.toLowerCase()
                 );
 
-                // Resolve care item
-                const careItem = careItems.find(c =>
-                    c.name.toLowerCase() === entry.careItem?.toLowerCase()
-                );
-
                 // Build start date
                 let startDate = entry.date;
                 if (entry.time) {
@@ -394,7 +389,6 @@ Parse the following input:`;
                     title: entry.title || eventType?.name || 'Event',
                     petIds: [pet.id],
                     eventTypeId: eventType?.id || null,
-                    careItemId: careItem?.id || null,
                     startDate,
                     status: entry.status || 'Completed',
                     notes: entry.notes || '',

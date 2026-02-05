@@ -1690,12 +1690,11 @@ export default {
 
         App.saveSettings = () => {
             // Always collect data source mappings
+            // Note: careItems and carePlans have been removed - scheduling now handled via event types
             const dataSources = {
                 pets: document.getElementById('dsMapPets')?.value || '',
                 events: document.getElementById('dsMapEvents')?.value || '',
                 eventTypes: document.getElementById('dsMapEventTypes')?.value || '',
-                careItems: document.getElementById('dsMapCareItems')?.value || '',
-                carePlans: document.getElementById('dsMapCarePlans')?.value || '',
                 contacts: document.getElementById('dsMapContacts')?.value || '',
                 scales: document.getElementById('dsMapScales')?.value || '',
                 scaleLevels: document.getElementById('dsMapScaleLevels')?.value || ''

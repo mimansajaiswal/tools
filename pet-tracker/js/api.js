@@ -9,10 +9,13 @@ const API = {
      */
     request: async (method, endpoint, body = null) => {
         const settings = PetTracker.Settings.get();
-        const { workerUrl, proxyToken, notionToken } = settings;
+        const { workerUrl, proxyToken, notionToken, notionOAuthData } = settings;
+
+        // Use OAuth token if available, otherwise use direct token
+        const token = notionToken || notionOAuthData?.access_token;
 
         if (!workerUrl) throw new Error('Worker URL not configured');
-        if (!notionToken) throw new Error('Notion token not configured');
+        if (!token) throw new Error('Notion token not configured');
 
         const cleanWorkerUrl = workerUrl.trim().replace(/\/$/, '');
         const target = `https://api.notion.com/v1${endpoint}`;
@@ -22,7 +25,7 @@ const API = {
         if (proxyToken) fetchUrl.searchParams.append('token', proxyToken.trim());
 
         const headers = {
-            'Authorization': `Bearer ${notionToken.trim()}`,
+            'Authorization': `Bearer ${token.trim()}`,
             'Notion-Version': '2025-09-03'
         };
 

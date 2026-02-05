@@ -424,6 +424,14 @@ const App = {
         }
 
         const eventType = App.state.eventTypes.find(t => t.id === eventTypeId);
+
+        // Get existing media if editing an existing event
+        let existingMedia = [];
+        if (editId) {
+            const existingEvent = await PetTracker.DB.get(PetTracker.STORES.EVENTS, editId);
+            existingMedia = existingEvent?.media || [];
+        }
+
         const eventData = {
             title: eventType?.name || 'Event',
             petIds: [petId],
@@ -432,17 +440,17 @@ const App = {
             notes: notes || '',
             value: value ? parseFloat(value) : null,
             severityLevelId: severityLevelId || null,
-            media: []
+            media: existingMedia // Preserve existing media by default
         };
 
         try {
-            // Process pending attachments
+            // Process pending attachments (new files to add)
             if (App.state.pendingAttachments.length > 0) {
                 PetTracker.UI.showLoading('Processing attachments...');
                 const processedMedia = await Media.processAndStoreMedia(App.state.pendingAttachments);
 
-                // Store media info for the event
-                eventData.media = processedMedia
+                // Add new media to existing media
+                const newMedia = processedMedia
                     .filter(m => !m.error)
                     .map(m => ({
                         id: m.id,
@@ -450,6 +458,9 @@ const App = {
                         name: m.originalName,
                         size: m.uploadSize || m.originalSize
                     }));
+
+                // Combine existing and new media
+                eventData.media = [...existingMedia, ...newMedia];
 
                 PetTracker.UI.hideLoading();
             }

@@ -356,46 +356,59 @@ const Analytics = {
     },
 
     /**
-     * Render adherence statistics
+     * Render adherence statistics based on recurring event types
      */
     renderAdherenceStats: async () => {
         const container = document.getElementById('adherenceStats');
         if (!container) return;
 
-        const carePlans = await PetTracker.DB.getAll(PetTracker.STORES.CARE_PLANS);
+        const eventTypes = await PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES);
         const events = await PetTracker.DB.getAll(PetTracker.STORES.EVENTS);
 
-        if (carePlans.length === 0) {
-            container.innerHTML = '<p class="text-earth-metal text-sm col-span-full">No care plans configured</p>';
+        // Filter to recurring event types only
+        const recurringTypes = eventTypes.filter(et => et.isRecurring);
+
+        if (recurringTypes.length === 0) {
+            container.innerHTML = '<p class="text-earth-metal text-sm col-span-full">No recurring event types configured</p>';
             return;
         }
 
         // Filter by pet if selected
-        let filteredPlans = carePlans;
+        let filteredTypes = recurringTypes;
         if (Analytics.state.selectedPetId) {
-            filteredPlans = carePlans.filter(p => p.petIds?.includes(Analytics.state.selectedPetId));
+            filteredTypes = recurringTypes.filter(et =>
+                et.relatedPetIds?.includes(Analytics.state.selectedPetId)
+            );
         }
 
         // Calculate adherence for last 30 days
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-        const stats = filteredPlans.map(plan => {
-            const planEvents = events.filter(e =>
-                e.careItemId === plan.careItemId &&
+        const stats = filteredTypes.map(eventType => {
+            // Get events of this type in the time window
+            let typeEvents = events.filter(e =>
+                e.eventTypeId === eventType.id &&
                 new Date(e.startDate) >= thirtyDaysAgo
             );
 
-            // Calculate expected occurrences based on interval
-            const intervalDays = plan.intervalUnit === 'Days' ? plan.intervalValue :
-                plan.intervalUnit === 'Weeks' ? plan.intervalValue * 7 :
-                    plan.intervalUnit === 'Months' ? plan.intervalValue * 30 : plan.intervalValue;
+            // If pet filter is active, also filter events by pet
+            if (Analytics.state.selectedPetId) {
+                typeEvents = typeEvents.filter(e =>
+                    e.petIds?.includes(Analytics.state.selectedPetId)
+                );
+            }
 
-            const expectedCount = Math.floor(30 / intervalDays);
-            const actualCount = planEvents.filter(e => e.status === 'Completed').length;
+            // Calculate expected occurrences based on interval
+            const intervalDays = eventType.intervalUnit === 'Days' ? (eventType.intervalValue || 1) :
+                eventType.intervalUnit === 'Weeks' ? (eventType.intervalValue || 1) * 7 :
+                    eventType.intervalUnit === 'Months' ? (eventType.intervalValue || 1) * 30 : (eventType.intervalValue || 1);
+
+            const expectedCount = Math.max(1, Math.floor(30 / intervalDays));
+            const actualCount = typeEvents.filter(e => e.status === 'Completed').length;
             const adherence = expectedCount > 0 ? Math.min(100, (actualCount / expectedCount) * 100) : 100;
 
             return {
-                name: plan.name,
+                name: eventType.name,
                 adherence: adherence.toFixed(0),
                 actual: actualCount,
                 expected: expectedCount
@@ -403,7 +416,7 @@ const Analytics = {
         });
 
         if (stats.length === 0) {
-            container.innerHTML = '<p class="text-earth-metal text-sm col-span-full">No care plans for selected pet</p>';
+            container.innerHTML = '<p class="text-earth-metal text-sm col-span-full">No recurring event types for selected pet</p>';
             return;
         }
 

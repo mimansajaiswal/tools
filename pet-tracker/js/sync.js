@@ -273,43 +273,16 @@ const Sync = {
     },
 
     /**
-     * Update pending queue items to replace local IDs with Notion IDs
-     * Called after a successful create to propagate the new notionId
+     * Update local record with Notion ID after successful create
+     * The resolveRelationIds function will look up notionIds from DB,
+     * so we don't need to modify queue items directly
+     * This function is kept for potential future queue manipulation needs
      */
     propagateNotionId: async (store, localId, notionId) => {
-        const pending = await PetTracker.SyncQueue.getPending();
-
-        // Map store to the relation field names that reference it
-        const relationFields = {
-            pets: ['petIds', 'relatedPetIds'],
-            scales: ['scaleId', 'defaultScaleId'],
-            eventTypes: ['eventTypeId', 'linkedEventTypeId'],
-            scaleLevels: ['severityLevelId'],
-            contacts: ['providerId', 'primaryVetId', 'relatedContactIds']
-        };
-
-        const fieldsToCheck = relationFields[store] || [];
-        if (fieldsToCheck.length === 0) return;
-
-        for (const op of pending) {
-            if (!op.data) continue;
-            let modified = false;
-
-            for (const field of fieldsToCheck) {
-                if (Array.isArray(op.data[field])) {
-                    const idx = op.data[field].indexOf(localId);
-                    if (idx !== -1) {
-                        // Don't replace in queue - the resolveRelationIds will look up from DB
-                        // But we need to ensure the local record has the notionId
-                        modified = true;
-                    }
-                } else if (op.data[field] === localId) {
-                    modified = true;
-                }
-            }
-
-
-        }
+        // The local record is already updated in processOperation after create
+        // This function exists as a hook for any additional propagation logic
+        // Currently, resolveRelationIds handles looking up notionIds from local records
+        console.log(`[Sync] Propagated notionId for ${store}:${localId} -> ${notionId}`);
     },
 
     /**
@@ -411,10 +384,15 @@ const Sync = {
                 if (!storeConstant) throw new Error(`Unknown store: ${store}`);
 
                 const record = await PetTracker.DB.get(storeConstant, recordId);
-                if (record?.notionId) {
-                    await PetTracker.API.archivePage(record.notionId);
+                // Use notionId from record if available, otherwise use from queued operation data
+                const notionId = record?.notionId || data?.notionId;
+                if (notionId) {
+                    await PetTracker.API.archivePage(notionId);
                 }
-                await PetTracker.DB.delete(storeConstant, recordId);
+                // Only delete if record still exists locally
+                if (record) {
+                    await PetTracker.DB.delete(storeConstant, recordId);
+                }
                 break;
             }
         }
@@ -606,10 +584,11 @@ const Sync = {
                 };
 
             case 'events':
+                // For events, Pet(s) and Event Type are required relations - throw on missing
                 return {
                     'Title': P.title(data.title || 'Event'),
-                    'Pet(s)': P.relation(await resolve(PetTracker.STORES.PETS, data.petIds)),
-                    'Event Type': P.relation(await resolve(PetTracker.STORES.EVENT_TYPES, data.eventTypeId ? [data.eventTypeId] : [])),
+                    'Pet(s)': P.relation(await resolve(PetTracker.STORES.PETS, data.petIds, data.petIds?.length > 0)),
+                    'Event Type': P.relation(await resolve(PetTracker.STORES.EVENT_TYPES, data.eventTypeId ? [data.eventTypeId] : [], !!data.eventTypeId)),
                     'Start Date': P.date(data.startDate, data.endDate),
                     'Status': P.select(data.status),
                     'Severity Level': P.relation(await resolve(PetTracker.STORES.SCALE_LEVELS, data.severityLevelId ? [data.severityLevelId] : [])),

@@ -95,27 +95,29 @@ const Todoist = {
     },
 
     /**
-     * Sync care plans to Todoist
+     * Sync recurring event types to Todoist
+     * Uses event types with isRecurring=true and todoistSync=true
      */
-    syncCarePlans: async () => {
+    syncRecurringEventTypes: async () => {
         if (!Todoist.isConfigured()) {
             console.log('[Todoist] Not configured, skipping sync');
             return;
         }
 
-        const plans = await PetTracker.DB.getAll(PetTracker.STORES.CARE_PLANS);
+        const eventTypes = await PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES);
         const pets = await PetTracker.DB.getAll(PetTracker.STORES.PETS);
         const now = new Date();
 
-        for (const plan of plans) {
-            if (!plan.todoistSync) continue;
+        // Filter to recurring event types with Todoist sync enabled
+        const recurringTypes = eventTypes.filter(et => et.isRecurring && et.todoistSync);
 
+        for (const eventType of recurringTypes) {
             try {
                 // Calculate if task should be created
-                const nextDue = plan.nextDue ? new Date(plan.nextDue) : null;
+                const nextDue = eventType.nextDue ? new Date(eventType.nextDue) : null;
                 if (!nextDue) continue;
 
-                const leadDays = plan.todoistLeadTime || 1;
+                const leadDays = eventType.todoistLeadTime || 1;
                 const createDate = new Date(nextDue);
                 createDate.setDate(createDate.getDate() - leadDays);
 
@@ -124,11 +126,11 @@ const Todoist = {
                     continue;
                 }
 
-                // Check if task already exists
+                // Check if task already exists for this event type
                 const events = await PetTracker.DB.query(
                     PetTracker.STORES.EVENTS,
                     e => e.todoistTaskId &&
-                        e.careItemId === plan.careItemId &&
+                        e.eventTypeId === eventType.id &&
                         e.status === 'Planned'
                 );
 
@@ -137,44 +139,43 @@ const Todoist = {
                     continue;
                 }
 
-                // Build task content
-                const petNames = plan.petIds
+                // Build task content - use related pets if configured
+                const petNames = (eventType.relatedPetIds || [])
                     .map(id => pets.find(p => p.id === id)?.name)
                     .filter(Boolean);
                 const petPrefix = petNames.length > 0 ? `[${petNames.join(', ')}] ` : '';
-                const content = `${petPrefix}${plan.name}`;
+                const content = `${petPrefix}${eventType.name}`;
 
                 // Create task
                 const taskOptions = {
-                    due_date: plan.nextDue
+                    due_date: eventType.nextDue
                 };
 
-                if (plan.todoistProject) {
-                    taskOptions.project_id = plan.todoistProject;
+                if (eventType.todoistProject) {
+                    taskOptions.project_id = eventType.todoistProject;
                 }
 
-                if (plan.todoistLabels) {
-                    taskOptions.labels = plan.todoistLabels.split(',').map(l => l.trim());
+                if (eventType.todoistLabels) {
+                    taskOptions.labels = eventType.todoistLabels.split(',').map(l => l.trim());
                 }
 
                 const task = await Todoist.createTask(content, taskOptions);
 
                 // Create planned event with Todoist task ID
                 await Events.create({
-                    title: plan.name,
-                    petIds: plan.petIds,
-                    eventTypeId: plan.eventTypeId,
-                    careItemId: plan.careItemId,
-                    startDate: plan.nextDue,
+                    title: eventType.name,
+                    petIds: eventType.relatedPetIds || [],
+                    eventTypeId: eventType.id,
+                    startDate: eventType.nextDue,
                     status: 'Planned',
                     source: 'Scheduled',
                     todoistTaskId: task.id
                 });
 
-                console.log(`[Todoist] Created task for ${plan.name}`);
+                console.log(`[Todoist] Created task for ${eventType.name}`);
 
             } catch (e) {
-                console.error(`[Todoist] Error syncing plan ${plan.name}:`, e);
+                console.error(`[Todoist] Error syncing event type ${eventType.name}:`, e);
             }
         }
     },
@@ -230,8 +231,8 @@ const Todoist = {
         console.log('[Todoist] Starting sync...');
 
         try {
-            // Push: Create tasks for upcoming care plans
-            await Todoist.syncCarePlans();
+            // Push: Create tasks for upcoming recurring event types
+            await Todoist.syncRecurringEventTypes();
 
             // Pull: Check for completed tasks
             await Todoist.pullCompletedTasks();

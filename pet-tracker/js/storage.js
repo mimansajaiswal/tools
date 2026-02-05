@@ -5,7 +5,7 @@
  */
 
 const DB_NAME = 'PetTracker_DB';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const LS_PREFIX = 'pettracker_';
 
 // IndexedDB Store Names
@@ -48,10 +48,10 @@ const DB = {
                 const db = event.target.result;
 
                 // Data stores with notionId index
+                // Note: CARE_ITEMS and CARE_PLANS have been removed - scheduling now handled via event types with isRecurring=true
                 const dataStores = [
                     STORES.PETS, STORES.EVENTS, STORES.EVENT_TYPES,
-                    STORES.SCALES, STORES.SCALE_LEVELS, STORES.CARE_ITEMS,
-                    STORES.CARE_PLANS, STORES.CONTACTS
+                    STORES.SCALES, STORES.SCALE_LEVELS, STORES.CONTACTS
                 ];
 
                 dataStores.forEach(storeName => {
@@ -62,9 +62,9 @@ const DB = {
                     }
                 });
 
-                // Sync queue store
+                // Sync queue store - uses explicit UUID keys (id provided by SyncQueue.add)
                 if (!db.objectStoreNames.contains(STORES.SYNC_QUEUE)) {
-                    const syncStore = db.createObjectStore(STORES.SYNC_QUEUE, { keyPath: 'id', autoIncrement: true });
+                    const syncStore = db.createObjectStore(STORES.SYNC_QUEUE, { keyPath: 'id' });
                     syncStore.createIndex('status', 'status', { unique: false });
                     syncStore.createIndex('createdAt', 'createdAt', { unique: false });
                 }

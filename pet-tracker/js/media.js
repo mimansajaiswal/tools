@@ -151,17 +151,31 @@ const Media = {
 
     /**
      * Store media in IndexedDB with metadata
+     * Has hard limit guard to prevent infinite retry loops for oversized blobs
      */
-    storeLocal: async (id, blob, metadata = {}) => {
+    storeLocal: async (id, blob, metadata = {}, _retryCount = 0) => {
+        const MAX_RETRIES = 3;
+        const MAX_SINGLE_BLOB_SIZE = 50 * 1024 * 1024; // 50MB hard limit per blob
+
+        // Hard guard: skip cache for blobs larger than practical limit
+        if (blob.size > MAX_SINGLE_BLOB_SIZE) {
+            console.warn(`[Media] Blob ${id} (${Math.round(blob.size / 1024 / 1024)}MB) exceeds max cache size, skipping local storage`);
+            return false;
+        }
+
         try {
             await PetTracker.MediaStore.set(id, blob);
             console.log(`[Media] Stored ${id} (${Math.round(blob.size / 1024)}KB)`);
             return true;
         } catch (e) {
-            if (e.isQuotaExceeded) {
-                console.warn('[Media] Storage quota exceeded, evicting old media');
+            if (e.isQuotaExceeded && _retryCount < MAX_RETRIES) {
+                console.warn(`[Media] Storage quota exceeded, evicting old media (retry ${_retryCount + 1}/${MAX_RETRIES})`);
                 await PetTracker.MediaStore.evictIfNeeded(blob.size);
-                return Media.storeLocal(id, blob, metadata);
+                return Media.storeLocal(id, blob, metadata, _retryCount + 1);
+            }
+            if (_retryCount >= MAX_RETRIES) {
+                console.error(`[Media] Failed to store ${id} after ${MAX_RETRIES} retries, skipping`);
+                return false;
             }
             throw e;
         }
