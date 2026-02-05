@@ -1,4 +1,4 @@
-const CACHE_VERSION = 15;
+const CACHE_VERSION = 16;
 const CACHE_NAME = `ghostink-cache-v${CACHE_VERSION}`;
 const CACHE_PREFIX = 'ghostink-cache-';
 
@@ -108,18 +108,19 @@ self.addEventListener('fetch', (event) => {
   if (request.mode === 'navigate' || request.destination === 'document') {
     event.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME);
+      const shellKey = new Request('./index.html');
       try {
         // no-store reduces the chance you get an HTTP-cached old HTML
         const fresh = await fetch(request, { cache: 'no-store' });
 
         // Cache the new HTML so subsequent offline works
         if (fresh && fresh.ok) {
-          await cache.put(request, fresh.clone());
+          await cache.put(shellKey, fresh.clone());
         }
         return fresh;
       } catch {
         // Offline fallback: app shell
-        return (await cache.match('./index.html')) || (await cache.match('./')) || Response.error();
+        return (await cache.match(shellKey, { ignoreSearch: true })) || (await cache.match('./')) || Response.error();
       }
     })());
     return;
@@ -139,7 +140,7 @@ self.addEventListener('fetch', (event) => {
       }
       return res;
     } catch {
-      return new Response('', { status: 503, statusText: 'Offline' });
+      return Response.error();
     }
   })());
 });
