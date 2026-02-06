@@ -279,6 +279,8 @@ export const buildFsrsTrainingPayload = (cards, { maxCards = 400, maxReviewsPerC
         const history = Array.isArray(c.reviewHistory) ? c.reviewHistory : [];
         if (history.length < 2) continue;
         const cleaned = [];
+        let isSorted = true;
+        let prevTs = Number.NEGATIVE_INFINITY;
         for (const e of history) {
             if (!e) continue;
             const ratingCode = normalizeRatingCode(e.rating);
@@ -287,10 +289,12 @@ export const buildFsrsTrainingPayload = (cards, { maxCards = 400, maxReviewsPerC
                 ? e._ts
                 : (e.at ? new Date(e.at).getTime() : NaN);
             if (!Number.isFinite(ts)) continue;
+            if (ts < prevTs) isSorted = false;
+            prevTs = ts;
             cleaned.push({ ts, ratingCode });
         }
         if (cleaned.length < 2) continue;
-        cleaned.sort((a, b) => a.ts - b.ts);
+        if (!isSorted) cleaned.sort((a, b) => a.ts - b.ts);
         const trimmed = (Number.isFinite(maxReviewsPerCard) && maxReviewsPerCard > 0 && cleaned.length > maxReviewsPerCard)
             ? cleaned.slice(-maxReviewsPerCard)
             : cleaned;

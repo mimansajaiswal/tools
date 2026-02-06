@@ -186,6 +186,17 @@ const isTypingTarget = (target) => {
 const SYNC_QUEUE_WARN_THRESHOLD = 500;
 const SYNC_QUEUE_WARN_COOLDOWN_MS = 10 * 60 * 1000;
 const STUDY_DUE_BUCKET_MS = 5 * 60 * 1000;
+const ANALYTICS_RETENTION_BINS = [
+    { label: '0d', min: 0, max: 0 },
+    { label: '1d', min: 1, max: 1 },
+    { label: '2d', min: 2, max: 2 },
+    { label: '3-6d', min: 3, max: 6 },
+    { label: '7-13d', min: 7, max: 13 },
+    { label: '14-29d', min: 14, max: 29 },
+    { label: '30-59d', min: 30, max: 59 },
+    { label: '60-119d', min: 60, max: 119 },
+    { label: '120d+', min: 120, max: Infinity }
+];
 
 const focusTrap = {
     active: null,
@@ -322,6 +333,7 @@ export const App = {
         deckStats: new Map(),
         cardsVersion: 0,
         fsrsTrainingCache: new Map(),
+        fsrsDeckHistoryVersion: new Map(),
         optimizing: { active: false, deckId: null, startedAt: null },
         studyDeckCache: null,
         dueIndex: new Map(),
@@ -349,11 +361,19 @@ export const App = {
         analyticsDecks: [],
         analyticsHeatmapMetric: 'count',
         analyticsIncludeSuspended: true,
+        analyticsHasLastYearOption: true,
         analyticsTags: [],
         analyticsFlags: [],
         analyticsMarked: false,
         analyticsDirty: true,
         analyticsCache: null,
+        analyticsCardSummary: new Map(),
+        analyticsAggGlobalAll: null,
+        analyticsAggGlobalActive: null,
+        analyticsAggDeckAll: new Map(),
+        analyticsAggDeckActive: new Map(),
+        analyticsAggVersion: 0,
+        analyticsHeatmapYearHtmlCache: new Map(),
         reverse: false,
         lastSync: null,
         lastPull: null,
@@ -1152,12 +1172,20 @@ export const App = {
         this.state.dueIndex = new Map();
         this.state.cardMeta = new Map();
         this.state.cardsVersion = 0;
+        this.state.fsrsDeckHistoryVersion = new Map();
         this.state.studyDeckCache = null;
         this.state.tagIndex = new Map();
         this.state.flagIndex = new Map();
         this.state.markedIndex = new Set();
         this.state.ratingIndex = new Map();
         this.state.createdDateIndex = new Map();
+        this.state.analyticsCardSummary = new Map();
+        this.state.analyticsAggGlobalAll = this.createAnalyticsAggregate();
+        this.state.analyticsAggGlobalActive = this.createAnalyticsAggregate();
+        this.state.analyticsAggDeckAll = new Map();
+        this.state.analyticsAggDeckActive = new Map();
+        this.state.analyticsAggVersion = 0;
+        this.state.analyticsHeatmapYearHtmlCache = new Map();
 
         const rawCards = await Storage.getAll('cards');
         let invalidCardStates = 0;
@@ -1194,6 +1222,11 @@ export const App = {
                     dueDate: c.sm2?.dueDate ?? c.dueDate ?? null
                 }
             };
+            const normalizedHistory = this.normalizeReviewHistory(card.reviewHistory);
+            if (!this.reviewHistoriesEqual(card.reviewHistory, normalizedHistory)) {
+                card.reviewHistory = normalizedHistory;
+                needsSave = true;
+            }
             if (card.srsStateError) {
                 invalidCardStates += 1;
                 needsSave = true;
@@ -3323,10 +3356,341 @@ export const App = {
         const day = String(d.getDate()).padStart(2, '0');
         return `${y}-${m}-${day}`;
     },
+    formatStudyDateKey(date) {
+        const d = new Date(date);
+        if (!Number.isFinite(d.getTime())) return '';
+        if (d.getHours() < DAY_START_HOUR) d.setDate(d.getDate() - 1);
+        return this.formatDateKey(d);
+    },
     startOfDay(date) {
         const d = new Date(date);
         d.setHours(0, 0, 0, 0);
         return d;
+    },
+    startOfStudyDay(date) {
+        const d = new Date(date);
+        if (!Number.isFinite(d.getTime())) return new Date(NaN);
+        if (d.getHours() < DAY_START_HOUR) d.setDate(d.getDate() - 1);
+        d.setHours(DAY_START_HOUR, 0, 0, 0);
+        return d;
+    },
+    studyDateFromKey(key) {
+        if (!key || typeof key !== 'string') return new Date(NaN);
+        const [y, m, d] = key.split('-').map(v => Number(v));
+        if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return new Date(NaN);
+        return new Date(y, m - 1, d, DAY_START_HOUR, 0, 0, 0);
+    },
+    reviewHistoriesEqual(a, b) {
+        if (a === b) return true;
+        if (!Array.isArray(a) || !Array.isArray(b)) return false;
+        if (a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i++) {
+            const x = a[i] || {};
+            const y = b[i] || {};
+            if (x.rating !== y.rating || x.at !== y.at || x.ms !== y.ms) return false;
+        }
+        return true;
+    },
+    normalizeReviewHistory(history) {
+        if (!Array.isArray(history) || history.length === 0) return [];
+        const normalized = [];
+        for (const entry of history) {
+            const ts = Number.isFinite(entry?._ts)
+                ? Number(entry._ts)
+                : (entry?.at ? new Date(entry.at).getTime() : NaN);
+            if (!Number.isFinite(ts)) continue;
+            const at = new Date(ts);
+            if (!Number.isFinite(at.getTime())) continue;
+            const rawRating = normalizeRating(entry?.rating) || entry?.rating;
+            const rating = ratingsMap[rawRating] ? rawRating : 'good';
+            const ms = Number.isFinite(entry?.ms) ? Math.max(0, Math.round(entry.ms)) : 0;
+            normalized.push({ rating, at: at.toISOString(), ms, _ts: Math.round(ts) });
+        }
+        normalized.sort((a, b) => (a._ts || 0) - (b._ts || 0));
+        const deduped = [];
+        const seen = new Set();
+        for (const entry of normalized) {
+            const key = `${entry.rating}|${entry._ts}|${entry.ms}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            deduped.push(entry);
+        }
+        return deduped;
+    },
+    getRetentionBinIndex(days) {
+        for (let i = 0; i < ANALYTICS_RETENTION_BINS.length; i++) {
+            const b = ANALYTICS_RETENTION_BINS[i];
+            if (days >= b.min && days <= b.max) return i;
+        }
+        return -1;
+    },
+    createAnalyticsAggregate() {
+        return {
+            dayMap: new Map(),
+            hourlyByDay: new Map(),
+            retentionByDay: new Map(),
+            reviewCount: 0,
+            firstDayKey: '',
+            lastDayKey: ''
+        };
+    },
+    createRetentionDayRow() {
+        return {
+            total: new Array(ANALYTICS_RETENTION_BINS.length).fill(0),
+            success: new Array(ANALYTICS_RETENTION_BINS.length).fill(0)
+        };
+    },
+    createAnalyticsDayStat() {
+        return {
+            count: 0,
+            ms: 0,
+            ratingSum: 0,
+            ratingCount: 0,
+            ratingCounts: { again: 0, hard: 0, good: 0, easy: 0 }
+        };
+    },
+    updateAnalyticsAggregateBounds(agg) {
+        let first = '';
+        let last = '';
+        for (const key of agg.dayMap.keys()) {
+            if (!first || key < first) first = key;
+            if (!last || key > last) last = key;
+        }
+        agg.firstDayKey = first;
+        agg.lastDayKey = last;
+    },
+    mergeAnalyticsSummaryIntoAggregate(agg, summary, sign = 1) {
+        if (!agg || !summary) return;
+        agg.reviewCount += sign * (summary.reviewCount || 0);
+        if (agg.reviewCount < 0) agg.reviewCount = 0;
+
+        for (const [dayKey, stat] of summary.dayMap.entries()) {
+            const target = agg.dayMap.get(dayKey) || this.createAnalyticsDayStat();
+            target.count += sign * (stat.count || 0);
+            target.ms += sign * (stat.ms || 0);
+            target.ratingSum += sign * (stat.ratingSum || 0);
+            target.ratingCount += sign * (stat.ratingCount || 0);
+            const srcCounts = stat.ratingCounts || {};
+            target.ratingCounts.again += sign * (srcCounts.again || 0);
+            target.ratingCounts.hard += sign * (srcCounts.hard || 0);
+            target.ratingCounts.good += sign * (srcCounts.good || 0);
+            target.ratingCounts.easy += sign * (srcCounts.easy || 0);
+            if (target.count <= 0) {
+                agg.dayMap.delete(dayKey);
+            } else {
+                agg.dayMap.set(dayKey, target);
+            }
+        }
+
+        for (const [dayKey, hours] of summary.hourlyByDay.entries()) {
+            const target = agg.hourlyByDay.get(dayKey) || new Array(24).fill(0);
+            for (let i = 0; i < 24; i++) {
+                target[i] = (target[i] || 0) + sign * (hours[i] || 0);
+            }
+            if (target.every(v => v <= 0)) {
+                agg.hourlyByDay.delete(dayKey);
+            } else {
+                agg.hourlyByDay.set(dayKey, target);
+            }
+        }
+
+        for (const [dayKey, row] of summary.retentionByDay.entries()) {
+            const target = agg.retentionByDay.get(dayKey) || this.createRetentionDayRow();
+            for (let i = 0; i < ANALYTICS_RETENTION_BINS.length; i++) {
+                target.total[i] += sign * (row.total?.[i] || 0);
+                target.success[i] += sign * (row.success?.[i] || 0);
+            }
+            if (target.total.every(v => v <= 0)) {
+                agg.retentionByDay.delete(dayKey);
+            } else {
+                agg.retentionByDay.set(dayKey, target);
+            }
+        }
+
+        if (sign > 0) {
+            if (summary.firstDayKey && (!agg.firstDayKey || summary.firstDayKey < agg.firstDayKey)) agg.firstDayKey = summary.firstDayKey;
+            if (summary.lastDayKey && (!agg.lastDayKey || summary.lastDayKey > agg.lastDayKey)) agg.lastDayKey = summary.lastDayKey;
+        } else {
+            this.updateAnalyticsAggregateBounds(agg);
+        }
+    },
+    mergeAnalyticsAggregateInto(target, source) {
+        if (!target || !source) return target;
+        const pseudoSummary = {
+            dayMap: source.dayMap,
+            hourlyByDay: source.hourlyByDay,
+            retentionByDay: source.retentionByDay,
+            reviewCount: source.reviewCount || 0,
+            firstDayKey: source.firstDayKey || '',
+            lastDayKey: source.lastDayKey || ''
+        };
+        this.mergeAnalyticsSummaryIntoAggregate(target, pseudoSummary, 1);
+        return target;
+    },
+    buildAnalyticsCardSummary(card) {
+        if (!card?.id || isClozeParent(card)) return null;
+        const history = Array.isArray(card.reviewHistory) ? card.reviewHistory : [];
+        const dayMap = new Map();
+        const hourlyByDay = new Map();
+        const retentionByDay = new Map();
+        let reviewCount = 0;
+        let firstDayKey = '';
+        let lastDayKey = '';
+        let prevTs = null;
+
+        for (const h of history) {
+            const ts = Number.isFinite(h?._ts)
+                ? Number(h._ts)
+                : (h?.at ? new Date(h.at).getTime() : NaN);
+            if (!Number.isFinite(ts)) continue;
+            const at = new Date(ts);
+            if (!Number.isFinite(at.getTime())) continue;
+            const dayKey = this.formatStudyDateKey(at);
+            if (!dayKey) continue;
+            const rawRating = normalizeRating(h?.rating) || h?.rating;
+            const rating = ratingsMap[rawRating] ? rawRating : 'good';
+            const ratingValue = ratingsMap[rating] || ratingsMap.good;
+            const durationMs = Number.isFinite(h?.ms) ? Math.max(0, h.ms) : 0;
+
+            const dayStat = dayMap.get(dayKey) || this.createAnalyticsDayStat();
+            dayStat.count += 1;
+            dayStat.ms += durationMs;
+            dayStat.ratingSum += ratingValue;
+            dayStat.ratingCount += 1;
+            if (dayStat.ratingCounts[rating] === undefined) dayStat.ratingCounts[rating] = 0;
+            dayStat.ratingCounts[rating] += 1;
+            dayMap.set(dayKey, dayStat);
+
+            const hours = hourlyByDay.get(dayKey) || new Array(24).fill(0);
+            hours[at.getHours()] += 1;
+            hourlyByDay.set(dayKey, hours);
+
+            if (Number.isFinite(prevTs)) {
+                const prevStudy = this.startOfStudyDay(new Date(prevTs));
+                const currStudy = this.startOfStudyDay(at);
+                const days = Math.max(0, Math.floor((currStudy - prevStudy) / 86400000));
+                const binIdx = this.getRetentionBinIndex(days);
+                if (binIdx >= 0) {
+                    const retRow = retentionByDay.get(dayKey) || this.createRetentionDayRow();
+                    retRow.total[binIdx] += 1;
+                    if (rating !== 'again') retRow.success[binIdx] += 1;
+                    retentionByDay.set(dayKey, retRow);
+                }
+            }
+            prevTs = ts;
+            reviewCount += 1;
+            if (!firstDayKey || dayKey < firstDayKey) firstDayKey = dayKey;
+            if (!lastDayKey || dayKey > lastDayKey) lastDayKey = dayKey;
+        }
+
+        if (reviewCount === 0) return null;
+
+        return {
+            cardId: card.id,
+            deckId: card.deckId || '',
+            includeActive: !card.suspended && !card.leech,
+            reviewCount,
+            firstDayKey,
+            lastDayKey,
+            dayMap,
+            hourlyByDay,
+            retentionByDay
+        };
+    },
+    bumpAnalyticsAggregateVersion() {
+        this.state.analyticsAggVersion = (this.state.analyticsAggVersion || 0) + 1;
+        if (this.state.analyticsHeatmapYearHtmlCache) this.state.analyticsHeatmapYearHtmlCache.clear();
+    },
+    ensureAnalyticsAggregateState() {
+        if (!this.state.analyticsCardSummary) this.state.analyticsCardSummary = new Map();
+        if (!this.state.analyticsAggGlobalAll) this.state.analyticsAggGlobalAll = this.createAnalyticsAggregate();
+        if (!this.state.analyticsAggGlobalActive) this.state.analyticsAggGlobalActive = this.createAnalyticsAggregate();
+        if (!this.state.analyticsAggDeckAll) this.state.analyticsAggDeckAll = new Map();
+        if (!this.state.analyticsAggDeckActive) this.state.analyticsAggDeckActive = new Map();
+        if (!this.state.analyticsHeatmapYearHtmlCache) this.state.analyticsHeatmapYearHtmlCache = new Map();
+        if (!Number.isFinite(this.state.analyticsAggVersion)) this.state.analyticsAggVersion = 0;
+    },
+    getOrCreateAnalyticsDeckAggregate(map, deckId) {
+        if (!deckId) return null;
+        let agg = map.get(deckId);
+        if (!agg) {
+            agg = this.createAnalyticsAggregate();
+            map.set(deckId, agg);
+        }
+        return agg;
+    },
+    updateAnalyticsSummaryForCard(card) {
+        if (!card?.id) return;
+        this.ensureAnalyticsAggregateState();
+        const prev = this.state.analyticsCardSummary.get(card.id) || null;
+        if (prev) {
+            this.mergeAnalyticsSummaryIntoAggregate(this.state.analyticsAggGlobalAll, prev, -1);
+            if (prev.includeActive) this.mergeAnalyticsSummaryIntoAggregate(this.state.analyticsAggGlobalActive, prev, -1);
+            if (prev.deckId) {
+                const deckAll = this.state.analyticsAggDeckAll.get(prev.deckId);
+                if (deckAll) this.mergeAnalyticsSummaryIntoAggregate(deckAll, prev, -1);
+                const deckActive = this.state.analyticsAggDeckActive.get(prev.deckId);
+                if (prev.includeActive && deckActive) this.mergeAnalyticsSummaryIntoAggregate(deckActive, prev, -1);
+            }
+            this.state.analyticsCardSummary.delete(card.id);
+        }
+
+        const next = this.buildAnalyticsCardSummary(card);
+        if (next) {
+            this.state.analyticsCardSummary.set(card.id, next);
+            this.mergeAnalyticsSummaryIntoAggregate(this.state.analyticsAggGlobalAll, next, 1);
+            if (next.includeActive) this.mergeAnalyticsSummaryIntoAggregate(this.state.analyticsAggGlobalActive, next, 1);
+            if (next.deckId) {
+                const deckAll = this.getOrCreateAnalyticsDeckAggregate(this.state.analyticsAggDeckAll, next.deckId);
+                this.mergeAnalyticsSummaryIntoAggregate(deckAll, next, 1);
+                if (next.includeActive) {
+                    const deckActive = this.getOrCreateAnalyticsDeckAggregate(this.state.analyticsAggDeckActive, next.deckId);
+                    this.mergeAnalyticsSummaryIntoAggregate(deckActive, next, 1);
+                }
+            }
+        }
+
+        if (prev || next) this.bumpAnalyticsAggregateVersion();
+    },
+    removeAnalyticsSummaryForCard(cardId) {
+        if (!cardId) return;
+        this.ensureAnalyticsAggregateState();
+        const prev = this.state.analyticsCardSummary.get(cardId);
+        if (!prev) return;
+        this.mergeAnalyticsSummaryIntoAggregate(this.state.analyticsAggGlobalAll, prev, -1);
+        if (prev.includeActive) this.mergeAnalyticsSummaryIntoAggregate(this.state.analyticsAggGlobalActive, prev, -1);
+        if (prev.deckId) {
+            const deckAll = this.state.analyticsAggDeckAll.get(prev.deckId);
+            if (deckAll) this.mergeAnalyticsSummaryIntoAggregate(deckAll, prev, -1);
+            const deckActive = this.state.analyticsAggDeckActive.get(prev.deckId);
+            if (prev.includeActive && deckActive) this.mergeAnalyticsSummaryIntoAggregate(deckActive, prev, -1);
+        }
+        this.state.analyticsCardSummary.delete(cardId);
+        this.bumpAnalyticsAggregateVersion();
+    },
+    getAnalyticsAggregateForDeckSelection(selectedSet, allSelected, includeSuspended) {
+        this.ensureAnalyticsAggregateState();
+        const globalAgg = includeSuspended ? this.state.analyticsAggGlobalAll : this.state.analyticsAggGlobalActive;
+        const deckAggMap = includeSuspended ? this.state.analyticsAggDeckAll : this.state.analyticsAggDeckActive;
+        if (allSelected) return globalAgg || this.createAnalyticsAggregate();
+        const ids = Array.from(selectedSet || []);
+        if (ids.length === 1) return deckAggMap.get(ids[0]) || this.createAnalyticsAggregate();
+        const merged = this.createAnalyticsAggregate();
+        for (const deckId of ids) {
+            const deckAgg = deckAggMap.get(deckId);
+            if (deckAgg) this.mergeAnalyticsAggregateInto(merged, deckAgg);
+        }
+        return merged;
+    },
+    buildAnalyticsAggregateFromCards(cards) {
+        this.ensureAnalyticsAggregateState();
+        const agg = this.createAnalyticsAggregate();
+        for (const card of cards || []) {
+            const summary = this.state.analyticsCardSummary.get(card?.id);
+            if (!summary) continue;
+            this.mergeAnalyticsSummaryIntoAggregate(agg, summary, 1);
+        }
+        return agg;
     },
     buildSparkBars(values, opts = {}) {
         const height = opts.height || 80;
@@ -3527,9 +3891,17 @@ export const App = {
         const deckMenu = el('#analyticsDeckMenu');
         const filterLabel = el('#analyticsFilterLabel');
         const filterMenu = el('#analyticsFilterMenu');
-        const selectedSet = new Set(this.state.analyticsDecks || []);
-        const allSelected = selectedSet.size === 0;
+        if (this.state.analyticsRange === '365') this.state.analyticsRange = 'last-year';
         const deckIds = this.state.decks.map(d => d.id);
+        const deckIdSet = new Set(deckIds);
+        const normalizedAnalyticsDecks = Array.isArray(this.state.analyticsDecks)
+            ? this.state.analyticsDecks.filter(id => deckIdSet.has(id))
+            : [];
+        if ((this.state.analyticsDecks || []).length !== normalizedAnalyticsDecks.length) {
+            this.state.analyticsDecks = normalizedAnalyticsDecks;
+        }
+        const selectedSet = new Set(normalizedAnalyticsDecks);
+        const allSelected = selectedSet.size === 0;
         const analyticsTags = Array.isArray(this.state.analyticsTags) ? this.state.analyticsTags : [];
         const analyticsFlags = Array.isArray(this.state.analyticsFlags) ? this.state.analyticsFlags : [];
         const analyticsMarked = !!this.state.analyticsMarked;
@@ -3540,13 +3912,14 @@ export const App = {
             filters: {
                 range: this.state.analyticsRange,
                 year: this.state.analyticsYear,
-                decks: this.state.analyticsDecks,
+                decks: normalizedAnalyticsDecks,
                 suspended: this.state.analyticsIncludeSuspended,
                 metric: this.state.analyticsHeatmapMetric,
                 tags: tagsKey,
                 flags: flagsKey,
                 marked: analyticsMarked ? 1 : 0
-            }
+            },
+            aggVersion: this.state.analyticsAggVersion || 0
         });
 
         // Helper to update labels (always runs)
@@ -3798,6 +4171,7 @@ export const App = {
                 createIconsInScope(filterMenu);
             }
             let rangeMode = this.state.analyticsRange || 'this-year';
+            if (rangeMode === '365') rangeMode = 'last-year';
             if (rangeMode !== 'year') this.state.analyticsYear = 'all';
             const rangeLabels = {
                 all: 'All time',
@@ -3806,6 +4180,7 @@ export const App = {
                 '90': 'Last 3 months',
                 '180': 'Last 6 months',
                 '365': 'Last year',
+                'last-year': 'Last year',
                 'this-year': 'This year',
                 year: 'Year'
             };
@@ -3819,6 +4194,8 @@ export const App = {
             }
             const rangeMenu = el('#analyticsRangeMenu');
             if (rangeMenu) {
+                const lastYearBtn = rangeMenu.querySelector('[data-range="last-year"], [data-range="365"]');
+                if (lastYearBtn) lastYearBtn.classList.toggle('hidden', this.state.analyticsHasLastYearOption === false);
                 rangeMenu.querySelectorAll('[data-range]').forEach(btn => {
                     const rangeKey = btn.dataset.range || '';
                     const isActive = rangeKey === rangeMode || (rangeKey === 'by-year' && rangeMode === 'year');
@@ -3850,6 +4227,7 @@ export const App = {
 
         // HEAVY CALCULATION START
         let rangeMode = this.state.analyticsRange || 'this-year';
+        if (rangeMode === '365') rangeMode = 'last-year';
         if (rangeMode !== 'year') this.state.analyticsYear = 'all';
 
         const includeSuspended = this.state.analyticsIncludeSuspended !== false;
@@ -3874,96 +4252,134 @@ export const App = {
             ? filteredBase
             : filteredBase.filter(c => !c.suspended && !c.leech);
 
-        const events = [];
-        cards.forEach(card => {
-            const history = Array.isArray(card.reviewHistory) ? card.reviewHistory : [];
-            if (history.length > 0) {
-                history.forEach(h => {
-                    const at = new Date(h.at);
-                    if (!Number.isFinite(at.getTime())) return;
-                    const normalized = normalizeRating(h.rating) || h.rating;
-                    const ratingValue = ratingsMap[normalized] ? ratingsMap[normalized] : ratingsMap.good;
-                    events.push({
-                        rating: normalized,
-                        ratingValue,
-                        at,
-                        ms: Number.isFinite(h.ms) ? Math.max(0, h.ms) : 0
-                    });
-                });
-                return;
-            }
-            const fallbackReview = card.fsrs?.lastReview || card.sm2?.lastReview || null;
-            if (fallbackReview) {
-                const at = new Date(fallbackReview);
-                if (!Number.isFinite(at.getTime())) return;
-                const normalized = normalizeRating(card.fsrs?.lastRating || card.sm2?.lastRating) || 'good';
-                const ratingValue = ratingsMap[normalized] ? ratingsMap[normalized] : ratingsMap.good;
-                events.push({
-                    rating: normalized,
-                    ratingValue,
-                    at,
-                    ms: 0
-                });
-            }
-        });
-        events.sort((a, b) => a.at - b.at);
-
-        const dayMap = new Map();
-        events.forEach(e => {
-            const key = this.formatDateKey(e.at);
-            if (!key) return;
-            if (!dayMap.has(key)) dayMap.set(key, { count: 0, ms: 0, ratingSum: 0, ratingCount: 0 });
-            const entry = dayMap.get(key);
-            entry.count += 1;
-            entry.ms += e.ms || 0;
-            entry.ratingSum += e.ratingValue || 0;
-            entry.ratingCount += 1;
-        });
+        const hasAttributeFilters = analyticsTags.length > 0 || analyticsFlags.length > 0 || analyticsMarked;
+        const analyticsAgg = hasAttributeFilters
+            ? this.buildAnalyticsAggregateFromCards(cards)
+            : this.getAnalyticsAggregateForDeckSelection(selectedSet, allSelected, includeSuspended);
+        const dayMap = analyticsAgg.dayMap || new Map();
+        const hasAnalyticsDayActivity = (stat) => (stat?.count || 0) > 0 || (stat?.ratingCount || 0) > 0;
+        const dayKeysSorted = Array.from(dayMap.keys()).sort();
+        const firstActiveKey = dayKeysSorted.find(k => hasAnalyticsDayActivity(dayMap.get(k))) || '';
+        const firstActiveDate = firstActiveKey ? this.studyDateFromKey(firstActiveKey) : null;
 
         const now = new Date();
-        const todayKey = this.formatDateKey(now);
+        const todayKey = this.formatStudyDateKey(now);
         const todayStats = dayMap.get(todayKey) || { count: 0, ms: 0 };
         const dueToday = cards.filter(c => isSchedulable(c) && this.isDue(c)).length;
+        const lastYearPrefix = `${now.getFullYear() - 1}-`;
+        const hasLastYearData = dayKeysSorted.some(k => k.startsWith(lastYearPrefix) && hasAnalyticsDayActivity(dayMap.get(k)));
+        this.state.analyticsHasLastYearOption = hasLastYearData;
+        if (rangeMode === 'last-year' && !hasLastYearData) {
+            rangeMode = 'this-year';
+            this.state.analyticsRange = 'this-year';
+        }
 
-        const ratings = { again: 0, hard: 0, good: 0, easy: 0 };
-        events.forEach(e => {
-            const key = ratingsMap[e.rating] ? e.rating : 'good';
-            ratings[key] = (ratings[key] || 0) + 1;
-        });
-        const totalRatings = Object.values(ratings).reduce((a, b) => a + b, 0);
-        const successCount = totalRatings - (ratings.again || 0);
-        const retentionPct = totalRatings ? Math.round((successCount / totalRatings) * 100) : 0;
-
-        const getCountForDate = (date) => {
-            const key = this.formatDateKey(date);
-            return dayMap.get(key)?.count || 0;
-        };
+        let rangeStart = this.startOfStudyDay(new Date(now));
+        let rangeEnd = this.startOfStudyDay(new Date(now));
+        if (rangeMode === 'this-year') {
+            rangeStart = new Date(now.getFullYear(), 0, 1, DAY_START_HOUR, 0, 0, 0);
+        } else if (rangeMode === 'last-year') {
+            const prevYear = now.getFullYear() - 1;
+            rangeStart = new Date(prevYear, 0, 1, DAY_START_HOUR, 0, 0, 0);
+            rangeEnd = new Date(prevYear, 11, 31, DAY_START_HOUR, 0, 0, 0);
+        } else if (rangeMode === 'year' && this.state.analyticsYear && this.state.analyticsYear !== 'all') {
+            const yearNum = Number(this.state.analyticsYear);
+            if (Number.isFinite(yearNum)) {
+                rangeStart = new Date(yearNum, 0, 1, DAY_START_HOUR, 0, 0, 0);
+                rangeEnd = new Date(yearNum, 11, 31, DAY_START_HOUR, 0, 0, 0);
+                if (yearNum === now.getFullYear()) rangeEnd = this.startOfStudyDay(now);
+            }
+        } else if (rangeMode === 'all') {
+            const firstKey = analyticsAgg.firstDayKey || '';
+            const firstDate = firstKey ? this.studyDateFromKey(firstKey) : null;
+            rangeStart = firstDate && Number.isFinite(firstDate.getTime()) ? firstDate : this.startOfStudyDay(now);
+        } else {
+            const rangeDays = Number(rangeMode || 90);
+            rangeStart.setDate(rangeStart.getDate() - (rangeDays - 1));
+        }
+        if (rangeMode !== 'all' && firstActiveDate && Number.isFinite(firstActiveDate.getTime()) && rangeStart < firstActiveDate) {
+            rangeStart = new Date(firstActiveDate);
+        }
+        if (rangeStart > rangeEnd) {
+            const oneDayPastEnd = new Date(rangeEnd);
+            oneDayPastEnd.setDate(oneDayPastEnd.getDate() + 1);
+            rangeStart = oneDayPastEnd;
+        }
+        const rangeStartKey = this.formatDateKey(rangeStart);
+        const rangeEndKey = this.formatDateKey(rangeEnd);
+        const daySet = new Set(dayKeysSorted);
         let streak = 0;
-        if (events.length > 0) {
-            const lastActive = this.startOfDay(events[events.length - 1].at);
-            const gapDays = Math.floor((this.startOfDay(now) - lastActive) / 86400000);
-            if (gapDays <= 1) {
-                let cursor = new Date(lastActive);
-                while (getCountForDate(cursor) > 0) {
+        if (dayKeysSorted.length > 0) {
+            const cursor = this.startOfStudyDay(now);
+            let key = this.formatDateKey(cursor);
+            if (!daySet.has(key)) {
+                cursor.setDate(cursor.getDate() - 1);
+                key = this.formatDateKey(cursor);
+            }
+            if (daySet.has(key)) {
+                while (daySet.has(key)) {
                     streak += 1;
                     cursor.setDate(cursor.getDate() - 1);
+                    key = this.formatDateKey(cursor);
                 }
             }
         }
         let longest = 0;
         let current = 0;
-        const earliestEvent = events.length ? this.startOfDay(events[0].at) : this.startOfDay(now);
-        const scanDate = new Date(earliestEvent);
-        const endDate = this.startOfDay(now);
-        while (scanDate <= endDate) {
-            if (getCountForDate(scanDate) > 0) {
-                current += 1;
-                longest = Math.max(longest, current);
+        let prevKey = '';
+        for (const key of dayKeysSorted) {
+            if (!prevKey) {
+                current = 1;
             } else {
-                current = 0;
+                const prevDate = this.studyDateFromKey(prevKey);
+                const currDate = this.studyDateFromKey(key);
+                const gapDays = (Number.isFinite(prevDate.getTime()) && Number.isFinite(currDate.getTime()))
+                    ? Math.floor((currDate - prevDate) / 86400000)
+                    : Number.POSITIVE_INFINITY;
+                current = gapDays === 1 ? current + 1 : 1;
             }
-            scanDate.setDate(scanDate.getDate() + 1);
+            if (current > longest) longest = current;
+            prevKey = key;
         }
+
+        const ratings = { again: 0, hard: 0, good: 0, easy: 0 };
+        const hourly = new Array(24).fill(0);
+        const retentionTotals = new Array(ANALYTICS_RETENTION_BINS.length).fill(0);
+        const retentionSuccess = new Array(ANALYTICS_RETENTION_BINS.length).fill(0);
+        const rangeDates = [];
+        const rangeCounts = [];
+        const rangeMinutes = [];
+        const tempDate = new Date(rangeStart);
+        while (tempDate <= rangeEnd) {
+            const key = this.formatDateKey(tempDate);
+            const dayStat = dayMap.get(key) || this.createAnalyticsDayStat();
+            rangeDates.push(key);
+            rangeCounts.push(dayStat.count || 0);
+            rangeMinutes.push((dayStat.ms || 0) / 60000);
+
+            const rc = dayStat.ratingCounts || {};
+            ratings.again += rc.again || 0;
+            ratings.hard += rc.hard || 0;
+            ratings.good += rc.good || 0;
+            ratings.easy += rc.easy || 0;
+
+            const hourRow = analyticsAgg.hourlyByDay.get(key);
+            if (Array.isArray(hourRow)) {
+                for (let i = 0; i < 24; i++) hourly[i] += hourRow[i] || 0;
+            }
+
+            const retRow = analyticsAgg.retentionByDay.get(key);
+            if (retRow) {
+                for (let i = 0; i < ANALYTICS_RETENTION_BINS.length; i++) {
+                    retentionTotals[i] += retRow.total?.[i] || 0;
+                    retentionSuccess[i] += retRow.success?.[i] || 0;
+                }
+            }
+            tempDate.setDate(tempDate.getDate() + 1);
+        }
+        const totalRatings = Object.values(ratings).reduce((a, b) => a + b, 0);
+        const successCount = totalRatings - (ratings.again || 0);
+        const retentionPct = totalRatings ? Math.round((successCount / totalRatings) * 100) : 0;
 
         // Cache the heavy lifting result
         this.state.analyticsCache = {
@@ -4004,35 +4420,6 @@ export const App = {
         const streakBadge = el('#analyticsStreakBadge');
         if (streakBadge) streakBadge.innerHTML = `<i data-lucide="flame" class="w-3 h-3"></i>${streak} day streak`;
 
-        let rangeStart = this.startOfDay(new Date(now));
-        let rangeEnd = this.startOfDay(new Date(now));
-        if (rangeMode === 'this-year') {
-            rangeStart = new Date(now.getFullYear(), 0, 1);
-        } else if (rangeMode === 'year' && this.state.analyticsYear && this.state.analyticsYear !== 'all') {
-            const yearNum = Number(this.state.analyticsYear);
-            if (Number.isFinite(yearNum)) {
-                rangeStart = new Date(yearNum, 0, 1);
-                rangeEnd = new Date(yearNum, 11, 31);
-                if (yearNum === now.getFullYear()) rangeEnd = this.startOfDay(now);
-            }
-        } else if (rangeMode === 'all') {
-            rangeStart = events.length ? this.startOfDay(events[0].at) : this.startOfDay(now);
-        } else {
-            const rangeDays = Number(rangeMode || 90);
-            rangeStart.setDate(rangeStart.getDate() - (rangeDays - 1));
-        }
-        const rangeDates = [];
-        const rangeCounts = [];
-        const rangeMinutes = [];
-        const tempDate = new Date(rangeStart);
-        while (tempDate <= rangeEnd) {
-            const key = this.formatDateKey(tempDate);
-            const dayStat = dayMap.get(key) || { count: 0, ms: 0 };
-            rangeDates.push(key);
-            rangeCounts.push(dayStat.count);
-            rangeMinutes.push((dayStat.ms || 0) / 60000);
-            tempDate.setDate(tempDate.getDate() + 1);
-        }
         const countChart = el('#analyticsReviewCount');
         if (countChart) {
             const axis = this.buildDateAxisLabels(rangeDates);
@@ -4093,11 +4480,6 @@ export const App = {
  `;
         }
 
-        const hourly = new Array(24).fill(0);
-        events.forEach(e => {
-            const h = e.at.getHours();
-            hourly[h] += 1;
-        });
         const hourlyEl = el('#analyticsHourlyBreakdown');
         if (hourlyEl) {
             const formatHour = (h) => h === 0 ? '12am' : h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`;
@@ -4137,7 +4519,9 @@ export const App = {
             const last = lastReview ? new Date(lastReview) : null;
             const dueDate = due ? new Date(due) : null;
             if (!last || !Number.isFinite(last.getTime()) || !dueDate || !Number.isFinite(dueDate.getTime())) return;
-            const days = Math.max(0, Math.round((dueDate - last) / 86400000));
+            const lastStudy = this.startOfStudyDay(last);
+            const dueStudy = this.startOfStudyDay(dueDate);
+            const days = Math.max(0, Math.floor((dueStudy - lastStudy) / 86400000));
             const bucket = intervalBuckets.find(b => b.min !== null && days >= b.min && days <= b.max);
             if (bucket) bucket.value += 1;
         });
@@ -4229,40 +4613,15 @@ export const App = {
  `;
         }
 
-        const bins = [
-            { label: '0d', min: 0, max: 0 },
-            { label: '1d', min: 1, max: 1 },
-            { label: '2d', min: 2, max: 2 },
-            { label: '3-6d', min: 3, max: 6 },
-            { label: '7-13d', min: 7, max: 13 },
-            { label: '14-29d', min: 14, max: 29 },
-            { label: '30-59d', min: 30, max: 59 },
-            { label: '60-119d', min: 60, max: 119 },
-            { label: '120d+', min: 120, max: Infinity }
-        ];
-        const retentionRows = bins.map(b => ({ label: b.label, total: 0, success: 0 }));
-        cards.forEach(card => {
-            const history = (card.reviewHistory || []).slice().sort((a, b) => new Date(a.at) - new Date(b.at));
-            for (let i = 1; i < history.length; i++) {
-                const prev = new Date(history[i - 1].at);
-                const curr = new Date(history[i].at);
-                if (!Number.isFinite(prev.getTime()) || !Number.isFinite(curr.getTime())) continue;
-                const days = Math.max(0, Math.floor((curr - prev) / 86400000));
-                const rating = normalizeRating(history[i].rating) || history[i].rating;
-                const row = retentionRows.find(r => {
-                    const bin = bins.find(b => b.label === r.label);
-                    return days >= bin.min && days <= bin.max;
-                });
-                if (row) {
-                    row.total += 1;
-                    if (rating !== 'again') row.success += 1;
-                }
-            }
-        });
+        const retentionRows = ANALYTICS_RETENTION_BINS.map((b, idx) => ({
+            label: b.label,
+            total: retentionTotals[idx] || 0,
+            success: retentionSuccess[idx] || 0
+        }));
         const retentionTable = el('#analyticsTrueRetention');
         if (retentionTable) {
             retentionTable.innerHTML = `
- <table class="analytics-table">
+<table class="analytics-table">
  <thead>
  <tr>
  <th>Interval</th>
@@ -4296,35 +4655,9 @@ export const App = {
             }
         }
 
-        const heatmapRangeStart = this.startOfDay(rangeStart);
-        const heatmapRangeEnd = this.startOfDay(rangeEnd);
-        const heatmapEvents = events.filter(e => {
-            const day = this.startOfDay(e.at);
-            return day >= heatmapRangeStart && day <= heatmapRangeEnd;
-        });
-        const heatmapDayMap = new Map();
-        heatmapEvents.forEach(e => {
-            const key = this.formatDateKey(e.at);
-            if (!key) return;
-            if (!heatmapDayMap.has(key)) {
-                heatmapDayMap.set(key, {
-                    count: 0,
-                    ms: 0,
-                    ratingSum: 0,
-                    ratingCount: 0,
-                    ratingCounts: { again: 0, hard: 0, good: 0, easy: 0 }
-                });
-            }
-            const entry = heatmapDayMap.get(key);
-            entry.count += 1;
-            entry.ms += e.ms || 0;
-            entry.ratingSum += e.ratingValue || 0;
-            entry.ratingCount += 1;
-            if (entry.ratingCounts && e.rating) {
-                if (entry.ratingCounts[e.rating] === undefined) entry.ratingCounts[e.rating] = 0;
-                entry.ratingCounts[e.rating] += 1;
-            }
-        });
+        const heatmapRangeStart = rangeStart;
+        const heatmapRangeEnd = rangeEnd;
+        const heatmapDayMap = dayMap;
 
         const heatmapEl = el('#analyticsHeatmap');
         if (heatmapEl) {
@@ -4332,19 +4665,26 @@ export const App = {
             const rangeYearEnd = heatmapRangeEnd.getFullYear();
             const rangeYearList = [];
             for (let y = rangeYearStart; y <= rangeYearEnd; y++) rangeYearList.push(y);
-            const availableYearStart = events.length ? events[0].at.getFullYear() : now.getFullYear();
+            const parsedYearStart = analyticsAgg.firstDayKey ? Number(analyticsAgg.firstDayKey.slice(0, 4)) : NaN;
+            const availableYearStart = Number.isFinite(parsedYearStart) ? parsedYearStart : now.getFullYear();
             const availableYearEnd = now.getFullYear();
-            const availableYearList = [];
-            for (let y = availableYearStart; y <= availableYearEnd; y++) availableYearList.push(y);
+            const availableYearSet = new Set();
+            for (const key of dayKeysSorted) {
+                const y = Number(key.slice(0, 4));
+                if (Number.isFinite(y) && y >= availableYearStart && y <= availableYearEnd) {
+                    availableYearSet.add(y);
+                }
+            }
+            const availableYearList = Array.from(availableYearSet).sort((a, b) => a - b);
             const yearMenu = el('#analyticsYearMenu');
             const selectedYear = (this.state.analyticsYear || 'all').toString();
             const validYear = availableYearList.includes(Number(selectedYear));
             const activeYear = (rangeMode === 'year' && validYear) ? selectedYear : 'all';
             this.state.analyticsYear = activeYear;
             if (yearMenu) {
-                yearMenu.innerHTML = [
-                    ...availableYearList.map(y => `<button type="button" class="analytics-year-option w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-muted" data-year="${y}">${y}</button>`)
-                ].join('');
+                yearMenu.innerHTML = availableYearList.length
+                    ? availableYearList.map(y => `<button type="button" class="analytics-year-option w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-muted" data-year="${y}">${y}</button>`).join('')
+                    : '<div class="px-3 py-2 text-xs text-[color:var(--text-sub)]">No years with reviews.</div>';
                 yearMenu.querySelectorAll('[data-year]').forEach(btn => {
                     const isActive = (btn.dataset.year || '') === activeYear;
                     btn.classList.toggle('bg-surface-muted', isActive);
@@ -4357,12 +4697,29 @@ export const App = {
                     };
                 });
             }
-            const yearsToRender = activeYear === 'all' ? rangeYearList : [Number(activeYear)];
+            const yearsWithRangeActivity = new Set();
+            for (const key of dayKeysSorted) {
+                if (key < rangeStartKey || key > rangeEndKey) continue;
+                if (!hasAnalyticsDayActivity(heatmapDayMap.get(key))) continue;
+                const y = Number(key.slice(0, 4));
+                if (Number.isFinite(y)) yearsWithRangeActivity.add(y);
+            }
+            const yearsToRender = (activeYear === 'all' ? rangeYearList : [Number(activeYear)])
+                .filter(y => yearsWithRangeActivity.has(y));
             const dayLabels = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
             const monthLabels = ['Ja', 'Fe', 'Mr', 'Ap', 'My', 'Jn', 'Jl', 'Au', 'Se', 'Oc', 'No', 'De'];
+            let heatmapFirstActiveKey = '';
+            for (const key of dayKeysSorted) {
+                if (key < rangeStartKey || key > rangeEndKey) continue;
+                if (hasAnalyticsDayActivity(heatmapDayMap.get(key))) {
+                    heatmapFirstActiveKey = key;
+                    break;
+                }
+            }
 
             const yearMaxCounts = new Map();
             for (const [key, val] of heatmapDayMap.entries()) {
+                if (key < rangeStartKey || key > rangeEndKey) continue;
                 const y = Number(key.slice(0, 4));
                 const prev = yearMaxCounts.get(y) || 0;
                 if (val.count > prev) yearMaxCounts.set(y, val.count);
@@ -4382,6 +4739,10 @@ export const App = {
             };
 
             const buildYearGrid = (year) => {
+                const heatmapMemoKey = `${year}|${currentCacheKey}|${rangeStartKey}|${rangeEndKey}|${this.state.analyticsAggVersion || 0}`;
+                const cachedYearHtml = this.state.analyticsHeatmapYearHtmlCache?.get(heatmapMemoKey);
+                if (cachedYearHtml) return cachedYearHtml;
+
                 const yearStart = new Date(year, 0, 1);
                 const yearEnd = new Date(year, 11, 31);
                 const start = startOfWeekMonday(yearStart);
@@ -4401,13 +4762,15 @@ export const App = {
 
                 days.forEach((d, idx) => {
                     const inYear = d.getFullYear() === year;
-                    const inRange = d >= heatmapRangeStart && d <= heatmapRangeEnd;
                     const key = this.formatDateKey(d);
-                    const stats = inYear && inRange
-                        ? (heatmapDayMap.get(key) || { count: 0, ms: 0, ratingSum: 0, ratingCount: 0, ratingCounts: { again: 0, hard: 0, good: 0, easy: 0 } })
-                        : { count: 0, ms: 0, ratingSum: 0, ratingCount: 0, ratingCounts: { again: 0, hard: 0, good: 0, easy: 0 } };
+                    const inRange = key >= rangeStartKey && key <= rangeEndKey;
+                    const inDomain = inYear && inRange;
+                    const isPreStart = inDomain && heatmapFirstActiveKey && key < heatmapFirstActiveKey;
+                    const stats = inDomain && !isPreStart
+                        ? (heatmapDayMap.get(key) || this.createAnalyticsDayStat())
+                        : this.createAnalyticsDayStat();
+                    const hasActivity = hasAnalyticsDayActivity(stats);
                     const count = stats.count || 0;
-                    const ms = stats.ms || 0;
                     const avgRating = stats.ratingCount ? stats.ratingSum / stats.ratingCount : 0;
                     const rc = stats.ratingCounts || { again: 0, hard: 0, good: 0, easy: 0 };
                     const distLabel = `Again ${rc.again || 0}, Hard ${rc.hard || 0}, Good ${rc.good || 0}, Easy ${rc.easy || 0}`;
@@ -4430,8 +4793,19 @@ export const App = {
                     const title = this.state.analyticsHeatmapMetric === 'rating'
                         ? `${key}: ${count} card${count === 1 ? '' : 's'} reviewed • Average ${avgRating ? avgRating.toFixed(2) : '—'} • ${distLabel}`
                         : `${key}: ${count} card${count === 1 ? '' : 's'} reviewed`;
-                    const outsideClass = inYear && inRange ? '' : ' is-outside';
-                    cells.push(`<div class="heatmap-cell level-${level}${outsideClass}" style="grid-column:${weekIndex + 2}; grid-row:${row}" data-tip="${escapeHtml(title)}" tabindex="0"></div>`);
+                    const classNames = ['heatmap-cell'];
+                    if (!inDomain) {
+                        classNames.push('level-0', 'is-outside');
+                    } else if (isPreStart) {
+                        classNames.push('is-prestart');
+                    } else {
+                        classNames.push(`level-${level}`);
+                        if (!hasActivity) classNames.push('is-zero');
+                    }
+                    const hasTip = inDomain && !isPreStart && hasActivity;
+                    const tipAttr = hasTip ? ` data-tip="${escapeHtml(title)}"` : '';
+                    const tabIndex = hasTip ? '0' : '-1';
+                    cells.push(`<div class="${classNames.join(' ')}" style="grid-column:${weekIndex + 2}; grid-row:${row}"${tipAttr} tabindex="${tabIndex}"></div>`);
 
                     if (inYear && d.getDate() === 1) {
                         const label = monthLabels[d.getMonth()];
@@ -4439,7 +4813,7 @@ export const App = {
                     }
                 });
 
-                return `
+                const html = `
  <div class="heatmap-year" data-year="${year}">
  <div class="heatmap-year-title">${year}</div>
  <div class="heatmap-grid" style="--heatmap-weeks:${weeks};">
@@ -4447,6 +4821,13 @@ export const App = {
  </div>
  </div>
  `;
+                if (this.state.analyticsHeatmapYearHtmlCache) {
+                    this.state.analyticsHeatmapYearHtmlCache.set(heatmapMemoKey, html);
+                    if (this.state.analyticsHeatmapYearHtmlCache.size > 120) {
+                        this.state.analyticsHeatmapYearHtmlCache.clear();
+                    }
+                }
+                return html;
             };
 
             heatmapEl.innerHTML = yearsToRender.map(buildYearGrid).join('');
@@ -4454,6 +4835,7 @@ export const App = {
 
         const container = el('#analyticsTab');
         if (container) createIconsInScope(container);
+        updateLabels();
         this.persistUiStateDebounced();
     },
     buildLocalTagOptions() {
@@ -5001,10 +5383,11 @@ export const App = {
 
         const cards = this.cardsForDeck(deck.id);
         const cache = this.state.fsrsTrainingCache.get(deck.id);
-        let payload = cache && cache.version === this.state.cardsVersion ? cache.payload : null;
+        const deckHistoryVersion = this.state.fsrsDeckHistoryVersion.get(deck.id) || 0;
+        let payload = cache && cache.version === deckHistoryVersion ? cache.payload : null;
         if (!payload) {
             payload = buildFsrsTrainingPayload(cards, { maxCards: 400 });
-            this.state.fsrsTrainingCache.set(deck.id, { version: this.state.cardsVersion, payload });
+            this.state.fsrsTrainingCache.set(deck.id, { version: deckHistoryVersion, payload });
         }
 
         const totalEvents = payload.totalReviews || 0;
@@ -5707,17 +6090,6 @@ export const App = {
         const seenNotionIds = isFullSync ? new Set() : null;
         const clozeParentsToReconcile = new Set();
         let analyticsTouched = false;
-        const historiesEqual = (a, b) => {
-            if (a === b) return true;
-            if (!Array.isArray(a) || !Array.isArray(b)) return false;
-            if (a.length !== b.length) return false;
-            for (let i = 0; i < a.length; i++) {
-                const x = a[i] || {};
-                const y = b[i] || {};
-                if (x.rating !== y.rating || x.at !== y.at || x.ms !== y.ms) return false;
-            }
-            return true;
-        };
 
         const upsertCard = (card) => {
             if (seenNotionIds && card.notionId) {
@@ -5735,7 +6107,7 @@ export const App = {
                 // Preserve local history if remote is empty
                 const preservedHistory = (remoteHistory.length === 0 && localHistory.length > 0) ? localHistory : remoteHistory;
                 const updated = { ...existing, ...card, reviewHistory: preservedHistory };
-                if (!historiesEqual(localHistory, preservedHistory) ||
+                if (!this.reviewHistoriesEqual(localHistory, preservedHistory) ||
                     (existing.fsrs?.lastReview || null) !== (card.fsrs?.lastReview || null) ||
                     (existing.sm2?.lastReview || null) !== (card.sm2?.lastReview || null) ||
                     (existing.fsrs?.lastRating || null) !== (card.fsrs?.lastRating || null) ||
@@ -7624,6 +7996,11 @@ export const App = {
         if (prev && prev !== next) this.removeFromIndex(this.state.createdDateIndex, prev, cardId);
         if (next && prev !== next) this.addToIndex(this.state.createdDateIndex, next, cardId);
     },
+    bumpFsrsDeckHistoryVersion(deckId) {
+        if (!deckId) return;
+        const cur = this.state.fsrsDeckHistoryVersion.get(deckId) || 0;
+        this.state.fsrsDeckHistoryVersion.set(deckId, cur + 1);
+    },
     adjustDeckTotal(deckId, delta) {
         if (!deckId) return;
         const stats = this.state.deckStats.get(deckId) || { total: 0 };
@@ -7708,8 +8085,15 @@ export const App = {
 
         const learning = parseSrsState(card?.srsState || null).learning;
         const history = Array.isArray(card?.reviewHistory) ? card.reviewHistory : [];
+        const firstEntry = history.length > 0 ? history[0] : null;
         const lastEntry = history.length > 0 ? history[history.length - 1] : null;
+        const firstEntrySig = firstEntry ? `${firstEntry.rating || ''}:${firstEntry.at || ''}:${Number.isFinite(firstEntry.ms) ? firstEntry.ms : 0}` : '';
         const lastEntrySig = lastEntry ? `${lastEntry.rating || ''}:${lastEntry.at || ''}:${Number.isFinite(lastEntry.ms) ? lastEntry.ms : 0}` : '';
+        const trainingSig = [
+            history.length,
+            firstEntrySig,
+            lastEntrySig
+        ].join('|');
         const lastReview = card?.fsrs?.lastReview || card?.sm2?.lastReview || '';
         const analyticsSig = [
             deckId,
@@ -7729,7 +8113,7 @@ export const App = {
             lastEntrySig
         ].join('|');
 
-        return { deckId, totalEligible, dueEligible, dueTs, versionSig, analyticsSig, tagsList, flag, marked, lastRating, createdDateKey };
+        return { deckId, totalEligible, dueEligible, dueTs, versionSig, analyticsSig, trainingSig, tagsList, flag, marked, lastRating, createdDateKey };
     },
     updateCardIndices(card) {
         if (!card?.id) return;
@@ -7753,16 +8137,34 @@ export const App = {
         this.updateRatingIndex(prev?.lastRating, next.lastRating, card.id);
         this.updateCreatedDateIndex(prev?.createdDateKey, next.createdDateKey, card.id);
         this.state.cardMeta.set(card.id, next);
+        const prevTrainingSig = prev?.trainingSig || '0||';
+        const nextTrainingSig = next.trainingSig || '0||';
+        const prevHasTraining = !prevTrainingSig.startsWith('0|');
+        const nextHasTraining = !nextTrainingSig.startsWith('0|');
+        const trainingChanged = prevTrainingSig !== nextTrainingSig || prev?.deckId !== next.deckId;
+        if (trainingChanged && (prevHasTraining || nextHasTraining)) {
+            if (prev?.deckId) {
+                this.bumpFsrsDeckHistoryVersion(prev.deckId);
+                this.state.fsrsTrainingCache.delete(prev.deckId);
+            }
+            if (next.deckId) {
+                this.bumpFsrsDeckHistoryVersion(next.deckId);
+                this.state.fsrsTrainingCache.delete(next.deckId);
+            }
+        }
         if (!prev || prev.versionSig !== next.versionSig) {
             this.state.cardsVersion = (this.state.cardsVersion || 0) + 1;
         }
-        if (!prev || prev.analyticsSig !== next.analyticsSig) {
+        if (!prev || prev.analyticsSig !== next.analyticsSig || prev.versionSig !== next.versionSig) {
             this.state.analyticsDirty = true;
         }
     },
     removeCardMeta(cardId) {
         const prev = this.state.cardMeta.get(cardId);
-        if (!prev) return;
+        if (!prev) {
+            this.removeAnalyticsSummaryForCard(cardId);
+            return;
+        }
         if (prev.deckId) {
             if (prev.totalEligible) this.adjustDeckTotal(prev.deckId, -1);
             if (prev.dueEligible && this.isValidDueTs(prev.dueTs)) {
@@ -7775,8 +8177,13 @@ export const App = {
         this.updateRatingIndex(prev.lastRating, '', cardId);
         this.updateCreatedDateIndex(prev.createdDateKey, '', cardId);
         this.state.cardMeta.delete(cardId);
+        if (prev.deckId && prev.trainingSig && !prev.trainingSig.startsWith('0|')) {
+            this.bumpFsrsDeckHistoryVersion(prev.deckId);
+            this.state.fsrsTrainingCache.delete(prev.deckId);
+        }
         this.state.cardsVersion = (this.state.cardsVersion || 0) + 1;
         this.state.analyticsDirty = true;
+        this.removeAnalyticsSummaryForCard(cardId);
     },
     reindexDeckDue(deckId) {
         if (!deckId) return;
@@ -7789,6 +8196,10 @@ export const App = {
         if (!card?.id) return;
 
         card.suspended = card.suspended ? 1 : 0;
+        const normalizedHistory = this.normalizeReviewHistory(card.reviewHistory);
+        if (!this.reviewHistoriesEqual(card.reviewHistory, normalizedHistory)) {
+            card.reviewHistory = normalizedHistory;
+        }
         const oldCard = this.state.cards.get(card.id);
 
         const oldTags = oldCard?.tags || [];
@@ -7840,6 +8251,7 @@ export const App = {
             this.state.cardDeckIndex.get(card.deckId).add(card.id);
         }
         this.updateCardIndices(card);
+        this.updateAnalyticsSummaryForCard(card);
     },
     removeCard(cardId) {
         const card = this.state.cards.get(cardId);
@@ -10220,7 +10632,7 @@ export const App = {
         if (!target) return;
         if (target.type === 'card') {
             await Storage.delete('cards', target.id);
-            this.state.cards.delete(target.id);
+            this.removeCard(target.id);
             this.queueOp({ type: 'card-delete', payload: { id: target.id, notionId: target.notionId } });
             this.renderCards();
             this.renderDecks(); // Refresh stats

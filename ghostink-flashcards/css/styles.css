@@ -1773,6 +1773,25 @@ body.offline-mode::after {
 
 .heatmap-cell.is-outside {
     opacity: 0.35;
+    pointer-events: none;
+}
+
+.heatmap-cell.is-prestart {
+    background: transparent;
+    border: 1px solid rgb(var(--charcoal-rgb) / 0.06);
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.heatmap-cell.is-zero {
+    pointer-events: none;
+}
+
+.heatmap-cell.is-outside:hover,
+.heatmap-cell.is-prestart:hover,
+.heatmap-cell.is-zero:hover {
+    transform: none;
+    box-shadow: none;
 }
 
 .heatmap-swatch {
