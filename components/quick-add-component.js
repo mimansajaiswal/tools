@@ -1,0 +1,2141 @@
+/* QuickAdd Component
+ * Deterministic quick-add parser with configurable prefixes, field terminator,
+ * bulk entry separation, validation, inline pill rendering, and style hooks.
+ */
+(function initQuickAdd(global) {
+    'use strict';
+    const DEFAULT_CLASSNAMES = {
+        root: 'qa-root',
+        inputWrap: 'qa-input-wrap',
+        inputSurface: 'qa-input-surface',
+        inlineLayer: 'qa-inline-layer',
+        inlineText: 'qa-inline-text',
+        inlineMark: 'qa-inline-mark',
+        inlineMarkInteractive: 'qa-inline-mark-interactive',
+        inlineMarkInferred: 'qa-inline-mark-inferred',
+        inlineMarkIcon: 'qa-inline-mark-icon',
+        inlineMarkDismiss: 'qa-inline-mark-dismiss',
+        input: 'qa-input',
+        hint: 'qa-hint',
+        status: 'qa-status',
+        preview: 'qa-preview',
+        entry: 'qa-entry',
+        entryHeader: 'qa-entry-header',
+        entryTitle: 'qa-entry-title',
+        badges: 'qa-badges',
+        badge: 'qa-badge',
+        attachmentSection: 'qa-attachment-section',
+        attachmentControls: 'qa-attachment-controls',
+        attachmentInput: 'qa-attachment-input',
+        attachmentHint: 'qa-attachment-hint',
+        attachmentList: 'qa-attachment-list',
+        attachmentItem: 'qa-attachment-item',
+        attachmentName: 'qa-attachment-name',
+        attachmentMeta: 'qa-attachment-meta',
+        attachmentRemove: 'qa-attachment-remove',
+        pillRow: 'qa-pill-row',
+        pill: 'qa-pill',
+        pillInteractive: 'qa-pill-interactive',
+        pillInferred: 'qa-pill-inferred',
+        pillInferredIcon: 'qa-pill-inferred-icon',
+        pillDismiss: 'qa-pill-dismiss',
+        issues: 'qa-issues',
+        issue: 'qa-issue',
+        output: 'qa-output',
+        dropdown: 'qa-dropdown',
+        dropdownOpen: 'qa-dropdown-open',
+        dropdownSearch: 'qa-dropdown-search',
+        dropdownList: 'qa-dropdown-list',
+        dropdownOption: 'qa-dropdown-option',
+        dropdownAdd: 'qa-dropdown-add',
+        dropdownColor: 'qa-dropdown-color',
+        dropdownMeta: 'qa-dropdown-meta'
+    };
+
+    const DEFAULT_CONFIG = {
+        mount: null,
+        debounceMs: 300,
+        allowMultipleEntries: true,
+        entrySeparator: '\n',
+        fieldTerminator: ';;',
+        fieldTerminatorMode: 'strict', // strict | or-next-prefix | or-end
+        escapeChar: '\\',
+        fallbackField: 'title',
+        showJsonOutput: true,
+        showInlinePills: true,
+        showEntryCards: true,
+        showEntryHeader: true,
+        showEntryPills: true,
+        allowEntryAttachments: false,
+        allowMultipleAttachments: true,
+        allowedAttachmentTypes: [],
+        autoDetectOptionsWithoutPrefix: false,
+        reduceInferredOptions: true,
+        placeholder: 'Type entries with prefixes and terminators...',
+        hintText: '',
+        schema: {
+            fields: []
+        },
+        classNames: {},
+        tokens: {},
+        onParse: null
+    };
+
+    function ensureQuickAddStyles() {
+        if (typeof document === 'undefined') {
+            return;
+        }
+        if (document.querySelector('link[data-qa-style="1"], style[data-qa-style="1"]')) {
+            return;
+        }
+
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.setAttribute('data-qa-style', '1');
+
+        let href = './quick-add-component.css';
+        const script = document.currentScript;
+        if (script && script.src) {
+            try {
+                const url = new URL(script.src, document.baseURI);
+                if (url.pathname.endsWith('.js')) {
+                    url.pathname = url.pathname.slice(0, -3) + '.css';
+                    href = url.toString();
+                }
+            } catch (err) {
+                // Keep fallback href.
+            }
+        }
+
+        link.href = href;
+        document.head.appendChild(link);
+    }
+
+    function mergeConfig(userConfig) {
+        const merged = Object.assign({}, DEFAULT_CONFIG, userConfig || {});
+        merged.schema = Object.assign({}, DEFAULT_CONFIG.schema, merged.schema || {});
+        merged.schema.fields = Array.isArray(merged.schema.fields) ? merged.schema.fields.slice() : [];
+        merged.classNames = Object.assign({}, DEFAULT_CLASSNAMES, merged.classNames || {});
+        if (typeof merged.allowedAttachmentTypes === 'string') {
+            merged.allowedAttachmentTypes = merged.allowedAttachmentTypes
+                .split(',')
+                .map((part) => part.trim())
+                .filter(Boolean);
+        } else if (!Array.isArray(merged.allowedAttachmentTypes)) {
+            merged.allowedAttachmentTypes = [];
+        }
+        return merged;
+    }
+
+    function normalizeOption(option) {
+        if (option && typeof option === 'object' && !Array.isArray(option)) {
+            const value = option.value !== undefined ? option.value : option.label;
+            return {
+                value: String(value),
+                label: String(option.label !== undefined ? option.label : value),
+                color: typeof option.color === 'string' ? option.color : null
+            };
+        }
+        return {
+            value: String(option),
+            label: String(option),
+            color: null
+        };
+    }
+
+    function normalizeField(field) {
+        const normalized = Object.assign({
+            key: '',
+            label: '',
+            prefixes: [],
+            type: 'string', // string | number | options | date | boolean
+            enum: [],
+            options: [],
+            required: false,
+            multiple: false,
+            naturalDate: false,
+            color: null,
+            autoDetectWithoutPrefix: false,
+            reduceInferredOptions: undefined,
+            allowCustom: undefined,
+            exhaustive: undefined
+        }, field || {});
+
+        if (normalized.type === 'enum') {
+            normalized.type = 'options';
+        }
+
+        if (typeof normalized.exhaustive === 'boolean' && typeof normalized.allowCustom !== 'boolean') {
+            normalized.allowCustom = !normalized.exhaustive;
+        }
+
+        if (typeof normalized.allowCustom !== 'boolean') {
+            normalized.allowCustom = false;
+        }
+
+        return normalized;
+    }
+
+    function getFieldOptions(field) {
+        const source = Array.isArray(field.options) && field.options.length > 0
+            ? field.options
+            : (Array.isArray(field.enum) ? field.enum : []);
+        return source.map(normalizeOption);
+    }
+
+    function normalizeSchema(schema, fallbackField) {
+        const fields = (schema.fields || []).map(normalizeField).filter((field) => field.key);
+        const byKey = {};
+
+        fields.forEach((field) => {
+            byKey[field.key] = field;
+        });
+
+        if (!byKey[fallbackField]) {
+            const fallback = normalizeField({
+                key: fallbackField,
+                label: fallbackField,
+                type: 'string',
+                required: false,
+                prefixes: []
+            });
+            byKey[fallbackField] = fallback;
+            fields.push(fallback);
+        }
+
+        return { fields, byKey };
+    }
+
+    function sortPrefixMatchers(schemaFields) {
+        const matchers = [];
+        schemaFields.forEach((field) => {
+            (field.prefixes || []).forEach((prefix) => {
+                if (typeof prefix === 'string' && prefix.length > 0) {
+                    matchers.push({ prefix, fieldKey: field.key });
+                }
+            });
+        });
+        matchers.sort((a, b) => b.prefix.length - a.prefix.length);
+        return matchers;
+    }
+
+    function isBoundary(text, index) {
+        if (index <= 0) {
+            return true;
+        }
+        return /\s/.test(text.charAt(index - 1));
+    }
+
+    function matchPrefixAt(text, index, prefixMatchers) {
+        if (!isBoundary(text, index)) {
+            return null;
+        }
+        for (let i = 0; i < prefixMatchers.length; i++) {
+            const candidate = prefixMatchers[i];
+            if (text.startsWith(candidate.prefix, index)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    function findNextPrefixIndex(text, fromIndex, prefixMatchers) {
+        for (let i = fromIndex; i < text.length; i++) {
+            if (matchPrefixAt(text, i, prefixMatchers)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    function splitEntriesWithPositions(input, separator, escapeChar) {
+        const entries = [];
+
+        if (!separator) {
+            entries.push({ raw: input, start: 0, end: input.length });
+            return entries;
+        }
+
+        if (separator === '\n') {
+            let start = 0;
+            let i = 0;
+            while (i < input.length) {
+                if (input.charAt(i) === '\n') {
+                    entries.push({ raw: input.slice(start, i), start, end: i });
+                    i += 1;
+                    start = i;
+                    continue;
+                }
+                if (input.charAt(i) === '\r' && input.charAt(i + 1) === '\n') {
+                    entries.push({ raw: input.slice(start, i), start, end: i });
+                    i += 2;
+                    start = i;
+                    continue;
+                }
+                i += 1;
+            }
+            entries.push({ raw: input.slice(start), start, end: input.length });
+            return entries;
+        }
+
+        let start = 0;
+        let i = 0;
+        while (i < input.length) {
+            if (escapeChar && input.startsWith(escapeChar + separator, i)) {
+                i += escapeChar.length + separator.length;
+                continue;
+            }
+            if (input.startsWith(separator, i)) {
+                entries.push({ raw: input.slice(start, i), start, end: i });
+                i += separator.length;
+                start = i;
+                continue;
+            }
+            i += 1;
+        }
+        entries.push({ raw: input.slice(start), start, end: input.length });
+        return entries;
+    }
+
+    function parseBoolean(rawValue) {
+        const value = String(rawValue).trim().toLowerCase();
+        if (['true', 'yes', '1', 'on'].includes(value)) {
+            return { ok: true, value: true };
+        }
+        if (['false', 'no', '0', 'off'].includes(value)) {
+            return { ok: true, value: false };
+        }
+        return { ok: false, error: 'Invalid boolean value' };
+    }
+
+    function toYMD(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    }
+
+    function parseDate(rawValue, naturalDate) {
+        const raw = String(rawValue).trim();
+        const value = raw.toLowerCase();
+        if (!value) {
+            return { ok: false, error: 'Missing date value' };
+        }
+
+        if (naturalDate) {
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+            const chrono = (typeof globalThis !== 'undefined' && globalThis.chrono && typeof globalThis.chrono.parseDate === 'function')
+                ? globalThis.chrono
+                : null;
+            if (chrono) {
+                const chronoDate = chrono.parseDate(raw, now, { forwardDate: true });
+                if (chronoDate && !Number.isNaN(chronoDate.getTime())) {
+                    return { ok: true, value: toYMD(chronoDate) };
+                }
+            }
+
+            if (value === 'today') {
+                return { ok: true, value: toYMD(today) };
+            }
+            if (value === 'yesterday') {
+                const d = new Date(today);
+                d.setDate(d.getDate() - 1);
+                return { ok: true, value: toYMD(d) };
+            }
+            if (value === 'tomorrow') {
+                const d = new Date(today);
+                d.setDate(d.getDate() + 1);
+                return { ok: true, value: toYMD(d) };
+            }
+
+            const inDays = value.match(/^in\s+(\d+)\s+days?$/);
+            if (inDays) {
+                const d = new Date(today);
+                d.setDate(d.getDate() + parseInt(inDays[1], 10));
+                return { ok: true, value: toYMD(d) };
+            }
+
+            const inWeeks = value.match(/^in\s+(\d+)\s+weeks?$/);
+            if (inWeeks) {
+                const d = new Date(today);
+                d.setDate(d.getDate() + parseInt(inWeeks[1], 10) * 7);
+                return { ok: true, value: toYMD(d) };
+            }
+
+            const parsedNatural = new Date(raw);
+            if (!Number.isNaN(parsedNatural.getTime())) {
+                return { ok: true, value: toYMD(parsedNatural) };
+            }
+        }
+
+        const strict = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!strict) {
+            return { ok: false, error: 'Date must be YYYY-MM-DD' };
+        }
+
+        return { ok: true, value: `${strict[1]}-${strict[2]}-${strict[3]}` };
+    }
+
+    function parseOption(field, rawValue) {
+        const value = String(rawValue).trim();
+        const options = getFieldOptions(field);
+        const matched = options.find((option) =>
+            option.value.toLowerCase() === value.toLowerCase() ||
+            option.label.toLowerCase() === value.toLowerCase()
+        );
+
+        if (matched) {
+            return { ok: true, value: matched.value };
+        }
+
+        if (field.allowCustom) {
+            return { ok: true, value };
+        }
+
+        return { ok: false, error: `Invalid option for ${field.key}` };
+    }
+
+    function parseByType(field, rawValue) {
+        const value = String(rawValue).trim();
+
+        if (field.type === 'string') {
+            return { ok: true, value };
+        }
+
+        if (field.type === 'number') {
+            const parsed = Number(value);
+            if (Number.isNaN(parsed)) {
+                return { ok: false, error: `Invalid number for ${field.key}` };
+            }
+            return { ok: true, value: parsed };
+        }
+
+        if (field.type === 'options') {
+            return parseOption(field, value);
+        }
+
+        if (field.type === 'date') {
+            return parseDate(value, !!field.naturalDate);
+        }
+
+        if (field.type === 'boolean') {
+            return parseBoolean(value);
+        }
+
+        return { ok: true, value };
+    }
+
+    function appendFieldValue(fields, field, key, value) {
+        if (!field) {
+            return;
+        }
+
+        if (field.multiple) {
+            if (!Array.isArray(fields[key])) {
+                fields[key] = [];
+            }
+            fields[key].push(value);
+            return;
+        }
+
+        fields[key] = value;
+    }
+
+    function isWordChar(ch) {
+        return /[A-Za-z0-9]/.test(ch || '');
+    }
+
+    function findBoundaryMatches(text, phrase) {
+        const out = [];
+        if (!phrase) {
+            return out;
+        }
+        const hay = String(text || '');
+        const needle = String(phrase || '').trim();
+        if (!needle) {
+            return out;
+        }
+
+        const hayLower = hay.toLowerCase();
+        const needleLower = needle.toLowerCase();
+        let from = 0;
+
+        while (from < hayLower.length) {
+            const at = hayLower.indexOf(needleLower, from);
+            if (at === -1) {
+                break;
+            }
+            const end = at + needle.length;
+            const before = at > 0 ? hay.charAt(at - 1) : '';
+            const after = end < hay.length ? hay.charAt(end) : '';
+            const goodLeft = at === 0 || !isWordChar(before);
+            const goodRight = end === hay.length || !isWordChar(after);
+            if (goodLeft && goodRight) {
+                out.push({ start: at, end });
+            }
+            from = at + 1;
+        }
+
+        return out;
+    }
+
+    function applyRequiredValidation(entry, normalizedSchema) {
+        const nextErrors = entry.errors.filter((error) => !error.startsWith('Missing required field: '));
+
+        normalizedSchema.fields.forEach((field) => {
+            if (!field.required) {
+                return;
+            }
+
+            const value = entry.fields[field.key];
+            const hasValue = Array.isArray(value)
+                ? value.length > 0
+                : value !== undefined && value !== null && String(value).trim() !== '';
+
+            if (!hasValue) {
+                nextErrors.push(`Missing required field: ${field.key}`);
+            }
+        });
+
+        entry.errors = nextErrors;
+        entry.isValid = entry.errors.length === 0 && entry.pending.length === 0;
+        return entry;
+    }
+
+    function parseEntry(rawEntry, config, normalizedSchema, prefixMatchers, entryIndex, globalStart) {
+        const fieldTerminator = config.fieldTerminator || '';
+        const terminatorMode = config.fieldTerminatorMode || 'strict';
+        const escapeChar = config.escapeChar || '\\';
+        const fallbackField = config.fallbackField;
+
+        const fields = {};
+        const pending = [];
+        const errors = [];
+        const tokens = [];
+        const fallbackChunks = [];
+        const explicitValues = {};
+        const explicitMentions = new Set();
+
+        let i = 0;
+        let tokenCount = 0;
+
+        while (i < rawEntry.length) {
+            while (i < rawEntry.length && /\s/.test(rawEntry.charAt(i))) {
+                i += 1;
+            }
+            if (i >= rawEntry.length) {
+                break;
+            }
+
+            const match = matchPrefixAt(rawEntry, i, prefixMatchers);
+            if (!match) {
+                const nextPrefixIndex = findNextPrefixIndex(rawEntry, i, prefixMatchers);
+                const end = nextPrefixIndex === -1 ? rawEntry.length : nextPrefixIndex;
+                const chunk = rawEntry.slice(i, end);
+                if (chunk.trim()) {
+                    fallbackChunks.push(chunk.trim());
+                }
+                i = end;
+                continue;
+            }
+
+            const tokenStartLocal = i;
+            const fieldKey = match.fieldKey;
+            const field = normalizedSchema.byKey[fieldKey];
+            i += match.prefix.length;
+
+            while (i < rawEntry.length && /\s/.test(rawEntry.charAt(i))) {
+                i += 1;
+            }
+
+            const valueStartLocal = i;
+            let valueEndLocal = i;
+            let tokenEndLocal = i;
+            let value = '';
+            let committed = false;
+
+            while (i < rawEntry.length) {
+                if (escapeChar && rawEntry.charAt(i) === escapeChar && i + 1 < rawEntry.length) {
+                    value += rawEntry.charAt(i + 1);
+                    i += 2;
+                    valueEndLocal = i;
+                    tokenEndLocal = i;
+                    continue;
+                }
+
+                if (fieldTerminator && rawEntry.startsWith(fieldTerminator, i)) {
+                    committed = true;
+                    tokenEndLocal = i + fieldTerminator.length;
+                    i += fieldTerminator.length;
+                    break;
+                }
+
+                if (terminatorMode === 'or-next-prefix' && isBoundary(rawEntry, i)) {
+                    const nextMatch = matchPrefixAt(rawEntry, i, prefixMatchers);
+                    if (nextMatch) {
+                        committed = true;
+                        tokenEndLocal = i;
+                        break;
+                    }
+                }
+
+                value += rawEntry.charAt(i);
+                i += 1;
+                valueEndLocal = i;
+                tokenEndLocal = i;
+            }
+
+            if (i >= rawEntry.length && tokenEndLocal < i) {
+                tokenEndLocal = i;
+            }
+
+            if (terminatorMode === 'or-end' && !committed) {
+                committed = true;
+                tokenEndLocal = i;
+            }
+
+            const cleanValue = value.trim();
+            const token = {
+                id: `e${entryIndex}_t${tokenCount++}`,
+                kind: 'field',
+                entryIndex,
+                key: fieldKey,
+                prefix: match.prefix,
+                value: cleanValue,
+                committed,
+                localStart: tokenStartLocal,
+                localEnd: tokenEndLocal,
+                localValueStart: valueStartLocal,
+                localValueEnd: valueEndLocal,
+                globalStart: globalStart + tokenStartLocal,
+                globalEnd: globalStart + tokenEndLocal,
+                globalValueStart: globalStart + valueStartLocal,
+                globalValueEnd: globalStart + valueEndLocal
+            };
+            tokens.push(token);
+            explicitMentions.add(fieldKey);
+
+            if (!cleanValue) {
+                if (committed) {
+                    errors.push(`Empty value for ${fieldKey}`);
+                } else {
+                    pending.push(`${fieldKey} is pending`);
+                }
+                continue;
+            }
+
+            if (!committed) {
+                pending.push(`${fieldKey} is pending`);
+                continue;
+            }
+
+            const parsed = parseByType(field, cleanValue);
+            if (!parsed.ok) {
+                errors.push(parsed.error);
+                continue;
+            }
+
+            appendFieldValue(fields, field, fieldKey, parsed.value);
+            if (!explicitValues[fieldKey]) {
+                explicitValues[fieldKey] = [];
+            }
+            explicitValues[fieldKey].push(parsed.value);
+        }
+
+        const fallbackText = fallbackChunks.join(' ').trim();
+        if (fallbackText) {
+            appendFieldValue(fields, normalizedSchema.byKey[fallbackField], fallbackField, fallbackText);
+        }
+
+        const inferred = [];
+        const autoDetectGlobal = !!config.autoDetectOptionsWithoutPrefix;
+        normalizedSchema.fields.forEach((field) => {
+            if (field.type !== 'options') {
+                return;
+            }
+            if (explicitMentions.has(field.key)) {
+                return;
+            }
+            const fieldAutoDetect = field.autoDetectWithoutPrefix === true || (autoDetectGlobal && field.autoDetectWithoutPrefix !== false);
+            if (!fieldAutoDetect) {
+                return;
+            }
+
+            const options = getFieldOptions(field);
+            if (options.length === 0) {
+                return;
+            }
+
+            const candidates = [];
+            options.forEach((option) => {
+                const labels = [option.label, option.value].filter(Boolean);
+                labels.forEach((label) => {
+                    findBoundaryMatches(rawEntry, label).forEach((match) => {
+                        candidates.push({
+                            fieldKey: field.key,
+                            value: option.value,
+                            label: option.label || option.value,
+                            start: match.start,
+                            end: match.end
+                        });
+                    });
+                });
+            });
+
+            if (candidates.length === 0) {
+                return;
+            }
+
+            candidates.sort((a, b) => a.start - b.start || a.end - b.end);
+            const reduceInferred = typeof field.reduceInferredOptions === 'boolean'
+                ? field.reduceInferredOptions
+                : !!config.reduceInferredOptions;
+
+            if (field.multiple) {
+                const selected = reduceInferred
+                    ? Array.from(candidates.reduce((acc, candidate) => {
+                        acc.set(normValue(candidate.value), candidate);
+                        return acc;
+                    }, new Map()).values()).sort((a, b) => a.start - b.start || a.end - b.end)
+                    : candidates;
+
+                selected.forEach((candidate) => {
+                    const parsed = parseByType(field, candidate.value);
+                    if (!parsed.ok) {
+                        return;
+                    }
+                    appendFieldValue(fields, field, field.key, parsed.value);
+                    inferred.push({
+                        id: `inf|${entryIndex}|${field.key}|${normValue(parsed.value)}`,
+                        fieldKey: field.key,
+                        value: parsed.value,
+                        label: candidate.label,
+                        localStart: candidate.start,
+                        localEnd: candidate.end,
+                        globalStart: globalStart + candidate.start,
+                        globalEnd: globalStart + candidate.end,
+                        inferred: true
+                    });
+                });
+                return;
+            }
+
+            // Single-value fields: reduced => last mention, not reduced => first mention.
+            const chosen = reduceInferred ? candidates[candidates.length - 1] : candidates[0];
+            const parsed = parseByType(field, chosen.value);
+            if (!parsed.ok) {
+                return;
+            }
+            appendFieldValue(fields, field, field.key, parsed.value);
+            inferred.push({
+                id: `inf|${entryIndex}|${field.key}|${normValue(parsed.value)}`,
+                fieldKey: field.key,
+                value: parsed.value,
+                label: chosen.label,
+                localStart: chosen.start,
+                localEnd: chosen.end,
+                globalStart: globalStart + chosen.start,
+                globalEnd: globalStart + chosen.end,
+                inferred: true
+            });
+        });
+
+        const entry = {
+            index: entryIndex,
+            raw: rawEntry,
+            globalStart,
+            globalEnd: globalStart + rawEntry.length,
+            fields,
+            explicitValues,
+            inferred,
+            pending,
+            errors,
+            tokens,
+            isValid: true
+        };
+
+        return applyRequiredValidation(entry, normalizedSchema);
+    }
+
+    function parseInput(input, userConfig) {
+        const config = mergeConfig(userConfig);
+        const normalizedSchema = normalizeSchema(config.schema, config.fallbackField);
+        const prefixMatchers = sortPrefixMatchers(normalizedSchema.fields);
+
+        const rawEntries = config.allowMultipleEntries === false
+            ? [{ raw: input || '', start: 0, end: (input || '').length }]
+            : splitEntriesWithPositions(input || '', config.entrySeparator, config.escapeChar);
+        const parsedEntries = [];
+
+        rawEntries.forEach((entryChunk) => {
+            if (!entryChunk.raw || entryChunk.raw.trim().length === 0) {
+                return;
+            }
+
+            const parsed = parseEntry(
+                entryChunk.raw,
+                config,
+                normalizedSchema,
+                prefixMatchers,
+                parsedEntries.length,
+                entryChunk.start
+            );
+            parsedEntries.push(parsed);
+        });
+
+        const validCount = parsedEntries.filter((entry) => entry.isValid).length;
+
+        return {
+            input: input || '',
+            entries: parsedEntries,
+            entryCount: parsedEntries.length,
+            validCount,
+            invalidCount: parsedEntries.length - validCount,
+            config: {
+                entrySeparator: config.entrySeparator,
+                fieldTerminator: config.fieldTerminator,
+                fieldTerminatorMode: config.fieldTerminatorMode
+            }
+        };
+    }
+
+    function escHtml(text) {
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function normValue(value) {
+        return String(value).toLowerCase().trim();
+    }
+
+    function resolveMount(mount) {
+        if (!mount) {
+            throw new Error('QuickAdd: mount is required');
+        }
+        if (typeof mount === 'string') {
+            const el = document.querySelector(mount);
+            if (!el) {
+                throw new Error(`QuickAdd: mount target not found: ${mount}`);
+            }
+            return el;
+        }
+        if (mount instanceof HTMLElement) {
+            return mount;
+        }
+        throw new Error('QuickAdd: mount must be a selector or HTMLElement');
+    }
+
+    function QuickAddComponent(userConfig) {
+        this.config = mergeConfig(userConfig);
+        this.normalizedSchema = normalizeSchema(this.config.schema, this.config.fallbackField);
+        this.mountEl = resolveMount(this.config.mount);
+        this.timer = null;
+        this.isRenderingInput = false;
+        this.inputText = '';
+        this.lastResult = parseInput('', this.config);
+        this.tokenMap = {};
+        this.dismissedSelections = new Set();
+        this.attachmentsByEntry = new Map();
+        this.attachmentCounter = 0;
+        this.dropdownState = null;
+
+        ensureQuickAddStyles();
+
+        this.renderShell();
+        this.applyTokens();
+        this.bindEvents();
+        this.parseAndRender();
+    }
+
+    QuickAddComponent.prototype.defaultHintText = function defaultHintText() {
+        const separator = this.config.entrySeparator === '\n' ? 'newline' : this.config.entrySeparator;
+        return `Field terminator: "${this.config.fieldTerminator}" | Entry separator: "${separator}"`;
+    };
+
+    QuickAddComponent.prototype.renderShell = function renderShell() {
+        const c = this.config.classNames;
+        const hint = this.config.hintText || this.defaultHintText();
+        const outputBlock = this.config.showJsonOutput
+            ? `<pre class="${c.output}" data-role="output"></pre>`
+            : '';
+
+        this.mountEl.innerHTML = `
+            <div class="${c.root}" data-role="root">
+                <div class="${c.inputWrap}">
+                    <div class="${c.inputSurface}" data-role="inputSurface">
+                        <div
+                            class="${c.input}"
+                            data-role="input"
+                            contenteditable="true"
+                            role="textbox"
+                            aria-multiline="true"
+                            spellcheck="false"
+                            data-placeholder="${escHtml(this.config.placeholder)}"
+                        ></div>
+                    </div>
+                    <div class="${c.hint}">${escHtml(hint)}</div>
+                </div>
+                <div class="${c.status}" data-role="status"></div>
+                <div class="${c.preview}" data-role="preview"></div>
+                ${outputBlock}
+                <div class="${c.dropdown}" data-role="dropdown" hidden>
+                    <input class="${c.dropdownSearch}" data-role="dropdownSearch" type="text" placeholder="Filter options..." />
+                    <div class="${c.dropdownList}" data-role="dropdownList"></div>
+                </div>
+            </div>
+        `;
+
+        this.rootEl = this.mountEl.querySelector('[data-role="root"]');
+        this.inputSurfaceEl = this.mountEl.querySelector('[data-role="inputSurface"]');
+        this.inputEl = this.mountEl.querySelector('[data-role="input"]');
+        this.statusEl = this.mountEl.querySelector('[data-role="status"]');
+        this.previewEl = this.mountEl.querySelector('[data-role="preview"]');
+        this.outputEl = this.mountEl.querySelector('[data-role="output"]');
+        this.dropdownEl = this.mountEl.querySelector('[data-role="dropdown"]');
+        this.dropdownSearchEl = this.mountEl.querySelector('[data-role="dropdownSearch"]');
+        this.dropdownListEl = this.mountEl.querySelector('[data-role="dropdownList"]');
+    };
+
+    QuickAddComponent.prototype.applyTokens = function applyTokens() {
+        const tokens = this.config.tokens || {};
+        Object.keys(tokens).forEach((name) => {
+            if (name.startsWith('--')) {
+                this.rootEl.style.setProperty(name, String(tokens[name]));
+            }
+        });
+    };
+
+    QuickAddComponent.prototype.bindEvents = function bindEvents() {
+        this.onInput = () => {
+            if (this.isRenderingInput) {
+                return;
+            }
+            this.closeDropdown();
+            if (this.timer) {
+                clearTimeout(this.timer);
+            }
+            this.timer = setTimeout(() => {
+                this.parseAndRender();
+            }, this.config.debounceMs);
+        };
+
+        this.onInputClick = (event) => {
+            const dismissBtn = event.target.closest('[data-dismiss-key]');
+            if (dismissBtn) {
+                event.preventDefault();
+                event.stopPropagation();
+                const dismissKey = dismissBtn.getAttribute('data-dismiss-key');
+                if (dismissKey) {
+                    this.dismissSelection(dismissKey);
+                }
+                return;
+            }
+            const pill = event.target.closest('[data-qa-pill="1"]');
+            if (!pill) {
+                return;
+            }
+            event.preventDefault();
+            this.handlePillClick(pill);
+        };
+
+        this.onPreviewClick = (event) => {
+            const removeBtn = event.target.closest('[data-entry-attachment-remove="1"]');
+            if (removeBtn) {
+                event.preventDefault();
+                event.stopPropagation();
+                const entryIndex = Number(removeBtn.getAttribute('data-entry-index'));
+                const attachmentId = removeBtn.getAttribute('data-attachment-id') || '';
+                if (!Number.isNaN(entryIndex) && attachmentId) {
+                    this.removeEntryAttachment(entryIndex, attachmentId);
+                }
+                return;
+            }
+            const dismissBtn = event.target.closest('[data-dismiss-key]');
+            if (dismissBtn) {
+                event.preventDefault();
+                event.stopPropagation();
+                const dismissKey = dismissBtn.getAttribute('data-dismiss-key');
+                if (dismissKey) {
+                    this.dismissSelection(dismissKey);
+                }
+                return;
+            }
+            const pill = event.target.closest('[data-qa-pill="1"]');
+            if (!pill) {
+                return;
+            }
+            this.handlePillClick(pill);
+        };
+
+        this.onPreviewChange = (event) => {
+            const input = event.target.closest('[data-entry-attachment-input="1"]');
+            if (!input || !input.files) {
+                return;
+            }
+            const entryIndex = Number(input.getAttribute('data-entry-index'));
+            if (Number.isNaN(entryIndex)) {
+                input.value = '';
+                return;
+            }
+            this.addEntryAttachments(entryIndex, Array.from(input.files));
+            input.value = '';
+        };
+
+        this.onDropdownInput = () => {
+            this.renderDropdownList();
+        };
+
+        this.onDropdownListClick = (event) => {
+            const optionBtn = event.target.closest('[data-option-value]');
+            if (!optionBtn) {
+                return;
+            }
+            const value = optionBtn.getAttribute('data-option-value') || '';
+            this.applyDropdownSelection(value);
+        };
+
+        this.onDocumentClick = (event) => {
+            if (!this.dropdownEl || this.dropdownEl.hidden) {
+                return;
+            }
+            if (this.dropdownEl.contains(event.target)) {
+                return;
+            }
+            if (event.target.closest('[data-qa-pill="1"]')) {
+                return;
+            }
+            this.closeDropdown();
+        };
+
+        this.onDocumentKeyDown = (event) => {
+            if (event.key === 'Escape' && this.dropdownState) {
+                this.closeDropdown();
+            }
+        };
+
+        this.inputEl.addEventListener('input', this.onInput);
+        this.inputEl.addEventListener('click', this.onInputClick);
+        this.previewEl.addEventListener('click', this.onPreviewClick);
+        this.previewEl.addEventListener('change', this.onPreviewChange);
+        this.dropdownSearchEl.addEventListener('input', this.onDropdownInput);
+        this.dropdownListEl.addEventListener('click', this.onDropdownListClick);
+        document.addEventListener('click', this.onDocumentClick);
+        document.addEventListener('keydown', this.onDocumentKeyDown);
+    };
+
+    QuickAddComponent.prototype.unbindEvents = function unbindEvents() {
+        if (this.inputEl && this.onInput) {
+            this.inputEl.removeEventListener('input', this.onInput);
+        }
+        if (this.inputEl && this.onInputClick) {
+            this.inputEl.removeEventListener('click', this.onInputClick);
+        }
+        if (this.previewEl && this.onPreviewClick) {
+            this.previewEl.removeEventListener('click', this.onPreviewClick);
+        }
+        if (this.previewEl && this.onPreviewChange) {
+            this.previewEl.removeEventListener('change', this.onPreviewChange);
+        }
+        if (this.dropdownSearchEl && this.onDropdownInput) {
+            this.dropdownSearchEl.removeEventListener('input', this.onDropdownInput);
+        }
+        if (this.dropdownListEl && this.onDropdownListClick) {
+            this.dropdownListEl.removeEventListener('click', this.onDropdownListClick);
+        }
+        document.removeEventListener('click', this.onDocumentClick);
+        document.removeEventListener('keydown', this.onDocumentKeyDown);
+    };
+
+    QuickAddComponent.prototype.rebuildTokenMap = function rebuildTokenMap(result) {
+        const map = {};
+        result.entries.forEach((entry) => {
+            entry.tokens.forEach((token) => {
+                map[token.id] = token;
+            });
+            (entry.inferred || []).forEach((inf) => {
+                map[inf.id] = {
+                    id: inf.id,
+                    kind: 'field',
+                    key: inf.fieldKey,
+                    prefix: '',
+                    value: inf.value,
+                    committed: true,
+                    globalStart: inf.globalStart,
+                    globalEnd: inf.globalEnd,
+                    globalValueStart: inf.globalStart,
+                    globalValueEnd: inf.globalEnd
+                };
+            });
+        });
+        this.tokenMap = map;
+    };
+
+    QuickAddComponent.prototype.buildDismissKey = function buildDismissKey(parts) {
+        return JSON.stringify([
+            parts.entryIndex,
+            parts.fieldKey,
+            normValue(parts.value),
+            parts.sourceKind,
+            normValue(parts.rawChunk || ''),
+            parts.occurrence
+        ]);
+    };
+
+    QuickAddComponent.prototype.removeFieldValue = function removeFieldValue(entry, fieldKey, value) {
+        const current = entry.fields[fieldKey];
+        if (current === undefined) {
+            return false;
+        }
+
+        if (Array.isArray(current)) {
+            const idx = current.findIndex((v) => normValue(v) === normValue(value));
+            if (idx < 0) {
+                return false;
+            }
+            current.splice(idx, 1);
+            if (current.length === 0) {
+                delete entry.fields[fieldKey];
+            }
+            return true;
+        }
+
+        if (normValue(current) !== normValue(value)) {
+            return false;
+        }
+        delete entry.fields[fieldKey];
+        return true;
+    };
+
+    QuickAddComponent.prototype.pruneDismissedSelections = function pruneDismissedSelections(activeKeys) {
+        if (!this.dismissedSelections || this.dismissedSelections.size === 0) {
+            return;
+        }
+        const next = new Set();
+        this.dismissedSelections.forEach((key) => {
+            if (activeKeys.has(key)) {
+                next.add(key);
+            }
+        });
+        this.dismissedSelections = next;
+    };
+
+    QuickAddComponent.prototype.applyDismissedSelections = function applyDismissedSelections(result) {
+        const hasDismissed = this.dismissedSelections && this.dismissedSelections.size > 0;
+        const activeKeys = new Set();
+
+        result.entries.forEach((entry) => {
+            const selections = this.collectEntrySelections(entry);
+            selections.forEach((selection) => {
+                if (selection.dismissKey) {
+                    activeKeys.add(selection.dismissKey);
+                }
+                if (!hasDismissed || !selection.dismissKey) {
+                    return;
+                }
+                if (!this.dismissedSelections.has(selection.dismissKey)) {
+                    return;
+                }
+                this.removeFieldValue(entry, selection.fieldKey, selection.value);
+            });
+            applyRequiredValidation(entry, this.normalizedSchema);
+        });
+
+        this.pruneDismissedSelections(activeKeys);
+
+        result.validCount = result.entries.filter((entry) => entry.isValid).length;
+        result.invalidCount = result.entryCount - result.validCount;
+        return result;
+    };
+
+    QuickAddComponent.prototype.readInputText = function readInputText() {
+        const root = this.inputEl;
+        if (!root) {
+            return '';
+        }
+        if (!root.childNodes || root.childNodes.length === 0) {
+            return '';
+        }
+
+        function extract(node) {
+            if (node && node.nodeType === Node.ELEMENT_NODE && node.getAttribute && node.getAttribute('data-qa-ignore') === '1') {
+                return '';
+            }
+            if (node.nodeType === Node.TEXT_NODE) {
+                return node.nodeValue || '';
+            }
+            if (node.nodeName === 'BR') {
+                return '\n';
+            }
+
+            let out = '';
+            const children = node.childNodes || [];
+            for (let i = 0; i < children.length; i++) {
+                out += extract(children[i]);
+            }
+
+            const isBlock = node.nodeName === 'DIV' || node.nodeName === 'P';
+            if (isBlock && node !== root && node.nextSibling) {
+                out += '\n';
+            }
+            return out;
+        }
+
+        return extract(root).replace(/\r\n/g, '\n');
+    };
+
+    QuickAddComponent.prototype.getCaretOffset = function getCaretOffset() {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) {
+            return null;
+        }
+        const range = sel.getRangeAt(0);
+        if (!this.inputEl.contains(range.startContainer)) {
+            return null;
+        }
+
+        const pre = range.cloneRange();
+        pre.selectNodeContents(this.inputEl);
+        pre.setEnd(range.startContainer, range.startOffset);
+        return pre.toString().length;
+    };
+
+    QuickAddComponent.prototype.setCaretOffset = function setCaretOffset(offset, focusInput) {
+        if (focusInput) {
+            this.inputEl.focus();
+        }
+        const selection = window.getSelection();
+        if (!selection) {
+            return;
+        }
+
+        const range = document.createRange();
+        const walker = document.createTreeWalker(this.inputEl, NodeFilter.SHOW_TEXT);
+        let remaining = Math.max(0, offset || 0);
+        let node = walker.nextNode();
+
+        while (node) {
+            const len = (node.nodeValue || '').length;
+            if (remaining <= len) {
+                range.setStart(node, remaining);
+                range.collapse(true);
+                selection.removeAllRanges();
+                selection.addRange(range);
+                return;
+            }
+            remaining -= len;
+            node = walker.nextNode();
+        }
+
+        range.selectNodeContents(this.inputEl);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+    };
+
+    QuickAddComponent.prototype.renderInlineLayer = function renderInlineLayer(result, options) {
+        const c = this.config.classNames;
+        const opts = options || {};
+        const raw = this.inputText || '';
+
+        const preserveCaret = !opts.skipCaretPreserve && document.activeElement === this.inputEl;
+        const caretOffset = typeof opts.caretOffset === 'number'
+            ? opts.caretOffset
+            : (preserveCaret ? this.getCaretOffset() : null);
+
+        if (!raw) {
+            this.isRenderingInput = true;
+            this.inputEl.innerHTML = '';
+            this.isRenderingInput = false;
+            if (typeof caretOffset === 'number') {
+                this.setCaretOffset(0, !!opts.focusInput);
+            }
+            return;
+        }
+
+        let html = '';
+        if (!this.config.showInlinePills) {
+            html = `<span class="${c.inlineText}">${escHtml(raw)}</span>`;
+        } else {
+            const fieldTokens = [];
+            result.entries.forEach((entry) => {
+                this.getRenderableFieldTokens(entry).forEach((token) => {
+                    fieldTokens.push(Object.assign({ entryIndex: entry.index }, token));
+                });
+            });
+            fieldTokens.sort((a, b) => a.globalStart - b.globalStart);
+
+            let cursor = 0;
+            const parts = [];
+            fieldTokens.forEach((token) => {
+                if (token.globalStart < cursor) {
+                    return;
+                }
+                if (token.globalStart > cursor) {
+                    parts.push(escHtml(raw.slice(cursor, token.globalStart)));
+                }
+
+                const rawTokenChunk = raw.slice(token.globalStart, token.globalEnd);
+                parts.push(this.buildInlineMarkHtml(token, rawTokenChunk));
+                cursor = token.globalEnd;
+            });
+            if (cursor < raw.length) {
+                parts.push(escHtml(raw.slice(cursor)));
+            }
+            html = `<span class="${c.inlineText}">${parts.join('')}</span>`;
+        }
+
+        this.isRenderingInput = true;
+        this.inputEl.innerHTML = html;
+        this.isRenderingInput = false;
+
+        if (typeof caretOffset === 'number') {
+            this.setCaretOffset(Math.min(caretOffset, raw.length), !!opts.focusInput);
+        }
+    };
+
+    QuickAddComponent.prototype.parseAndRender = function parseAndRender(options) {
+        const opts = options || {};
+        if (typeof opts.source === 'string') {
+            this.inputText = opts.source;
+        } else {
+            this.inputText = this.readInputText();
+        }
+
+        const input = this.inputText || '';
+        this.lastResult = parseInput(input, this.config);
+        this.lastResult = this.applyDismissedSelections(this.lastResult);
+        this.lastResult = this.syncEntryAttachmentMeta(this.lastResult);
+        this.rebuildTokenMap(this.lastResult);
+        this.renderInlineLayer(this.lastResult, opts);
+        this.renderResult(this.lastResult);
+
+        const caretOffset = typeof opts.caretOffset === 'number'
+            ? opts.caretOffset
+            : this.getCaretOffset();
+        this.syncTypingDropdown(caretOffset);
+
+        if (typeof this.config.onParse === 'function') {
+            this.config.onParse(this.lastResult);
+        }
+    };
+
+    QuickAddComponent.prototype.getFieldDefinition = function getFieldDefinition(fieldKey) {
+        return this.normalizedSchema.byKey[fieldKey] || null;
+    };
+
+    QuickAddComponent.prototype.resolvePillColor = function resolvePillColor(field, value) {
+        if (!field) {
+            return null;
+        }
+
+        const options = getFieldOptions(field);
+        if (options.length > 0) {
+            const match = options.find((option) =>
+                option.value.toLowerCase() === String(value).toLowerCase() ||
+                option.label.toLowerCase() === String(value).toLowerCase()
+            );
+            if (match && match.color) {
+                return match.color;
+            }
+        }
+
+        return field.color || null;
+    };
+
+    QuickAddComponent.prototype.isInteractivePill = function isInteractivePill(field) {
+        if (!field) {
+            return false;
+        }
+        return field.type === 'options' && !field.multiple && getFieldOptions(field).length > 0;
+    };
+
+    QuickAddComponent.prototype.buildPillHtml = function buildPillHtml(data) {
+        const c = this.config.classNames;
+        const field = this.getFieldDefinition(data.fieldKey);
+        const color = this.resolvePillColor(field, data.value);
+        const inferred = !!data.inferred;
+        const interactive = this.isInteractivePill(field) && !!data.tokenId;
+        const styleAttr = color ? ` style="--qa-pill-accent:${escHtml(color)}"` : '';
+        const classes = [
+            c.pill,
+            interactive ? c.pillInteractive : '',
+            inferred ? c.pillInferred : ''
+        ].filter(Boolean).join(' ');
+
+        const attrs = interactive
+            ? ` data-qa-pill="1" data-pill-field="${escHtml(data.fieldKey)}" data-pill-token="${escHtml(data.tokenId)}" data-pill-entry="${data.entryIndex}"`
+            : '';
+        const inferredIcon = inferred
+            ? `<span class="${c.pillInferredIcon}" aria-hidden="true"><svg viewBox="0 0 16 16" width="12" height="12" focusable="false"><path d="M8 1.5l1.4 2.9 3.1.5-2.2 2.2.5 3.2L8 8.9l-2.8 1.4.5-3.2L3.5 4.9l3.1-.5L8 1.5z" fill="currentColor"/></svg></span>`
+            : '';
+        const dismiss = data.dismissKey
+            ? `<button type="button" class="${c.pillDismiss}" data-dismiss-key="${escHtml(data.dismissKey)}" aria-label="Dismiss value">x</button>`
+            : '';
+
+        return `<span class="${classes}"${attrs}${styleAttr}>${inferredIcon}<span>${escHtml(data.label)}</span>${dismiss}</span>`;
+    };
+
+    QuickAddComponent.prototype.buildInlineMarkHtml = function buildInlineMarkHtml(token, rawChunk) {
+        const c = this.config.classNames;
+        const field = this.getFieldDefinition(token.key);
+        const color = this.resolvePillColor(field, token.value);
+        const interactive = this.isInteractivePill(field);
+        const styleAttr = color ? ` style="--qa-inline-accent:${escHtml(color)}"` : '';
+        const classes = [
+            c.inlineMark,
+            interactive ? c.inlineMarkInteractive : '',
+            token.inferred ? c.inlineMarkInferred : ''
+        ].filter(Boolean).join(' ');
+        const attrs = interactive
+            ? ` data-qa-pill="1" data-pill-field="${escHtml(token.key)}" data-pill-token="${escHtml(token.id)}" data-pill-entry="${token.entryIndex}"`
+            : '';
+        const inferredIcon = token.inferred
+            ? `<span class="${c.inlineMarkIcon}" data-qa-ignore="1" contenteditable="false" aria-hidden="true"><svg viewBox="0 0 16 16" width="10" height="10" focusable="false"><path d="M8 1.5l1.4 2.9 3.1.5-2.2 2.2.5 3.2L8 8.9l-2.8 1.4.5-3.2L3.5 4.9l3.1-.5L8 1.5z" fill="currentColor"/></svg></span>`
+            : '';
+        const dismiss = token.dismissKey
+            ? `<button type="button" class="${c.inlineMarkDismiss}" data-qa-ignore="1" contenteditable="false" data-dismiss-key="${escHtml(token.dismissKey)}" aria-label="Dismiss value">x</button>`
+            : '';
+        return `<span class="${classes}"${attrs}${styleAttr}>${inferredIcon}<span>${escHtml(rawChunk)}</span>${dismiss}</span>`;
+    };
+
+    QuickAddComponent.prototype.getRenderableFieldTokens = function getRenderableFieldTokens(entry) {
+        const selections = this.collectEntrySelections(entry);
+        const output = [];
+
+        selections.forEach((selection) => {
+            if (selection.token) {
+                output.push(Object.assign({}, selection.token, {
+                    entryIndex: entry.index,
+                    inferred: false,
+                    dismissKey: selection.dismissKey
+                }));
+                return;
+            }
+            if (!selection.inferredItem) {
+                return;
+            }
+            output.push({
+                id: selection.inferredItem.id,
+                kind: 'field',
+                key: selection.inferredItem.fieldKey,
+                prefix: '',
+                value: selection.inferredItem.value,
+                committed: true,
+                globalStart: selection.inferredItem.globalStart,
+                globalEnd: selection.inferredItem.globalEnd,
+                globalValueStart: selection.inferredItem.globalStart,
+                globalValueEnd: selection.inferredItem.globalEnd,
+                entryIndex: entry.index,
+                inferred: true,
+                dismissKey: selection.dismissKey
+            });
+        });
+
+        output.sort((a, b) => a.globalStart - b.globalStart);
+        return output;
+    };
+
+    QuickAddComponent.prototype.findTokenIdForFieldValue = function findTokenIdForFieldValue(entry, fieldKey, value, usedTokenIds) {
+        const target = normValue(value);
+        for (let i = entry.tokens.length - 1; i >= 0; i--) {
+            const token = entry.tokens[i];
+            if (token.kind !== 'field' || !token.committed) {
+                continue;
+            }
+            if (token.key !== fieldKey) {
+                continue;
+            }
+            if (usedTokenIds.has(token.id)) {
+                continue;
+            }
+            if (normValue(token.value) === target) {
+                usedTokenIds.add(token.id);
+                return token.id;
+            }
+        }
+
+        for (let i = entry.tokens.length - 1; i >= 0; i--) {
+            const token = entry.tokens[i];
+            if (token.kind !== 'field' || !token.committed) {
+                continue;
+            }
+            if (token.key !== fieldKey) {
+                continue;
+            }
+            if (usedTokenIds.has(token.id)) {
+                continue;
+            }
+            usedTokenIds.add(token.id);
+            return token.id;
+        }
+
+        return null;
+    };
+
+    QuickAddComponent.prototype.findInferredForFieldValue = function findInferredForFieldValue(entry, fieldKey, value, usedInferredIds) {
+        const inferred = entry.inferred || [];
+        for (let i = inferred.length - 1; i >= 0; i--) {
+            const item = inferred[i];
+            if (item.fieldKey !== fieldKey) {
+                continue;
+            }
+            if (usedInferredIds.has(item.id)) {
+                continue;
+            }
+            if (normValue(item.value) === normValue(value)) {
+                usedInferredIds.add(item.id);
+                return item;
+            }
+        }
+        return null;
+    };
+
+    QuickAddComponent.prototype.findTokenById = function findTokenById(entry, tokenId) {
+        if (!tokenId) {
+            return null;
+        }
+        for (let i = 0; i < entry.tokens.length; i++) {
+            if (entry.tokens[i].id === tokenId) {
+                return entry.tokens[i];
+            }
+        }
+        return null;
+    };
+
+    QuickAddComponent.prototype.collectEntrySelections = function collectEntrySelections(entry) {
+        const source = this.inputText || '';
+        const usedTokens = new Set();
+        const usedInferred = new Set();
+        const occurrenceByFingerprint = new Map();
+        const selections = [];
+
+        Object.keys(entry.fields).forEach((fieldKey) => {
+            const value = entry.fields[fieldKey];
+            const values = Array.isArray(value) ? value : [value];
+            values.forEach((item) => {
+                const tokenId = this.findTokenIdForFieldValue(entry, fieldKey, item, usedTokens);
+                const inferredItem = this.findInferredForFieldValue(entry, fieldKey, item, usedInferred);
+                const token = this.findTokenById(entry, tokenId);
+
+                let sourceKind = 'fallback';
+                let rawChunk = '';
+                if (token) {
+                    sourceKind = 'explicit';
+                    rawChunk = source.slice(token.globalStart, token.globalEnd);
+                } else if (inferredItem) {
+                    sourceKind = 'inferred';
+                    rawChunk = source.slice(inferredItem.globalStart, inferredItem.globalEnd);
+                }
+
+                const fingerprint = [
+                    entry.index,
+                    fieldKey,
+                    normValue(item),
+                    sourceKind,
+                    normValue(rawChunk)
+                ].join('|');
+                const occurrence = occurrenceByFingerprint.get(fingerprint) || 0;
+                occurrenceByFingerprint.set(fingerprint, occurrence + 1);
+
+                const dismissKey = (sourceKind === 'explicit' || sourceKind === 'inferred')
+                    ? this.buildDismissKey({
+                        entryIndex: entry.index,
+                        fieldKey,
+                        value: item,
+                        sourceKind,
+                        rawChunk,
+                        occurrence
+                    })
+                    : null;
+
+                selections.push({
+                    fieldKey,
+                    value: item,
+                    label: `${fieldKey}: ${item}`,
+                    entryIndex: entry.index,
+                    tokenId: token ? token.id : null,
+                    token: token || null,
+                    inferredItem: inferredItem || null,
+                    inferred: !!inferredItem && !token,
+                    dismissKey
+                });
+            });
+        });
+
+        return selections;
+    };
+
+    QuickAddComponent.prototype.supportsEntryAttachments = function supportsEntryAttachments() {
+        return this.config.showEntryCards !== false && this.config.allowEntryAttachments === true;
+    };
+
+    QuickAddComponent.prototype.getAttachmentAcceptValue = function getAttachmentAcceptValue() {
+        const parts = (this.config.allowedAttachmentTypes || [])
+            .map((item) => String(item || '').trim())
+            .filter(Boolean);
+        return parts.join(',');
+    };
+
+    QuickAddComponent.prototype.isAttachmentAllowed = function isAttachmentAllowed(file) {
+        const allowed = this.config.allowedAttachmentTypes || [];
+        if (!allowed.length) {
+            return true;
+        }
+
+        const name = String(file.name || '').toLowerCase();
+        const type = String(file.type || '').toLowerCase();
+        return allowed.some((ruleRaw) => {
+            const rule = String(ruleRaw || '').trim().toLowerCase();
+            if (!rule) {
+                return false;
+            }
+            if (rule.startsWith('.')) {
+                return name.endsWith(rule);
+            }
+            if (rule.endsWith('/*')) {
+                const prefix = rule.slice(0, -1);
+                return type.startsWith(prefix);
+            }
+            return type === rule;
+        });
+    };
+
+    QuickAddComponent.prototype.pruneAttachmentsForResult = function pruneAttachmentsForResult(result) {
+        if (!this.attachmentsByEntry || this.attachmentsByEntry.size === 0) {
+            return;
+        }
+        const active = new Set(result.entries.map((entry) => entry.index));
+        Array.from(this.attachmentsByEntry.keys()).forEach((entryIndex) => {
+            if (!active.has(entryIndex)) {
+                this.attachmentsByEntry.delete(entryIndex);
+            }
+        });
+    };
+
+    QuickAddComponent.prototype.getEntryAttachmentMeta = function getEntryAttachmentMeta(entryIndex) {
+        const list = this.attachmentsByEntry.get(entryIndex) || [];
+        return list.map((item) => ({
+            id: item.id,
+            name: item.name,
+            size: item.size,
+            type: item.type,
+            lastModified: item.lastModified
+        }));
+    };
+
+    QuickAddComponent.prototype.syncEntryAttachmentMeta = function syncEntryAttachmentMeta(result) {
+        if (!result || !Array.isArray(result.entries)) {
+            return result;
+        }
+        if (!this.supportsEntryAttachments()) {
+            result.entries.forEach((entry) => {
+                delete entry.attachments;
+            });
+            return result;
+        }
+        this.pruneAttachmentsForResult(result);
+        result.entries.forEach((entry) => {
+            const attachments = this.getEntryAttachmentMeta(entry.index);
+            if (attachments.length > 0) {
+                entry.attachments = attachments;
+            } else {
+                delete entry.attachments;
+            }
+        });
+        return result;
+    };
+
+    QuickAddComponent.prototype.formatAttachmentSize = function formatAttachmentSize(bytes) {
+        const num = Number(bytes || 0);
+        if (num < 1024) {
+            return `${num} B`;
+        }
+        if (num < 1024 * 1024) {
+            return `${(num / 1024).toFixed(1)} KB`;
+        }
+        return `${(num / (1024 * 1024)).toFixed(1)} MB`;
+    };
+
+    QuickAddComponent.prototype.addEntryAttachments = function addEntryAttachments(entryIndex, files) {
+        if (!this.supportsEntryAttachments()) {
+            return;
+        }
+        const selected = Array.isArray(files) ? files.filter(Boolean) : [];
+        if (!selected.length) {
+            return;
+        }
+
+        const allowed = selected.filter((file) => this.isAttachmentAllowed(file));
+        if (!allowed.length) {
+            return;
+        }
+
+        const current = this.attachmentsByEntry.get(entryIndex) || [];
+        const canMultiple = this.config.allowMultipleAttachments !== false;
+        let next = canMultiple ? current.slice() : [];
+
+        allowed.forEach((file) => {
+            const fingerprint = `${file.name}|${file.size}|${file.lastModified}|${file.type}`;
+            const exists = next.some((item) => item.fingerprint === fingerprint);
+            if (exists) {
+                return;
+            }
+            next.push({
+                id: `att_${entryIndex}_${++this.attachmentCounter}`,
+                fingerprint,
+                file,
+                name: file.name || 'attachment',
+                size: Number(file.size || 0),
+                type: file.type || '',
+                lastModified: Number(file.lastModified || 0)
+            });
+        });
+
+        if (!canMultiple && next.length > 1) {
+            next = [next[next.length - 1]];
+        }
+
+        this.attachmentsByEntry.set(entryIndex, next);
+        this.syncEntryAttachmentMeta(this.lastResult);
+        this.renderResult(this.lastResult);
+        if (typeof this.config.onParse === 'function') {
+            this.config.onParse(this.lastResult);
+        }
+    };
+
+    QuickAddComponent.prototype.removeEntryAttachment = function removeEntryAttachment(entryIndex, attachmentId) {
+        const current = this.attachmentsByEntry.get(entryIndex) || [];
+        if (!current.length) {
+            return;
+        }
+        const next = current.filter((item) => item.id !== attachmentId);
+        if (next.length > 0) {
+            this.attachmentsByEntry.set(entryIndex, next);
+        } else {
+            this.attachmentsByEntry.delete(entryIndex);
+        }
+        this.syncEntryAttachmentMeta(this.lastResult);
+        this.renderResult(this.lastResult);
+        if (typeof this.config.onParse === 'function') {
+            this.config.onParse(this.lastResult);
+        }
+    };
+
+    QuickAddComponent.prototype.renderEntryAttachments = function renderEntryAttachments(entry) {
+        if (!this.supportsEntryAttachments()) {
+            return '';
+        }
+        const c = this.config.classNames;
+        const attachments = this.attachmentsByEntry.get(entry.index) || [];
+        const accept = this.getAttachmentAcceptValue();
+        const acceptAttr = accept ? ` accept="${escHtml(accept)}"` : '';
+        const multipleAttr = this.config.allowMultipleAttachments !== false ? ' multiple' : '';
+
+        const listHtml = attachments.length
+            ? `
+                <div class="${c.attachmentList}">
+                    ${attachments.map((item) => `
+                        <div class="${c.attachmentItem}">
+                            <span class="${c.attachmentName}" title="${escHtml(item.name)}">${escHtml(item.name)}</span>
+                            <span class="${c.attachmentMeta}">${escHtml(this.formatAttachmentSize(item.size))}</span>
+                            <button
+                                type="button"
+                                class="${c.attachmentRemove}"
+                                data-entry-attachment-remove="1"
+                                data-entry-index="${entry.index}"
+                                data-attachment-id="${escHtml(item.id)}"
+                                aria-label="Remove attachment"
+                            >x</button>
+                        </div>
+                    `).join('')}
+                </div>
+            `
+            : '';
+
+        return `
+            <div class="${c.attachmentSection}">
+                <div class="${c.attachmentControls}">
+                    <input
+                        type="file"
+                        class="${c.attachmentInput}"
+                        data-entry-attachment-input="1"
+                        data-entry-index="${entry.index}"${acceptAttr}${multipleAttr}
+                    />
+                    <span class="${c.attachmentHint}">
+                        ${this.config.allowMultipleAttachments !== false ? 'Multiple attachments allowed' : 'Single attachment only'}
+                    </span>
+                </div>
+                ${listHtml}
+            </div>
+        `;
+    };
+
+    QuickAddComponent.prototype.renderEntryPills = function renderEntryPills(entry) {
+        const c = this.config.classNames;
+        const selections = this.collectEntrySelections(entry);
+        const pills = selections.map((selection) => this.buildPillHtml(selection));
+
+        if (pills.length === 0) {
+            return `<div class="${c.pillRow}"><span class="${c.pill}">No extracted fields</span></div>`;
+        }
+
+        return `<div class="${c.pillRow}">${pills.join('')}</div>`;
+    };
+
+    QuickAddComponent.prototype.renderResult = function renderResult(result) {
+        const c = this.config.classNames;
+        const showEntryCards = this.config.showEntryCards !== false;
+        const showEntryHeader = this.config.showEntryHeader !== false;
+        const showEntryPills = this.config.showEntryPills !== false;
+        this.statusEl.textContent = `${result.entryCount} entries | ${result.validCount} valid | ${result.invalidCount} issues`;
+
+        if (!showEntryCards) {
+            this.previewEl.innerHTML = '';
+            if (this.outputEl) {
+                this.outputEl.textContent = JSON.stringify(result, null, 2);
+            }
+            return;
+        }
+
+        if (result.entries.length === 0) {
+            this.previewEl.innerHTML = `<div class="${c.entry}">No parsed entries yet.</div>`;
+        } else {
+            this.previewEl.innerHTML = result.entries.map((entry) => {
+                const pendingRows = entry.pending.map((pending) =>
+                    `<div class="${c.issue}">Pending: ${escHtml(pending)}</div>`
+                ).join('');
+                const errorRows = entry.errors.map((error) =>
+                    `<div class="${c.issue}">${escHtml(error)}</div>`
+                ).join('');
+                const badgeText = entry.isValid ? 'valid' : 'needs attention';
+                const headerHtml = showEntryHeader
+                    ? `
+                        <div class="${c.entryHeader}">
+                            <div class="${c.entryTitle}">Entry ${entry.index + 1}</div>
+                            <div class="${c.badges}">
+                                <span class="${c.badge}">${badgeText}</span>
+                            </div>
+                        </div>
+                    `
+                    : '';
+                const pillsHtml = showEntryPills ? this.renderEntryPills(entry) : '';
+                const attachmentsHtml = this.renderEntryAttachments(entry);
+
+                return `
+                    <article class="${c.entry}">
+                        ${headerHtml}
+                        ${pillsHtml}
+                        ${attachmentsHtml}
+                        ${(entry.pending.length || entry.errors.length) ? `
+                            <div class="${c.issues}">
+                                ${pendingRows}
+                                ${errorRows}
+                            </div>
+                        ` : ''}
+                    </article>
+                `;
+            }).join('');
+        }
+
+        if (this.outputEl) {
+            this.outputEl.textContent = JSON.stringify(result, null, 2);
+        }
+    };
+
+    QuickAddComponent.prototype.getCaretClientRect = function getCaretClientRect() {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) {
+            return this.inputEl.getBoundingClientRect();
+        }
+        const range = sel.getRangeAt(0).cloneRange();
+        range.collapse(true);
+        const rect = range.getBoundingClientRect();
+        if (rect && rect.width + rect.height > 0) {
+            return rect;
+        }
+        return this.inputEl.getBoundingClientRect();
+    };
+
+    QuickAddComponent.prototype.findOptionTokenAtCaret = function findOptionTokenAtCaret(caretOffset) {
+        if (typeof caretOffset !== 'number') {
+            return null;
+        }
+
+        let best = null;
+        this.lastResult.entries.forEach((entry) => {
+            entry.tokens.forEach((token) => {
+                if (token.kind !== 'field') {
+                    return;
+                }
+                const field = this.getFieldDefinition(token.key);
+                if (!field || field.type !== 'options') {
+                    return;
+                }
+
+                const inRange = caretOffset >= token.globalStart && caretOffset <= token.globalEnd;
+                if (!inRange) {
+                    return;
+                }
+                if (!best || token.globalStart >= best.globalStart) {
+                    best = token;
+                }
+            });
+        });
+
+        return best;
+    };
+
+    QuickAddComponent.prototype.syncTypingDropdown = function syncTypingDropdown(caretOffset) {
+        if (document.activeElement !== this.inputEl) {
+            if (this.dropdownState && this.dropdownState.source === 'typing') {
+                this.closeDropdown();
+            }
+            return;
+        }
+
+        const token = this.findOptionTokenAtCaret(caretOffset);
+        if (!token) {
+            if (this.dropdownState && this.dropdownState.source === 'typing') {
+                this.closeDropdown();
+            }
+            return;
+        }
+
+        const field = this.getFieldDefinition(token.key);
+        if (!field || field.type !== 'options') {
+            if (this.dropdownState && this.dropdownState.source === 'typing') {
+                this.closeDropdown();
+            }
+            return;
+        }
+
+        const options = getFieldOptions(field);
+        if (options.length === 0) {
+            if (this.dropdownState && this.dropdownState.source === 'typing') {
+                this.closeDropdown();
+            }
+            return;
+        }
+
+        this.dropdownState = {
+            fieldKey: token.key,
+            tokenId: token.id,
+            entryIndex: typeof token.entryIndex === 'number' ? token.entryIndex : 0,
+            currentValue: token.value || '',
+            allowCustom: !!field.allowCustom,
+            options,
+            source: 'typing'
+        };
+
+        this.dropdownSearchEl.value = token.value || '';
+        this.renderDropdownList();
+        this.positionDropdownAtRect(this.getCaretClientRect());
+        this.dropdownEl.hidden = false;
+        this.dropdownEl.classList.add(this.config.classNames.dropdownOpen);
+    };
+
+    QuickAddComponent.prototype.handlePillClick = function handlePillClick(pillEl) {
+        const fieldKey = pillEl.getAttribute('data-pill-field');
+        const tokenId = pillEl.getAttribute('data-pill-token');
+        const entryIndex = Number(pillEl.getAttribute('data-pill-entry'));
+
+        if (!fieldKey || !tokenId || Number.isNaN(entryIndex)) {
+            return;
+        }
+
+        const field = this.getFieldDefinition(fieldKey);
+        if (!field || field.type !== 'options') {
+            return;
+        }
+
+        const token = this.tokenMap[tokenId];
+        if (!token) {
+            return;
+        }
+
+        const options = getFieldOptions(field);
+        if (options.length === 0) {
+            return;
+        }
+
+        this.dropdownState = {
+            fieldKey,
+            tokenId,
+            entryIndex,
+            currentValue: token.value,
+            allowCustom: !!field.allowCustom,
+            options,
+            anchorEl: pillEl,
+            source: 'click'
+        };
+
+        this.dropdownSearchEl.value = '';
+        this.renderDropdownList();
+        this.positionDropdown(pillEl);
+        this.dropdownEl.hidden = false;
+        this.dropdownEl.classList.add(this.config.classNames.dropdownOpen);
+        this.dropdownSearchEl.focus();
+        this.dropdownSearchEl.select();
+    };
+
+    QuickAddComponent.prototype.positionDropdownAtRect = function positionDropdownAtRect(rect) {
+        const width = Math.min(320, Math.max(240, (rect.width || 0) + 40));
+        const left = Math.max(10, Math.min(rect.left || 0, window.innerWidth - width - 10));
+        const top = Math.min(window.innerHeight - 20, (rect.bottom || rect.top || 0) + 8);
+
+        this.dropdownEl.style.position = 'fixed';
+        this.dropdownEl.style.left = `${left}px`;
+        this.dropdownEl.style.top = `${top}px`;
+        this.dropdownEl.style.width = `${width}px`;
+        this.dropdownEl.style.zIndex = '9999';
+    };
+
+    QuickAddComponent.prototype.positionDropdown = function positionDropdown(anchorEl) {
+        this.positionDropdownAtRect(anchorEl.getBoundingClientRect());
+    };
+
+    QuickAddComponent.prototype.renderDropdownList = function renderDropdownList() {
+        if (!this.dropdownState) {
+            this.dropdownListEl.innerHTML = '';
+            return;
+        }
+
+        const c = this.config.classNames;
+        const queryRaw = this.dropdownSearchEl.value || '';
+        const query = queryRaw.trim().toLowerCase();
+
+        let filtered = this.dropdownState.options;
+        if (query) {
+            filtered = filtered.filter((option) =>
+                option.label.toLowerCase().includes(query) || option.value.toLowerCase().includes(query)
+            );
+        }
+
+        const items = filtered.map((option) => {
+            const colorStyle = option.color ? ` style="background:${escHtml(option.color)}"` : '';
+            const selected = normValue(option.value) === normValue(this.dropdownState.currentValue);
+            return `
+                <button type="button" class="${c.dropdownOption}" data-option-value="${escHtml(option.value)}">
+                    <span class="${c.dropdownColor}"${colorStyle}></span>
+                    <span>${escHtml(option.label)}</span>
+                    ${selected ? `<span class="${c.dropdownMeta}">current</span>` : ''}
+                </button>
+            `;
+        });
+
+        const exactMatch = this.dropdownState.options.some((option) =>
+            option.value.toLowerCase() === query || option.label.toLowerCase() === query
+        );
+
+        if (this.dropdownState.allowCustom && query && !exactMatch) {
+            items.push(`
+                <button type="button" class="${c.dropdownOption} ${c.dropdownAdd}" data-option-value="${escHtml(queryRaw.trim())}">
+                    <span class="${c.dropdownColor}"></span>
+                    <span>Add "${escHtml(queryRaw.trim())}"</span>
+                    <span class="${c.dropdownMeta}">custom</span>
+                </button>
+            `);
+        }
+
+        if (items.length === 0) {
+            this.dropdownListEl.innerHTML = `<div class="${c.dropdownMeta}" style="padding:8px 10px;">No options</div>`;
+            return;
+        }
+
+        this.dropdownListEl.innerHTML = items.join('');
+    };
+
+    QuickAddComponent.prototype.replaceRange = function replaceRange(text, start, end, replacement) {
+        return text.slice(0, start) + replacement + text.slice(end);
+    };
+
+    QuickAddComponent.prototype.applyDropdownSelection = function applyDropdownSelection(nextValue) {
+        if (!this.dropdownState) {
+            return;
+        }
+
+        const token = this.tokenMap[this.dropdownState.tokenId];
+        if (!token) {
+            this.closeDropdown();
+            return;
+        }
+
+        const source = this.inputText || this.readInputText();
+        let updated = this.replaceRange(source, token.globalValueStart, token.globalValueEnd, nextValue);
+        let caret = token.globalValueStart + String(nextValue).length;
+
+        if (!token.committed && this.config.fieldTerminatorMode === 'strict' && this.config.fieldTerminator) {
+            updated = this.replaceRange(updated, caret, caret, this.config.fieldTerminator);
+            caret += this.config.fieldTerminator.length;
+        }
+
+        this.closeDropdown();
+        this.parseAndRender({ source: updated, caretOffset: caret, focusInput: true });
+    };
+
+    QuickAddComponent.prototype.closeDropdown = function closeDropdown() {
+        this.dropdownState = null;
+        if (!this.dropdownEl) {
+            return;
+        }
+        this.dropdownEl.hidden = true;
+        this.dropdownEl.classList.remove(this.config.classNames.dropdownOpen);
+        this.dropdownListEl.innerHTML = '';
+        this.dropdownSearchEl.value = '';
+    };
+
+    QuickAddComponent.prototype.dismissSelection = function dismissSelection(dismissKey) {
+        if (!dismissKey) {
+            return;
+        }
+        this.dismissedSelections.add(dismissKey);
+        this.closeDropdown();
+        this.parseAndRender({ skipCaretPreserve: true });
+    };
+
+    QuickAddComponent.prototype.setInput = function setInput(text) {
+        this.inputText = text || '';
+        this.dismissedSelections.clear();
+        this.attachmentsByEntry.clear();
+        this.closeDropdown();
+        this.parseAndRender({ source: this.inputText, caretOffset: this.inputText.length, focusInput: false });
+    };
+
+    QuickAddComponent.prototype.getResult = function getResult() {
+        return this.lastResult;
+    };
+
+    QuickAddComponent.prototype.updateConfig = function updateConfig(nextConfig) {
+        this.config = mergeConfig(Object.assign({}, this.config, nextConfig || {}));
+        this.normalizedSchema = normalizeSchema(this.config.schema, this.config.fallbackField);
+
+        this.closeDropdown();
+        this.unbindEvents();
+        this.renderShell();
+        this.applyTokens();
+        this.bindEvents();
+        this.parseAndRender();
+    };
+
+    QuickAddComponent.prototype.destroy = function destroy() {
+        if (this.timer) {
+            clearTimeout(this.timer);
+        }
+        this.unbindEvents();
+
+        this.mountEl.innerHTML = '';
+    };
+
+    global.QuickAdd = {
+        create: function create(config) {
+            return new QuickAddComponent(config);
+        },
+        parse: parseInput
+    };
+})(window);

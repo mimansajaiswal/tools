@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Components Demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f5f0e8;
+            --ink: #201b16;
+            --ink-soft: #6d6258;
+            --line: #cfc2af;
+            --surface: #fffaf3;
+            --accent: #1f5d69;
+            --accent-soft: #d9eef2;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background:
+                radial-gradient(circle at 15% 10%, #efe5d8 0%, transparent 35%),
+                radial-gradient(circle at 85% 95%, #e0efe9 0%, transparent 30%),
+                var(--bg);
+            color: var(--ink);
+            font-family: "Space Grotesk", sans-serif;
+            line-height: 1.45;
+        }
+
+        .shell {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 24px 18px 42px;
+        }
+
+        .hero {
+            margin-bottom: 18px;
+        }
+
+        .hero h1 {
+            margin: 0 0 6px;
+            font: 700 36px/1.05 "Fraunces", serif;
+        }
+
+        .hero p {
+            margin: 0;
+            color: var(--ink-soft);
+            max-width: 75ch;
+        }
+
+        .hero .import-note {
+            margin-top: 10px;
+            font: 500 12px/1.4 "JetBrains Mono", monospace;
+            color: var(--ink-soft);
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 8px 10px;
+            display: inline-block;
+        }
+
+        .tab-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 16px 0 18px;
+        }
+
+        .tab-btn {
+            border: 1px solid var(--line);
+            background: var(--surface);
+            color: var(--ink);
+            border-radius: 999px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font: 500 13px/1 "JetBrains Mono", monospace;
+            letter-spacing: 0.01em;
+        }
+
+        .tab-btn.active {
+            border-color: var(--accent);
+            background: var(--accent-soft);
+            color: var(--accent);
+        }
+
+        .page {
+            display: none;
+            border: 1px solid var(--line);
+            background: var(--surface);
+            border-radius: 16px;
+            padding: 14px;
+            min-width: 0;
+        }
+
+        .page.active {
+            display: block;
+            animation: reveal .22s ease-out;
+        }
+
+        @keyframes reveal {
+            from {
+                opacity: 0;
+                transform: translateY(5px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .example-wrap {
+            margin-top: 10px;
+            display: grid;
+            gap: 12px;
+        }
+
+        .example-wrap>* {
+            min-width: 0;
+        }
+
+        .example-head {
+            display: grid;
+            gap: 4px;
+        }
+
+        .example-head h2 {
+            margin: 0;
+            font: 700 22px/1.1 "Fraunces", serif;
+        }
+
+        .example-head p {
+            margin: 0;
+            color: var(--ink-soft);
+        }
+
+        .meta {
+            margin-top: 4px;
+            color: var(--ink-soft);
+            font: 500 12px/1.4 "JetBrains Mono", monospace;
+        }
+
+        .config-box {
+            margin-top: 8px;
+            border: 1px solid var(--line);
+            background: #fff;
+            border-radius: 10px;
+            overflow: hidden;
+            max-width: 100%;
+        }
+
+        .config-box summary {
+            cursor: pointer;
+            list-style: none;
+            padding: 8px 10px;
+            font: 500 12px/1 "JetBrains Mono", monospace;
+            color: var(--ink);
+            background: #f8f3ea;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .config-box summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .config-box pre {
+            margin: 0;
+            padding: 10px;
+            background: #fff;
+            color: var(--ink);
+            overflow-x: auto;
+            max-width: 100%;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            font: 500 11px/1.5 "JetBrains Mono", monospace;
+        }
+
+        .future-grid {
+            display: grid;
+            gap: 10px;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        }
+
+        .future-card {
+            border: 1px dashed var(--line);
+            background: #fff;
+            border-radius: 12px;
+            padding: 12px;
+            min-height: 90px;
+        }
+
+        .future-card strong {
+            display: block;
+            margin-bottom: 4px;
+            font-family: "JetBrains Mono", monospace;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+
+        .future-card p {
+            margin: 0;
+            font-size: 14px;
+            color: var(--ink-soft);
+        }
+
+        /* Example 2 custom classNames */
+        .petqa-root {
+            --qa-bg: #eef8f3;
+            --qa-fg: #1d2b25;
+            --qa-muted: #5a6d63;
+            --qa-border: #b8d5c7;
+            --qa-accent: #1d7d5e;
+            --qa-accent-soft: #d8efe5;
+            --qa-danger: #8e3737;
+            --qa-radius: 16px;
+            --qa-font: "JetBrains Mono", monospace;
+            box-shadow: 0 10px 30px rgba(29, 125, 94, 0.08);
+        }
+
+        .petqa-entry {
+            background: linear-gradient(180deg, #ffffff 0%, #f7fcf9 100%);
+        }
+    </style>
+</head>
+
+<body>
+    <main class="shell">
+        <header class="hero">
+            <h1>Components Demo</h1>
+            <p>Gallery scaffold for reusable UI components. Quick Add Parser is wired with live schema-driven parsing
+                and three variant demos.</p>
+            <div class="import-note">Single-file import:
+                <code>&lt;script src=\"./quick-add-component.js\"&gt;&lt;/script&gt;</code>
+            </div>
+        </header>
+
+        <div class="tab-row" id="pageTabs">
+            <button class="tab-btn active" data-page="quickAddPage">Quick Add Parser</button>
+            <button class="tab-btn" data-page="futurePage">Future Components</button>
+        </div>
+
+        <section class="page active" id="quickAddPage">
+            <div class="tab-row" id="exampleTabs">
+                <button class="tab-btn active" data-example="example1">Example 1: Tasks</button>
+                <button class="tab-btn" data-example="example2">Example 2: Pet Log</button>
+                <button class="tab-btn" data-example="example3">Example 3: Expenses</button>
+            </div>
+
+            <article class="example-wrap active" data-example-panel="example1">
+                <div class="example-head">
+                    <h2>Task Planner Variant</h2>
+                    <p>Double-newline bulk entries, terminator <code>;;</code> or next prefix commit, natural dates on
+                        <code>due:</code>. Repeated single-value prefixes keep only the last one, parsed pills can be
+                        dismissed with <code>x</code>, and entry cards allow multiple attachments.
+                    </p>
+                    <div class="meta" id="meta1"></div>
+                    <details class="config-box" open>
+                        <summary>Config + Options</summary>
+                        <pre id="config1"></pre>
+                    </details>
+                </div>
+                <div id="quickAddExample1"></div>
+            </article>
+
+            <article class="example-wrap" style="display:none" data-example-panel="example2">
+                <div class="example-head">
+                    <h2>Pet Event Variant</h2>
+                    <p>Semicolon bulk separator, strict terminator <code>~~</code>, option auto-detect from free text,
+                        and inferred reduction control (global off, symptom field on). Both inferred and explicit parsed
+                        pills can be dismissed with <code>x</code>.</p>
+                    <div class="meta" id="meta2"></div>
+                    <details class="config-box" open>
+                        <summary>Config + Options</summary>
+                        <pre id="config2"></pre>
+                    </details>
+                </div>
+                <div id="quickAddExample2"></div>
+            </article>
+
+            <article class="example-wrap" style="display:none" data-example-panel="example3">
+                <div class="example-head">
+                    <h2>Expense Variant</h2>
+                    <p>Commit mode <code>or-next-prefix</code> with terminator <code>::</code>, typed validation for
+                        numbers/booleans/dates, dark theme token overrides.</p>
+                    <div class="meta" id="meta3"></div>
+                    <details class="config-box" open>
+                        <summary>Config + Options</summary>
+                        <pre id="config3"></pre>
+                    </details>
+                </div>
+                <div id="quickAddExample3"></div>
+            </article>
+        </section>
+
+        <section class="page" id="futurePage">
+            <h2 style="margin:0 0 10px;font:700 24px/1.1 Fraunces,serif;">Future Components Shelf</h2>
+            <div class="future-grid">
+                <div class="future-card">
+                    <strong>Tokenizer Viewer</strong>
+                    <p>Token stream inspector to debug prefix matching and pending states.</p>
+                </div>
+                <div class="future-card">
+                    <strong>Data Grid Editor</strong>
+                    <p>Small editable grid for row-level data entry and validation.</p>
+                </div>
+                <div class="future-card">
+                    <strong>Template Snippet Bar</strong>
+                    <p>One-tap insert snippets for mobile quick entry workflows.</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="https://unpkg.com/chrono-node@2.7.7/dist/chrono.min.js"></script>
+    <script src="./quick-add-component.js"></script>
+    <script>
+        function connectTabs(tabContainerId, attrName, panelSelector) {
+            const container = document.getElementById(tabContainerId);
+            if (!container) return;
+            container.addEventListener('click', (event) => {
+                const btn = event.target.closest(`[${attrName}]`);
+                if (!btn) return;
+                const value = btn.getAttribute(attrName);
+                container.querySelectorAll(`[${attrName}]`).forEach((item) => {
+                    item.classList.toggle('active', item === btn);
+                });
+                document.querySelectorAll(panelSelector).forEach((panel) => {
+                    const panelId = panel.id || panel.getAttribute('data-example-panel');
+                    const active = panelId === value;
+                    panel.classList.toggle('active', active);
+                    panel.style.display = active ? '' : 'none';
+                });
+            });
+        }
+
+        connectTabs('pageTabs', 'data-page', '.page');
+        connectTabs('exampleTabs', 'data-example', '[data-example-panel]');
+
+        function summarizeConfig(config) {
+            const fields = (config.schema?.fields || []).map((f) => ({
+                key: f.key,
+                type: f.type,
+                required: !!f.required,
+                prefixes: f.prefixes || [],
+                options: f.options || f.enum || undefined,
+                color: f.color || undefined,
+                autoDetectWithoutPrefix: f.autoDetectWithoutPrefix === true ? true : undefined,
+                reduceInferredOptions: typeof f.reduceInferredOptions === 'boolean' ? f.reduceInferredOptions : undefined,
+                allowCustom: typeof f.allowCustom === 'boolean' ? f.allowCustom : undefined,
+                exhaustive: typeof f.exhaustive === 'boolean' ? f.exhaustive : undefined,
+                naturalDate: f.naturalDate === true ? true : undefined,
+                multiple: f.multiple === true ? true : undefined
+            }));
+            return {
+                debounceMs: config.debounceMs,
+                allowMultipleEntries: config.allowMultipleEntries === false ? false : true,
+                entrySeparator: config.entrySeparator,
+                fieldTerminator: config.fieldTerminator,
+                fieldTerminatorMode: config.fieldTerminatorMode,
+                showEntryCards: config.showEntryCards === false ? false : true,
+                showEntryHeader: config.showEntryHeader === false ? false : true,
+                showEntryPills: config.showEntryPills === false ? false : true,
+                allowEntryAttachments: config.allowEntryAttachments === true ? true : undefined,
+                allowMultipleAttachments: typeof config.allowMultipleAttachments === 'boolean' ? config.allowMultipleAttachments : undefined,
+                allowedAttachmentTypes: (config.allowedAttachmentTypes || []).length ? config.allowedAttachmentTypes : undefined,
+                autoDetectOptionsWithoutPrefix: config.autoDetectOptionsWithoutPrefix === true ? true : undefined,
+                reduceInferredOptions: typeof config.reduceInferredOptions === 'boolean' ? config.reduceInferredOptions : undefined,
+                fallbackField: config.fallbackField,
+                placeholder: config.placeholder,
+                hasClassOverrides: !!config.classNames,
+                hasTokenOverrides: !!config.tokens,
+                fields
+            };
+        }
+
+        function renderConfigSummary(targetId, config) {
+            const el = document.getElementById(targetId);
+            if (!el) return;
+            el.textContent = JSON.stringify(summarizeConfig(config), null, 2);
+        }
+
+        const taskConfig = {
+            mount: '#quickAddExample1',
+            debounceMs: 280,
+            entrySeparator: '\n\n',
+            fieldTerminator: ';;',
+            fieldTerminatorMode: 'or-next-prefix',
+            allowEntryAttachments: true,
+            allowMultipleAttachments: true,
+            allowedAttachmentTypes: ['.pdf', '.png', '.jpg', 'image/*'],
+            fallbackField: 'title',
+            placeholder: 'Example: ... !p2;; !p1;; and #work;; #health ... (last value wins)',
+            schema: {
+                fields: [
+                    { key: 'title', type: 'string', required: true },
+                    {
+                        key: 'priority',
+                        type: 'options',
+                        prefixes: ['!'],
+                        exhaustive: true,
+                        options: [
+                            { value: 'p1', color: '#dc2626' },
+                            { value: 'p2', color: '#d97706' },
+                            { value: 'p3', color: '#0284c7' }
+                        ]
+                    },
+                    {
+                        key: 'project',
+                        type: 'options',
+                        prefixes: ['#'],
+                        exhaustive: true,
+                        options: [
+                            { value: 'health', color: '#0d9488' },
+                            { value: 'work', color: '#7c3aed' },
+                            { value: 'home', color: '#16a34a' },
+                            { value: 'errands', color: '#475569' }
+                        ]
+                    },
+                    { key: 'due', type: 'date', naturalDate: true, prefixes: ['due:'] },
+                    { key: 'owner', type: 'string', prefixes: ['@'] }
+                ]
+            },
+            tokens: {
+                '--qa-bg': '#fff8ef',
+                '--qa-border': '#e5d7c4',
+                '--qa-accent': '#8b4a2f',
+                '--qa-accent-soft': '#f4e7df'
+            },
+            onParse: (result) => {
+                document.getElementById('meta1').textContent = `entries=${result.entryCount}, valid=${result.validCount}, invalid=${result.invalidCount}`;
+            }
+        };
+        renderConfigSummary('config1', taskConfig);
+        const taskAdd = QuickAdd.create(taskConfig);
+        taskAdd.setInput(
+            'Book vet appointment then call clinic !p3;; shift to urgent !p1;; prep records #health;; and confirm slot due:tomorrow;; with @Mimansa;; before breakfast\n\n' +
+            'Pick up supplements !p2;; #errands;; due:in 2 days;; @Mimansa;;'
+        );
+
+        const petConfig = {
+            mount: '#quickAddExample2',
+            debounceMs: 320,
+            entrySeparator: ';',
+            fieldTerminator: '~~',
+            fieldTerminatorMode: 'strict',
+            showEntryHeader: false,
+            autoDetectOptionsWithoutPrefix: true,
+            reduceInferredOptions: false,
+            fallbackField: 'note',
+            placeholder: 'Use ; for new entry. Example: pet:Luna~~ sev:2~~ at:yesterday~~ cough noted (auto-detected)',
+            classNames: {
+                root: 'qa-root petqa-root',
+                entry: 'qa-entry petqa-entry'
+            },
+            schema: {
+                fields: [
+                    { key: 'note', type: 'string' },
+                    {
+                        key: 'pet',
+                        type: 'options',
+                        prefixes: ['pet:'],
+                        required: true,
+                        exhaustive: true,
+                        options: [
+                            { value: 'Luna', color: '#22c55e' },
+                            { value: 'Mochi', color: '#f97316' },
+                            { value: 'Pico', color: '#3b82f6' }
+                        ]
+                    },
+                    {
+                        key: 'symptom',
+                        type: 'options',
+                        prefixes: ['symptom:', 'sym:'],
+                        allowCustom: true,
+                        autoDetectWithoutPrefix: true,
+                        reduceInferredOptions: true,
+                        options: [
+                            { value: 'cough', color: '#dc2626' },
+                            { value: 'vomit', color: '#ea580c' },
+                            { value: 'itching', color: '#d97706' },
+                            { value: 'low energy', color: '#7c3aed' }
+                        ]
+                    },
+                    { key: 'severity', type: 'number', prefixes: ['sev:'] },
+                    { key: 'at', type: 'date', naturalDate: true, prefixes: ['at:'], required: true }
+                ]
+            },
+            onParse: (result) => {
+                document.getElementById('meta2').textContent = `entries=${result.entryCount}, valid=${result.validCount}, invalid=${result.invalidCount}`;
+            }
+        };
+        renderConfigSummary('config2', petConfig);
+        const petAdd = QuickAdd.create(petConfig);
+        petAdd.setInput(
+            'pet:Luna~~ sev:2~~ at:yesterday~~ cough and appetite normal;' +
+            ' pet:Mochi~~ sev:3~~ at:today~~ low energy and slept longer than usual'
+        );
+
+        const expenseConfig = {
+            mount: '#quickAddExample3',
+            debounceMs: 250,
+            entrySeparator: '\n',
+            fieldTerminator: '::',
+            fieldTerminatorMode: 'or-next-prefix',
+            showEntryPills: false,
+            fallbackField: 'memo',
+            placeholder: 'Example: Team lunch $23.4:: cat:Food:: pay:Card:: on:2026-02-06:: rb:no::',
+            schema: {
+                fields: [
+                    { key: 'memo', type: 'string', required: true },
+                    { key: 'amount', type: 'number', prefixes: ['$'], required: true },
+                    {
+                        key: 'category',
+                        type: 'options',
+                        prefixes: ['cat:'],
+                        required: true,
+                        exhaustive: true,
+                        options: [
+                            { value: 'Food', color: '#f59e0b' },
+                            { value: 'Travel', color: '#0ea5e9' },
+                            { value: 'Supplies', color: '#22c55e' },
+                            { value: 'Software', color: '#a855f7' }
+                        ]
+                    },
+                    {
+                        key: 'payment',
+                        type: 'options',
+                        prefixes: ['pay:'],
+                        allowCustom: false,
+                        options: [
+                            { value: 'Card', color: '#06b6d4' },
+                            { value: 'Cash', color: '#84cc16' },
+                            { value: 'UPI', color: '#f97316' },
+                            { value: 'Bank', color: '#8b5cf6' }
+                        ]
+                    },
+                    { key: 'on', type: 'date', naturalDate: false, prefixes: ['on:'], required: true },
+                    { key: 'reimbursable', type: 'boolean', prefixes: ['rb:'] }
+                ]
+            },
+            tokens: {
+                '--qa-bg': '#1d2328',
+                '--qa-fg': '#edf2f8',
+                '--qa-muted': '#a6b3c0',
+                '--qa-border': '#33404a',
+                '--qa-accent': '#66d9ef',
+                '--qa-accent-soft': '#27414c',
+                '--qa-danger': '#f28b82',
+                '--qa-card-bg': '#111a20',
+                '--qa-card-fg': '#edf2f8',
+                '--qa-input-bg': '#0f171d',
+                '--qa-input-fg': '#edf2f8',
+                '--qa-output-bg': '#0f171d',
+                '--qa-output-fg': '#dbe7f3',
+                '--qa-pill-bg': '#13232d',
+                '--qa-pill-border': '#3f5f74',
+                '--qa-pill-fg': '#dceaf8'
+            },
+            onParse: (result) => {
+                document.getElementById('meta3').textContent = `entries=${result.entryCount}, valid=${result.validCount}, invalid=${result.invalidCount}`;
+            }
+        };
+        renderConfigSummary('config3', expenseConfig);
+        const expenseAdd = QuickAdd.create(expenseConfig);
+        expenseAdd.setInput(
+            'Team lunch $23.4:: cat:Food:: pay:Card:: on:2026-02-06:: rb:no::\n' +
+            'Airport cab $48 cat:Travel pay:Cash on:2026-02-05 rb:yes'
+        );
+    </script>
+</body>
+
+</html>
