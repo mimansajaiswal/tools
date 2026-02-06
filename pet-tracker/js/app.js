@@ -363,6 +363,29 @@ const App = {
         const notesInput = document.getElementById('addEventNotes');
         if (notesInput) notesInput.value = prefill.notes || '';
 
+        // FIX #8: Clear and populate advanced fields
+        const endDateInput = document.getElementById('addEventEndDate');
+        if (endDateInput) endDateInput.value = '';
+        const durationInput = document.getElementById('addEventDuration');
+        if (durationInput) durationInput.value = '';
+        const costInput = document.getElementById('addEventCost');
+        if (costInput) costInput.value = '';
+        const costCatInput = document.getElementById('addEventCostCategory');
+        if (costCatInput) costCatInput.value = '';
+        const costCurrInput = document.getElementById('addEventCostCurrency');
+        if (costCurrInput) costCurrInput.value = '';
+        const tagsInput = document.getElementById('addEventTags');
+        if (tagsInput) tagsInput.value = '';
+
+        // Populate provider dropdown from contacts
+        const providerSelect = document.getElementById('addEventProvider');
+        if (providerSelect) {
+            PetTracker.DB.getAll(PetTracker.STORES.CONTACTS).then(contacts => {
+                providerSelect.innerHTML = '<option value="">None</option>' +
+                    contacts.map(c => `<option value="${c.id}">${PetTracker.UI.escapeHtml(c.name)} (${c.role || 'Contact'})</option>`).join('');
+            });
+        }
+
         PetTracker.UI.openModal('addEventModal');
     },
 
@@ -438,14 +461,31 @@ const App = {
             existingMedia = existingEvent?.media || [];
         }
 
+        // FIX #8: Read advanced fields
+        const endDate = document.getElementById('addEventEndDate')?.value || null;
+        const duration = document.getElementById('addEventDuration')?.value;
+        const cost = document.getElementById('addEventCost')?.value;
+        const costCategory = document.getElementById('addEventCostCategory')?.value || null;
+        const costCurrency = document.getElementById('addEventCostCurrency')?.value || null;
+        const providerId = document.getElementById('addEventProvider')?.value || null;
+        const tagsStr = document.getElementById('addEventTags')?.value || '';
+        const tags = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : [];
+
         const eventData = {
             title: eventType?.name || 'Event',
             petIds: [petId],
             eventTypeId: eventTypeId || null,
             startDate: time ? `${date}T${time}:00` : date,
+            endDate: endDate || null,
             notes: notes || '',
             value: value ? parseFloat(value) : null,
             severityLevelId: severityLevelId || null,
+            duration: duration ? parseFloat(duration) : null,
+            cost: cost ? parseFloat(cost) : null,
+            costCategory,
+            costCurrency,
+            providerId,
+            tags,
             media: existingMedia // Preserve existing media by default
         };
 
@@ -529,6 +569,7 @@ const App = {
 
     /**
      * Drain pending shares from IndexedDB (fallback for postMessage timing issues)
+     * FIX #4: Reconstruct File objects from stored ArrayBuffer data
      */
     drainPendingShares: async () => {
         const DB_NAME = 'PetTracker_ShareDB';
@@ -536,14 +577,15 @@ const App = {
 
         try {
             const db = await new Promise((resolve, reject) => {
-                const request = indexedDB.open(DB_NAME, 1);
+                const request = indexedDB.open(DB_NAME, 2);
                 request.onerror = () => reject(request.error);
                 request.onsuccess = () => resolve(request.result);
                 request.onupgradeneeded = (e) => {
                     const db = e.target.result;
-                    if (!db.objectStoreNames.contains(STORE_NAME)) {
-                        db.createObjectStore(STORE_NAME, { autoIncrement: true });
+                    if (db.objectStoreNames.contains(STORE_NAME)) {
+                        db.deleteObjectStore(STORE_NAME);
                     }
+                    db.createObjectStore(STORE_NAME, { keyPath: 'id' });
                 };
             });
 
@@ -557,8 +599,11 @@ const App = {
             });
 
             if (allShares.length > 0) {
-                // Collect all files from pending shares
-                const files = allShares.flatMap(share => share.files || []);
+                // FIX #4: Each share is {id, name, type, data: ArrayBuffer, timestamp}
+                // Reconstruct File objects from the stored ArrayBuffer data
+                const files = allShares
+                    .filter(share => share.data)
+                    .map(share => new File([share.data], share.name || 'shared-file', { type: share.type || 'application/octet-stream' }));
 
                 if (files.length > 0) {
                     console.log(`[App] Draining ${files.length} pending share files`);
@@ -1223,9 +1268,9 @@ const App = {
 
     /**
      * Test Notion connection
+     * FIX #14: Use centralized token resolution
      */
     testConnection: async () => {
-        // Save current inputs first
         const workerUrl = document.getElementById('settingsWorkerUrl')?.value?.trim();
         const notionToken = document.getElementById('settingsNotionToken')?.value?.trim();
         const proxyToken = document.getElementById('settingsProxyToken')?.value?.trim();
@@ -1235,13 +1280,15 @@ const App = {
             return;
         }
 
-        if (!notionToken) {
-            PetTracker.UI.toast('Please enter Notion token', 'error');
-            return;
-        }
-
         // Save temporarily for API call
         PetTracker.Settings.set({ workerUrl, notionToken, proxyToken });
+
+        // FIX #14: Use centralized token helper (supports both direct token and OAuth)
+        const effectiveToken = PetTracker.API.getEffectiveToken();
+        if (!effectiveToken) {
+            PetTracker.UI.toast('Please enter Notion token or connect via OAuth', 'error');
+            return;
+        }
 
         try {
             PetTracker.UI.showLoading('Testing connection...');
@@ -1259,7 +1306,9 @@ const App = {
      */
     scanDataSources: async () => {
         const settings = PetTracker.Settings.get();
-        if (!settings.workerUrl || !settings.notionToken) {
+        // FIX #14: Use centralized token resolution
+        const effectiveToken = PetTracker.API.getEffectiveToken();
+        if (!settings.workerUrl || !effectiveToken) {
             PetTracker.UI.toast('Configure connection first', 'error');
             return;
         }
@@ -1283,16 +1332,19 @@ const App = {
                 properties: Object.keys(ds.properties || {})
             }));
 
-            // Required properties - ALL must be present
+            // FIX #5 & #6: Required properties aligned to actual read/write contract
+            // Removed Photo/Icon/Primary Vet/Related Contacts from required (read-only or optional)
+            // FIX #6: End Date removed from Events - uses Start Date.end instead
+            // Media kept as optional (read-only for now)
             const requiredProps = {
                 'Pets': [
                     'Name', 'Species', 'Breed', 'Sex', 'Birth Date', 'Adoption Date', 'Status',
-                    'Microchip ID', 'Photo', 'Tags', 'Notes', 'Primary Vet', 'Related Contacts',
-                    'Target Weight Min', 'Target Weight Max', 'Weight Unit', 'Color', 'Icon', 'Is Primary'
+                    'Microchip ID', 'Tags', 'Notes',
+                    'Target Weight Min', 'Target Weight Max', 'Weight Unit', 'Color', 'Is Primary'
                 ],
                 'Events': [
-                    'Title', 'Pet(s)', 'Event Type', 'Start Date', 'End Date', 'Status',
-                    'Severity Level', 'Value', 'Unit', 'Duration', 'Notes', 'Media', 'Tags',
+                    'Title', 'Pet(s)', 'Event Type', 'Start Date', 'Status',
+                    'Severity Level', 'Value', 'Unit', 'Duration', 'Notes', 'Tags',
                     'Source', 'Provider', 'Cost', 'Cost Category', 'Cost Currency',
                     'Todoist Task ID', 'Client Updated At'
                 ],
@@ -1367,6 +1419,77 @@ const App = {
             PetTracker.UI.hideLoading();
             PetTracker.UI.toast('Scan failed: ' + e.message, 'error');
         }
+    },
+
+    // FIX #12: Sync queue management
+    showSyncQueue: async () => {
+        const container = document.getElementById('syncQueueContent');
+        if (!container) return;
+
+        const pending = await PetTracker.SyncQueue.getPending();
+        const failed = await PetTracker.DB.query(PetTracker.STORES.SYNC_QUEUE, i => i.status === 'failed');
+        const allItems = [...pending, ...failed];
+
+        if (allItems.length === 0) {
+            container.innerHTML = '<p class="text-earth-metal text-sm text-center py-4">Queue is empty</p>';
+        } else {
+            container.innerHTML = allItems.map(item => `
+                <div class="flex items-center gap-3 p-3 border border-oatmeal mb-2 ${item.status === 'failed' ? 'border-muted-pink bg-muted-pink/5' : ''}">
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm text-charcoal font-medium truncate">${item.type} ${item.store}</p>
+                        <p class="text-xs text-earth-metal truncate">${item.status} • ${item.retryCount || 0} retries</p>
+                        ${item.error ? `<p class="text-xs text-muted-pink truncate mt-1">${PetTracker.UI.escapeHtml(item.error)}</p>` : ''}
+                    </div>
+                    ${item.status === 'failed' ? `
+                        <button onclick="App.retryQueueItem('${item.id}')" class="p-1 text-earth-metal hover:text-dull-purple" title="Retry">
+                            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                        </button>
+                        <button onclick="App.dropQueueItem('${item.id}')" class="p-1 text-earth-metal hover:text-muted-pink" title="Drop">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
+
+        PetTracker.UI.openModal('syncQueueModal');
+        if (window.lucide) lucide.createIcons();
+    },
+
+    retryQueueItem: async (id) => {
+        const item = await PetTracker.DB.get(PetTracker.STORES.SYNC_QUEUE, id);
+        if (item) {
+            item.status = 'pending';
+            item.retryCount = 0;
+            await PetTracker.DB.put(PetTracker.STORES.SYNC_QUEUE, item);
+            PetTracker.UI.toast('Queued for retry', 'success');
+            App.showSyncQueue();
+            PetTracker.Sync?.updatePendingCount();
+        }
+    },
+
+    dropQueueItem: async (id) => {
+        await PetTracker.DB.delete(PetTracker.STORES.SYNC_QUEUE, id);
+        PetTracker.UI.toast('Dropped', 'info');
+        App.showSyncQueue();
+        PetTracker.Sync?.updatePendingCount();
+    },
+
+    retryAllFailed: async () => {
+        await PetTracker.SyncQueue.resetFailed();
+        PetTracker.UI.toast('All failed items queued for retry', 'success');
+        App.showSyncQueue();
+        PetTracker.Sync?.updatePendingCount();
+    },
+
+    dropAllFailed: async () => {
+        const failed = await PetTracker.DB.query(PetTracker.STORES.SYNC_QUEUE, i => i.status === 'failed');
+        for (const item of failed) {
+            await PetTracker.DB.delete(PetTracker.STORES.SYNC_QUEUE, item.id);
+        }
+        PetTracker.UI.toast('All failed items dropped', 'info');
+        App.showSyncQueue();
+        PetTracker.Sync?.updatePendingCount();
     },
 
     /**

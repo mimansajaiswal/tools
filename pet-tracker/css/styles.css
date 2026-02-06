@@ -1,9 +1,10 @@
 /* Pet Tracker Custom Styles */
 
 /* Masked input - shows dots like password but not treated as password by browsers */
+/* Note: text-security is non-standard, -webkit-text-security works in WebKit browsers */
 .masked-input {
     -webkit-text-security: disc;
-    text-security: disc;
+    /* Fallback for non-WebKit: use password input type or JS masking instead */
 }
 
 /* Custom Scrollbar */
@@ -739,6 +740,7 @@ a:focus-visible,
 .line-clamp-2 {
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }

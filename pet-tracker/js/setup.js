@@ -312,6 +312,16 @@ const Setup = {
         document.getElementById('eventTypeWindowBefore').value = data.windowBefore || 0;
         document.getElementById('eventTypeWindowAfter').value = data.windowAfter || 0;
 
+        // Populate Todoist fields
+        const todoistSyncEl = document.getElementById('eventTypeTodoistSync');
+        if (todoistSyncEl) todoistSyncEl.checked = data.todoistSync || false;
+        const todoistProjectEl = document.getElementById('eventTypeTodoistProject');
+        if (todoistProjectEl) todoistProjectEl.value = data.todoistProject || '';
+        const todoistLabelsEl = document.getElementById('eventTypeTodoistLabels');
+        if (todoistLabelsEl) todoistLabelsEl.value = data.todoistLabels || '';
+        const todoistLeadTimeEl = document.getElementById('eventTypeTodoistLeadTime');
+        if (todoistLeadTimeEl) todoistLeadTimeEl.value = data.todoistLeadTime || 1;
+
         // Toggle recurring fields visibility
         Setup.toggleRecurringFields();
 
@@ -983,7 +993,8 @@ const Setup = {
             return null;
         }
 
-        return nextDue.toISOString().split('T')[0];
+        // FIX #10: Use local date to avoid UTC timezone shift
+        return PetTracker.UI.localDateYYYYMMDD(nextDue);
     }
 };
 

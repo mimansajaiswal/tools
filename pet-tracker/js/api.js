@@ -185,6 +185,15 @@ const API = {
      */
     getOAuthReturnUrl: () => {
         return new URL('index.html', window.location.href).toString();
+    },
+
+    /**
+     * FIX #14: Centralized token resolution helper
+     * Returns the effective Notion token regardless of auth mode (direct token or OAuth)
+     */
+    getEffectiveToken: () => {
+        const settings = PetTracker.Settings.get();
+        return settings.notionToken || settings.notionOAuthData?.access_token || null;
     }
 };
 

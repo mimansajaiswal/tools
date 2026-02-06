@@ -51,16 +51,18 @@ const Care = {
 
     /**
      * Calculate next due for rolling schedule (needs last event)
+     * FIX #11: Accepts optional petId to find last event per pet
      */
-    calculateRollingNextDue: async (eventType) => {
+    calculateRollingNextDue: async (eventType, petId = null) => {
         if (eventType.scheduleType !== 'Rolling') {
             return Care.calculateNextDue(eventType);
         }
 
-        // Find last completed event for this event type
+        // Find last completed event for this event type, optionally filtered by pet
         const events = await PetTracker.DB.query(
             PetTracker.STORES.EVENTS,
-            e => e.eventTypeId === eventType.id && e.status === 'Completed'
+            e => e.eventTypeId === eventType.id && e.status === 'Completed' &&
+                (!petId || (e.petIds && e.petIds.includes(petId)))
         );
 
         if (events.length === 0) {
@@ -111,50 +113,55 @@ const Care = {
         const upcoming = [];
 
         for (const eventType of recurringTypes) {
-            // Filter by pet if specified
-            if (petIds.length > 0 && eventType.relatedPetIds?.length > 0) {
-                if (!eventType.relatedPetIds.some(id => petIds.includes(id))) {
-                    continue;
-                }
-            }
-
             // Filter by category if specified
             if (categories.length > 0 && !categories.includes(eventType.category)) {
                 continue;
             }
 
-            // Calculate next due
-            let nextDue;
-            if (eventType.scheduleType === 'Rolling') {
-                nextDue = await Care.calculateRollingNextDue(eventType);
-            } else {
-                nextDue = Care.calculateNextDue(eventType);
+            // Check if schedule has ended
+            if (eventType.endDate && new Date(eventType.endDate) < now) {
+                continue;
             }
 
-            if (!nextDue) continue;
+            // FIX #11: Generate per-pet entries when event type has multiple related pets
+            const relatedPets = eventType.relatedPetIds?.length > 0
+                ? eventType.relatedPetIds
+                : [null]; // null = no specific pet
 
-            const dueDate = new Date(nextDue);
-
-            // Check if within horizon
-            if (dueDate <= endDate) {
-                // Check if schedule has ended
-                if (eventType.endDate && new Date(eventType.endDate) < now) {
+            for (const petId of relatedPets) {
+                // Filter by pet if specified
+                if (petIds.length > 0 && petId && !petIds.includes(petId)) {
                     continue;
                 }
 
-                upcoming.push({
-                    eventTypeId: eventType.id,
-                    eventTypeName: eventType.name,
-                    petIds: eventType.relatedPetIds || [],
-                    category: eventType.category,
-                    dueDate: nextDue,
-                    dueTime: eventType.dueTime,
-                    windowBefore: eventType.windowBefore,
-                    windowAfter: eventType.windowAfter,
-                    isOverdue: dueDate < now,
-                    icon: eventType.defaultIcon,
-                    color: eventType.defaultColor
-                });
+                // Calculate next due (per-pet for rolling schedules)
+                let nextDue;
+                if (eventType.scheduleType === 'Rolling') {
+                    nextDue = await Care.calculateRollingNextDue(eventType, petId);
+                } else {
+                    nextDue = Care.calculateNextDue(eventType);
+                }
+
+                if (!nextDue) continue;
+
+                const dueDate = new Date(nextDue);
+
+                // Check if within horizon
+                if (dueDate <= endDate) {
+                    upcoming.push({
+                        eventTypeId: eventType.id,
+                        eventTypeName: eventType.name,
+                        petIds: petId ? [petId] : (eventType.relatedPetIds || []),
+                        category: eventType.category,
+                        dueDate: nextDue,
+                        dueTime: eventType.dueTime,
+                        windowBefore: eventType.windowBefore,
+                        windowAfter: eventType.windowAfter,
+                        isOverdue: dueDate < now,
+                        icon: eventType.defaultIcon,
+                        color: eventType.defaultColor
+                    });
+                }
             }
         }
 

@@ -502,16 +502,74 @@ Parse the following input:`;
     },
 
     /**
-     * Show entry edit form
+     * Show entry edit form - allows inline editing of parsed entries
      */
     showEntryEdit: (entryId) => {
         const entry = AI.state.entries.find(e => e._id === entryId);
         if (!entry) return;
 
-        // Mark as edited
-        AI.markEdited(entryId);
+        const entryEl = document.querySelector(`[data-entry-id="${entryId}"]`);
+        if (!entryEl) return;
 
-        // For now, show inline edit - could be expanded to full modal
+        // Create inline edit form
+        const editForm = document.createElement('div');
+        editForm.className = 'space-y-2 p-2 bg-oatmeal border border-earth-metal';
+        editForm.innerHTML = `
+            <div>
+                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Title</label>
+                <input type="text" class="input-field text-sm" id="aiEditTitle_${entryId}" value="${PetTracker.UI.escapeHtml(entry.title || '')}">
+            </div>
+            <div>
+                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Notes</label>
+                <textarea class="input-field text-sm" rows="2" id="aiEditNotes_${entryId}">${PetTracker.UI.escapeHtml(entry.notes || '')}</textarea>
+            </div>
+            <div class="flex gap-2 justify-end">
+                <button type="button" onclick="AI.cancelEdit('${entryId}')" class="text-xs text-earth-metal hover:text-charcoal">Cancel</button>
+                <button type="button" onclick="AI.saveEdit('${entryId}')" class="text-xs text-dull-purple font-medium">Save</button>
+            </div>
+        `;
+
+        // Replace entry content with edit form
+        const contentEl = entryEl.querySelector('.entry-content');
+        if (contentEl) {
+            contentEl.dataset.originalHtml = contentEl.innerHTML;
+            contentEl.innerHTML = '';
+            contentEl.appendChild(editForm);
+        }
+
+        // Mark as being edited
+        AI.markEdited(entryId);
+    },
+
+    /**
+     * Cancel inline edit
+     */
+    cancelEdit: (entryId) => {
+        const entryEl = document.querySelector(`[data-entry-id="${entryId}"]`);
+        if (!entryEl) return;
+
+        const contentEl = entryEl.querySelector('.entry-content');
+        if (contentEl && contentEl.dataset.originalHtml) {
+            contentEl.innerHTML = contentEl.dataset.originalHtml;
+            delete contentEl.dataset.originalHtml;
+        }
+    },
+
+    /**
+     * Save inline edit
+     */
+    saveEdit: (entryId) => {
+        const entry = AI.state.entries.find(e => e._id === entryId);
+        if (!entry) return;
+
+        const titleEl = document.getElementById(`aiEditTitle_${entryId}`);
+        const notesEl = document.getElementById(`aiEditNotes_${entryId}`);
+
+        if (titleEl) entry.title = titleEl.value.trim();
+        if (notesEl) entry.notes = notesEl.value.trim();
+
+        // Re-render entries to show updated values
+        AI.renderEntries();
     },
 
     /**

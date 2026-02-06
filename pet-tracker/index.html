@@ -237,6 +237,31 @@
 
     <!-- ========== MODALS ========== -->
 
+    <!-- FIX #12: Sync Queue Modal -->
+    <div id="syncQueueModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
+        aria-modal="true">
+        <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
+        <div class="relative bg-white-linen border border-oatmeal w-full max-w-lg max-h-[90vh] overflow-y-auto z-10">
+            <div class="sticky top-0 bg-white-linen border-b border-oatmeal p-4 flex items-center justify-between">
+                <span class="section-header">Sync Queue</span>
+                <button onclick="PetTracker.UI.closeModal('syncQueueModal')"
+                    class="p-1 text-earth-metal hover:text-charcoal">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div id="syncQueueContent" class="p-4"></div>
+            <div class="p-4 border-t border-oatmeal flex gap-3 justify-end">
+                <button onclick="App.retryAllFailed()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
+                    <i data-lucide="refresh-cw" class="w-3 h-3 inline mr-1"></i>Retry All
+                </button>
+                <button onclick="App.dropAllFailed()"
+                    class="btn-secondary px-4 py-2 font-mono text-xs uppercase text-muted-pink">
+                    <i data-lucide="trash-2" class="w-3 h-3 inline mr-1"></i>Drop All Failed
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Add Event Modal -->
     <div id="addEventModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
         aria-modal="true" aria-labelledby="addEventModalTitle">
@@ -282,6 +307,70 @@
                     <textarea id="addEventNotes" class="input-field h-24 resize-none"
                         placeholder="Additional notes..."></textarea>
                 </div>
+                <!-- FIX #8: Advanced fields section -->
+                <details class="border border-oatmeal">
+                    <summary
+                        class="p-3 font-mono text-xs uppercase text-earth-metal cursor-pointer hover:bg-oatmeal/30">
+                        Advanced Fields
+                    </summary>
+                    <div class="p-3 space-y-4 border-t border-oatmeal">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">End Date</label>
+                                <input type="date" id="addEventEndDate" class="input-field">
+                            </div>
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Duration
+                                    (min)</label>
+                                <input type="number" id="addEventDuration" class="input-field" placeholder="Minutes">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4">
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Cost</label>
+                                <input type="number" id="addEventCost" class="input-field" step="0.01"
+                                    placeholder="0.00">
+                            </div>
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Cost
+                                    Category</label>
+                                <select id="addEventCostCategory" class="select-field">
+                                    <option value="">Select...</option>
+                                    <option value="Routine">Routine</option>
+                                    <option value="Emergency">Emergency</option>
+                                    <option value="Preventive">Preventive</option>
+                                    <option value="Surgery">Surgery</option>
+                                    <option value="Medication">Medication</option>
+                                    <option value="Supplies">Supplies</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Currency</label>
+                                <select id="addEventCostCurrency" class="select-field">
+                                    <option value="">Select...</option>
+                                    <option value="USD">USD</option>
+                                    <option value="EUR">EUR</option>
+                                    <option value="GBP">GBP</option>
+                                    <option value="CAD">CAD</option>
+                                    <option value="AUD">AUD</option>
+                                    <option value="INR">INR</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Provider</label>
+                            <select id="addEventProvider" class="select-field">
+                                <option value="">None</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Tags (comma
+                                separated)</label>
+                            <input type="text" id="addEventTags" class="input-field" placeholder="tag1, tag2">
+                        </div>
+                    </div>
+                </details>
                 <div>
                     <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Attachments</label>
                     <div id="attachmentPreviewContainer" class="hidden flex flex-wrap gap-2 mb-3"></div>
@@ -967,6 +1056,62 @@
                     <textarea id="addPetNotes" class="input-field h-20 resize-none"
                         placeholder="Additional notes..."></textarea>
                 </div>
+                <!-- FIX #9: Advanced pet fields -->
+                <details class="border border-oatmeal">
+                    <summary
+                        class="p-3 font-mono text-xs uppercase text-earth-metal cursor-pointer hover:bg-oatmeal/30">
+                        Advanced Fields
+                    </summary>
+                    <div class="p-3 space-y-4 border-t border-oatmeal">
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Adoption Date</label>
+                            <input type="date" id="addPetAdoptionDate" class="input-field">
+                        </div>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Status</label>
+                            <select id="addPetStatus" class="select-field">
+                                <option value="Active">Active</option>
+                                <option value="Deceased">Deceased</option>
+                                <option value="Rehomed">Rehomed</option>
+                                <option value="Lost">Lost</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Microchip ID</label>
+                            <input type="text" id="addPetMicrochipId" class="input-field"
+                                placeholder="Microchip number">
+                        </div>
+                        <div class="grid grid-cols-3 gap-4">
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Target Weight
+                                    Min</label>
+                                <input type="number" id="addPetWeightMin" class="input-field" step="0.1"
+                                    placeholder="Min">
+                            </div>
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Target Weight
+                                    Max</label>
+                                <input type="number" id="addPetWeightMax" class="input-field" step="0.1"
+                                    placeholder="Max">
+                            </div>
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Weight
+                                    Unit</label>
+                                <select id="addPetWeightUnit" class="select-field">
+                                    <option value="lb">lb</option>
+                                    <option value="kg">kg</option>
+                                    <option value="oz">oz</option>
+                                    <option value="g">g</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="addPetIsPrimary" class="w-4 h-4">
+                            <label for="addPetIsPrimary" class="font-mono text-xs uppercase text-earth-metal">Primary
+                                Pet</label>
+                        </div>
+                    </div>
+                </details>
                 <div class="flex gap-3 justify-end pt-4 border-t border-oatmeal">
                     <button type="button" onclick="PetTracker.UI.closeModal('addPetModal')"
                         class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Cancel</button>
@@ -1331,6 +1476,40 @@
                             <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Assign to Pets
                                 (optional)</label>
                             <div id="eventTypePetCheckboxes" class="flex flex-wrap gap-3 mt-2"></div>
+                        </div>
+
+                        <!-- Todoist Integration -->
+                        <div class="border-t border-oatmeal pt-4 mt-4">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" id="eventTypeTodoistSync" class="w-4 h-4">
+                                <span class="text-sm font-medium">
+                                    <i data-lucide="check-square" class="w-4 h-4 inline mr-1"></i>
+                                    Sync to Todoist
+                                </span>
+                            </label>
+                            <p class="text-xs text-earth-metal mt-1">Create Todoist tasks for upcoming occurrences</p>
+                            <div id="eventTypeTodoistFields" class="space-y-3 mt-3">
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Project
+                                            ID (optional)</label>
+                                        <input type="text" id="eventTypeTodoistProject" class="input-field"
+                                            placeholder="Leave empty for Inbox">
+                                    </div>
+                                    <div>
+                                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Lead Time
+                                            (days)</label>
+                                        <input type="number" id="eventTypeTodoistLeadTime" class="input-field" value="1"
+                                            min="0">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Labels
+                                        (comma-separated)</label>
+                                    <input type="text" id="eventTypeTodoistLabels" class="input-field"
+                                        placeholder="pet-care, recurring">
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

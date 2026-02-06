@@ -130,8 +130,10 @@ const Sync = {
                 indicator.innerHTML = '<i data-lucide="cloud-off" class="w-4 h-4"></i>';
                 indicator.title = 'Offline';
             } else if (Sync.failedCount > 0) {
-                indicator.innerHTML = '<i data-lucide="alert-triangle" class="w-4 h-4 text-muted-pink"></i>';
-                indicator.title = `${Sync.failedCount} failed syncs`;
+                // FIX #12: Make failed indicator clickable to show sync queue
+                indicator.innerHTML = '<i data-lucide="alert-triangle" class="w-4 h-4 text-muted-pink cursor-pointer"></i>';
+                indicator.title = `${Sync.failedCount} failed syncs - click to manage`;
+                indicator.onclick = () => App.showSyncQueue?.();
             } else if (Sync.pendingCount > 0) {
                 indicator.innerHTML = '<i data-lucide="cloud" class="w-4 h-4 text-muted-pink"></i>';
                 indicator.title = `${Sync.pendingCount} pending changes`;
@@ -370,6 +372,17 @@ const Sync = {
 
                 const record = await PetTracker.DB.get(storeConstant, recordId);
                 if (!record?.notionId) {
+                    // FIX #3: Check if there's a pending create for this record
+                    const pending = await PetTracker.SyncQueue.getPending();
+                    const hasPendingCreate = pending.some(p =>
+                        p.type === 'create' && p.store === store && p.recordId === recordId
+                    );
+                    if (hasPendingCreate) {
+                        // Mark as retryable - the create will complete first due to sorting
+                        const error = new Error(`Waiting for create to complete: ${store}:${recordId}`);
+                        error.isRetryable = true;
+                        throw error;
+                    }
                     throw new Error('No Notion ID for update');
                 }
                 const properties = await Sync.toNotionProperties(store, data);
@@ -401,18 +414,20 @@ const Sync = {
 
     /**
      * Pull remote updates from Notion
+     * FIX #1: Pull in dependency order to prevent relation normalization issues
      */
     pullRemoteUpdates: async () => {
         const settings = PetTracker.Settings.get();
 
-        // Pull each data source
+        // Pull in dependency order: base entities first, then dependents
+        // pets -> scales -> scaleLevels -> eventTypes -> contacts -> events
         const sources = [
             { store: 'pets', storeKey: 'PETS' },
-            { store: 'events', storeKey: 'EVENTS' },
-            { store: 'eventTypes', storeKey: 'EVENT_TYPES' },
             { store: 'scales', storeKey: 'SCALES' },
             { store: 'scaleLevels', storeKey: 'SCALE_LEVELS' },
-            { store: 'contacts', storeKey: 'CONTACTS' }
+            { store: 'eventTypes', storeKey: 'EVENT_TYPES' },
+            { store: 'contacts', storeKey: 'CONTACTS' },
+            { store: 'events', storeKey: 'EVENTS' }
         ];
 
         for (const { store, storeKey } of sources) {
@@ -426,21 +441,32 @@ const Sync = {
                 console.error(`[Sync] Error pulling ${store}:`, e);
             }
         }
+
+        // FIX #1: Second pass - repair any relations that couldn't be resolved on first pull
+        await Sync.repairBrokenRelations();
     },
 
     /**
      * Pull a single data source
+     * FIX #15: Uses last_edited_time filter for incremental pull when possible
      */
     pullDataSource: async (store, storeKey, dataSourceId) => {
         let cursor = null;
         let hasMore = true;
+
+        // FIX #15: Build filter for incremental pull based on last sync time
+        const lastSync = PetTracker.Settings.getLastSync();
+        const filter = lastSync ? {
+            timestamp: 'last_edited_time',
+            last_edited_time: { on_or_after: lastSync }
+        } : null;
 
         while (hasMore) {
             await Sync.waitForRateLimit();
 
             const result = await PetTracker.API.queryDatabase(
                 dataSourceId,
-                null,
+                filter,
                 [{ timestamp: 'last_edited_time', direction: 'descending' }],
                 cursor
             );
@@ -482,18 +508,30 @@ const Sync = {
             return;
         }
 
-        // If no local match by notionId, try to find by name (prevent duplicates)
-        // This handles the case where a record was created locally but not synced yet
-        if (!local && remote.name) {
+        // FIX #13: Use clientId for deterministic dedupe, fall back to name
+        if (!local) {
             const allRecords = await PetTracker.DB.getAll(storeName);
-            const matchByName = allRecords.find(r =>
-                r.name === remote.name && !r.notionId
-            );
-            if (matchByName) {
-                // Found a local record with same name that hasn't synced yet
-                // Link it to the Notion record instead of creating a duplicate
-                local = matchByName;
-                console.log(`[Sync] Matched ${store} by name: "${remote.name}"`);
+
+            // Prefer clientId match if available
+            if (remote.clientId) {
+                const matchByClientId = allRecords.find(r =>
+                    r.clientId === remote.clientId && !r.notionId
+                );
+                if (matchByClientId) {
+                    local = matchByClientId;
+                    console.log(`[Sync] Matched ${store} by clientId: "${remote.clientId}"`);
+                }
+            }
+
+            // Fall back to name match only if no clientId match and name is set
+            if (!local && remote.name) {
+                const matchByName = allRecords.find(r =>
+                    r.name === remote.name && !r.notionId
+                );
+                if (matchByName) {
+                    local = matchByName;
+                    console.log(`[Sync] Matched ${store} by name: "${remote.name}"`);
+                }
             }
         }
 
@@ -631,12 +669,14 @@ const Sync = {
      * Resolve local IDs to Notion page IDs for relations
      * Returns array of notionIds (filters out any that don't have a notionId yet)
      * Throws an error if any required relation can't be resolved (so it can be retried)
+     * FIX #2: Treat both "record missing" and "record exists without notionId" as retryable
      */
     resolveRelationIds: async (storeName, localIds, throwOnMissing = false) => {
         if (!localIds || !Array.isArray(localIds) || localIds.length === 0) return [];
 
         const notionIds = [];
-        const missingIds = [];
+        const missingNotionIds = []; // Record exists but no notionId
+        const missingRecords = [];   // Record doesn't exist at all
 
         for (const localId of localIds) {
             if (!localId) continue;
@@ -644,14 +684,18 @@ const Sync = {
             if (record?.notionId) {
                 notionIds.push(record.notionId);
             } else if (record) {
-                missingIds.push(localId);
+                // Record exists but hasn't synced yet
+                missingNotionIds.push(localId);
+            } else {
+                // Record doesn't exist at all - could be a pending create
+                missingRecords.push(localId);
             }
         }
 
-        // If we have unresolved relations that exist locally but haven't synced,
-        // this is a dependency ordering issue that can be retried
-        if (throwOnMissing && missingIds.length > 0) {
-            const error = new Error(`Dependency not synced yet: ${storeName}:${missingIds.join(',')}`);
+        // FIX #2: If throwOnMissing, treat both cases as retryable dependency errors
+        if (throwOnMissing && (missingNotionIds.length > 0 || missingRecords.length > 0)) {
+            const allMissing = [...missingNotionIds, ...missingRecords];
+            const error = new Error(`Dependency not synced yet: ${storeName}:${allMissing.join(',')}`);
             error.isRetryable = true;
             throw error;
         }
@@ -667,8 +711,8 @@ const Sync = {
         const resolve = Sync.resolveRelationIds;
 
         switch (store) {
-            case 'pets':
-                return {
+            case 'pets': {
+                const petProps = {
                     'Name': P.title(data.name),
                     'Species': P.select(data.species),
                     'Breed': P.richText(data.breed),
@@ -685,10 +729,22 @@ const Sync = {
                     'Color': P.richText(data.color),
                     'Is Primary': P.checkbox(data.isPrimary)
                 };
+                // FIX #5: Include optional relation properties if data has them
+                if (data.photo?.length > 0) {
+                    petProps['Photo'] = P.files(data.photo);
+                }
+                if (data.primaryVetId) {
+                    petProps['Primary Vet'] = P.relation(await resolve(PetTracker.STORES.CONTACTS, [data.primaryVetId]));
+                }
+                if (data.relatedContactIds?.length > 0) {
+                    petProps['Related Contacts'] = P.relation(await resolve(PetTracker.STORES.CONTACTS, data.relatedContactIds));
+                }
+                return petProps;
+            }
 
-            case 'events':
+            case 'events': {
                 // For events, Pet(s) and Event Type are required relations - throw on missing
-                return {
+                const eventProps = {
                     'Title': P.title(data.title || 'Event'),
                     'Pet(s)': P.relation(await resolve(PetTracker.STORES.PETS, data.petIds, data.petIds?.length > 0)),
                     'Event Type': P.relation(await resolve(PetTracker.STORES.EVENT_TYPES, data.eventTypeId ? [data.eventTypeId] : [], !!data.eventTypeId)),
@@ -708,6 +764,36 @@ const Sync = {
                     'Todoist Task ID': P.richText(data.todoistTaskId),
                     'Client Updated At': P.date(data.updatedAt)
                 };
+
+                // FIX #7: Include Media property if local media exists
+                if (data.media?.length > 0) {
+                    const uploadedMedia = [];
+                    for (const m of data.media) {
+                        if (m.url) {
+                            uploadedMedia.push(m);
+                        } else {
+                            // Local media - try to upload. Uses localId or id field
+                            const mediaId = m.localId || m.id;
+                            if (mediaId && typeof Media !== 'undefined') {
+                                try {
+                                    const blob = await PetTracker.MediaStore.get(`${mediaId}_upload`);
+                                    if (blob) {
+                                        const uploaded = await Media.uploadToNotion(blob, m.name || 'media.webp');
+                                        uploadedMedia.push({ name: m.name || 'media', url: uploaded.url });
+                                    }
+                                } catch (e) {
+                                    console.warn(`[Sync] Media upload failed for ${mediaId}:`, e.message);
+                                }
+                            }
+                        }
+                    }
+                    if (uploadedMedia.length > 0) {
+                        eventProps['Media'] = P.files(uploadedMedia);
+                    }
+                }
+
+                return eventProps;
+            }
 
             case 'eventTypes':
                 return {
@@ -911,6 +997,57 @@ const Sync = {
             default:
                 console.warn(`[Sync] No extraction mapping for store: ${store}`);
                 return { updatedAt: page.last_edited_time };
+        }
+    },
+
+    /**
+     * FIX #1: Repair broken relations after pull
+     * Re-processes records that have null relation fields due to pull order issues
+     */
+    repairBrokenRelations: async () => {
+        const settings = PetTracker.Settings.get();
+        let repaired = 0;
+
+        // Check events for broken relations
+        const events = await PetTracker.DB.getAll(PetTracker.STORES.EVENTS);
+        for (const event of events) {
+            let needsUpdate = false;
+
+            // If petIds is empty but we have notionId, we might have broken relations
+            if (event.notionId && (!event.petIds || event.petIds.length === 0 || event.petIds.includes(null))) {
+                // Re-fetch from Notion if datasource is configured
+                const dataSourceId = settings.dataSources?.events;
+                if (dataSourceId) {
+                    try {
+                        const page = await PetTracker.API.getPage(event.notionId);
+                        if (page && !page.archived) {
+                            const refreshed = Sync.fromNotionPage('events', page);
+                            await Sync.normalizeRelationFields('events', refreshed);
+
+                            // Update fields that were null
+                            if (refreshed.petIds?.length > 0 && refreshed.petIds[0]) {
+                                event.petIds = refreshed.petIds;
+                                needsUpdate = true;
+                            }
+                            if (refreshed.eventTypeId && !event.eventTypeId) {
+                                event.eventTypeId = refreshed.eventTypeId;
+                                needsUpdate = true;
+                            }
+                        }
+                    } catch (e) {
+                        console.warn(`[Sync] Could not repair event ${event.id}:`, e.message);
+                    }
+                }
+            }
+
+            if (needsUpdate) {
+                await PetTracker.DB.put(PetTracker.STORES.EVENTS, event);
+                repaired++;
+            }
+        }
+
+        if (repaired > 0) {
+            console.log(`[Sync] Repaired ${repaired} broken relation(s)`);
         }
     },
 

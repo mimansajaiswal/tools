@@ -339,6 +339,22 @@ const Pets = {
         document.getElementById('addPetNotes').value = pet.notes || '';
         document.getElementById('addPetForm').dataset.editId = id;
 
+        // FIX #9: Populate advanced fields
+        const adoptionDateEl = document.getElementById('addPetAdoptionDate');
+        if (adoptionDateEl) adoptionDateEl.value = pet.adoptionDate || '';
+        const statusEl = document.getElementById('addPetStatus');
+        if (statusEl) statusEl.value = pet.status || 'Active';
+        const microchipEl = document.getElementById('addPetMicrochipId');
+        if (microchipEl) microchipEl.value = pet.microchipId || '';
+        const weightMinEl = document.getElementById('addPetWeightMin');
+        if (weightMinEl) weightMinEl.value = pet.targetWeightMin || '';
+        const weightMaxEl = document.getElementById('addPetWeightMax');
+        if (weightMaxEl) weightMaxEl.value = pet.targetWeightMax || '';
+        const weightUnitEl = document.getElementById('addPetWeightUnit');
+        if (weightUnitEl) weightUnitEl.value = pet.weightUnit || 'lb';
+        const isPrimaryEl = document.getElementById('addPetIsPrimary');
+        if (isPrimaryEl) isPrimaryEl.checked = !!pet.isPrimary;
+
         // Populate icon field
         const iconInput = document.getElementById('addPetIcon');
         const iconPreview = document.getElementById('addPetIconPreview');
@@ -383,7 +399,15 @@ const Pets = {
             birthDate: document.getElementById('addPetBirthDate')?.value || null,
             color: document.getElementById('addPetColor')?.value || '#8b7b8e',
             notes: document.getElementById('addPetNotes')?.value?.trim() || '',
-            icon
+            icon,
+            // FIX #9: Advanced pet fields
+            adoptionDate: document.getElementById('addPetAdoptionDate')?.value || null,
+            status: document.getElementById('addPetStatus')?.value || 'Active',
+            microchipId: document.getElementById('addPetMicrochipId')?.value?.trim() || '',
+            targetWeightMin: parseFloat(document.getElementById('addPetWeightMin')?.value) || null,
+            targetWeightMax: parseFloat(document.getElementById('addPetWeightMax')?.value) || null,
+            weightUnit: document.getElementById('addPetWeightUnit')?.value || 'lb',
+            isPrimary: document.getElementById('addPetIsPrimary')?.checked || false
         };
 
         if (!data.name) {

@@ -141,17 +141,19 @@ self.addEventListener('fetch', (event) => {
     }
 });
 
-// Helper to open share DB
+// FIX #4: Helper to open share DB with unified schema (keyPath: 'id')
 function openShareDB() {
     return new Promise((resolve, reject) => {
-        const request = indexedDB.open('PetTracker_ShareDB', 1);
+        const request = indexedDB.open('PetTracker_ShareDB', 2);
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve(request.result);
         request.onupgradeneeded = (event) => {
             const db = event.target.result;
-            if (!db.objectStoreNames.contains('pendingShares')) {
-                db.createObjectStore('pendingShares', { keyPath: 'id' });
+            // Delete old store with incompatible schema if it exists
+            if (db.objectStoreNames.contains('pendingShares')) {
+                db.deleteObjectStore('pendingShares');
             }
+            db.createObjectStore('pendingShares', { keyPath: 'id' });
         };
     });
 }

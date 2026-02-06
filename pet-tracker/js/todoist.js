@@ -324,7 +324,8 @@ const Todoist = {
             return null;
         }
 
-        return nextDue.toISOString().split('T')[0];
+        // FIX #10: Use local date to avoid UTC timezone shift
+        return PetTracker.UI.localDateYYYYMMDD(nextDue);
     }
 };
 
