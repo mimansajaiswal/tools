@@ -401,21 +401,72 @@ const Setup = {
             return;
         }
 
+        // Recurring schedule fields
+        const isRecurring = document.getElementById('eventTypeIsRecurring')?.checked || false;
+        const scheduleType = document.getElementById('eventTypeScheduleType')?.value || 'Fixed';
+        const intervalValue = parseInt(document.getElementById('eventTypeIntervalValue')?.value) || 1;
+        const intervalUnit = document.getElementById('eventTypeIntervalUnit')?.value || 'Months';
+        const anchorDate = document.getElementById('eventTypeAnchorDate')?.value || null;
+        const endDate = document.getElementById('eventTypeEndDate')?.value || null;
+        const dueTime = document.getElementById('eventTypeDueTime')?.value || null;
+        const defaultDose = document.getElementById('eventTypeDefaultDose')?.value?.trim() || null;
+        const windowBefore = parseInt(document.getElementById('eventTypeWindowBefore')?.value) || 0;
+        const windowAfter = parseInt(document.getElementById('eventTypeWindowAfter')?.value) || 0;
+
+        // Pet assignments
+        const petCheckboxes = document.querySelectorAll('input[name="eventTypePets"]:checked');
+        const relatedPetIds = Array.from(petCheckboxes).map(cb => cb.value);
+
+        // Todoist integration fields (if present in modal)
+        const todoistSync = document.getElementById('eventTypeTodoistSync')?.checked || false;
+        const todoistProject = document.getElementById('eventTypeTodoistProject')?.value?.trim() || null;
+        const todoistLabels = document.getElementById('eventTypeTodoistLabels')?.value?.trim() || null;
+        const todoistLeadTime = parseInt(document.getElementById('eventTypeTodoistLeadTime')?.value) || 1;
+
+        // Preserve existing fields when editing
+        let existingData = {};
+        if (Setup.editingId) {
+            existingData = await PetTracker.DB.get(PetTracker.STORES.EVENT_TYPES, Setup.editingId) || {};
+        }
+
         const now = new Date().toISOString();
         const data = {
+            ...existingData, // Preserve fields not in UI
             id: Setup.editingId || PetTracker.generateId(),
             name,
             category,
             trackingMode,
-            defaultIcon: Setup.selectedIcon || 'circle',
-            defaultColor: Setup.selectedColor || 'purple',
+            defaultIcon: Setup.selectedIcon || existingData.defaultIcon || 'circle',
+            defaultColor: Setup.selectedColor || existingData.defaultColor || 'purple',
             usesSeverity,
             defaultScaleId,
             allowAttachments,
             defaultValueKind,
+            // Recurring schedule fields
+            isRecurring,
+            scheduleType: isRecurring ? scheduleType : null,
+            intervalValue: isRecurring ? intervalValue : null,
+            intervalUnit: isRecurring ? intervalUnit : null,
+            anchorDate: isRecurring ? anchorDate : null,
+            endDate: isRecurring ? endDate : null,
+            dueTime: isRecurring ? dueTime : null,
+            defaultDose,
+            windowBefore: isRecurring ? windowBefore : null,
+            windowAfter: isRecurring ? windowAfter : null,
+            relatedPetIds,
+            // Todoist fields
+            todoistSync: isRecurring ? todoistSync : false,
+            todoistProject: isRecurring && todoistSync ? todoistProject : null,
+            todoistLabels: isRecurring && todoistSync ? todoistLabels : null,
+            todoistLeadTime: isRecurring && todoistSync ? todoistLeadTime : null,
             updatedAt: now,
             synced: false
         };
+
+        // Calculate nextDue if recurring and has anchor date
+        if (isRecurring && anchorDate) {
+            data.nextDue = Setup.calculateNextDue(data);
+        }
 
         if (!Setup.editingId) {
             data.createdAt = now;
@@ -442,12 +493,19 @@ const Setup = {
     deleteEventType: async (id) => {
         if (!confirm('Delete this event type? Events using it will lose their type reference.')) return;
 
-        await PetTracker.DB.delete(PetTracker.STORES.EVENT_TYPES, id);
+        // Get notionId before deleting locally so remote archive can work
+        const record = await PetTracker.DB.get(PetTracker.STORES.EVENT_TYPES, id);
+        const notionId = record?.notionId;
+
+        // Queue delete with notionId before local delete
         await PetTracker.SyncQueue.add({
             type: 'delete',
             store: 'eventTypes',
-            recordId: id
+            recordId: id,
+            data: { notionId }
         });
+
+        await PetTracker.DB.delete(PetTracker.STORES.EVENT_TYPES, id);
 
         if (PetTracker.Sync?.updatePendingCount) PetTracker.Sync.updatePendingCount();
         PetTracker.UI.toast('Event type deleted', 'info');
@@ -650,17 +708,28 @@ const Setup = {
     saveScale: async () => {
         const name = document.getElementById('scaleName').value.trim();
         const valueType = document.getElementById('scaleValueType').value;
+        const unit = document.getElementById('scaleUnit')?.value?.trim() || null;
+        const notes = document.getElementById('scaleNotes')?.value?.trim() || null;
 
         if (!name) {
             PetTracker.UI.toast('Name is required', 'error');
             return;
         }
 
+        // Preserve existing fields when editing
+        let existingData = {};
+        if (Setup.editingId) {
+            existingData = await PetTracker.DB.get(PetTracker.STORES.SCALES, Setup.editingId) || {};
+        }
+
         const now = new Date().toISOString();
         const data = {
+            ...existingData, // Preserve fields not in UI
             id: Setup.editingId || PetTracker.generateId(),
             name,
             valueType,
+            unit,
+            notes,
             updatedAt: now,
             synced: false
         };
@@ -685,15 +754,27 @@ const Setup = {
     deleteScale: async (id) => {
         if (!confirm('Delete this scale and all its levels?')) return;
 
-        // Delete levels first
+        // Delete levels first - queue with notionId before local delete
         const levels = await PetTracker.DB.query(PetTracker.STORES.SCALE_LEVELS, l => l.scaleId === id);
         for (const level of levels) {
+            await PetTracker.SyncQueue.add({
+                type: 'delete',
+                store: 'scaleLevels',
+                recordId: level.id,
+                data: { notionId: level.notionId }
+            });
             await PetTracker.DB.delete(PetTracker.STORES.SCALE_LEVELS, level.id);
-            await PetTracker.SyncQueue.add({ type: 'delete', store: 'scaleLevels', recordId: level.id });
         }
 
+        // Get notionId before deleting locally
+        const scale = await PetTracker.DB.get(PetTracker.STORES.SCALES, id);
+        await PetTracker.SyncQueue.add({
+            type: 'delete',
+            store: 'scales',
+            recordId: id,
+            data: { notionId: scale?.notionId }
+        });
         await PetTracker.DB.delete(PetTracker.STORES.SCALES, id);
-        await PetTracker.SyncQueue.add({ type: 'delete', store: 'scales', recordId: id });
 
         if (PetTracker.Sync?.updatePendingCount) PetTracker.Sync.updatePendingCount();
         PetTracker.UI.toast('Scale deleted', 'info');
@@ -858,6 +939,51 @@ const Setup = {
     selectColor: (containerId, color) => {
         Setup.selectedColor = color;
         Setup.renderColorPicker(containerId, color);
+    },
+
+    /**
+     * Calculate next due date for a recurring event type
+     */
+    calculateNextDue: (eventType) => {
+        if (!eventType.isRecurring || !eventType.anchorDate) return null;
+
+        const now = new Date();
+        const anchor = new Date(eventType.anchorDate);
+        const interval = eventType.intervalValue || 1;
+        const unit = eventType.intervalUnit || 'Months';
+
+        // For Fixed schedule: find next occurrence from anchor
+        // For Rolling schedule: nextDue is calculated based on last completion (handled elsewhere)
+        if (eventType.scheduleType === 'One-off') {
+            return eventType.anchorDate;
+        }
+
+        let nextDue = new Date(anchor);
+
+        // Find the next occurrence that is in the future
+        while (nextDue <= now) {
+            switch (unit) {
+                case 'Days':
+                    nextDue.setDate(nextDue.getDate() + interval);
+                    break;
+                case 'Weeks':
+                    nextDue.setDate(nextDue.getDate() + (interval * 7));
+                    break;
+                case 'Months':
+                    nextDue.setMonth(nextDue.getMonth() + interval);
+                    break;
+                case 'Years':
+                    nextDue.setFullYear(nextDue.getFullYear() + interval);
+                    break;
+            }
+        }
+
+        // Check if past end date
+        if (eventType.endDate && nextDue > new Date(eventType.endDate)) {
+            return null;
+        }
+
+        return nextDue.toISOString().split('T')[0];
     }
 };
 

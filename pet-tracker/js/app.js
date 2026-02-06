@@ -3,6 +3,9 @@
  * Initialization, routing, and state management
  */
 
+const APP_OAUTH_DEV_PASSWORD_KEY = 'oauth_dev_password';
+const APP_OAUTH_BASE = 'https://notion-oauth-handler.mimansa-jaiswal.workers.dev';
+
 const App = {
     state: {
         currentView: 'dashboard',
@@ -85,6 +88,9 @@ const App = {
                     App.handleShareTarget(event.data.files);
                 }
             });
+
+            // Also drain any pending shares from IndexedDB (fallback if postMessage missed)
+            App.drainPendingShares();
         }
 
         // PWA install prompt
@@ -518,6 +524,58 @@ const App = {
         } catch (e) {
             console.error('[App] Error processing shared files:', e);
             PetTracker.UI.toast('Error processing files', 'error');
+        }
+    },
+
+    /**
+     * Drain pending shares from IndexedDB (fallback for postMessage timing issues)
+     */
+    drainPendingShares: async () => {
+        const DB_NAME = 'PetTracker_ShareDB';
+        const STORE_NAME = 'pendingShares';
+
+        try {
+            const db = await new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, 1);
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => resolve(request.result);
+                request.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains(STORE_NAME)) {
+                        db.createObjectStore(STORE_NAME, { autoIncrement: true });
+                    }
+                };
+            });
+
+            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const store = tx.objectStore(STORE_NAME);
+
+            const allShares = await new Promise((resolve, reject) => {
+                const request = store.getAll();
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+
+            if (allShares.length > 0) {
+                // Collect all files from pending shares
+                const files = allShares.flatMap(share => share.files || []);
+
+                if (files.length > 0) {
+                    console.log(`[App] Draining ${files.length} pending share files`);
+                    await App.handleShareTarget(files);
+                }
+
+                // Clear the store
+                await new Promise((resolve, reject) => {
+                    const clearRequest = store.clear();
+                    clearRequest.onsuccess = () => resolve();
+                    clearRequest.onerror = () => reject(clearRequest.error);
+                });
+            }
+
+            db.close();
+        } catch (e) {
+            console.warn('[App] Error draining pending shares:', e);
         }
     },
 
@@ -1005,7 +1063,7 @@ const App = {
      * Uses redirect-based flow with return URL for multi-app support on same domain
      * Matches the approach used in ghostink-flashcards
      */
-    startNotionOAuth: () => {
+    startNotionOAuth: async () => {
         // Save any current settings before redirect
         const workerUrl = document.getElementById('settingsWorkerUrl')?.value?.trim();
         const proxyToken = document.getElementById('settingsProxyToken')?.value?.trim();
@@ -1017,9 +1075,39 @@ const App = {
 
         // Build return URL with full path so OAuth handler knows where to redirect
         const returnUrl = encodeURIComponent(window.location.href);
+        const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
 
-        // Redirect to centralized OAuth handler with return URL
-        window.location.href = `https://notion-oauth-handler.mimansa-jaiswal.workers.dev/auth/login?from=${returnUrl}`;
+        try {
+            if (isLocal) {
+                const devPassword = (localStorage.getItem(APP_OAUTH_DEV_PASSWORD_KEY) || '').trim();
+                if (!devPassword) {
+                    PetTracker.UI.hideLoading();
+                    PetTracker.UI.toast(`Set localStorage.${APP_OAUTH_DEV_PASSWORD_KEY} first`, 'warning');
+                    return;
+                }
+
+                const unlockRes = await fetch(`${APP_OAUTH_BASE}/auth/dev-unlock`, {
+                    method: 'POST',
+                    headers: { 'X-OAuth-Dev-Password': devPassword }
+                });
+                if (!unlockRes.ok) {
+                    const msg = await unlockRes.text().catch(() => '');
+                    throw new Error(msg || `Dev unlock failed (${unlockRes.status})`);
+                }
+
+                const data = await unlockRes.json();
+                const unlockToken = (data?.unlockToken || '').trim();
+                if (!unlockToken) throw new Error('Dev unlock token missing');
+
+                window.location.href = `${APP_OAUTH_BASE}/auth/login?from=${returnUrl}&dev_unlock=${encodeURIComponent(unlockToken)}`;
+                return;
+            }
+
+            window.location.href = `${APP_OAUTH_BASE}/auth/login?from=${returnUrl}`;
+        } catch (e) {
+            PetTracker.UI.hideLoading();
+            PetTracker.UI.toast(`OAuth start failed: ${e?.message || 'unknown error'}`, 'error');
+        }
     },
 
     /**

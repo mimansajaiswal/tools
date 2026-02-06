@@ -997,7 +997,9 @@
                         <li>Go to Cloudflare Dashboard → Workers & Pages</li>
                         <li>Create a new Worker</li>
                         <li>Paste the code below and deploy</li>
-                        <li>Optionally set <code class="bg-oatmeal px-1">ALL_CORS_PROXY_MATCH_TOKEN</code> secret</li>
+                        <li>Optionally set <code class="bg-oatmeal px-1">ALL_CORS_PROXY_MATCH_TOKEN</code> and send it
+                            as <code class="bg-oatmeal px-1">X-Proxy-Token</code> (query <code
+                                class="bg-oatmeal px-1">?token=</code> still works)</li>
                         <li>Copy your Worker URL to settings</li>
                     </ol>
                 </div>
@@ -1419,129 +1421,8 @@
         </div>
     </div>
 
-    <!-- Care Item Modal -->
-    <div id="careItemModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
-        aria-modal="true" aria-labelledby="careItemModalTitle">
-        <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
-        <div class="relative bg-white-linen border border-oatmeal w-full max-w-lg max-h-[90vh] overflow-y-auto z-10">
-            <div class="sticky top-0 bg-white-linen border-b border-oatmeal p-4 flex items-center justify-between">
-                <span id="careItemModalTitle" class="section-header">Add Care Item</span>
-                <button onclick="PetTracker.UI.closeModal('careItemModal')"
-                    class="p-1 text-earth-metal hover:text-charcoal">
-                    <i data-lucide="x" class="w-5 h-5"></i>
-                </button>
-            </div>
-            <form class="p-4 space-y-4" onsubmit="event.preventDefault(); Setup.saveCareItem();">
-                <div>
-                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Name *</label>
-                    <input type="text" id="careItemName" class="input-field" placeholder="e.g., Heartworm Prevention"
-                        required>
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Type</label>
-                        <select id="careItemType" class="select-field">
-                            <option value="Medication">Medication</option>
-                            <option value="Vaccine">Vaccine</option>
-                            <option value="Procedure">Procedure</option>
-                            <option value="Grooming">Grooming</option>
-                            <option value="Supplement">Supplement</option>
-                            <option value="Other">Other</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Default Dose</label>
-                        <input type="text" id="careItemDefaultDose" class="input-field" placeholder="e.g., 1 tablet">
-                    </div>
-                </div>
-                <div>
-                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Notes</label>
-                    <textarea id="careItemNotes" class="input-field h-20 resize-none"
-                        placeholder="Additional notes..."></textarea>
-                </div>
-                <label class="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" id="careItemActive" checked class="w-4 h-4">
-                    <span class="text-sm">Active</span>
-                </label>
-                <div class="flex gap-3 justify-end pt-4 border-t border-oatmeal">
-                    <button type="button" onclick="PetTracker.UI.closeModal('careItemModal')"
-                        class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Cancel</button>
-                    <button type="submit" class="btn-primary px-4 py-2 font-mono text-xs uppercase">Save</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- Care Plan Modal -->
-    <div id="carePlanModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
-        aria-modal="true" aria-labelledby="carePlanModalTitle">
-        <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
-        <div class="relative bg-white-linen border border-oatmeal w-full max-w-lg max-h-[90vh] overflow-y-auto z-10">
-            <div class="sticky top-0 bg-white-linen border-b border-oatmeal p-4 flex items-center justify-between">
-                <span id="carePlanModalTitle" class="section-header">Add Care Plan</span>
-                <button onclick="PetTracker.UI.closeModal('carePlanModal')"
-                    class="p-1 text-earth-metal hover:text-charcoal">
-                    <i data-lucide="x" class="w-5 h-5"></i>
-                </button>
-            </div>
-            <form class="p-4 space-y-4" onsubmit="event.preventDefault(); Setup.saveCarePlan();">
-                <div>
-                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Name *</label>
-                    <input type="text" id="carePlanName" class="input-field" placeholder="e.g., Monthly Heartworm"
-                        required>
-                </div>
-                <div>
-                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Care Item</label>
-                    <select id="carePlanCareItem" class="select-field">
-                        <option value="">-- Select Care Item --</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Pets</label>
-                    <div id="carePlanPetCheckboxes"
-                        class="space-y-2 max-h-32 overflow-y-auto border border-oatmeal p-2">
-                    </div>
-                </div>
-                <div class="grid grid-cols-3 gap-4">
-                    <div>
-                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Schedule</label>
-                        <select id="carePlanScheduleType" class="select-field">
-                            <option value="Fixed">Fixed</option>
-                            <option value="Rolling">Rolling</option>
-                            <option value="One-off">One-off</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Every</label>
-                        <input type="number" id="carePlanIntervalValue" class="input-field" value="1" min="1">
-                    </div>
-                    <div>
-                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Unit</label>
-                        <select id="carePlanIntervalUnit" class="select-field">
-                            <option value="Days">Days</option>
-                            <option value="Weeks">Weeks</option>
-                            <option value="Months" selected>Months</option>
-                            <option value="Years">Years</option>
-                        </select>
-                    </div>
-                </div>
-                <div>
-                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Start Date</label>
-                    <input type="date" id="carePlanAnchorDate" class="input-field">
-                </div>
-                <div>
-                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Notes</label>
-                    <textarea id="carePlanNotes" class="input-field h-16 resize-none"
-                        placeholder="Additional notes..."></textarea>
-                </div>
-                <div class="flex gap-3 justify-end pt-4 border-t border-oatmeal">
-                    <button type="button" onclick="PetTracker.UI.closeModal('carePlanModal')"
-                        class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Cancel</button>
-                    <button type="submit" class="btn-primary px-4 py-2 font-mono text-xs uppercase">Save</button>
-                </div>
-            </form>
-        </div>
-    </div>
+    <!-- Note: Care Item and Care Plan modals have been removed. -->
+    <!-- Scheduling is now handled via Event Types with isRecurring=true -->
 
     <!-- Scripts -->
     <script src="./js/storage.js"></script>
@@ -1564,113 +1445,112 @@
 
     <script>
         // Worker code template
-        const WORKER_CODE = `// Pet Tracker CORS Proxy Worker with OAuth Support
+        const WORKER_CODE = `// Pet Tracker CORS Proxy Worker
 // Deploy to Cloudflare Workers
-// Set secrets: ALL_CORS_PROXY_MATCH_TOKEN (optional), NOTION_CLIENT_SECRET
+// Optional secret: ALL_CORS_PROXY_MATCH_TOKEN
+// Optional var: ALLOWED_ORIGINS (comma-separated)
+
+function getAllowedOrigins(env) {
+  const raw = (env.ALLOWED_ORIGINS || "https://mimansajaiswal.github.io").trim();
+  return raw.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+function isLocalDevOrigin(origin) {
+  if (!origin) return false;
+  try {
+    const parsed = new URL(origin);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+    return parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
+  } catch (_) {
+    return false;
+  }
+}
+
+function isAllowedOrigin(origin, allowed) {
+  if (!origin) return false;
+  return allowed.includes(origin) || isLocalDevOrigin(origin);
+}
+
+function getCorsHeaders(request, env) {
+  const origin = request.headers.get("Origin");
+  const allowed = getAllowedOrigins(env);
+  const allowOrigin = isAllowedOrigin(origin, allowed) ? origin : allowed[0];
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Methods": "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, Notion-Version, X-Proxy-Token",
+    "Vary": "Origin",
+  };
+}
+
+function withCors(request, env, response) {
+  const cors = getCorsHeaders(request, env);
+  const out = new Response(response.body, response);
+  for (const [key, value] of Object.entries(cors)) out.headers.set(key, value);
+  out.headers.set("Cache-Control", "no-store");
+  return out;
+}
+
+function unauthorized(request, env) {
+  return withCors(request, env, new Response("Unauthorized", { status: 403 }));
+}
+
+function getProxyToken(request) {
+  const url = new URL(request.url);
+  return request.headers.get("X-Proxy-Token") || url.searchParams.get("token");
+}
+
+function buildProxyRequest(targetUrl, request) {
+  const headers = new Headers();
+  for (const [key, value] of request.headers.entries()) {
+    const k = key.toLowerCase();
+    if (k === "host") continue;
+    if (k === "cookie") continue;
+    if (k.startsWith("cf-")) continue;
+    if (k === "x-proxy-token") continue;
+    headers.set(key, value);
+  }
+
+  return new Request(targetUrl, {
+    method: request.method,
+    headers,
+    body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
+    redirect: "follow",
+  });
+}
 
 export default {
   async fetch(request, env) {
+    if (request.method === "OPTIONS") {
+      return new Response(null, { headers: getCorsHeaders(request, env) });
+    }
+
     const url = new URL(request.url);
-
-    // Handle preflight for all requests
-    if (request.method === 'OPTIONS') {
-      return new Response(null, {
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization, Notion-Version',
-          'Access-Control-Max-Age': '86400'
-        }
-      });
+    const requiredToken = (env.ALL_CORS_PROXY_MATCH_TOKEN || "").trim();
+    if (requiredToken) {
+      const provided = getProxyToken(request);
+      if (!provided || provided !== requiredToken) return unauthorized(request, env);
     }
 
-    // OAuth callback handler
-    if (url.pathname === '/oauth/callback') {
-      const code = url.searchParams.get('code');
-      const clientId = url.searchParams.get('state') || env.NOTION_CLIENT_ID;
-      const clientSecret = env.NOTION_CLIENT_SECRET;
-
-      if (!code) {
-        return new Response(\`<!DOCTYPE html><html><body><script>
-          window.opener.postMessage({ type: 'NOTION_OAUTH_ERROR', error: 'No code provided' }, '*');
-          window.close();
-        <\\/script></body></html>\`, { headers: { 'Content-Type': 'text/html' } });
-      }
-
-      if (!clientSecret) {
-        return new Response(\`<!DOCTYPE html><html><body><script>
-          window.opener.postMessage({ type: 'NOTION_OAUTH_ERROR', error: 'Server missing NOTION_CLIENT_SECRET' }, '*');
-          window.close();
-        <\\/script></body></html>\`, { headers: { 'Content-Type': 'text/html' } });
-      }
-
-      try {
-        const tokenRes = await fetch('https://api.notion.com/v1/oauth/token', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Basic ' + btoa(clientId + ':' + clientSecret)
-          },
-          body: JSON.stringify({
-            grant_type: 'authorization_code',
-            code,
-            redirect_uri: url.origin + '/oauth/callback'
-          })
-        });
-
-        const tokenData = await tokenRes.json();
-
-        if (tokenData.access_token) {
-          return new Response(\`<!DOCTYPE html><html><body><script>
-            window.opener.postMessage({ type: 'NOTION_OAUTH_SUCCESS', token: '\${tokenData.access_token}' }, '*');
-            window.close();
-          <\\/script></body></html>\`, { headers: { 'Content-Type': 'text/html' } });
-        } else {
-          return new Response(\`<!DOCTYPE html><html><body><script>
-            window.opener.postMessage({ type: 'NOTION_OAUTH_ERROR', error: '\${tokenData.error || 'Token exchange failed'}' }, '*');
-            window.close();
-          <\\/script></body></html>\`, { headers: { 'Content-Type': 'text/html' } });
-        }
-      } catch (e) {
-        return new Response(\`<!DOCTYPE html><html><body><script>
-          window.opener.postMessage({ type: 'NOTION_OAUTH_ERROR', error: 'Token exchange error' }, '*');
-          window.close();
-        <\\/script></body></html>\`, { headers: { 'Content-Type': 'text/html' } });
-      }
+    const targetUrlParam = url.searchParams.get("url");
+    if (!targetUrlParam) {
+      return withCors(request, env, new Response("Missing url parameter", { status: 400 }));
     }
 
-    // Regular proxy request
-    const targetUrl = url.searchParams.get('url');
-    const token = url.searchParams.get('token');
-
-    // Validate token if configured
-    if (env.ALL_CORS_PROXY_MATCH_TOKEN && token !== env.ALL_CORS_PROXY_MATCH_TOKEN) {
-      return new Response('Unauthorized', { status: 401 });
+    let targetUrl;
+    try {
+      targetUrl = new URL(targetUrlParam).toString();
+    } catch (_) {
+      return withCors(request, env, new Response("Invalid target URL", { status: 400 }));
     }
 
-    if (!targetUrl) {
-      return new Response('Missing url parameter', { status: 400 });
+    try {
+      const upstream = await fetch(buildProxyRequest(targetUrl, request));
+      return withCors(request, env, upstream);
+    } catch (e) {
+      return withCors(request, env, new Response(\`Upstream request failed: \${e?.message || "unknown error"}\`, { status: 502 }));
     }
-
-    // Forward request
-    const headers = new Headers(request.headers);
-    headers.delete('host');
-
-    const response = await fetch(targetUrl, {
-      method: request.method,
-      headers,
-      body: request.method !== 'GET' && request.method !== 'HEAD' ? await request.text() : null
-    });
-
-    // Add CORS headers
-    const corsHeaders = new Headers(response.headers);
-    corsHeaders.set('Access-Control-Allow-Origin', '*');
-
-    return new Response(response.body, {
-      status: response.status,
-      headers: corsHeaders
-    });
-  }
+  },
 };`;
 
         // Add worker code display function
@@ -1688,37 +1568,17 @@ export default {
             });
         };
 
-        App.saveSettings = () => {
-            // Always collect data source mappings
-            // Note: careItems and carePlans have been removed - scheduling now handled via event types
-            const dataSources = {
-                pets: document.getElementById('dsMapPets')?.value || '',
-                events: document.getElementById('dsMapEvents')?.value || '',
-                eventTypes: document.getElementById('dsMapEventTypes')?.value || '',
-                contacts: document.getElementById('dsMapContacts')?.value || '',
-                scales: document.getElementById('dsMapScales')?.value || '',
-                scaleLevels: document.getElementById('dsMapScaleLevels')?.value || ''
-            };
+        // NOTE: saveSettings is defined in js/app.js - this override is intentionally removed
+        // The app.js version includes dataSourceNames and better validation
+        // Original (removed) saveSettings override was here
 
-            const settings = {
-                workerUrl: document.getElementById('settingsWorkerUrl')?.value || '',
-                proxyToken: document.getElementById('settingsProxyToken')?.value || '',
-                notionToken: document.getElementById('settingsNotionToken')?.value || '',
-                dataSources,
-                aiProvider: document.getElementById('settingsAiProvider')?.value || 'openai',
-                aiModel: document.getElementById('settingsAiModel')?.value || 'gpt-4o-mini',
-                aiApiKey: document.getElementById('settingsAiApiKey')?.value || '',
-                aiEndpoint: document.getElementById('settingsAiEndpoint')?.value || '',
-                todoistEnabled: document.getElementById('settingsTodoistEnabled')?.checked || false,
-                todoistToken: document.getElementById('settingsTodoistToken')?.value || '',
-                gcalEnabled: document.getElementById('settingsGcalEnabled')?.checked || false,
-                gcalCalendarId: document.getElementById('settingsGcalCalendarId')?.value || ''
-            };
+        // REMOVED: App.saveSettings override - using js/app.js version instead
+        // Keep this comment as a marker that the override was intentionally removed
 
-            PetTracker.Settings.set(settings);
-            PetTracker.UI.toast('Settings saved', 'success');
-            PetTracker.UI.closeModal('settingsModal');
-        };
+        // Temporary compatibility shim - remove if app.js version works
+        if (!App.saveSettings) {
+            console.error('[index.html] App.saveSettings not found - js/app.js may not be loaded');
+        }
 
         // Google Calendar OAuth - redirect-based flow
         App.startGoogleOAuth = () => {
@@ -1729,7 +1589,7 @@ export default {
             }
             PetTracker.Settings.set({ workerUrl });
             const returnUrl = encodeURIComponent(new URL('index.html', window.location.href).toString());
-            window.location.href = `https://notion-oauth-handler.mimansa-jaiswal.workers.dev/google/auth?from=${returnUrl}`;
+            window.location.href = `https://notion-oauth-handler.mimansa-jaiswal.workers.dev/gcal/auth?from=${returnUrl}`;
         };
 
         // Disconnect Google Calendar
@@ -1772,9 +1632,11 @@ export default {
             if (!settings.gcalAccessToken || !settings.workerUrl) return;
 
             try {
-                const response = await fetch(`${settings.workerUrl}?url=${encodeURIComponent('https://www.googleapis.com/calendar/v3/users/me/calendarList')}${settings.proxyToken ? '&token=' + settings.proxyToken : ''}`, {
-                    headers: { 'Authorization': `Bearer ${settings.gcalAccessToken}` }
-                });
+                const proxyUrl = new URL(settings.workerUrl);
+                proxyUrl.searchParams.append('url', 'https://www.googleapis.com/calendar/v3/users/me/calendarList');
+                const headers = { 'Authorization': `Bearer ${settings.gcalAccessToken}` };
+                if (settings.proxyToken) headers['X-Proxy-Token'] = settings.proxyToken;
+                const response = await fetch(proxyUrl.toString(), { headers });
 
                 if (!response.ok) throw new Error('Failed to fetch calendars');
                 const data = await response.json();
@@ -1789,77 +1651,9 @@ export default {
             }
         };
 
-
-
-        App.testConnection = async () => {
-            // Save current values first
-            App.saveSettings();
-
-            try {
-                PetTracker.UI.showLoading('Testing connection...');
-                const user = await PetTracker.API.verifyConnection();
-                PetTracker.UI.hideLoading();
-                PetTracker.UI.toast(`Connected as ${user.name || user.id}`, 'success');
-            } catch (e) {
-                PetTracker.UI.hideLoading();
-                PetTracker.UI.toast(`Connection failed: ${e.message}`, 'error');
-            }
-        };
-
-        App.scanDataSources = async () => {
-            const settings = PetTracker.Settings.get();
-            if (!settings.workerUrl || !settings.notionToken) {
-                PetTracker.UI.toast('Configure connection first', 'error');
-                return;
-            }
-
-            try {
-                PetTracker.UI.showLoading('Scanning data sources...');
-
-                // List all data sources using paginated search
-                const dataSources = await PetTracker.API.listDatabases();
-
-                if (dataSources.length === 0) {
-                    PetTracker.UI.hideLoading();
-                    PetTracker.UI.toast('No databases found. Share databases with your integration.', 'warning');
-                    return;
-                }
-
-                // Populate mapping dropdowns
-                const mappingDiv = document.getElementById('dataSourceMapping');
-                if (mappingDiv) {
-                    mappingDiv.classList.remove('hidden');
-
-                    const dbOptions = dataSources.map(ds => ({
-                        id: ds.id,
-                        name: ds.title?.[0]?.plain_text || ds.name || 'Untitled'
-                    }));
-
-                    const optionsHtml = '<option value="">Select...</option>' +
-                        dbOptions.map(db => `<option value="${db.id}">${PetTracker.UI.escapeHtml(db.name)}</option>`).join('');
-
-                    ['Pets', 'Events', 'EventTypes', 'CareItems', 'CarePlans', 'Contacts', 'Scales', 'ScaleLevels'].forEach(key => {
-                        const el = document.getElementById(`dsMap${key}`);
-                        if (el) {
-                            el.innerHTML = optionsHtml;
-                            // Try to auto-select by name match
-                            const match = dbOptions.find(db =>
-                                db.name.toLowerCase().replace(/\s+/g, '').includes(key.toLowerCase().replace(/\s+/g, ''))
-                            );
-                            if (match) el.value = match.id;
-                        }
-                    });
-                }
-
-                PetTracker.UI.hideLoading();
-                PetTracker.UI.toast(`Found ${dataSources.length} databases`, 'success');
-                if (window.lucide) lucide.createIcons();
-
-            } catch (e) {
-                PetTracker.UI.hideLoading();
-                PetTracker.UI.toast(`Scan failed: ${e.message}`, 'error');
-            }
-        };
+        // NOTE: testConnection and scanDataSources are defined in js/app.js
+        // The app.js versions include better validation and smart matching logic
+        // Do not redefine them here to avoid overwriting the more complete versions.
 
         // Load saved settings into form
         document.addEventListener('DOMContentLoaded', () => {

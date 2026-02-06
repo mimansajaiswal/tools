@@ -22,12 +22,12 @@ const API = {
 
         const fetchUrl = new URL(cleanWorkerUrl);
         fetchUrl.searchParams.append('url', target);
-        if (proxyToken) fetchUrl.searchParams.append('token', proxyToken.trim());
 
         const headers = {
             'Authorization': `Bearer ${token.trim()}`,
             'Notion-Version': '2025-09-03'
         };
+        if (proxyToken) headers['X-Proxy-Token'] = proxyToken.trim();
 
         if (!(body instanceof FormData)) {
             headers['Content-Type'] = 'application/json';

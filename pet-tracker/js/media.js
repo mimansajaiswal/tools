@@ -388,20 +388,26 @@ const Media = {
                     const processed = await Media.processImage(file);
                     await Media.storeLocal(`${id}_upload`, processed.upload);
                     await Media.storeLocal(`${id}_preview`, processed.preview);
+                    // Create preview URL - caller should revoke when done
+                    const previewUrl = URL.createObjectURL(processed.preview);
                     result = {
                         id,
                         type: 'image',
-                        previewUrl: URL.createObjectURL(processed.preview),
+                        previewUrl,
+                        _revokeUrl: previewUrl, // Mark for revocation
                         originalName: file.name,
                         uploadSize: processed.uploadSize
                     };
                 } else if (file.type.startsWith('video/')) {
                     const processed = await Media.processVideo(file);
                     await Media.storeLocal(`${id}_poster`, processed.poster);
+                    // Create preview URL - caller should revoke when done
+                    const previewUrl = URL.createObjectURL(processed.poster);
                     result = {
                         id,
                         type: 'video',
-                        previewUrl: URL.createObjectURL(processed.poster),
+                        previewUrl,
+                        _revokeUrl: previewUrl, // Mark for revocation
                         originalName: file.name,
                         duration: processed.duration,
                         warning: file.size > 50 * 1024 * 1024 ? 'Video is large. Consider trimming before upload.' : null

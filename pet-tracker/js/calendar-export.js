@@ -484,12 +484,17 @@ const GoogleCalendar = {
                 ? `${url}/${encodeURIComponent(event.googleCalendarEventId)}`
                 : url;
 
-            const response = await fetch(`${settings.workerUrl}?url=${encodeURIComponent(apiUrl)}${settings.proxyToken ? '&token=' + settings.proxyToken : ''}`, {
+            const proxyUrl = new URL(settings.workerUrl);
+            proxyUrl.searchParams.append('url', apiUrl);
+            const headers = {
+                'Authorization': `Bearer ${settings.gcalAccessToken}`,
+                'Content-Type': 'application/json'
+            };
+            if (settings.proxyToken) headers['X-Proxy-Token'] = settings.proxyToken;
+
+            const response = await fetch(proxyUrl.toString(), {
                 method,
-                headers: {
-                    'Authorization': `Bearer ${settings.gcalAccessToken}`,
-                    'Content-Type': 'application/json'
-                },
+                headers,
                 body: JSON.stringify(gcalEvent)
             });
 
@@ -521,9 +526,14 @@ const GoogleCalendar = {
             const calendarId = encodeURIComponent(settings.gcalCalendarId);
             const url = `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${encodeURIComponent(googleEventId)}`;
 
-            const response = await fetch(`${settings.workerUrl}?url=${encodeURIComponent(url)}${settings.proxyToken ? '&token=' + settings.proxyToken : ''}`, {
+            const proxyUrl = new URL(settings.workerUrl);
+            proxyUrl.searchParams.append('url', url);
+            const headers = { 'Authorization': `Bearer ${settings.gcalAccessToken}` };
+            if (settings.proxyToken) headers['X-Proxy-Token'] = settings.proxyToken;
+
+            const response = await fetch(proxyUrl.toString(), {
                 method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${settings.gcalAccessToken}` }
+                headers
             });
 
             return response.ok || response.status === 404;

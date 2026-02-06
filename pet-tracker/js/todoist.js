@@ -113,8 +113,22 @@ const Todoist = {
 
         for (const eventType of recurringTypes) {
             try {
-                // Calculate if task should be created
-                const nextDue = eventType.nextDue ? new Date(eventType.nextDue) : null;
+                // Calculate nextDue if not set (reuse Setup.calculateNextDue logic)
+                let nextDue = eventType.nextDue ? new Date(eventType.nextDue) : null;
+
+                // If nextDue is missing or stale, recalculate it
+                if (!nextDue || nextDue < now) {
+                    const calculatedDue = Todoist.calculateNextDue(eventType);
+                    if (calculatedDue) {
+                        nextDue = new Date(calculatedDue);
+                        // Update the event type with the new nextDue
+                        eventType.nextDue = calculatedDue;
+                        eventType.updatedAt = new Date().toISOString();
+                        eventType.synced = false;
+                        await PetTracker.DB.put(PetTracker.STORES.EVENT_TYPES, eventType);
+                    }
+                }
+
                 if (!nextDue) continue;
 
                 const leadDays = eventType.todoistLeadTime || 1;
@@ -195,25 +209,33 @@ const Todoist = {
         for (const event of plannedEvents) {
             try {
                 // Check task status in Todoist
-                const task = await Todoist.request('GET', `/tasks/${event.todoistTaskId}`).catch(() => null);
+                const task = await Todoist.request('GET', `/tasks/${event.todoistTaskId}`);
 
-                if (!task) {
-                    // Task was deleted or completed in Todoist
-                    // Mark event as completed
+                // Task exists and is not completed - nothing to do
+                if (task && !task.is_completed) {
+                    continue;
+                }
+
+                // Task is explicitly marked as completed
+                if (task && task.is_completed) {
                     await Events.update(event.id, {
                         status: 'Completed',
                         updatedAt: new Date().toISOString()
                     });
-
-                    console.log(`[Todoist] Marked ${event.title} as completed`);
+                    console.log(`[Todoist] Marked ${event.title} as completed (task completed)`);
                 }
             } catch (e) {
-                // Task not found means it was completed
-                if (e.message?.includes('404')) {
+                // Only treat 404 as "task gone/completed"
+                // Retry or skip on network/5xx errors
+                if (e.message?.includes('404') || e.status === 404) {
                     await Events.update(event.id, {
                         status: 'Completed',
                         updatedAt: new Date().toISOString()
                     });
+                    console.log(`[Todoist] Marked ${event.title} as completed (task deleted)`);
+                } else {
+                    // Network error or 5xx - skip this task, don't mark as completed
+                    console.warn(`[Todoist] Skipping ${event.title} due to API error:`, e.message);
                 }
             }
         }
@@ -258,6 +280,51 @@ const Todoist = {
             success: true,
             projectCount: projects.length
         };
+    },
+
+    /**
+     * Calculate next due date for a recurring event type
+     * This mirrors Setup.calculateNextDue but is available in Todoist context
+     */
+    calculateNextDue: (eventType) => {
+        if (!eventType.isRecurring || !eventType.anchorDate) return null;
+
+        const now = new Date();
+        const anchor = new Date(eventType.anchorDate);
+        const interval = eventType.intervalValue || 1;
+        const unit = eventType.intervalUnit || 'Months';
+
+        if (eventType.scheduleType === 'One-off') {
+            // For one-off, return anchor date only if it's in the future
+            return anchor > now ? eventType.anchorDate : null;
+        }
+
+        let nextDue = new Date(anchor);
+
+        // Find the next occurrence that is in the future
+        while (nextDue <= now) {
+            switch (unit) {
+                case 'Days':
+                    nextDue.setDate(nextDue.getDate() + interval);
+                    break;
+                case 'Weeks':
+                    nextDue.setDate(nextDue.getDate() + (interval * 7));
+                    break;
+                case 'Months':
+                    nextDue.setMonth(nextDue.getMonth() + interval);
+                    break;
+                case 'Years':
+                    nextDue.setFullYear(nextDue.getFullYear() + interval);
+                    break;
+            }
+        }
+
+        // Check if past end date
+        if (eventType.endDate && nextDue > new Date(eventType.endDate)) {
+            return null;
+        }
+
+        return nextDue.toISOString().split('T')[0];
     }
 };
 

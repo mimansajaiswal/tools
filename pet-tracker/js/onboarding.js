@@ -3,6 +3,9 @@
  * Multi-step setup wizard with customizable tracking options
  */
 
+const ONBOARDING_OAUTH_DEV_PASSWORD_KEY = 'oauth_dev_password';
+const ONBOARDING_OAUTH_BASE = 'https://notion-oauth-handler.mimansa-jaiswal.workers.dev';
+
 const Onboarding = {
     currentStep: 1,
     totalSteps: 5,
@@ -449,7 +452,11 @@ const Onboarding = {
 
             PetTracker.Settings.set({ workerUrl, proxyToken });
 
-            const res = await fetch(workerUrl);
+            const url = new URL(workerUrl.replace(/\/$/, ''));
+            url.searchParams.append('url', 'https://api.notion.com/v1/users/me');
+            const headers = {};
+            if (proxyToken) headers['X-Proxy-Token'] = proxyToken;
+            const res = await fetch(url.toString(), { headers });
 
             if (res.status === 401 && proxyToken === '') {
                 throw new Error('Worker requires Proxy Token');
@@ -482,7 +489,7 @@ const Onboarding = {
     /**
      * Start OAuth Flow using centralized OAuth handler (matches ghostink approach)
      */
-    startOAuth: () => {
+    startOAuth: async () => {
         const workerUrl = document.getElementById('onboardingWorkerUrl')?.value?.trim();
         const proxyToken = document.getElementById('onboardingProxyToken')?.value?.trim();
 
@@ -499,9 +506,39 @@ const Onboarding = {
 
         // Build return URL so OAuth handler knows where to redirect after auth
         const returnUrl = encodeURIComponent(window.location.href);
+        const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
 
-        // Redirect to centralized OAuth handler (same as ghostink)
-        window.location.href = `https://notion-oauth-handler.mimansa-jaiswal.workers.dev/auth/login?from=${returnUrl}`;
+        try {
+            if (isLocal) {
+                const devPassword = (localStorage.getItem(ONBOARDING_OAUTH_DEV_PASSWORD_KEY) || '').trim();
+                if (!devPassword) {
+                    PetTracker.UI.hideLoading();
+                    PetTracker.UI.toast(`Set localStorage.${ONBOARDING_OAUTH_DEV_PASSWORD_KEY} first`, 'warning');
+                    return;
+                }
+
+                const unlockRes = await fetch(`${ONBOARDING_OAUTH_BASE}/auth/dev-unlock`, {
+                    method: 'POST',
+                    headers: { 'X-OAuth-Dev-Password': devPassword }
+                });
+                if (!unlockRes.ok) {
+                    const msg = await unlockRes.text().catch(() => '');
+                    throw new Error(msg || `Dev unlock failed (${unlockRes.status})`);
+                }
+
+                const data = await unlockRes.json();
+                const unlockToken = (data?.unlockToken || '').trim();
+                if (!unlockToken) throw new Error('Dev unlock token missing');
+
+                window.location.href = `${ONBOARDING_OAUTH_BASE}/auth/login?from=${returnUrl}&dev_unlock=${encodeURIComponent(unlockToken)}`;
+                return;
+            }
+
+            window.location.href = `${ONBOARDING_OAUTH_BASE}/auth/login?from=${returnUrl}`;
+        } catch (e) {
+            PetTracker.UI.hideLoading();
+            PetTracker.UI.toast(`OAuth start failed: ${e?.message || 'unknown error'}`, 'error');
+        }
     },
 
     // Required properties for each database type - ALL must be present

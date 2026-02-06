@@ -399,11 +399,28 @@ const Analytics = {
             }
 
             // Calculate expected occurrences based on interval
-            const intervalDays = eventType.intervalUnit === 'Days' ? (eventType.intervalValue || 1) :
-                eventType.intervalUnit === 'Weeks' ? (eventType.intervalValue || 1) * 7 :
-                    eventType.intervalUnit === 'Months' ? (eventType.intervalValue || 1) * 30 : (eventType.intervalValue || 1);
+            let intervalDays;
+            const intervalValue = eventType.intervalValue || 1;
 
-            const expectedCount = Math.max(1, Math.floor(30 / intervalDays));
+            switch (eventType.intervalUnit) {
+                case 'Days':
+                    intervalDays = intervalValue;
+                    break;
+                case 'Weeks':
+                    intervalDays = intervalValue * 7;
+                    break;
+                case 'Months':
+                    intervalDays = intervalValue * 30;
+                    break;
+                case 'Years':
+                    intervalDays = intervalValue * 365;
+                    break;
+                default:
+                    intervalDays = intervalValue;
+            }
+
+            // For yearly events, expected count in 30 days is likely 0, but we should still show them
+            const expectedCount = intervalDays >= 30 ? (30 / intervalDays) : Math.max(1, Math.floor(30 / intervalDays));
             const actualCount = typeEvents.filter(e => e.status === 'Completed').length;
             const adherence = expectedCount > 0 ? Math.min(100, (actualCount / expectedCount) * 100) : 100;
 

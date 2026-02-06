@@ -184,7 +184,8 @@ const Sync = {
 
         const settings = PetTracker.Settings.get();
         const hasDataSources = settings.dataSources && Object.values(settings.dataSources).some(v => v);
-        if (!settings.workerUrl || !settings.notionToken || !hasDataSources) {
+        const hasToken = settings.notionToken || settings.notionOAuthData?.access_token;
+        if (!settings.workerUrl || !hasToken || !hasDataSources) {
             console.log('[Sync] Not configured, skipping');
             return;
         }
@@ -496,6 +497,9 @@ const Sync = {
             }
         }
 
+        // Normalize relation fields: convert Notion IDs to local IDs
+        await Sync.normalizeRelationFields(store, remote);
+
         if (!local) {
             // New remote record
             remote.id = PetTracker.generateId();
@@ -518,10 +522,109 @@ const Sync = {
     },
 
     /**
+     * Normalize relation fields in a record from Notion IDs to local IDs
+     */
+    normalizeRelationFields: async (store, record) => {
+        const n2l = Sync.notionIdsToLocalIds;
+
+        switch (store) {
+            case 'pets':
+                if (record.primaryVetId) {
+                    const localIds = await n2l(PetTracker.STORES.CONTACTS, [record.primaryVetId]);
+                    record.primaryVetId = localIds[0] || null;
+                }
+                if (record.relatedContactIds?.length) {
+                    record.relatedContactIds = await n2l(PetTracker.STORES.CONTACTS, record.relatedContactIds);
+                }
+                break;
+
+            case 'events':
+                if (record.petIds?.length) {
+                    record.petIds = await n2l(PetTracker.STORES.PETS, record.petIds);
+                }
+                if (record.eventTypeId) {
+                    const localIds = await n2l(PetTracker.STORES.EVENT_TYPES, [record.eventTypeId]);
+                    record.eventTypeId = localIds[0] || null;
+                }
+                if (record.severityLevelId) {
+                    const localIds = await n2l(PetTracker.STORES.SCALE_LEVELS, [record.severityLevelId]);
+                    record.severityLevelId = localIds[0] || null;
+                }
+                if (record.providerId) {
+                    const localIds = await n2l(PetTracker.STORES.CONTACTS, [record.providerId]);
+                    record.providerId = localIds[0] || null;
+                }
+                break;
+
+            case 'eventTypes':
+                if (record.defaultScaleId) {
+                    const localIds = await n2l(PetTracker.STORES.SCALES, [record.defaultScaleId]);
+                    record.defaultScaleId = localIds[0] || null;
+                }
+                if (record.relatedPetIds?.length) {
+                    record.relatedPetIds = await n2l(PetTracker.STORES.PETS, record.relatedPetIds);
+                }
+                break;
+
+            case 'scaleLevels':
+                if (record.scaleId) {
+                    const localIds = await n2l(PetTracker.STORES.SCALES, [record.scaleId]);
+                    record.scaleId = localIds[0] || null;
+                }
+                break;
+
+            case 'contacts':
+                if (record.relatedPetIds?.length) {
+                    record.relatedPetIds = await n2l(PetTracker.STORES.PETS, record.relatedPetIds);
+                }
+                break;
+        }
+    },
+
+    /**
      * Get data source ID for a store
      */
     getDataSourceId: (store, settings) => {
         return settings.dataSources?.[store] || null;
+    },
+
+    /**
+     * Convert Notion page IDs to local IDs for relations (used during pull)
+     * Returns array of local IDs, filtering out any that can't be resolved
+     */
+    notionIdsToLocalIds: async (storeName, notionIds) => {
+        if (!notionIds || !Array.isArray(notionIds) || notionIds.length === 0) return [];
+
+        const localIds = [];
+        const allRecords = await PetTracker.DB.getAll(storeName);
+        const notionIdToLocalId = new Map();
+
+        // Build a map of notionId -> localId for quick lookup
+        for (const record of allRecords) {
+            if (record.notionId) {
+                notionIdToLocalId.set(record.notionId, record.id);
+            }
+        }
+
+        for (const notionId of notionIds) {
+            if (!notionId) continue;
+
+            // First try direct lookup as notionId
+            const localId = notionIdToLocalId.get(notionId);
+            if (localId) {
+                localIds.push(localId);
+            } else {
+                // Check if this is already a local ID (for records created locally)
+                const record = allRecords.find(r => r.id === notionId);
+                if (record) {
+                    localIds.push(notionId);
+                }
+                // If neither, the relation points to an unknown record - skip it
+                // This can happen if the related record hasn't been pulled yet
+            }
+        }
+
+        return localIds;
     },
 
     /**
