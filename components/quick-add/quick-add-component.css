@@ -68,6 +68,11 @@
 }
 
 .qa-inline-mark {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 4px;
+    max-width: 100%;
     border-radius: 6px;
     padding: 0 6px;
     box-decoration-break: clone;
@@ -75,9 +80,13 @@
     background: color-mix(in srgb, var(--qa-inline-accent, var(--qa-accent)) 18%, transparent);
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--qa-inline-accent, var(--qa-accent)) 55%, transparent);
     color: var(--qa-input-fg);
+    white-space: normal;
+    vertical-align: baseline;
 }
 
-.qa-inline-mark>span {
+.qa-inline-mark-label {
+    min-width: 0;
+    white-space: normal;
     overflow-wrap: anywhere;
     word-break: break-word;
 }
@@ -105,6 +114,7 @@
     margin-right: 3px;
     opacity: 0.85;
     vertical-align: baseline;
+    flex-shrink: 0;
 }
 
 .qa-inline-mark-blocked-icon {
@@ -116,6 +126,7 @@
     font-weight: 700;
     font-size: 10px;
     line-height: 1;
+    flex-shrink: 0;
 }
 
 .qa-inline-mark-dismiss {
@@ -129,10 +140,18 @@
     line-height: 1;
     opacity: 0.8;
     vertical-align: baseline;
+    flex-shrink: 0;
 }
 
 .qa-inline-mark-dismiss:hover {
     opacity: 1;
+}
+
+.qa-input-tail {
+    display: inline-block;
+    width: 0.9ch;
+    min-height: 1em;
+    vertical-align: baseline;
 }
 
 .qa-input {
@@ -230,8 +249,9 @@
 
 .qa-pill {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     flex: 0 1 auto;
+    flex-wrap: nowrap;
     gap: 6px;
     min-width: 0;
     max-width: 100%;
@@ -243,13 +263,12 @@
     font-size: 12px;
     line-height: 1.2;
     white-space: normal;
-    overflow-wrap: anywhere;
-    word-break: break-word;
 }
 
-.qa-pill>span:not(.qa-pill-inferred-icon) {
+.qa-pill-label {
     display: block;
     min-width: 0;
+    white-space: normal;
     overflow-wrap: anywhere;
     word-break: break-word;
 }
