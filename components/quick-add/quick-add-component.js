@@ -28,6 +28,7 @@
         badge: 'qa-badge',
         attachmentSection: 'qa-attachment-section',
         attachmentControls: 'qa-attachment-controls',
+        attachmentPick: 'qa-attachment-pick',
         attachmentInput: 'qa-attachment-input',
         attachmentHint: 'qa-attachment-hint',
         attachmentList: 'qa-attachment-list',
@@ -53,6 +54,11 @@
         dropdownColor: 'qa-dropdown-color',
         dropdownMeta: 'qa-dropdown-meta',
         blockedInfo: 'qa-blocked-info',
+        blockedInfoAnchored: 'qa-blocked-info-anchored',
+        blockedInfoAnchorBelowStart: 'qa-blocked-info-anchor-below-start',
+        blockedInfoAnchorBelowEnd: 'qa-blocked-info-anchor-below-end',
+        blockedInfoAnchorAboveStart: 'qa-blocked-info-anchor-above-start',
+        blockedInfoAnchorAboveEnd: 'qa-blocked-info-anchor-above-end',
         blockedInfoIcon: 'qa-blocked-info-icon',
         blockedInfoText: 'qa-blocked-info-text',
         pillBlocked: 'qa-pill-blocked',
@@ -100,7 +106,7 @@
         link.rel = 'stylesheet';
         link.setAttribute('data-qa-style', '1');
 
-        let href = './quick-add-component.css';
+        let href = './quick-add/quick-add-component.css';
         const script = document.currentScript;
         if (script && script.src) {
             try {
@@ -804,6 +810,7 @@
                 fieldKey: token.key,
                 value: parsed.value,
                 source: 'explicit',
+                tokenId: token.id,
                 reason: allowed.reason,
                 globalStart: token.globalStart,
                 globalEnd: token.globalEnd
@@ -833,6 +840,37 @@
         });
 
         entry.inferred = (entry.inferred || []).filter((inf) => !blockedInferredIds.has(inf.id));
+
+        // For single-value fields, keep the latest valid explicit token.
+        // If the last explicit token was blocked, this restores the previous valid one.
+        Object.keys(normalizedSchema.byKey).forEach((fieldKey) => {
+            const field = normalizedSchema.byKey[fieldKey];
+            if (!field || field.multiple) {
+                return;
+            }
+            if (entry.fields[fieldKey] !== undefined) {
+                return;
+            }
+
+            for (let i = entry.tokens.length - 1; i >= 0; i--) {
+                const token = entry.tokens[i];
+                if (token.kind !== 'field' || !token.committed || token.key !== fieldKey || !token.value) {
+                    continue;
+                }
+                const parsed = parseByType(field, token.value);
+                if (!parsed.ok) {
+                    continue;
+                }
+                const trialFields = Object.assign({}, entry.fields, { [fieldKey]: parsed.value });
+                const allowed = evaluateFieldDependency(field, parsed.value, trialFields);
+                if (!allowed.ok) {
+                    continue;
+                }
+                entry.fields[fieldKey] = parsed.value;
+                break;
+            }
+        });
+
         return entry;
     }
 
@@ -1256,6 +1294,9 @@
         this.attachmentCounter = 0;
         this.dropdownState = null;
         this.blockedInfoState = null;
+        this.blockedAnchorEl = null;
+        this.anchorSupportChecked = false;
+        this.anchorSupported = false;
 
         ensureQuickAddStyles();
 
@@ -1300,7 +1341,6 @@
                     <input class="${c.dropdownSearch}" data-role="dropdownSearch" type="text" placeholder="Filter options..." />
                     <div class="${c.dropdownList}" data-role="dropdownList"></div>
                 </div>
-                <div class="${c.blockedInfo}" data-role="blockedInfo" hidden></div>
             </div>
         `;
 
@@ -1313,7 +1353,7 @@
         this.dropdownEl = this.mountEl.querySelector('[data-role="dropdown"]');
         this.dropdownSearchEl = this.mountEl.querySelector('[data-role="dropdownSearch"]');
         this.dropdownListEl = this.mountEl.querySelector('[data-role="dropdownList"]');
-        this.blockedInfoEl = this.mountEl.querySelector('[data-role="blockedInfo"]');
+        this.blockedInfoEl = null;
     };
 
     QuickAddComponent.prototype.applyTokens = function applyTokens() {
@@ -1743,6 +1783,7 @@
         } else {
             this.inputText = this.readInputText();
         }
+        this.closeBlockedInfo();
 
         const input = this.inputText || '';
         this.lastResult = parseInput(input, this.config);
@@ -1931,9 +1972,17 @@
 
     QuickAddComponent.prototype.findTokenIdForFieldValue = function findTokenIdForFieldValue(entry, fieldKey, value, usedTokenIds) {
         const target = normValue(value);
+        const blockedExplicitTokenIds = new Set(
+            (entry.blocked || [])
+                .filter((item) => item.source === 'explicit' && item.tokenId)
+                .map((item) => item.tokenId)
+        );
         for (let i = entry.tokens.length - 1; i >= 0; i--) {
             const token = entry.tokens[i];
             if (token.kind !== 'field' || !token.committed) {
+                continue;
+            }
+            if (blockedExplicitTokenIds.has(token.id)) {
                 continue;
             }
             if (token.key !== fieldKey) {
@@ -1951,6 +2000,9 @@
         for (let i = entry.tokens.length - 1; i >= 0; i--) {
             const token = entry.tokens[i];
             if (token.kind !== 'field' || !token.committed) {
+                continue;
+            }
+            if (blockedExplicitTokenIds.has(token.id)) {
                 continue;
             }
             if (token.key !== fieldKey) {
@@ -2224,6 +2276,7 @@
         const accept = this.getAttachmentAcceptValue();
         const acceptAttr = accept ? ` accept="${escHtml(accept)}"` : '';
         const multipleAttr = this.config.allowMultipleAttachments !== false ? ' multiple' : '';
+        const inputId = `qa_att_input_${entry.index}`;
 
         const listHtml = attachments.length
             ? `
@@ -2249,14 +2302,18 @@
         return `
             <div class="${c.attachmentSection}">
                 <div class="${c.attachmentControls}">
+                    <label class="${c.attachmentPick}" for="${escHtml(inputId)}">
+                        + Add attachment
+                    </label>
                     <input
                         type="file"
                         class="${c.attachmentInput}"
+                        id="${escHtml(inputId)}"
                         data-entry-attachment-input="1"
                         data-entry-index="${entry.index}"${acceptAttr}${multipleAttr}
                     />
                     <span class="${c.attachmentHint}">
-                        ${this.config.allowMultipleAttachments !== false ? 'Multiple attachments allowed' : 'Single attachment only'}
+                        ${this.config.allowMultipleAttachments !== false ? 'Multiple files allowed' : 'Single file only'}
                     </span>
                 </div>
                 ${listHtml}
@@ -2312,9 +2369,6 @@
                 const errorRows = entry.errors.map((error) =>
                     `<div class="${c.issue}">${escHtml(error)}</div>`
                 ).join('');
-                const blockedRows = (entry.blocked || []).map((item) =>
-                    `<div class="${c.issue}">Skipped by constraints: ${escHtml(item.fieldKey)} = ${escHtml(String(item.value))}${item.reason ? ` (${escHtml(item.reason)})` : ''}</div>`
-                ).join('');
                 const badgeText = entry.isValid ? 'valid' : 'needs attention';
                 const headerHtml = showEntryHeader
                     ? `
@@ -2334,11 +2388,10 @@
                         ${headerHtml}
                         ${pillsHtml}
                         ${attachmentsHtml}
-                        ${(entry.pending.length || entry.errors.length || (entry.blocked && entry.blocked.length)) ? `
+                        ${(entry.pending.length || entry.errors.length) ? `
                             <div class="${c.issues}">
                                 ${pendingRows}
                                 ${errorRows}
-                                ${blockedRows}
                             </div>
                         ` : ''}
                     </article>
@@ -2489,19 +2542,48 @@
     };
 
     QuickAddComponent.prototype.positionDropdownAtRect = function positionDropdownAtRect(rect) {
-        const width = Math.min(320, Math.max(240, (rect.width || 0) + 40));
-        const left = Math.max(10, Math.min(rect.left || 0, window.innerWidth - width - 10));
-        const top = Math.min(window.innerHeight - 20, (rect.bottom || rect.top || 0) + 8);
+        const pad = window.innerWidth <= 480 ? 8 : 10;
+        const viewportWidth = Math.max(0, window.innerWidth - (pad * 2));
+        const preferredWidth = Math.max(200, (rect.width || 0) + 40);
+        const width = Math.min(360, viewportWidth, preferredWidth);
+        const left = Math.max(pad, Math.min(rect.left || 0, window.innerWidth - width - pad));
+
+        const belowTop = (rect.bottom || rect.top || 0) + 8;
+        const approxHeight = 280;
+        let top = belowTop;
+        if (belowTop + approxHeight > window.innerHeight) {
+            top = Math.max(pad, (rect.top || 0) - approxHeight - 8);
+        }
+        if (top + approxHeight > window.innerHeight - pad) {
+            top = Math.max(pad, window.innerHeight - approxHeight - pad);
+        }
 
         this.dropdownEl.style.position = 'fixed';
         this.dropdownEl.style.left = `${left}px`;
         this.dropdownEl.style.top = `${top}px`;
         this.dropdownEl.style.width = `${width}px`;
+        this.dropdownEl.style.maxWidth = `${viewportWidth}px`;
         this.dropdownEl.style.zIndex = '9999';
     };
 
     QuickAddComponent.prototype.positionDropdown = function positionDropdown(anchorEl) {
         this.positionDropdownAtRect(anchorEl.getBoundingClientRect());
+    };
+
+    QuickAddComponent.prototype.supportsCssAnchorPositioning = function supportsCssAnchorPositioning() {
+        if (this.anchorSupportChecked) {
+            return this.anchorSupported;
+        }
+        this.anchorSupportChecked = true;
+        this.anchorSupported = false;
+        if (!window.CSS || typeof window.CSS.supports !== 'function') {
+            return this.anchorSupported;
+        }
+        const hasAnchorName = window.CSS.supports('anchor-name: --qa-anchor-test');
+        const hasPositionAnchor = window.CSS.supports('position-anchor: --qa-anchor-test');
+        const hasAnchorFn = window.CSS.supports('top: anchor(bottom)');
+        this.anchorSupported = hasAnchorName && hasPositionAnchor && hasAnchorFn;
+        return this.anchorSupported;
     };
 
     QuickAddComponent.prototype.showBlockedInfoFromElement = function showBlockedInfoFromElement(element) {
@@ -2514,7 +2596,15 @@
 
     QuickAddComponent.prototype.showBlockedInfo = function showBlockedInfo(reason, anchorEl) {
         if (!this.blockedInfoEl) {
-            return;
+            if (!this.rootEl) {
+                return;
+            }
+            const el = document.createElement('div');
+            el.className = this.config.classNames.blockedInfo;
+            el.setAttribute('data-role', 'blockedInfo');
+            el.hidden = true;
+            this.rootEl.appendChild(el);
+            this.blockedInfoEl = el;
         }
         this.closeDropdown();
         const c = this.config.classNames;
@@ -2524,28 +2614,98 @@
             <span class="${c.blockedInfoText}">${safeReason}</span>
         `;
         this.blockedInfoState = { reason: reason || '' };
-        const rect = anchorEl && anchorEl.getBoundingClientRect
-            ? anchorEl.getBoundingClientRect()
-            : this.inputEl.getBoundingClientRect();
+        const useAnchor = !!anchorEl && this.supportsCssAnchorPositioning();
+        this.blockedInfoEl.classList.toggle(c.blockedInfoAnchored, useAnchor);
+        this.blockedInfoEl.classList.remove(
+            c.blockedInfoAnchorBelowStart,
+            c.blockedInfoAnchorBelowEnd,
+            c.blockedInfoAnchorAboveStart,
+            c.blockedInfoAnchorAboveEnd
+        );
 
-        const width = Math.min(420, Math.max(240, (rect.width || 0) + 90));
-        const left = Math.max(10, Math.min(rect.left || 0, window.innerWidth - width - 10));
-        const top = Math.min(window.innerHeight - 20, (rect.bottom || rect.top || 0) + 8);
-        this.blockedInfoEl.style.position = 'fixed';
-        this.blockedInfoEl.style.left = `${left}px`;
-        this.blockedInfoEl.style.top = `${top}px`;
-        this.blockedInfoEl.style.width = `${width}px`;
-        this.blockedInfoEl.style.zIndex = '10000';
+        if (useAnchor) {
+            this.blockedAnchorEl = anchorEl;
+            this.blockedAnchorEl.style.anchorName = '--qa-blocked-anchor';
+            const rect = anchorEl.getBoundingClientRect();
+            const pad = window.innerWidth <= 480 ? 8 : 10;
+            const minWidth = 170;
+            const maxViewportWidth = Math.max(minWidth, window.innerWidth - (pad * 2));
+            const preferredWidth = Math.max(220, (rect.width || 0) + 90);
+            const spaceRight = Math.max(0, window.innerWidth - (rect.left || 0) - pad);
+            const spaceLeft = Math.max(0, (rect.right || 0) - pad);
+            const useStart = spaceRight >= spaceLeft;
+            const chosenSpace = Math.max(minWidth, useStart ? spaceRight : spaceLeft);
+            const width = Math.min(420, maxViewportWidth, chosenSpace, preferredWidth);
+
+            const spaceBelow = Math.max(0, window.innerHeight - (rect.bottom || 0) - pad);
+            const spaceAbove = Math.max(0, (rect.top || 0) - pad);
+            const useBelow = spaceBelow >= spaceAbove;
+            const maxHeight = Math.max(56, Math.min(220, (useBelow ? spaceBelow : spaceAbove) - 8));
+
+            this.blockedInfoEl.style.position = 'fixed';
+            this.blockedInfoEl.style.width = `${Math.floor(width)}px`;
+            this.blockedInfoEl.style.maxWidth = `${Math.floor(width)}px`;
+            this.blockedInfoEl.style.maxHeight = `${Math.floor(maxHeight)}px`;
+            this.blockedInfoEl.style.zIndex = '10000';
+            this.blockedInfoEl.style.overflow = 'auto';
+            this.blockedInfoEl.style.setProperty('position-anchor', '--qa-blocked-anchor');
+            this.blockedInfoEl.style.removeProperty('left');
+            this.blockedInfoEl.style.removeProperty('top');
+            this.blockedInfoEl.style.removeProperty('marginTop');
+            this.blockedInfoEl.style.removeProperty('position-try-fallbacks');
+            if (useBelow && useStart) {
+                this.blockedInfoEl.classList.add(c.blockedInfoAnchorBelowStart);
+            } else if (useBelow && !useStart) {
+                this.blockedInfoEl.classList.add(c.blockedInfoAnchorBelowEnd);
+            } else if (!useBelow && useStart) {
+                this.blockedInfoEl.classList.add(c.blockedInfoAnchorAboveStart);
+            } else {
+                this.blockedInfoEl.classList.add(c.blockedInfoAnchorAboveEnd);
+            }
+        } else {
+            const rect = anchorEl && anchorEl.getBoundingClientRect
+                ? anchorEl.getBoundingClientRect()
+                : this.inputEl.getBoundingClientRect();
+
+            const pad = window.innerWidth <= 480 ? 8 : 10;
+            const viewportWidth = Math.max(0, window.innerWidth - (pad * 2));
+            const width = Math.min(420, viewportWidth, Math.max(180, (rect.width || 0) + 90));
+            const left = Math.max(pad, Math.min(rect.left || 0, window.innerWidth - width - pad));
+            const belowTop = (rect.bottom || rect.top || 0) + 8;
+            const approxHeight = 56;
+            let top = belowTop;
+            if (belowTop + approxHeight > window.innerHeight) {
+                top = Math.max(pad, (rect.top || 0) - approxHeight - 8);
+            }
+            if (top + approxHeight > window.innerHeight - pad) {
+                top = Math.max(pad, window.innerHeight - approxHeight - pad);
+            }
+            this.blockedInfoEl.style.position = 'fixed';
+            this.blockedInfoEl.style.left = `${left}px`;
+            this.blockedInfoEl.style.top = `${top}px`;
+            this.blockedInfoEl.style.marginTop = '0';
+            this.blockedInfoEl.style.width = `${width}px`;
+            this.blockedInfoEl.style.maxWidth = `${viewportWidth}px`;
+            this.blockedInfoEl.style.zIndex = '10000';
+            this.blockedInfoEl.style.removeProperty('position-anchor');
+            this.blockedInfoEl.style.removeProperty('position-try-fallbacks');
+        }
         this.blockedInfoEl.hidden = false;
     };
 
     QuickAddComponent.prototype.closeBlockedInfo = function closeBlockedInfo() {
         this.blockedInfoState = null;
+        if (this.blockedAnchorEl) {
+            this.blockedAnchorEl.style.anchorName = '';
+            this.blockedAnchorEl = null;
+        }
         if (!this.blockedInfoEl) {
             return;
         }
-        this.blockedInfoEl.hidden = true;
-        this.blockedInfoEl.innerHTML = '';
+        if (this.blockedInfoEl.parentNode) {
+            this.blockedInfoEl.parentNode.removeChild(this.blockedInfoEl);
+        }
+        this.blockedInfoEl = null;
     };
 
     QuickAddComponent.prototype.renderDropdownList = function renderDropdownList() {
