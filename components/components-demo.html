@@ -1,0 +1,1219 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Components Demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f5f0e8;
+            --ink: #201b16;
+            --ink-soft: #6d6258;
+            --line: #cfc2af;
+            --surface: #fffaf3;
+            --accent: #1f5d69;
+            --accent-soft: #d9eef2;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background:
+                radial-gradient(circle at 15% 10%, #efe5d8 0%, transparent 35%),
+                radial-gradient(circle at 85% 95%, #e0efe9 0%, transparent 30%),
+                var(--bg);
+            color: var(--ink);
+            font-family: "Space Grotesk", sans-serif;
+            line-height: 1.45;
+        }
+
+        .shell {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 24px 18px 42px;
+        }
+
+        .hero {
+            margin-bottom: 18px;
+        }
+
+        .hero h1 {
+            margin: 0 0 6px;
+            font: 700 36px/1.05 "Fraunces", serif;
+        }
+
+        .import-note {
+            margin-top: 10px;
+            font: 500 12px/1.4 "JetBrains Mono", monospace;
+            color: var(--ink-soft);
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 8px 10px;
+            display: inline-block;
+        }
+
+        .tab-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 16px 0 18px;
+        }
+
+        .tab-btn {
+            border: 1px solid var(--line);
+            background: var(--surface);
+            color: var(--ink);
+            border-radius: 999px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font: 500 13px/1 "JetBrains Mono", monospace;
+            letter-spacing: 0.01em;
+        }
+
+        .tab-btn.active {
+            border-color: var(--accent);
+            background: var(--accent-soft);
+            color: var(--accent);
+        }
+
+        .page {
+            display: none;
+            border: 1px solid var(--line);
+            background: var(--surface);
+            border-radius: 16px;
+            padding: 14px;
+            min-width: 0;
+        }
+
+        .page.active {
+            display: block;
+            animation: reveal .22s ease-out;
+        }
+
+        @keyframes reveal {
+            from {
+                opacity: 0;
+                transform: translateY(5px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .example-wrap {
+            margin-top: 10px;
+            display: grid;
+            gap: 12px;
+        }
+
+        .example-wrap>* {
+            min-width: 0;
+        }
+
+        .example-head {
+            display: grid;
+            gap: 4px;
+        }
+
+        .example-head h2 {
+            margin: 0;
+            font: 700 22px/1.1 "Fraunces", serif;
+        }
+
+        .example-head p {
+            margin: 0;
+            color: var(--ink-soft);
+        }
+
+        .quickadd-intro p {
+            margin: 0;
+            color: var(--ink-soft);
+            max-width: 75ch;
+        }
+
+        .meta {
+            margin-top: 4px;
+            color: var(--ink-soft);
+            font: 500 12px/1.4 "JetBrains Mono", monospace;
+        }
+
+        .config-box {
+            margin-top: 8px;
+            border: 1px solid var(--line);
+            background: #fff;
+            border-radius: 10px;
+            overflow: hidden;
+            max-width: 100%;
+        }
+
+        .config-box>summary {
+            cursor: pointer;
+            list-style: none;
+            padding: 8px 10px;
+            font: 500 12px/1 "JetBrains Mono", monospace;
+            color: var(--ink);
+            background: #f8f3ea;
+            border-bottom: 1px solid var(--line);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .config-box>summary::after {
+            content: "▸";
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--ink-soft);
+            transform: rotate(0deg);
+            transition: transform 140ms ease;
+        }
+
+        .config-box[open]>summary::after {
+            transform: rotate(90deg);
+        }
+
+        .config-box>summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .config-tools {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin: 0;
+            padding: 8px 10px;
+            border-bottom: 1px solid var(--line);
+            background: #fffdf9;
+        }
+
+        .config-hint {
+            color: var(--ink-soft);
+            font: 500 11px/1.2 "JetBrains Mono", monospace;
+        }
+
+        .config-actions {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .config-btn {
+            border: 1px solid var(--line);
+            background: #fff;
+            color: var(--ink);
+            border-radius: 999px;
+            padding: 4px 10px;
+            font: 600 11px/1 "JetBrains Mono", monospace;
+            cursor: pointer;
+        }
+
+        .config-btn:hover {
+            border-color: var(--ink-soft);
+        }
+
+        .config-btn:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+
+        .config-editor {
+            margin: 0;
+            padding: 10px;
+            background: #fff;
+            color: var(--ink);
+            width: 100%;
+            min-height: 240px;
+            max-height: min(56vh, 620px);
+            resize: vertical;
+            border: 0;
+            border-radius: 0;
+            font: 500 11px/1.5 "JetBrains Mono", monospace;
+            box-sizing: border-box;
+            display: block;
+            white-space: pre;
+            overflow: auto;
+        }
+
+        .config-editor:focus {
+            outline: 2px solid #c0b8ac;
+            outline-offset: -2px;
+        }
+
+        .config-status {
+            margin: 0;
+            padding: 7px 10px;
+            border-top: 1px solid var(--line);
+            background: #fff;
+            color: var(--ink-soft);
+            min-height: 1.2em;
+            font: 600 11px/1.2 "JetBrains Mono", monospace;
+        }
+
+        .config-status.ok {
+            color: #0f766e;
+        }
+
+        .config-status.error {
+            color: #b91c1c;
+        }
+
+        .config-errors {
+            margin: 0;
+            border-top: 1px solid var(--line);
+            background: #fff8f8;
+        }
+
+        .config-errors[hidden] {
+            display: none;
+        }
+
+        .config-errors summary {
+            cursor: pointer;
+            list-style: none;
+            padding: 7px 10px;
+            color: #8f1d1d;
+            font: 700 11px/1.2 "JetBrains Mono", monospace;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .config-errors summary::after {
+            content: "▾";
+            color: #8f1d1d;
+            transform: rotate(-90deg);
+            transition: transform 120ms ease;
+        }
+
+        .config-errors[open] summary::after {
+            transform: rotate(0deg);
+        }
+
+        .config-errors summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .config-errors-list {
+            margin: 0;
+            padding: 0 10px 10px 28px;
+            color: #7f1d1d;
+            font: 600 11px/1.35 "JetBrains Mono", monospace;
+            max-height: min(34vh, 260px);
+            overflow: auto;
+        }
+
+        /* Example 2 custom classNames */
+        .petqa-root {
+            --qa-bg: #eef8f3;
+            --qa-fg: #1d2b25;
+            --qa-muted: #5a6d63;
+            --qa-border: #b8d5c7;
+            --qa-accent: #1d7d5e;
+            --qa-accent-soft: #d8efe5;
+            --qa-danger: #8e3737;
+            --qa-radius: 16px;
+            --qa-font: "JetBrains Mono", monospace;
+            box-shadow: 0 10px 30px rgba(29, 125, 94, 0.08);
+        }
+
+        .petqa-entry {
+            background: linear-gradient(180deg, #ffffff 0%, #f7fcf9 100%);
+        }
+    </style>
+</head>
+
+<body>
+    <main class="shell">
+        <header class="hero">
+            <h1>Components Demo</h1>
+        </header>
+
+        <div class="tab-row" id="componentTabs">
+            <button class="tab-btn active" data-page="quickAddPage">Quick Add</button>
+        </div>
+
+        <section class="page active" id="quickAddPage">
+            <div class="quickadd-intro">
+                <p>Gallery scaffold for reusable UI components. Quick Add Parser is wired with live schema-driven
+                    parsing
+                    and three variant demos.</p>
+                <div class="import-note">Single-file import:
+                    <code>&lt;script src=\"./quick-add/quick-add-component.js\"&gt;&lt;/script&gt;</code>
+                </div>
+            </div>
+            <div class="tab-row" id="exampleTabs">
+                <button class="tab-btn active" data-example="example1">Example 1: Tasks</button>
+                <button class="tab-btn" data-example="example2">Example 2: Pet Log</button>
+                <button class="tab-btn" data-example="example3">Example 3: Expenses</button>
+            </div>
+
+            <article class="example-wrap active" data-example-panel="example1">
+                <div class="example-head">
+                    <h2>Task Planner Variant</h2>
+                    <p>Double-newline bulk entries, terminator <code>;;</code> or next prefix commit, natural dates on
+                        <code>due:</code>. Repeated single-value prefixes keep only the last one, parsed pills can be
+                        dismissed with <code>x</code>, and entry cards allow multiple attachments.
+                    </p>
+                    <div class="meta" id="meta1"></div>
+                    <details class="config-box">
+                        <summary>Config + Options</summary>
+                        <div class="config-tools">
+                            <span class="config-hint">Playground JSON (editable)</span>
+                            <div class="config-actions">
+                                <button class="config-btn" type="button" id="applyConfig1">Apply</button>
+                                <button class="config-btn" type="button" id="resetConfig1">Reset</button>
+                            </div>
+                        </div>
+                        <textarea id="config1" class="config-editor" spellcheck="false"></textarea>
+                        <div class="config-status" id="config1Status" aria-live="polite"></div>
+                        <details class="config-errors" id="config1ErrorsBox" hidden>
+                            <summary id="config1ErrorsSummary">Show all errors</summary>
+                            <ul class="config-errors-list" id="config1Errors"></ul>
+                        </details>
+                    </details>
+                </div>
+                <div id="quickAddExample1"></div>
+            </article>
+
+            <article class="example-wrap" style="display:none" data-example-panel="example2">
+                <div class="example-head">
+                    <h2>Pet Event Variant</h2>
+                    <p>Semicolon bulk separator, strict terminator <code>~~</code>, option auto-detect from free text,
+                        dependency-aware event options by pet, and inferred reduction control (global off, symptom field
+                        on). Includes self + conditional date constraints; blocked tokens are striped and clickable for
+                        details.</p>
+                    <div class="meta" id="meta2"></div>
+                    <details class="config-box">
+                        <summary>Config + Options</summary>
+                        <div class="config-tools">
+                            <span class="config-hint">Playground JSON (editable)</span>
+                            <div class="config-actions">
+                                <button class="config-btn" type="button" id="applyConfig2">Apply</button>
+                                <button class="config-btn" type="button" id="resetConfig2">Reset</button>
+                            </div>
+                        </div>
+                        <textarea id="config2" class="config-editor" spellcheck="false"></textarea>
+                        <div class="config-status" id="config2Status" aria-live="polite"></div>
+                        <details class="config-errors" id="config2ErrorsBox" hidden>
+                            <summary id="config2ErrorsSummary">Show all errors</summary>
+                            <ul class="config-errors-list" id="config2Errors"></ul>
+                        </details>
+                    </details>
+                </div>
+                <div id="quickAddExample2"></div>
+            </article>
+
+            <article class="example-wrap" style="display:none" data-example-panel="example3">
+                <div class="example-head">
+                    <h2>Expense Variant</h2>
+                    <p>Commit mode <code>or-next-prefix</code> with terminator <code>::</code>, typed validation for
+                        numbers/booleans/dates, dark theme token overrides.</p>
+                    <div class="meta" id="meta3"></div>
+                    <details class="config-box">
+                        <summary>Config + Options</summary>
+                        <div class="config-tools">
+                            <span class="config-hint">Playground JSON (editable)</span>
+                            <div class="config-actions">
+                                <button class="config-btn" type="button" id="applyConfig3">Apply</button>
+                                <button class="config-btn" type="button" id="resetConfig3">Reset</button>
+                            </div>
+                        </div>
+                        <textarea id="config3" class="config-editor" spellcheck="false"></textarea>
+                        <div class="config-status" id="config3Status" aria-live="polite"></div>
+                        <details class="config-errors" id="config3ErrorsBox" hidden>
+                            <summary id="config3ErrorsSummary">Show all errors</summary>
+                            <ul class="config-errors-list" id="config3Errors"></ul>
+                        </details>
+                    </details>
+                </div>
+                <div id="quickAddExample3"></div>
+            </article>
+        </section>
+
+    </main>
+
+    <script src="https://unpkg.com/chrono-node@2.7.7/dist/chrono.min.js"></script>
+    <script src="./quick-add/quick-add-component.js"></script>
+    <script>
+        function connectTabs(tabContainerId, attrName, panelSelector) {
+            const container = document.getElementById(tabContainerId);
+            if (!container) return;
+            container.addEventListener('click', (event) => {
+                const btn = event.target.closest(`[${attrName}]`);
+                if (!btn) return;
+                const value = btn.getAttribute(attrName);
+                container.querySelectorAll(`[${attrName}]`).forEach((item) => {
+                    item.classList.toggle('active', item === btn);
+                });
+                document.querySelectorAll(panelSelector).forEach((panel) => {
+                    const panelId = panel.id || panel.getAttribute('data-example-panel');
+                    const active = panelId === value;
+                    panel.classList.toggle('active', active);
+                    panel.style.display = active ? '' : 'none';
+                });
+            });
+        }
+
+        connectTabs('componentTabs', 'data-page', '.page');
+        connectTabs('exampleTabs', 'data-example', '[data-example-panel]');
+
+        function cloneJson(value) {
+            return JSON.parse(JSON.stringify(value));
+        }
+
+        function toEditableConfig(baseConfig) {
+            const editable = cloneJson(baseConfig);
+            delete editable.mount;
+            delete editable.onParse;
+            return editable;
+        }
+
+        function setConfigStatus(statusEl, text, type) {
+            if (!statusEl) return;
+            statusEl.textContent = text || '';
+            statusEl.classList.remove('ok', 'error');
+            if (type) {
+                statusEl.classList.add(type);
+            }
+        }
+
+        const ALLOWED_TOP_LEVEL_KEYS = new Set([
+            'debounceMs',
+            'allowMultipleEntries',
+            'entrySeparator',
+            'fieldTerminator',
+            'fieldTerminatorMode',
+            'escapeChar',
+            'fallbackField',
+            'showJsonOutput',
+            'showInlinePills',
+            'showEntryCards',
+            'showEntryHeader',
+            'showEntryPills',
+            'allowEntryAttachments',
+            'allowMultipleAttachments',
+            'allowedAttachmentTypes',
+            'autoDetectOptionsWithoutPrefix',
+            'reduceInferredOptions',
+            'placeholder',
+            'hintText',
+            'schema',
+            'classNames',
+            'tokens'
+        ]);
+        const ALLOWED_SCHEMA_KEYS = new Set(['fields']);
+        const ALLOWED_FIELD_KEYS = new Set([
+            'key',
+            'label',
+            'prefixes',
+            'type',
+            'enum',
+            'options',
+            'required',
+            'multiple',
+            'naturalDate',
+            'color',
+            'autoDetectWithoutPrefix',
+            'reduceInferredOptions',
+            'allowCustom',
+            'exhaustive',
+            'dependsOn',
+            'dependencies',
+            'constraints',
+            'constraint'
+        ]);
+        const ALLOWED_OPTION_KEYS = new Set([
+            'value',
+            'label',
+            'color',
+            'dependsOn',
+            'dependencies',
+            'constraints',
+            'constraint'
+        ]);
+        const ALLOWED_CONDITION_KEYS = new Set(['field', 'op', 'value', 'values', 'and', 'or', 'not', 'when', 'message']);
+        const VALID_FIELD_TYPES = new Set(['string', 'number', 'options', 'date', 'boolean']);
+        const VALID_FIELD_TERMINATOR_MODES = new Set(['strict', 'or-next-prefix', 'or-end']);
+        const VALID_CONDITION_OPERATORS = new Set([
+            'eq',
+            'neq',
+            'in',
+            'notin',
+            'gt',
+            'gte',
+            'lt',
+            'lte',
+            'includes',
+            'exists',
+            'notexists'
+        ]);
+
+        function isPlainObject(value) {
+            return !!value && typeof value === 'object' && !Array.isArray(value);
+        }
+
+        function pushValidationError(errors, path, message) {
+            errors.push(path ? `${path}: ${message}` : message);
+        }
+
+        function validateAllowedKeys(obj, allowedKeys, path, errors) {
+            Object.keys(obj || {}).forEach((key) => {
+                if (!allowedKeys.has(key)) {
+                    pushValidationError(errors, `${path}.${key}`, 'key is not allowed');
+                }
+            });
+        }
+
+        function validateConstraintNode(node, path, errors) {
+            if (!isPlainObject(node)) {
+                pushValidationError(errors, path, 'must be an object');
+                return;
+            }
+            validateAllowedKeys(node, ALLOWED_CONDITION_KEYS, path, errors);
+
+            if (node.field !== undefined && typeof node.field !== 'string') {
+                pushValidationError(errors, `${path}.field`, 'must be a string');
+            }
+            if (node.message !== undefined && typeof node.message !== 'string') {
+                pushValidationError(errors, `${path}.message`, 'must be a string');
+            }
+            if (node.op !== undefined) {
+                if (typeof node.op !== 'string') {
+                    pushValidationError(errors, `${path}.op`, 'must be a string');
+                } else if (!VALID_CONDITION_OPERATORS.has(node.op)) {
+                    pushValidationError(
+                        errors,
+                        `${path}.op`,
+                        `must be one of: ${Array.from(VALID_CONDITION_OPERATORS).join(', ')}`
+                    );
+                }
+            }
+            if (node.values !== undefined && !Array.isArray(node.values)) {
+                pushValidationError(errors, `${path}.values`, 'must be an array');
+            }
+            if (node.and !== undefined) {
+                if (!Array.isArray(node.and)) {
+                    pushValidationError(errors, `${path}.and`, 'must be an array');
+                } else {
+                    node.and.forEach((item, index) => validateConstraintNode(item, `${path}.and[${index}]`, errors));
+                }
+            }
+            if (node.or !== undefined) {
+                if (!Array.isArray(node.or)) {
+                    pushValidationError(errors, `${path}.or`, 'must be an array');
+                } else {
+                    node.or.forEach((item, index) => validateConstraintNode(item, `${path}.or[${index}]`, errors));
+                }
+            }
+            if (node.not !== undefined) {
+                validateConstraintNode(node.not, `${path}.not`, errors);
+            }
+            if (node.when !== undefined) {
+                validateConstraintNode(node.when, `${path}.when`, errors);
+            }
+        }
+
+        function validateConstraintSet(value, path, errors) {
+            if (value === undefined) {
+                return;
+            }
+            if (Array.isArray(value)) {
+                value.forEach((item, index) => validateConstraintNode(item, `${path}[${index}]`, errors));
+                return;
+            }
+            validateConstraintNode(value, path, errors);
+        }
+
+        function validateOption(option, path, errors) {
+            if (!isPlainObject(option)) {
+                if (typeof option !== 'string' && typeof option !== 'number' && typeof option !== 'boolean') {
+                    pushValidationError(errors, path, 'option must be string/number/boolean or object');
+                }
+                return;
+            }
+
+            validateAllowedKeys(option, ALLOWED_OPTION_KEYS, path, errors);
+            if (option.value === undefined) {
+                pushValidationError(errors, `${path}.value`, 'is required for object options');
+            }
+            if (option.label !== undefined && typeof option.label !== 'string') {
+                pushValidationError(errors, `${path}.label`, 'must be a string');
+            }
+            if (option.color !== undefined && typeof option.color !== 'string') {
+                pushValidationError(errors, `${path}.color`, 'must be a string');
+            }
+            validateConstraintSet(option.dependsOn !== undefined ? option.dependsOn : option.dependencies, `${path}.dependsOn`, errors);
+            validateConstraintSet(option.constraints !== undefined ? option.constraints : option.constraint, `${path}.constraints`, errors);
+        }
+
+        function validateField(field, path, errors) {
+            if (!isPlainObject(field)) {
+                pushValidationError(errors, path, 'field must be an object');
+                return;
+            }
+
+            validateAllowedKeys(field, ALLOWED_FIELD_KEYS, path, errors);
+            if (!field.key || typeof field.key !== 'string') {
+                pushValidationError(errors, `${path}.key`, 'is required and must be a string');
+            }
+            if (field.type !== undefined) {
+                if (typeof field.type !== 'string' || !VALID_FIELD_TYPES.has(field.type)) {
+                    pushValidationError(errors, `${path}.type`, `must be one of: ${Array.from(VALID_FIELD_TYPES).join(', ')}`);
+                }
+            }
+            if (field.label !== undefined && typeof field.label !== 'string') {
+                pushValidationError(errors, `${path}.label`, 'must be a string');
+            }
+            if (field.prefixes !== undefined) {
+                if (!Array.isArray(field.prefixes)) {
+                    pushValidationError(errors, `${path}.prefixes`, 'must be an array of strings');
+                } else if (field.prefixes.some((item) => typeof item !== 'string')) {
+                    pushValidationError(errors, `${path}.prefixes`, 'must contain only strings');
+                }
+            }
+            if (field.enum !== undefined) {
+                if (!Array.isArray(field.enum)) {
+                    pushValidationError(errors, `${path}.enum`, 'must be an array');
+                }
+            }
+            if (field.options !== undefined) {
+                if (!Array.isArray(field.options)) {
+                    pushValidationError(errors, `${path}.options`, 'must be an array');
+                } else {
+                    field.options.forEach((option, index) => validateOption(option, `${path}.options[${index}]`, errors));
+                }
+            }
+            ['required', 'multiple', 'naturalDate', 'autoDetectWithoutPrefix', 'reduceInferredOptions', 'allowCustom', 'exhaustive']
+                .forEach((key) => {
+                    if (field[key] !== undefined && typeof field[key] !== 'boolean') {
+                        pushValidationError(errors, `${path}.${key}`, 'must be a boolean');
+                    }
+                });
+            if (field.color !== undefined && typeof field.color !== 'string') {
+                pushValidationError(errors, `${path}.color`, 'must be a string');
+            }
+            validateConstraintSet(field.dependsOn !== undefined ? field.dependsOn : field.dependencies, `${path}.dependsOn`, errors);
+            validateConstraintSet(field.constraints !== undefined ? field.constraints : field.constraint, `${path}.constraints`, errors);
+        }
+
+        function validateEditableConfig(config) {
+            const errors = [];
+
+            if (!isPlainObject(config)) {
+                return ['Config must be a JSON object.'];
+            }
+
+            validateAllowedKeys(config, ALLOWED_TOP_LEVEL_KEYS, 'config', errors);
+
+            if (config.debounceMs !== undefined && typeof config.debounceMs !== 'number') {
+                pushValidationError(errors, 'config.debounceMs', 'must be a number');
+            }
+            if (config.entrySeparator !== undefined && typeof config.entrySeparator !== 'string') {
+                pushValidationError(errors, 'config.entrySeparator', 'must be a string');
+            }
+            if (config.fieldTerminator !== undefined && typeof config.fieldTerminator !== 'string') {
+                pushValidationError(errors, 'config.fieldTerminator', 'must be a string');
+            }
+            if (config.fieldTerminatorMode !== undefined) {
+                if (typeof config.fieldTerminatorMode !== 'string' || !VALID_FIELD_TERMINATOR_MODES.has(config.fieldTerminatorMode)) {
+                    pushValidationError(
+                        errors,
+                        'config.fieldTerminatorMode',
+                        `must be one of: ${Array.from(VALID_FIELD_TERMINATOR_MODES).join(', ')}`
+                    );
+                }
+            }
+            if (config.escapeChar !== undefined && typeof config.escapeChar !== 'string') {
+                pushValidationError(errors, 'config.escapeChar', 'must be a string');
+            }
+            if (config.fallbackField !== undefined && typeof config.fallbackField !== 'string') {
+                pushValidationError(errors, 'config.fallbackField', 'must be a string');
+            }
+            if (config.placeholder !== undefined && typeof config.placeholder !== 'string') {
+                pushValidationError(errors, 'config.placeholder', 'must be a string');
+            }
+            if (config.hintText !== undefined && typeof config.hintText !== 'string') {
+                pushValidationError(errors, 'config.hintText', 'must be a string');
+            }
+
+            [
+                'allowMultipleEntries',
+                'showJsonOutput',
+                'showInlinePills',
+                'showEntryCards',
+                'showEntryHeader',
+                'showEntryPills',
+                'allowEntryAttachments',
+                'allowMultipleAttachments',
+                'autoDetectOptionsWithoutPrefix',
+                'reduceInferredOptions'
+            ].forEach((key) => {
+                if (config[key] !== undefined && typeof config[key] !== 'boolean') {
+                    pushValidationError(errors, `config.${key}`, 'must be a boolean');
+                }
+            });
+
+            if (config.allowedAttachmentTypes !== undefined) {
+                if (!Array.isArray(config.allowedAttachmentTypes)) {
+                    pushValidationError(errors, 'config.allowedAttachmentTypes', 'must be an array of strings');
+                } else if (config.allowedAttachmentTypes.some((item) => typeof item !== 'string')) {
+                    pushValidationError(errors, 'config.allowedAttachmentTypes', 'must contain only strings');
+                }
+            }
+
+            if (config.classNames !== undefined) {
+                if (!isPlainObject(config.classNames)) {
+                    pushValidationError(errors, 'config.classNames', 'must be an object');
+                } else {
+                    Object.keys(config.classNames).forEach((key) => {
+                        if (typeof config.classNames[key] !== 'string') {
+                            pushValidationError(errors, `config.classNames.${key}`, 'must be a string');
+                        }
+                    });
+                }
+            }
+
+            if (config.tokens !== undefined) {
+                if (!isPlainObject(config.tokens)) {
+                    pushValidationError(errors, 'config.tokens', 'must be an object');
+                } else {
+                    Object.keys(config.tokens).forEach((key) => {
+                        const tokenValue = config.tokens[key];
+                        if (typeof tokenValue !== 'string' && typeof tokenValue !== 'number') {
+                            pushValidationError(errors, `config.tokens.${key}`, 'must be a string or number');
+                        }
+                    });
+                }
+            }
+
+            if (!isPlainObject(config.schema)) {
+                pushValidationError(errors, 'config.schema', 'is required and must be an object');
+            } else {
+                validateAllowedKeys(config.schema, ALLOWED_SCHEMA_KEYS, 'config.schema', errors);
+                if (!Array.isArray(config.schema.fields)) {
+                    pushValidationError(errors, 'config.schema.fields', 'is required and must be an array');
+                } else {
+                    config.schema.fields.forEach((field, index) => validateField(field, `config.schema.fields[${index}]`, errors));
+                }
+            }
+
+            return errors;
+        }
+
+        function setupConfigPlayground(options) {
+            const {
+                editorId,
+                applyButtonId,
+                resetButtonId,
+                statusId,
+                errorsBoxId,
+                errorsSummaryId,
+                errorsListId,
+                component,
+                baseConfig,
+                defaultInput
+            } = options;
+
+            const editorEl = document.getElementById(editorId);
+            const applyBtn = document.getElementById(applyButtonId);
+            const resetBtn = document.getElementById(resetButtonId);
+            const statusEl = document.getElementById(statusId);
+            const errorsBoxEl = document.getElementById(errorsBoxId);
+            const errorsSummaryEl = document.getElementById(errorsSummaryId);
+            const errorsListEl = document.getElementById(errorsListId);
+            if (!editorEl || !applyBtn || !resetBtn || !component) {
+                return;
+            }
+
+            const defaultEditable = toEditableConfig(baseConfig);
+            editorEl.value = JSON.stringify(defaultEditable, null, 2);
+            const validationDebounceMs = 260;
+            let validationTimer = null;
+
+            function parseAndValidateEditor() {
+                let parsed;
+                try {
+                    parsed = JSON.parse(editorEl.value);
+                } catch (error) {
+                    return {
+                        ok: false,
+                        parsed: null,
+                        errors: [`Invalid JSON: ${error.message}`]
+                    };
+                }
+
+                const errors = validateEditableConfig(parsed);
+                return {
+                    ok: errors.length === 0,
+                    parsed,
+                    errors
+                };
+            }
+
+            function renderValidationErrors(errors) {
+                if (!errorsBoxEl || !errorsListEl || !errorsSummaryEl) {
+                    return;
+                }
+                const list = Array.isArray(errors) ? errors : [];
+                errorsListEl.innerHTML = '';
+                if (!list.length) {
+                    errorsBoxEl.hidden = true;
+                    errorsBoxEl.open = false;
+                    errorsSummaryEl.textContent = 'Show all errors';
+                    return;
+                }
+
+                errorsBoxEl.hidden = false;
+                errorsSummaryEl.textContent = `Show all errors (${list.length})`;
+                list.forEach((message) => {
+                    const item = document.createElement('li');
+                    item.textContent = message;
+                    errorsListEl.appendChild(item);
+                });
+            }
+
+            function refreshValidationUI() {
+                const result = parseAndValidateEditor();
+                applyBtn.disabled = !result.ok;
+                if (result.ok) {
+                    setConfigStatus(statusEl, 'Valid config. Click Apply to update parser.', 'ok');
+                    renderValidationErrors([]);
+                } else {
+                    const firstError = result.errors[0] || 'Not valid.';
+                    const extraCount = Math.max(0, result.errors.length - 1);
+                    const suffix = extraCount ? ` (+${extraCount} more)` : '';
+                    setConfigStatus(statusEl, `Not valid: ${firstError}${suffix}`, 'error');
+                    renderValidationErrors(result.errors);
+                }
+                return result;
+            }
+
+            function scheduleValidation() {
+                if (validationTimer) {
+                    clearTimeout(validationTimer);
+                }
+                validationTimer = setTimeout(() => {
+                    validationTimer = null;
+                    refreshValidationUI();
+                }, validationDebounceMs);
+            }
+
+            function applyFromEditor() {
+                if (validationTimer) {
+                    clearTimeout(validationTimer);
+                    validationTimer = null;
+                }
+                const validation = parseAndValidateEditor();
+                if (!validation.ok) {
+                    refreshValidationUI();
+                    return;
+                }
+                const parsed = validation.parsed;
+
+                const currentInput = component.getResult()?.input || defaultInput || '';
+                const nextConfig = Object.assign({}, baseConfig, parsed, {
+                    mount: baseConfig.mount,
+                    onParse: baseConfig.onParse
+                });
+
+                try {
+                    component.updateConfig(nextConfig);
+                    component.setInput(currentInput);
+                } catch (error) {
+                    const message = `Config error: ${error.message}`;
+                    setConfigStatus(statusEl, message, 'error');
+                    renderValidationErrors([message]);
+                    return;
+                }
+                setConfigStatus(statusEl, 'Applied.', 'ok');
+                renderValidationErrors([]);
+            }
+
+            applyBtn.addEventListener('click', applyFromEditor);
+            resetBtn.addEventListener('click', () => {
+                editorEl.value = JSON.stringify(defaultEditable, null, 2);
+                applyFromEditor();
+                setConfigStatus(statusEl, 'Reset to default and applied.', 'ok');
+            });
+            editorEl.addEventListener('input', () => {
+                applyBtn.disabled = true;
+                setConfigStatus(statusEl, 'Checking...', '');
+                scheduleValidation();
+            });
+            refreshValidationUI();
+        }
+
+        const taskConfig = {
+            mount: '#quickAddExample1',
+            debounceMs: 280,
+            entrySeparator: '\n\n',
+            fieldTerminator: ';;',
+            fieldTerminatorMode: 'or-next-prefix',
+            allowEntryAttachments: true,
+            allowMultipleAttachments: true,
+            allowedAttachmentTypes: ['.pdf', '.png', '.jpg', 'image/*'],
+            fallbackField: 'title',
+            placeholder: 'Example: ... !p2;; !p1;; and #work;; #health ... (last value wins)',
+            schema: {
+                fields: [
+                    { key: 'title', type: 'string', required: true },
+                    {
+                        key: 'priority',
+                        type: 'options',
+                        prefixes: ['!'],
+                        exhaustive: true,
+                        options: [
+                            { value: 'p1', color: '#dc2626' },
+                            { value: 'p2', color: '#d97706' },
+                            { value: 'p3', color: '#0284c7' }
+                        ]
+                    },
+                    {
+                        key: 'project',
+                        type: 'options',
+                        prefixes: ['#'],
+                        exhaustive: true,
+                        options: [
+                            { value: 'health', color: '#0d9488' },
+                            { value: 'work', color: '#7c3aed' },
+                            { value: 'home', color: '#16a34a' },
+                            { value: 'errands', color: '#475569' }
+                        ]
+                    },
+                    { key: 'due', type: 'date', naturalDate: true, prefixes: ['due:'] },
+                    { key: 'owner', type: 'string', prefixes: ['@'] }
+                ]
+            },
+            tokens: {
+                '--qa-bg': '#fff8ef',
+                '--qa-border': '#e5d7c4',
+                '--qa-accent': '#8b4a2f',
+                '--qa-accent-soft': '#f4e7df'
+            },
+            onParse: (result) => {
+                document.getElementById('meta1').textContent = `entries=${result.entryCount}, valid=${result.validCount}, invalid=${result.invalidCount}`;
+            }
+        };
+        const taskDefaultInput =
+            'Book vet appointment then call clinic !p3;; shift to urgent !p1;; prep records #health;; and confirm slot due:tomorrow;; with @Mimansa;; before breakfast\n\n' +
+            'Pick up supplements !p2;; #errands;; due:in 2 days;; @Mimansa;;';
+        const taskAdd = QuickAdd.create(taskConfig);
+        taskAdd.setInput(taskDefaultInput);
+        setupConfigPlayground({
+            editorId: 'config1',
+            applyButtonId: 'applyConfig1',
+            resetButtonId: 'resetConfig1',
+            statusId: 'config1Status',
+            errorsBoxId: 'config1ErrorsBox',
+            errorsSummaryId: 'config1ErrorsSummary',
+            errorsListId: 'config1Errors',
+            component: taskAdd,
+            baseConfig: taskConfig,
+            defaultInput: taskDefaultInput
+        });
+
+        const petConfig = {
+            mount: '#quickAddExample2',
+            debounceMs: 320,
+            entrySeparator: ';',
+            fieldTerminator: '~~',
+            fieldTerminatorMode: 'strict',
+            showEntryHeader: false,
+            autoDetectOptionsWithoutPrefix: true,
+            reduceInferredOptions: false,
+            fallbackField: 'note',
+            placeholder: 'Use ; for new entry. Example: pet:Luna~~ event:walk~~ due:2025-02-01~~ at:yesterday~~',
+            classNames: {
+                root: 'qa-root petqa-root',
+                entry: 'qa-entry petqa-entry'
+            },
+            schema: {
+                fields: [
+                    { key: 'note', type: 'string' },
+                    {
+                        key: 'pet',
+                        type: 'options',
+                        prefixes: ['pet:'],
+                        required: true,
+                        exhaustive: true,
+                        options: [
+                            { value: 'Luna', color: '#22c55e' },
+                            { value: 'Mochi', color: '#f97316' },
+                            { value: 'Pico', color: '#3b82f6' }
+                        ]
+                    },
+                    {
+                        key: 'event',
+                        type: 'options',
+                        prefixes: ['event:', 'ev:'],
+                        required: true,
+                        exhaustive: true,
+                        options: [
+                            { value: 'walk', color: '#22c55e', dependsOn: { field: 'pet', op: 'in', value: ['Luna', 'Mochi'] } },
+                            { value: 'fetch', color: '#16a34a', dependsOn: { field: 'pet', op: 'eq', value: 'Luna' } },
+                            { value: 'litter', color: '#2563eb', dependsOn: { field: 'pet', op: 'eq', value: 'Pico' } },
+                            { value: 'groom', color: '#f97316', dependsOn: { field: 'pet', op: 'eq', value: 'Mochi' } },
+                            { value: 'vet', color: '#7c3aed' }
+                        ]
+                    },
+                    {
+                        key: 'due',
+                        type: 'date',
+                        naturalDate: false,
+                        prefixes: ['due:'],
+                        constraints: [
+                            {
+                                op: 'gte',
+                                value: '2025-02-15',
+                                message: 'Due date must be on or after 2025-02-15'
+                            },
+                            {
+                                when: { field: 'pet', op: 'eq', value: 'Pico' },
+                                op: 'gte',
+                                value: '2026-01-01',
+                                message: 'For pet Pico, due date must be on or after 2026-01-01'
+                            }
+                        ]
+                    },
+                    {
+                        key: 'symptom',
+                        type: 'options',
+                        prefixes: ['symptom:', 'sym:'],
+                        allowCustom: true,
+                        autoDetectWithoutPrefix: true,
+                        reduceInferredOptions: true,
+                        options: [
+                            { value: 'cough', color: '#dc2626' },
+                            { value: 'vomit', color: '#ea580c' },
+                            { value: 'itching', color: '#d97706' },
+                            { value: 'low energy', color: '#7c3aed' }
+                        ]
+                    },
+                    { key: 'severity', type: 'number', prefixes: ['sev:'] },
+                    { key: 'at', type: 'date', naturalDate: true, prefixes: ['at:'], required: true }
+                ]
+            },
+            onParse: (result) => {
+                document.getElementById('meta2').textContent = `entries=${result.entryCount}, valid=${result.validCount}, invalid=${result.invalidCount}`;
+            }
+        };
+        const petDefaultInput =
+            'pet:Luna~~ event:litter~~ due:2025-02-01~~ sev:2~~ at:yesterday~~ cough and appetite normal;' +
+            ' pet:Mochi~~ event:groom~~ due:2026-03-01~~ sev:3~~ at:today~~ low energy and slept longer than usual';
+        const petAdd = QuickAdd.create(petConfig);
+        petAdd.setInput(petDefaultInput);
+        setupConfigPlayground({
+            editorId: 'config2',
+            applyButtonId: 'applyConfig2',
+            resetButtonId: 'resetConfig2',
+            statusId: 'config2Status',
+            errorsBoxId: 'config2ErrorsBox',
+            errorsSummaryId: 'config2ErrorsSummary',
+            errorsListId: 'config2Errors',
+            component: petAdd,
+            baseConfig: petConfig,
+            defaultInput: petDefaultInput
+        });
+
+        const expenseConfig = {
+            mount: '#quickAddExample3',
+            debounceMs: 250,
+            entrySeparator: '\n',
+            fieldTerminator: '::',
+            fieldTerminatorMode: 'or-next-prefix',
+            showEntryPills: false,
+            fallbackField: 'memo',
+            placeholder: 'Example: Team lunch $23.4:: cat:Food:: pay:Card:: on:2026-02-06:: rb:no::',
+            schema: {
+                fields: [
+                    { key: 'memo', type: 'string', required: true },
+                    { key: 'amount', type: 'number', prefixes: ['$'], required: true },
+                    {
+                        key: 'category',
+                        type: 'options',
+                        prefixes: ['cat:'],
+                        required: true,
+                        exhaustive: true,
+                        options: [
+                            { value: 'Food', color: '#f59e0b' },
+                            { value: 'Travel', color: '#0ea5e9' },
+                            { value: 'Supplies', color: '#22c55e' },
+                            { value: 'Software', color: '#a855f7' }
+                        ]
+                    },
+                    {
+                        key: 'payment',
+                        type: 'options',
+                        prefixes: ['pay:'],
+                        allowCustom: false,
+                        options: [
+                            { value: 'Card', color: '#06b6d4' },
+                            { value: 'Cash', color: '#84cc16' },
+                            { value: 'UPI', color: '#f97316' },
+                            { value: 'Bank', color: '#8b5cf6' }
+                        ]
+                    },
+                    { key: 'on', type: 'date', naturalDate: false, prefixes: ['on:'], required: true },
+                    { key: 'reimbursable', type: 'boolean', prefixes: ['rb:'] }
+                ]
+            },
+            tokens: {
+                '--qa-bg': '#1d2328',
+                '--qa-fg': '#edf2f8',
+                '--qa-muted': '#a6b3c0',
+                '--qa-border': '#33404a',
+                '--qa-accent': '#66d9ef',
+                '--qa-accent-soft': '#27414c',
+                '--qa-danger': '#f28b82',
+                '--qa-card-bg': '#111a20',
+                '--qa-card-fg': '#edf2f8',
+                '--qa-input-bg': '#0f171d',
+                '--qa-input-fg': '#edf2f8',
+                '--qa-output-bg': '#0f171d',
+                '--qa-output-fg': '#dbe7f3',
+                '--qa-pill-bg': '#13232d',
+                '--qa-pill-border': '#3f5f74',
+                '--qa-pill-fg': '#dceaf8'
+            },
+            onParse: (result) => {
+                document.getElementById('meta3').textContent = `entries=${result.entryCount}, valid=${result.validCount}, invalid=${result.invalidCount}`;
+            }
+        };
+        const expenseDefaultInput =
+            'Team lunch $23.4:: cat:Food:: pay:Card:: on:2026-02-06:: rb:no::\n' +
+            'Airport cab $48 cat:Travel pay:Cash on:2026-02-05 rb:yes';
+        const expenseAdd = QuickAdd.create(expenseConfig);
+        expenseAdd.setInput(expenseDefaultInput);
+        setupConfigPlayground({
+            editorId: 'config3',
+            applyButtonId: 'applyConfig3',
+            resetButtonId: 'resetConfig3',
+            statusId: 'config3Status',
+            errorsBoxId: 'config3ErrorsBox',
+            errorsSummaryId: 'config3ErrorsSummary',
+            errorsListId: 'config3Errors',
+            component: expenseAdd,
+            baseConfig: expenseConfig,
+            defaultInput: expenseDefaultInput
+        });
+    </script>
+</body>
+
+</html>
