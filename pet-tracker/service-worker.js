@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pet-tracker-v7';
+const CACHE_NAME = 'pet-tracker-v8';
 const STATIC_ASSETS = [
     './',
     './index.html',
@@ -7,8 +7,8 @@ const STATIC_ASSETS = [
     './icons/icon-192.png',
     './icons/icon-512.png',
     './css/styles.css',
-    './vendor/quick-add/quick-add-component.js',
-    './vendor/quick-add/quick-add-component.css',
+    '../components/quick-add/quick-add-component.js',
+    '../components/quick-add/quick-add-component.css',
     './js/storage.js',
     './js/ui.js',
     './js/api.js',
