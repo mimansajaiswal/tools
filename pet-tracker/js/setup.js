@@ -130,6 +130,9 @@ const Setup = {
                     <button data-setup-tab="scales" class="tab-nav ${Setup.currentTab === 'scales' ? 'active' : ''}" onclick="Setup.switchTab('scales')">
                         <i data-lucide="gauge" class="w-4 h-4 inline mr-1"></i>Scales
                     </button>
+                    <button data-setup-tab="quickAdd" class="tab-nav ${Setup.currentTab === 'quickAdd' ? 'active' : ''}" onclick="Setup.switchTab('quickAdd')">
+                        <i data-lucide="zap" class="w-4 h-4 inline mr-1"></i>Quick Add
+                    </button>
                 </div>
 
                 <!-- Tab Content -->
@@ -168,6 +171,9 @@ const Setup = {
                 break;
             case 'scales':
                 await Setup.renderScales(container);
+                break;
+            case 'quickAdd':
+                Setup.renderQuickAddPrefixes(container);
                 break;
         }
 
@@ -919,6 +925,143 @@ const Setup = {
         PetTracker.UI.closeModal('scaleLevelModal');
         PetTracker.UI.toast(Setup.editingId ? 'Level updated' : 'Level added', 'success');
         Setup.renderTabContent();
+    },
+
+    // ============ QUICK ADD PREFIXES ============
+
+    quickAddFieldDefs: [
+        { key: 'pet', label: 'Pet', hint: 'Which pet this event is for' },
+        { key: 'type', label: 'Event Type', hint: 'The type of event (Walk, Vet, etc.)' },
+        { key: 'date', label: 'Date', hint: 'Event date (supports natural dates like "today")' },
+        { key: 'time', label: 'Time', hint: 'Event time (e.g., 08:00)' },
+        { key: 'status', label: 'Status', hint: 'Completed, Scheduled, or Cancelled' },
+        { key: 'severity', label: 'Severity', hint: 'Severity level for the event' },
+        { key: 'value', label: 'Value', hint: 'Numeric value (weight, dose, etc.)' },
+        { key: 'unit', label: 'Unit', hint: 'Unit of measurement (lb, mg, etc.)' },
+        { key: 'tags', label: 'Tags', hint: 'Categorization tags' },
+        { key: 'notes', label: 'Notes', hint: 'Free-text notes (also the fallback field)' }
+    ],
+
+    renderQuickAddPrefixes: (container) => {
+        const settings = PetTracker.Settings.get();
+        const current = settings.quickAddPrefixes || {};
+        const defaults = PetTracker.Settings.defaults.quickAddPrefixes || {};
+
+        let rows = Setup.quickAddFieldDefs.map(fd => {
+            const prefixes = current[fd.key] || defaults[fd.key] || [];
+            const defaultPrefixes = defaults[fd.key] || [];
+            const isDefault = JSON.stringify(prefixes) === JSON.stringify(defaultPrefixes);
+
+            return `
+                <div class="flex flex-col sm:flex-row items-start gap-2 p-3 border border-oatmeal">
+                    <div class="w-full sm:w-32 flex-shrink-0">
+                        <p class="text-sm text-charcoal font-medium">${fd.label}</p>
+                        <p class="text-[10px] text-earth-metal">${fd.hint}</p>
+                    </div>
+                    <div class="flex-1 w-full">
+                        <input type="text" id="qaPrefix_${fd.key}" class="input-field text-sm font-mono"
+                            value="${PetTracker.UI.escapeHtml(prefixes.join('  '))}"
+                            placeholder="${defaultPrefixes.join('  ')}">
+                        <p class="text-[10px] text-earth-metal mt-1">
+                            Default: <span class="font-mono">${PetTracker.UI.escapeHtml(defaultPrefixes.join('  '))}</span>
+                            ${!isDefault ? ' <span class="text-dull-purple">(customized)</span>' : ''}
+                        </p>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = `
+            <div class="space-y-4">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <p class="text-sm text-earth-metal">
+                            Configure the prefixes used to parse Quick Add input. Separate multiple prefixes with spaces.
+                        </p>
+                        <p class="text-xs text-earth-metal mt-1">
+                            Example input: <span class="font-mono text-charcoal">pet:Luna type:Walk on:today #morning</span>
+                        </p>
+                    </div>
+                </div>
+
+                <div class="grid gap-2">
+                    ${rows}
+                </div>
+
+                <div id="qaPrefixDupeWarning" class="hidden border border-muted-pink bg-muted-pink/10 p-3 text-xs text-charcoal"></div>
+
+                <div class="flex flex-wrap gap-3 pt-2 border-t border-oatmeal">
+                    <button onclick="Setup.saveQuickAddPrefixes()" class="btn-primary px-4 py-2 font-mono text-xs uppercase">
+                        <i data-lucide="check" class="w-4 h-4 inline mr-1"></i>Save Prefixes
+                    </button>
+                    <button onclick="Setup.resetQuickAddPrefixes()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
+                        <i data-lucide="rotate-ccw" class="w-4 h-4 inline mr-1"></i>Reset to Defaults
+                    </button>
+                </div>
+            </div>
+        `;
+    },
+
+    saveQuickAddPrefixes: () => {
+        const defaults = PetTracker.Settings.defaults.quickAddPrefixes || {};
+        const next = {};
+        const allPrefixes = {};
+
+        Setup.quickAddFieldDefs.forEach(fd => {
+            const input = document.getElementById('qaPrefix_' + fd.key);
+            if (!input) {
+                next[fd.key] = defaults[fd.key] || [];
+                return;
+            }
+            var raw = input.value.trim();
+            var prefixes;
+            if (!raw) {
+                prefixes = defaults[fd.key] || [];
+            } else {
+                prefixes = raw.split(/\s+/).filter(Boolean).map(function (p) { return p.trim(); });
+                prefixes = Array.from(new Set(prefixes));
+            }
+            next[fd.key] = prefixes;
+            prefixes.forEach(p => {
+                var normalized = p.toLowerCase();
+                if (!allPrefixes[normalized]) allPrefixes[normalized] = [];
+                allPrefixes[normalized].push({ original: p, field: fd.label });
+            });
+        });
+
+        var dupes = Object.entries(allPrefixes)
+            .filter(function (entry) { return entry[1].length > 1; })
+            .map(function (entry) {
+                var originals = entry[1].map(function (d) { return d.original; });
+                var fields = entry[1].map(function (d) { return d.field; });
+                return '"' + originals[0] + '" used in: ' + fields.join(', ');
+            });
+
+        var warningEl = document.getElementById('qaPrefixDupeWarning');
+        if (dupes.length > 0) {
+            if (warningEl) {
+                warningEl.innerHTML = '<strong>Error — duplicate prefixes (case-insensitive):</strong><br>' + dupes.join('<br>');
+                warningEl.classList.remove('hidden');
+            }
+            PetTracker.UI.toast('Cannot save: duplicate prefixes found', 'error');
+            return;
+        }
+
+        if (warningEl) {
+            warningEl.classList.add('hidden');
+        }
+
+        PetTracker.Settings.set({ quickAddPrefixes: next });
+        PetTracker.UI.toast('Quick Add prefixes saved', 'success');
+        Setup.renderQuickAddPrefixes(document.getElementById('setupTabContent'));
+        if (window.lucide) lucide.createIcons();
+    },
+
+    resetQuickAddPrefixes: () => {
+        PetTracker.Settings.set({ quickAddPrefixes: PetTracker.Settings.defaults.quickAddPrefixes });
+        PetTracker.UI.toast('Prefixes reset to defaults', 'success');
+        Setup.renderQuickAddPrefixes(document.getElementById('setupTabContent'));
+        if (window.lucide) lucide.createIcons();
     },
 
     // ============ ICON & COLOR PICKERS ============

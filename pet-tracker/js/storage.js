@@ -373,9 +373,16 @@ const SyncQueue = {
  */
 const AIQueue = {
     add: async (text) => {
+        var normalized = text.trim().toLowerCase();
+        var pending = await AIQueue.getPending();
+        var isDupe = pending.some(function (item) {
+            return item.text.trim().toLowerCase() === normalized;
+        });
+        if (isDupe) return null;
+
         const queueItem = {
             id: generateId(),
-            text,
+            text: text.trim(),
             status: 'pending',
             createdAt: new Date().toISOString(),
             error: null
@@ -384,7 +391,11 @@ const AIQueue = {
     },
 
     getPending: async () => {
-        return DB.query(STORES.AI_QUEUE, item => item.status === 'pending');
+        var items = await DB.query(STORES.AI_QUEUE, item => item.status === 'pending');
+        items.sort(function (a, b) {
+            return (a.createdAt || '').localeCompare(b.createdAt || '');
+        });
+        return items;
     },
 
     getAll: async () => {
@@ -419,6 +430,18 @@ const AIQueue = {
     getPendingCount: async () => {
         const pending = await AIQueue.getPending();
         return pending.length;
+    },
+
+    resetStaleProcessing: async () => {
+        var stale = await DB.query(STORES.AI_QUEUE, function (item) {
+            return item.status === 'processing';
+        });
+        for (var i = 0; i < stale.length; i++) {
+            stale[i].status = 'pending';
+            stale[i].error = null;
+            await DB.put(STORES.AI_QUEUE, stale[i]);
+        }
+        return stale.length;
     }
 };
 
@@ -555,13 +578,31 @@ const Settings = {
         uploadCapMb: 5,
         defaultPetId: null,
         calendarView: 'month',
-        theme: 'light'
+        theme: 'light',
+        quickAddPrefixes: {
+            pet: ['pet:', 'p:'],
+            type: ['type:', 't:'],
+            date: ['on:', 'date:', 'd:'],
+            time: ['at:', 'time:'],
+            status: ['status:', 'st:'],
+            severity: ['sev:', 'severity:'],
+            value: ['val:', 'value:'],
+            unit: ['unit:', 'u:'],
+            tags: ['#', 'tag:'],
+            notes: ['notes:', 'note:']
+        }
     },
 
     get: () => {
         try {
             const raw = localStorage.getItem(Settings.KEYS.SETTINGS);
-            return raw ? { ...Settings.defaults, ...JSON.parse(raw) } : { ...Settings.defaults };
+            if (!raw) return { ...Settings.defaults };
+            const parsed = JSON.parse(raw);
+            return {
+                ...Settings.defaults,
+                ...parsed,
+                quickAddPrefixes: { ...(Settings.defaults.quickAddPrefixes || {}), ...(parsed.quickAddPrefixes || {}) }
+            };
         } catch (e) {
             console.error('[Settings] Error reading:', e);
             return { ...Settings.defaults };
@@ -573,8 +614,8 @@ const Settings = {
         const hasDataSources = Object.prototype.hasOwnProperty.call(updates, 'dataSources');
         const hasDataSourceNames = Object.prototype.hasOwnProperty.call(updates, 'dataSourceNames');
         const hasSyncCursors = Object.prototype.hasOwnProperty.call(updates, 'syncCursors');
+        const hasQaPrefixes = Object.prototype.hasOwnProperty.call(updates, 'quickAddPrefixes');
 
-        // Deep merge for nested objects while allowing explicit clears from forms.
         const merged = {
             ...current,
             ...updates,
@@ -586,7 +627,10 @@ const Settings = {
                 : { ...(current.dataSourceNames || {}) },
             syncCursors: hasSyncCursors
                 ? { ...(current.syncCursors || {}), ...(updates.syncCursors || {}) }
-                : { ...(current.syncCursors || {}) }
+                : { ...(current.syncCursors || {}) },
+            quickAddPrefixes: hasQaPrefixes
+                ? { ...(Settings.defaults.quickAddPrefixes || {}), ...(updates.quickAddPrefixes || {}) }
+                : { ...(current.quickAddPrefixes || Settings.defaults.quickAddPrefixes || {}) }
         };
         localStorage.setItem(Settings.KEYS.SETTINGS, JSON.stringify(merged));
         return merged;

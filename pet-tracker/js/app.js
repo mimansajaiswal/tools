@@ -67,11 +67,17 @@ const App = {
         }
 
         // Online/offline handling
-        window.addEventListener('online', () => {
+        window.addEventListener('online', async () => {
             App.state.isOnline = true;
             App.updateSyncStatus();
             PetTracker.UI.toast('Back online', 'success');
             // Sync.run() is called by Sync.init() listener
+            if (AI.isConfigured()) {
+                var pendingCount = await PetTracker.AIQueue.getPendingCount();
+                if (pendingCount > 0) {
+                    AI.processQueue();
+                }
+            }
         });
 
         window.addEventListener('offline', () => {
@@ -83,6 +89,15 @@ const App = {
         // Initialize background sync engine
         if (PetTracker.Sync) {
             PetTracker.Sync.init();
+        }
+
+        // Reset stale AI queue items stuck in 'processing' state
+        if (PetTracker.AIQueue && PetTracker.AIQueue.resetStaleProcessing) {
+            PetTracker.AIQueue.resetStaleProcessing().then(function (count) {
+                if (count > 0) console.log('[App] Reset ' + count + ' stale AI queue items');
+            }).catch(function (e) {
+                console.warn('[App] Failed to reset stale AI queue items:', e);
+            });
         }
 
         // Handle share target

@@ -56,6 +56,9 @@
         }
     </script>
 
+    <!-- Quick Add Component -->
+    <link rel="stylesheet" href="./vendor/quick-add/quick-add-component.css">
+
     <!-- Custom Styles -->
     <link rel="stylesheet" href="./css/styles.css">
 </head>
@@ -139,10 +142,10 @@
                 <i data-lucide="plus-circle" class="w-5 h-5"></i>
                 <span class="font-mono text-xs uppercase">Add Event</span>
             </button>
-            <button onclick="AI.openModal()"
+            <button onclick="PetTracker.QuickAddModal.open()"
                 class="w-full flex items-center gap-3 px-3 py-2 text-earth-metal hover:bg-oatmeal/30 transition-fast">
-                <i data-lucide="sparkles" class="w-5 h-5"></i>
-                <span class="font-mono text-xs uppercase">AI Quick Add</span>
+                <i data-lucide="zap" class="w-5 h-5"></i>
+                <span class="font-mono text-xs uppercase">Quick Add</span>
             </button>
             <button id="installPwaBtn" onclick="App.promptInstall()"
                 class="hidden w-full flex items-center gap-3 px-3 py-2 text-dull-purple hover:bg-oatmeal/30 transition-fast">
@@ -1219,72 +1222,98 @@
         </div>
     </div>
 
-    <!-- AI Entry Modal -->
-    <div id="aiEntryModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
-        aria-modal="true" aria-labelledby="aiEntryModalTitle">
+    <!-- Quick Add Modal (Combined: Quick Add + AI) -->
+    <div id="quickAddModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
+        aria-modal="true" aria-labelledby="quickAddModalTitle">
         <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
         <div
             class="relative bg-white-linen border border-oatmeal w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col z-10">
             <div class="border-b border-oatmeal p-4 flex items-center justify-between flex-shrink-0">
-                <div class="flex items-center gap-3">
-                    <span class="section-header">AI Quick Add</span>
-                    <button onclick="AI.showQueueModal()" class="relative p-1 text-earth-metal hover:text-dull-purple"
-                        title="View Queue">
-                        <i data-lucide="list-todo" class="w-5 h-5"></i>
-                        <span id="aiQueueBadge"
-                            class="hidden absolute -top-1 -right-1 w-5 h-5 bg-dull-purple text-white-linen text-[10px] font-mono flex items-center justify-center">0</span>
-                    </button>
-                </div>
-                <button onclick="PetTracker.UI.closeModal('aiEntryModal')"
-                    class="p-1 text-earth-metal hover:text-charcoal">
+                <span id="quickAddModalTitle" class="section-header">Quick Add</span>
+                <button onclick="PetTracker.QuickAddModal.close()" class="p-1 text-earth-metal hover:text-charcoal">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
-            <div class="flex-1 overflow-y-auto p-4 space-y-4">
-                <!-- Input Area -->
-                <div>
-                    <label class="font-mono text-xs uppercase text-earth-metal block mb-2">Type or Dictate</label>
-                    <textarea id="aiInputText" class="input-field h-32 resize-none"
-                        placeholder="e.g., Luna threw up this morning, gave Max his heartworm meds yesterday at 8am..."
-                        oninput="AI.onInputChange(this.value)"></textarea>
-                    <p class="text-xs text-earth-metal mt-1">AI will parse automatically after 5 seconds of inactivity.
-                        Offline? Queue for later.</p>
-                </div>
 
-                <!-- Action Buttons -->
-                <div class="flex flex-wrap gap-2">
-                    <button onclick="AI.parse()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
-                        <i data-lucide="sparkles" class="w-4 h-4 inline mr-2"></i>Parse Now
-                    </button>
-                    <button onclick="AI.queueForLater()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase"
-                        title="Save for later when offline or busy">
-                        <i data-lucide="clock" class="w-4 h-4 inline mr-2"></i>Queue for Later
-                    </button>
-                    <button onclick="AI.processQueue()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase"
-                        title="Process all pending queued items">
-                        <i data-lucide="play" class="w-4 h-4 inline mr-2"></i>Process Queue
-                    </button>
-                </div>
+            <!-- Tabs -->
+            <div class="border-b border-oatmeal flex items-center gap-1 px-4 flex-shrink-0">
+                <button type="button" id="qaTabQuick" onclick="PetTracker.QuickAddModal.selectTab('quick')"
+                    class="px-4 py-2.5 font-mono text-xs uppercase border-b-2 border-dull-purple text-dull-purple bg-dull-purple/10 transition-all">
+                    <i data-lucide="zap" class="w-3.5 h-3.5 inline mr-1"></i>Quick Add
+                </button>
+                <button type="button" id="qaTabAI" onclick="PetTracker.QuickAddModal.selectTab('ai')"
+                    class="px-4 py-2.5 font-mono text-xs uppercase border-b-2 border-transparent text-earth-metal bg-transparent transition-all">
+                    <i data-lucide="sparkles" class="w-3.5 h-3.5 inline mr-1"></i>AI Add
+                </button>
+                <span id="qaAiDisabledHint" class="ml-auto text-[10px] text-earth-metal font-mono hidden">
+                    Set AI key in Settings
+                </span>
+            </div>
 
-                <!-- Entries List -->
-                <div>
-                    <span class="font-mono text-xs uppercase text-earth-metal">Extracted Entries</span>
-                    <div id="aiEntriesList" class="mt-2 space-y-2">
-                        <p class="text-earth-metal text-sm py-4">
-                            Type or dictate entries above. AI will parse them after 5 seconds of inactivity.
-                        </p>
+            <!-- Quick Add Panel -->
+            <section id="qaPanelQuick" class="flex-1 overflow-y-auto">
+                <div class="p-4 space-y-4">
+                    <div id="qaMount"></div>
+                    <div class="flex justify-end gap-3 pt-3 border-t border-oatmeal">
+                        <button type="button" onclick="PetTracker.QuickAddModal.close()"
+                            class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Close</button>
+                        <button type="button" id="qaSaveBtn" onclick="PetTracker.QuickAddModal.save()"
+                            class="btn-primary px-4 py-2 font-mono text-xs uppercase" disabled>
+                            Save Events
+                        </button>
                     </div>
                 </div>
-            </div>
-            <div class="border-t border-oatmeal p-4 flex justify-end gap-3 flex-shrink-0">
-                <button onclick="AI.reset(); PetTracker.UI.closeModal('aiEntryModal')"
-                    class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
-                    Cancel
-                </button>
-                <button onclick="AI.saveAll()" class="btn-primary px-4 py-2 font-mono text-xs uppercase">
-                    <i data-lucide="check" class="w-4 h-4 inline mr-2"></i>Save All
-                </button>
-            </div>
+            </section>
+
+            <!-- AI Add Panel -->
+            <section id="qaPanelAI" class="hidden flex-1 overflow-y-auto">
+                <div id="qaAiMount" class="p-4 space-y-4">
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-2">Type or Dictate</label>
+                        <textarea id="aiInputText" class="input-field h-32 resize-none"
+                            placeholder="e.g., Luna threw up this morning, gave Max his heartworm meds yesterday at 8am..."
+                            oninput="AI.onInputChange(this.value)"></textarea>
+                        <p class="text-xs text-earth-metal mt-1">AI will parse automatically after 5 seconds of
+                            inactivity. Offline? Queue for later.</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="AI.parse()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
+                            <i data-lucide="sparkles" class="w-4 h-4 inline mr-2"></i>Parse Now
+                        </button>
+                        <button onclick="AI.queueForLater()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase"
+                            title="Save for later when offline or busy">
+                            <i data-lucide="clock" class="w-4 h-4 inline mr-2"></i>Queue for Later
+                        </button>
+                        <button onclick="AI.processQueue()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase"
+                            title="Process all pending queued items">
+                            <i data-lucide="play" class="w-4 h-4 inline mr-2"></i>Process Queue
+                        </button>
+                        <button onclick="AI.showQueueModal()"
+                            class="btn-secondary px-4 py-2 font-mono text-xs uppercase relative" title="View Queue">
+                            <i data-lucide="list-todo" class="w-4 h-4 inline mr-2"></i>Queue
+                            <span id="aiQueueBadge"
+                                class="hidden absolute -top-1 -right-1 w-5 h-5 bg-dull-purple text-white-linen text-[10px] font-mono flex items-center justify-center">0</span>
+                        </button>
+                    </div>
+                    <div>
+                        <span class="font-mono text-xs uppercase text-earth-metal">Extracted Entries</span>
+                        <div id="aiEntriesList" class="mt-2 space-y-2">
+                            <p class="text-earth-metal text-sm py-4">
+                                Type or dictate entries above. AI will parse them after 5 seconds of inactivity.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-3 pt-3 border-t border-oatmeal">
+                        <button onclick="AI.reset(); PetTracker.QuickAddModal.close()"
+                            class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
+                            Cancel
+                        </button>
+                        <button onclick="AI.saveAll()" class="btn-primary px-4 py-2 font-mono text-xs uppercase">
+                            <i data-lucide="check" class="w-4 h-4 inline mr-2"></i>Save All
+                        </button>
+                    </div>
+                </div>
+            </section>
         </div>
     </div>
 
@@ -1735,6 +1764,8 @@
     <script src="./js/care.js"></script>
     <script src="./js/media.js"></script>
     <script src="./js/ai.js"></script>
+    <script src="./vendor/quick-add/quick-add-component.js"></script>
+    <script src="./js/quick-add-modal.js"></script>
     <script src="./js/todoist.js"></script>
     <script src="./js/calendar-export.js"></script>
     <script src="./js/analytics.js"></script>

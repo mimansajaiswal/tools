@@ -330,7 +330,26 @@ Parse the following input:`;
 
         } catch (e) {
             console.error('[AI] Parse error:', e);
-            PetTracker.UI.toast(`AI error: ${e.message}`, 'error');
+            var isNetworkError = !navigator.onLine ||
+                (e instanceof TypeError && /fetch|network/i.test(e.message)) ||
+                /network|offline|ECONNREFUSED|Failed to fetch/i.test(e.message);
+            if (isNetworkError || !navigator.onLine) {
+                try {
+                    var queued = await PetTracker.AIQueue.add(AI.state.inputText);
+                    if (queued) {
+                        await AI.updateQueueCount();
+                        AI.renderQueueIndicator();
+                        PetTracker.UI.toast('Offline — queued for later processing', 'warning');
+                    } else {
+                        PetTracker.UI.toast('Already queued for processing', 'info');
+                    }
+                } catch (qErr) {
+                    console.error('[AI] Auto-queue error:', qErr);
+                    PetTracker.UI.toast(`AI error: ${e.message}`, 'error');
+                }
+            } else {
+                PetTracker.UI.toast(`AI error: ${e.message}`, 'error');
+            }
         } finally {
             AI.state.isProcessing = false;
             AI.renderEntries();
@@ -407,7 +426,11 @@ Parse the following input:`;
 
         PetTracker.UI.toast(`Saved ${saved} entries`, 'success');
         AI.reset();
-        PetTracker.UI.closeModal('aiEntryModal');
+        if (PetTracker.QuickAddModal) {
+            PetTracker.QuickAddModal.close();
+        } else {
+            PetTracker.UI.closeModal('quickAddModal');
+        }
         App.renderDashboard();
     },
 
@@ -467,31 +490,33 @@ Parse the following input:`;
             return `
                 <div class="card p-3 ${isDeleted ? 'opacity-50 border-muted-pink' : ''} ${isEdited ? 'border-dull-purple' : ''}"
                      data-entry-id="${entry._id}">
-                    <div class="flex items-start justify-between gap-3">
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2 mb-1">
-                                <span class="font-serif text-sm text-charcoal">${PetTracker.UI.escapeHtml(entry.title || entry.eventType || 'Event')}</span>
-                                ${isEdited ? '<span class="badge badge-accent text-[8px]">EDITED</span>' : ''}
-                                ${isDeleted ? '<span class="badge badge-pink text-[8px]">REMOVED</span>' : ''}
+                    <div class="entry-content">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 mb-1">
+                                    <span class="font-serif text-sm text-charcoal">${PetTracker.UI.escapeHtml(entry.title || entry.eventType || 'Event')}</span>
+                                    ${isEdited ? '<span class="badge badge-accent text-[8px]">EDITED</span>' : ''}
+                                    ${isDeleted ? '<span class="badge badge-pink text-[8px]">REMOVED</span>' : ''}
+                                </div>
+                                <p class="meta-row text-[10px]">
+                                    <span class="meta-value">${PetTracker.UI.escapeHtml(entry.petName || 'Unknown')}</span>
+                                    <span class="meta-separator">//</span>
+                                    <span>${entry.date || 'No date'}</span>
+                                    ${entry.time ? `<span class="meta-separator">//</span><span>${entry.time}</span>` : ''}
+                                </p>
+                                ${entry.notes ? `<p class="text-xs text-earth-metal mt-1 truncate">${PetTracker.UI.escapeHtml(entry.notes)}</p>` : ''}
                             </div>
-                            <p class="meta-row text-[10px]">
-                                <span class="meta-value">${PetTracker.UI.escapeHtml(entry.petName || 'Unknown')}</span>
-                                <span class="meta-separator">//</span>
-                                <span>${entry.date || 'No date'}</span>
-                                ${entry.time ? `<span class="meta-separator">//</span><span>${entry.time}</span>` : ''}
-                            </p>
-                            ${entry.notes ? `<p class="text-xs text-earth-metal mt-1 truncate">${PetTracker.UI.escapeHtml(entry.notes)}</p>` : ''}
-                        </div>
-                        <div class="flex items-center gap-1 flex-shrink-0">
-                            <span class="text-[10px] text-earth-metal">${Math.round((entry.confidence || 0) * 100)}%</span>
-                            ${!isDeleted ? `
-                                <button onclick="AI.showEntryEdit('${entry._id}')" class="p-1 text-earth-metal hover:text-dull-purple">
-                                    <i data-lucide="pencil" class="w-3 h-3"></i>
-                                </button>
-                                <button onclick="AI.markDeleted('${entry._id}')" class="p-1 text-earth-metal hover:text-muted-pink">
-                                    <i data-lucide="x" class="w-3 h-3"></i>
-                                </button>
-                            ` : ''}
+                            <div class="flex items-center gap-1 flex-shrink-0">
+                                <span class="text-[10px] text-earth-metal">${Math.round((entry.confidence || 0) * 100)}%</span>
+                                ${!isDeleted ? `
+                                    <button onclick="AI.showEntryEdit('${entry._id}')" class="p-1 text-earth-metal hover:text-dull-purple">
+                                        <i data-lucide="pencil" class="w-3 h-3"></i>
+                                    </button>
+                                    <button onclick="AI.markDeleted('${entry._id}')" class="p-1 text-earth-metal hover:text-muted-pink">
+                                        <i data-lucide="x" class="w-3 h-3"></i>
+                                    </button>
+                                ` : ''}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -537,8 +562,6 @@ Parse the following input:`;
             contentEl.appendChild(editForm);
         }
 
-        // Mark as being edited
-        AI.markEdited(entryId);
     },
 
     /**
@@ -568,7 +591,7 @@ Parse the following input:`;
         if (titleEl) entry.title = titleEl.value.trim();
         if (notesEl) entry.notes = notesEl.value.trim();
 
-        // Re-render entries to show updated values
+        AI.markEdited(entryId);
         AI.renderEntries();
     },
 
@@ -580,7 +603,11 @@ Parse the following input:`;
         await AI.updateQueueCount();
         AI.renderEntries();
         AI.renderQueueIndicator();
-        PetTracker.UI.openModal('aiEntryModal');
+        if (PetTracker.QuickAddModal) {
+            PetTracker.QuickAddModal.open('ai');
+        } else {
+            PetTracker.UI.openModal('quickAddModal');
+        }
     },
 
     /**
@@ -658,6 +685,7 @@ Parse the following input:`;
         for (const item of pending) {
             try {
                 AI.state.processingQueueId = item.id;
+                await PetTracker.AIQueue.updateStatus(item.id, 'processing');
                 const result = await AI.callProvider(item.text);
 
                 result.entries.forEach((entry, index) => {
