@@ -91,6 +91,16 @@
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--qa-inline-accent, var(--qa-accent)) 55%, transparent), inset 0 0 0 999px color-mix(in srgb, var(--qa-inline-accent, var(--qa-accent)) 8%, transparent);
 }
 
+.qa-inline-mark-blocked {
+    background-image:
+        repeating-linear-gradient(-45deg,
+            color-mix(in srgb, #dc2626 18%, transparent) 0,
+            color-mix(in srgb, #dc2626 18%, transparent) 4px,
+            color-mix(in srgb, #ffffff 70%, transparent) 4px,
+            color-mix(in srgb, #ffffff 70%, transparent) 8px);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, #dc2626 45%, transparent);
+}
+
 .qa-inline-mark-icon {
     display: inline-flex;
     align-items: center;
@@ -98,6 +108,17 @@
     margin-right: 3px;
     opacity: 0.85;
     vertical-align: baseline;
+}
+
+.qa-inline-mark-blocked-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 3px;
+    color: #dc2626;
+    font-weight: 700;
+    font-size: 10px;
+    line-height: 1;
 }
 
 .qa-inline-mark-dismiss {
@@ -279,6 +300,33 @@
     opacity: 1;
 }
 
+.qa-pill-blocked {
+    border-style: dashed;
+    border-color: color-mix(in srgb, #dc2626 55%, var(--qa-pill-border));
+    color: color-mix(in srgb, #991b1b 75%, var(--qa-pill-fg));
+    background-image:
+        repeating-linear-gradient(-45deg,
+            color-mix(in srgb, #dc2626 14%, transparent) 0,
+            color-mix(in srgb, #dc2626 14%, transparent) 4px,
+            color-mix(in srgb, #ffffff 70%, transparent) 4px,
+            color-mix(in srgb, #ffffff 70%, transparent) 8px);
+    cursor: pointer;
+}
+
+.qa-pill-blocked:hover {
+    filter: brightness(1.03);
+}
+
+.qa-pill-blocked-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #dc2626;
+    font-weight: 700;
+    font-size: 10px;
+    line-height: 1;
+}
+
 .qa-issues {
     margin-top: 8px;
     border-top: 1px dashed var(--qa-border);
@@ -450,6 +498,44 @@
     margin-left: auto;
     font-size: 11px;
     color: var(--qa-muted);
+}
+
+.qa-blocked-info {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    border: 1px solid color-mix(in srgb, #dc2626 45%, var(--qa-border));
+    border-radius: 10px;
+    padding: 10px 11px;
+    background:
+        repeating-linear-gradient(-45deg,
+            color-mix(in srgb, #dc2626 8%, #fff) 0,
+            color-mix(in srgb, #dc2626 8%, #fff) 6px,
+            color-mix(in srgb, #fff 92%, transparent) 6px,
+            color-mix(in srgb, #fff 92%, transparent) 12px);
+    color: var(--qa-card-fg);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+}
+
+.qa-blocked-info-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 999px;
+    background: #dc2626;
+    color: #fff;
+    font-size: 11px;
+    line-height: 1;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.qa-blocked-info-text {
+    font-size: 12px;
+    line-height: 1.35;
+    color: color-mix(in srgb, #111827 82%, var(--qa-card-fg));
 }
 
 @media (max-width: 640px) {

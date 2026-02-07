@@ -275,8 +275,9 @@
                 <div class="example-head">
                     <h2>Pet Event Variant</h2>
                     <p>Semicolon bulk separator, strict terminator <code>~~</code>, option auto-detect from free text,
-                        and inferred reduction control (global off, symptom field on). Both inferred and explicit parsed
-                        pills can be dismissed with <code>x</code>.</p>
+                        dependency-aware event options by pet, and inferred reduction control (global off, symptom field
+                        on). Includes self + conditional date constraints; blocked tokens are striped and clickable for
+                        details.</p>
                     <div class="meta" id="meta2"></div>
                     <details class="config-box" open>
                         <summary>Config + Options</summary>
@@ -358,7 +359,9 @@
                 allowCustom: typeof f.allowCustom === 'boolean' ? f.allowCustom : undefined,
                 exhaustive: typeof f.exhaustive === 'boolean' ? f.exhaustive : undefined,
                 naturalDate: f.naturalDate === true ? true : undefined,
-                multiple: f.multiple === true ? true : undefined
+                multiple: f.multiple === true ? true : undefined,
+                dependsOn: f.dependsOn || f.dependencies || undefined,
+                constraints: f.constraints || f.constraint || undefined
             }));
             return {
                 debounceMs: config.debounceMs,
@@ -456,7 +459,7 @@
             autoDetectOptionsWithoutPrefix: true,
             reduceInferredOptions: false,
             fallbackField: 'note',
-            placeholder: 'Use ; for new entry. Example: pet:Luna~~ sev:2~~ at:yesterday~~ cough noted (auto-detected)',
+            placeholder: 'Use ; for new entry. Example: pet:Luna~~ event:walk~~ due:2025-02-01~~ at:yesterday~~',
             classNames: {
                 root: 'qa-root petqa-root',
                 entry: 'qa-entry petqa-entry'
@@ -474,6 +477,39 @@
                             { value: 'Luna', color: '#22c55e' },
                             { value: 'Mochi', color: '#f97316' },
                             { value: 'Pico', color: '#3b82f6' }
+                        ]
+                    },
+                    {
+                        key: 'event',
+                        type: 'options',
+                        prefixes: ['event:', 'ev:'],
+                        required: true,
+                        exhaustive: true,
+                        options: [
+                            { value: 'walk', color: '#22c55e', dependsOn: { field: 'pet', op: 'in', value: ['Luna', 'Mochi'] } },
+                            { value: 'fetch', color: '#16a34a', dependsOn: { field: 'pet', op: 'eq', value: 'Luna' } },
+                            { value: 'litter', color: '#2563eb', dependsOn: { field: 'pet', op: 'eq', value: 'Pico' } },
+                            { value: 'groom', color: '#f97316', dependsOn: { field: 'pet', op: 'eq', value: 'Mochi' } },
+                            { value: 'vet', color: '#7c3aed' }
+                        ]
+                    },
+                    {
+                        key: 'due',
+                        type: 'date',
+                        naturalDate: false,
+                        prefixes: ['due:'],
+                        constraints: [
+                            {
+                                op: 'gte',
+                                value: '2025-02-15',
+                                message: 'Due date must be on or after 2025-02-15'
+                            },
+                            {
+                                when: { field: 'pet', op: 'eq', value: 'Pico' },
+                                op: 'gte',
+                                value: '2026-01-01',
+                                message: 'For pet Pico, due date must be on or after 2026-01-01'
+                            }
                         ]
                     },
                     {
@@ -501,8 +537,8 @@
         renderConfigSummary('config2', petConfig);
         const petAdd = QuickAdd.create(petConfig);
         petAdd.setInput(
-            'pet:Luna~~ sev:2~~ at:yesterday~~ cough and appetite normal;' +
-            ' pet:Mochi~~ sev:3~~ at:today~~ low energy and slept longer than usual'
+            'pet:Luna~~ event:litter~~ due:2025-02-01~~ sev:2~~ at:yesterday~~ cough and appetite normal;' +
+            ' pet:Mochi~~ event:groom~~ due:2026-03-01~~ sev:3~~ at:today~~ low energy and slept longer than usual'
         );
 
         const expenseConfig = {

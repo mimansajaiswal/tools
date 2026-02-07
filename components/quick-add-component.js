@@ -14,6 +14,8 @@
         inlineMarkInteractive: 'qa-inline-mark-interactive',
         inlineMarkInferred: 'qa-inline-mark-inferred',
         inlineMarkIcon: 'qa-inline-mark-icon',
+        inlineMarkBlocked: 'qa-inline-mark-blocked',
+        inlineMarkBlockedIcon: 'qa-inline-mark-blocked-icon',
         inlineMarkDismiss: 'qa-inline-mark-dismiss',
         input: 'qa-input',
         hint: 'qa-hint',
@@ -49,7 +51,12 @@
         dropdownOption: 'qa-dropdown-option',
         dropdownAdd: 'qa-dropdown-add',
         dropdownColor: 'qa-dropdown-color',
-        dropdownMeta: 'qa-dropdown-meta'
+        dropdownMeta: 'qa-dropdown-meta',
+        blockedInfo: 'qa-blocked-info',
+        blockedInfoIcon: 'qa-blocked-info-icon',
+        blockedInfoText: 'qa-blocked-info-text',
+        pillBlocked: 'qa-pill-blocked',
+        pillBlockedIcon: 'qa-pill-blocked-icon'
     };
 
     const DEFAULT_CONFIG = {
@@ -133,13 +140,17 @@
             return {
                 value: String(value),
                 label: String(option.label !== undefined ? option.label : value),
-                color: typeof option.color === 'string' ? option.color : null
+                color: typeof option.color === 'string' ? option.color : null,
+                dependsOn: option.dependsOn !== undefined ? option.dependsOn : option.dependencies,
+                constraints: option.constraints !== undefined ? option.constraints : option.constraint
             };
         }
         return {
             value: String(option),
             label: String(option),
-            color: null
+            color: null,
+            dependsOn: null,
+            constraints: null
         };
     }
 
@@ -158,7 +169,9 @@
             autoDetectWithoutPrefix: false,
             reduceInferredOptions: undefined,
             allowCustom: undefined,
-            exhaustive: undefined
+            exhaustive: undefined,
+            dependsOn: undefined,
+            constraints: undefined
         }, field || {});
 
         if (normalized.type === 'enum') {
@@ -425,6 +438,402 @@
         }
 
         return { ok: true, value };
+    }
+
+    function toValueArray(raw) {
+        if (Array.isArray(raw)) {
+            return raw.filter((item) => item !== undefined && item !== null);
+        }
+        if (raw === undefined || raw === null) {
+            return [];
+        }
+        return [raw];
+    }
+
+    function primitiveForCompare(value) {
+        if (value === undefined || value === null) {
+            return null;
+        }
+        if (typeof value === 'number' || typeof value === 'boolean') {
+            return value;
+        }
+        const str = String(value).trim();
+        if (!str) {
+            return '';
+        }
+        const lower = str.toLowerCase();
+        if (lower === 'true') {
+            return true;
+        }
+        if (lower === 'false') {
+            return false;
+        }
+        const num = Number(str);
+        if (!Number.isNaN(num) && str.match(/^-?\d+(\.\d+)?$/)) {
+            return num;
+        }
+        const t = Date.parse(str);
+        if (!Number.isNaN(t) && str.match(/^\d{4}-\d{2}-\d{2}/)) {
+            return t;
+        }
+        return lower;
+    }
+
+    function valuesForField(fields, fieldKey) {
+        if (!fields || !fieldKey) {
+            return [];
+        }
+        return toValueArray(fields[fieldKey]).map((value) => primitiveForCompare(value));
+    }
+
+    function compareWithOp(actualValues, opRaw, expectedRaw) {
+        const op = (opRaw || 'eq').toLowerCase();
+        const expected = primitiveForCompare(expectedRaw);
+        const expectedList = toValueArray(expectedRaw).map((value) => primitiveForCompare(value));
+
+        if (op === 'exists') {
+            return actualValues.length > 0;
+        }
+
+        if (op === 'notexists') {
+            return actualValues.length === 0;
+        }
+
+        if (actualValues.length === 0) {
+            return false;
+        }
+
+        if (op === 'eq') {
+            return actualValues.some((actual) => actual === expected);
+        }
+        if (op === 'neq') {
+            return actualValues.every((actual) => actual !== expected);
+        }
+        if (op === 'in') {
+            return actualValues.some((actual) => expectedList.includes(actual));
+        }
+        if (op === 'notin') {
+            return actualValues.every((actual) => !expectedList.includes(actual));
+        }
+        if (op === 'includes') {
+            return actualValues.some((actual) => String(actual || '').includes(String(expected || '')));
+        }
+        if (op === 'gt') {
+            return actualValues.some((actual) => Number(actual) > Number(expected));
+        }
+        if (op === 'gte') {
+            return actualValues.some((actual) => Number(actual) >= Number(expected));
+        }
+        if (op === 'lt') {
+            return actualValues.some((actual) => Number(actual) < Number(expected));
+        }
+        if (op === 'lte') {
+            return actualValues.some((actual) => Number(actual) <= Number(expected));
+        }
+        return actualValues.some((actual) => actual === expected);
+    }
+
+    function normalizeRuleList(raw) {
+        if (raw === undefined || raw === null) {
+            return [];
+        }
+        return Array.isArray(raw) ? raw : [raw];
+    }
+
+    function normalizeRuleField(ruleField, selfFieldKey) {
+        if (!ruleField || ruleField === '$self' || ruleField === 'self') {
+            return selfFieldKey;
+        }
+        return ruleField;
+    }
+
+    function getRuleActualValues(rule, fields, context) {
+        const ref = normalizeRuleField(rule.field, context.selfFieldKey);
+        if (ref === context.selfFieldKey && context.selfValue !== undefined) {
+            return [primitiveForCompare(context.selfValue)];
+        }
+        return valuesForField(fields, ref);
+    }
+
+    function dependencyRuleMatches(rule, fields, context) {
+        const ctx = context || { selfFieldKey: '', selfValue: undefined };
+        if (!rule) {
+            return true;
+        }
+
+        if (Array.isArray(rule)) {
+            return rule.every((item) => dependencyRuleMatches(item, fields, ctx));
+        }
+
+        if (typeof rule !== 'object') {
+            return !!rule;
+        }
+
+        if (Array.isArray(rule.and)) {
+            return rule.and.every((item) => dependencyRuleMatches(item, fields, ctx));
+        }
+        if (Array.isArray(rule.or)) {
+            return rule.or.some((item) => dependencyRuleMatches(item, fields, ctx));
+        }
+        if (rule.not !== undefined) {
+            return !dependencyRuleMatches(rule.not, fields, ctx);
+        }
+
+        if (!rule.field && !rule.op) {
+            return true;
+        }
+
+        const actualValues = getRuleActualValues(rule, fields, ctx);
+        return compareWithOp(actualValues, rule.op, rule.value);
+    }
+
+    function humanOp(opRaw) {
+        const op = (opRaw || 'eq').toLowerCase();
+        if (op === 'eq') return 'is';
+        if (op === 'neq') return 'is not';
+        if (op === 'in') return 'is one of';
+        if (op === 'notin') return 'is not one of';
+        if (op === 'includes') return 'contains';
+        if (op === 'gt') return 'is greater than';
+        if (op === 'gte') return 'is on or after / at least';
+        if (op === 'lt') return 'is less than';
+        if (op === 'lte') return 'is on or before / at most';
+        if (op === 'exists') return 'is set';
+        if (op === 'notexists') return 'is not set';
+        return op;
+    }
+
+    function humanValue(value) {
+        if (Array.isArray(value)) {
+            return value.join(', ');
+        }
+        return String(value);
+    }
+
+    function formatRuleTemplate(template, vars) {
+        return String(template || '').replace(/\{([a-zA-Z0-9_]+)\}/g, (_, key) => {
+            if (Object.prototype.hasOwnProperty.call(vars, key)) {
+                return String(vars[key]);
+            }
+            return '';
+        });
+    }
+
+    function pickNonEmptyText() {
+        for (let i = 0; i < arguments.length; i++) {
+            const val = arguments[i];
+            if (typeof val !== 'string') {
+                continue;
+            }
+            const trimmed = val.trim();
+            if (trimmed) {
+                return trimmed;
+            }
+        }
+        return '';
+    }
+
+    function dependencyReason(rule, context) {
+        const ctx = context || { selfFieldKey: '' };
+        if (!rule) {
+            return 'constraint not met';
+        }
+        if (Array.isArray(rule)) {
+            return rule.map((item) => dependencyReason(item, ctx)).join(' and ');
+        }
+        if (typeof rule !== 'object') {
+            return 'constraint not met';
+        }
+        if (Array.isArray(rule.and)) {
+            return rule.and.map((item) => dependencyReason(item, ctx)).join(' and ');
+        }
+        if (Array.isArray(rule.or)) {
+            return `(${rule.or.map((item) => dependencyReason(item, ctx)).join(' or ')})`;
+        }
+        if (rule.not !== undefined) {
+            return `not (${dependencyReason(rule.not, ctx)})`;
+        }
+
+        const fieldRef = normalizeRuleField(rule.field, ctx.selfFieldKey);
+        const fieldLabel = fieldRef === ctx.selfFieldKey ? 'this field' : fieldRef;
+        const op = (rule.op || 'eq').toLowerCase();
+        if (op === 'exists' || op === 'notexists') {
+            return `${fieldLabel} ${humanOp(op)}`;
+        }
+        return `${fieldLabel} ${humanOp(op)} ${humanValue(rule.value)}`;
+    }
+
+    function evaluateRuleSet(rulesRaw, fields, context) {
+        const ctx = context || { selfFieldKey: '', selfValue: undefined };
+        const rules = normalizeRuleList(rulesRaw);
+        for (let i = 0; i < rules.length; i++) {
+            const rawRule = rules[i];
+            if (!rawRule || typeof rawRule !== 'object') {
+                continue;
+            }
+
+            const whenRule = rawRule.when;
+            if (whenRule && !dependencyRuleMatches(whenRule, fields, ctx)) {
+                continue;
+            }
+
+            const targetRule = rawRule.then && typeof rawRule.then === 'object'
+                ? rawRule.then
+                : rawRule;
+
+            const ok = dependencyRuleMatches(targetRule, fields, ctx);
+            if (ok) {
+                continue;
+            }
+
+            const messageVars = {
+                field: normalizeRuleField(targetRule.field, ctx.selfFieldKey) || ctx.selfFieldKey,
+                op: humanOp(targetRule.op),
+                value: humanValue(targetRule.value),
+                self_field: ctx.selfFieldKey
+            };
+            const customMessage = pickNonEmptyText(
+                rawRule.message,
+                rawRule.reason,
+                targetRule.message,
+                targetRule.reason
+            );
+            if (customMessage) {
+                return { ok: false, reason: formatRuleTemplate(customMessage, messageVars) };
+            }
+
+            const prefix = rules.length > 1 ? `Constraint ${i + 1}: ` : '';
+            if (whenRule) {
+                return {
+                    ok: false,
+                    reason: `${prefix}When ${dependencyReason(whenRule, ctx)}, ${dependencyReason(targetRule, ctx)}`
+                };
+            }
+            return { ok: false, reason: `${prefix}${dependencyReason(targetRule, ctx)}` };
+        }
+        return { ok: true, reason: '' };
+    }
+
+    function findOptionByParsedValue(field, parsedValue) {
+        const options = getFieldOptions(field);
+        const target = String(parsedValue).toLowerCase();
+        return options.find((option) => option.value.toLowerCase() === target) || null;
+    }
+
+    function evaluateFieldDependency(field, parsedValue, fields) {
+        if (!field) {
+            return { ok: true, reason: '' };
+        }
+        const context = { selfFieldKey: field.key, selfValue: parsedValue };
+        const fieldRule = field.dependsOn !== undefined ? field.dependsOn : field.dependencies;
+        const fieldRuleResult = evaluateRuleSet(fieldRule, fields, context);
+        if (!fieldRuleResult.ok) {
+            return fieldRuleResult;
+        }
+        const selfConstraints = field.constraints !== undefined ? field.constraints : field.constraint;
+        const selfRuleResult = evaluateRuleSet(selfConstraints, fields, context);
+        if (!selfRuleResult.ok) {
+            return selfRuleResult;
+        }
+
+        if (field.type === 'options') {
+            const option = findOptionByParsedValue(field, parsedValue);
+            const optionRule = option && option.dependsOn ? option.dependsOn : null;
+            const optionRuleResult = evaluateRuleSet(optionRule, fields, context);
+            if (!optionRuleResult.ok) {
+                return optionRuleResult;
+            }
+            const optionConstraints = option && option.constraints !== undefined ? option.constraints : (option ? option.constraint : null);
+            const optionConstraintResult = evaluateRuleSet(optionConstraints, fields, context);
+            if (!optionConstraintResult.ok) {
+                return optionConstraintResult;
+            }
+        }
+
+        return { ok: true, reason: '' };
+    }
+
+    function removeFieldValueFromFields(fields, field, key, value) {
+        const current = fields[key];
+        if (current === undefined) {
+            return;
+        }
+        if (field && field.multiple) {
+            if (!Array.isArray(current)) {
+                return;
+            }
+            const idx = current.findIndex((item) => String(item).toLowerCase() === String(value).toLowerCase());
+            if (idx >= 0) {
+                current.splice(idx, 1);
+            }
+            if (current.length === 0) {
+                delete fields[key];
+            }
+            return;
+        }
+
+        if (String(current).toLowerCase() === String(value).toLowerCase()) {
+            delete fields[key];
+        }
+    }
+
+    function applyDependencyConstraints(entry, normalizedSchema) {
+        entry.blocked = [];
+        const blockedInferredIds = new Set();
+        let blockedCount = 0;
+
+        entry.tokens.forEach((token) => {
+            if (token.kind !== 'field' || !token.committed || !token.value) {
+                return;
+            }
+            const field = normalizedSchema.byKey[token.key];
+            if (!field) {
+                return;
+            }
+            const parsed = parseByType(field, token.value);
+            if (!parsed.ok) {
+                return;
+            }
+            const allowed = evaluateFieldDependency(field, parsed.value, entry.fields);
+            if (allowed.ok) {
+                return;
+            }
+            removeFieldValueFromFields(entry.fields, field, token.key, parsed.value);
+            entry.blocked.push({
+                id: `blk_${entry.index}_${blockedCount++}`,
+                fieldKey: token.key,
+                value: parsed.value,
+                source: 'explicit',
+                reason: allowed.reason,
+                globalStart: token.globalStart,
+                globalEnd: token.globalEnd
+            });
+        });
+
+        (entry.inferred || []).forEach((inf) => {
+            const field = normalizedSchema.byKey[inf.fieldKey];
+            if (!field) {
+                return;
+            }
+            const allowed = evaluateFieldDependency(field, inf.value, entry.fields);
+            if (allowed.ok) {
+                return;
+            }
+            removeFieldValueFromFields(entry.fields, field, inf.fieldKey, inf.value);
+            blockedInferredIds.add(inf.id);
+            entry.blocked.push({
+                id: `blk_${entry.index}_${blockedCount++}`,
+                fieldKey: inf.fieldKey,
+                value: inf.value,
+                source: 'inferred',
+                reason: allowed.reason,
+                globalStart: inf.globalStart,
+                globalEnd: inf.globalEnd
+            });
+        });
+
+        entry.inferred = (entry.inferred || []).filter((inf) => !blockedInferredIds.has(inf.id));
+        return entry;
     }
 
     function appendFieldValue(fields, field, key, value) {
@@ -753,9 +1162,11 @@
             pending,
             errors,
             tokens,
+            blocked: [],
             isValid: true
         };
 
+        applyDependencyConstraints(entry, normalizedSchema);
         return applyRequiredValidation(entry, normalizedSchema);
     }
 
@@ -844,6 +1255,7 @@
         this.attachmentsByEntry = new Map();
         this.attachmentCounter = 0;
         this.dropdownState = null;
+        this.blockedInfoState = null;
 
         ensureQuickAddStyles();
 
@@ -888,6 +1300,7 @@
                     <input class="${c.dropdownSearch}" data-role="dropdownSearch" type="text" placeholder="Filter options..." />
                     <div class="${c.dropdownList}" data-role="dropdownList"></div>
                 </div>
+                <div class="${c.blockedInfo}" data-role="blockedInfo" hidden></div>
             </div>
         `;
 
@@ -900,6 +1313,7 @@
         this.dropdownEl = this.mountEl.querySelector('[data-role="dropdown"]');
         this.dropdownSearchEl = this.mountEl.querySelector('[data-role="dropdownSearch"]');
         this.dropdownListEl = this.mountEl.querySelector('[data-role="dropdownList"]');
+        this.blockedInfoEl = this.mountEl.querySelector('[data-role="blockedInfo"]');
     };
 
     QuickAddComponent.prototype.applyTokens = function applyTokens() {
@@ -917,6 +1331,7 @@
                 return;
             }
             this.closeDropdown();
+            this.closeBlockedInfo();
             if (this.timer) {
                 clearTimeout(this.timer);
             }
@@ -926,6 +1341,13 @@
         };
 
         this.onInputClick = (event) => {
+            const blocked = event.target.closest('[data-qa-blocked="1"]');
+            if (blocked) {
+                event.preventDefault();
+                event.stopPropagation();
+                this.showBlockedInfoFromElement(blocked);
+                return;
+            }
             const dismissBtn = event.target.closest('[data-dismiss-key]');
             if (dismissBtn) {
                 event.preventDefault();
@@ -954,6 +1376,13 @@
                 if (!Number.isNaN(entryIndex) && attachmentId) {
                     this.removeEntryAttachment(entryIndex, attachmentId);
                 }
+                return;
+            }
+            const blocked = event.target.closest('[data-qa-blocked="1"]');
+            if (blocked) {
+                event.preventDefault();
+                event.stopPropagation();
+                this.showBlockedInfoFromElement(blocked);
                 return;
             }
             const dismissBtn = event.target.closest('[data-dismiss-key]');
@@ -1001,6 +1430,11 @@
         };
 
         this.onDocumentClick = (event) => {
+            if (this.blockedInfoEl && !this.blockedInfoEl.hidden) {
+                if (!this.blockedInfoEl.contains(event.target) && !event.target.closest('[data-qa-blocked="1"]')) {
+                    this.closeBlockedInfo();
+                }
+            }
             if (!this.dropdownEl || this.dropdownEl.hidden) {
                 return;
             }
@@ -1016,6 +1450,9 @@
         this.onDocumentKeyDown = (event) => {
             if (event.key === 'Escape' && this.dropdownState) {
                 this.closeDropdown();
+            }
+            if (event.key === 'Escape' && this.blockedInfoState) {
+                this.closeBlockedInfo();
             }
         };
 
@@ -1329,6 +1766,20 @@
         return this.normalizedSchema.byKey[fieldKey] || null;
     };
 
+    QuickAddComponent.prototype.getEntryFieldsForDependency = function getEntryFieldsForDependency(entryIndex) {
+        const entry = (this.lastResult.entries || []).find((item) => item.index === entryIndex);
+        return entry && entry.fields ? entry.fields : {};
+    };
+
+    QuickAddComponent.prototype.isFieldValueDependencyAllowed = function isFieldValueDependencyAllowed(fieldKey, value, entryIndex) {
+        const field = this.getFieldDefinition(fieldKey);
+        if (!field) {
+            return { ok: true, reason: '' };
+        }
+        const fields = this.getEntryFieldsForDependency(entryIndex);
+        return evaluateFieldDependency(field, value, fields);
+    };
+
     QuickAddComponent.prototype.resolvePillColor = function resolvePillColor(field, value) {
         if (!field) {
             return null;
@@ -1360,25 +1811,34 @@
         const field = this.getFieldDefinition(data.fieldKey);
         const color = this.resolvePillColor(field, data.value);
         const inferred = !!data.inferred;
-        const interactive = this.isInteractivePill(field) && !!data.tokenId;
-        const styleAttr = color ? ` style="--qa-pill-accent:${escHtml(color)}"` : '';
+        const blocked = !!data.blocked;
+        const interactive = !blocked && this.isInteractivePill(field) && !!data.tokenId;
+        const styleAttr = (!blocked && color) ? ` style="--qa-pill-accent:${escHtml(color)}"` : '';
         const classes = [
             c.pill,
             interactive ? c.pillInteractive : '',
-            inferred ? c.pillInferred : ''
+            inferred ? c.pillInferred : '',
+            blocked ? c.pillBlocked : ''
         ].filter(Boolean).join(' ');
 
-        const attrs = interactive
+        const interactionAttrs = interactive
             ? ` data-qa-pill="1" data-pill-field="${escHtml(data.fieldKey)}" data-pill-token="${escHtml(data.tokenId)}" data-pill-entry="${data.entryIndex}"`
             : '';
+        const blockedAttrs = blocked
+            ? ` data-qa-blocked="1" data-blocked-reason="${escHtml(data.reason || 'Blocked by constraints')}"`
+            : '';
+        const attrs = `${interactionAttrs}${blockedAttrs}`;
         const inferredIcon = inferred
             ? `<span class="${c.pillInferredIcon}" aria-hidden="true"><svg viewBox="0 0 16 16" width="12" height="12" focusable="false"><path d="M8 1.5l1.4 2.9 3.1.5-2.2 2.2.5 3.2L8 8.9l-2.8 1.4.5-3.2L3.5 4.9l3.1-.5L8 1.5z" fill="currentColor"/></svg></span>`
             : '';
-        const dismiss = data.dismissKey
+        const blockedIcon = blocked
+            ? `<span class="${c.pillBlockedIcon}" aria-hidden="true">!</span>`
+            : '';
+        const dismiss = (!blocked && data.dismissKey)
             ? `<button type="button" class="${c.pillDismiss}" data-dismiss-key="${escHtml(data.dismissKey)}" aria-label="Dismiss value">x</button>`
             : '';
 
-        return `<span class="${classes}"${attrs}${styleAttr}>${inferredIcon}<span>${escHtml(data.label)}</span>${dismiss}</span>`;
+        return `<span class="${classes}"${attrs}${styleAttr}>${blockedIcon}${inferredIcon}<span>${escHtml(data.label)}</span>${dismiss}</span>`;
     };
 
     QuickAddComponent.prototype.buildInlineMarkHtml = function buildInlineMarkHtml(token, rawChunk) {
@@ -1386,22 +1846,30 @@
         const field = this.getFieldDefinition(token.key);
         const color = this.resolvePillColor(field, token.value);
         const interactive = this.isInteractivePill(field);
-        const styleAttr = color ? ` style="--qa-inline-accent:${escHtml(color)}"` : '';
+        const styleAttr = (!token.blocked && color) ? ` style="--qa-inline-accent:${escHtml(color)}"` : '';
         const classes = [
             c.inlineMark,
             interactive ? c.inlineMarkInteractive : '',
-            token.inferred ? c.inlineMarkInferred : ''
+            token.inferred ? c.inlineMarkInferred : '',
+            token.blocked ? c.inlineMarkBlocked : ''
         ].filter(Boolean).join(' ');
-        const attrs = interactive
+        const attrs = (interactive && !token.blocked)
             ? ` data-qa-pill="1" data-pill-field="${escHtml(token.key)}" data-pill-token="${escHtml(token.id)}" data-pill-entry="${token.entryIndex}"`
+            : '';
+        const blockedAttrs = token.blocked
+            ? ` data-qa-blocked="1" data-blocked-reason="${escHtml(token.reason || 'Blocked by constraints')}"`
             : '';
         const inferredIcon = token.inferred
             ? `<span class="${c.inlineMarkIcon}" data-qa-ignore="1" contenteditable="false" aria-hidden="true"><svg viewBox="0 0 16 16" width="10" height="10" focusable="false"><path d="M8 1.5l1.4 2.9 3.1.5-2.2 2.2.5 3.2L8 8.9l-2.8 1.4.5-3.2L3.5 4.9l3.1-.5L8 1.5z" fill="currentColor"/></svg></span>`
             : '';
+        const blockedIcon = token.blocked
+            ? `<span class="${c.inlineMarkBlockedIcon}" data-qa-ignore="1" contenteditable="false" aria-hidden="true">!</span>`
+            : '';
         const dismiss = token.dismissKey
             ? `<button type="button" class="${c.inlineMarkDismiss}" data-qa-ignore="1" contenteditable="false" data-dismiss-key="${escHtml(token.dismissKey)}" aria-label="Dismiss value">x</button>`
             : '';
-        return `<span class="${classes}"${attrs}${styleAttr}>${inferredIcon}<span>${escHtml(rawChunk)}</span>${dismiss}</span>`;
+        const titleAttr = token.blocked && token.reason ? ` title="${escHtml(`Blocked by constraints: ${token.reason}`)}"` : '';
+        return `<span class="${classes}"${attrs}${blockedAttrs}${styleAttr}${titleAttr}>${blockedIcon}${inferredIcon}<span>${escHtml(rawChunk)}</span>${dismiss}</span>`;
     };
 
     QuickAddComponent.prototype.getRenderableFieldTokens = function getRenderableFieldTokens(entry) {
@@ -1434,6 +1902,26 @@
                 entryIndex: entry.index,
                 inferred: true,
                 dismissKey: selection.dismissKey
+            });
+        });
+
+        (entry.blocked || []).forEach((blocked) => {
+            output.push({
+                id: blocked.id,
+                kind: 'field',
+                key: blocked.fieldKey,
+                prefix: '',
+                value: blocked.value,
+                committed: true,
+                globalStart: blocked.globalStart,
+                globalEnd: blocked.globalEnd,
+                globalValueStart: blocked.globalStart,
+                globalValueEnd: blocked.globalEnd,
+                entryIndex: entry.index,
+                blocked: true,
+                reason: blocked.reason,
+                inferred: blocked.source === 'inferred',
+                dismissKey: null
             });
         });
 
@@ -1780,6 +2268,17 @@
         const c = this.config.classNames;
         const selections = this.collectEntrySelections(entry);
         const pills = selections.map((selection) => this.buildPillHtml(selection));
+        (entry.blocked || []).forEach((item) => {
+            pills.push(this.buildPillHtml({
+                fieldKey: item.fieldKey,
+                entryIndex: entry.index,
+                value: item.value,
+                label: `${item.fieldKey}: ${item.value}`,
+                inferred: item.source === 'inferred',
+                blocked: true,
+                reason: item.reason
+            }));
+        });
 
         if (pills.length === 0) {
             return `<div class="${c.pillRow}"><span class="${c.pill}">No extracted fields</span></div>`;
@@ -1813,6 +2312,9 @@
                 const errorRows = entry.errors.map((error) =>
                     `<div class="${c.issue}">${escHtml(error)}</div>`
                 ).join('');
+                const blockedRows = (entry.blocked || []).map((item) =>
+                    `<div class="${c.issue}">Skipped by constraints: ${escHtml(item.fieldKey)} = ${escHtml(String(item.value))}${item.reason ? ` (${escHtml(item.reason)})` : ''}</div>`
+                ).join('');
                 const badgeText = entry.isValid ? 'valid' : 'needs attention';
                 const headerHtml = showEntryHeader
                     ? `
@@ -1832,10 +2334,11 @@
                         ${headerHtml}
                         ${pillsHtml}
                         ${attachmentsHtml}
-                        ${(entry.pending.length || entry.errors.length) ? `
+                        ${(entry.pending.length || entry.errors.length || (entry.blocked && entry.blocked.length)) ? `
                             <div class="${c.issues}">
                                 ${pendingRows}
                                 ${errorRows}
+                                ${blockedRows}
                             </div>
                         ` : ''}
                     </article>
@@ -1941,6 +2444,7 @@
     };
 
     QuickAddComponent.prototype.handlePillClick = function handlePillClick(pillEl) {
+        this.closeBlockedInfo();
         const fieldKey = pillEl.getAttribute('data-pill-field');
         const tokenId = pillEl.getAttribute('data-pill-token');
         const entryIndex = Number(pillEl.getAttribute('data-pill-entry'));
@@ -2000,6 +2504,50 @@
         this.positionDropdownAtRect(anchorEl.getBoundingClientRect());
     };
 
+    QuickAddComponent.prototype.showBlockedInfoFromElement = function showBlockedInfoFromElement(element) {
+        if (!element) {
+            return;
+        }
+        const reason = element.getAttribute('data-blocked-reason') || 'Blocked by constraints';
+        this.showBlockedInfo(reason, element);
+    };
+
+    QuickAddComponent.prototype.showBlockedInfo = function showBlockedInfo(reason, anchorEl) {
+        if (!this.blockedInfoEl) {
+            return;
+        }
+        this.closeDropdown();
+        const c = this.config.classNames;
+        const safeReason = escHtml(reason || 'Blocked by constraints');
+        this.blockedInfoEl.innerHTML = `
+            <span class="${c.blockedInfoIcon}" aria-hidden="true">!</span>
+            <span class="${c.blockedInfoText}">${safeReason}</span>
+        `;
+        this.blockedInfoState = { reason: reason || '' };
+        const rect = anchorEl && anchorEl.getBoundingClientRect
+            ? anchorEl.getBoundingClientRect()
+            : this.inputEl.getBoundingClientRect();
+
+        const width = Math.min(420, Math.max(240, (rect.width || 0) + 90));
+        const left = Math.max(10, Math.min(rect.left || 0, window.innerWidth - width - 10));
+        const top = Math.min(window.innerHeight - 20, (rect.bottom || rect.top || 0) + 8);
+        this.blockedInfoEl.style.position = 'fixed';
+        this.blockedInfoEl.style.left = `${left}px`;
+        this.blockedInfoEl.style.top = `${top}px`;
+        this.blockedInfoEl.style.width = `${width}px`;
+        this.blockedInfoEl.style.zIndex = '10000';
+        this.blockedInfoEl.hidden = false;
+    };
+
+    QuickAddComponent.prototype.closeBlockedInfo = function closeBlockedInfo() {
+        this.blockedInfoState = null;
+        if (!this.blockedInfoEl) {
+            return;
+        }
+        this.blockedInfoEl.hidden = true;
+        this.blockedInfoEl.innerHTML = '';
+    };
+
     QuickAddComponent.prototype.renderDropdownList = function renderDropdownList() {
         if (!this.dropdownState) {
             this.dropdownListEl.innerHTML = '';
@@ -2010,7 +2558,10 @@
         const queryRaw = this.dropdownSearchEl.value || '';
         const query = queryRaw.trim().toLowerCase();
 
-        let filtered = this.dropdownState.options;
+        const dependencyFiltered = this.dropdownState.options.filter((option) =>
+            this.isFieldValueDependencyAllowed(this.dropdownState.fieldKey, option.value, this.dropdownState.entryIndex).ok
+        );
+        let filtered = dependencyFiltered;
         if (query) {
             filtered = filtered.filter((option) =>
                 option.label.toLowerCase().includes(query) || option.value.toLowerCase().includes(query)
@@ -2029,11 +2580,17 @@
             `;
         });
 
-        const exactMatch = this.dropdownState.options.some((option) =>
+        const exactMatch = dependencyFiltered.some((option) =>
             option.value.toLowerCase() === query || option.label.toLowerCase() === query
         );
 
-        if (this.dropdownState.allowCustom && query && !exactMatch) {
+        const customAllowedByDependency = this.isFieldValueDependencyAllowed(
+            this.dropdownState.fieldKey,
+            queryRaw.trim(),
+            this.dropdownState.entryIndex
+        ).ok;
+
+        if (this.dropdownState.allowCustom && query && !exactMatch && customAllowedByDependency) {
             items.push(`
                 <button type="button" class="${c.dropdownOption} ${c.dropdownAdd}" data-option-value="${escHtml(queryRaw.trim())}">
                     <span class="${c.dropdownColor}"></span>
@@ -2044,7 +2601,9 @@
         }
 
         if (items.length === 0) {
-            this.dropdownListEl.innerHTML = `<div class="${c.dropdownMeta}" style="padding:8px 10px;">No options</div>`;
+            const dependencyBlocked = dependencyFiltered.length === 0;
+            const msg = dependencyBlocked ? 'No options (constraints active)' : 'No options';
+            this.dropdownListEl.innerHTML = `<div class="${c.dropdownMeta}" style="padding:8px 10px;">${escHtml(msg)}</div>`;
             return;
         }
 
@@ -2057,6 +2616,14 @@
 
     QuickAddComponent.prototype.applyDropdownSelection = function applyDropdownSelection(nextValue) {
         if (!this.dropdownState) {
+            return;
+        }
+        const allowed = this.isFieldValueDependencyAllowed(
+            this.dropdownState.fieldKey,
+            nextValue,
+            this.dropdownState.entryIndex
+        );
+        if (!allowed.ok) {
             return;
         }
 
@@ -2104,6 +2671,7 @@
         this.dismissedSelections.clear();
         this.attachmentsByEntry.clear();
         this.closeDropdown();
+        this.closeBlockedInfo();
         this.parseAndRender({ source: this.inputText, caretOffset: this.inputText.length, focusInput: false });
     };
 
@@ -2116,6 +2684,7 @@
         this.normalizedSchema = normalizeSchema(this.config.schema, this.config.fallbackField);
 
         this.closeDropdown();
+        this.closeBlockedInfo();
         this.unbindEvents();
         this.renderShell();
         this.applyTokens();
@@ -2128,6 +2697,7 @@
             clearTimeout(this.timer);
         }
         this.unbindEvents();
+        this.closeBlockedInfo();
 
         this.mountEl.innerHTML = '';
     };
