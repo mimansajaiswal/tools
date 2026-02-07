@@ -135,6 +135,23 @@ html[data-theme="light"] {
   box-sizing: border-box;
 }
 
+:focus-visible {
+  outline: 2px solid var(--dull-purple);
+  outline-offset: 2px;
+}
+
+.btn:focus-visible,
+.menu-item:focus-visible,
+.tab:focus-visible,
+.search-result:focus-visible,
+.thumb-item:focus-visible,
+.outline-item:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
 body {
   margin: 0;
   font-family: "Manrope", sans-serif;

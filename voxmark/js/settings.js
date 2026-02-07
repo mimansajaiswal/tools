@@ -6,6 +6,14 @@ function validateApiKey(provider, key) {
   return true;
 }
 
+function getPersistedSettings(settings) {
+  const safe = normalizeSettings(settings || {});
+  // Keep API keys in-memory only for this session.
+  safe.sttKey = "";
+  safe.aiKey = "";
+  return safe;
+}
+
 function saveSettings() {
   const sttProvider = elements.sttProviderSelect.value;
   const settings = {
@@ -47,12 +55,14 @@ function saveSettings() {
 async function loadSettings() {
   const stored = await loadSettingsFromDB();
   if (stored) {
-    state.settings = { ...DEFAULT_SETTINGS, ...normalizeSettings(stored) };
+    state.settings = { ...DEFAULT_SETTINGS, ...getPersistedSettings(stored) };
+    // Migrate legacy persisted settings to key-free storage.
+    persistSettings();
   } else {
     const legacy = localStorage.getItem("voxmark-settings");
     if (legacy) {
       try {
-        state.settings = { ...DEFAULT_SETTINGS, ...normalizeSettings(JSON.parse(legacy)) };
+        state.settings = { ...DEFAULT_SETTINGS, ...getPersistedSettings(JSON.parse(legacy)) };
         persistSettings();
       } catch (err) {
         console.warn("Failed to parse settings", err);
@@ -95,8 +105,9 @@ function setMode(value) {
 }
 
 function persistSettings() {
-  localStorage.setItem("voxmark-settings", JSON.stringify(state.settings));
-  saveSettingsToDB(state.settings);
+  const persisted = getPersistedSettings(state.settings);
+  localStorage.setItem("voxmark-settings", JSON.stringify(persisted));
+  saveSettingsToDB(persisted);
 }
 
 function setTapFocusButtonState(active) {
@@ -199,13 +210,25 @@ function renderPaletteEditor() {
     const row = document.createElement("div");
     row.className = "palette-row";
     row.dataset.index = `${index}`;
-    row.innerHTML = `
-      <input type="color" value="${entry.color}" aria-label="Color swatch" />
-      <input type="text" value="${entry.name}" placeholder="Name" aria-label="Color name" />
-      <button class="btn icon ghost small palette-remove" type="button" aria-label="Remove color">
-        <i class="ph ph-x"></i>
-      </button>
-    `;
+    const colorInput = document.createElement("input");
+    colorInput.type = "color";
+    colorInput.value = entry.color;
+    colorInput.setAttribute("aria-label", "Color swatch");
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.value = entry.name;
+    nameInput.placeholder = "Name";
+    nameInput.setAttribute("aria-label", "Color name");
+    const remove = document.createElement("button");
+    remove.className = "btn icon ghost small palette-remove";
+    remove.type = "button";
+    remove.setAttribute("aria-label", "Remove color");
+    const icon = document.createElement("i");
+    icon.className = "ph ph-x";
+    remove.appendChild(icon);
+    row.appendChild(colorInput);
+    row.appendChild(nameInput);
+    row.appendChild(remove);
     elements.paletteList.appendChild(row);
   });
 }

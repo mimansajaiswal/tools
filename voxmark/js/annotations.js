@@ -768,7 +768,7 @@ function pushAnnotationHistory(pdfState) {
   }
 }
 
-function undoAnnotation() {
+async function undoAnnotation() {
   const pdfState = getActivePdf();
   if (!pdfState) {
     notify("Undo", "No active PDF.");
@@ -778,13 +778,29 @@ function undoAnnotation() {
     .reverse()
     .find((s) => s.pdfId === pdfState.id);
   if (!lastForPdf) {
-    notify("Undo", "Nothing to undo.");
+    if (!pdfState.annotations.length) {
+      notify("Undo", "Nothing to undo.");
+      return;
+    }
+    const removed = pdfState.annotations.pop();
+    await applyAllAnnotations(pdfState, { invertForView: isPdfInvertedView() });
+    logEvent({
+      title: "Annotation undone",
+      detail: { pdfId: pdfState.id, mode: "fallback", removed: removed?.id },
+      sessionId: state.activeSessionId
+    });
+    notify("Undo", "Last annotation removed.");
     return;
   }
   const index = annotationHistory.indexOf(lastForPdf);
   annotationHistory.splice(index, 1);
   pdfState.annotations = lastForPdf.annotations;
-  applyAllAnnotations(pdfState, { invertForView: isPdfInvertedView() });
+  await applyAllAnnotations(pdfState, { invertForView: isPdfInvertedView() });
+  logEvent({
+    title: "Annotation undone",
+    detail: { pdfId: pdfState.id, mode: "history" },
+    sessionId: state.activeSessionId
+  });
   notify("Undo", "Annotation change undone.");
 }
 
@@ -1022,6 +1038,29 @@ async function commitAdjustments() {
   await applyAllAnnotations(pdfState, { invertForView: isPdfInvertedView() });
 }
 
+function areBboxesNear(a, b, tolerance = 1.5) {
+  if (!a || !b) return false;
+  return (
+    Math.abs((a.x || 0) - (b.x || 0)) <= tolerance &&
+    Math.abs((a.y || 0) - (b.y || 0)) <= tolerance &&
+    Math.abs((a.width || 0) - (b.width || 0)) <= tolerance &&
+    Math.abs((a.height || 0) - (b.height || 0)) <= tolerance
+  );
+}
+
+function isDuplicateAnnotation(pdfState, nextAnnotation) {
+  if (!pdfState || !nextAnnotation) return false;
+  const commentKey = String(nextAnnotation.comment || "").trim().toLowerCase();
+  return pdfState.annotations.some((existing) => {
+    if (existing.pageIndex !== nextAnnotation.pageIndex) return false;
+    if ((existing.type || "") !== (nextAnnotation.type || "")) return false;
+    if ((existing.color || "") !== (nextAnnotation.color || "")) return false;
+    const existingComment = String(existing.comment || "").trim().toLowerCase();
+    if (existingComment !== commentKey) return false;
+    return areBboxesNear(existing.bbox, nextAnnotation.bbox);
+  });
+}
+
 async function applyAnnotations(aiResponse, session) {
   if (!aiResponse?.annotations?.length) return 0;
   let addedTotal = 0;
@@ -1045,7 +1084,7 @@ async function applyAnnotations(aiResponse, session) {
       }
       const target = await resolveTarget(annotation, pdfState, session);
       if (!target) continue;
-      pdfState.annotations.push({
+      const nextAnnotation = {
         id: crypto.randomUUID(),
         pageIndex: annotation.pageIndex,
         type: annotation.type,
@@ -1053,7 +1092,11 @@ async function applyAnnotations(aiResponse, session) {
         comment: annotation.comment || "",
         mode: annotation.target?.mode || "auto",
         bbox: target.bbox
-      });
+      };
+      if (isDuplicateAnnotation(pdfState, nextAnnotation)) {
+        continue;
+      }
+      pdfState.annotations.push(nextAnnotation);
       added += 1;
     }
     await applyAllAnnotations(pdfState, { invertForView: isPdfInvertedView() });
@@ -1090,20 +1133,4 @@ async function refreshPdfRender(pdfState) {
   pdfState.pdfDoc = await pdfjsLib.getDocument({ data: bytesForPdfjs }).promise;
   pdfState.pageCount = pdfState.pdfDoc.numPages;
   await renderPdf(pdfState);
-}
-
-async function undoAnnotation() {
-  const pdfState = getActivePdf();
-  if (!pdfState || !pdfState.annotations.length) {
-    notify("Undo", "No annotations to undo.");
-    return;
-  }
-  const removed = pdfState.annotations.pop();
-  await applyAllAnnotations(pdfState, { invertForView: isPdfInvertedView() });
-  logEvent({
-    title: "Annotation undone",
-    detail: { pdfId: pdfState.id, removed: removed?.id },
-    sessionId: state.activeSessionId
-  });
-  notify("Undo", "Last annotation removed.");
 }

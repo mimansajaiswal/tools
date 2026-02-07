@@ -89,6 +89,38 @@ function compressTranscriptSegments(segments) {
   return compressed;
 }
 
+function summarizeAiPayload(payload) {
+  const annotationsPreview = {
+    transcriptChars: (payload.transcript || "").length,
+    segmentCount: payload.transcriptSegments?.length || 0,
+    snapshotCount: payload.snapshots?.length || 0,
+    tapCount: payload.taps?.length || 0,
+    contextEntries: payload.contextHistory?.length || 0,
+    chunk: payload.chunkMeta || null
+  };
+  return annotationsPreview;
+}
+
+function summarizeAiResponse(response) {
+  const list = Array.isArray(response?.annotations) ? response.annotations : [];
+  const types = {};
+  list.forEach((item) => {
+    const type = item?.type || "unknown";
+    types[type] = (types[type] || 0) + 1;
+  });
+  return {
+    annotationCount: list.length,
+    types
+  };
+}
+
+function summarizeSttResponse(provider, text) {
+  return {
+    provider,
+    transcriptChars: (text || "").length
+  };
+}
+
 function getSystemPrompt() {
   const palette = getPaletteForPrompt();
   const paletteList = palette.length
@@ -229,7 +261,7 @@ function safeJsonParse(text) {
     if (start === -1 || end === -1) {
       logEvent({
         title: "JSON parse error",
-        detail: `No JSON object found in response: "${trimmed.slice(0, 200)}..."`,
+        detail: { reason: "No JSON object found", responseChars: trimmed.length },
         type: "error"
       });
       notify("AI Processing", "No valid JSON in AI response.", { type: "error", duration: 4000 });
@@ -240,7 +272,7 @@ function safeJsonParse(text) {
   } catch (err) {
     logEvent({
       title: "JSON parse error",
-      detail: `Parse failed: ${err.message}. Raw: "${(text || "").slice(0, 300)}..."`,
+      detail: { reason: err.message, responseChars: (text || "").length },
       type: "error"
     });
     notify("AI Processing", `Failed to parse AI response: ${err.message}`, { type: "error", duration: 4000 });
@@ -298,7 +330,11 @@ async function transcribeAudio(session) {
   }
   logEvent({
     title: "STT request",
-    detail: { provider, model: state.settings.sttModel },
+    detail: {
+      provider,
+      model: state.settings.sttModel,
+      audioChunks: session.audioChunks.length
+    },
     sessionId: session.id
   });
   const blobs = session.audioChunks.map((chunk) => chunk.blob);
@@ -316,12 +352,13 @@ async function transcribeAudio(session) {
       body: form
     });
     const data = await response.json();
+    const text = data.text || "";
     logEvent({
       title: "STT response",
-      detail: data,
+      detail: summarizeSttResponse(provider, text),
       sessionId: session.id
     });
-    return data.text || "";
+    return text;
   }
   if (provider === "gemini") {
     const base64Audio = await blobToBase64(audioBlob);
@@ -343,7 +380,7 @@ async function transcribeAudio(session) {
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
     logEvent({
       title: "STT response (Gemini)",
-      detail: data,
+      detail: summarizeSttResponse(provider, text),
       sessionId: session.id
     });
     return text.trim();
@@ -356,6 +393,7 @@ async function transcribeAudio(session) {
       headers: {
         "x-api-key": state.settings.sttKey,
         "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
         "content-type": "application/json"
       },
       body: JSON.stringify({
@@ -377,7 +415,7 @@ async function transcribeAudio(session) {
     const text = data.content?.[0]?.text || "";
     logEvent({
       title: "STT response (Anthropic)",
-      detail: data,
+      detail: summarizeSttResponse(provider, text),
       sessionId: session.id
     });
     return text.trim();
@@ -444,7 +482,7 @@ async function processSession(session) {
       const payload = buildAiPayload(session, chunk);
       logEvent({
         title: `AI request (chunk ${chunkIndex}/${chunks.length})`,
-        detail: payload,
+        detail: summarizeAiPayload(payload),
         sessionId: session.id
       });
       const response = await callAi(payload);
@@ -454,7 +492,7 @@ async function processSession(session) {
         processedChunks.add(chunkIndex);
         logEvent({
           title: `AI response (chunk ${chunkIndex}/${chunks.length})`,
-          detail: response,
+          detail: summarizeAiResponse(response),
           sessionId: session.id
         });
       }

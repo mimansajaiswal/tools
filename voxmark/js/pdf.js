@@ -4,19 +4,40 @@ function addPdfCard(pdf) {
   card.dataset.id = pdf.id;
   const textStatus =
     pdf.hasTextLayer === null ? "Checking" : pdf.hasTextLayer ? "Text" : "Scanned";
-  card.innerHTML = `
-    <strong><i class="ph ph-file-pdf"></i><span class="pdf-name">${pdf.name}</span></strong>
-    <div class="pdf-meta">
-      <span>${pdf.pageCount} pages · ${textStatus}</span>
-      <span class="badge">${pdf.annotationCount} notes</span>
-    </div>
-    <div class="pdf-actions">
-      <button class="remove-btn" title="Unload PDF"><i class="ph ph-x"></i></button>
-    </div>
-  `;
-  const nameEl = card.querySelector(".pdf-name");
-  if (nameEl) nameEl.title = pdf.name;
-  card.querySelector(".remove-btn").addEventListener("click", (event) => {
+  const title = document.createElement("strong");
+  const icon = document.createElement("i");
+  icon.className = "ph ph-file-pdf";
+  const nameEl = document.createElement("span");
+  nameEl.className = "pdf-name";
+  nameEl.textContent = pdf.name;
+  nameEl.title = pdf.name;
+  title.appendChild(icon);
+  title.appendChild(nameEl);
+
+  const meta = document.createElement("div");
+  meta.className = "pdf-meta";
+  const metaText = document.createElement("span");
+  metaText.textContent = `${pdf.pageCount} pages · ${textStatus}`;
+  const badge = document.createElement("span");
+  badge.className = "badge";
+  badge.textContent = `${pdf.annotationCount} notes`;
+  meta.appendChild(metaText);
+  meta.appendChild(badge);
+
+  const actions = document.createElement("div");
+  actions.className = "pdf-actions";
+  const removeBtn = document.createElement("button");
+  removeBtn.className = "remove-btn";
+  removeBtn.title = "Unload PDF";
+  const removeIcon = document.createElement("i");
+  removeIcon.className = "ph ph-x";
+  removeBtn.appendChild(removeIcon);
+  actions.appendChild(removeBtn);
+
+  card.appendChild(title);
+  card.appendChild(meta);
+  card.appendChild(actions);
+  removeBtn.addEventListener("click", (event) => {
     event.stopPropagation();
     confirmRemovePdf(pdf.id);
   });
@@ -563,11 +584,12 @@ function renderLinkAnnotation({ annotation, annotationLayer, viewport, pdfState 
   link.style.width = `${rect.width}px`;
   link.style.height = `${rect.height}px`;
   link.setAttribute("aria-label", "PDF link");
-  const url = annotation.url || annotation.unsafeUrl || annotation.action?.url;
-  if (url) {
-    link.href = url;
+  const rawUrl = annotation.url || annotation.unsafeUrl || annotation.action?.url;
+  const safeUrl = sanitizeExternalUrl(rawUrl);
+  if (safeUrl) {
+    link.href = safeUrl;
     link.target = "_blank";
-    link.rel = "noopener";
+    link.rel = "noopener noreferrer";
     annotationLayer.appendChild(link);
     return;
   }
@@ -685,6 +707,19 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+function sanitizeExternalUrl(url) {
+  if (!url || typeof url !== "string") return null;
+  try {
+    const parsed = new URL(url, window.location.href);
+    if (!["http:", "https:", "mailto:", "tel:"].includes(parsed.protocol)) {
+      return null;
+    }
+    return parsed.href;
+  } catch (error) {
+    return null;
+  }
+}
+
 function resolveAnnotationColor(annotation, alpha = 0.28) {
   const color = annotation.color;
   if (Array.isArray(color) && color.length >= 3) {
@@ -767,14 +802,16 @@ function handleNamedAction(name, pdfState) {
 }
 
 function openExternalActionModal(title, url, filename) {
-  const detail = url || filename ? `<p>${escapeHtml(url || filename)}</p>` : "<p>External action.</p>";
+  const safeUrl = sanitizeExternalUrl(url);
+  const detailValue = safeUrl || filename;
+  const detail = detailValue ? `<p>${escapeHtml(detailValue)}</p>` : "<p>External action.</p>";
   const actions = [{ label: "Close", variant: "secondary", onClick: closeModal }];
-  if (url) {
+  if (safeUrl) {
     actions.unshift({
       label: "Open",
       variant: "accent",
       onClick: () => {
-        window.open(url, "_blank", "noopener");
+        window.open(safeUrl, "_blank", "noopener,noreferrer");
         closeModal();
       }
     });
@@ -930,75 +967,84 @@ async function searchInActivePdf(query) {
   if (searchRunning) return;
   searchRunning = true;
   elements.searchResults.innerHTML = `<div class="viewer-hint">Searching...</div>`;
-  const results = [];
-  const termLower = term.toLowerCase();
-  const hasWhitespace = /\s/.test(termLower);
-  const seen = new Set();
-  for (const pageData of pdfState.pages) {
-    const textRecord = await getPageTextRecord(pdfState, pageData);
-    const text = textRecord.text || "";
-    const textNoSpace = textRecord.textNoSpace || "";
-    const noSpaceMap = textRecord.noSpaceMap || [];
-    if (!text) continue;
-    const lower = text.toLowerCase();
-    let idx = lower.indexOf(termLower);
-    let matchIndex = 0;
-    while (idx !== -1) {
-      const start = Math.max(0, idx - 24);
-      const end = Math.min(text.length, idx + term.length + 24);
-      const snippet = text.slice(start, end).replace(/\s+/g, " ").trim();
-      const key = `t:${pageData.pageNum}:${idx}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        results.push({
-          pageIndex: pageData.pageNum - 1,
-          snippet,
-          matchIndex,
-          matchStart: idx
-        });
-      }
-      idx = lower.indexOf(termLower, idx + termLower.length);
-      matchIndex += 1;
-      if (results.length > 50) break;
-    }
-    if (!hasWhitespace && results.length <= 50 && textNoSpace) {
-      const lowerNoSpace = textNoSpace.toLowerCase();
-      let idxNoSpace = lowerNoSpace.indexOf(termLower);
-      while (idxNoSpace !== -1) {
-        const mappedIndex = noSpaceMap[idxNoSpace] ?? 0;
-        if (text.slice(mappedIndex, mappedIndex + term.length).toLowerCase() !== termLower) {
-          const start = Math.max(0, mappedIndex - 24);
-          const end = Math.min(text.length, mappedIndex + term.length + 24);
-          const snippet = text.slice(start, end).replace(/\s+/g, " ").trim();
-          const key = `n:${pageData.pageNum}:${idxNoSpace}`;
-          if (!seen.has(key)) {
-            seen.add(key);
-            results.push({
-              pageIndex: pageData.pageNum - 1,
-              snippet,
-              matchIndex: null,
-              matchStart: null,
-              matchStartNoSpace: idxNoSpace
-            });
-          }
+  try {
+    const results = [];
+    const termLower = term.toLowerCase();
+    const hasWhitespace = /\s/.test(termLower);
+    const seen = new Set();
+    for (const pageData of pdfState.pages) {
+      const textRecord = await getPageTextRecord(pdfState, pageData);
+      const text = textRecord.text || "";
+      const textNoSpace = textRecord.textNoSpace || "";
+      const noSpaceMap = textRecord.noSpaceMap || [];
+      if (!text) continue;
+      const lower = text.toLowerCase();
+      let idx = lower.indexOf(termLower);
+      let matchIndex = 0;
+      while (idx !== -1) {
+        const start = Math.max(0, idx - 24);
+        const end = Math.min(text.length, idx + term.length + 24);
+        const snippet = text.slice(start, end).replace(/\s+/g, " ").trim();
+        const key = `t:${pageData.pageNum}:${idx}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          results.push({
+            pageIndex: pageData.pageNum - 1,
+            snippet,
+            matchIndex,
+            matchStart: idx
+          });
         }
-        idxNoSpace = lowerNoSpace.indexOf(termLower, idxNoSpace + termLower.length);
+        idx = lower.indexOf(termLower, idx + termLower.length);
+        matchIndex += 1;
         if (results.length > 50) break;
       }
+      if (!hasWhitespace && results.length <= 50 && textNoSpace) {
+        const lowerNoSpace = textNoSpace.toLowerCase();
+        let idxNoSpace = lowerNoSpace.indexOf(termLower);
+        while (idxNoSpace !== -1) {
+          const mappedIndex = noSpaceMap[idxNoSpace] ?? 0;
+          if (text.slice(mappedIndex, mappedIndex + term.length).toLowerCase() !== termLower) {
+            const start = Math.max(0, mappedIndex - 24);
+            const end = Math.min(text.length, mappedIndex + term.length + 24);
+            const snippet = text.slice(start, end).replace(/\s+/g, " ").trim();
+            const key = `n:${pageData.pageNum}:${mappedIndex}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              results.push({
+                pageIndex: pageData.pageNum - 1,
+                snippet,
+                matchIndex: null,
+                matchStart: mappedIndex,
+                matchStartNoSpace: null
+              });
+            }
+          }
+          idxNoSpace = lowerNoSpace.indexOf(termLower, idxNoSpace + termLower.length);
+          if (results.length > 50) break;
+        }
+      }
+      if (results.length > 50) break;
     }
-    if (results.length > 50) break;
-  }
-  renderSearchResults(results, term);
-  state.searchResults = results;
-  state.searchTerm = term;
-  state.activeSearchIndex = results.length ? 0 : -1;
-  updateSearchNavButtons();
-  searchRunning = false;
-  if (window.innerWidth < 960) {
-    openSidebar();
-  }
-  if (document.querySelector(".app")?.classList.contains("search-open")) {
-    closeSearchPanel();
+    renderSearchResults(results, term);
+    state.searchResults = results;
+    state.searchTerm = term;
+    state.activeSearchIndex = results.length ? 0 : -1;
+    updateSearchNavButtons();
+    if (window.innerWidth < 960) {
+      openSidebar();
+    }
+    if (document.querySelector(".app")?.classList.contains("search-open")) {
+      closeSearchPanel();
+    }
+  } catch (error) {
+    state.searchResults = [];
+    state.searchTerm = term;
+    state.activeSearchIndex = -1;
+    updateSearchNavButtons();
+    elements.searchResults.innerHTML = `<div class="viewer-hint">Search failed. Try again.</div>`;
+  } finally {
+    searchRunning = false;
   }
 }
 
@@ -1023,8 +1069,10 @@ async function getPageTextRecord(pdfState, pageData) {
     for (let i = 0; i < str.length; i += 1) {
       const ch = str[i];
       textParts.push(ch);
-      noSpaceParts.push(ch);
-      noSpaceMap.push(textIndex);
+      if (!/\s/.test(ch)) {
+        noSpaceParts.push(ch);
+        noSpaceMap.push(textIndex);
+      }
       textIndex += 1;
     }
     if (idx < items.length - 1) {
@@ -1266,16 +1314,17 @@ function buildSpanIndex(spans) {
   let indexNoSpace = 0;
   const entries = spans.map((span) => {
     const text = span.textContent || "";
+    const nonSpaceLength = text.replace(/\s/g, "").length;
     const start = index;
     const end = start + text.length;
     const startNoSpace = indexNoSpace;
-    const endNoSpace = startNoSpace + text.length;
+    const endNoSpace = startNoSpace + nonSpaceLength;
     index = end + 1;
     indexNoSpace = endNoSpace;
     return { span, text, start, end, startNoSpace, endNoSpace };
   });
   const combinedText = entries.map((entry) => entry.text).join(" ");
-  const combinedNoSpace = entries.map((entry) => entry.text).join("");
+  const combinedNoSpace = entries.map((entry) => entry.text).join("").replace(/\s/g, "");
   return { entries, combinedText, combinedNoSpace };
 }
 
@@ -1409,7 +1458,12 @@ function renderOutlineItem(pdfState, item, depth) {
   button.textContent = item.title || "Untitled";
   button.addEventListener("click", async () => {
     if (item.url) {
-      window.open(item.url, "_blank", "noopener");
+      const safeUrl = sanitizeExternalUrl(item.url);
+      if (safeUrl) {
+        window.open(safeUrl, "_blank", "noopener,noreferrer");
+      } else {
+        notify("PDF Link", "Blocked unsafe outline URL.", { type: "error", duration: 3500 });
+      }
       return;
     }
     const destination = await resolveDestination(pdfState, item.dest);
@@ -1557,12 +1611,17 @@ function updateActivePageIndicator() {
 }
 
 let ocrLoader = null;
+const OCR_SCRIPT_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+const OCR_WORKER_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js";
+const OCR_CORE_URL = "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0/tesseract-core.wasm.js";
+const OCR_LANG_PATH = "https://tessdata.projectnaptha.com/4.0.0";
+
 async function loadTesseract() {
   if (window.Tesseract) return window.Tesseract;
   if (ocrLoader) return ocrLoader;
   ocrLoader = new Promise((resolve, reject) => {
     const script = document.createElement("script");
-    script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+    script.src = OCR_SCRIPT_URL;
     script.onload = () => resolve(window.Tesseract);
     script.onerror = () => reject(new Error("Failed to load OCR library."));
     document.head.appendChild(script);
@@ -1572,7 +1631,10 @@ async function loadTesseract() {
 
 async function runOcrOnVisiblePages() {
   const pdfState = getActivePdf();
-  if (!pdfState) return;
+  if (!pdfState) {
+    notify("OCR", "No PDF loaded.");
+    return;
+  }
   if (!state.settings.ocrEnabled) {
     openModal({
       title: "OCR Disabled",
@@ -1581,43 +1643,65 @@ async function runOcrOnVisiblePages() {
     });
     return;
   }
+  const visiblePages = getVisiblePages(pdfState);
+  if (!visiblePages.length) {
+    notify("OCR", "No visible pages to process.");
+    return;
+  }
   setLoading(true, "Running OCR...");
+  let processed = 0;
+  let worker = null;
   try {
     const Tesseract = await loadTesseract();
-    const visible = getVisiblePages(pdfState);
-    for (const pageData of visible) {
-      if (pageData.ocrSpans && pageData.ocrSpans.length) continue;
-      await renderPage(pdfState, pageData);
-      if (!pageData.textLayer.classList.contains("no-text")) continue;
-      await runOcrOnPage(pdfState, pageData, Tesseract);
+    worker = await Tesseract.createWorker("eng", 1, {
+      logger: () => { },
+      workerPath: OCR_WORKER_URL,
+      corePath: OCR_CORE_URL,
+      langPath: OCR_LANG_PATH
+    });
+    for (const pageData of visiblePages) {
+      if (pageData.ocrSpans?.length) continue;
+      if (!pageData.canvas) {
+        await renderPage(pdfState, pageData);
+      }
+      if (!pageData.canvas) continue;
+      // Only OCR pages that do not already expose selectable text.
+      if (!pageData.textLayer?.classList.contains("no-text")) continue;
+      const dataUrl = pageData.canvas.toDataURL("image/png");
+      const { data } = await worker.recognize(dataUrl);
+      const viewport = pageData.viewport;
+      const scale = pdfState.scale || 1;
+      pageData.ocrSpans = extractOcrSpans(data?.words || [], viewport, scale);
+      processed += 1;
     }
+    if (processed) {
+      persistPdfState(pdfState);
+    }
+    notify("OCR", `Processed ${processed} page${processed === 1 ? "" : "s"}.`);
   } catch (error) {
-    notify("OCR", "OCR failed to run.", { type: "error", duration: 4000 });
+    notify("OCR", `OCR failed: ${error.message || "Unknown error"}`, {
+      type: "error",
+      duration: 4000
+    });
   } finally {
+    if (worker) {
+      try {
+        await worker.terminate();
+      } catch (error) {
+        // Ignore worker cleanup failures.
+      }
+    }
     setLoading(false);
   }
 }
 
-async function runOcrOnPage(pdfState, pageData, Tesseract) {
-  if (!pageData || !Tesseract) return;
-  const viewport = pageData.page.getViewport({ scale: 1.5 });
-  const canvas = document.createElement("canvas");
-  canvas.width = viewport.width;
-  canvas.height = viewport.height;
-  const context = canvas.getContext("2d");
-  await pageData.page.render({ canvasContext: context, viewport }).promise;
-  const result = await Tesseract.recognize(canvas, "eng", {
-    langPath: "https://tessdata.projectnaptha.com/4.0.0",
-    workerPath: "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/worker.min.js",
-    corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.0.0/tesseract-core.wasm.js"
-  });
-  const words = result?.data?.words || [];
-  const spans = words
+function extractOcrSpans(words, viewport, scale) {
+  return words
     .filter((word) => word.text && word.bbox)
     .map((word) => {
       const { x0, y0, x1, y1 } = word.bbox;
-      const [sx, sy] = viewport.convertToPdfPoint(x0, y0);
-      const [sx2, sy2] = viewport.convertToPdfPoint(x1, y1);
+      const [sx, sy] = viewport.convertToPdfPoint(x0 / scale, y0 / scale);
+      const [sx2, sy2] = viewport.convertToPdfPoint(x1 / scale, y1 / scale);
       return {
         text: word.text,
         bbox: {
@@ -1628,7 +1712,6 @@ async function runOcrOnPage(pdfState, pageData, Tesseract) {
         }
       };
     });
-  pageData.ocrSpans = spans;
 }
 
 let renderTimeout;
@@ -1913,65 +1996,5 @@ async function restorePdfState(stored) {
       duration: 5000
     });
     return null;
-  }
-}
-
-async function runOcrOnVisiblePages() {
-  const pdfState = getActivePdf();
-  if (!pdfState) {
-    notify("OCR", "No PDF loaded.");
-    return;
-  }
-  if (typeof Tesseract === "undefined") {
-    notify("OCR", "Tesseract.js not loaded. Check your connection.", { type: "error" });
-    return;
-  }
-  const visiblePages = getVisiblePages(pdfState);
-  if (!visiblePages.length) {
-    notify("OCR", "No visible pages to process.");
-    return;
-  }
-  setLoading(true, "Running OCR...");
-  let processed = 0;
-  try {
-    const worker = await Tesseract.createWorker("eng", 1, {
-      logger: () => { }
-    });
-    for (const pageData of visiblePages) {
-      if (pageData.ocrSpans?.length) continue;
-      if (!pageData.canvas) {
-        await renderPage(pdfState, pageData);
-      }
-      if (!pageData.canvas) continue;
-      const dataUrl = pageData.canvas.toDataURL("image/png");
-      const { data } = await worker.recognize(dataUrl);
-      const viewport = pageData.viewport;
-      const scale = pdfState.scale || 1;
-      const spans = (data.words || []).map((word) => {
-        const bbox = word.bbox;
-        const [pdfX, pdfY] = viewport.convertToPdfPoint(bbox.x0 / scale, bbox.y0 / scale);
-        const [pdfX2, pdfY2] = viewport.convertToPdfPoint(bbox.x1 / scale, bbox.y1 / scale);
-        return {
-          text: word.text,
-          bbox: {
-            x: Math.min(pdfX, pdfX2),
-            y: Math.min(pdfY, pdfY2),
-            width: Math.abs(pdfX2 - pdfX),
-            height: Math.abs(pdfY2 - pdfY)
-          }
-        };
-      });
-      pageData.ocrSpans = spans;
-      processed++;
-    }
-    await worker.terminate();
-    if (processed) {
-      persistPdfState(pdfState);
-    }
-    notify("OCR", `Processed ${processed} page${processed === 1 ? "" : "s"}.`);
-  } catch (error) {
-    notify("OCR", `OCR failed: ${error.message || "Unknown error"}`, { type: "error" });
-  } finally {
-    setLoading(false);
   }
 }
