@@ -17,6 +17,8 @@
         inlineMarkBlocked: 'qa-inline-mark-blocked',
         inlineMarkBlockedIcon: 'qa-inline-mark-blocked-icon',
         inlineMarkDismiss: 'qa-inline-mark-dismiss',
+        inlineMarkLabel: 'qa-inline-mark-label',
+        inputTail: 'qa-input-tail',
         input: 'qa-input',
         hint: 'qa-hint',
         status: 'qa-status',
@@ -41,6 +43,7 @@
         pillInteractive: 'qa-pill-interactive',
         pillInferred: 'qa-pill-inferred',
         pillInferredIcon: 'qa-pill-inferred-icon',
+        pillLabel: 'qa-pill-label',
         pillDismiss: 'qa-pill-dismiss',
         issues: 'qa-issues',
         issue: 'qa-issue',
@@ -1380,6 +1383,74 @@
             }, this.config.debounceMs);
         };
 
+        this.onBeforeInput = (event) => {
+            if (this.isRenderingInput) {
+                return;
+            }
+            const inputType = String(event.inputType || '');
+            if (inputType === 'insertParagraph' || inputType === 'insertLineBreak') {
+                event.preventDefault();
+                this.insertTextAtSelection('\n', { preferTokenBoundary: true });
+                return;
+            }
+
+            if (inputType === 'insertFromPaste') {
+                const pasted = this.getPlainTextFromEvent(event);
+                if (pasted === null) {
+                    return;
+                }
+                event.preventDefault();
+                this.insertTextAtSelection(pasted);
+                return;
+            }
+        };
+
+        this.onInputKeyDown = (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                this.insertTextAtSelection('\n', { preferTokenBoundary: true });
+            }
+        };
+
+        this.onInputPaste = (event) => {
+            if (event.defaultPrevented) {
+                return;
+            }
+            const pasted = this.getPlainTextFromEvent(event);
+            if (pasted === null) {
+                return;
+            }
+            event.preventDefault();
+            this.insertTextAtSelection(pasted);
+        };
+
+        this.onInputCopy = (event) => {
+            if (!event.clipboardData) {
+                return;
+            }
+            const offsets = this.getSelectionOffsets();
+            if (!offsets || offsets.start === offsets.end) {
+                return;
+            }
+            const source = this.inputText || this.readInputText();
+            event.preventDefault();
+            event.clipboardData.setData('text/plain', source.slice(offsets.start, offsets.end));
+        };
+
+        this.onInputCut = (event) => {
+            if (!event.clipboardData) {
+                return;
+            }
+            const offsets = this.getSelectionOffsets();
+            if (!offsets || offsets.start === offsets.end) {
+                return;
+            }
+            const source = this.inputText || this.readInputText();
+            event.preventDefault();
+            event.clipboardData.setData('text/plain', source.slice(offsets.start, offsets.end));
+            this.replaceTextInInput(offsets.start, offsets.end, '');
+        };
+
         this.onInputClick = (event) => {
             const blocked = event.target.closest('[data-qa-blocked="1"]');
             if (blocked) {
@@ -1396,6 +1467,15 @@
                 if (dismissKey) {
                     this.dismissSelection(dismissKey);
                 }
+                return;
+            }
+            const tail = event.target.closest('[data-qa-tail="1"]');
+            if (tail) {
+                event.preventDefault();
+                event.stopPropagation();
+                const source = this.inputText || this.readInputText();
+                this.closeDropdown();
+                this.setCaretOffset(source.length, true);
                 return;
             }
             const pill = event.target.closest('[data-qa-pill="1"]');
@@ -1497,6 +1577,11 @@
         };
 
         this.inputEl.addEventListener('input', this.onInput);
+        this.inputEl.addEventListener('beforeinput', this.onBeforeInput);
+        this.inputEl.addEventListener('keydown', this.onInputKeyDown);
+        this.inputEl.addEventListener('paste', this.onInputPaste);
+        this.inputEl.addEventListener('copy', this.onInputCopy);
+        this.inputEl.addEventListener('cut', this.onInputCut);
         this.inputEl.addEventListener('click', this.onInputClick);
         this.previewEl.addEventListener('click', this.onPreviewClick);
         this.previewEl.addEventListener('change', this.onPreviewChange);
@@ -1509,6 +1594,21 @@
     QuickAddComponent.prototype.unbindEvents = function unbindEvents() {
         if (this.inputEl && this.onInput) {
             this.inputEl.removeEventListener('input', this.onInput);
+        }
+        if (this.inputEl && this.onBeforeInput) {
+            this.inputEl.removeEventListener('beforeinput', this.onBeforeInput);
+        }
+        if (this.inputEl && this.onInputKeyDown) {
+            this.inputEl.removeEventListener('keydown', this.onInputKeyDown);
+        }
+        if (this.inputEl && this.onInputPaste) {
+            this.inputEl.removeEventListener('paste', this.onInputPaste);
+        }
+        if (this.inputEl && this.onInputCopy) {
+            this.inputEl.removeEventListener('copy', this.onInputCopy);
+        }
+        if (this.inputEl && this.onInputCut) {
+            this.inputEl.removeEventListener('cut', this.onInputCut);
         }
         if (this.inputEl && this.onInputClick) {
             this.inputEl.removeEventListener('click', this.onInputClick);
@@ -1639,47 +1739,177 @@
             return '';
         }
 
-        function extract(node) {
-            if (node && node.nodeType === Node.ELEMENT_NODE && node.getAttribute && node.getAttribute('data-qa-ignore') === '1') {
+        return this.extractEditableText(root, root)
+            .replace(/\r\n/g, '\n')
+            .replace(/\r/g, '\n');
+    };
+
+    QuickAddComponent.prototype.extractEditableText = function extractEditableText(node, root) {
+        if (!node) {
+            return '';
+        }
+        if (node.nodeType === Node.ELEMENT_NODE) {
+            const ignored = node.getAttribute && node.getAttribute('data-qa-ignore') === '1';
+            const nonEditable = node.getAttribute && node.getAttribute('contenteditable') === 'false';
+            if (node !== root && (ignored || nonEditable)) {
                 return '';
-            }
-            if (node.nodeType === Node.TEXT_NODE) {
-                return node.nodeValue || '';
             }
             if (node.nodeName === 'BR') {
                 return '\n';
             }
-
-            let out = '';
-            const children = node.childNodes || [];
-            for (let i = 0; i < children.length; i++) {
-                out += extract(children[i]);
-            }
-
-            const isBlock = node.nodeName === 'DIV' || node.nodeName === 'P';
-            if (isBlock && node !== root && node.nextSibling) {
-                out += '\n';
-            }
-            return out;
+        }
+        if (node.nodeType === Node.TEXT_NODE) {
+            return node.nodeValue || '';
         }
 
-        return extract(root).replace(/\r\n/g, '\n');
+        let out = '';
+        const children = node.childNodes || [];
+        for (let i = 0; i < children.length; i++) {
+            out += this.extractEditableText(children[i], root);
+        }
+
+        const isBlock = node.nodeName === 'DIV' || node.nodeName === 'P';
+        if (isBlock && node !== root && node.nextSibling) {
+            out += '\n';
+        }
+        return out;
     };
 
-    QuickAddComponent.prototype.getCaretOffset = function getCaretOffset() {
+    QuickAddComponent.prototype.getOffsetFromBoundary = function getOffsetFromBoundary(container, offset) {
+        if (!container || !this.inputEl || !this.inputEl.contains(container)) {
+            return null;
+        }
+        const pre = document.createRange();
+        pre.selectNodeContents(this.inputEl);
+        try {
+            pre.setEnd(container, offset);
+        } catch (err) {
+            return null;
+        }
+        const fragment = pre.cloneContents();
+        const text = this.extractEditableText(fragment, fragment)
+            .replace(/\r\n/g, '\n')
+            .replace(/\r/g, '\n');
+        return text.length;
+    };
+
+    QuickAddComponent.prototype.getSelectionOffsets = function getSelectionOffsets() {
         const sel = window.getSelection();
         if (!sel || sel.rangeCount === 0) {
             return null;
         }
         const range = sel.getRangeAt(0);
-        if (!this.inputEl.contains(range.startContainer)) {
+        if (!this.inputEl.contains(range.startContainer) || !this.inputEl.contains(range.endContainer)) {
             return null;
         }
+        const start = this.getOffsetFromBoundary(range.startContainer, range.startOffset);
+        const end = this.getOffsetFromBoundary(range.endContainer, range.endOffset);
+        if (start === null || end === null) {
+            return null;
+        }
+        return start <= end
+            ? { start, end, isCollapsed: range.collapsed }
+            : { start: end, end: start, isCollapsed: range.collapsed };
+    };
 
-        const pre = range.cloneRange();
-        pre.selectNodeContents(this.inputEl);
-        pre.setEnd(range.startContainer, range.startOffset);
-        return pre.toString().length;
+    QuickAddComponent.prototype.normalizeInsertedText = function normalizeInsertedText(text) {
+        return String(text || '')
+            .replace(/\r\n/g, '\n')
+            .replace(/\r/g, '\n');
+    };
+
+    QuickAddComponent.prototype.getPlainTextFromEvent = function getPlainTextFromEvent(event) {
+        const clipboard = event.clipboardData || event.dataTransfer || null;
+        if (!clipboard || typeof clipboard.getData !== 'function') {
+            return null;
+        }
+        return this.normalizeInsertedText(clipboard.getData('text/plain') || '');
+    };
+
+    QuickAddComponent.prototype.replaceTextInInput = function replaceTextInInput(start, end, replacement, options) {
+        const source = this.inputText || this.readInputText();
+        const len = source.length;
+        const safeStart = Math.max(0, Math.min(Number(start) || 0, len));
+        const safeEnd = Math.max(safeStart, Math.min(Number(end) || 0, len));
+        const inserted = this.normalizeInsertedText(replacement);
+        const updated = this.replaceRange(source, safeStart, safeEnd, inserted);
+        const caret = safeStart + inserted.length;
+
+        if (this.timer) {
+            clearTimeout(this.timer);
+            this.timer = null;
+        }
+        this.closeDropdown();
+        this.closeBlockedInfo();
+        this.parseAndRender({
+            source: updated,
+            caretOffset: caret,
+            focusInput: !options || options.focusInput !== false,
+            skipCaretPreserve: true
+        });
+    };
+
+    QuickAddComponent.prototype.findFieldTokenAtOffset = function findFieldTokenAtOffset(offset) {
+        if (typeof offset !== 'number') {
+            return null;
+        }
+        let best = null;
+        this.lastResult.entries.forEach((entry) => {
+            entry.tokens.forEach((token) => {
+                if (token.kind !== 'field') {
+                    return;
+                }
+                if (offset <= token.globalStart || offset >= token.globalEnd) {
+                    return;
+                }
+                if (!best || token.globalStart >= best.globalStart) {
+                    best = token;
+                }
+            });
+        });
+        return best;
+    };
+
+    QuickAddComponent.prototype.insertTextAtSelection = function insertTextAtSelection(text, options) {
+        const offsets = this.getSelectionOffsets();
+        if (!offsets) {
+            const source = this.inputText || this.readInputText();
+            this.replaceTextInInput(source.length, source.length, text);
+            return;
+        }
+
+        let start = offsets.start;
+        let end = offsets.end;
+        const opts = options || {};
+        if (offsets.isCollapsed && opts.preferTokenBoundary) {
+            const token = this.findFieldTokenAtOffset(start);
+            if (token && start > token.globalStart && start < token.globalEnd) {
+                start = token.globalEnd;
+                end = token.globalEnd;
+            }
+        }
+        this.replaceTextInInput(start, end, text);
+    };
+
+    QuickAddComponent.prototype.getCaretOffset = function getCaretOffset() {
+        const offsets = this.getSelectionOffsets();
+        return offsets ? offsets.start : null;
+    };
+
+    QuickAddComponent.prototype.isIgnoredTextNode = function isIgnoredTextNode(node) {
+        let current = node ? node.parentNode : null;
+        while (current && current !== this.inputEl) {
+            if (current.nodeType === Node.ELEMENT_NODE) {
+                if (
+                    (current.getAttribute && current.getAttribute('data-qa-ignore') === '1') ||
+                    (current.getAttribute && current.getAttribute('contenteditable') === 'false')
+                ) {
+                    return true;
+                }
+            }
+            current = current.parentNode;
+        }
+        return false;
     };
 
     QuickAddComponent.prototype.setCaretOffset = function setCaretOffset(offset, focusInput) {
@@ -1692,7 +1922,21 @@
         }
 
         const range = document.createRange();
-        const walker = document.createTreeWalker(this.inputEl, NodeFilter.SHOW_TEXT);
+        const walker = document.createTreeWalker(
+            this.inputEl,
+            NodeFilter.SHOW_TEXT,
+            {
+                acceptNode: (node) => {
+                    if (!node || !(node.nodeValue || '').length) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+                    if (this.isIgnoredTextNode(node)) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+                    return NodeFilter.FILTER_ACCEPT;
+                }
+            }
+        );
         let remaining = Math.max(0, offset || 0);
         let node = walker.nextNode();
 
@@ -1764,7 +2008,7 @@
             if (cursor < raw.length) {
                 parts.push(escHtml(raw.slice(cursor)));
             }
-            html = `<span class="${c.inlineText}">${parts.join('')}</span>`;
+            html = `<span class="${c.inlineText}">${parts.join('')}<span class="${c.inputTail}" data-qa-tail="1" data-qa-ignore="1" contenteditable="false" aria-hidden="true"></span></span>`;
         }
 
         this.isRenderingInput = true;
@@ -1879,7 +2123,7 @@
             ? `<button type="button" class="${c.pillDismiss}" data-dismiss-key="${escHtml(data.dismissKey)}" aria-label="Dismiss value">x</button>`
             : '';
 
-        return `<span class="${classes}"${attrs}${styleAttr}>${blockedIcon}${inferredIcon}<span>${escHtml(data.label)}</span>${dismiss}</span>`;
+        return `<span class="${classes}"${attrs}${styleAttr}>${blockedIcon}${inferredIcon}<span class="${c.pillLabel}">${escHtml(data.label)}</span>${dismiss}</span>`;
     };
 
     QuickAddComponent.prototype.buildInlineMarkHtml = function buildInlineMarkHtml(token, rawChunk) {
@@ -1910,7 +2154,7 @@
             ? `<button type="button" class="${c.inlineMarkDismiss}" data-qa-ignore="1" contenteditable="false" data-dismiss-key="${escHtml(token.dismissKey)}" aria-label="Dismiss value">x</button>`
             : '';
         const titleAttr = token.blocked && token.reason ? ` title="${escHtml(`Blocked by constraints: ${token.reason}`)}"` : '';
-        return `<span class="${classes}"${attrs}${blockedAttrs}${styleAttr}${titleAttr}>${blockedIcon}${inferredIcon}<span>${escHtml(rawChunk)}</span>${dismiss}</span>`;
+        return `<span class="${classes}"${attrs}${blockedAttrs}${styleAttr}${titleAttr}>${blockedIcon}${inferredIcon}<span class="${c.inlineMarkLabel}">${escHtml(rawChunk)}</span>${dismiss}</span>`;
     };
 
     QuickAddComponent.prototype.getRenderableFieldTokens = function getRenderableFieldTokens(entry) {
@@ -2489,6 +2733,7 @@
             source: 'typing'
         };
 
+        this.dropdownSearchEl.hidden = true;
         this.dropdownSearchEl.value = token.value || '';
         this.renderDropdownList();
         this.positionDropdownAtRect(this.getCaretClientRect());
@@ -2532,6 +2777,7 @@
             source: 'click'
         };
 
+        this.dropdownSearchEl.hidden = false;
         this.dropdownSearchEl.value = '';
         this.renderDropdownList();
         this.positionDropdown(pillEl);
@@ -2539,6 +2785,30 @@
         this.dropdownEl.classList.add(this.config.classNames.dropdownOpen);
         this.dropdownSearchEl.focus();
         this.dropdownSearchEl.select();
+    };
+
+    QuickAddComponent.prototype.placeCaretNearPill = function placeCaretNearPill(pillEl, clickEvent) {
+        if (!pillEl) {
+            return;
+        }
+        const tokenId = pillEl.getAttribute('data-pill-token');
+        if (!tokenId) {
+            return;
+        }
+        const token = this.tokenMap[tokenId];
+        if (!token) {
+            return;
+        }
+
+        const rect = pillEl.getBoundingClientRect();
+        const clickX = clickEvent && typeof clickEvent.clientX === 'number'
+            ? clickEvent.clientX
+            : rect.right;
+        const midpoint = rect.left + (rect.width / 2);
+        const caretOffset = clickX >= midpoint ? token.globalEnd : token.globalStart;
+
+        this.closeDropdown();
+        this.setCaretOffset(caretOffset, true);
     };
 
     QuickAddComponent.prototype.positionDropdownAtRect = function positionDropdownAtRect(rect) {
@@ -2796,10 +3066,26 @@
         const source = this.inputText || this.readInputText();
         let updated = this.replaceRange(source, token.globalValueStart, token.globalValueEnd, nextValue);
         let caret = token.globalValueStart + String(nextValue).length;
+        const terminator = String(this.config.fieldTerminator || '');
+        const fromTyping = this.dropdownState && this.dropdownState.source === 'typing';
 
-        if (!token.committed && this.config.fieldTerminatorMode === 'strict' && this.config.fieldTerminator) {
-            updated = this.replaceRange(updated, caret, caret, this.config.fieldTerminator);
-            caret += this.config.fieldTerminator.length;
+        if (!token.committed && terminator) {
+            const tokenTail = updated.slice(caret, caret + terminator.length);
+            const shouldAppendTerminator = (
+                tokenTail !== terminator
+                && (fromTyping || this.config.fieldTerminatorMode === 'strict')
+            );
+            if (shouldAppendTerminator) {
+                updated = this.replaceRange(updated, caret, caret, terminator);
+                caret += terminator.length;
+            }
+            if (fromTyping) {
+                const nextChar = updated.charAt(caret);
+                if (nextChar !== '\n' && !/\s/.test(nextChar || '')) {
+                    updated = this.replaceRange(updated, caret, caret, ' ');
+                    caret += 1;
+                }
+            }
         }
 
         this.closeDropdown();
@@ -2814,6 +3100,7 @@
         this.dropdownEl.hidden = true;
         this.dropdownEl.classList.remove(this.config.classNames.dropdownOpen);
         this.dropdownListEl.innerHTML = '';
+        this.dropdownSearchEl.hidden = false;
         this.dropdownSearchEl.value = '';
     };
 
