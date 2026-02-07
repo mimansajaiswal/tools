@@ -1,8 +1,11 @@
-const CACHE_NAME = 'pet-tracker-v4';
+const CACHE_NAME = 'pet-tracker-v6';
 const STATIC_ASSETS = [
     './',
     './index.html',
     './manifest.webmanifest',
+    './icons/icon.svg',
+    './icons/icon-192.png',
+    './icons/icon-512.png',
     './css/styles.css',
     './js/storage.js',
     './js/ui.js',
@@ -22,11 +25,33 @@ const STATIC_ASSETS = [
     './js/setup.js',
     './js/app.js'
 ];
+const CROSS_ORIGIN_PRECACHE = [
+    'https://cdn.tailwindcss.com',
+    'https://unpkg.com/lucide@0.561.0/dist/umd/lucide.min.js',
+    'https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js',
+    'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap'
+];
+const CACHEABLE_CROSS_ORIGIN_HOSTS = new Set([
+    'cdn.tailwindcss.com',
+    'unpkg.com',
+    'cdn.jsdelivr.net',
+    'fonts.googleapis.com',
+    'fonts.gstatic.com'
+]);
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => {
-            return cache.addAll(STATIC_ASSETS);
+        caches.open(CACHE_NAME).then(async (cache) => {
+            await cache.addAll(STATIC_ASSETS);
+
+            // Best-effort prefetch for critical CDN assets used by the shell.
+            await Promise.allSettled(
+                CROSS_ORIGIN_PRECACHE.map(async (url) => {
+                    const request = new Request(url, { mode: 'no-cors' });
+                    const response = await fetch(request);
+                    await cache.put(request, response);
+                })
+            );
         })
     );
     self.skipWaiting();
@@ -47,9 +72,9 @@ self.addEventListener('fetch', (event) => {
     if (event.request.method !== 'GET') return;
 
     const url = new URL(event.request.url);
-
-    // Skip caching for API calls and external resources
-    if (url.hostname !== location.hostname) {
+    const isSameOrigin = url.origin === location.origin;
+    const isAllowedCrossOrigin = CACHEABLE_CROSS_ORIGIN_HOSTS.has(url.hostname);
+    if (!isSameOrigin && !isAllowedCrossOrigin) {
         return;
     }
 
@@ -58,7 +83,7 @@ self.addEventListener('fetch', (event) => {
             const cached = await caches.match(event.request);
             try {
                 const response = await fetch(event.request);
-                if (response.ok) {
+                if (response.ok || response.type === 'opaque') {
                     const clone = response.clone();
                     caches.open(CACHE_NAME).then((cache) => {
                         cache.put(event.request, clone);
@@ -72,8 +97,8 @@ self.addEventListener('fetch', (event) => {
                 }
 
                 // For navigation requests (HTML pages), return cached index.html for SPA fallback
-                if (event.request.mode === 'navigate' ||
-                    (event.request.method === 'GET' && event.request.headers.get('accept')?.includes('text/html'))) {
+                if (isSameOrigin && (event.request.mode === 'navigate' ||
+                    (event.request.method === 'GET' && event.request.headers.get('accept')?.includes('text/html')))) {
                     const indexCache = await caches.match('./index.html');
                     if (indexCache) {
                         return indexCache;

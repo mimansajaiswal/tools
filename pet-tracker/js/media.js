@@ -338,6 +338,7 @@ const Media = {
         }
 
         return {
+            id: uploadInfo.id || null,
             url: uploadInfo.url,
             expiresAt: uploadInfo.expiry_time
         };
@@ -400,6 +401,7 @@ const Media = {
                     };
                 } else if (file.type.startsWith('video/')) {
                     const processed = await Media.processVideo(file);
+                    const uploadStored = await Media.storeLocal(`${id}_upload`, file);
                     await Media.storeLocal(`${id}_poster`, processed.poster);
                     // Create preview URL - caller should revoke when done
                     const previewUrl = URL.createObjectURL(processed.poster);
@@ -409,15 +411,20 @@ const Media = {
                         previewUrl,
                         _revokeUrl: previewUrl, // Mark for revocation
                         originalName: file.name,
+                        originalSize: file.size,
                         duration: processed.duration,
-                        warning: file.size > 50 * 1024 * 1024 ? 'Video is large. Consider trimming before upload.' : null
+                        warning: !uploadStored
+                            ? 'Video preview saved, but file too large for local upload cache.'
+                            : (file.size > 50 * 1024 * 1024 ? 'Video is large. Consider trimming before upload.' : null)
                     };
                 } else {
+                    const uploadStored = await Media.storeLocal(`${id}_upload`, file);
                     result = {
                         id,
-                        type: 'other',
+                        type: 'file',
                         originalName: file.name,
-                        originalSize: file.size
+                        originalSize: file.size,
+                        warning: !uploadStored ? 'File too large for local upload cache.' : null
                     };
                 }
 

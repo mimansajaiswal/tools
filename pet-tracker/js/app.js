@@ -15,7 +15,11 @@ const App = {
         isOnline: navigator.onLine,
         pendingAttachments: [],
         attachmentPreviews: [],
-        deferredPrompt: null
+        deferredPrompt: null,
+        addEventTypeOptions: [],
+        addEventSelectedTypeId: null,
+        addEventAvailableTags: [],
+        addEventSelectedTags: []
     },
 
     /**
@@ -146,6 +150,16 @@ const App = {
                 App.showView(view, false);
             }
         });
+
+        // Close custom dropdowns when clicking outside.
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('#addEventTypeInput') && !e.target.closest('#addEventTypeDropdown')) {
+                App.closeAddEventTypeDropdown();
+            }
+            if (!e.target.closest('#addEventTagsDropdown')) {
+                App.closeEventTagsMenu();
+            }
+        });
     },
 
     /**
@@ -232,14 +246,6 @@ const App = {
             App.state.eventTypes = await PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES);
             App.state.activePetId = PetTracker.Settings.getActivePet();
 
-            // Create default scales and event types if none exist
-            if (App.state.eventTypes.length === 0) {
-                // Create scales first so event types can reference them
-                await Care.createDefaultScales();
-                await Care.createDefaultEventTypes();
-                App.state.eventTypes = await PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES);
-            }
-
             // Populate pet filter dropdowns
             App.populatePetFilters();
 
@@ -303,7 +309,7 @@ const App = {
     /**
      * Open Add Event modal
      */
-    openAddModal: (prefill = {}) => {
+    openAddModal: async (prefill = {}) => {
         const form = document.getElementById('addEventForm');
         if (form) {
             form.reset();
@@ -328,26 +334,20 @@ const App = {
             if (App.state.pets.length === 0) {
                 petSelect.innerHTML = '<option value="">No pets - add one first</option>';
             }
+            petSelect.onchange = async () => {
+                await App.updateAddEventTypeOptions(petSelect.value, null, true);
+            };
         }
 
-        // Populate event type dropdown
-        const typeSelect = document.getElementById('addEventType');
-        if (typeSelect) {
-            typeSelect.innerHTML = '<option value="">Select type...</option>' +
-                App.state.eventTypes.map(t =>
-                    `<option value="${t.id}" ${t.id === prefill.type ? 'selected' : ''}>${t.name}</option>`
-                ).join('');
+        await App.initEventTagsDropdown(Array.isArray(prefill.tags) ? prefill.tags : []);
 
-            // Add event listener for event type change to update severity selector
-            typeSelect.onchange = () => App.updateSeveritySelector(typeSelect.value);
-
-            // Trigger initial update if prefill.type is set
-            if (prefill.type) {
-                App.updateSeveritySelector(prefill.type, prefill.severityLevelId);
-            } else {
-                App.updateSeveritySelector(null);
-            }
-        }
+        const activePetId = petSelect?.value || prefill.pet || null;
+        await App.updateAddEventTypeOptions(
+            activePetId,
+            prefill.type || null,
+            true,
+            prefill.severityLevelId || null
+        );
 
         // Set defaults
         const dateInput = document.getElementById('addEventDate');
@@ -359,34 +359,357 @@ const App = {
         // Clear other fields
         const valueInput = document.getElementById('addEventValue');
         if (valueInput) valueInput.value = prefill.value || '';
+        const unitInput = document.getElementById('addEventUnit');
+        if (unitInput) unitInput.value = prefill.unit || '';
 
         const notesInput = document.getElementById('addEventNotes');
         if (notesInput) notesInput.value = prefill.notes || '';
 
         // FIX #8: Clear and populate advanced fields
         const endDateInput = document.getElementById('addEventEndDate');
-        if (endDateInput) endDateInput.value = '';
+        if (endDateInput) endDateInput.value = prefill.endDate || '';
         const durationInput = document.getElementById('addEventDuration');
-        if (durationInput) durationInput.value = '';
+        if (durationInput) durationInput.value = prefill.duration ?? '';
         const costInput = document.getElementById('addEventCost');
-        if (costInput) costInput.value = '';
+        if (costInput) costInput.value = prefill.cost ?? '';
         const costCatInput = document.getElementById('addEventCostCategory');
-        if (costCatInput) costCatInput.value = '';
+        if (costCatInput) costCatInput.value = prefill.costCategory || '';
         const costCurrInput = document.getElementById('addEventCostCurrency');
-        if (costCurrInput) costCurrInput.value = '';
-        const tagsInput = document.getElementById('addEventTags');
-        if (tagsInput) tagsInput.value = '';
+        if (costCurrInput) costCurrInput.value = prefill.costCurrency || '';
 
         // Populate provider dropdown from contacts
         const providerSelect = document.getElementById('addEventProvider');
         if (providerSelect) {
-            PetTracker.DB.getAll(PetTracker.STORES.CONTACTS).then(contacts => {
-                providerSelect.innerHTML = '<option value="">None</option>' +
-                    contacts.map(c => `<option value="${c.id}">${PetTracker.UI.escapeHtml(c.name)} (${c.role || 'Contact'})</option>`).join('');
-            });
+            const contacts = await PetTracker.DB.getAll(PetTracker.STORES.CONTACTS);
+            providerSelect.innerHTML = '<option value="">None</option>' +
+                contacts.map(c => `<option value="${c.id}">${PetTracker.UI.escapeHtml(c.name)} (${c.role || 'Contact'})</option>`).join('');
+            if (prefill.providerId) {
+                providerSelect.value = prefill.providerId;
+            }
         }
 
         PetTracker.UI.openModal('addEventModal');
+        if (window.lucide) lucide.createIcons();
+    },
+
+    getAllowedEventTypesForPet: (petId) => {
+        const allTypes = App.state.eventTypes || [];
+        if (!petId) return allTypes;
+
+        // Backward compatibility: before mappings are configured, keep all types visible.
+        const hasAnyScopedType = allTypes.some(t => Array.isArray(t.relatedPetIds) && t.relatedPetIds.filter(Boolean).length > 0);
+        if (!hasAnyScopedType) return allTypes;
+
+        // Once mappings exist, only show event types explicitly assigned to this pet.
+        return allTypes.filter(t => {
+            const related = Array.isArray(t.relatedPetIds) ? t.relatedPetIds.filter(Boolean) : [];
+            return related.includes(petId);
+        });
+    },
+
+    closeAddEventTypeDropdown: () => {
+        const dropdown = document.getElementById('addEventTypeDropdown');
+        if (dropdown) dropdown.classList.remove('open');
+    },
+
+    openAddEventTypeDropdown: () => {
+        const dropdown = document.getElementById('addEventTypeDropdown');
+        if (dropdown) dropdown.classList.add('open');
+    },
+
+    setAddEventTypeSelection: async (typeId, forceDefaults = false, severityLevelId = null) => {
+        const input = document.getElementById('addEventTypeInput');
+        const hidden = document.getElementById('addEventType');
+        const selected = App.state.addEventTypeOptions.find(t => t.id === typeId) || null;
+
+        App.state.addEventSelectedTypeId = selected?.id || null;
+
+        if (input) {
+            input.value = selected ? selected.name : '';
+        }
+        if (hidden) {
+            hidden.value = selected?.id || '';
+        }
+
+        await App.updateSeveritySelector(selected?.id || null, severityLevelId);
+        if (selected?.id) {
+            App.applyEventTypeDefaults(selected.id, forceDefaults);
+            App.applyEventTypeDefaultTags(selected.id, forceDefaults);
+        }
+    },
+
+    renderAddEventTypeOptions: (filter = '') => {
+        const dropdown = document.getElementById('addEventTypeDropdown');
+        if (!dropdown) return;
+
+        const term = (filter || '').trim().toLowerCase();
+        const options = App.state.addEventTypeOptions
+            .filter(t => !term || (t.name || '').toLowerCase().includes(term))
+            .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+        if (options.length === 0) {
+            dropdown.innerHTML = '<div class="combobox-option text-earth-metal">No matching event types</div>';
+            return;
+        }
+
+        dropdown.innerHTML = options.map((t, idx) => `
+            <div class="combobox-option ${idx === 0 ? 'highlighted' : ''}" data-value="${t.id}">
+                ${PetTracker.UI.escapeHtml(t.name)}
+            </div>
+        `).join('');
+
+        dropdown.querySelectorAll('.combobox-option[data-value]').forEach(opt => {
+            opt.addEventListener('mousedown', async (e) => {
+                e.preventDefault();
+                await App.setAddEventTypeSelection(opt.dataset.value, true);
+                App.closeAddEventTypeDropdown();
+            });
+        });
+    },
+
+    updateAddEventTypeOptions: async (petId, preferredTypeId = null, forceDefaults = false, severityLevelId = null) => {
+        const input = document.getElementById('addEventTypeInput');
+        const hidden = document.getElementById('addEventType');
+        const dropdown = document.getElementById('addEventTypeDropdown');
+        if (!input || !hidden || !dropdown) return;
+
+        let allowedOptions = App.getAllowedEventTypesForPet(petId);
+        if (preferredTypeId && !allowedOptions.some(t => t.id === preferredTypeId)) {
+            const preferred = (App.state.eventTypes || []).find(t => t.id === preferredTypeId);
+            if (preferred) {
+                allowedOptions = [preferred, ...allowedOptions];
+            }
+        }
+        App.state.addEventTypeOptions = allowedOptions;
+
+        const current = preferredTypeId || App.state.addEventSelectedTypeId;
+        const isCurrentAllowed = App.state.addEventTypeOptions.some(t => t.id === current);
+        const selectedId = isCurrentAllowed ? current : null;
+
+        if (App.state.addEventTypeOptions.length === 0) {
+            input.value = '';
+            hidden.value = '';
+            App.state.addEventSelectedTypeId = null;
+        }
+
+        App.renderAddEventTypeOptions(input.value);
+        await App.setAddEventTypeSelection(selectedId, forceDefaults, severityLevelId);
+
+        input.onfocus = () => {
+            App.renderAddEventTypeOptions(input.value);
+            App.openAddEventTypeDropdown();
+        };
+        input.onclick = () => {
+            App.renderAddEventTypeOptions(input.value);
+            App.openAddEventTypeDropdown();
+        };
+        input.oninput = () => {
+            const typed = (input.value || '').trim().toLowerCase();
+            const exact = App.state.addEventTypeOptions.find(t => (t.name || '').toLowerCase() === typed);
+            if (exact) {
+                hidden.value = exact.id;
+                App.state.addEventSelectedTypeId = exact.id;
+            } else {
+                hidden.value = '';
+                App.state.addEventSelectedTypeId = null;
+            }
+            App.renderAddEventTypeOptions(input.value);
+            App.openAddEventTypeDropdown();
+        };
+        input.onkeydown = (e) => {
+            if (e.key === 'Escape') {
+                App.closeAddEventTypeDropdown();
+                return;
+            }
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const first = dropdown.querySelector('.combobox-option[data-value]');
+                if (first) first.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+            }
+        };
+    },
+
+    applyEventTypeDefaultTags: (eventTypeId, force = false) => {
+        const eventType = (App.state.eventTypes || []).find(t => t.id === eventTypeId);
+        if (!eventType) return;
+
+        const defaultTags = Array.isArray(eventType.defaultTags)
+            ? eventType.defaultTags.map(tag => (tag || '').trim()).filter(Boolean)
+            : [];
+        if (defaultTags.length === 0) return;
+
+        const available = new Set(App.state.addEventAvailableTags || []);
+        defaultTags.forEach(tag => available.add(tag));
+        App.state.addEventAvailableTags = [...available].sort((a, b) => a.localeCompare(b));
+
+        if (force && (App.state.addEventSelectedTags || []).length === 0) {
+            App.state.addEventSelectedTags = [...new Set(defaultTags)].sort((a, b) => a.localeCompare(b));
+            App.updateEventTagsLabel();
+        }
+
+        App.renderEventTagOptions();
+    },
+
+    collectExistingEventTags: async () => {
+        const [events, eventTypes] = await Promise.all([
+            PetTracker.DB.getAll(PetTracker.STORES.EVENTS),
+            PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES)
+        ]);
+        const tags = new Set();
+
+        for (const e of events || []) {
+            (e.tags || []).forEach(tag => {
+                const normalized = (tag || '').trim();
+                if (normalized) tags.add(normalized);
+            });
+        }
+        for (const t of eventTypes || []) {
+            (t.defaultTags || []).forEach(tag => {
+                const normalized = (tag || '').trim();
+                if (normalized) tags.add(normalized);
+            });
+        }
+
+        return [...tags].sort((a, b) => a.localeCompare(b));
+    },
+
+    closeEventTagsMenu: () => {
+        const menu = document.getElementById('addEventTagsMenu');
+        const trigger = document.querySelector('#addEventTagsDropdown .multiselect-trigger');
+        if (menu) menu.classList.add('hidden');
+        if (trigger) trigger.setAttribute('aria-expanded', 'false');
+    },
+
+    toggleEventTagsMenu: () => {
+        const menu = document.getElementById('addEventTagsMenu');
+        const trigger = document.querySelector('#addEventTagsDropdown .multiselect-trigger');
+        if (!menu || !trigger) return;
+
+        const open = menu.classList.contains('hidden');
+        if (open) {
+            menu.classList.remove('hidden');
+            trigger.setAttribute('aria-expanded', 'true');
+            const search = document.getElementById('addEventTagsSearch');
+            if (search) {
+                search.focus();
+                search.select();
+            }
+            App.renderEventTagOptions();
+        } else {
+            App.closeEventTagsMenu();
+        }
+    },
+
+    updateEventTagsLabel: () => {
+        const label = document.getElementById('addEventTagsLabel');
+        const chips = document.getElementById('addEventTagsChips');
+        if (!label || !chips) return;
+
+        const tags = App.state.addEventSelectedTags || [];
+        if (tags.length === 0) {
+            label.innerHTML = 'Select or add tags...';
+            label.className = 'multiselect-label text-sm text-earth-metal';
+            chips.innerHTML = '';
+            chips.classList.add('hidden');
+            return;
+        }
+
+        const preview = tags.slice(0, 2).join(', ');
+        label.innerHTML = tags.length > 2 ? `${PetTracker.UI.escapeHtml(preview)} <span class="multiselect-selected-count">+${tags.length - 2}</span>` : PetTracker.UI.escapeHtml(preview);
+        label.className = 'multiselect-label text-sm text-charcoal';
+
+        chips.classList.remove('hidden');
+        chips.innerHTML = tags.map(tag => `
+            <span class="multiselect-tag">
+                ${PetTracker.UI.escapeHtml(tag)}
+                <button type="button" aria-label="Remove ${PetTracker.UI.escapeHtml(tag)}" onclick="App.removeEventTag('${encodeURIComponent(tag)}')">×</button>
+            </span>
+        `).join('');
+    },
+
+    removeEventTag: (encodedTag) => {
+        const decoded = decodeURIComponent(encodedTag || '');
+        App.state.addEventSelectedTags = (App.state.addEventSelectedTags || []).filter(t => t !== decoded);
+        App.updateEventTagsLabel();
+        App.renderEventTagOptions();
+    },
+
+    toggleEventTagSelection: (tag) => {
+        const value = (tag || '').trim();
+        if (!value) return;
+
+        if (!(App.state.addEventAvailableTags || []).includes(value)) {
+            App.state.addEventAvailableTags = [...(App.state.addEventAvailableTags || []), value]
+                .sort((a, b) => a.localeCompare(b));
+        }
+
+        const selected = new Set(App.state.addEventSelectedTags || []);
+        if (selected.has(value)) selected.delete(value);
+        else selected.add(value);
+
+        App.state.addEventSelectedTags = [...selected].sort((a, b) => a.localeCompare(b));
+        App.updateEventTagsLabel();
+        App.renderEventTagOptions();
+    },
+
+    renderEventTagOptions: () => {
+        const search = document.getElementById('addEventTagsSearch');
+        const options = document.getElementById('addEventTagsOptions');
+        if (!options) return;
+
+        const term = (search?.value || '').trim();
+        const termLower = term.toLowerCase();
+        const selected = new Set(App.state.addEventSelectedTags || []);
+        const all = App.state.addEventAvailableTags || [];
+        const filtered = all.filter(tag => tag.toLowerCase().includes(termLower));
+
+        let html = filtered.map(tag => `
+            <label class="multiselect-option">
+                <input type="checkbox" ${selected.has(tag) ? 'checked' : ''} onchange="App.toggleEventTagSelection(decodeURIComponent('${encodeURIComponent(tag)}'))">
+                <span>${PetTracker.UI.escapeHtml(tag)}</span>
+            </label>
+        `).join('');
+
+        const hasExact = all.some(tag => tag.toLowerCase() === termLower);
+        if (term && !hasExact) {
+            html += `
+                <button type="button" class="multiselect-option w-full text-left" onclick="App.toggleEventTagSelection(decodeURIComponent('${encodeURIComponent(term)}'))">
+                    + Add "${PetTracker.UI.escapeHtml(term)}"
+                </button>
+            `;
+        }
+
+        if (!html) {
+            html = '<div class="text-xs text-earth-metal px-2 py-1">No tags yet</div>';
+        }
+
+        options.innerHTML = html;
+    },
+
+    initEventTagsDropdown: async (prefillTags = []) => {
+        App.state.addEventAvailableTags = await App.collectExistingEventTags();
+        App.state.addEventSelectedTags = [...new Set((prefillTags || []).map(t => (t || '').trim()).filter(Boolean))]
+            .sort((a, b) => a.localeCompare(b));
+
+        const search = document.getElementById('addEventTagsSearch');
+        if (search) {
+            search.value = '';
+            search.onkeydown = (e) => {
+                if (e.key === 'Escape') {
+                    App.closeEventTagsMenu();
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const value = search.value.trim();
+                    if (value) App.toggleEventTagSelection(value);
+                    search.value = '';
+                    App.renderEventTagOptions();
+                }
+            };
+        }
+
+        App.updateEventTagsLabel();
+        App.renderEventTagOptions();
+        App.closeEventTagsMenu();
     },
 
     /**
@@ -427,6 +750,20 @@ const App = {
     },
 
     /**
+     * Apply defaults from selected event type to add-event fields
+     */
+    applyEventTypeDefaults: (eventTypeId, force = false) => {
+        if (!eventTypeId) return;
+        const eventType = App.state.eventTypes.find(t => t.id === eventTypeId);
+        if (!eventType) return;
+
+        const unitInput = document.getElementById('addEventUnit');
+        if (unitInput && (force || !unitInput.value)) {
+            unitInput.value = eventType.defaultUnit || '';
+        }
+    },
+
+    /**
      * Save event from Add modal
      */
     saveEvent: async () => {
@@ -440,6 +777,7 @@ const App = {
         const time = document.getElementById('addEventTime')?.value;
         const notes = document.getElementById('addEventNotes')?.value;
         const value = document.getElementById('addEventValue')?.value;
+        const unit = document.getElementById('addEventUnit')?.value?.trim() || null;
         const severityLevelId = document.getElementById('addEventSeverity')?.value || null;
 
         if (!petId || !date) {
@@ -468,8 +806,11 @@ const App = {
         const costCategory = document.getElementById('addEventCostCategory')?.value || null;
         const costCurrency = document.getElementById('addEventCostCurrency')?.value || null;
         const providerId = document.getElementById('addEventProvider')?.value || null;
-        const tagsStr = document.getElementById('addEventTags')?.value || '';
-        const tags = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : [];
+        const tags = [...new Set(
+            (App.state.addEventSelectedTags || [])
+                .map(t => (t || '').trim())
+                .filter(Boolean)
+        )];
 
         const eventData = {
             title: eventType?.name || 'Event',
@@ -479,6 +820,7 @@ const App = {
             endDate: endDate || null,
             notes: notes || '',
             value: value ? parseFloat(value) : null,
+            unit,
             severityLevelId: severityLevelId || null,
             duration: duration ? parseFloat(duration) : null,
             cost: cost ? parseFloat(cost) : null,
@@ -494,6 +836,7 @@ const App = {
             if (App.state.pendingAttachments.length > 0) {
                 PetTracker.UI.showLoading('Processing attachments...');
                 const processedMedia = await Media.processAndStoreMedia(App.state.pendingAttachments);
+                const warnings = processedMedia.map(m => m.warning).filter(Boolean);
 
                 // Add new media to existing media
                 const newMedia = processedMedia
@@ -509,6 +852,9 @@ const App = {
                 eventData.media = [...existingMedia, ...newMedia];
 
                 PetTracker.UI.hideLoading();
+                if (warnings.length > 0) {
+                    PetTracker.UI.toast(warnings[0], 'warning');
+                }
             }
 
             if (editId) {
@@ -537,6 +883,16 @@ const App = {
     },
 
     /**
+     * Classify attachment type for preview labels.
+     */
+    getAttachmentType: (file) => {
+        const mime = file?.type || '';
+        if (mime.startsWith('image/')) return 'image';
+        if (mime.startsWith('video/')) return 'video';
+        return 'file';
+    },
+
+    /**
      * Handle share target files
      */
     handleShareTarget: async (files) => {
@@ -556,7 +912,7 @@ const App = {
                     file,
                     previewUrl,
                     name: file.name,
-                    type: file.type.startsWith('video/') ? 'video' : 'image'
+                    type: App.getAttachmentType(file)
                 });
             }
             App.renderAttachmentPreviews();
@@ -644,10 +1000,11 @@ const App = {
                 ${p.previewUrl
                 ? `<img src="${p.previewUrl}" alt="${PetTracker.UI.escapeHtml(p.name)}" class="w-16 h-16 object-cover border border-oatmeal">`
                 : `<div class="w-16 h-16 bg-oatmeal flex items-center justify-center border border-earth-metal">
-                        <i data-lucide="file" class="w-6 h-6 text-earth-metal"></i>
+                       <i data-lucide="file" class="w-6 h-6 text-earth-metal"></i>
                        </div>`
             }
                 ${p.type === 'video' ? '<span class="absolute bottom-1 left-1 bg-charcoal text-white-linen text-[8px] px-1 font-mono">VIDEO</span>' : ''}
+                ${p.type === 'file' ? '<span class="absolute bottom-1 left-1 bg-earth-metal text-white-linen text-[8px] px-1 font-mono">FILE</span>' : ''}
                 <button type="button" onclick="App.removeAttachment(${idx})" class="absolute -top-1 -right-1 w-5 h-5 bg-muted-pink text-charcoal flex items-center justify-center text-xs hover:bg-opacity-80">×</button>
             </div>
         `).join('');
@@ -712,7 +1069,7 @@ const App = {
                 file,
                 previewUrl,
                 name: file.name,
-                type: file.type.startsWith('video/') ? 'video' : 'image'
+                type: App.getAttachmentType(file)
             });
         }
 
@@ -848,10 +1205,7 @@ const App = {
         if (!container) return;
 
         const pets = App.state.pets;
-        const events = await PetTracker.DB.getAll(PetTracker.STORES.EVENTS);
-        // Sort events by date descending for "Recent Activity"
-        events.sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
-        const recentEvents = events.slice(0, 10);
+        const recentEvents = await Events.getRecent(10);
 
         if (pets.length === 0) {
             container.innerHTML = PetTracker.UI.emptyState(
@@ -965,7 +1319,7 @@ const App = {
                         </div>
                         <div class="card p-4">
                             <h3 class="font-mono text-xs uppercase text-earth-metal mb-2">Adherence</h3>
-                            <p class="text-sm text-charcoal">Care plan adherence percentage</p>
+                            <p class="text-sm text-charcoal">Recurring schedule adherence percentage</p>
                         </div>
                         <div class="card p-4">
                             <h3 class="font-mono text-xs uppercase text-earth-metal mb-2">Activity Heatmap</h3>
@@ -1161,14 +1515,22 @@ const App = {
     handleOAuthReturn: () => {
         const hashParams = new URLSearchParams(window.location.hash.replace('#', '?'));
         const searchParams = new URLSearchParams(window.location.search);
-        const notionToken = hashParams.get('token') || searchParams.get('token') || searchParams.get('accessToken');
+        const notionToken = hashParams.get('token') || hashParams.get('accessToken') ||
+            searchParams.get('token') || searchParams.get('accessToken');
         const gcalToken = hashParams.get('gcalAccessToken') || searchParams.get('gcalAccessToken');
         const gcalEmail = hashParams.get('gcalEmail') || searchParams.get('gcalEmail');
 
         let handled = false;
 
         if (notionToken) {
-            PetTracker.Settings.set({ notionToken });
+            PetTracker.Settings.set({
+                notionToken,
+                authMode: 'oauth',
+                notionOAuthData: {
+                    access_token: notionToken,
+                    acquiredAt: new Date().toISOString()
+                }
+            });
             PetTracker.UI.toast('Connected to Notion!', 'success');
 
             const settings = PetTracker.Settings.get();
@@ -1208,7 +1570,16 @@ const App = {
 
         if (handled) {
             try {
-                window.history.replaceState({}, document.title, window.location.pathname);
+                const cleanUrl = new URL(window.location.href);
+                cleanUrl.searchParams.delete('token');
+                cleanUrl.searchParams.delete('accessToken');
+                cleanUrl.searchParams.delete('botId');
+                cleanUrl.searchParams.delete('workspaceName');
+                cleanUrl.searchParams.delete('workspaceIcon');
+                cleanUrl.searchParams.delete('gcalAccessToken');
+                cleanUrl.searchParams.delete('gcalEmail');
+                cleanUrl.hash = '';
+                window.history.replaceState({}, document.title, cleanUrl.pathname + cleanUrl.search);
             } catch (e) {
                 console.warn('History replaceState failed:', e);
             }
@@ -1222,8 +1593,22 @@ const App = {
      */
     saveSettings: () => {
         // Collect data source mappings (6 databases after simplification)
-        const dataSources = {};
-        const dataSourceNames = {};
+        const dataSources = {
+            pets: '',
+            events: '',
+            eventTypes: '',
+            contacts: '',
+            scales: '',
+            scaleLevels: ''
+        };
+        const dataSourceNames = {
+            pets: '',
+            events: '',
+            eventTypes: '',
+            contacts: '',
+            scales: '',
+            scaleLevels: ''
+        };
         const storeKeyMap = {
             'Pets': 'pets',
             'Events': 'events',
@@ -1235,20 +1620,29 @@ const App = {
 
         ['Pets', 'Events', 'EventTypes', 'Contacts', 'Scales', 'ScaleLevels'].forEach(key => {
             const el = document.getElementById(`dsMap${key}`);
-            if (el?.value) {
-                const storeKey = storeKeyMap[key];
-                dataSources[storeKey] = el.value;
-                // Save the selected option's text (database name)
-                if (el.selectedIndex >= 0) {
-                    dataSourceNames[storeKey] = el.options[el.selectedIndex].text;
-                }
+            const storeKey = storeKeyMap[key];
+            if (!storeKey) return;
+
+            dataSources[storeKey] = el?.value || '';
+            if (el?.value && el.selectedIndex >= 0) {
+                dataSourceNames[storeKey] = el.options[el.selectedIndex].text;
+            } else {
+                dataSourceNames[storeKey] = '';
             }
         });
+
+        const notionToken = document.getElementById('settingsNotionToken')?.value?.trim() || '';
+        const gcalEnabled = document.getElementById('settingsGcalEnabled')?.checked || false;
+        const existing = PetTracker.Settings.get();
+        const existingOAuthToken = existing.notionOAuthData?.access_token || '';
+        const usingOAuthToken = !!existingOAuthToken && notionToken === existingOAuthToken;
 
         const settings = {
             workerUrl: document.getElementById('settingsWorkerUrl')?.value?.trim() || '',
             proxyToken: document.getElementById('settingsProxyToken')?.value?.trim() || '',
-            notionToken: document.getElementById('settingsNotionToken')?.value?.trim() || '',
+            notionToken,
+            authMode: usingOAuthToken ? 'oauth' : (notionToken ? 'token' : (existing.authMode || 'token')),
+            notionOAuthData: usingOAuthToken ? existing.notionOAuthData : (notionToken ? null : existing.notionOAuthData),
             dataSources,
             dataSourceNames,
             aiProvider: document.getElementById('settingsAiProvider')?.value || 'openai',
@@ -1257,8 +1651,10 @@ const App = {
             aiEndpoint: document.getElementById('settingsAiEndpoint')?.value?.trim() || '',
             todoistEnabled: document.getElementById('settingsTodoistEnabled')?.checked || false,
             todoistToken: document.getElementById('settingsTodoistToken')?.value?.trim() || '',
-            gcalEnabled: document.getElementById('settingsGcalEnabled')?.checked || false,
-            gcalCalendarId: document.getElementById('settingsGcalCalendarId')?.value || ''
+            gcalEnabled,
+            gcalCalendarId: document.getElementById('settingsGcalCalendarId')?.value || '',
+            gcalAccessToken: gcalEnabled ? (existing.gcalAccessToken || '') : '',
+            gcalUserEmail: gcalEnabled ? (existing.gcalUserEmail || '') : ''
         };
 
         PetTracker.Settings.set(settings);
@@ -1274,6 +1670,9 @@ const App = {
         const workerUrl = document.getElementById('settingsWorkerUrl')?.value?.trim();
         const notionToken = document.getElementById('settingsNotionToken')?.value?.trim();
         const proxyToken = document.getElementById('settingsProxyToken')?.value?.trim();
+        const existing = PetTracker.Settings.get();
+        const existingOAuthToken = existing.notionOAuthData?.access_token || '';
+        const usingOAuthToken = !!existingOAuthToken && notionToken === existingOAuthToken;
 
         if (!workerUrl) {
             PetTracker.UI.toast('Please enter Worker URL', 'error');
@@ -1281,7 +1680,13 @@ const App = {
         }
 
         // Save temporarily for API call
-        PetTracker.Settings.set({ workerUrl, notionToken, proxyToken });
+        PetTracker.Settings.set({
+            workerUrl,
+            notionToken,
+            proxyToken,
+            authMode: usingOAuthToken ? 'oauth' : (notionToken ? 'token' : existing.authMode),
+            notionOAuthData: usingOAuthToken ? existing.notionOAuthData : (notionToken ? null : existing.notionOAuthData)
+        });
 
         // FIX #14: Use centralized token helper (supports both direct token and OAuth)
         const effectiveToken = PetTracker.API.getEffectiveToken();
@@ -1332,19 +1737,20 @@ const App = {
                 properties: Object.keys(ds.properties || {})
             }));
 
-            // FIX #5 & #6: Required properties aligned to actual read/write contract
-            // Removed Photo/Icon/Primary Vet/Related Contacts from required (read-only or optional)
-            // FIX #6: End Date removed from Events - uses Start Date.end instead
-            // Media kept as optional (read-only for now)
+            // Required properties aligned to actual write contract
+            // Optional relation/media fields are supported when present, but not required for mapping.
+            // End Date is represented via Start Date date-range end.
             const requiredProps = {
                 'Pets': [
                     'Name', 'Species', 'Breed', 'Sex', 'Birth Date', 'Adoption Date', 'Status',
                     'Microchip ID', 'Tags', 'Notes',
-                    'Target Weight Min', 'Target Weight Max', 'Weight Unit', 'Color', 'Is Primary'
+                    'Target Weight Min', 'Target Weight Max', 'Weight Unit', 'Color', 'Is Primary',
+                    'Photo'
                 ],
                 'Events': [
                     'Title', 'Pet(s)', 'Event Type', 'Start Date', 'Status',
                     'Severity Level', 'Value', 'Unit', 'Duration', 'Notes', 'Tags',
+                    'Media',
                     'Source', 'Provider', 'Cost', 'Cost Category', 'Cost Currency',
                     'Todoist Task ID', 'Client Updated At'
                 ],

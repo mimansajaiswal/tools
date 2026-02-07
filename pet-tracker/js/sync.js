@@ -17,6 +17,8 @@ const Sync = {
     // Background sync interval (2 minutes)
     syncIntervalMs: 2 * 60 * 1000,
 
+    requiredDataSourceKeys: ['pets', 'events', 'eventTypes', 'scales', 'scaleLevels', 'contacts'],
+
     // Store name mapping (camelCase store names to UPPER_CASE STORES constants)
     storeNameMap: {
         'pets': 'PETS',
@@ -126,9 +128,11 @@ const Sync = {
             if (Sync.isRunning) {
                 indicator.innerHTML = '<i data-lucide="refresh-cw" class="w-4 h-4 animate-spin"></i>';
                 indicator.title = 'Syncing...';
+                indicator.onclick = null;
             } else if (!navigator.onLine) {
                 indicator.innerHTML = '<i data-lucide="cloud-off" class="w-4 h-4"></i>';
                 indicator.title = 'Offline';
+                indicator.onclick = null;
             } else if (Sync.failedCount > 0) {
                 // FIX #12: Make failed indicator clickable to show sync queue
                 indicator.innerHTML = '<i data-lucide="alert-triangle" class="w-4 h-4 text-muted-pink cursor-pointer"></i>';
@@ -137,9 +141,11 @@ const Sync = {
             } else if (Sync.pendingCount > 0) {
                 indicator.innerHTML = '<i data-lucide="cloud" class="w-4 h-4 text-muted-pink"></i>';
                 indicator.title = `${Sync.pendingCount} pending changes`;
+                indicator.onclick = null;
             } else {
                 indicator.innerHTML = '<i data-lucide="cloud" class="w-4 h-4 text-dull-purple"></i>';
                 indicator.title = 'Synced';
+                indicator.onclick = null;
             }
             if (window.lucide) lucide.createIcons();
         }
@@ -185,7 +191,9 @@ const Sync = {
         }
 
         const settings = PetTracker.Settings.get();
-        const hasDataSources = settings.dataSources && Object.values(settings.dataSources).some(v => v);
+        const hasDataSources = Sync.requiredDataSourceKeys.every(
+            key => !!settings.dataSources?.[key]
+        );
         const hasToken = settings.notionToken || settings.notionOAuthData?.access_token;
         if (!settings.workerUrl || !hasToken || !hasDataSources) {
             console.log('[Sync] Not configured, skipping');
@@ -276,15 +284,57 @@ const Sync = {
     },
 
     /**
+     * Merge event media arrays, preserving upload metadata from local record when queue data is stale.
+     */
+    mergeEventMediaMetadata: (queueMedia = [], recordMedia = []) => {
+        const recordById = new Map();
+        for (const m of (recordMedia || [])) {
+            const key = m?.localId || m?.id;
+            if (key) recordById.set(key, m);
+        }
+        return (queueMedia || []).map(m => {
+            const key = m?.localId || m?.id;
+            const existing = key ? recordById.get(key) : null;
+            if (!existing) return m;
+            return {
+                ...existing,
+                ...m,
+                url: m.url || existing.url || '',
+                fileUploadId: m.fileUploadId || existing.fileUploadId || null
+            };
+        });
+    },
+
+    /**
      * Update local record with Notion ID after successful create
      * The resolveRelationIds function will look up notionIds from DB,
      * so we don't need to modify queue items directly
      * This function is kept for potential future queue manipulation needs
      */
     propagateNotionId: async (store, localId, notionId) => {
-        // The local record is already updated in processOperation after create
-        // This function exists as a hook for any additional propagation logic
-        // Currently, resolveRelationIds handles looking up notionIds from local records
+        // The local record is already updated in processOperation after create.
+        // Queue dependent updates where relations are optional and may have been omitted earlier.
+        if (store === 'contacts') {
+            const pets = await PetTracker.DB.query(
+                PetTracker.STORES.PETS,
+                p => p.primaryVetId === localId || p.relatedContactIds?.includes(localId)
+            );
+            for (const pet of pets) {
+                const updated = {
+                    ...pet,
+                    synced: false,
+                    updatedAt: new Date().toISOString()
+                };
+                await PetTracker.DB.put(PetTracker.STORES.PETS, updated);
+                await PetTracker.SyncQueue.add({
+                    type: 'update',
+                    store: 'pets',
+                    recordId: pet.id,
+                    data: updated
+                });
+            }
+        }
+
         console.log(`[Sync] Propagated notionId for ${store}:${localId} -> ${notionId}`);
     },
 
@@ -322,10 +372,21 @@ const Sync = {
                     await new Promise(r => setTimeout(r, (e.retryAfter || 1) * 1000));
                 }
 
-                if (e.isRetryable && (op.retryCount || 0) < 3) {
-                    // Retryable error - keep in queue for next sync cycle
-                    op.retryCount = (op.retryCount || 0) + 1;
-                    await PetTracker.DB.put(PetTracker.STORES.SYNC_QUEUE, op);
+                if (e.isRetryable) {
+                    // Dependency retries should not be hard-capped.
+                    if (e.isDependency) {
+                        op.status = 'pending';
+                        op.error = null;
+                        op.lastAttempt = new Date().toISOString();
+                        await PetTracker.DB.put(PetTracker.STORES.SYNC_QUEUE, op);
+                    } else if ((op.retryCount || 0) < 3) {
+                        // Retryable error - keep in queue for next sync cycle
+                        op.retryCount = (op.retryCount || 0) + 1;
+                        op.lastAttempt = new Date().toISOString();
+                        await PetTracker.DB.put(PetTracker.STORES.SYNC_QUEUE, op);
+                    } else {
+                        await PetTracker.SyncQueue.fail(op.id, e.message);
+                    }
                 } else {
                     await PetTracker.SyncQueue.fail(op.id, e.message);
                 }
@@ -352,14 +413,30 @@ const Sync = {
                 const storeConstant = Sync.getStoreConstant(store);
                 if (!storeConstant) throw new Error(`Unknown store: ${store}`);
 
-                const properties = await Sync.toNotionProperties(store, data);
+                const record = await PetTracker.DB.get(storeConstant, recordId);
+                if (!record) {
+                    console.log(`[Sync] Skipping create for deleted local record: ${store}:${recordId}`);
+                    return { skipped: true };
+                }
+                if (record.notionId) {
+                    console.log(`[Sync] Skipping create for already-synced local record: ${store}:${recordId}`);
+                    return { notionId: record.notionId, skipped: true };
+                }
+                const payload = store === 'events'
+                    ? {
+                        ...data,
+                        media: Sync.mergeEventMediaMetadata(data?.media, record?.media)
+                    }
+                    : data;
+
+                const properties = await Sync.toNotionProperties(store, payload);
                 const result = await PetTracker.API.createPage(dataSourceId, properties);
 
                 // Update local record with Notion ID
-                const record = await PetTracker.DB.get(storeConstant, recordId);
                 if (record) {
                     record.notionId = result.id;
                     record.synced = true;
+                    if (Array.isArray(payload?.media)) record.media = payload.media;
                     await PetTracker.DB.put(storeConstant, record);
                 }
                 // Return notionId so caller can propagate to dependent queue items
@@ -381,14 +458,22 @@ const Sync = {
                         // Mark as retryable - the create will complete first due to sorting
                         const error = new Error(`Waiting for create to complete: ${store}:${recordId}`);
                         error.isRetryable = true;
+                        error.isDependency = true;
                         throw error;
                     }
                     throw new Error('No Notion ID for update');
                 }
-                const properties = await Sync.toNotionProperties(store, data);
+                const payload = store === 'events'
+                    ? {
+                        ...data,
+                        media: Sync.mergeEventMediaMetadata(data?.media, record?.media)
+                    }
+                    : data;
+                const properties = await Sync.toNotionProperties(store, payload);
                 await PetTracker.API.updatePage(record.notionId, properties);
 
                 record.synced = true;
+                if (Array.isArray(payload?.media)) record.media = payload.media;
                 await PetTracker.DB.put(storeConstant, record);
                 break;
             }
@@ -448,18 +533,30 @@ const Sync = {
 
     /**
      * Pull a single data source
-     * FIX #15: Uses last_edited_time filter for incremental pull when possible
+     * Uses per-store incremental cursors with overlap to avoid missed edits
      */
     pullDataSource: async (store, storeKey, dataSourceId) => {
         let cursor = null;
         let hasMore = true;
 
-        // FIX #15: Build filter for incremental pull based on last sync time
-        const lastSync = PetTracker.Settings.getLastSync();
-        const filter = lastSync ? {
-            timestamp: 'last_edited_time',
-            last_edited_time: { on_or_after: lastSync }
-        } : null;
+        const settings = PetTracker.Settings.get();
+        const storeCursor = settings.syncCursors?.[store] || null;
+        const syncStartedAt = new Date().toISOString();
+        let newestEditedSeen = null;
+
+        // Use overlap window to avoid edge misses around cursor boundaries
+        let filter = null;
+        if (storeCursor) {
+            const parsed = new Date(storeCursor).getTime();
+            if (!Number.isNaN(parsed)) {
+                const overlapMs = 5 * 60 * 1000;
+                const from = new Date(Math.max(0, parsed - overlapMs)).toISOString();
+                filter = {
+                    timestamp: 'last_edited_time',
+                    last_edited_time: { on_or_after: from }
+                };
+            }
+        }
 
         while (hasMore) {
             await Sync.waitForRateLimit();
@@ -472,12 +569,25 @@ const Sync = {
             );
 
             for (const page of result.results) {
+                if (!newestEditedSeen || new Date(page.last_edited_time) > new Date(newestEditedSeen)) {
+                    newestEditedSeen = page.last_edited_time;
+                }
                 await Sync.reconcileRecord(store, storeKey, page);
             }
 
             hasMore = result.has_more;
             cursor = result.next_cursor;
         }
+
+        // Advance only this store's cursor. Use max(sync-start, newest seen) to be conservative.
+        const nextCursor = newestEditedSeen && new Date(newestEditedSeen) > new Date(syncStartedAt)
+            ? newestEditedSeen
+            : syncStartedAt;
+        PetTracker.Settings.set({
+            syncCursors: {
+                [store]: nextCursor
+            }
+        });
     },
 
     /**
@@ -508,35 +618,17 @@ const Sync = {
             return;
         }
 
-        // FIX #13: Use clientId for deterministic dedupe, fall back to name
-        if (!local) {
-            const allRecords = await PetTracker.DB.getAll(storeName);
-
-            // Prefer clientId match if available
-            if (remote.clientId) {
-                const matchByClientId = allRecords.find(r =>
-                    r.clientId === remote.clientId && !r.notionId
-                );
-                if (matchByClientId) {
-                    local = matchByClientId;
-                    console.log(`[Sync] Matched ${store} by clientId: "${remote.clientId}"`);
-                }
-            }
-
-            // Fall back to name match only if no clientId match and name is set
-            if (!local && remote.name) {
-                const matchByName = allRecords.find(r =>
-                    r.name === remote.name && !r.notionId
-                );
-                if (matchByName) {
-                    local = matchByName;
-                    console.log(`[Sync] Matched ${store} by name: "${remote.name}"`);
-                }
-            }
-        }
-
         // Normalize relation fields: convert Notion IDs to local IDs
         await Sync.normalizeRelationFields(store, remote);
+
+        // Local-only dedupe heuristic for unsynced rows without requiring a Notion-side client ID.
+        if (!local) {
+            const allRecords = await PetTracker.DB.getAll(storeName);
+            local = Sync.findHeuristicLocalMatch(store, allRecords, remote);
+            if (local) {
+                console.log(`[Sync] Matched ${store} by heuristic: ${local.id}`);
+            }
+        }
 
         if (!local) {
             // New remote record
@@ -556,6 +648,79 @@ const Sync = {
                 local.synced = true;
                 await PetTracker.DB.put(storeName, local);
             }
+        }
+    },
+
+    /**
+     * Find an unsynced local row that likely corresponds to a pulled remote row.
+     * This avoids duplicate creation retries without storing local IDs in Notion.
+     */
+    findHeuristicLocalMatch: (store, allRecords, remote) => {
+        const normalize = (v) => (v || '').toString().trim().toLowerCase();
+        const sameDay = (a, b) => {
+            if (!a || !b) return false;
+            const da = new Date(a);
+            const db = new Date(b);
+            if (Number.isNaN(da.getTime()) || Number.isNaN(db.getTime())) return false;
+            return da.getFullYear() === db.getFullYear() &&
+                da.getMonth() === db.getMonth() &&
+                da.getDate() === db.getDate();
+        };
+        const nearTimestamp = (a, b, toleranceMinutes = 10) => {
+            if (!a || !b) return false;
+            const ta = new Date(a).getTime();
+            const tb = new Date(b).getTime();
+            if (Number.isNaN(ta) || Number.isNaN(tb)) return false;
+            return Math.abs(ta - tb) <= (toleranceMinutes * 60 * 1000);
+        };
+        const sameSet = (a = [], b = []) => {
+            const aa = [...new Set((a || []).filter(Boolean))].sort();
+            const bb = [...new Set((b || []).filter(Boolean))].sort();
+            return JSON.stringify(aa) === JSON.stringify(bb);
+        };
+
+        const candidates = (allRecords || []).filter(r => !r.notionId);
+        if (candidates.length === 0) return null;
+
+        switch (store) {
+            case 'pets':
+                return candidates.find(r =>
+                    normalize(r.name) === normalize(remote.name) &&
+                    normalize(r.species) === normalize(remote.species) &&
+                    ((r.birthDate && remote.birthDate) ? sameDay(r.birthDate, remote.birthDate) : true)
+                ) || null;
+
+            case 'events':
+                return candidates.find(r =>
+                    normalize(r.eventTypeId) === normalize(remote.eventTypeId) &&
+                    sameSet(r.petIds || [], remote.petIds || []) &&
+                    (nearTimestamp(r.startDate, remote.startDate) || sameDay(r.startDate, remote.startDate)) &&
+                    (normalize(r.title) === normalize(remote.title))
+                ) || null;
+
+            case 'eventTypes':
+                return candidates.find(r =>
+                    normalize(r.name) === normalize(remote.name) &&
+                    normalize(r.category) === normalize(remote.category)
+                ) || null;
+
+            case 'scales':
+                return candidates.find(r => normalize(r.name) === normalize(remote.name)) || null;
+
+            case 'scaleLevels':
+                return candidates.find(r =>
+                    normalize(r.name) === normalize(remote.name) &&
+                    Number(r.order ?? -1) === Number(remote.order ?? -2)
+                ) || null;
+
+            case 'contacts':
+                return candidates.find(r =>
+                    normalize(r.name) === normalize(remote.name) &&
+                    normalize(r.role) === normalize(remote.role)
+                ) || null;
+
+            default:
+                return null;
         }
     },
 
@@ -668,10 +833,11 @@ const Sync = {
     /**
      * Resolve local IDs to Notion page IDs for relations
      * Returns array of notionIds (filters out any that don't have a notionId yet)
-     * Throws an error if any required relation can't be resolved (so it can be retried)
-     * FIX #2: Treat both "record missing" and "record exists without notionId" as retryable
+     * Options:
+     * - throwOnMissing: throw if any relation ID cannot be resolved
+     * - retryOnUnsyncedOnly: throw only when the local relation exists but lacks notionId
      */
-    resolveRelationIds: async (storeName, localIds, throwOnMissing = false) => {
+    resolveRelationIds: async (storeName, localIds, throwOnMissing = false, retryOnUnsyncedOnly = false) => {
         if (!localIds || !Array.isArray(localIds) || localIds.length === 0) return [];
 
         const notionIds = [];
@@ -692,12 +858,20 @@ const Sync = {
             }
         }
 
-        // FIX #2: If throwOnMissing, treat both cases as retryable dependency errors
+        const markDependencyError = (message) => {
+            const error = new Error(message);
+            error.isRetryable = true;
+            error.isDependency = true;
+            return error;
+        };
+
         if (throwOnMissing && (missingNotionIds.length > 0 || missingRecords.length > 0)) {
             const allMissing = [...missingNotionIds, ...missingRecords];
-            const error = new Error(`Dependency not synced yet: ${storeName}:${allMissing.join(',')}`);
-            error.isRetryable = true;
-            throw error;
+            throw markDependencyError(`Dependency not synced yet: ${storeName}:${allMissing.join(',')}`);
+        }
+
+        if (!throwOnMissing && retryOnUnsyncedOnly && missingNotionIds.length > 0) {
+            throw markDependencyError(`Dependency missing Notion ID: ${storeName}:${missingNotionIds.join(',')}`);
         }
 
         return notionIds;
@@ -729,10 +903,58 @@ const Sync = {
                     'Color': P.richText(data.color),
                     'Is Primary': P.checkbox(data.isPrimary)
                 };
-                // FIX #5: Include optional relation properties if data has them
-                if (data.photo?.length > 0) {
-                    petProps['Photo'] = P.files(data.photo);
+
+                // Handle pet photo uploads from local cache in the same way as event media.
+                const uploadedPhotos = [];
+                const normalizedPhotos = [];
+                const photos = Array.isArray(data.photo) ? data.photo : [];
+                for (const p of photos) {
+                    const remoteUrl = (typeof p?.url === 'string' && /^https?:\/\//i.test(p.url)) ? p.url : '';
+                    if (p?.fileUploadId || remoteUrl) {
+                        const normalized = {
+                            ...p,
+                            name: p.name || 'pet-photo',
+                            url: remoteUrl || '',
+                            fileUploadId: p.fileUploadId || null
+                        };
+                        uploadedPhotos.push(normalized);
+                        normalizedPhotos.push(normalized);
+                        continue;
+                    }
+
+                    const mediaId = p?.localId || p?.id;
+                    if (!mediaId || typeof Media === 'undefined') {
+                        normalizedPhotos.push(p);
+                        continue;
+                    }
+
+                    try {
+                        const blob = await PetTracker.MediaStore.get(`${mediaId}_upload`);
+                        if (!blob) {
+                            normalizedPhotos.push(p);
+                            continue;
+                        }
+                        const uploaded = await Media.uploadToNotion(blob, p.name || 'pet-photo.webp');
+                        const normalized = {
+                            ...p,
+                            id: mediaId,
+                            localId: mediaId,
+                            name: p.name || 'pet-photo',
+                            url: uploaded.url || '',
+                            fileUploadId: uploaded.id || null
+                        };
+                        uploadedPhotos.push(normalized);
+                        normalizedPhotos.push(normalized);
+                    } catch (e) {
+                        console.warn(`[Sync] Pet photo upload failed for ${mediaId}:`, e.message);
+                        normalizedPhotos.push(p);
+                    }
                 }
+
+                // Keep Photo property explicit so clear/remove operations sync as well.
+                petProps['Photo'] = P.files(uploadedPhotos);
+                data.photo = normalizedPhotos;
+
                 if (data.primaryVetId) {
                     petProps['Primary Vet'] = P.relation(await resolve(PetTracker.STORES.CONTACTS, [data.primaryVetId]));
                 }
@@ -750,14 +972,24 @@ const Sync = {
                     'Event Type': P.relation(await resolve(PetTracker.STORES.EVENT_TYPES, data.eventTypeId ? [data.eventTypeId] : [], !!data.eventTypeId)),
                     'Start Date': P.date(data.startDate, data.endDate),
                     'Status': P.select(data.status),
-                    'Severity Level': P.relation(await resolve(PetTracker.STORES.SCALE_LEVELS, data.severityLevelId ? [data.severityLevelId] : [])),
+                    'Severity Level': P.relation(await resolve(
+                        PetTracker.STORES.SCALE_LEVELS,
+                        data.severityLevelId ? [data.severityLevelId] : [],
+                        false,
+                        true
+                    )),
                     'Value': P.number(data.value),
                     'Unit': P.select(data.unit),
                     'Duration': P.number(data.duration),
                     'Notes': P.richText(data.notes),
                     'Tags': P.multiSelect(data.tags),
                     'Source': P.select(data.source),
-                    'Provider': P.relation(await resolve(PetTracker.STORES.CONTACTS, data.providerId ? [data.providerId] : [])),
+                    'Provider': P.relation(await resolve(
+                        PetTracker.STORES.CONTACTS,
+                        data.providerId ? [data.providerId] : [],
+                        false,
+                        true
+                    )),
                     'Cost': P.number(data.cost),
                     'Cost Category': P.select(data.costCategory),
                     'Cost Currency': P.select(data.costCurrency),
@@ -765,12 +997,14 @@ const Sync = {
                     'Client Updated At': P.date(data.updatedAt)
                 };
 
-                // FIX #7: Include Media property if local media exists
-                if (data.media?.length > 0) {
+                // Include Media property and upload local blobs when needed.
+                if (Array.isArray(data.media)) {
                     const uploadedMedia = [];
+                    const normalizedMedia = [];
                     for (const m of data.media) {
-                        if (m.url) {
+                        if (m.url || m.fileUploadId) {
                             uploadedMedia.push(m);
+                            normalizedMedia.push(m);
                         } else {
                             // Local media - try to upload. Uses localId or id field
                             const mediaId = m.localId || m.id;
@@ -779,29 +1013,45 @@ const Sync = {
                                     const blob = await PetTracker.MediaStore.get(`${mediaId}_upload`);
                                     if (blob) {
                                         const uploaded = await Media.uploadToNotion(blob, m.name || 'media.webp');
-                                        uploadedMedia.push({ name: m.name || 'media', url: uploaded.url });
+                                        const normalized = {
+                                            ...m,
+                                            name: m.name || 'media',
+                                            url: uploaded.url || m.url || '',
+                                            fileUploadId: uploaded.id || m.fileUploadId || null
+                                        };
+                                        uploadedMedia.push(normalized);
+                                        normalizedMedia.push(normalized);
+                                    } else {
+                                        normalizedMedia.push(m);
                                     }
                                 } catch (e) {
                                     console.warn(`[Sync] Media upload failed for ${mediaId}:`, e.message);
+                                    normalizedMedia.push(m);
                                 }
+                            } else {
+                                normalizedMedia.push(m);
                             }
                         }
                     }
-                    if (uploadedMedia.length > 0) {
-                        eventProps['Media'] = P.files(uploadedMedia);
-                    }
+                    eventProps['Media'] = P.files(uploadedMedia);
+                    // Persist normalized metadata to avoid re-uploading unchanged local media
+                    data.media = normalizedMedia;
                 }
 
                 return eventProps;
             }
 
-            case 'eventTypes':
+            case 'eventTypes': {
                 return {
                     'Name': P.title(data.name),
                     'Category': P.select(data.category),
                     'Tracking Mode': P.select(data.trackingMode),
                     'Uses Severity': P.checkbox(data.usesSeverity),
-                    'Default Scale': P.relation(await resolve(PetTracker.STORES.SCALES, data.defaultScaleId ? [data.defaultScaleId] : [])),
+                    'Default Scale': P.relation(await resolve(
+                        PetTracker.STORES.SCALES,
+                        data.defaultScaleId ? [data.defaultScaleId] : [],
+                        !!(data.usesSeverity && data.defaultScaleId)
+                    )),
                     'Default Color': P.select(data.defaultColor),
                     'Default Icon': P.richText(data.defaultIcon),
                     'Default Tags': P.multiSelect(data.defaultTags),
@@ -830,8 +1080,14 @@ const Sync = {
                     'Active': P.checkbox(data.active),
                     'Active Start': P.date(data.activeStart),
                     'Active End': P.date(data.activeEnd),
-                    'Related Pets': P.relation(await resolve(PetTracker.STORES.PETS, data.relatedPetIds || []))
+                    'Related Pets': P.relation(await resolve(
+                        PetTracker.STORES.PETS,
+                        data.relatedPetIds || [],
+                        false,
+                        true
+                    ))
                 };
+            }
 
             case 'scales':
                 return {
@@ -844,7 +1100,7 @@ const Sync = {
             case 'scaleLevels':
                 return {
                     'Name': P.title(data.name),
-                    'Scale': P.relation(await resolve(PetTracker.STORES.SCALES, data.scaleId ? [data.scaleId] : [])),
+                    'Scale': P.relation(await resolve(PetTracker.STORES.SCALES, data.scaleId ? [data.scaleId] : [], !!data.scaleId)),
                     'Order': P.number(data.order),
                     'Color': P.select(data.color),
                     'Numeric Value': P.number(data.numericValue),
@@ -859,7 +1115,12 @@ const Sync = {
                     'Email': P.richText(data.email),
                     'Address': P.richText(data.address),
                     'Notes': P.richText(data.notes),
-                    'Related Pets': P.relation(await resolve(PetTracker.STORES.PETS, data.relatedPetIds || []))
+                    'Related Pets': P.relation(await resolve(
+                        PetTracker.STORES.PETS,
+                        data.relatedPetIds || [],
+                        false,
+                        true
+                    ))
                 };
 
             default:
@@ -1001,48 +1262,82 @@ const Sync = {
     },
 
     /**
-     * FIX #1: Repair broken relations after pull
-     * Re-processes records that have null relation fields due to pull order issues
+     * Repair relation fields that may not have resolved on pull.
      */
     repairBrokenRelations: async () => {
         const settings = PetTracker.Settings.get();
+        const relationFieldsByStore = {
+            pets: ['primaryVetId', 'relatedContactIds'],
+            events: ['petIds', 'eventTypeId', 'severityLevelId', 'providerId'],
+            eventTypes: ['defaultScaleId', 'relatedPetIds'],
+            scaleLevels: ['scaleId'],
+            contacts: ['relatedPetIds']
+        };
+        const sources = [
+            { store: 'pets', storeName: PetTracker.STORES.PETS },
+            { store: 'events', storeName: PetTracker.STORES.EVENTS },
+            { store: 'eventTypes', storeName: PetTracker.STORES.EVENT_TYPES },
+            { store: 'scaleLevels', storeName: PetTracker.STORES.SCALE_LEVELS },
+            { store: 'contacts', storeName: PetTracker.STORES.CONTACTS }
+        ];
+
+        const normArray = (v) => Array.isArray(v) ? v.filter(Boolean) : [];
+        const asNullable = (v) => (v === undefined || v === '') ? null : v;
         let repaired = 0;
 
-        // Check events for broken relations
-        const events = await PetTracker.DB.getAll(PetTracker.STORES.EVENTS);
-        for (const event of events) {
-            let needsUpdate = false;
+        for (const { store, storeName } of sources) {
+            if (!settings.dataSources?.[store]) continue;
+            const relationFields = relationFieldsByStore[store] || [];
+            if (relationFields.length === 0) continue;
 
-            // If petIds is empty but we have notionId, we might have broken relations
-            if (event.notionId && (!event.petIds || event.petIds.length === 0 || event.petIds.includes(null))) {
-                // Re-fetch from Notion if datasource is configured
-                const dataSourceId = settings.dataSources?.events;
-                if (dataSourceId) {
-                    try {
-                        const page = await PetTracker.API.getPage(event.notionId);
-                        if (page && !page.archived) {
-                            const refreshed = Sync.fromNotionPage('events', page);
-                            await Sync.normalizeRelationFields('events', refreshed);
+            const records = await PetTracker.DB.getAll(storeName);
+            for (const record of records) {
+                if (!record?.notionId) continue;
 
-                            // Update fields that were null
-                            if (refreshed.petIds?.length > 0 && refreshed.petIds[0]) {
-                                event.petIds = refreshed.petIds;
-                                needsUpdate = true;
+                const looksBroken = relationFields.some(field => {
+                    const value = record[field];
+                    return Array.isArray(value)
+                        ? value.length === 0 || value.some(v => !v)
+                        : value === null || value === undefined || value === '';
+                });
+                if (!looksBroken) continue;
+
+                try {
+                    const page = await PetTracker.API.getPage(record.notionId);
+                    if (!page || page.archived) continue;
+
+                    const refreshed = Sync.fromNotionPage(store, page);
+                    await Sync.normalizeRelationFields(store, refreshed);
+
+                    let changed = false;
+                    for (const field of relationFields) {
+                        const currentValue = record[field];
+                        const refreshedValue = refreshed[field];
+
+                        if (Array.isArray(refreshedValue) || Array.isArray(currentValue)) {
+                            const curr = normArray(currentValue);
+                            const next = normArray(refreshedValue);
+                            if (JSON.stringify(curr) !== JSON.stringify(next)) {
+                                record[field] = next;
+                                changed = true;
                             }
-                            if (refreshed.eventTypeId && !event.eventTypeId) {
-                                event.eventTypeId = refreshed.eventTypeId;
-                                needsUpdate = true;
+                        } else {
+                            const curr = asNullable(currentValue);
+                            const next = asNullable(refreshedValue);
+                            if (curr !== next) {
+                                record[field] = next;
+                                changed = true;
                             }
                         }
-                    } catch (e) {
-                        console.warn(`[Sync] Could not repair event ${event.id}:`, e.message);
                     }
-                }
-            }
 
-            if (needsUpdate) {
-                await PetTracker.DB.put(PetTracker.STORES.EVENTS, event);
-                repaired++;
+                    if (changed) {
+                        await PetTracker.DB.put(storeName, record);
+                        repaired++;
+                    }
+                } catch (e) {
+                    console.warn(`[Sync] Could not repair ${store} ${record.id}:`, e.message);
+                }
             }
         }
 

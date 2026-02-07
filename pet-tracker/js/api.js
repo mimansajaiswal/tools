@@ -9,10 +9,12 @@ const API = {
      */
     request: async (method, endpoint, body = null) => {
         const settings = PetTracker.Settings.get();
-        const { workerUrl, proxyToken, notionToken, notionOAuthData } = settings;
+        const { workerUrl, proxyToken, notionToken, notionOAuthData, authMode } = settings;
 
-        // Use OAuth token if available, otherwise use direct token
-        const token = notionToken || notionOAuthData?.access_token;
+        // Honor selected auth mode first, then fall back to whichever token exists.
+        const token = authMode === 'oauth'
+            ? (notionOAuthData?.access_token || notionToken)
+            : (notionToken || notionOAuthData?.access_token);
 
         if (!workerUrl) throw new Error('Worker URL not configured');
         if (!token) throw new Error('Notion token not configured');
@@ -118,12 +120,21 @@ const API = {
 
     /**
      * Upload file to Notion (get upload URL)
+     * Prefer modern /file_uploads endpoint; fall back to /files for older workers.
      */
     getFileUploadUrl: async (fileName, contentType) => {
-        return API.request('POST', '/files', {
-            file_name: fileName,
-            content_type: contentType
-        });
+        try {
+            return await API.request('POST', '/file_uploads', {
+                object: 'file_upload',
+                filename: fileName,
+                content_type: contentType
+            });
+        } catch (e) {
+            return API.request('POST', '/files', {
+                file_name: fileName,
+                content_type: contentType
+            });
+        }
     },
 
     /**
@@ -193,7 +204,9 @@ const API = {
      */
     getEffectiveToken: () => {
         const settings = PetTracker.Settings.get();
-        return settings.notionToken || settings.notionOAuthData?.access_token || null;
+        return settings.authMode === 'oauth'
+            ? (settings.notionOAuthData?.access_token || settings.notionToken || null)
+            : (settings.notionToken || settings.notionOAuthData?.access_token || null);
     }
 };
 
@@ -246,11 +259,23 @@ const NotionProps = {
     }),
 
     files: (files) => ({
-        files: (files || []).map(f => ({
-            type: 'external',
-            name: f.name || 'file',
-            external: { url: f.url }
-        }))
+        files: (files || []).map(f => {
+            if (f.fileUploadId) {
+                return {
+                    type: 'file_upload',
+                    name: f.name || 'file',
+                    file_upload: { id: f.fileUploadId }
+                };
+            }
+            if (f.url) {
+                return {
+                    type: 'external',
+                    name: f.name || 'file',
+                    external: { url: f.url }
+                };
+            }
+            return null;
+        }).filter(Boolean)
     })
 };
 

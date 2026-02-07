@@ -5,7 +5,7 @@
  */
 
 const DB_NAME = 'PetTracker_DB';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const LS_PREFIX = 'pettracker_';
 
 // IndexedDB Store Names
@@ -55,10 +55,20 @@ const DB = {
                 ];
 
                 dataStores.forEach(storeName => {
+                    let store;
                     if (!db.objectStoreNames.contains(storeName)) {
-                        const store = db.createObjectStore(storeName, { keyPath: 'id' });
+                        store = db.createObjectStore(storeName, { keyPath: 'id' });
+                    } else {
+                        store = event.target.transaction.objectStore(storeName);
+                    }
+                    if (!store.indexNames.contains('notionId')) {
                         store.createIndex('notionId', 'notionId', { unique: false });
+                    }
+                    if (!store.indexNames.contains('updatedAt')) {
                         store.createIndex('updatedAt', 'updatedAt', { unique: false });
+                    }
+                    if (storeName === STORES.EVENTS && !store.indexNames.contains('startDate')) {
+                        store.createIndex('startDate', 'startDate', { unique: false });
                     }
                 });
 
@@ -164,6 +174,47 @@ const DB = {
         return all.filter(filterFn);
     },
 
+    getByIndexRange: async (storeName, indexName, range) => {
+        const db = await DB.open();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(storeName, 'readonly');
+            const store = tx.objectStore(storeName);
+            if (!store.indexNames.contains(indexName)) {
+                resolve(null);
+                return;
+            }
+            const index = store.index(indexName);
+            const request = index.getAll(range);
+            request.onsuccess = () => resolve(request.result || []);
+            request.onerror = () => reject(request.error);
+        });
+    },
+
+    getRecentByIndex: async (storeName, indexName, limit = 10) => {
+        const db = await DB.open();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(storeName, 'readonly');
+            const store = tx.objectStore(storeName);
+            if (!store.indexNames.contains(indexName)) {
+                resolve(null);
+                return;
+            }
+            const index = store.index(indexName);
+            const results = [];
+            const request = index.openCursor(null, 'prev');
+            request.onsuccess = () => {
+                const cursor = request.result;
+                if (!cursor || results.length >= limit) {
+                    resolve(results);
+                    return;
+                }
+                results.push(cursor.value);
+                cursor.continue();
+            };
+            request.onerror = () => reject(request.error);
+        });
+    },
+
     // Delete entire database (for reset)
     deleteDatabase: () => {
         return new Promise((resolve, reject) => {
@@ -184,12 +235,106 @@ const DB = {
  * Sync Queue Manager
  */
 const SyncQueue = {
+    getActiveForRecord: async (store, recordId) => {
+        return DB.query(
+            STORES.SYNC_QUEUE,
+            item => item.store === store &&
+                item.recordId === recordId &&
+                (item.status === 'pending' || item.status === 'failed')
+        );
+    },
+
+    removeMany: async (items = []) => {
+        for (const item of items) {
+            await DB.delete(STORES.SYNC_QUEUE, item.id);
+        }
+    },
+
     add: async (operation) => {
+        const existing = await SyncQueue.getActiveForRecord(operation.store, operation.recordId);
+        const now = new Date().toISOString();
+
+        const existingCreate = existing.find(item => item.type === 'create');
+        const existingUpdate = existing.find(item => item.type === 'update');
+        const existingDelete = existing.find(item => item.type === 'delete');
+
+        // Queue compaction: collapse conflicting operations for same record.
+        if (operation.type === 'update') {
+            if (existingDelete) {
+                return existingDelete;
+            }
+
+            if (existingCreate) {
+                existingCreate.data = { ...(existingCreate.data || {}), ...(operation.data || {}) };
+                existingCreate.status = 'pending';
+                existingCreate.error = null;
+                existingCreate.retryCount = existingCreate.retryCount || 0;
+                existingCreate.lastAttempt = now;
+                return DB.put(STORES.SYNC_QUEUE, existingCreate);
+            }
+
+            if (existingUpdate) {
+                existingUpdate.data = { ...(existingUpdate.data || {}), ...(operation.data || {}) };
+                existingUpdate.status = 'pending';
+                existingUpdate.error = null;
+                existingUpdate.lastAttempt = now;
+                return DB.put(STORES.SYNC_QUEUE, existingUpdate);
+            }
+        }
+
+        if (operation.type === 'create') {
+            if (existingDelete) {
+                await DB.delete(STORES.SYNC_QUEUE, existingDelete.id);
+            }
+
+            if (existingCreate) {
+                existingCreate.data = { ...(existingCreate.data || {}), ...(operation.data || {}) };
+                existingCreate.status = 'pending';
+                existingCreate.error = null;
+                existingCreate.lastAttempt = now;
+                return DB.put(STORES.SYNC_QUEUE, existingCreate);
+            }
+        }
+
+        if (operation.type === 'delete') {
+            const hasPendingCreateOrUpdate = existing.some(
+                item => item.type === 'create' || item.type === 'update'
+            );
+            await SyncQueue.removeMany(existing.filter(
+                item => item.type === 'create' || item.type === 'update'
+            ));
+
+            // Created-and-deleted before first sync: remove queue noise and skip remote delete.
+            if (hasPendingCreateOrUpdate && !operation.data?.notionId) {
+                if (existingDelete) {
+                    await DB.delete(STORES.SYNC_QUEUE, existingDelete.id);
+                }
+                return null;
+            }
+
+            if (existingDelete) {
+                existingDelete.data = {
+                    ...(existingDelete.data || {}),
+                    ...(operation.data || {}),
+                    notionId: operation.data?.notionId || existingDelete.data?.notionId || null
+                };
+                existingDelete.status = 'pending';
+                existingDelete.error = null;
+                existingDelete.lastAttempt = now;
+                return DB.put(STORES.SYNC_QUEUE, existingDelete);
+            }
+
+            // No known remote ID and no pending create/update to cancel -> skip.
+            if (!operation.data?.notionId) {
+                return null;
+            }
+        }
+
         const queueItem = {
             ...operation,
             id: generateId(),
             status: 'pending',
-            createdAt: new Date().toISOString(),
+            createdAt: now,
             retryCount: 0
         };
         return DB.put(STORES.SYNC_QUEUE, queueItem);
@@ -372,6 +517,8 @@ const MediaStore = {
  * LocalStorage Settings Manager (all keys prefixed with pettracker_)
  */
 const Settings = {
+    REQUIRED_DATA_SOURCE_KEYS: ['pets', 'events', 'eventTypes', 'scales', 'scaleLevels', 'contacts'],
+
     KEYS: {
         SETTINGS: LS_PREFIX + 'settings',
         LAST_SYNC: LS_PREFIX + 'last_sync',
@@ -404,6 +551,7 @@ const Settings = {
         gcalAccessToken: '',
         gcalCalendarId: '',
         gcalUserEmail: '',
+        syncCursors: {},
         uploadCapMb: 5,
         defaultPetId: null,
         calendarView: 'month',
@@ -422,12 +570,23 @@ const Settings = {
 
     set: (updates) => {
         const current = Settings.get();
-        // Deep merge for nested objects like dataSources and dataSourceNames
+        const hasDataSources = Object.prototype.hasOwnProperty.call(updates, 'dataSources');
+        const hasDataSourceNames = Object.prototype.hasOwnProperty.call(updates, 'dataSourceNames');
+        const hasSyncCursors = Object.prototype.hasOwnProperty.call(updates, 'syncCursors');
+
+        // Deep merge for nested objects while allowing explicit clears from forms.
         const merged = {
             ...current,
             ...updates,
-            dataSources: { ...(current.dataSources || {}), ...(updates.dataSources || {}) },
-            dataSourceNames: { ...(current.dataSourceNames || {}), ...(updates.dataSourceNames || {}) }
+            dataSources: hasDataSources
+                ? { ...(Settings.defaults.dataSources || {}), ...(updates.dataSources || {}) }
+                : { ...(current.dataSources || {}) },
+            dataSourceNames: hasDataSourceNames
+                ? { ...(Settings.defaults.dataSourceNames || {}), ...(updates.dataSourceNames || {}) }
+                : { ...(current.dataSourceNames || {}) },
+            syncCursors: hasSyncCursors
+                ? { ...(current.syncCursors || {}), ...(updates.syncCursors || {}) }
+                : { ...(current.syncCursors || {}) }
         };
         localStorage.setItem(Settings.KEYS.SETTINGS, JSON.stringify(merged));
         return merged;
@@ -435,9 +594,11 @@ const Settings = {
 
     isConnected: () => {
         const s = Settings.get();
-        // Check for dataSources mapping (at least pets and events should be mapped)
-        const hasDataSources = s.dataSources && (s.dataSources.pets || s.dataSources.events);
-        return !!(s.workerUrl && (s.notionToken || s.notionOAuthData) && hasDataSources);
+        const hasDataSources = Settings.REQUIRED_DATA_SOURCE_KEYS.every(
+            key => !!s.dataSources?.[key]
+        );
+        const hasToken = !!(s.notionToken || s.notionOAuthData?.access_token);
+        return !!(s.workerUrl && hasToken && hasDataSources);
     },
 
     isOnboardingDone: () => localStorage.getItem(Settings.KEYS.ONBOARDING_DONE) === 'true',

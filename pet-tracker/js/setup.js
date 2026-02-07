@@ -1,6 +1,6 @@
 /**
  * Pet Tracker - Setup Module
- * Manage Event Types, Scales, Scale Levels, Care Items, Care Plans
+ * Manage Event Types, Scales, and Scale Levels
  */
 
 const Setup = {
@@ -260,17 +260,26 @@ const Setup = {
             usesSeverity: false,
             allowAttachments: false,
             defaultValueKind: null,
+            defaultUnit: '',
+            defaultTags: [],
+            correlationGroup: '',
             isRecurring: false,
             scheduleType: 'Fixed',
             intervalValue: 1,
             intervalUnit: 'Months',
             anchorDate: PetTracker.UI.localDateYYYYMMDD(),
             endDate: '',
+            endAfterOccurrences: null,
             dueTime: '',
+            timeOfDayPreference: '',
             defaultDose: '',
+            defaultRoute: '',
             windowBefore: 0,
             windowAfter: 0,
-            relatedPetIds: []
+            relatedPetIds: [],
+            active: true,
+            activeStart: '',
+            activeEnd: ''
         };
 
         if (id) {
@@ -289,6 +298,14 @@ const Setup = {
         document.getElementById('eventTypeUsesSeverity').checked = data.usesSeverity;
         document.getElementById('eventTypeAllowAttachments').checked = data.allowAttachments;
         document.getElementById('eventTypeValueKind').value = data.defaultValueKind || '';
+        const defaultUnitEl = document.getElementById('eventTypeDefaultUnit');
+        if (defaultUnitEl) defaultUnitEl.value = data.defaultUnit || '';
+        const defaultTagsEl = document.getElementById('eventTypeDefaultTags');
+        if (defaultTagsEl) defaultTagsEl.value = Array.isArray(data.defaultTags) ? data.defaultTags.join(', ') : (data.defaultTags || '');
+        const correlationEl = document.getElementById('eventTypeCorrelationGroup');
+        if (correlationEl) correlationEl.value = data.correlationGroup || '';
+        const defaultRouteEl = document.getElementById('eventTypeDefaultRoute');
+        if (defaultRouteEl) defaultRouteEl.value = data.defaultRoute || '';
 
         // Populate and show scale selector
         await Setup.populateScaleDropdown(data.defaultScaleId || null);
@@ -307,10 +324,20 @@ const Setup = {
         document.getElementById('eventTypeIntervalUnit').value = data.intervalUnit || 'Months';
         document.getElementById('eventTypeAnchorDate').value = data.anchorDate || PetTracker.UI.localDateYYYYMMDD();
         document.getElementById('eventTypeEndDate').value = data.endDate || '';
+        const endAfterEl = document.getElementById('eventTypeEndAfterOccurrences');
+        if (endAfterEl) endAfterEl.value = data.endAfterOccurrences || '';
         document.getElementById('eventTypeDueTime').value = data.dueTime || '';
+        const timeOfDayEl = document.getElementById('eventTypeTimeOfDayPreference');
+        if (timeOfDayEl) timeOfDayEl.value = data.timeOfDayPreference || '';
         document.getElementById('eventTypeDefaultDose').value = data.defaultDose || '';
         document.getElementById('eventTypeWindowBefore').value = data.windowBefore || 0;
         document.getElementById('eventTypeWindowAfter').value = data.windowAfter || 0;
+        const activeEl = document.getElementById('eventTypeActive');
+        if (activeEl) activeEl.checked = data.active !== false;
+        const activeStartEl = document.getElementById('eventTypeActiveStart');
+        if (activeStartEl) activeStartEl.value = data.activeStart || '';
+        const activeEndEl = document.getElementById('eventTypeActiveEnd');
+        if (activeEndEl) activeEndEl.value = data.activeEnd || '';
 
         // Populate Todoist fields
         const todoistSyncEl = document.getElementById('eventTypeTodoistSync');
@@ -405,6 +432,16 @@ const Setup = {
         const defaultScaleId = usesSeverity ? (document.getElementById('eventTypeDefaultScale').value || null) : null;
         const allowAttachments = document.getElementById('eventTypeAllowAttachments').checked;
         const defaultValueKind = document.getElementById('eventTypeValueKind').value || null;
+        const defaultUnit = document.getElementById('eventTypeDefaultUnit')?.value?.trim() || null;
+        const defaultRoute = document.getElementById('eventTypeDefaultRoute')?.value || null;
+        const defaultTags = (document.getElementById('eventTypeDefaultTags')?.value || '')
+            .split(',')
+            .map(t => t.trim())
+            .filter(Boolean);
+        const correlationGroup = document.getElementById('eventTypeCorrelationGroup')?.value?.trim() || null;
+        const active = document.getElementById('eventTypeActive')?.checked ?? true;
+        const activeStart = document.getElementById('eventTypeActiveStart')?.value || null;
+        const activeEnd = document.getElementById('eventTypeActiveEnd')?.value || null;
 
         if (!name) {
             PetTracker.UI.toast('Name is required', 'error');
@@ -418,7 +455,9 @@ const Setup = {
         const intervalUnit = document.getElementById('eventTypeIntervalUnit')?.value || 'Months';
         const anchorDate = document.getElementById('eventTypeAnchorDate')?.value || null;
         const endDate = document.getElementById('eventTypeEndDate')?.value || null;
+        const endAfterOccurrences = parseInt(document.getElementById('eventTypeEndAfterOccurrences')?.value) || null;
         const dueTime = document.getElementById('eventTypeDueTime')?.value || null;
+        const timeOfDayPreference = document.getElementById('eventTypeTimeOfDayPreference')?.value || null;
         const defaultDose = document.getElementById('eventTypeDefaultDose')?.value?.trim() || null;
         const windowBefore = parseInt(document.getElementById('eventTypeWindowBefore')?.value) || 0;
         const windowAfter = parseInt(document.getElementById('eventTypeWindowAfter')?.value) || 0;
@@ -452,6 +491,10 @@ const Setup = {
             defaultScaleId,
             allowAttachments,
             defaultValueKind,
+            defaultUnit,
+            defaultTags,
+            correlationGroup,
+            defaultRoute,
             // Recurring schedule fields
             isRecurring,
             scheduleType: isRecurring ? scheduleType : null,
@@ -459,11 +502,16 @@ const Setup = {
             intervalUnit: isRecurring ? intervalUnit : null,
             anchorDate: isRecurring ? anchorDate : null,
             endDate: isRecurring ? endDate : null,
+            endAfterOccurrences: isRecurring ? endAfterOccurrences : null,
             dueTime: isRecurring ? dueTime : null,
+            timeOfDayPreference: isRecurring ? timeOfDayPreference : null,
             defaultDose,
             windowBefore: isRecurring ? windowBefore : null,
             windowAfter: isRecurring ? windowAfter : null,
             relatedPetIds,
+            active,
+            activeStart,
+            activeEnd,
             // Todoist fields
             todoistSync: isRecurring ? todoistSync : false,
             todoistProject: isRecurring && todoistSync ? todoistProject : null,
@@ -501,27 +549,30 @@ const Setup = {
     },
 
     deleteEventType: async (id) => {
-        if (!confirm('Delete this event type? Events using it will lose their type reference.')) return;
+        PetTracker.UI.confirm(
+            'Delete this event type? Events using it will lose their type reference.',
+            async () => {
+                // Get notionId before deleting locally so remote archive can work
+                const record = await PetTracker.DB.get(PetTracker.STORES.EVENT_TYPES, id);
+                const notionId = record?.notionId;
 
-        // Get notionId before deleting locally so remote archive can work
-        const record = await PetTracker.DB.get(PetTracker.STORES.EVENT_TYPES, id);
-        const notionId = record?.notionId;
+                // Queue delete with notionId before local delete
+                await PetTracker.SyncQueue.add({
+                    type: 'delete',
+                    store: 'eventTypes',
+                    recordId: id,
+                    data: { notionId }
+                });
 
-        // Queue delete with notionId before local delete
-        await PetTracker.SyncQueue.add({
-            type: 'delete',
-            store: 'eventTypes',
-            recordId: id,
-            data: { notionId }
-        });
+                await PetTracker.DB.delete(PetTracker.STORES.EVENT_TYPES, id);
 
-        await PetTracker.DB.delete(PetTracker.STORES.EVENT_TYPES, id);
+                if (PetTracker.Sync?.updatePendingCount) PetTracker.Sync.updatePendingCount();
+                PetTracker.UI.toast('Event type deleted', 'info');
 
-        if (PetTracker.Sync?.updatePendingCount) PetTracker.Sync.updatePendingCount();
-        PetTracker.UI.toast('Event type deleted', 'info');
-
-        App.state.eventTypes = await PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES);
-        Setup.renderTabContent();
+                App.state.eventTypes = await PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES);
+                Setup.renderTabContent();
+            }
+        );
     },
 
     // ============ CATEGORY COMBOBOX ============
@@ -762,33 +813,36 @@ const Setup = {
     },
 
     deleteScale: async (id) => {
-        if (!confirm('Delete this scale and all its levels?')) return;
+        PetTracker.UI.confirm(
+            'Delete this scale and all its levels?',
+            async () => {
+                // Delete levels first - queue with notionId before local delete
+                const levels = await PetTracker.DB.query(PetTracker.STORES.SCALE_LEVELS, l => l.scaleId === id);
+                for (const level of levels) {
+                    await PetTracker.SyncQueue.add({
+                        type: 'delete',
+                        store: 'scaleLevels',
+                        recordId: level.id,
+                        data: { notionId: level.notionId }
+                    });
+                    await PetTracker.DB.delete(PetTracker.STORES.SCALE_LEVELS, level.id);
+                }
 
-        // Delete levels first - queue with notionId before local delete
-        const levels = await PetTracker.DB.query(PetTracker.STORES.SCALE_LEVELS, l => l.scaleId === id);
-        for (const level of levels) {
-            await PetTracker.SyncQueue.add({
-                type: 'delete',
-                store: 'scaleLevels',
-                recordId: level.id,
-                data: { notionId: level.notionId }
-            });
-            await PetTracker.DB.delete(PetTracker.STORES.SCALE_LEVELS, level.id);
-        }
+                // Get notionId before deleting locally
+                const scale = await PetTracker.DB.get(PetTracker.STORES.SCALES, id);
+                await PetTracker.SyncQueue.add({
+                    type: 'delete',
+                    store: 'scales',
+                    recordId: id,
+                    data: { notionId: scale?.notionId }
+                });
+                await PetTracker.DB.delete(PetTracker.STORES.SCALES, id);
 
-        // Get notionId before deleting locally
-        const scale = await PetTracker.DB.get(PetTracker.STORES.SCALES, id);
-        await PetTracker.SyncQueue.add({
-            type: 'delete',
-            store: 'scales',
-            recordId: id,
-            data: { notionId: scale?.notionId }
-        });
-        await PetTracker.DB.delete(PetTracker.STORES.SCALES, id);
-
-        if (PetTracker.Sync?.updatePendingCount) PetTracker.Sync.updatePendingCount();
-        PetTracker.UI.toast('Scale deleted', 'info');
-        Setup.renderTabContent();
+                if (PetTracker.Sync?.updatePendingCount) PetTracker.Sync.updatePendingCount();
+                PetTracker.UI.toast('Scale deleted', 'info');
+                Setup.renderTabContent();
+            }
+        );
     },
 
     showScaleLevelModal: async (scaleId, levelId = null) => {

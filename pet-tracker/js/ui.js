@@ -82,6 +82,8 @@ const UI = {
             overlay.addEventListener('click', (e) => {
                 if (e.target === overlay) {
                     const modalId = overlay.closest('[id]')?.id;
+                    const modal = modalId ? document.getElementById(modalId) : null;
+                    if (modal?.dataset.disableOverlayClose === 'true') return;
                     if (modalId === 'addEventModal' && typeof App !== 'undefined') {
                         App.confirmCloseAddModal();
                     } else if (modalId) {
@@ -107,6 +109,9 @@ const UI = {
 
         // Escape key closes modal
         if (e.key === 'Escape') {
+            if (openModal.dataset.disableEscapeClose === 'true') {
+                return;
+            }
             e.preventDefault();
             if (modalId === 'addEventModal' && typeof App !== 'undefined') {
                 App.confirmCloseAddModal();

@@ -4,6 +4,9 @@
  */
 
 const Pets = {
+    photoObjectUrls: new Set(),
+    modalPreviewUrl: null,
+
     /**
      * Save a new pet
      */
@@ -211,6 +214,105 @@ const Pets = {
         </svg>`;
     },
 
+    isRemotePhotoUrl: (url) => typeof url === 'string' && /^https?:\/\//i.test(url),
+
+    getPhotoLocalId: (pet) => pet?.photo?.[0]?.localId || pet?.photo?.[0]?.id || null,
+
+    revokePhotoObjectUrls: () => {
+        for (const url of Pets.photoObjectUrls) {
+            try { URL.revokeObjectURL(url); } catch (_) { }
+        }
+        Pets.photoObjectUrls.clear();
+    },
+
+    revokeModalPreviewUrl: () => {
+        if (Pets.modalPreviewUrl && Pets.modalPreviewUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(Pets.modalPreviewUrl);
+        }
+        Pets.modalPreviewUrl = null;
+    },
+
+    setModalPhotoPreview: (src = null) => {
+        const wrap = document.getElementById('addPetPhotoPreviewWrap');
+        const img = document.getElementById('addPetPhotoPreviewImg');
+        const clearBtn = document.getElementById('addPetPhotoClearBtn');
+
+        if (!wrap || !img || !clearBtn) return;
+
+        if (!src) {
+            img.src = '';
+            wrap.classList.add('hidden');
+            clearBtn.classList.add('hidden');
+            return;
+        }
+
+        img.src = src;
+        wrap.classList.remove('hidden');
+        clearBtn.classList.remove('hidden');
+    },
+
+    hydrateLocalPhotoPreviews: async (container) => {
+        if (!container) return;
+
+        const imgs = Array.from(container.querySelectorAll('img[data-pet-photo-id]'));
+        for (const img of imgs) {
+            const localId = img.dataset.petPhotoId;
+            if (!localId) continue;
+
+            try {
+                const blob = await PetTracker.MediaStore.get(`${localId}_preview`) ||
+                    await PetTracker.MediaStore.get(`${localId}_upload`);
+                if (!blob) continue;
+
+                const objectUrl = URL.createObjectURL(blob);
+                Pets.photoObjectUrls.add(objectUrl);
+                img.src = objectUrl;
+                img.classList.remove('hidden');
+                const fallback = img.parentElement?.querySelector('[data-pet-photo-fallback]');
+                if (fallback) fallback.classList.add('hidden');
+            } catch (e) {
+                console.warn('[Pets] Failed to hydrate local photo preview:', e.message);
+            }
+        }
+    },
+
+    handlePhotoFileChange: async (inputEl) => {
+        const file = inputEl?.files?.[0];
+        if (!file) return;
+
+        try {
+            PetTracker.UI.showLoading('Processing pet photo...');
+            const processed = await Media.processAndStoreMedia([file]);
+            const media = processed.find(m => !m.error);
+            if (!media?.id) throw new Error(media?.error || 'Could not process photo');
+
+            const mediaIdEl = document.getElementById('addPetPhotoMediaId');
+            const urlEl = document.getElementById('addPetPhotoUrl');
+            if (mediaIdEl) mediaIdEl.value = media.id;
+            if (urlEl) urlEl.value = '';
+
+            Pets.revokeModalPreviewUrl();
+            Pets.modalPreviewUrl = media.previewUrl || null;
+            Pets.setModalPhotoPreview(Pets.modalPreviewUrl);
+            PetTracker.UI.hideLoading();
+        } catch (e) {
+            PetTracker.UI.hideLoading();
+            console.error('[Pets] Photo processing failed:', e);
+            PetTracker.UI.toast(`Photo error: ${e.message}`, 'error');
+        } finally {
+            if (inputEl) inputEl.value = '';
+        }
+    },
+
+    clearPhotoSelection: () => {
+        const mediaIdEl = document.getElementById('addPetPhotoMediaId');
+        const urlEl = document.getElementById('addPetPhotoUrl');
+        if (mediaIdEl) mediaIdEl.value = '';
+        if (urlEl) urlEl.value = '';
+        Pets.revokeModalPreviewUrl();
+        Pets.setModalPhotoPreview(null);
+    },
+
     /**
      * Render pet card
      */
@@ -221,9 +323,18 @@ const Pets = {
 
         // Determine what to show in the avatar area: photo > icon > species default
         const speciesIcon = PetTracker.UI.getSpeciesIcon(pet.species);
+        const photo = pet.photo?.[0] || null;
+        const localPhotoId = Pets.getPhotoLocalId(pet);
         let avatarContent;
-        if (pet.photo?.[0]?.url) {
-            avatarContent = `<img src="${pet.photo[0].url}" alt="${PetTracker.UI.escapeHtml(pet.name)}" class="w-full h-full object-cover">`;
+        if (photo?.url && Pets.isRemotePhotoUrl(photo.url)) {
+            avatarContent = `<img src="${photo.url}" alt="${PetTracker.UI.escapeHtml(pet.name)}" class="w-full h-full object-cover">`;
+        } else if (localPhotoId) {
+            avatarContent = `
+                <div data-pet-photo-fallback class="w-full h-full flex items-center justify-center">
+                    <i data-lucide="${speciesIcon}" class="w-7 h-7 text-earth-metal"></i>
+                </div>
+                <img data-pet-photo-id="${localPhotoId}" alt="${PetTracker.UI.escapeHtml(pet.name)}" class="hidden w-full h-full object-cover">
+            `;
         } else if (pet.icon) {
             avatarContent = PetTracker.UI.renderIcon(pet.icon, speciesIcon, 'w-7 h-7');
         } else {
@@ -272,6 +383,7 @@ const Pets = {
 
         // Clear pet detail state when going back to list
         PetTracker.Settings.setUIState({ viewingPetId: null });
+        Pets.revokePhotoObjectUrls();
 
         const pets = await Pets.getAll();
 
@@ -298,6 +410,38 @@ const Pets = {
         `;
 
         if (window.lucide) lucide.createIcons();
+        await Pets.hydrateLocalPhotoPreviews(container);
+    },
+
+    /**
+     * Populate contact selectors used in Add/Edit Pet modal
+     */
+    populateContactSelectors: async (primaryVetId = null, relatedContactIds = []) => {
+        const contacts = await PetTracker.DB.getAll(PetTracker.STORES.CONTACTS);
+        const primaryVetSelect = document.getElementById('addPetPrimaryVet');
+        const relatedContactsContainer = document.getElementById('addPetRelatedContacts');
+
+        if (primaryVetSelect) {
+            primaryVetSelect.innerHTML = '<option value="">None</option>' +
+                contacts
+                    .filter(c => c.role === 'Vet' || c.role === 'Emergency' || c.role === 'Other')
+                    .map(c => `<option value="${c.id}" ${c.id === primaryVetId ? 'selected' : ''}>${PetTracker.UI.escapeHtml(c.name)} (${c.role || 'Contact'})</option>`)
+                    .join('');
+        }
+
+        if (relatedContactsContainer) {
+            if (contacts.length === 0) {
+                relatedContactsContainer.innerHTML = '<p class="text-xs text-earth-metal">No contacts yet. Add contacts from the Contacts tab.</p>';
+                return;
+            }
+
+            relatedContactsContainer.innerHTML = contacts.map(contact => `
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" value="${contact.id}" ${relatedContactIds.includes(contact.id) ? 'checked' : ''} class="w-4 h-4">
+                    <span class="text-sm">${PetTracker.UI.escapeHtml(contact.name)} ${contact.role ? `(${PetTracker.UI.escapeHtml(contact.role)})` : ''}</span>
+                </label>
+            `).join('');
+        }
     },
 
     /**
@@ -308,6 +452,12 @@ const Pets = {
         if (form) form.reset();
 
         document.getElementById('addPetColor').value = '#8b7b8e';
+        const photoUrlEl = document.getElementById('addPetPhotoUrl');
+        if (photoUrlEl) photoUrlEl.value = '';
+        const photoMediaIdEl = document.getElementById('addPetPhotoMediaId');
+        if (photoMediaIdEl) photoMediaIdEl.value = '';
+        Pets.revokeModalPreviewUrl();
+        Pets.setModalPhotoPreview(null);
         document.getElementById('addPetForm').dataset.editId = '';
 
         // Reset icon
@@ -318,6 +468,8 @@ const Pets = {
 
         const header = document.querySelector('#addPetModal .section-header');
         if (header) header.textContent = 'Add Pet';
+
+        Pets.populateContactSelectors(null, []);
 
         PetTracker.UI.openModal('addPetModal');
         if (window.lucide) lucide.createIcons();
@@ -346,6 +498,36 @@ const Pets = {
         if (statusEl) statusEl.value = pet.status || 'Active';
         const microchipEl = document.getElementById('addPetMicrochipId');
         if (microchipEl) microchipEl.value = pet.microchipId || '';
+        const photoUrlEl = document.getElementById('addPetPhotoUrl');
+        const photoMediaIdEl = document.getElementById('addPetPhotoMediaId');
+        const photo = pet.photo?.[0] || null;
+        const localPhotoId = Pets.getPhotoLocalId(pet);
+        if (photoUrlEl) {
+            photoUrlEl.value = (photo?.url && Pets.isRemotePhotoUrl(photo.url)) ? photo.url : '';
+        }
+        if (photoMediaIdEl) {
+            photoMediaIdEl.value = localPhotoId || '';
+        }
+        Pets.revokeModalPreviewUrl();
+        if (photo?.url && Pets.isRemotePhotoUrl(photo.url)) {
+            Pets.setModalPhotoPreview(photo.url);
+        } else if (localPhotoId) {
+            try {
+                const blob = await PetTracker.MediaStore.get(`${localPhotoId}_preview`) ||
+                    await PetTracker.MediaStore.get(`${localPhotoId}_upload`);
+                if (blob) {
+                    Pets.modalPreviewUrl = URL.createObjectURL(blob);
+                    Pets.setModalPhotoPreview(Pets.modalPreviewUrl);
+                } else {
+                    Pets.setModalPhotoPreview(null);
+                }
+            } catch (e) {
+                console.warn('[Pets] Failed to load local pet photo preview:', e.message);
+                Pets.setModalPhotoPreview(null);
+            }
+        } else {
+            Pets.setModalPhotoPreview(null);
+        }
         const weightMinEl = document.getElementById('addPetWeightMin');
         if (weightMinEl) weightMinEl.value = pet.targetWeightMin || '';
         const weightMaxEl = document.getElementById('addPetWeightMax');
@@ -354,6 +536,8 @@ const Pets = {
         if (weightUnitEl) weightUnitEl.value = pet.weightUnit || 'lb';
         const isPrimaryEl = document.getElementById('addPetIsPrimary');
         if (isPrimaryEl) isPrimaryEl.checked = !!pet.isPrimary;
+
+        await Pets.populateContactSelectors(pet.primaryVetId || null, pet.relatedContactIds || []);
 
         // Populate icon field
         const iconInput = document.getElementById('addPetIcon');
@@ -404,6 +588,16 @@ const Pets = {
             adoptionDate: document.getElementById('addPetAdoptionDate')?.value || null,
             status: document.getElementById('addPetStatus')?.value || 'Active',
             microchipId: document.getElementById('addPetMicrochipId')?.value?.trim() || '',
+            photo: (() => {
+                const mediaId = document.getElementById('addPetPhotoMediaId')?.value?.trim() || '';
+                if (mediaId) {
+                    return [{ id: mediaId, localId: mediaId, name: 'pet-photo.webp' }];
+                }
+                const photoUrl = document.getElementById('addPetPhotoUrl')?.value?.trim() || '';
+                return photoUrl ? [{ name: 'Pet Photo', url: photoUrl }] : [];
+            })(),
+            primaryVetId: document.getElementById('addPetPrimaryVet')?.value || null,
+            relatedContactIds: Array.from(document.querySelectorAll('#addPetRelatedContacts input[type="checkbox"]:checked')).map(cb => cb.value),
             targetWeightMin: parseFloat(document.getElementById('addPetWeightMin')?.value) || null,
             targetWeightMax: parseFloat(document.getElementById('addPetWeightMax')?.value) || null,
             weightUnit: document.getElementById('addPetWeightUnit')?.value || 'lb',
@@ -425,6 +619,7 @@ const Pets = {
             }
 
             PetTracker.UI.closeModal('addPetModal');
+            Pets.revokeModalPreviewUrl();
 
             // Refresh
             await App.loadData();
@@ -499,8 +694,17 @@ const Pets = {
                         <div class="w-32 h-32 bg-oatmeal flex items-center justify-center flex-shrink-0 overflow-hidden">
                             ${(() => {
                 const speciesIcon = PetTracker.UI.getSpeciesIcon(pet.species);
-                if (pet.photo?.[0]?.url) {
-                    return `<img src="${pet.photo[0].url}" alt="${PetTracker.UI.escapeHtml(pet.name)}" class="w-full h-full object-cover">`;
+                const photo = pet.photo?.[0] || null;
+                const localPhotoId = Pets.getPhotoLocalId(pet);
+                if (photo?.url && Pets.isRemotePhotoUrl(photo.url)) {
+                    return `<img src="${photo.url}" alt="${PetTracker.UI.escapeHtml(pet.name)}" class="w-full h-full object-cover">`;
+                } else if (localPhotoId) {
+                    return `
+                        <div data-pet-photo-fallback class="w-full h-full flex items-center justify-center">
+                            <i data-lucide="${speciesIcon}" class="w-16 h-16 text-earth-metal"></i>
+                        </div>
+                        <img data-pet-photo-id="${localPhotoId}" alt="${PetTracker.UI.escapeHtml(pet.name)}" class="hidden w-full h-full object-cover">
+                    `;
                 } else if (pet.icon) {
                     return PetTracker.UI.renderIcon(pet.icon, speciesIcon, 'w-16 h-16');
                 } else {
@@ -603,6 +807,8 @@ const Pets = {
         `;
 
         if (window.lucide) lucide.createIcons();
+        Pets.revokePhotoObjectUrls();
+        await Pets.hydrateLocalPhotoPreviews(container);
     },
 
     /**

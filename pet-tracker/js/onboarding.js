@@ -57,6 +57,12 @@ const Onboarding = {
         recurringTypes: []
     },
 
+    defaultSelections: {
+        eventTypes: ['medication', 'symptom', 'vet-visit', 'walk', 'weight', 'vaccine'],
+        scales: ['symptom-severity', 'activity-level'],
+        recurringTypes: ['heartworm', 'flea-tick', 'rabies', 'annual-checkup']
+    },
+
     /**
      * Initialize onboarding
      */
@@ -68,12 +74,28 @@ const Onboarding = {
             Onboarding.currentStep = 1;
         }
 
-        // Pre-select recommended items
-        Onboarding.selections.eventTypes = ['medication', 'symptom', 'vet-visit', 'walk', 'weight', 'vaccine'];
-        Onboarding.selections.scales = ['symptom-severity', 'activity-level'];
-        Onboarding.selections.recurringTypes = ['heartworm', 'flea-tick', 'rabies', 'annual-checkup'];
+        const savedSelections = settings.onboardingSelections || {};
+        Onboarding.selections.eventTypes = Array.isArray(savedSelections.eventTypes)
+            ? savedSelections.eventTypes
+            : [...Onboarding.defaultSelections.eventTypes];
+        Onboarding.selections.scales = Array.isArray(savedSelections.scales)
+            ? savedSelections.scales
+            : [...Onboarding.defaultSelections.scales];
+        Onboarding.selections.recurringTypes = Array.isArray(savedSelections.recurringTypes)
+            ? savedSelections.recurringTypes
+            : [...Onboarding.defaultSelections.recurringTypes];
 
         Onboarding.updateUI();
+    },
+
+    persistSelections: () => {
+        PetTracker.Settings.set({
+            onboardingSelections: {
+                eventTypes: [...Onboarding.selections.eventTypes],
+                scales: [...Onboarding.selections.scales],
+                recurringTypes: [...Onboarding.selections.recurringTypes]
+            }
+        });
     },
 
     /**
@@ -117,6 +139,11 @@ const Onboarding = {
      * Update UI to reflect current step
      */
     updateUI: () => {
+        PetTracker.Settings.set({
+            onboardingInProgress: true,
+            onboardingStep: Onboarding.currentStep
+        });
+
         // Update step indicators
         document.querySelectorAll('#onboardingSteps [data-step]').forEach(el => {
             const step = parseInt(el.dataset.step);
@@ -288,6 +315,7 @@ const Onboarding = {
 
         Onboarding.updateDropdownLabel(type);
         Onboarding.updateSelectAllState(type);
+        Onboarding.persistSelections();
     },
 
     /**
@@ -313,6 +341,7 @@ const Onboarding = {
         }
 
         Onboarding.updateDropdownLabel(type);
+        Onboarding.persistSelections();
     },
 
     /**
@@ -387,8 +416,9 @@ const Onboarding = {
             case 3:
                 const notionToken = document.getElementById('onboardingNotionToken')?.value;
                 const dbVerified = document.getElementById('onboardingDatabasesVerified')?.value === 'true';
+                const hasEffectiveToken = !!PetTracker.API.getEffectiveToken();
 
-                if (!notionToken) {
+                if (!notionToken && !hasEffectiveToken) {
                     PetTracker.UI.toast('Notion connection required', 'error');
                     return false;
                 }
@@ -545,12 +575,14 @@ const Onboarding = {
     requiredProperties: {
         'Pets': [
             'Name', 'Species', 'Breed', 'Sex', 'Birth Date', 'Adoption Date', 'Status',
-            'Microchip ID', 'Photo', 'Tags', 'Notes', 'Primary Vet', 'Related Contacts',
-            'Target Weight Min', 'Target Weight Max', 'Weight Unit', 'Color', 'Icon', 'Is Primary'
+            'Microchip ID', 'Tags', 'Notes',
+            'Target Weight Min', 'Target Weight Max', 'Weight Unit', 'Color', 'Is Primary',
+            'Photo'
         ],
         'Events': [
-            'Title', 'Pet(s)', 'Event Type', 'Start Date', 'End Date', 'Status',
-            'Severity Level', 'Value', 'Unit', 'Duration', 'Notes', 'Media', 'Tags',
+            'Title', 'Pet(s)', 'Event Type', 'Start Date', 'Status',
+            'Severity Level', 'Value', 'Unit', 'Duration', 'Notes', 'Tags',
+            'Media',
             'Source', 'Provider', 'Cost', 'Cost Category', 'Cost Currency',
             'Todoist Task ID', 'Client Updated At'
         ],
@@ -577,12 +609,19 @@ const Onboarding = {
         const container = document.getElementById('onboardingDbList');
         const verifyBtn = document.getElementById('onboardingDbVerifyBtn');
 
-        if (!token) {
-            PetTracker.UI.toast('Enter a Notion token', 'error');
-            return;
+        if (token) {
+            PetTracker.Settings.set({
+                notionToken: token,
+                authMode: 'token',
+                notionOAuthData: null
+            });
         }
 
-        PetTracker.Settings.set({ notionToken: token });
+        const effectiveToken = PetTracker.API.getEffectiveToken();
+        if (!effectiveToken) {
+            PetTracker.UI.toast('Enter a Notion token or connect via OAuth', 'error');
+            return;
+        }
 
         try {
             PetTracker.UI.showLoading('Scanning Notion...');
@@ -667,6 +706,30 @@ const Onboarding = {
         const selects = document.querySelectorAll('#onboardingDbList select[data-source]');
         let allSet = true;
         const mapping = {};
+        const storeMapping = {
+            'Pets': 'pets',
+            'Events': 'events',
+            'Event Types': 'eventTypes',
+            'Scales': 'scales',
+            'Scale Levels': 'scaleLevels',
+            'Contacts': 'contacts'
+        };
+        const dataSources = {
+            pets: '',
+            events: '',
+            eventTypes: '',
+            scales: '',
+            scaleLevels: '',
+            contacts: ''
+        };
+        const dataSourceNames = {
+            pets: '',
+            events: '',
+            eventTypes: '',
+            scales: '',
+            scaleLevels: '',
+            contacts: ''
+        };
 
         selects.forEach(sel => {
             const label = sel.closest('.grid')?.querySelector('label');
@@ -689,35 +752,20 @@ const Onboarding = {
                 }
             }
             mapping[sel.dataset.source] = sel.value;
+            const storeKey = storeMapping[sel.dataset.source];
+            if (storeKey) {
+                dataSources[storeKey] = sel.value || '';
+                if (sel.value && sel.selectedIndex >= 0) {
+                    dataSourceNames[storeKey] = sel.options[sel.selectedIndex].text;
+                } else {
+                    dataSourceNames[storeKey] = '';
+                }
+            }
         });
 
+        PetTracker.Settings.set({ dataSources, dataSourceNames });
+
         if (allSet) {
-            const storeMapping = {
-                'Pets': 'pets',
-                'Events': 'events',
-                'Event Types': 'eventTypes',
-                'Scales': 'scales',
-                'Scale Levels': 'scaleLevels',
-                'Contacts': 'contacts'
-            };
-
-            const dataSources = {};
-            const dataSourceNames = {};
-
-            Object.keys(mapping).forEach(key => {
-                if (storeMapping[key]) {
-                    const storeKey = storeMapping[key];
-                    dataSources[storeKey] = mapping[key];
-
-                    // Get the selected option's text (database name)
-                    const select = document.querySelector(`#onboardingDbList select[data-source="${key}"]`);
-                    if (select && select.selectedIndex >= 0) {
-                        dataSourceNames[storeKey] = select.options[select.selectedIndex].text;
-                    }
-                }
-            });
-
-            PetTracker.Settings.set({ dataSources, dataSourceNames });
             document.getElementById('onboardingDatabasesVerified').value = 'true';
             PetTracker.UI.toast('Mapping complete', 'success');
         } else {
@@ -761,6 +809,11 @@ const Onboarding = {
 
             // Mark onboarding complete
             PetTracker.Settings.setOnboardingDone(true);
+            PetTracker.Settings.set({
+                onboardingInProgress: false,
+                onboardingStep: null,
+                onboardingSelections: null
+            });
 
             // Clean up event listener
             document.removeEventListener('click', Onboarding.handleOutsideClick);

@@ -408,7 +408,21 @@ const Calendar = {
      * Get filtered events
      */
     getFilteredEvents: async () => {
-        let events = await PetTracker.DB.getAll(PetTracker.STORES.EVENTS);
+        let events;
+        const { currentDate, view } = Calendar.state;
+
+        if (view === 'week') {
+            const start = new Date(currentDate);
+            start.setDate(currentDate.getDate() - currentDate.getDay());
+            const end = new Date(start);
+            end.setDate(start.getDate() + 6);
+            events = await Events.getForDateRange(start, end);
+        } else {
+            const start = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+            const end = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+            events = await Events.getForDateRange(start, end);
+        }
+
         const { petIds, eventTypeIds, tags } = Calendar.state.filters;
 
         if (petIds.length > 0) {
@@ -528,6 +542,9 @@ const Calendar = {
 
         const pet = App.state.pets.find(p => p.id === event.petIds?.[0]);
         const eventType = App.state.eventTypes.find(t => t.id === event.eventTypeId);
+        const provider = event.providerId
+            ? await PetTracker.DB.get(PetTracker.STORES.CONTACTS, event.providerId)
+            : null;
 
         // Determine icon to show
         const defaultIcon = eventType?.defaultIcon || 'activity';
@@ -594,6 +611,50 @@ const Calendar = {
                         <div class="meta-row text-sm">
                             <span class="meta-label">VALUE:</span>
                             <span class="meta-value">${event.value} ${event.unit || ''}</span>
+                        </div>
+                    ` : ''}
+
+                    ${event.endDate ? `
+                        <div class="meta-row text-sm">
+                            <span class="meta-label">END:</span>
+                            <span class="meta-value">${PetTracker.UI.formatDate(event.endDate)}</span>
+                            ${event.endDate.includes('T') ? `
+                                <span class="meta-separator">//</span>
+                                <span class="meta-label">TIME:</span>
+                                <span class="meta-value">${PetTracker.UI.formatTime(event.endDate)}</span>
+                            ` : ''}
+                        </div>
+                    ` : ''}
+
+                    ${event.duration !== null && event.duration !== undefined ? `
+                        <div class="meta-row text-sm">
+                            <span class="meta-label">DURATION:</span>
+                            <span class="meta-value">${event.duration} min</span>
+                        </div>
+                    ` : ''}
+
+                    ${(event.cost !== null && event.cost !== undefined) ? `
+                        <div class="meta-row text-sm">
+                            <span class="meta-label">COST:</span>
+                            <span class="meta-value">${event.cost} ${event.costCurrency || ''}</span>
+                            ${event.costCategory ? `
+                                <span class="meta-separator">//</span>
+                                <span class="meta-value">${PetTracker.UI.escapeHtml(event.costCategory)}</span>
+                            ` : ''}
+                        </div>
+                    ` : ''}
+
+                    ${provider ? `
+                        <div class="meta-row text-sm">
+                            <span class="meta-label">PROVIDER:</span>
+                            <span class="meta-value">${PetTracker.UI.escapeHtml(provider.name)}</span>
+                        </div>
+                    ` : ''}
+
+                    ${event.media?.length > 0 ? `
+                        <div class="meta-row text-sm">
+                            <span class="meta-label">ATTACHMENTS:</span>
+                            <span class="meta-value">${event.media.length}</span>
                         </div>
                     ` : ''}
 

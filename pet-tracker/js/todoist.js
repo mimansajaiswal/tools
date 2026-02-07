@@ -1,6 +1,6 @@
 /**
  * Pet Tracker - Todoist Integration
- * Two-way sync for care plan tasks
+ * Two-way sync for recurring event-type tasks
  */
 
 const Todoist = {
@@ -118,7 +118,9 @@ const Todoist = {
 
                 // If nextDue is missing or stale, recalculate it
                 if (!nextDue || nextDue < now) {
-                    const calculatedDue = Todoist.calculateNextDue(eventType);
+                    const calculatedDue = eventType.scheduleType === 'Rolling' && typeof Care !== 'undefined'
+                        ? await Care.computeNextDueForEventType(eventType)
+                        : Todoist.calculateNextDue(eventType);
                     if (calculatedDue) {
                         nextDue = new Date(calculatedDue);
                         // Update the event type with the new nextDue

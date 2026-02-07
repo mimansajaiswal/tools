@@ -133,25 +133,32 @@ const Events = {
     getForDateRange: async (startDate, endDate) => {
         const start = new Date(startDate);
         start.setHours(0, 0, 0, 0);
-        const startTime = start.getTime();
+        const startIso = start.toISOString();
 
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999); // End of day to include same-day events
-        const endTime = end.getTime();
+        const endIso = end.toISOString();
 
-        return PetTracker.DB.query(
-            PetTracker.STORES.EVENTS,
-            e => {
-                const eventDate = new Date(e.startDate).getTime();
-                return eventDate >= startTime && eventDate <= endTime;
-            }
-        );
+        const range = IDBKeyRange.bound(startIso, endIso);
+        const indexed = await PetTracker.DB.getByIndexRange(PetTracker.STORES.EVENTS, 'startDate', range);
+        if (indexed !== null) return indexed;
+
+        // Fallback for older DBs without startDate index
+        const startTime = start.getTime();
+        const endTime = end.getTime();
+        return PetTracker.DB.query(PetTracker.STORES.EVENTS, e => {
+            const eventDate = new Date(e.startDate).getTime();
+            return eventDate >= startTime && eventDate <= endTime;
+        });
     },
 
     /**
      * Get recent events
      */
     getRecent: async (limit = 10) => {
+        const recent = await PetTracker.DB.getRecentByIndex(PetTracker.STORES.EVENTS, 'startDate', limit);
+        if (recent !== null) return recent;
+
         const all = await Events.getAll();
         all.sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
         return all.slice(0, limit);
@@ -211,54 +218,35 @@ const Events = {
         // Close any existing drawer
         Calendar.closeEventDetail?.();
 
-        // Populate the add modal with event data
+        const date = event.startDate?.includes('T') ? event.startDate.slice(0, 10) : (event.startDate || '');
+        const time = event.startDate?.includes('T') ? event.startDate.slice(11, 16) : '';
+        App.openAddModal({
+            pet: event.petIds?.[0] || null,
+            type: event.eventTypeId || null,
+            date,
+            time,
+            value: event.value ?? '',
+            unit: event.unit || '',
+            notes: event.notes || '',
+            severityLevelId: event.severityLevelId || null,
+            endDate: event.endDate || '',
+            duration: event.duration ?? '',
+            cost: event.cost ?? '',
+            costCategory: event.costCategory || '',
+            costCurrency: event.costCurrency || '',
+            providerId: event.providerId || null,
+            tags: event.tags || []
+        });
+
+        // Mark form as editing after openAddModal reset
         const form = document.getElementById('addEventForm');
-        if (form) form.dataset.editId = id;
-
-        // Set pet
-        const petSelect = document.getElementById('addEventPet');
-        if (petSelect && event.petIds?.[0]) {
-            petSelect.value = event.petIds[0];
-        }
-
-        // Set event type
-        const typeSelect = document.getElementById('addEventType');
-        if (typeSelect && event.eventTypeId) {
-            typeSelect.value = event.eventTypeId;
-        }
-
-        // Set date/time
-        if (event.startDate) {
-            const dateInput = document.getElementById('addEventDate');
-            const timeInput = document.getElementById('addEventTime');
-
-            if (event.startDate.includes('T')) {
-                dateInput.value = event.startDate.slice(0, 10);
-                timeInput.value = event.startDate.slice(11, 16);
-            } else {
-                dateInput.value = event.startDate;
-                timeInput.value = '';
-            }
-        }
-
-        // Set value
-        const valueInput = document.getElementById('addEventValue');
-        if (valueInput) valueInput.value = event.value ?? '';
-
-        // Set notes
-        const notesInput = document.getElementById('addEventNotes');
-        if (notesInput) notesInput.value = event.notes || '';
-
-        // Set severity (trigger update based on event type, then select the saved value)
-        if (event.eventTypeId) {
-            await App.updateSeveritySelector(event.eventTypeId, event.severityLevelId);
+        if (form) {
+            form.dataset.editId = id;
         }
 
         // Update header
         const header = document.querySelector('#addEventModal .section-header');
         if (header) header.textContent = 'Edit Event';
-
-        PetTracker.UI.openModal('addEventModal');
     },
 
     /**

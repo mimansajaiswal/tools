@@ -61,7 +61,7 @@ const Care = {
         // Find last completed event for this event type, optionally filtered by pet
         const events = await PetTracker.DB.query(
             PetTracker.STORES.EVENTS,
-            e => e.eventTypeId === eventType.id && e.status === 'Completed' &&
+            e => e.eventTypeId === eventType.id && (e.status === 'Completed' || e.status === 'Missed') &&
                 (!petId || (e.petIds && e.petIds.includes(petId)))
         );
 
@@ -91,6 +91,55 @@ const Care = {
         }
 
         return PetTracker.UI.localDateYYYYMMDD(lastDate);
+    },
+
+    /**
+     * Compute next due for an event type, honoring per-pet rolling schedules
+     */
+    computeNextDueForEventType: async (eventType) => {
+        if (!eventType?.isRecurring) return null;
+
+        if (eventType.scheduleType !== 'Rolling') {
+            return Care.calculateNextDue(eventType);
+        }
+
+        const relatedPets = eventType.relatedPetIds?.length > 0
+            ? eventType.relatedPetIds
+            : [null];
+        const dueDates = [];
+        for (const petId of relatedPets) {
+            const due = await Care.calculateRollingNextDue(eventType, petId);
+            if (due) dueDates.push(due);
+        }
+        if (dueDates.length === 0) return null;
+        dueDates.sort((a, b) => new Date(a) - new Date(b));
+        return dueDates[0];
+    },
+
+    /**
+     * Advance a YYYY-MM-DD date by the configured interval
+     */
+    advanceDueByInterval: (baseDate, eventType) => {
+        if (!baseDate) return null;
+        const d = new Date(baseDate);
+        const interval = eventType.intervalValue || 1;
+        switch (eventType.intervalUnit) {
+            case 'Days':
+                d.setDate(d.getDate() + interval);
+                break;
+            case 'Weeks':
+                d.setDate(d.getDate() + (interval * 7));
+                break;
+            case 'Months':
+                d.setMonth(d.getMonth() + interval);
+                break;
+            case 'Years':
+                d.setFullYear(d.getFullYear() + interval);
+                break;
+            default:
+                d.setDate(d.getDate() + 1);
+        }
+        return PetTracker.UI.localDateYYYYMMDD(d);
     },
 
     /**
@@ -259,11 +308,11 @@ const Care = {
                                 </p>
                             </div>
                             <div class="flex gap-2">
-                                <button onclick="Care.markComplete('${item.eventTypeId}')" 
+                                <button onclick="Care.markComplete('${item.eventTypeId}', '${item.petIds?.[0] || ''}')" 
                                         class="btn-primary px-3 py-1 font-mono text-[10px] uppercase">
                                     Done
                                 </button>
-                                <button onclick="Care.skipOnce('${item.eventTypeId}')" 
+                                <button onclick="Care.skipOnce('${item.eventTypeId}', '${item.petIds?.[0] || ''}')" 
                                         class="btn-secondary px-3 py-1 font-mono text-[10px] uppercase">
                                     Skip
                                 </button>
@@ -285,14 +334,14 @@ const Care = {
     /**
      * Mark a recurring event type item as complete (create event)
      */
-    markComplete: async (eventTypeId) => {
+    markComplete: async (eventTypeId, petId = null) => {
         const eventType = await PetTracker.DB.get(PetTracker.STORES.EVENT_TYPES, eventTypeId);
         if (!eventType) return;
 
         // Create completed event
         await Events.create({
             title: eventType.name,
-            petIds: eventType.relatedPetIds || [],
+            petIds: petId ? [petId] : (eventType.relatedPetIds || []),
             eventTypeId: eventType.id,
             startDate: new Date().toISOString(),
             status: 'Completed',
@@ -300,7 +349,17 @@ const Care = {
         });
 
         // Update event type's next due and queue for sync
-        const nextDue = await Care.calculateRollingNextDue(eventType);
+        let nextDue;
+        if (eventType.scheduleType === 'Rolling') {
+            nextDue = await Care.computeNextDueForEventType(eventType);
+        } else if (eventType.scheduleType === 'One-off') {
+            nextDue = null;
+        } else {
+            nextDue = Care.advanceDueByInterval(
+                eventType.nextDue || PetTracker.UI.localDateYYYYMMDD(),
+                eventType
+            );
+        }
         const updatedEventType = {
             ...eventType,
             nextDue,
@@ -327,40 +386,35 @@ const Care = {
     /**
      * Skip once (advance to next occurrence)
      */
-    skipOnce: async (eventTypeId) => {
+    skipOnce: async (eventTypeId, petId = null) => {
         const eventType = await PetTracker.DB.get(PetTracker.STORES.EVENT_TYPES, eventTypeId);
         if (!eventType) return;
 
         // Create a missed event
         await Events.create({
             title: eventType.name,
-            petIds: eventType.relatedPetIds || [],
+            petIds: petId ? [petId] : (eventType.relatedPetIds || []),
             eventTypeId: eventType.id,
             startDate: eventType.nextDue || PetTracker.UI.localDateYYYYMMDD(),
             status: 'Missed',
             source: 'Scheduled'
         });
 
-        // Advance next due by one interval
-        const current = new Date(eventType.nextDue || new Date());
-        switch (eventType.intervalUnit) {
-            case 'Days':
-                current.setDate(current.getDate() + (eventType.intervalValue || 1));
-                break;
-            case 'Weeks':
-                current.setDate(current.getDate() + ((eventType.intervalValue || 1) * 7));
-                break;
-            case 'Months':
-                current.setMonth(current.getMonth() + (eventType.intervalValue || 1));
-                break;
-            case 'Years':
-                current.setFullYear(current.getFullYear() + (eventType.intervalValue || 1));
-                break;
+        let nextDue;
+        if (eventType.scheduleType === 'Rolling') {
+            nextDue = await Care.computeNextDueForEventType(eventType);
+        } else if (eventType.scheduleType === 'One-off') {
+            nextDue = null;
+        } else {
+            nextDue = Care.advanceDueByInterval(
+                eventType.nextDue || PetTracker.UI.localDateYYYYMMDD(),
+                eventType
+            );
         }
 
         const updatedEventType = {
             ...eventType,
-            nextDue: PetTracker.UI.localDateYYYYMMDD(current),
+            nextDue,
             updatedAt: new Date().toISOString(),
             synced: false
         };

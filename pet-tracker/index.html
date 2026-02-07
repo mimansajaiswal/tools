@@ -280,7 +280,12 @@
                 </div>
                 <div>
                     <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Event Type *</label>
-                    <select id="addEventType" class="select-field" required></select>
+                    <div class="combobox-container">
+                        <input type="text" id="addEventTypeInput" class="input-field combobox-input"
+                            placeholder="Select event type..." autocomplete="off" required>
+                        <input type="hidden" id="addEventType">
+                        <div class="combobox-dropdown" id="addEventTypeDropdown"></div>
+                    </div>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
@@ -298,9 +303,15 @@
                         <option value="">-- Select Level --</option>
                     </select>
                 </div>
-                <div>
-                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Value</label>
-                    <input type="number" id="addEventValue" class="input-field" placeholder="e.g., weight, dose">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Value</label>
+                        <input type="number" id="addEventValue" class="input-field" placeholder="e.g., weight, dose">
+                    </div>
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Unit</label>
+                        <input type="text" id="addEventUnit" class="input-field" placeholder="e.g., lb, mg, mL">
+                    </div>
                 </div>
                 <div>
                     <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Notes</label>
@@ -365,9 +376,24 @@
                             </select>
                         </div>
                         <div>
-                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Tags (comma
-                                separated)</label>
-                            <input type="text" id="addEventTags" class="input-field" placeholder="tag1, tag2">
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Tags</label>
+                            <div class="multiselect-dropdown" id="addEventTagsDropdown">
+                                <button type="button"
+                                    class="multiselect-trigger input-field flex items-center justify-between"
+                                    onclick="App.toggleEventTagsMenu()" aria-expanded="false">
+                                    <span id="addEventTagsLabel"
+                                        class="multiselect-label text-sm text-earth-metal">Select or add tags...</span>
+                                    <i data-lucide="chevron-down"
+                                        class="w-4 h-4 text-earth-metal transition-transform"></i>
+                                </button>
+                                <div id="addEventTagsMenu"
+                                    class="multiselect-menu hidden absolute z-20 mt-1 w-full bg-white-linen border border-oatmeal shadow-lg max-h-56 overflow-y-auto p-2 space-y-2">
+                                    <input type="text" id="addEventTagsSearch" class="input-field"
+                                        placeholder="Search or add tag..." oninput="App.renderEventTagOptions()">
+                                    <div id="addEventTagsOptions" class="space-y-1"></div>
+                                </div>
+                                <div id="addEventTagsChips" class="multiselect-tags mt-2 hidden"></div>
+                            </div>
                         </div>
                     </div>
                 </details>
@@ -375,7 +401,7 @@
                     <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Attachments</label>
                     <div id="attachmentPreviewContainer" class="hidden flex flex-wrap gap-2 mb-3"></div>
                     <div class="border border-dashed border-oatmeal p-4 text-center">
-                        <input type="file" id="addEventFiles" class="hidden" multiple accept="image/*,video/*"
+                        <input type="file" id="addEventFiles" class="hidden" multiple accept="*/*"
                             onchange="App.handleFileInputChange(this)">
                         <button type="button" onclick="document.getElementById('addEventFiles').click()"
                             class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
@@ -671,8 +697,9 @@
 
     <!-- Onboarding Modal (Multi-step Wizard) -->
     <div id="onboardingModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
-        aria-modal="true" aria-labelledby="onboardingModalTitle">
-        <div class="absolute inset-0 modal-overlay"></div>
+        aria-modal="true" aria-labelledby="onboardingModalTitle" data-disable-escape-close="true"
+        data-disable-overlay-close="true">
+        <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
         <div
             class="relative bg-white-linen border border-oatmeal w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col z-10">
             <div class="p-4 border-b border-oatmeal flex-shrink-0">
@@ -1081,6 +1108,38 @@
                             <input type="text" id="addPetMicrochipId" class="input-field"
                                 placeholder="Microchip number">
                         </div>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Photo</label>
+                            <input type="file" id="addPetPhotoFile" class="input-field" accept="image/*"
+                                onchange="Pets.handlePhotoFileChange(this)">
+                            <input type="hidden" id="addPetPhotoMediaId">
+                            <div id="addPetPhotoPreviewWrap" class="hidden mt-2">
+                                <img id="addPetPhotoPreviewImg" src="" alt="Pet photo preview"
+                                    class="w-24 h-24 object-cover border border-oatmeal">
+                            </div>
+                            <button type="button" id="addPetPhotoClearBtn" onclick="Pets.clearPhotoSelection()"
+                                class="hidden mt-2 btn-secondary px-3 py-1 font-mono text-[10px] uppercase">
+                                Remove Photo
+                            </button>
+                        </div>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Photo URL
+                                (optional)</label>
+                            <input type="url" id="addPetPhotoUrl" class="input-field"
+                                placeholder="https://example.com/pet-photo.jpg">
+                        </div>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Primary Vet</label>
+                            <select id="addPetPrimaryVet" class="select-field">
+                                <option value="">None</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Related
+                                Contacts</label>
+                            <div id="addPetRelatedContacts"
+                                class="space-y-2 max-h-32 overflow-y-auto border border-oatmeal p-2"></div>
+                        </div>
                         <div class="grid grid-cols-3 gap-4">
                             <div>
                                 <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Target Weight
@@ -1375,6 +1434,34 @@
                         <option value="Temperature">Temperature</option>
                     </select>
                 </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Default Unit</label>
+                        <input type="text" id="eventTypeDefaultUnit" class="input-field" placeholder="e.g., lb, mg, mL">
+                    </div>
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Default Route</label>
+                        <select id="eventTypeDefaultRoute" class="select-field">
+                            <option value="">None</option>
+                            <option value="Oral">Oral</option>
+                            <option value="Topical">Topical</option>
+                            <option value="Injection">Injection</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Default Tags</label>
+                        <input type="text" id="eventTypeDefaultTags" class="input-field"
+                            placeholder="comma-separated tags">
+                    </div>
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Correlation Group</label>
+                        <input type="text" id="eventTypeCorrelationGroup" class="input-field"
+                            placeholder="e.g., Meds, Symptoms">
+                    </div>
+                </div>
                 <div class="space-y-3">
                     <label class="flex items-center gap-2 cursor-pointer">
                         <input type="checkbox" id="eventTypeUsesSeverity" class="w-4 h-4"
@@ -1445,6 +1532,12 @@
                                 <input type="date" id="eventTypeEndDate" class="input-field">
                             </div>
                         </div>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">End After
+                                Occurrences</label>
+                            <input type="number" id="eventTypeEndAfterOccurrences" class="input-field" min="1"
+                                placeholder="Optional max occurrences">
+                        </div>
                         <div class="grid grid-cols-2 gap-4">
                             <div>
                                 <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Preferred
@@ -1452,11 +1545,23 @@
                                 <input type="time" id="eventTypeDueTime" class="input-field">
                             </div>
                             <div>
-                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Default
-                                    Dose/Amount</label>
-                                <input type="text" id="eventTypeDefaultDose" class="input-field"
-                                    placeholder="e.g., 1 tablet">
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Time of Day
+                                    Preference</label>
+                                <select id="eventTypeTimeOfDayPreference" class="select-field">
+                                    <option value="">Any</option>
+                                    <option value="Morning">Morning</option>
+                                    <option value="Afternoon">Afternoon</option>
+                                    <option value="Evening">Evening</option>
+                                    <option value="Night">Night</option>
+                                    <option value="Any">Any</option>
+                                </select>
                             </div>
+                        </div>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Default
+                                Dose/Amount</label>
+                            <input type="text" id="eventTypeDefaultDose" class="input-field"
+                                placeholder="e.g., 1 tablet">
                         </div>
                         <div class="grid grid-cols-2 gap-4">
                             <div>
@@ -1510,6 +1615,22 @@
                                         placeholder="pet-care, recurring">
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="border border-oatmeal p-4 space-y-4">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="eventTypeActive" class="w-4 h-4">
+                        <span class="text-sm font-medium">Active</span>
+                    </label>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Active Start</label>
+                            <input type="date" id="eventTypeActiveStart" class="input-field">
+                        </div>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Active End</label>
+                            <input type="date" id="eventTypeActiveEnd" class="input-field">
                         </div>
                     </div>
                 </div>
