@@ -6,6 +6,10 @@
 const Setup = {
     currentTab: 'eventTypes',
     editingId: null,
+    normalizeScheduleType: (value) => {
+        if (value === 'Rolling' || value === 'From completion date') return 'Rolling';
+        return 'Fixed';
+    },
 
     // Common Lucide icons for pet tracking (expanded set)
     availableIcons: [
@@ -115,7 +119,7 @@ const Setup = {
 
         container.innerHTML = `
             <div class="p-4 md:p-6 max-w-5xl mx-auto">
-                <div class="flex items-center justify-between mb-6">
+                <div class="setup-top-row flex flex-wrap items-start gap-3 justify-between mb-6">
                     <div>
                         <h2 class="font-serif text-2xl text-charcoal">Setup</h2>
                         <p class="text-sm text-earth-metal mt-1">Configure event types and scales</p>
@@ -198,7 +202,7 @@ const Setup = {
         });
 
         let html = `
-            <div class="flex items-center justify-between mb-4">
+            <div class="setup-tab-actions flex flex-wrap items-center gap-3 justify-between mb-4">
                 <p class="text-sm text-earth-metal">
                     ${eventTypes.length} event type${eventTypes.length !== 1 ? 's' : ''} configured
                 </p>
@@ -282,6 +286,7 @@ const Setup = {
             defaultRoute: '',
             windowBefore: 0,
             windowAfter: 0,
+            todoistSection: null,
             relatedPetIds: [],
             active: true,
             activeStart: '',
@@ -325,7 +330,7 @@ const Setup = {
 
         // Populate recurring fields
         document.getElementById('eventTypeIsRecurring').checked = data.isRecurring || false;
-        document.getElementById('eventTypeScheduleType').value = data.scheduleType || 'Fixed';
+        document.getElementById('eventTypeScheduleType').value = Setup.normalizeScheduleType(data.scheduleType || 'Fixed');
         document.getElementById('eventTypeIntervalValue').value = data.intervalValue || 1;
         document.getElementById('eventTypeIntervalUnit').value = data.intervalUnit || 'Months';
         document.getElementById('eventTypeAnchorDate').value = data.anchorDate || PetTracker.UI.localDateYYYYMMDD();
@@ -350,10 +355,13 @@ const Setup = {
         if (todoistSyncEl) todoistSyncEl.checked = data.todoistSync || false;
         const todoistProjectEl = document.getElementById('eventTypeTodoistProject');
         if (todoistProjectEl) todoistProjectEl.value = data.todoistProject || '';
+        const todoistSectionEl = document.getElementById('eventTypeTodoistSection');
+        if (todoistSectionEl) todoistSectionEl.value = data.todoistSection || '';
         const todoistLabelsEl = document.getElementById('eventTypeTodoistLabels');
         if (todoistLabelsEl) todoistLabelsEl.value = data.todoistLabels || '';
         const todoistLeadTimeEl = document.getElementById('eventTypeTodoistLeadTime');
         if (todoistLeadTimeEl) todoistLeadTimeEl.value = data.todoistLeadTime || 1;
+        await Setup.populateTodoistSections(data.todoistProject || '');
 
         // Toggle recurring fields visibility
         Setup.toggleRecurringFields();
@@ -365,6 +373,45 @@ const Setup = {
         document.getElementById('eventTypeModalTitle').textContent = id ? 'Edit Event Type' : 'Add Event Type';
 
         PetTracker.UI.openModal('eventTypeModal');
+    },
+
+    handleTodoistProjectChange: async () => {
+        const projectId = document.getElementById('eventTypeTodoistProject')?.value?.trim() || '';
+        await Setup.populateTodoistSections(projectId);
+    },
+
+    populateTodoistSections: async (projectId) => {
+        const dataList = document.getElementById('eventTypeTodoistSectionOptions');
+        const hint = document.getElementById('eventTypeTodoistSectionHint');
+        if (!dataList) return;
+
+        dataList.innerHTML = '';
+        if (!projectId) {
+            if (hint) hint.textContent = 'Enter Project ID to load section suggestions.';
+            return;
+        }
+
+        if (typeof Todoist === 'undefined' || !Todoist.isConfigured()) {
+            if (hint) hint.textContent = 'Todoist not connected. Enter section ID manually.';
+            return;
+        }
+
+        if (hint) hint.textContent = 'Loading sections...';
+        try {
+            const sections = await Todoist.getSections(projectId);
+            const optionsHtml = (sections || []).map(section => `
+                <option value="${PetTracker.UI.escapeHtml(section.id || '')}">${PetTracker.UI.escapeHtml(section.name || section.id || 'Section')}</option>
+            `).join('');
+            dataList.innerHTML = optionsHtml;
+            if (hint) {
+                hint.textContent = sections?.length
+                    ? `Loaded ${sections.length} section suggestion${sections.length === 1 ? '' : 's'}.`
+                    : 'No sections found for this project.';
+            }
+        } catch (e) {
+            console.warn('[Setup] Could not load Todoist sections:', e.message || e);
+            if (hint) hint.textContent = 'Could not load sections. Enter section ID manually.';
+        }
     },
 
     toggleRecurringFields: () => {
@@ -456,7 +503,7 @@ const Setup = {
 
         // Recurring schedule fields
         const isRecurring = document.getElementById('eventTypeIsRecurring')?.checked || false;
-        const scheduleType = document.getElementById('eventTypeScheduleType')?.value || 'Fixed';
+        const scheduleType = Setup.normalizeScheduleType(document.getElementById('eventTypeScheduleType')?.value || 'Fixed');
         const intervalValue = parseInt(document.getElementById('eventTypeIntervalValue')?.value) || 1;
         const intervalUnit = document.getElementById('eventTypeIntervalUnit')?.value || 'Months';
         const anchorDate = document.getElementById('eventTypeAnchorDate')?.value || null;
@@ -475,6 +522,7 @@ const Setup = {
         // Todoist integration fields (if present in modal)
         const todoistSync = document.getElementById('eventTypeTodoistSync')?.checked || false;
         const todoistProject = document.getElementById('eventTypeTodoistProject')?.value?.trim() || null;
+        const todoistSection = document.getElementById('eventTypeTodoistSection')?.value?.trim() || null;
         const todoistLabels = document.getElementById('eventTypeTodoistLabels')?.value?.trim() || null;
         const todoistLeadTime = parseInt(document.getElementById('eventTypeTodoistLeadTime')?.value) || 1;
 
@@ -521,6 +569,7 @@ const Setup = {
             // Todoist fields
             todoistSync: isRecurring ? todoistSync : false,
             todoistProject: isRecurring && todoistSync ? todoistProject : null,
+            todoistSection: isRecurring && todoistSync ? todoistSection : null,
             todoistLabels: isRecurring && todoistSync ? todoistLabels : null,
             todoistLeadTime: isRecurring && todoistSync ? todoistLeadTime : null,
             updatedAt: now,
@@ -693,7 +742,7 @@ const Setup = {
         });
 
         let html = `
-            <div class="flex items-center justify-between mb-4">
+            <div class="setup-tab-actions flex flex-wrap items-center gap-3 justify-between mb-4">
                 <p class="text-sm text-earth-metal">${scales.length} scale${scales.length !== 1 ? 's' : ''} configured</p>
                 <button onclick="Setup.showScaleModal()" class="btn-primary px-4 py-2 font-mono text-xs uppercase">
                     <i data-lucide="plus" class="w-4 h-4 inline mr-1"></i>Add Scale
@@ -717,16 +766,16 @@ const Setup = {
             for (const scale of scales) {
                 const levels = levelsByScale[scale.id] || [];
                 html += `
-                    <div class="border border-oatmeal p-4">
-                        <div class="flex items-center justify-between mb-3">
-                            <div class="flex items-center gap-3">
+                    <div class="setup-scale-card border border-oatmeal p-4">
+                        <div class="setup-scale-card-header flex flex-wrap items-center gap-2 justify-between mb-3">
+                            <div class="setup-scale-card-title flex items-center gap-3">
                                 <i data-lucide="gauge" class="w-5 h-5 text-dull-purple"></i>
                                 <div>
                                     <p class="text-sm text-charcoal font-medium">${PetTracker.UI.escapeHtml(scale.name)}</p>
                                     <p class="text-xs text-earth-metal">${scale.valueType || 'Labels'} • ${levels.length} levels</p>
                                 </div>
                             </div>
-                            <div class="flex gap-2">
+                            <div class="setup-scale-card-actions flex gap-2">
                                 <button onclick="Setup.showScaleModal('${scale.id}')" class="p-2 text-earth-metal hover:text-dull-purple">
                                     <i data-lucide="edit" class="w-4 h-4"></i>
                                 </button>
@@ -735,12 +784,12 @@ const Setup = {
                                 </button>
                             </div>
                         </div>
-                        <div class="flex flex-wrap gap-2">
+                        <div class="setup-scale-level-list flex flex-wrap gap-2">
                             ${levels.map(l => {
                     const colorObj = Setup.availableColors.find(c => c.value === l.color) || { hex: '#6b6357' };
                     return `<span class="px-2 py-1 text-xs font-mono" style="background: ${colorObj.hex}20; color: ${colorObj.hex}">${PetTracker.UI.escapeHtml(l.name)}</span>`;
                 }).join('')}
-                            <button onclick="Setup.showScaleLevelModal('${scale.id}')" class="px-2 py-1 text-xs font-mono text-dull-purple border border-dull-purple hover:bg-dull-purple/10">
+                            <button onclick="Setup.showScaleLevelModal('${scale.id}')" class="setup-add-level-btn px-2 py-1 text-xs font-mono text-dull-purple border border-dull-purple hover:bg-dull-purple/10">
                                 + Add Level
                             </button>
                         </div>
@@ -934,12 +983,20 @@ const Setup = {
         { key: 'type', label: 'Event Type', hint: 'The type of event (Walk, Vet, etc.)' },
         { key: 'date', label: 'Date', hint: 'Event date (supports natural dates like "today")' },
         { key: 'time', label: 'Time', hint: 'Event time (e.g., 08:00)' },
-        { key: 'status', label: 'Status', hint: 'Completed, Scheduled, or Cancelled' },
+        { key: 'status', label: 'Status', hint: 'Completed, Planned, or Missed' },
         { key: 'severity', label: 'Severity', hint: 'Severity level for the event' },
         { key: 'value', label: 'Value', hint: 'Numeric value (weight, dose, etc.)' },
         { key: 'unit', label: 'Unit', hint: 'Unit of measurement (lb, mg, etc.)' },
         { key: 'tags', label: 'Tags', hint: 'Categorization tags' },
-        { key: 'notes', label: 'Notes', hint: 'Free-text notes (also the fallback field)' }
+        { key: 'notes', label: 'Notes', hint: 'Free-text notes (also the fallback field)' },
+        { key: 'attachments', label: 'Attachments', hint: 'Attachment refs (e.g. 1, 2-3, all, filename)' },
+        { key: 'endDate', label: 'End Date', hint: 'Event end date (YYYY-MM-DD)' },
+        { key: 'duration', label: 'Duration', hint: 'Duration in minutes' },
+        { key: 'provider', label: 'Provider', hint: 'Vet/care provider contact ID' },
+        { key: 'cost', label: 'Cost', hint: 'Cost amount (numeric)' },
+        { key: 'costCategory', label: 'Cost Category', hint: 'e.g. Vet, Medication, Grooming' },
+        { key: 'costCurrency', label: 'Currency', hint: 'e.g. USD, EUR, INR' },
+        { key: 'todoistTaskId', label: 'Todoist Task', hint: 'Linked Todoist task ID' }
     ],
 
     renderQuickAddPrefixes: (container) => {
@@ -950,7 +1007,9 @@ const Setup = {
         let rows = Setup.quickAddFieldDefs.map(fd => {
             const prefixes = current[fd.key] || defaults[fd.key] || [];
             const defaultPrefixes = defaults[fd.key] || [];
-            const isDefault = JSON.stringify(prefixes) === JSON.stringify(defaultPrefixes);
+            const currentPrefix = prefixes[0] || '';
+            const defaultPrefix = defaultPrefixes[0] || '';
+            const isDefault = currentPrefix === defaultPrefix;
 
             return `
                 <div class="flex flex-col sm:flex-row items-start gap-2 p-3 border border-oatmeal">
@@ -960,10 +1019,10 @@ const Setup = {
                     </div>
                     <div class="flex-1 w-full">
                         <input type="text" id="qaPrefix_${fd.key}" class="input-field text-sm font-mono"
-                            value="${PetTracker.UI.escapeHtml(prefixes.join('  '))}"
-                            placeholder="${defaultPrefixes.join('  ')}">
+                            value="${PetTracker.UI.escapeHtml(currentPrefix)}"
+                            placeholder="${PetTracker.UI.escapeHtml(defaultPrefix)}">
                         <p class="text-[10px] text-earth-metal mt-1">
-                            Default: <span class="font-mono">${PetTracker.UI.escapeHtml(defaultPrefixes.join('  '))}</span>
+                            Default: <span class="font-mono">${PetTracker.UI.escapeHtml(defaultPrefix)}</span>
                             ${!isDefault ? ' <span class="text-dull-purple">(customized)</span>' : ''}
                         </p>
                     </div>
@@ -973,10 +1032,10 @@ const Setup = {
 
         container.innerHTML = `
             <div class="space-y-4">
-                <div class="flex items-start justify-between gap-4">
+                <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                     <div>
                         <p class="text-sm text-earth-metal">
-                            Configure the prefixes used to parse Quick Add input. Separate multiple prefixes with spaces.
+                            Configure the prefix used to parse each Quick Add field. One prefix per field.
                         </p>
                         <p class="text-xs text-earth-metal mt-1">
                             Example input: <span class="font-mono text-charcoal">pet:Luna type:Walk on:today #morning</span>
@@ -1014,19 +1073,18 @@ const Setup = {
                 return;
             }
             var raw = input.value.trim();
-            var prefixes;
+            var prefix;
             if (!raw) {
-                prefixes = defaults[fd.key] || [];
+                prefix = (defaults[fd.key] || [''])[0];
             } else {
-                prefixes = raw.split(/\s+/).filter(Boolean).map(function (p) { return p.trim(); });
-                prefixes = Array.from(new Set(prefixes));
+                prefix = raw.split(/\s+/)[0].trim();
             }
-            next[fd.key] = prefixes;
-            prefixes.forEach(p => {
-                var normalized = p.toLowerCase();
+            next[fd.key] = [prefix];
+            if (prefix) {
+                var normalized = prefix.toLowerCase();
                 if (!allPrefixes[normalized]) allPrefixes[normalized] = [];
-                allPrefixes[normalized].push({ original: p, field: fd.label });
-            });
+                allPrefixes[normalized].push({ original: prefix, field: fd.label });
+            }
         });
 
         var dupes = Object.entries(allPrefixes)
@@ -1087,7 +1145,7 @@ const Setup = {
             <div id="${containerId}Grid" class="hidden border border-oatmeal p-2 max-h-48 overflow-y-auto mb-4">
                 <input type="text" class="input-field text-xs mb-2" placeholder="Search icons..." 
                     oninput="Setup.filterIcons('${containerId}', this.value)">
-                <div class="grid grid-cols-8 gap-1" id="${containerId}Icons">
+                <div class="grid grid-cols-5 sm:grid-cols-8 gap-1" id="${containerId}Icons">
                     ${Setup.availableIcons.map(icon => `
                         <button type="button" class="p-2 hover:bg-oatmeal/50 ${icon === selectedIcon ? 'bg-dull-purple/20' : ''}" 
                             onclick="Setup.selectIcon('${containerId}', '${icon}')" title="${icon}">
@@ -1158,6 +1216,7 @@ const Setup = {
         const anchor = new Date(eventType.anchorDate);
         const interval = eventType.intervalValue || 1;
         const unit = eventType.intervalUnit || 'Months';
+        const maxOccurrences = Number(eventType.endAfterOccurrences) || null;
 
         // For Fixed schedule: find next occurrence from anchor
         // For Rolling schedule: nextDue is calculated based on last completion (handled elsewhere)
@@ -1166,6 +1225,7 @@ const Setup = {
         }
 
         let nextDue = new Date(anchor);
+        let occurrenceIndex = 1;
 
         // Find the next occurrence that is in the future
         while (nextDue <= now) {
@@ -1182,6 +1242,10 @@ const Setup = {
                 case 'Years':
                     nextDue.setFullYear(nextDue.getFullYear() + interval);
                     break;
+            }
+            occurrenceIndex += 1;
+            if (maxOccurrences && occurrenceIndex > maxOccurrences) {
+                return null;
             }
         }
 

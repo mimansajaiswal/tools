@@ -86,6 +86,8 @@ const UI = {
                     if (modal?.dataset.disableOverlayClose === 'true') return;
                     if (modalId === 'addEventModal' && typeof App !== 'undefined') {
                         App.confirmCloseAddModal();
+                    } else if (modalId === 'addPetModal' && typeof Pets !== 'undefined') {
+                        Pets.requestCloseModal();
                     } else if (modalId) {
                         UI.closeModal(modalId);
                     }
@@ -115,6 +117,8 @@ const UI = {
             e.preventDefault();
             if (modalId === 'addEventModal' && typeof App !== 'undefined') {
                 App.confirmCloseAddModal();
+            } else if (modalId === 'addPetModal' && typeof Pets !== 'undefined') {
+                Pets.requestCloseModal();
             } else {
                 UI.closeModal(modalId);
             }

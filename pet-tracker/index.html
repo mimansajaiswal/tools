@@ -64,7 +64,7 @@
 </head>
 
 <body
-    class="bg-white-linen text-charcoal font-sans min-h-screen flex flex-col md:flex-row overflow-hidden selection:bg-dull-purple selection:text-white-linen">
+    class="bg-white-linen text-charcoal font-sans min-h-screen flex flex-col md:flex-row overflow-x-hidden md:overflow-hidden selection:bg-dull-purple selection:text-white-linen">
 
     <!-- Skip Link -->
     <a href="#mainContent"
@@ -91,9 +91,18 @@
 
         <!-- Pet Filter -->
         <div class="p-3 border-b border-oatmeal">
-            <select id="petFilterDesktop" class="select-field text-sm" onchange="App.filterByPet(this.value)">
-                <option value="">All Pets</option>
-            </select>
+            <label class="font-mono text-[10px] uppercase text-earth-metal block mb-1">Pet Scope</label>
+            <div class="multiselect-dropdown" id="petFilterDesktopDropdown">
+                <button type="button" class="multiselect-trigger input-field flex items-center justify-between"
+                    onclick="App.toggleSidebarPetFilterMenu()" aria-expanded="false">
+                    <span id="petFilterDesktopLabel" class="multiselect-label text-sm text-earth-metal">All Pets</span>
+                    <i data-lucide="chevron-down" class="w-4 h-4 text-earth-metal transition-transform"></i>
+                </button>
+                <div id="petFilterDesktopMenu"
+                    class="multiselect-menu hidden absolute z-20 mt-1 w-full bg-white-linen border border-oatmeal shadow-lg max-h-72 overflow-y-auto p-2 space-y-1">
+                    <div id="petFilterDesktopOptions" class="space-y-1"></div>
+                </div>
+            </div>
         </div>
 
         <!-- Navigation -->
@@ -161,10 +170,10 @@
     </aside>
 
     <!-- Main Content -->
-    <main class="flex-1 flex flex-col min-h-0 h-screen">
+    <main class="flex-1 flex flex-col min-h-[100svh] md:min-h-0 md:h-screen">
         <!-- Header -->
         <header
-            class="h-14 md:h-16 border-b border-oatmeal flex items-center justify-between px-4 bg-white-linen flex-shrink-0">
+            class="h-14 md:h-16 border-b border-oatmeal flex items-center justify-between px-4 bg-white-linen flex-shrink-0 sticky top-0 z-30">
             <div class="flex items-center gap-3">
                 <!-- Mobile menu toggle -->
                 <button class="md:hidden p-2 -ml-2 text-earth-metal" onclick="App.toggleMobileMenu()">
@@ -194,15 +203,16 @@
                 <span id="lastSyncTime" class="hidden md:inline text-[10px] font-mono text-earth-metal">
                     Never synced
                 </span>
-                <!-- Mobile Add Button -->
-                <button onclick="App.openAddModal()" class="md:hidden p-2 text-dull-purple">
-                    <i data-lucide="plus" class="w-5 h-5"></i>
+                <button id="installPwaBtnMobile" onclick="App.promptInstall()"
+                    class="hidden md:hidden p-2 text-earth-metal hover:text-dull-purple transition-fast"
+                    title="Install app">
+                    <i data-lucide="download" class="w-5 h-5"></i>
                 </button>
             </div>
         </header>
 
         <!-- View Container -->
-        <div class="flex-1 overflow-y-auto">
+        <div id="mainScrollView" class="flex-1 min-h-0 overflow-y-auto overscroll-auto">
             <div data-view="dashboard"></div>
             <div data-view="calendar" class="hidden"></div>
             <div data-view="upcoming" class="hidden"></div>
@@ -212,9 +222,23 @@
             <div data-view="setup" class="hidden"></div>
         </div>
 
+        <!-- Mobile Floating Actions -->
+        <div class="mobile-action-stack md:hidden" aria-label="Quick actions">
+            <button type="button" class="mobile-action-btn mobile-action-btn-primary" onclick="App.openAddModal()"
+                aria-label="Add Event" title="Add Event">
+                <i data-lucide="plus-circle" class="w-4 h-4" aria-hidden="true"></i>
+                <span>Add Event</span>
+            </button>
+            <button type="button" class="mobile-action-btn mobile-action-btn-secondary"
+                onclick="PetTracker.QuickAddModal.open()" aria-label="Quick Add" title="Quick Add">
+                <i data-lucide="zap" class="w-4 h-4" aria-hidden="true"></i>
+                <span>Quick Add</span>
+            </button>
+        </div>
+
         <!-- Bottom Nav (Mobile) -->
         <nav
-            class="md:hidden h-16 border-t border-oatmeal flex items-center justify-around bg-white-linen flex-shrink-0">
+            class="mobile-bottom-nav md:hidden fixed bottom-0 inset-x-0 h-16 border-t border-oatmeal flex items-center justify-around bg-white-linen z-30">
             <button data-nav="dashboard" class="flex flex-col items-center gap-1 p-2 text-dull-purple">
                 <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
                 <span class="font-mono text-[9px] uppercase">Home</span>
@@ -299,6 +323,14 @@
                         <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Time</label>
                         <input type="time" id="addEventTime" class="input-field">
                     </div>
+                </div>
+                <div>
+                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Status</label>
+                    <select id="addEventStatus" class="select-field">
+                        <option value="Completed">Completed</option>
+                        <option value="Planned">Planned</option>
+                        <option value="Missed">Missed</option>
+                    </select>
                 </div>
                 <div id="addEventSeverityContainer" class="hidden">
                     <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Severity/Rating</label>
@@ -526,7 +558,7 @@
 
                 <!-- Database Tab -->
                 <div data-tab-panel="settings" data-panel="database" class="hidden space-y-4">
-                    <div class="flex items-center justify-between">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <div>
                             <span class="font-mono text-xs uppercase text-earth-metal">Data Source Mapping</span>
                             <p class="text-xs text-earth-metal mt-1">Click Scan to detect and map your Notion databases
@@ -540,7 +572,7 @@
 
                     <div id="dataSourceMapping" class="space-y-3">
                         <span class="font-mono text-xs uppercase text-earth-metal">Data Source Mapping</span>
-                        <div class="grid grid-cols-2 gap-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                                 <label class="font-mono text-[10px] uppercase text-earth-metal block mb-1">Pets</label>
                                 <select id="dsMapPets" class="select-field text-sm"></select>
@@ -576,6 +608,16 @@
                     <div id="schemaStatus" class="hidden">
                         <span class="font-mono text-xs uppercase text-earth-metal">Schema Status</span>
                         <div id="schemaStatusList" class="mt-2 space-y-1"></div>
+                    </div>
+
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Attachment Upload
+                            Cap</label>
+                        <select id="settingsUploadCapMb" class="select-field text-sm">
+                            <option value="5">5 MB (Free Workspace)</option>
+                            <option value="20">20 MB (Paid Soft Cap)</option>
+                        </select>
+                        <p class="text-xs text-earth-metal mt-1">Files above this cap are rejected before upload.</p>
                     </div>
                 </div>
 
@@ -616,11 +658,28 @@
                         <label for="settingsTodoistEnabled" class="font-mono text-xs uppercase text-charcoal">Enable
                             Todoist Integration</label>
                     </div>
+                    <div class="border border-oatmeal p-4 space-y-3">
+                        <span class="font-mono text-xs uppercase text-earth-metal">Todoist Account</span>
+                        <div id="todoistConnectionStatus" class="text-sm text-earth-metal">Not connected</div>
+                        <button onclick="App.startTodoistOAuth()"
+                            class="btn-secondary w-full px-4 py-2 font-mono text-xs uppercase flex items-center justify-center gap-2">
+                            <i data-lucide="check-square" class="w-4 h-4"></i>Connect with Todoist OAuth
+                        </button>
+                        <p class="text-xs text-earth-metal">OAuth token is preferred. Manual token still supported
+                            below.</p>
+                        <div id="todoistDisconnectSection" class="hidden">
+                            <button onclick="App.disconnectTodoistOAuth()"
+                                class="btn-secondary w-full px-4 py-2 font-mono text-xs uppercase">
+                                <i data-lucide="unlink" class="w-4 h-4 inline mr-2"></i>Disconnect Todoist OAuth
+                            </button>
+                        </div>
+                    </div>
                     <div>
                         <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Todoist API Token</label>
                         <input type="text" id="settingsTodoistToken" class="input-field masked-input" autocomplete="off"
                             data-lpignore="true" data-form-type="other" placeholder="Your Todoist token"
                             autocomplete="off">
+                        <p class="text-xs text-earth-metal mt-1">Used when OAuth is not connected.</p>
                     </div>
                 </div>
 
@@ -775,7 +834,7 @@
                         <input type="hidden" id="onboardingWorkerVerified" value="false">
                         <div id="onboardingWorkerStatus" class="hidden"></div>
 
-                        <div class="grid grid-cols-2 gap-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <button type="button" onclick="App.showWorkerCode()"
                                 class="btn-secondary px-3 py-2 font-mono text-xs uppercase">
                                 <i data-lucide="code" class="w-4 h-4 inline mr-2"></i>Code
@@ -1020,8 +1079,7 @@
         <div class="relative bg-white-linen border border-oatmeal w-full max-w-lg max-h-[90vh] overflow-y-auto z-10">
             <div class="sticky top-0 bg-white-linen border-b border-oatmeal p-4 flex items-center justify-between">
                 <span class="section-header">Add Pet</span>
-                <button onclick="PetTracker.UI.closeModal('addPetModal')"
-                    class="p-1 text-earth-metal hover:text-charcoal">
+                <button onclick="Pets.requestCloseModal()" class="p-1 text-earth-metal hover:text-charcoal">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
@@ -1175,7 +1233,7 @@
                     </div>
                 </details>
                 <div class="flex gap-3 justify-end pt-4 border-t border-oatmeal">
-                    <button type="button" onclick="PetTracker.UI.closeModal('addPetModal')"
+                    <button type="button" onclick="Pets.requestCloseModal()"
                         class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Cancel</button>
                     <button type="submit" class="btn-primary px-4 py-2 font-mono text-xs uppercase">Save Pet</button>
                 </div>
@@ -1236,7 +1294,7 @@
             </div>
 
             <!-- Tabs -->
-            <div class="border-b border-oatmeal flex items-center gap-1 px-4 flex-shrink-0">
+            <div class="border-b border-oatmeal flex flex-wrap items-center gap-1 px-3 md:px-4 flex-shrink-0">
                 <button type="button" id="qaTabQuick" onclick="PetTracker.QuickAddModal.selectTab('quick')"
                     class="px-4 py-2.5 font-mono text-xs uppercase border-b-2 border-dull-purple text-dull-purple bg-dull-purple/10 transition-all">
                     <i data-lucide="zap" class="w-3.5 h-3.5 inline mr-1"></i>Quick Add
@@ -1245,16 +1303,42 @@
                     class="px-4 py-2.5 font-mono text-xs uppercase border-b-2 border-transparent text-earth-metal bg-transparent transition-all">
                     <i data-lucide="sparkles" class="w-3.5 h-3.5 inline mr-1"></i>AI Add
                 </button>
-                <span id="qaAiDisabledHint" class="ml-auto text-[10px] text-earth-metal font-mono hidden">
+                <span id="qaAiDisabledHint" class="sm:ml-auto text-[10px] text-earth-metal font-mono hidden">
                     Set AI key in Settings
                 </span>
+            </div>
+
+            <!-- Shared Attachment Staging -->
+            <div class="border-b border-oatmeal p-4 space-y-2 flex-shrink-0">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <span class="font-mono text-xs uppercase text-earth-metal">Attachments (Optional)</span>
+                    <div class="flex flex-wrap gap-2 w-full sm:w-auto">
+                        <input type="file" id="qaAttachmentInput" class="hidden" multiple
+                            onchange="PetTracker.QuickAddModal.handleAttachmentInputChange(this)">
+                        <button type="button" onclick="document.getElementById('qaAttachmentInput')?.click()"
+                            class="btn-secondary px-3 py-1 font-mono text-[10px] uppercase">
+                            <i data-lucide="paperclip" class="w-3 h-3 inline mr-1"></i>Add Files
+                        </button>
+                        <button type="button" onclick="PetTracker.QuickAddModal.clearAttachments()"
+                            class="btn-secondary px-3 py-1 font-mono text-[10px] uppercase">
+                            Clear
+                        </button>
+                    </div>
+                </div>
+                <p class="text-[10px] text-earth-metal">
+                    Reference files in entries with <span class="font-mono text-charcoal">attach:1</span>,
+                    <span class="font-mono text-charcoal">attach:1,2</span>, <span
+                        class="font-mono text-charcoal">attach:2-4</span>, or <span
+                        class="font-mono text-charcoal">attach:all</span>.
+                </p>
+                <div id="qaAttachmentPreviewList" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
             </div>
 
             <!-- Quick Add Panel -->
             <section id="qaPanelQuick" class="flex-1 overflow-y-auto">
                 <div class="p-4 space-y-4">
                     <div id="qaMount"></div>
-                    <div class="flex justify-end gap-3 pt-3 border-t border-oatmeal">
+                    <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-3 border-t border-oatmeal">
                         <button type="button" onclick="PetTracker.QuickAddModal.close()"
                             class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Close</button>
                         <button type="button" id="qaSaveBtn" onclick="PetTracker.QuickAddModal.save()"
@@ -1527,9 +1611,8 @@
                         <div>
                             <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Schedule Type</label>
                             <select id="eventTypeScheduleType" class="select-field">
-                                <option value="Fixed">Fixed (from anchor date)</option>
-                                <option value="Rolling">Rolling (from last completion)</option>
-                                <option value="One-off">One-off (single occurrence)</option>
+                                <option value="Fixed">Regular (from anchor/start date)</option>
+                                <option value="Rolling">From completion date</option>
                             </select>
                         </div>
                         <div class="grid grid-cols-2 gap-4">
@@ -1628,14 +1711,27 @@
                                         <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Project
                                             ID (optional)</label>
                                         <input type="text" id="eventTypeTodoistProject" class="input-field"
+                                            onchange="Setup.handleTodoistProjectChange()"
                                             placeholder="Leave empty for Inbox">
                                     </div>
+                                    <div>
+                                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Section
+                                            ID (optional)</label>
+                                        <input type="text" id="eventTypeTodoistSection" class="input-field"
+                                            list="eventTypeTodoistSectionOptions" placeholder="Section within project">
+                                        <datalist id="eventTypeTodoistSectionOptions"></datalist>
+                                        <p id="eventTypeTodoistSectionHint" class="text-[10px] text-earth-metal mt-1">
+                                            Enter Project ID to load section suggestions.</p>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4">
                                     <div>
                                         <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Lead Time
                                             (days)</label>
                                         <input type="number" id="eventTypeTodoistLeadTime" class="input-field" value="1"
                                             min="0">
                                     </div>
+                                    <div></div>
                                 </div>
                                 <div>
                                     <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Labels
@@ -1912,6 +2008,52 @@ export default {
         }
 
         // Google Calendar OAuth - redirect-based flow
+        App.startTodoistOAuth = () => {
+            const workerUrl = document.getElementById('settingsWorkerUrl')?.value?.trim();
+            if (!workerUrl) {
+                PetTracker.UI.toast('Please enter Worker URL first in Connection tab', 'error');
+                return;
+            }
+            PetTracker.Settings.set({ workerUrl });
+            const returnUrl = encodeURIComponent(new URL('index.html', window.location.href).toString());
+            window.location.href = `https://notion-oauth-handler.mimansa-jaiswal.workers.dev/todoist/auth?from=${returnUrl}`;
+        };
+
+        App.disconnectTodoistOAuth = () => {
+            PetTracker.UI.confirm('Disconnect Todoist OAuth?', () => {
+                PetTracker.Settings.set({
+                    todoistOAuthData: null,
+                    todoistAuthMode: 'token',
+                    todoistToken: '',
+                    todoistLastCompletedSyncAt: ''
+                });
+                App.updateTodoistUI();
+                PetTracker.UI.toast('Todoist OAuth disconnected', 'success');
+            });
+        };
+
+        App.updateTodoistUI = () => {
+            const settings = PetTracker.Settings.get();
+            const statusEl = document.getElementById('todoistConnectionStatus');
+            const disconnectDiv = document.getElementById('todoistDisconnectSection');
+            const oauthEmail = settings.todoistOAuthData?.email || '';
+            const hasOAuth = !!settings.todoistOAuthData?.access_token;
+            const hasManual = !!settings.todoistToken;
+
+            if (statusEl) {
+                if (hasOAuth) {
+                    statusEl.innerHTML = `<span class="text-dull-purple">Connected via OAuth</span>${oauthEmail ? ` as ${PetTracker.UI.escapeHtml(oauthEmail)}` : ''}`;
+                } else if (hasManual) {
+                    statusEl.textContent = 'Using manual token';
+                } else {
+                    statusEl.textContent = 'Not connected';
+                }
+            }
+
+            if (disconnectDiv) disconnectDiv.classList.toggle('hidden', !hasOAuth);
+        };
+
+        // Google Calendar OAuth - redirect-based flow
         App.startGoogleOAuth = () => {
             const workerUrl = document.getElementById('settingsWorkerUrl')?.value?.trim();
             if (!workerUrl) {
@@ -1998,9 +2140,12 @@ export default {
                 document.getElementById('settingsAiApiKey').value = s.aiApiKey || '';
                 document.getElementById('settingsAiEndpoint').value = s.aiEndpoint || '';
                 document.getElementById('settingsTodoistEnabled').checked = s.todoistEnabled || false;
-                document.getElementById('settingsTodoistToken').value = s.todoistToken || '';
+                document.getElementById('settingsTodoistToken').value = (s.todoistAuthMode || 'token') === 'token' ? (s.todoistToken || '') : '';
                 document.getElementById('settingsGcalEnabled').checked = s.gcalEnabled || false;
                 document.getElementById('settingsGcalCalendarId').value = s.gcalCalendarId || '';
+                const uploadCap = document.getElementById('settingsUploadCapMb');
+                if (uploadCap) uploadCap.value = String(Number(s.uploadCapMb) >= 20 ? 20 : 5);
+                setTimeout(() => App.updateTodoistUI?.(), 100);
                 // Update Google Calendar UI
                 setTimeout(() => App.updateGcalUI(), 100);
                 // Update AI endpoint visibility

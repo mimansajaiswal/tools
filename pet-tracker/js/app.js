@@ -114,10 +114,11 @@ const App = {
 
         // PWA install prompt
         window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
             App.state.deferredPrompt = e;
             const installBtn = document.getElementById('installPwaBtn');
             if (installBtn) installBtn.classList.remove('hidden');
+            const installBtnMobile = document.getElementById('installPwaBtnMobile');
+            if (installBtnMobile) installBtnMobile.classList.remove('hidden');
             console.log('[App] PWA install prompt available');
         });
 
@@ -125,9 +126,14 @@ const App = {
             App.state.deferredPrompt = null;
             const installBtn = document.getElementById('installPwaBtn');
             if (installBtn) installBtn.classList.add('hidden');
+            const installBtnMobile = document.getElementById('installPwaBtnMobile');
+            if (installBtnMobile) installBtnMobile.classList.add('hidden');
             PetTracker.UI.toast('App installed successfully!', 'success');
             console.log('[App] PWA installed');
         });
+
+        // Guard against stale overflow locks from prior menu/modal state.
+        App.ensureScrollUnlocked();
 
         console.log('[App] Initialization complete');
     },
@@ -174,6 +180,9 @@ const App = {
             if (!e.target.closest('#addEventTagsDropdown')) {
                 App.closeEventTagsMenu();
             }
+            if (!e.target.closest('#petFilterDesktopDropdown')) {
+                App.closeSidebarPetFilterMenu();
+            }
         });
     },
 
@@ -210,6 +219,12 @@ const App = {
         };
         const headerTitle = document.getElementById('headerTitle');
         if (headerTitle) headerTitle.textContent = titles[viewName] || viewName;
+
+        const mobileActions = document.querySelector('.mobile-action-stack');
+        if (mobileActions) {
+            const shouldHide = ['setup'].includes(viewName);
+            mobileActions.classList.toggle('hidden', shouldHide);
+        }
 
         // Push to browser history for back/forward navigation
         if (pushHistory) {
@@ -250,6 +265,8 @@ const App = {
                 Setup.render();
                 break;
         }
+
+        App.ensureScrollUnlocked();
     },
 
     /**
@@ -274,14 +291,87 @@ const App = {
      * Populate pet filter dropdowns in sidebar
      */
     populatePetFilters: () => {
-        const desktopFilter = document.getElementById('petFilterDesktop');
-        if (desktopFilter) {
-            const activePet = App.state.activePetId || '';
-            desktopFilter.innerHTML = '<option value="">All Pets</option>' +
-                App.state.pets.map(p =>
-                    `<option value="${p.id}" ${p.id === activePet ? 'selected' : ''}>${PetTracker.UI.escapeHtml(p.name)}</option>`
-                ).join('');
+        App.renderSidebarPetFilter();
+    },
+
+    renderSidebarPetFilter: () => {
+        const optionsEl = document.getElementById('petFilterDesktopOptions');
+        if (!optionsEl) return;
+
+        const activePet = App.state.activePetId || '';
+        const options = [{ id: '', name: 'All Pets' }, ...(App.state.pets || [])]
+            .sort((a, b) => {
+                if (!a.id) return -1;
+                if (!b.id) return 1;
+                return (a.name || '').localeCompare(b.name || '');
+            });
+
+        optionsEl.innerHTML = options.map(opt => {
+            const isSelected = (opt.id || '') === activePet;
+            const encodedId = encodeURIComponent(opt.id || '');
+            const petColor = opt.id ? (opt.color || '#8b7b8e') : null;
+            return `
+                <button type="button" class="multiselect-option multiselect-option-single ${isSelected ? 'is-selected' : ''}" onclick="App.selectSidebarPetFilter('${encodedId}')">
+                    <span class="inline-flex items-center gap-2 min-w-0 flex-1">
+                        ${petColor
+                    ? `<span class="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:${petColor}"></span>`
+                    : '<span class="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0 bg-oatmeal"></span>'}
+                        <span class="multiselect-option-text">${PetTracker.UI.escapeHtml(opt.name || 'All Pets')}</span>
+                    </span>
+                    ${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-dull-purple"></i>' : ''}
+                </button>
+            `;
+        }).join('');
+
+        App.updateSidebarPetFilterLabel();
+        if (window.lucide) lucide.createIcons();
+    },
+
+    updateSidebarPetFilterLabel: () => {
+        const labelEl = document.getElementById('petFilterDesktopLabel');
+        if (!labelEl) return;
+
+        if (!App.state.activePetId) {
+            labelEl.textContent = 'All Pets';
+            labelEl.className = 'multiselect-label text-sm text-earth-metal';
+            return;
         }
+
+        const pet = (App.state.pets || []).find(p => p.id === App.state.activePetId);
+        labelEl.textContent = pet?.name || 'All Pets';
+        labelEl.className = 'multiselect-label text-sm text-charcoal';
+    },
+
+    toggleSidebarPetFilterMenu: () => {
+        const menu = document.getElementById('petFilterDesktopMenu');
+        const trigger = document.querySelector('#petFilterDesktopDropdown .multiselect-trigger');
+        if (!menu || !trigger) return;
+
+        const shouldOpen = menu.classList.contains('hidden');
+        App.closeSidebarPetFilterMenu();
+        if (!shouldOpen) return;
+
+        menu.classList.remove('hidden');
+        trigger.setAttribute('aria-expanded', 'true');
+        App.renderSidebarPetFilter();
+    },
+
+    closeSidebarPetFilterMenu: () => {
+        const menu = document.getElementById('petFilterDesktopMenu');
+        const trigger = document.querySelector('#petFilterDesktopDropdown .multiselect-trigger');
+        if (menu) menu.classList.add('hidden');
+        if (trigger) trigger.setAttribute('aria-expanded', 'false');
+    },
+
+    selectSidebarPetFilter: (encodedPetId) => {
+        let petId = '';
+        try {
+            petId = decodeURIComponent(encodedPetId || '');
+        } catch (_) {
+            petId = encodedPetId || '';
+        }
+        App.closeSidebarPetFilterMenu();
+        App.filterByPet(petId || null);
     },
 
     /**
@@ -294,9 +384,8 @@ const App = {
         // Restore pet filter if saved
         if (uiState.filterPetId) {
             App.state.activePetId = uiState.filterPetId;
-            const desktopFilter = document.getElementById('petFilterDesktop');
-            if (desktopFilter) desktopFilter.value = uiState.filterPetId;
         }
+        App.updateSidebarPetFilterLabel();
 
         // Show the saved view (don't push to history on restore)
         App.showView(currentView, false);
@@ -370,6 +459,8 @@ const App = {
 
         const timeInput = document.getElementById('addEventTime');
         if (timeInput) timeInput.value = prefill.time || new Date().toTimeString().slice(0, 5);
+        const statusInput = document.getElementById('addEventStatus');
+        if (statusInput) statusInput.value = prefill.status || 'Completed';
 
         // Clear other fields
         const valueInput = document.getElementById('addEventValue');
@@ -794,6 +885,7 @@ const App = {
         const value = document.getElementById('addEventValue')?.value;
         const unit = document.getElementById('addEventUnit')?.value?.trim() || null;
         const severityLevelId = document.getElementById('addEventSeverity')?.value || null;
+        const status = document.getElementById('addEventStatus')?.value || 'Completed';
 
         if (!petId || !date) {
             PetTracker.UI.toast('Please fill required fields', 'error');
@@ -837,6 +929,7 @@ const App = {
             value: value ? parseFloat(value) : null,
             unit,
             severityLevelId: severityLevelId || null,
+            status,
             duration: duration ? parseFloat(duration) : null,
             cost: cost ? parseFloat(cost) : null,
             costCategory,
@@ -851,7 +944,13 @@ const App = {
             if (App.state.pendingAttachments.length > 0) {
                 PetTracker.UI.showLoading('Processing attachments...');
                 const processedMedia = await Media.processAndStoreMedia(App.state.pendingAttachments);
+                const errors = processedMedia.filter(m => m.error);
                 const warnings = processedMedia.map(m => m.warning).filter(Boolean);
+                if (errors.length > 0) {
+                    PetTracker.UI.hideLoading();
+                    PetTracker.UI.toast(`Attachment error: ${errors[0].error}`, 'error');
+                    return;
+                }
 
                 // Add new media to existing media
                 const newMedia = processedMedia
@@ -878,7 +977,6 @@ const App = {
             } else {
                 await Events.create({
                     ...eventData,
-                    status: 'Completed',
                     source: 'Manual'
                 });
                 PetTracker.UI.toast('Event saved', 'success');
@@ -1164,7 +1262,10 @@ const App = {
         if (todoistEnabled) todoistEnabled.checked = settings.todoistEnabled || false;
 
         const todoistToken = document.getElementById('settingsTodoistToken');
-        if (todoistToken) todoistToken.value = settings.todoistToken || '';
+        if (todoistToken) {
+            const showManualToken = (settings.todoistAuthMode || 'token') === 'token';
+            todoistToken.value = showManualToken ? (settings.todoistToken || '') : '';
+        }
 
         // Populate GCal tab
         const gcalEnabled = document.getElementById('settingsGcalEnabled');
@@ -1173,6 +1274,10 @@ const App = {
         const gcalCalendarId = document.getElementById('settingsGcalCalendarId');
         if (gcalCalendarId) gcalCalendarId.value = settings.gcalCalendarId || '';
 
+        const uploadCap = document.getElementById('settingsUploadCapMb');
+        if (uploadCap) uploadCap.value = String(Number(settings.uploadCapMb) >= 20 ? 20 : 5);
+
+        if (typeof App.updateTodoistUI === 'function') App.updateTodoistUI();
         App.updateGcalUI();
 
         // Show data source mappings and populate with saved values
@@ -1312,42 +1417,6 @@ const App = {
     },
 
     /**
-     * Render analytics view (placeholder)
-     */
-    renderAnalytics: () => {
-        const container = document.querySelector('[data-view="analytics"]');
-        if (!container) return;
-
-        container.innerHTML = `
-            <div class="p-4">
-                ${PetTracker.UI.sectionHeader(1, 'Analytics')}
-                <div class="mt-4 space-y-6">
-                    <p class="text-earth-metal">Correlation view and trend dashboards coming soon...</p>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div class="card p-4">
-                            <h3 class="font-mono text-xs uppercase text-earth-metal mb-2">Weight Trends</h3>
-                            <p class="text-sm text-charcoal">Weight tracking with moving averages</p>
-                        </div>
-                        <div class="card p-4">
-                            <h3 class="font-mono text-xs uppercase text-earth-metal mb-2">Correlations</h3>
-                            <p class="text-sm text-charcoal">Event correlations with configurable time windows</p>
-                        </div>
-                        <div class="card p-4">
-                            <h3 class="font-mono text-xs uppercase text-earth-metal mb-2">Adherence</h3>
-                            <p class="text-sm text-charcoal">Recurring schedule adherence percentage</p>
-                        </div>
-                        <div class="card p-4">
-                            <h3 class="font-mono text-xs uppercase text-earth-metal mb-2">Activity Heatmap</h3>
-                            <p class="text-sm text-charcoal">Time-of-day activity patterns</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        if (window.lucide) lucide.createIcons();
-    },
-
-    /**
      * Show pet detail
      */
     showPetDetail: (petId) => {
@@ -1372,11 +1441,9 @@ const App = {
         // Save to UI state
         PetTracker.Settings.setUIState({ filterPetId: petId || null });
 
-        // Update filter dropdowns to match
-        const desktopFilter = document.getElementById('petFilterDesktop');
-        const mobileFilter = document.getElementById('petFilterMobile');
-        if (desktopFilter) desktopFilter.value = petId || '';
-        if (mobileFilter) mobileFilter.value = petId || '';
+        // Keep sidebar filter label/options in sync.
+        App.updateSidebarPetFilterLabel();
+        App.renderSidebarPetFilter();
 
         // Re-render current view
         if (App.state.currentView === 'dashboard') {
@@ -1427,7 +1494,19 @@ const App = {
         const overlay = document.getElementById('mobileMenuOverlay');
         if (sidebar) sidebar.classList.remove('mobile-menu-open');
         if (overlay) overlay.classList.add('hidden');
-        document.body.style.overflow = '';
+        App.ensureScrollUnlocked();
+    },
+
+    /**
+     * Keep body scroll unlocked unless a modal or mobile menu is actively open.
+     */
+    ensureScrollUnlocked: () => {
+        const sidebar = document.querySelector('aside');
+        const menuOpen = !!sidebar?.classList.contains('mobile-menu-open');
+        const modalOpen = !!document.querySelector('[role="dialog"]:not(.hidden)');
+        if (!menuOpen && !modalOpen) {
+            document.body.style.overflow = '';
+        }
     },
 
     /**
@@ -1467,6 +1546,8 @@ const App = {
 
             const installBtn = document.getElementById('installPwaBtn');
             if (installBtn) installBtn.classList.add('hidden');
+            const installBtnMobile = document.getElementById('installPwaBtnMobile');
+            if (installBtnMobile) installBtnMobile.classList.add('hidden');
         } catch (e) {
             console.error('[App] PWA install error:', e);
         }
@@ -1534,6 +1615,9 @@ const App = {
             searchParams.get('token') || searchParams.get('accessToken');
         const gcalToken = hashParams.get('gcalAccessToken') || searchParams.get('gcalAccessToken');
         const gcalEmail = hashParams.get('gcalEmail') || searchParams.get('gcalEmail');
+        const todoistToken = hashParams.get('todoistAccessToken') || hashParams.get('todoistToken') ||
+            searchParams.get('todoistAccessToken') || searchParams.get('todoistToken');
+        const todoistEmail = hashParams.get('todoistEmail') || searchParams.get('todoistEmail');
 
         let handled = false;
 
@@ -1583,6 +1667,25 @@ const App = {
             handled = true;
         }
 
+        if (todoistToken) {
+            const todoistSettings = {
+                todoistEnabled: true,
+                todoistAuthMode: 'oauth',
+                todoistLastCompletedSyncAt: '',
+                todoistOAuthData: {
+                    access_token: todoistToken,
+                    acquiredAt: new Date().toISOString(),
+                    email: todoistEmail || ''
+                }
+            };
+            PetTracker.Settings.set(todoistSettings);
+            PetTracker.UI.toast('Connected to Todoist!', 'success');
+            if (typeof App.updateTodoistUI === 'function') {
+                setTimeout(() => App.updateTodoistUI(), 100);
+            }
+            handled = true;
+        }
+
         if (handled) {
             try {
                 const cleanUrl = new URL(window.location.href);
@@ -1593,6 +1696,9 @@ const App = {
                 cleanUrl.searchParams.delete('workspaceIcon');
                 cleanUrl.searchParams.delete('gcalAccessToken');
                 cleanUrl.searchParams.delete('gcalEmail');
+                cleanUrl.searchParams.delete('todoistAccessToken');
+                cleanUrl.searchParams.delete('todoistToken');
+                cleanUrl.searchParams.delete('todoistEmail');
                 cleanUrl.hash = '';
                 window.history.replaceState({}, document.title, cleanUrl.pathname + cleanUrl.search);
             } catch (e) {
@@ -1647,10 +1753,30 @@ const App = {
         });
 
         const notionToken = document.getElementById('settingsNotionToken')?.value?.trim() || '';
+        const todoistTokenInput = document.getElementById('settingsTodoistToken')?.value?.trim() || '';
         const gcalEnabled = document.getElementById('settingsGcalEnabled')?.checked || false;
         const existing = PetTracker.Settings.get();
+        const uploadCapRaw = Number(document.getElementById('settingsUploadCapMb')?.value || existing.uploadCapMb || 5);
+        const uploadCapMb = uploadCapRaw >= 20 ? 20 : 5;
         const existingOAuthToken = existing.notionOAuthData?.access_token || '';
         const usingOAuthToken = !!existingOAuthToken && notionToken === existingOAuthToken;
+
+        const existingTodoistOAuthToken = existing.todoistOAuthData?.access_token || '';
+        const todoistUsingManualToken = !!todoistTokenInput;
+        const todoistAuthMode = todoistUsingManualToken
+            ? 'token'
+            : (existingTodoistOAuthToken ? 'oauth' : (existing.todoistAuthMode || 'token'));
+        const nextTodoistToken = todoistUsingManualToken
+            ? todoistTokenInput
+            : (existingTodoistOAuthToken ? (existing.todoistToken || '') : '');
+        const nextTodoistOAuthData = todoistUsingManualToken ? null : (existing.todoistOAuthData || null);
+        const existingTodoistEffectiveToken = (existing.todoistAuthMode === 'oauth')
+            ? (existing.todoistOAuthData?.access_token || existing.todoistToken || '')
+            : (existing.todoistToken || existing.todoistOAuthData?.access_token || '');
+        const nextTodoistEffectiveToken = (todoistAuthMode === 'oauth')
+            ? (nextTodoistOAuthData?.access_token || nextTodoistToken || '')
+            : (nextTodoistToken || nextTodoistOAuthData?.access_token || '');
+        const todoistTokenChanged = existingTodoistEffectiveToken !== nextTodoistEffectiveToken;
 
         const settings = {
             workerUrl: document.getElementById('settingsWorkerUrl')?.value?.trim() || '',
@@ -1665,7 +1791,11 @@ const App = {
             aiApiKey: document.getElementById('settingsAiApiKey')?.value?.trim() || '',
             aiEndpoint: document.getElementById('settingsAiEndpoint')?.value?.trim() || '',
             todoistEnabled: document.getElementById('settingsTodoistEnabled')?.checked || false,
-            todoistToken: document.getElementById('settingsTodoistToken')?.value?.trim() || '',
+            todoistToken: nextTodoistToken,
+            todoistAuthMode,
+            todoistOAuthData: nextTodoistOAuthData,
+            todoistLastCompletedSyncAt: todoistTokenChanged ? '' : (existing.todoistLastCompletedSyncAt || ''),
+            uploadCapMb,
             gcalEnabled,
             gcalCalendarId: document.getElementById('settingsGcalCalendarId')?.value || '',
             gcalAccessToken: gcalEnabled ? (existing.gcalAccessToken || '') : '',
@@ -1776,7 +1906,7 @@ const App = {
                     'Schedule Type', 'Interval Value', 'Interval Unit', 'Anchor Date', 'Due Time',
                     'Time of Day Preference', 'Window Before', 'Window After', 'End Date',
                     'End After Occurrences', 'Next Due', 'Todoist Sync', 'Todoist Project',
-                    'Todoist Labels', 'Todoist Lead Time', 'Default Dose', 'Default Route',
+                    'Todoist Section', 'Todoist Labels', 'Todoist Lead Time', 'Default Dose', 'Default Route',
                     'Active', 'Active Start', 'Active End', 'Related Pets'
                 ],
                 'Scales': ['Name', 'Value Type', 'Unit', 'Notes'],
@@ -1831,6 +1961,43 @@ const App = {
 
                     el.innerHTML = optionsHtml;
                 });
+            }
+
+            // Populate schema status summary for the currently selected mappings.
+            const schemaWrap = document.getElementById('schemaStatus');
+            const schemaList = document.getElementById('schemaStatusList');
+            if (schemaWrap && schemaList) {
+                const rows = ['Pets', 'Events', 'EventTypes', 'Contacts', 'Scales', 'ScaleLevels'].map(key => {
+                    const selectEl = document.getElementById(`dsMap${key}`);
+                    const selectedId = selectEl?.value || '';
+                    if (!selectedId) {
+                        return `
+                            <div class="text-xs border border-oatmeal p-2">
+                                <span class="font-mono uppercase text-earth-metal">${key}</span>
+                                <span class="ml-2 text-muted-pink">Not mapped</span>
+                            </div>
+                        `;
+                    }
+
+                    const db = dbOptions.find(d => d.id === selectedId);
+                    const props = requiredProps[key] || [];
+                    const missing = props.filter(prop =>
+                        !db?.properties?.some(p => p.toLowerCase() === prop.toLowerCase())
+                    );
+                    const ok = missing.length === 0;
+
+                    return `
+                        <div class="text-xs border border-oatmeal p-2">
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+                                <span class="font-mono uppercase text-earth-metal">${key}</span>
+                                <span class="${ok ? 'text-dull-purple' : 'text-muted-pink'}">${ok ? 'OK' : `Missing ${missing.length}`}</span>
+                            </div>
+                            ${ok ? '' : `<p class="mt-1 text-earth-metal">Missing: ${PetTracker.UI.escapeHtml(missing.slice(0, 4).join(', '))}${missing.length > 4 ? '...' : ''}</p>`}
+                        </div>
+                    `;
+                }).join('');
+                schemaList.innerHTML = rows;
+                schemaWrap.classList.remove('hidden');
             }
 
             PetTracker.UI.hideLoading();

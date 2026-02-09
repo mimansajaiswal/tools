@@ -241,6 +241,19 @@ const CalendarExport = {
             );
         }
 
+        if (filters.eventTypeIds?.length > 0) {
+            events = events.filter(e =>
+                filters.eventTypeIds.includes(e.eventTypeId)
+            );
+        }
+
+        if (filters.categories?.length > 0) {
+            events = events.filter(e => {
+                const eventType = App.state.eventTypes.find(t => t.id === e.eventTypeId);
+                return eventType && filters.categories.includes(eventType.category);
+            });
+        }
+
         if (events.length === 0) {
             PetTracker.UI.toast('No events to export', 'info');
             return;
@@ -348,6 +361,8 @@ const CalendarExport = {
     showExportModal: () => {
         const today = new Date().toISOString().slice(0, 10);
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const categories = [...new Set((App.state.eventTypes || []).map(t => t.category).filter(Boolean))]
+            .sort((a, b) => a.localeCompare(b));
 
         const modal = document.createElement('div');
         modal.id = 'calendarExportModal';
@@ -370,7 +385,7 @@ const CalendarExport = {
                         </select>
                     </div>
                     
-                    <div id="exportDateRangeFields" class="hidden grid grid-cols-2 gap-4">
+                    <div id="exportDateRangeFields" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Start Date</label>
                             <input type="date" id="exportStartDate" class="input-field" value="${thirtyDaysAgo}">
@@ -390,8 +405,26 @@ const CalendarExport = {
                             `).join('')}
                         </select>
                     </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Event Types</label>
+                            <select id="exportEventTypeFilter" class="select-field h-28" multiple>
+                                ${(App.state.eventTypes || []).map(t => `
+                                    <option value="${t.id}">${PetTracker.UI.escapeHtml(t.name)}</option>
+                                `).join('')}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Categories</label>
+                            <select id="exportCategoryFilter" class="select-field h-28" multiple>
+                                ${categories.map(c => `
+                                    <option value="${encodeURIComponent(c)}">${PetTracker.UI.escapeHtml(c)}</option>
+                                `).join('')}
+                            </select>
+                        </div>
+                    </div>
                 </div>
-                <div class="border-t border-oatmeal p-4 flex justify-end gap-3">
+                <div class="border-t border-oatmeal p-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
                     <button onclick="CalendarExport.closeExportModal()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
                         Cancel
                     </button>
@@ -423,10 +456,28 @@ const CalendarExport = {
     executeExport: async () => {
         const exportType = document.getElementById('exportType')?.value;
         const petFilter = document.getElementById('exportPetFilter')?.value;
+        const eventTypeFilters = Array.from(document.getElementById('exportEventTypeFilter')?.selectedOptions || [])
+            .map(o => o.value)
+            .filter(Boolean);
+        const categoryFilters = Array.from(document.getElementById('exportCategoryFilter')?.selectedOptions || [])
+            .map(o => {
+                try {
+                    return decodeURIComponent(o.value);
+                } catch (_) {
+                    return o.value;
+                }
+            })
+            .filter(Boolean);
 
         const filters = {};
         if (petFilter) {
             filters.petIds = [petFilter];
+        }
+        if (eventTypeFilters.length > 0) {
+            filters.eventTypeIds = eventTypeFilters;
+        }
+        if (categoryFilters.length > 0) {
+            filters.categories = categoryFilters;
         }
 
         if (exportType === 'range') {
@@ -607,8 +658,11 @@ const GoogleCalendar = {
      */
     syncEvent: async (event) => {
         const googleEventId = await GoogleCalendar.pushEvent(event);
-        if (googleEventId && googleEventId !== event.googleCalendarEventId) {
-            event.googleCalendarEventId = googleEventId;
+        if (googleEventId) {
+            if (googleEventId !== event.googleCalendarEventId) {
+                event.googleCalendarEventId = googleEventId;
+            }
+            event.googleCalendarDirty = false;
             await PetTracker.DB.put(PetTracker.STORES.EVENTS, event);
         }
         return googleEventId;

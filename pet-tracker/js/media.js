@@ -137,7 +137,9 @@ const Media = {
      * Check if file size is within Notion limits
      */
     checkFileSize: (file, isPaidPlan = false) => {
-        const limitMb = isPaidPlan ? 20 : 5;
+        const limitMb = typeof isPaidPlan === 'number'
+            ? isPaidPlan
+            : (isPaidPlan ? 20 : 5);
         const limitBytes = limitMb * 1024 * 1024;
 
         return {
@@ -147,6 +149,15 @@ const Media = {
             limitMb,
             exceededBy: Math.max(0, file.size - limitBytes)
         };
+    },
+
+    /**
+     * Resolve and sanitize the configured upload cap (MiB)
+     * Allowed caps: 5 (free) or 20 (paid soft cap).
+     */
+    getUploadCapMb: (configuredCap = 5) => {
+        const cap = Number(configuredCap);
+        return cap >= 20 ? 20 : 5;
     },
 
     /**
@@ -164,13 +175,13 @@ const Media = {
         }
 
         try {
-            await PetTracker.MediaStore.set(id, blob);
+            await PetTracker.MediaStore.set(id, blob, metadata);
             console.log(`[Media] Stored ${id} (${Math.round(blob.size / 1024)}KB)`);
             return true;
         } catch (e) {
             if (e.isQuotaExceeded && _retryCount < MAX_RETRIES) {
                 console.warn(`[Media] Storage quota exceeded, evicting old media (retry ${_retryCount + 1}/${MAX_RETRIES})`);
-                await PetTracker.MediaStore.evictIfNeeded(blob.size);
+                await PetTracker.MediaStore.evictIfNeeded(blob.size, metadata);
                 return Media.storeLocal(id, blob, metadata, _retryCount + 1);
             }
             if (_retryCount >= MAX_RETRIES) {
@@ -310,8 +321,8 @@ const Media = {
         const settings = PetTracker.Settings.get();
 
         // Check size limit
-        const isPaid = settings.uploadCapMb > 5;
-        const check = Media.checkFileSize(blob, isPaid);
+        const limitMb = Media.getUploadCapMb(settings.uploadCapMb);
+        const check = Media.checkFileSize(blob, limitMb);
 
         if (!check.ok) {
             throw new Error(`File exceeds ${check.limitMb}MB limit`);
@@ -387,8 +398,19 @@ const Media = {
 
                 if (file.type.startsWith('image/')) {
                     const processed = await Media.processImage(file);
-                    await Media.storeLocal(`${id}_upload`, processed.upload);
-                    await Media.storeLocal(`${id}_preview`, processed.preview);
+                    const uploadStored = await Media.storeLocal(
+                        `${id}_upload`,
+                        processed.upload,
+                        { role: 'upload', evictable: false, purpose: 'sync-upload' }
+                    );
+                    const previewStored = await Media.storeLocal(
+                        `${id}_preview`,
+                        processed.preview,
+                        { role: 'preview', evictable: true, purpose: 'ui-preview' }
+                    );
+                    if (!uploadStored) {
+                        throw new Error('Image could not be cached locally for upload. Free up storage and retry.');
+                    }
                     // Create preview URL - caller should revoke when done
                     const previewUrl = URL.createObjectURL(processed.preview);
                     result = {
@@ -397,12 +419,24 @@ const Media = {
                         previewUrl,
                         _revokeUrl: previewUrl, // Mark for revocation
                         originalName: file.name,
-                        uploadSize: processed.uploadSize
+                        uploadSize: processed.uploadSize,
+                        warning: !previewStored ? 'Preview cache is full. Image will still upload when synced.' : null
                     };
                 } else if (file.type.startsWith('video/')) {
                     const processed = await Media.processVideo(file);
-                    const uploadStored = await Media.storeLocal(`${id}_upload`, file);
-                    await Media.storeLocal(`${id}_poster`, processed.poster);
+                    const uploadStored = await Media.storeLocal(
+                        `${id}_upload`,
+                        file,
+                        { role: 'upload', evictable: false, purpose: 'sync-upload' }
+                    );
+                    const posterStored = await Media.storeLocal(
+                        `${id}_poster`,
+                        processed.poster,
+                        { role: 'preview', evictable: true, purpose: 'ui-preview' }
+                    );
+                    if (!uploadStored) {
+                        throw new Error('Video could not be cached locally for upload. Trim it and retry.');
+                    }
                     // Create preview URL - caller should revoke when done
                     const previewUrl = URL.createObjectURL(processed.poster);
                     result = {
@@ -413,18 +447,25 @@ const Media = {
                         originalName: file.name,
                         originalSize: file.size,
                         duration: processed.duration,
-                        warning: !uploadStored
-                            ? 'Video preview saved, but file too large for local upload cache.'
-                            : (file.size > 50 * 1024 * 1024 ? 'Video is large. Consider trimming before upload.' : null)
+                        warning: file.size > 50 * 1024 * 1024
+                            ? 'Video is large. Consider trimming before upload.'
+                            : (!posterStored ? 'Preview cache is full. Video will still upload when synced.' : null)
                     };
                 } else {
-                    const uploadStored = await Media.storeLocal(`${id}_upload`, file);
+                    const uploadStored = await Media.storeLocal(
+                        `${id}_upload`,
+                        file,
+                        { role: 'upload', evictable: false, purpose: 'sync-upload' }
+                    );
+                    if (!uploadStored) {
+                        throw new Error('File could not be cached locally for upload. Free up storage and retry.');
+                    }
                     result = {
                         id,
                         type: 'file',
                         originalName: file.name,
                         originalSize: file.size,
-                        warning: !uploadStored ? 'File too large for local upload cache.' : null
+                        warning: null
                     };
                 }
 

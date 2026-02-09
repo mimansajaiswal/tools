@@ -1,5 +1,8 @@
 # Pet Tracker Implementation Tracker
 
+## Architecture Note (2026-02-08)
+Recurring scheduling is implemented on **Event Types**. The old **Care Plans** model is no longer used in app code. Any historical Care Plan mentions below are legacy notes from earlier sessions.
+
 ## Project Overview
 Client-only, offline-first PWA for pet health tracking using Notion as backend.
 

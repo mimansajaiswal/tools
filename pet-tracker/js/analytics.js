@@ -15,7 +15,11 @@ const Analytics = {
         heatmapEventTypeIds: [],
         heatmapInitialized: false,
         heatmapTypesSearch: '',
-        heatmapControlsInitialized: false
+        heatmapControlsInitialized: false,
+        filterControlsInitialized: false,
+        correlationControlsInitialized: false,
+        correlationPrimarySearch: '',
+        correlationSecondarySearch: ''
     },
 
     TIME_WINDOWS: {
@@ -42,6 +46,15 @@ const Analytics = {
         { key: '730', label: 'Last 24 months' }
     ],
 
+    CORRELATION_WINDOW_OPTIONS: [
+        { key: '6h', label: '6 hours' },
+        { key: '12h', label: '12 hours' },
+        { key: '24h', label: '24 hours' },
+        { key: '48h', label: '48 hours' },
+        { key: '7d', label: '7 days' },
+        { key: 'custom', label: 'Custom' }
+    ],
+
     /**
      * Render the analytics view
      */
@@ -50,24 +63,41 @@ const Analytics = {
         if (!container) return;
 
         const pets = App.state.pets;
+        const validPetIds = new Set((pets || []).map(p => p.id));
+        if (Analytics.state.selectedPetId && !validPetIds.has(Analytics.state.selectedPetId)) {
+            Analytics.state.selectedPetId = null;
+        }
         const events = await PetTracker.DB.getAll(PetTracker.STORES.EVENTS);
-        const eventTypes = App.state.eventTypes;
+        const eventTypes = App.state.eventTypes || [];
+        const validEventTypeIds = new Set(eventTypes.map(t => t.id));
+        if (Analytics.state.primaryEventType && !validEventTypeIds.has(Analytics.state.primaryEventType)) {
+            Analytics.state.primaryEventType = null;
+        }
+        if (Analytics.state.secondaryEventType && !validEventTypeIds.has(Analytics.state.secondaryEventType)) {
+            Analytics.state.secondaryEventType = null;
+        }
+        if (!Analytics.TIME_WINDOWS[Analytics.state.correlationWindow] && Analytics.state.correlationWindow !== 'custom') {
+            Analytics.state.correlationWindow = '24h';
+        }
         Analytics.syncHeatmapEventTypeState(eventTypes);
 
         container.innerHTML = `
-            <div class="p-4 space-y-6">
+            <div class="p-3 md:p-4 space-y-6">
                 <!-- Filters -->
-                <div class="flex flex-wrap items-center gap-4">
-                    <div>
+                <div class="flex flex-col sm:flex-row sm:flex-wrap items-end gap-3 sm:gap-4">
+                    <div class="w-full sm:min-w-[220px] sm:w-auto">
                         <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Pet</label>
-                        <select id="analyticsPetFilter" class="select-field text-sm" onchange="Analytics.updateFilters()">
-                            <option value="">All Pets</option>
-                            ${pets.map(p => `
-                                <option value="${p.id}" ${p.id === Analytics.state.selectedPetId ? 'selected' : ''}>
-                                    ${PetTracker.UI.escapeHtml(p.name)}
-                                </option>
-                            `).join('')}
-                        </select>
+                        <div class="multiselect-dropdown" id="analyticsPetDropdown">
+                            <button type="button" class="multiselect-trigger input-field flex items-center justify-between"
+                                onclick="Analytics.toggleAnalyticsPetMenu()" aria-expanded="false">
+                                <span id="analyticsPetLabel" class="multiselect-label text-sm text-earth-metal">All Pets</span>
+                                <i data-lucide="chevron-down" class="w-4 h-4 text-earth-metal transition-transform"></i>
+                            </button>
+                            <div id="analyticsPetMenu"
+                                class="multiselect-menu hidden absolute z-20 mt-1 w-full bg-white-linen border border-oatmeal shadow-lg max-h-72 overflow-y-auto p-2 space-y-1">
+                                <div id="analyticsPetOptions" class="space-y-1"></div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -84,16 +114,21 @@ const Analytics = {
                 <div class="card p-4">
                     ${PetTracker.UI.sectionHeader(2, 'Event Activity Overview')}
                     <div class="mt-4 space-y-4">
-                        <div class="flex flex-wrap items-end gap-4">
-                            <div>
+                        <div class="flex flex-col sm:flex-row sm:flex-wrap items-end gap-3 sm:gap-4">
+                            <div class="w-full sm:w-auto">
                                 <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Time Range</label>
-                                <div class="combobox-container">
-                                    <input type="text" id="activityHeatmapRangeInput" class="input-field combobox-input text-sm cursor-pointer" readonly
-                                        onclick="Analytics.toggleHeatmapRangeDropdown()">
-                                    <div id="activityHeatmapRangeDropdown" class="combobox-dropdown"></div>
+                                <div class="multiselect-dropdown" id="activityHeatmapRangeDropdown">
+                                    <button type="button" class="multiselect-trigger input-field flex items-center justify-between"
+                                        onclick="Analytics.toggleHeatmapRangeMenu()" aria-expanded="false">
+                                        <span id="activityHeatmapRangeLabel" class="multiselect-label text-sm text-charcoal">Last 12 months</span>
+                                        <i data-lucide="chevron-down" class="w-4 h-4 text-earth-metal transition-transform"></i>
+                                    </button>
+                                    <div id="activityHeatmapRangeMenu"
+                                        class="multiselect-menu hidden absolute z-20 mt-1 w-full bg-white-linen border border-oatmeal shadow-lg max-h-72 overflow-y-auto p-2 space-y-1">
+                                    </div>
                                 </div>
                             </div>
-                            <div class="min-w-[260px] ml-auto">
+                            <div class="w-full sm:min-w-[260px] sm:ml-auto">
                                 <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Event Types</label>
                                 <div class="multiselect-dropdown" id="activityHeatmapTypesDropdown">
                                     <button type="button" class="multiselect-trigger input-field flex items-center justify-between"
@@ -119,6 +154,11 @@ const Analytics = {
                         <div id="activityHeatmapSummary" class="grid grid-cols-1 md:grid-cols-3 gap-3"></div>
                         <div id="activityHeatmapContainer" class="overflow-x-auto"></div>
                         <div id="activityHeatmapLegend" class="text-xs text-earth-metal"></div>
+                        <div class="pt-3 border-t border-oatmeal">
+                            <h4 class="font-mono text-xs uppercase text-earth-metal mb-2">Time-of-Day Heatmap</h4>
+                            <div id="activityHourSummary" class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3"></div>
+                            <div id="activityHourHeatmap"></div>
+                        </div>
                     </div>
                 </div>
 
@@ -126,38 +166,62 @@ const Analytics = {
                 <div class="card p-4">
                     ${PetTracker.UI.sectionHeader(3, 'Event Correlation')}
                     <div class="mt-4 space-y-4">
-                        <div class="flex flex-wrap items-end gap-4">
-                            <div>
+                        <div id="correlationControls" class="flex flex-col sm:flex-row sm:flex-wrap items-end gap-3 sm:gap-4">
+                            <div class="w-full sm:min-w-[220px] sm:w-auto">
                                 <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Primary Event</label>
-                                <select id="correlationPrimary" class="select-field text-sm" onchange="Analytics.updateCorrelation()">
-                                    <option value="">Select event type...</option>
-                                    ${eventTypes.map(t => `
-                                        <option value="${t.id}" ${t.id === Analytics.state.primaryEventType ? 'selected' : ''}>
-                                            ${PetTracker.UI.escapeHtml(t.name)}
-                                        </option>
-                                    `).join('')}
-                                </select>
+                                <div class="multiselect-dropdown" id="correlationPrimaryDropdown">
+                                    <button type="button" class="multiselect-trigger input-field flex items-center justify-between"
+                                        onclick="Analytics.toggleCorrelationTypeMenu('primary')" aria-expanded="false">
+                                        <span id="correlationPrimaryLabel" class="multiselect-label text-sm text-earth-metal">Select event type...</span>
+                                        <i data-lucide="chevron-down" class="w-4 h-4 text-earth-metal transition-transform"></i>
+                                    </button>
+                                    <div id="correlationPrimaryMenu"
+                                        class="multiselect-menu hidden absolute z-20 mt-1 w-full bg-white-linen border border-oatmeal shadow-lg max-h-72 overflow-y-auto p-2 space-y-2">
+                                        <input type="text" id="correlationPrimarySearch" class="input-field"
+                                            placeholder="Search event types..." oninput="Analytics.handleCorrelationTypeSearch('primary', this.value)">
+                                        <div id="correlationPrimaryOptions" class="space-y-1"></div>
+                                        <div class="pt-2 border-t border-oatmeal">
+                                            <button type="button" onclick="Analytics.clearCorrelationType('primary')" class="btn-secondary px-2 py-1 font-mono text-[10px] uppercase">Clear</button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            <div>
+                            <div class="w-full sm:min-w-[220px] sm:w-auto">
                                 <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Secondary Event</label>
-                                <select id="correlationSecondary" class="select-field text-sm" onchange="Analytics.updateCorrelation()">
-                                    <option value="">Select event type...</option>
-                                    ${eventTypes.map(t => `
-                                        <option value="${t.id}" ${t.id === Analytics.state.secondaryEventType ? 'selected' : ''}>
-                                            ${PetTracker.UI.escapeHtml(t.name)}
-                                        </option>
-                                    `).join('')}
-                                </select>
+                                <div class="multiselect-dropdown" id="correlationSecondaryDropdown">
+                                    <button type="button" class="multiselect-trigger input-field flex items-center justify-between"
+                                        onclick="Analytics.toggleCorrelationTypeMenu('secondary')" aria-expanded="false">
+                                        <span id="correlationSecondaryLabel" class="multiselect-label text-sm text-earth-metal">Select event type...</span>
+                                        <i data-lucide="chevron-down" class="w-4 h-4 text-earth-metal transition-transform"></i>
+                                    </button>
+                                    <div id="correlationSecondaryMenu"
+                                        class="multiselect-menu hidden absolute z-20 mt-1 w-full bg-white-linen border border-oatmeal shadow-lg max-h-72 overflow-y-auto p-2 space-y-2">
+                                        <input type="text" id="correlationSecondarySearch" class="input-field"
+                                            placeholder="Search event types..." oninput="Analytics.handleCorrelationTypeSearch('secondary', this.value)">
+                                        <div id="correlationSecondaryOptions" class="space-y-1"></div>
+                                        <div class="pt-2 border-t border-oatmeal">
+                                            <button type="button" onclick="Analytics.clearCorrelationType('secondary')" class="btn-secondary px-2 py-1 font-mono text-[10px] uppercase">Clear</button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            <div>
+                            <div class="w-full sm:min-w-[170px] sm:w-auto">
                                 <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Time Window</label>
-                                <select id="correlationWindow" class="select-field text-sm" onchange="Analytics.updateCorrelation()">
-                                    <option value="6h" ${Analytics.state.correlationWindow === '6h' ? 'selected' : ''}>6 hours</option>
-                                    <option value="12h" ${Analytics.state.correlationWindow === '12h' ? 'selected' : ''}>12 hours</option>
-                                    <option value="24h" ${Analytics.state.correlationWindow === '24h' ? 'selected' : ''}>24 hours</option>
-                                    <option value="48h" ${Analytics.state.correlationWindow === '48h' ? 'selected' : ''}>48 hours</option>
-                                    <option value="7d" ${Analytics.state.correlationWindow === '7d' ? 'selected' : ''}>7 days</option>
-                                </select>
+                                <div class="multiselect-dropdown" id="correlationWindowDropdown">
+                                    <button type="button" class="multiselect-trigger input-field flex items-center justify-between"
+                                        onclick="Analytics.toggleCorrelationWindowMenu()" aria-expanded="false">
+                                        <span id="correlationWindowLabel" class="multiselect-label text-sm text-charcoal">24 hours</span>
+                                        <i data-lucide="chevron-down" class="w-4 h-4 text-earth-metal transition-transform"></i>
+                                    </button>
+                                    <div id="correlationWindowMenu"
+                                        class="multiselect-menu hidden absolute z-20 mt-1 w-full bg-white-linen border border-oatmeal shadow-lg max-h-72 overflow-y-auto p-2 space-y-1">
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="correlationCustomHoursWrap" class="w-full sm:w-auto ${Analytics.state.correlationWindow === 'custom' ? '' : 'hidden'}">
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Custom Hours</label>
+                                <input type="number" min="1" step="1" id="correlationCustomHours" class="input-field text-sm"
+                                    value="${Analytics.state.customWindowHours || 24}" onchange="Analytics.updateCorrelation()">
                             </div>
                         </div>
                         <div id="correlationResults" class="border border-oatmeal p-4 bg-oatmeal/10">
@@ -177,10 +241,13 @@ const Analytics = {
         `;
 
         if (window.lucide) lucide.createIcons();
+        Analytics.initFilterControls(pets);
         Analytics.initHeatmapControls(eventTypes);
+        Analytics.initCorrelationControls(eventTypes);
 
         // Render charts after DOM is ready
         await Analytics.renderEventHeatmap(events, eventTypes);
+        await Analytics.renderTimeOfDayHeatmap(events, eventTypes);
         await Analytics.renderWeightChart(events);
         await Analytics.renderAdherenceStats();
         await Analytics.updateCorrelation();
@@ -189,9 +256,9 @@ const Analytics = {
     /**
      * Update filters and re-render
      */
-    updateFilters: () => {
-        Analytics.state.selectedPetId = document.getElementById('analyticsPetFilter')?.value || null;
-        Analytics.render();
+    updateFilters: async (petId = Analytics.state.selectedPetId) => {
+        Analytics.state.selectedPetId = petId || null;
+        await Analytics.render();
     },
 
     /**
@@ -215,6 +282,87 @@ const Analytics = {
         Analytics.state.heatmapRangeDays = Analytics.HEATMAP_RANGES[Analytics.state.heatmapRangeKey] || 365;
     },
 
+    initFilterControls: (pets) => {
+        Analytics.renderAnalyticsPetOptions(pets || []);
+        Analytics.updateAnalyticsPetLabel(pets || []);
+        if (!Analytics.state.filterControlsInitialized) {
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('#analyticsPetDropdown')) {
+                    Analytics.closeAnalyticsPetMenu();
+                }
+            });
+            Analytics.state.filterControlsInitialized = true;
+        }
+    },
+
+    updateAnalyticsPetLabel: (pets) => {
+        const label = document.getElementById('analyticsPetLabel');
+        if (!label) return;
+        if (!Analytics.state.selectedPetId) {
+            label.textContent = 'All Pets';
+            label.className = 'multiselect-label text-sm text-earth-metal';
+            return;
+        }
+        const pet = (pets || []).find(p => p.id === Analytics.state.selectedPetId);
+        label.textContent = pet?.name || 'All Pets';
+        label.className = 'multiselect-label text-sm text-charcoal';
+    },
+
+    renderAnalyticsPetOptions: (pets) => {
+        const container = document.getElementById('analyticsPetOptions');
+        if (!container) return;
+
+        const selectedPetId = Analytics.state.selectedPetId || '';
+        const sortedPets = [...(pets || [])].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        const options = [{ id: '', name: 'All Pets' }, ...sortedPets];
+
+        container.innerHTML = options.map(opt => {
+            const isSelected = (opt.id || '') === selectedPetId;
+            const token = encodeURIComponent(opt.id || '');
+            const petColor = opt.id ? (opt.color || '#8b7b8e') : null;
+            return `
+                <button type="button" class="multiselect-option multiselect-option-single ${isSelected ? 'is-selected' : ''}" onclick="Analytics.selectAnalyticsPet('${token}')">
+                    <span class="inline-flex items-center gap-2 min-w-0 flex-1">
+                        ${petColor ? `<span class="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:${petColor}"></span>` : '<span class="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0 bg-oatmeal"></span>'}
+                        <span class="multiselect-option-text">${PetTracker.UI.escapeHtml(opt.name || 'All Pets')}</span>
+                    </span>
+                    ${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-dull-purple"></i>' : ''}
+                </button>
+            `;
+        }).join('');
+    },
+
+    toggleAnalyticsPetMenu: () => {
+        const menu = document.getElementById('analyticsPetMenu');
+        const trigger = document.querySelector('#analyticsPetDropdown .multiselect-trigger');
+        if (!menu || !trigger) return;
+        const shouldOpen = menu.classList.contains('hidden');
+        Analytics.closeAnalyticsPetMenu();
+        if (!shouldOpen) return;
+        menu.classList.remove('hidden');
+        trigger.setAttribute('aria-expanded', 'true');
+        Analytics.renderAnalyticsPetOptions(App.state.pets || []);
+        if (window.lucide) lucide.createIcons();
+    },
+
+    closeAnalyticsPetMenu: () => {
+        const menu = document.getElementById('analyticsPetMenu');
+        const trigger = document.querySelector('#analyticsPetDropdown .multiselect-trigger');
+        if (menu) menu.classList.add('hidden');
+        if (trigger) trigger.setAttribute('aria-expanded', 'false');
+    },
+
+    selectAnalyticsPet: async (encodedPetId) => {
+        let petId = '';
+        try {
+            petId = decodeURIComponent(encodedPetId || '');
+        } catch (_) {
+            petId = encodedPetId || '';
+        }
+        Analytics.closeAnalyticsPetMenu();
+        await Analytics.updateFilters(petId || null);
+    },
+
     initHeatmapControls: (eventTypes) => {
         Analytics.renderHeatmapRangeOptions();
         Analytics.updateHeatmapRangeInputLabel();
@@ -228,8 +376,8 @@ const Analytics = {
 
         if (!Analytics.state.heatmapControlsInitialized) {
             document.addEventListener('click', (e) => {
-                if (!e.target.closest('#activityHeatmapRangeInput') && !e.target.closest('#activityHeatmapRangeDropdown')) {
-                    Analytics.closeHeatmapRangeDropdown();
+                if (!e.target.closest('#activityHeatmapRangeDropdown')) {
+                    Analytics.closeHeatmapRangeMenu();
                 }
                 if (!e.target.closest('#activityHeatmapTypesDropdown')) {
                     Analytics.closeHeatmapTypesMenu();
@@ -239,51 +387,287 @@ const Analytics = {
         }
     },
 
-    renderHeatmapRangeOptions: () => {
-        const dropdown = document.getElementById('activityHeatmapRangeDropdown');
-        if (!dropdown) return;
+    initCorrelationControls: (eventTypes) => {
+        Analytics.renderCorrelationTypeOptions('primary', eventTypes);
+        Analytics.renderCorrelationTypeOptions('secondary', eventTypes);
+        Analytics.updateCorrelationTypeLabel('primary', eventTypes);
+        Analytics.updateCorrelationTypeLabel('secondary', eventTypes);
+        Analytics.renderCorrelationWindowOptions();
+        Analytics.updateCorrelationWindowLabel();
 
-        dropdown.innerHTML = Analytics.HEATMAP_RANGE_OPTIONS.map((option, idx) => `
-            <div class="combobox-option ${option.key === Analytics.state.heatmapRangeKey || (!Analytics.state.heatmapRangeKey && idx === 0) ? 'highlighted' : ''}" data-value="${option.key}">
-                ${option.label}
+        const primarySearch = document.getElementById('correlationPrimarySearch');
+        if (primarySearch) primarySearch.value = Analytics.state.correlationPrimarySearch || '';
+        const secondarySearch = document.getElementById('correlationSecondarySearch');
+        if (secondarySearch) secondarySearch.value = Analytics.state.correlationSecondarySearch || '';
+
+        if (!Analytics.state.correlationControlsInitialized) {
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('#correlationControls')) {
+                    Analytics.closeCorrelationMenus();
+                }
+            });
+            Analytics.state.correlationControlsInitialized = true;
+        }
+    },
+
+    getCorrelationTypeState: (kind) => {
+        return kind === 'secondary'
+            ? {
+                selectedId: Analytics.state.secondaryEventType,
+                search: Analytics.state.correlationSecondarySearch || '',
+                optionsId: 'correlationSecondaryOptions',
+                menuId: 'correlationSecondaryMenu',
+                dropdownId: 'correlationSecondaryDropdown',
+                triggerSelector: '#correlationSecondaryDropdown .multiselect-trigger',
+                labelId: 'correlationSecondaryLabel'
+            }
+            : {
+                selectedId: Analytics.state.primaryEventType,
+                search: Analytics.state.correlationPrimarySearch || '',
+                optionsId: 'correlationPrimaryOptions',
+                menuId: 'correlationPrimaryMenu',
+                dropdownId: 'correlationPrimaryDropdown',
+                triggerSelector: '#correlationPrimaryDropdown .multiselect-trigger',
+                labelId: 'correlationPrimaryLabel'
+            };
+    },
+
+    buildEventTypeGroups: (eventTypes, search = '') => {
+        const term = (search || '').trim().toLowerCase();
+        const grouped = new Map();
+        for (const type of (eventTypes || [])) {
+            const name = type?.name || '';
+            const category = type?.category || 'Uncategorized';
+            const matches = !term
+                || name.toLowerCase().includes(term)
+                || category.toLowerCase().includes(term);
+            if (!matches) continue;
+            if (!grouped.has(category)) grouped.set(category, []);
+            grouped.get(category).push(type);
+        }
+
+        return Array.from(grouped.entries())
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .map(([category, items]) => ({
+                category,
+                items: items.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+            }));
+    },
+
+    updateCorrelationTypeLabel: (kind, eventTypes) => {
+        const meta = Analytics.getCorrelationTypeState(kind);
+        const label = document.getElementById(meta.labelId);
+        if (!label) return;
+        const selected = (eventTypes || []).find(t => t.id === meta.selectedId);
+        label.textContent = selected
+            ? `${selected.name || 'Untitled'}${selected.category ? ` (${selected.category})` : ''}`
+            : 'Select event type...';
+        label.className = `multiselect-label text-sm ${selected ? 'text-charcoal' : 'text-earth-metal'}`;
+    },
+
+    renderCorrelationTypeOptions: (kind, eventTypes) => {
+        const meta = Analytics.getCorrelationTypeState(kind);
+        const container = document.getElementById(meta.optionsId);
+        if (!container) return;
+
+        const search = (meta.search || '').trim().toLowerCase();
+        const selected = meta.selectedId;
+        const groups = Analytics.buildEventTypeGroups(eventTypes, search);
+
+        if (groups.length === 0) {
+            container.innerHTML = '<div class="text-xs text-earth-metal px-2 py-1">No matching event types</div>';
+            return;
+        }
+
+        container.innerHTML = groups.map(group => `
+            <div class="multiselect-group">
+                <div class="multiselect-group-label">${PetTracker.UI.escapeHtml(group.category)}</div>
+                <div class="space-y-1">
+                    ${group.items.map(t => {
+            const isSelected = t.id === selected;
+            const encodedId = encodeURIComponent(String(t.id || ''));
+            return `
+                            <button type="button" class="multiselect-option multiselect-option-single ${isSelected ? 'is-selected' : ''}" onclick="Analytics.selectCorrelationType('${kind}', '${encodedId}')">
+                                <span class="inline-flex items-center gap-2 min-w-0 flex-1">
+                                    <span class="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0" style="background:${Analytics.getEventTypeColorHex(t)}"></span>
+                                    <span class="multiselect-option-text">${PetTracker.UI.escapeHtml(t.name || 'Untitled')}</span>
+                                </span>
+                                ${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-dull-purple"></i>' : ''}
+                            </button>
+                        `;
+        }).join('')}
+                </div>
             </div>
         `).join('');
+    },
 
-        dropdown.querySelectorAll('.combobox-option[data-value]').forEach(opt => {
-            opt.addEventListener('mousedown', (e) => {
-                e.preventDefault();
-                Analytics.selectHeatmapRange(opt.dataset.value);
-            });
-        });
+    handleCorrelationTypeSearch: (kind, value = '') => {
+        if (kind === 'secondary') Analytics.state.correlationSecondarySearch = value;
+        else Analytics.state.correlationPrimarySearch = value;
+        Analytics.renderCorrelationTypeOptions(kind, App.state.eventTypes || []);
+        if (window.lucide) lucide.createIcons();
+    },
+
+    toggleCorrelationTypeMenu: (kind) => {
+        const meta = Analytics.getCorrelationTypeState(kind);
+        const menu = document.getElementById(meta.menuId);
+        const trigger = document.querySelector(meta.triggerSelector);
+        if (!menu || !trigger) return;
+
+        const shouldOpen = menu.classList.contains('hidden');
+        Analytics.closeCorrelationMenus();
+        if (!shouldOpen) return;
+
+        menu.classList.remove('hidden');
+        trigger.setAttribute('aria-expanded', 'true');
+        const searchEl = document.getElementById(kind === 'secondary' ? 'correlationSecondarySearch' : 'correlationPrimarySearch');
+        if (searchEl) {
+            searchEl.focus();
+            searchEl.select();
+        }
+        Analytics.renderCorrelationTypeOptions(kind, App.state.eventTypes || []);
+        if (window.lucide) lucide.createIcons();
+    },
+
+    closeCorrelationTypeMenu: (kind) => {
+        const meta = Analytics.getCorrelationTypeState(kind);
+        const menu = document.getElementById(meta.menuId);
+        const trigger = document.querySelector(meta.triggerSelector);
+        if (menu) menu.classList.add('hidden');
+        if (trigger) trigger.setAttribute('aria-expanded', 'false');
+    },
+
+    selectCorrelationType: async (kind, encodedEventTypeId) => {
+        let eventTypeId = '';
+        try {
+            eventTypeId = decodeURIComponent(encodedEventTypeId || '');
+        } catch (_) {
+            eventTypeId = encodedEventTypeId || '';
+        }
+        if (kind === 'secondary') Analytics.state.secondaryEventType = eventTypeId || null;
+        else Analytics.state.primaryEventType = eventTypeId || null;
+        Analytics.updateCorrelationTypeLabel('primary', App.state.eventTypes || []);
+        Analytics.updateCorrelationTypeLabel('secondary', App.state.eventTypes || []);
+        Analytics.closeCorrelationMenus();
+        await Analytics.updateCorrelation();
+    },
+
+    clearCorrelationType: async (kind) => {
+        if (kind === 'secondary') Analytics.state.secondaryEventType = null;
+        else Analytics.state.primaryEventType = null;
+        Analytics.updateCorrelationTypeLabel('primary', App.state.eventTypes || []);
+        Analytics.updateCorrelationTypeLabel('secondary', App.state.eventTypes || []);
+        Analytics.renderCorrelationTypeOptions(kind, App.state.eventTypes || []);
+        if (window.lucide) lucide.createIcons();
+        await Analytics.updateCorrelation();
+    },
+
+    getCorrelationWindowLabel: () => {
+        if (Analytics.state.correlationWindow === 'custom') {
+            return `${Analytics.state.customWindowHours || 24} hours (custom)`;
+        }
+        return Analytics.CORRELATION_WINDOW_OPTIONS.find(w => w.key === Analytics.state.correlationWindow)?.label || '24 hours';
+    },
+
+    updateCorrelationWindowLabel: () => {
+        const label = document.getElementById('correlationWindowLabel');
+        if (!label) return;
+        label.textContent = Analytics.getCorrelationWindowLabel();
+        label.className = 'multiselect-label text-sm text-charcoal';
+    },
+
+    renderCorrelationWindowOptions: () => {
+        const menu = document.getElementById('correlationWindowMenu');
+        if (!menu) return;
+        menu.innerHTML = Analytics.CORRELATION_WINDOW_OPTIONS.map(option => {
+            const isSelected = option.key === Analytics.state.correlationWindow;
+            return `
+                <button type="button" class="multiselect-option multiselect-option-single ${isSelected ? 'is-selected' : ''}" onclick="Analytics.selectCorrelationWindow('${option.key}')">
+                    <span class="multiselect-option-text">${PetTracker.UI.escapeHtml(option.label)}</span>
+                    ${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-dull-purple"></i>' : ''}
+                </button>
+            `;
+        }).join('');
+    },
+
+    toggleCorrelationWindowMenu: () => {
+        const menu = document.getElementById('correlationWindowMenu');
+        const trigger = document.querySelector('#correlationWindowDropdown .multiselect-trigger');
+        if (!menu || !trigger) return;
+
+        const shouldOpen = menu.classList.contains('hidden');
+        Analytics.closeCorrelationMenus();
+        if (!shouldOpen) return;
+        menu.classList.remove('hidden');
+        trigger.setAttribute('aria-expanded', 'true');
+        Analytics.renderCorrelationWindowOptions();
+        if (window.lucide) lucide.createIcons();
+    },
+
+    closeCorrelationWindowMenu: () => {
+        const menu = document.getElementById('correlationWindowMenu');
+        const trigger = document.querySelector('#correlationWindowDropdown .multiselect-trigger');
+        if (menu) menu.classList.add('hidden');
+        if (trigger) trigger.setAttribute('aria-expanded', 'false');
+    },
+
+    selectCorrelationWindow: async (windowKey) => {
+        if (!Analytics.CORRELATION_WINDOW_OPTIONS.some(w => w.key === windowKey)) return;
+        Analytics.state.correlationWindow = windowKey;
+        Analytics.renderCorrelationWindowOptions();
+        Analytics.updateCorrelationWindowLabel();
+        Analytics.closeCorrelationMenus();
+        await Analytics.updateCorrelation();
+    },
+
+    closeCorrelationMenus: () => {
+        Analytics.closeCorrelationTypeMenu('primary');
+        Analytics.closeCorrelationTypeMenu('secondary');
+        Analytics.closeCorrelationWindowMenu();
+    },
+
+    renderHeatmapRangeOptions: () => {
+        const menu = document.getElementById('activityHeatmapRangeMenu');
+        if (!menu) return;
+
+        menu.innerHTML = Analytics.HEATMAP_RANGE_OPTIONS.map(option => {
+            const isSelected = option.key === Analytics.state.heatmapRangeKey;
+            return `
+                <button type="button" class="multiselect-option multiselect-option-single ${isSelected ? 'is-selected' : ''}" onclick="Analytics.selectHeatmapRange('${option.key}')">
+                    <span class="multiselect-option-text">${PetTracker.UI.escapeHtml(option.label)}</span>
+                    ${isSelected ? '<i data-lucide="check" class="w-3.5 h-3.5 text-dull-purple"></i>' : ''}
+                </button>
+            `;
+        }).join('');
     },
 
     updateHeatmapRangeInputLabel: () => {
-        const input = document.getElementById('activityHeatmapRangeInput');
-        if (!input) return;
+        const label = document.getElementById('activityHeatmapRangeLabel');
+        if (!label) return;
         const selected = Analytics.HEATMAP_RANGE_OPTIONS.find(option => option.key === Analytics.state.heatmapRangeKey);
-        input.value = selected?.label || 'Last 12 months';
+        label.textContent = selected?.label || 'Last 12 months';
+        label.className = 'multiselect-label text-sm text-charcoal';
     },
 
-    openHeatmapRangeDropdown: () => {
-        const dropdown = document.getElementById('activityHeatmapRangeDropdown');
-        if (dropdown) dropdown.classList.add('open');
+    closeHeatmapRangeMenu: () => {
+        const menu = document.getElementById('activityHeatmapRangeMenu');
+        const trigger = document.querySelector('#activityHeatmapRangeDropdown .multiselect-trigger');
+        if (menu) menu.classList.add('hidden');
+        if (trigger) trigger.setAttribute('aria-expanded', 'false');
     },
 
-    closeHeatmapRangeDropdown: () => {
-        const dropdown = document.getElementById('activityHeatmapRangeDropdown');
-        if (dropdown) dropdown.classList.remove('open');
-    },
-
-    toggleHeatmapRangeDropdown: () => {
-        const dropdown = document.getElementById('activityHeatmapRangeDropdown');
-        if (!dropdown) return;
-        const willOpen = !dropdown.classList.contains('open');
-        if (willOpen) {
-            Analytics.renderHeatmapRangeOptions();
-            Analytics.openHeatmapRangeDropdown();
-        } else {
-            Analytics.closeHeatmapRangeDropdown();
-        }
+    toggleHeatmapRangeMenu: () => {
+        const menu = document.getElementById('activityHeatmapRangeMenu');
+        const trigger = document.querySelector('#activityHeatmapRangeDropdown .multiselect-trigger');
+        if (!menu || !trigger) return;
+        const shouldOpen = menu.classList.contains('hidden');
+        Analytics.closeHeatmapRangeMenu();
+        if (!shouldOpen) return;
+        Analytics.closeHeatmapTypesMenu();
+        menu.classList.remove('hidden');
+        trigger.setAttribute('aria-expanded', 'true');
+        Analytics.renderHeatmapRangeOptions();
+        if (window.lucide) lucide.createIcons();
     },
 
     selectHeatmapRange: async (rangeKey) => {
@@ -291,7 +675,8 @@ const Analytics = {
         Analytics.state.heatmapRangeKey = rangeKey;
         Analytics.state.heatmapRangeDays = Analytics.HEATMAP_RANGES[rangeKey];
         Analytics.updateHeatmapRangeInputLabel();
-        Analytics.closeHeatmapRangeDropdown();
+        Analytics.renderHeatmapRangeOptions();
+        Analytics.closeHeatmapRangeMenu();
         await Analytics.updateHeatmapFilters();
     },
 
@@ -302,6 +687,7 @@ const Analytics = {
 
         const shouldOpen = menu.classList.contains('hidden');
         if (shouldOpen) {
+            Analytics.closeHeatmapRangeMenu();
             menu.classList.remove('hidden');
             trigger.setAttribute('aria-expanded', 'true');
             const search = document.getElementById('activityHeatmapTypesSearch');
@@ -344,20 +730,26 @@ const Analytics = {
 
         const search = (Analytics.state.heatmapTypesSearch || '').trim().toLowerCase();
         const selected = new Set(Analytics.state.heatmapEventTypeIds || []);
-        const sortedTypes = [...(eventTypes || [])].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-        const filtered = sortedTypes.filter(t => !search || (t.name || '').toLowerCase().includes(search));
+        const groups = Analytics.buildEventTypeGroups(eventTypes, search);
 
-        if (filtered.length === 0) {
+        if (groups.length === 0) {
             container.innerHTML = '<div class="text-xs text-earth-metal px-2 py-1">No matching event types</div>';
             return;
         }
 
-        container.innerHTML = filtered.map(t => `
-            <label class="multiselect-option">
-                <input type="checkbox" ${selected.has(t.id) ? 'checked' : ''} onchange="Analytics.toggleHeatmapTypeSelection('${t.id}')">
-                <span class="inline-block w-2.5 h-2.5 rounded-full" style="background:${Analytics.getEventTypeColorHex(t)}"></span>
-                <span>${PetTracker.UI.escapeHtml(t.name || 'Untitled')}</span>
-            </label>
+        container.innerHTML = groups.map(group => `
+            <div class="multiselect-group">
+                <div class="multiselect-group-label">${PetTracker.UI.escapeHtml(group.category)}</div>
+                <div class="space-y-1">
+                    ${group.items.map(t => `
+                        <label class="multiselect-option">
+                            <input type="checkbox" ${selected.has(t.id) ? 'checked' : ''} onchange="Analytics.toggleHeatmapTypeSelection('${t.id}')">
+                            <span class="inline-block w-2.5 h-2.5 rounded-full" style="background:${Analytics.getEventTypeColorHex(t)}"></span>
+                            <span>${PetTracker.UI.escapeHtml(t.name || 'Untitled')}</span>
+                        </label>
+                    `).join('')}
+                </div>
+            </div>
         `).join('');
     },
 
@@ -428,6 +820,7 @@ const Analytics = {
         Analytics.updateHeatmapTypeLabel(App.state.eventTypes || []);
         const events = await PetTracker.DB.getAll(PetTracker.STORES.EVENTS);
         await Analytics.renderEventHeatmap(events, App.state.eventTypes || []);
+        await Analytics.renderTimeOfDayHeatmap(events, App.state.eventTypes || []);
     },
 
     toggleHeatmapEventTypes: async (mode) => {
@@ -603,8 +996,9 @@ const Analytics = {
         }
 
         const dayHeader = Array.from({ length: 31 }, (_, i) => `<div class="text-[9px] text-earth-metal text-center">${i + 1}</div>`).join('');
+        const isMobile = window.matchMedia && window.matchMedia('(max-width: 767px)').matches;
         heatmapContainer.innerHTML = `
-            <div class="min-w-[760px] space-y-1">
+            <div class="space-y-1" style="min-width:${isMobile ? 620 : 760}px">
                 <div class="grid grid-cols-[72px_repeat(31,minmax(0,1fr))] gap-1 items-center sticky top-0 bg-white-linen/95 py-1">
                     <div></div>
                     ${dayHeader}
@@ -626,6 +1020,92 @@ const Analytics = {
                 ${selectedTypes.length > 8 ? `<span>+${selectedTypes.length - 8} more</span>` : ''}
             </div>
             <p class="pt-1">Square shade = daily volume. Dots = top event types that day.</p>
+        `;
+    },
+
+    /**
+     * Render time-of-day activity heatmap (hourly bins).
+     */
+    renderTimeOfDayHeatmap: async (allEvents, eventTypes) => {
+        const container = document.getElementById('activityHourHeatmap');
+        const summary = document.getElementById('activityHourSummary');
+        if (!container || !summary) return;
+
+        const selectedTypeIds = new Set(Analytics.state.heatmapEventTypeIds || []);
+        const now = new Date();
+        now.setHours(23, 59, 59, 999);
+        const days = Analytics.state.heatmapRangeDays || 365;
+        const from = new Date(now);
+        from.setHours(0, 0, 0, 0);
+        from.setDate(from.getDate() - (days - 1));
+
+        let events = (allEvents || []).filter(e => e.startDate && e.eventTypeId);
+        if (Analytics.state.selectedPetId) {
+            events = events.filter(e => e.petIds?.includes(Analytics.state.selectedPetId));
+        }
+        if (selectedTypeIds.size > 0) {
+            events = events.filter(e => selectedTypeIds.has(e.eventTypeId));
+        } else {
+            events = [];
+        }
+        events = events.filter(e => {
+            const d = new Date(e.startDate);
+            return !Number.isNaN(d.getTime()) && d >= from && d <= now;
+        });
+
+        if (events.length === 0) {
+            summary.innerHTML = `
+                <div class="border border-oatmeal p-3 text-center md:col-span-3">
+                    <span class="font-mono text-[10px] uppercase text-earth-metal">No Data</span>
+                    <p class="text-sm text-earth-metal mt-1">No timed activity in selected filters.</p>
+                </div>
+            `;
+            container.innerHTML = '';
+            return;
+        }
+
+        const hourlyCounts = Array.from({ length: 24 }, () => 0);
+        for (const event of events) {
+            const dt = new Date(event.startDate);
+            if (!Number.isNaN(dt.getTime())) {
+                hourlyCounts[dt.getHours()] += 1;
+            }
+        }
+
+        const total = hourlyCounts.reduce((a, b) => a + b, 0);
+        const maxCount = Math.max(...hourlyCounts);
+        const busiestHour = hourlyCounts.indexOf(maxCount);
+        const avgPerHour = total / 24;
+
+        summary.innerHTML = `
+            <div class="border border-oatmeal p-3 text-center">
+                <span class="font-mono text-[10px] uppercase text-earth-metal">Total Timed Events</span>
+                <p class="font-serif text-2xl text-charcoal">${total}</p>
+            </div>
+            <div class="border border-oatmeal p-3 text-center">
+                <span class="font-mono text-[10px] uppercase text-earth-metal">Peak Hour</span>
+                <p class="font-serif text-2xl text-charcoal">${String(busiestHour).padStart(2, '0')}:00</p>
+            </div>
+            <div class="border border-oatmeal p-3 text-center">
+                <span class="font-mono text-[10px] uppercase text-earth-metal">Avg / Hour</span>
+                <p class="font-serif text-2xl text-charcoal">${avgPerHour.toFixed(1)}</p>
+            </div>
+        `;
+
+        container.innerHTML = `
+            <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
+                ${hourlyCounts.map((count, hour) => {
+            const ratio = maxCount > 0 ? (count / maxCount) : 0;
+            const alpha = count === 0 ? 0.08 : (0.18 + (ratio * 0.72));
+            const bg = `rgba(139,123,142,${alpha.toFixed(2)})`;
+            return `
+                        <div class="border border-oatmeal p-2" style="background:${bg}" title="${String(hour).padStart(2, '0')}:00 — ${count} events">
+                            <p class="font-mono text-[10px] uppercase text-earth-metal">${String(hour).padStart(2, '0')}:00</p>
+                            <p class="font-serif text-lg text-charcoal">${count}</p>
+                        </div>
+                    `;
+        }).join('')}
+            </div>
         `;
     },
 
@@ -785,13 +1265,20 @@ const Analytics = {
      * Update correlation analysis
      */
     updateCorrelation: async () => {
-        const primaryId = document.getElementById('correlationPrimary')?.value;
-        const secondaryId = document.getElementById('correlationSecondary')?.value;
-        const windowKey = document.getElementById('correlationWindow')?.value || '24h';
+        const primaryId = Analytics.state.primaryEventType || null;
+        const secondaryId = Analytics.state.secondaryEventType || null;
+        const windowKey = Analytics.state.correlationWindow || '24h';
+        const customHoursInput = document.getElementById('correlationCustomHours');
+        const customWrap = document.getElementById('correlationCustomHoursWrap');
+        if (customWrap) customWrap.classList.toggle('hidden', windowKey !== 'custom');
+        const parsedCustomHours = parseInt(customHoursInput?.value || `${Analytics.state.customWindowHours || 24}`, 10);
+        const customHours = Number.isFinite(parsedCustomHours) && parsedCustomHours > 0 ? parsedCustomHours : 24;
 
         Analytics.state.primaryEventType = primaryId;
         Analytics.state.secondaryEventType = secondaryId;
         Analytics.state.correlationWindow = windowKey;
+        Analytics.state.customWindowHours = customHours;
+        Analytics.updateCorrelationWindowLabel();
 
         const resultsContainer = document.getElementById('correlationResults');
         if (!resultsContainer) return;
@@ -801,7 +1288,9 @@ const Analytics = {
             return;
         }
 
-        const windowHours = Analytics.TIME_WINDOWS[windowKey] || 24;
+        const windowHours = windowKey === 'custom'
+            ? customHours
+            : (Analytics.TIME_WINDOWS[windowKey] || 24);
         const events = await PetTracker.DB.getAll(PetTracker.STORES.EVENTS);
 
         // Filter by pet if selected

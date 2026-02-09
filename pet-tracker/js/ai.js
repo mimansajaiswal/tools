@@ -32,6 +32,7 @@ const AI = {
         const eventTypes = await PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES);
         const scales = await PetTracker.DB.getAll(PetTracker.STORES.SCALES);
         const scaleLevels = await PetTracker.DB.getAll(PetTracker.STORES.SCALE_LEVELS);
+        const attachmentCatalog = (window.PetTracker?.QuickAddModal?.getAttachmentCatalog?.() || []);
 
         const now = new Date();
         const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -64,6 +65,11 @@ ${scales.map(s => {
             return `- "${s.name}": ${levels.map(l => l.name).join(', ')}`;
         }).join('\n') || '- No scales configured'}
 
+## Staged Attachments (optional)
+${attachmentCatalog.length > 0
+                ? attachmentCatalog.map(a => `- #${a.index}: "${a.name}" (${a.type})`).join('\n')
+                : '- No staged attachments'}
+
 ## Instructions
 1. Parse the input into one or more event entries
 2. If multiple pets are mentioned (e.g., "Luna and Max"), create SEPARATE entries for each pet
@@ -72,6 +78,7 @@ ${scales.map(s => {
 5. For dates, interpret relative terms (today, yesterday, this morning, etc.)
 6. For severity, match to configured scale levels
 7. Include confidence score (0.0-1.0) based on clarity of input
+8. If the text references files/photos/videos, map them to the "attachments" field using attachment numbers (e.g., ["1","2"]) or filename snippets
 
 ## Output Format (JSON only, no markdown)
 {
@@ -89,6 +96,7 @@ ${scales.map(s => {
       "durationMinutes": null,
       "notes": "Any additional context",
       "tags": [],
+      "attachments": [],
       "confidence": 0.95
     }
   ],
@@ -265,6 +273,26 @@ Parse the following input:`;
         }
     },
 
+    normalizeStatus: (rawStatus) => {
+        const status = String(rawStatus || '').trim().toLowerCase();
+        if (!status) return 'Completed';
+        if (['completed', 'done', 'complete'].includes(status)) return 'Completed';
+        if (['planned', 'plan', 'scheduled', 'schedule'].includes(status)) return 'Planned';
+        if (['missed', 'skip', 'skipped', 'cancelled', 'canceled'].includes(status)) return 'Missed';
+        return 'Completed';
+    },
+
+    normalizeAttachmentRefs: (raw) => {
+        if (raw === undefined || raw === null || raw === '') return [];
+        if (Array.isArray(raw)) {
+            return raw.map(v => String(v || '').trim()).filter(Boolean);
+        }
+        return String(raw)
+            .split(/[,\n]+/)
+            .map(v => v.trim())
+            .filter(Boolean);
+    },
+
     /**
      * Handle input change with debounced parsing
      */
@@ -302,6 +330,8 @@ Parse the following input:`;
             result.entries.forEach((entry, index) => {
                 entry._id = `ai_${Date.now()}_${index}`;
                 entry._isNew = true;
+                entry.status = AI.normalizeStatus(entry.status);
+                entry.attachments = AI.normalizeAttachmentRefs(entry.attachments || entry.attachmentRefs);
 
                 // Check if we already have a similar entry that was edited
                 const existingIndex = AI.state.entries.findIndex(e =>
@@ -404,17 +434,54 @@ Parse the following input:`;
                     startDate = `${entry.date}T${entry.time}:00`;
                 }
 
+                const normalizedStatus = AI.normalizeStatus(entry.status);
+                const attachmentRefs = AI.normalizeAttachmentRefs(entry.attachments || entry.attachmentRefs);
+                let media = [];
+                if (attachmentRefs.length > 0 && window.PetTracker?.QuickAddModal?.mapAttachmentRefsToMedia) {
+                    media = await window.PetTracker.QuickAddModal.mapAttachmentRefsToMedia(attachmentRefs);
+                }
+
+                let providerId = entry.provider || null;
+                if (providerId && window.PetTracker?.QuickAddModal?.resolveProviderId) {
+                    providerId = window.PetTracker.QuickAddModal.resolveProviderId(providerId);
+                }
+
+                // Resolve severityLabel to severityLevelId
+                let severityLevelId = null;
+                if (entry.severityLabel && eventType?.usesSeverity && eventType?.defaultScaleId) {
+                    const scaleLevels = await PetTracker.DB.getAll(PetTracker.STORES.SCALE_LEVELS);
+                    let matchedLevel = scaleLevels.find(l =>
+                        l.scaleId === eventType.defaultScaleId &&
+                        l.name.toLowerCase() === entry.severityLabel.toLowerCase()
+                    );
+                    if (!matchedLevel) {
+                        matchedLevel = scaleLevels.find(l =>
+                            l.scaleId === eventType.defaultScaleId &&
+                            l.name.toLowerCase().includes(entry.severityLabel.toLowerCase())
+                        );
+                    }
+                    if (matchedLevel) severityLevelId = matchedLevel.id;
+                }
+
                 await Events.create({
                     title: entry.title || eventType?.name || 'Event',
                     petIds: [pet.id],
                     eventTypeId: eventType?.id || null,
                     startDate,
-                    status: entry.status || 'Completed',
+                    endDate: entry.endDate || null,
+                    status: normalizedStatus,
+                    severityLevelId,
                     notes: entry.notes || '',
                     value: entry.value,
                     unit: entry.unit,
                     duration: entry.durationMinutes,
                     tags: entry.tags || [],
+                    media,
+                    providerId: providerId || null,
+                    cost: entry.cost || null,
+                    costCategory: entry.costCategory || null,
+                    costCurrency: entry.costCurrency || null,
+                    todoistTaskId: entry.todoistTaskId || null,
                     source: 'AI'
                 });
 
@@ -503,8 +570,12 @@ Parse the following input:`;
                                     <span class="meta-separator">//</span>
                                     <span>${entry.date || 'No date'}</span>
                                     ${entry.time ? `<span class="meta-separator">//</span><span>${entry.time}</span>` : ''}
+                                    ${entry.status ? `<span class="meta-separator">//</span><span>${PetTracker.UI.escapeHtml(entry.status)}</span>` : ''}
                                 </p>
                                 ${entry.notes ? `<p class="text-xs text-earth-metal mt-1 truncate">${PetTracker.UI.escapeHtml(entry.notes)}</p>` : ''}
+                                ${Array.isArray(entry.attachments) && entry.attachments.length > 0
+                    ? `<p class="text-[10px] text-earth-metal mt-1">Attachments: ${PetTracker.UI.escapeHtml(entry.attachments.join(', '))}</p>`
+                    : ''}
                             </div>
                             <div class="flex items-center gap-1 flex-shrink-0">
                                 <span class="text-[10px] text-earth-metal">${Math.round((entry.confidence || 0) * 100)}%</span>
@@ -548,6 +619,10 @@ Parse the following input:`;
                 <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Notes</label>
                 <textarea class="input-field text-sm" rows="2" id="aiEditNotes_${entryId}">${PetTracker.UI.escapeHtml(entry.notes || '')}</textarea>
             </div>
+            <div>
+                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Attachments</label>
+                <input type="text" class="input-field text-sm" id="aiEditAttachments_${entryId}" value="${PetTracker.UI.escapeHtml((entry.attachments || []).join(', '))}" placeholder="e.g. 1,2 or all">
+            </div>
             <div class="flex gap-2 justify-end">
                 <button type="button" onclick="AI.cancelEdit('${entryId}')" class="text-xs text-earth-metal hover:text-charcoal">Cancel</button>
                 <button type="button" onclick="AI.saveEdit('${entryId}')" class="text-xs text-dull-purple font-medium">Save</button>
@@ -587,9 +662,11 @@ Parse the following input:`;
 
         const titleEl = document.getElementById(`aiEditTitle_${entryId}`);
         const notesEl = document.getElementById(`aiEditNotes_${entryId}`);
+        const attachmentsEl = document.getElementById(`aiEditAttachments_${entryId}`);
 
         if (titleEl) entry.title = titleEl.value.trim();
         if (notesEl) entry.notes = notesEl.value.trim();
+        if (attachmentsEl) entry.attachments = AI.normalizeAttachmentRefs(attachmentsEl.value);
 
         AI.markEdited(entryId);
         AI.renderEntries();
@@ -692,6 +769,8 @@ Parse the following input:`;
                     entry._id = `ai_${Date.now()}_${index}`;
                     entry._isNew = true;
                     entry._fromQueue = item.id;
+                    entry.status = AI.normalizeStatus(entry.status);
+                    entry.attachments = AI.normalizeAttachmentRefs(entry.attachments || entry.attachmentRefs);
                     AI.state.entries.push(entry);
                 });
 

@@ -4,41 +4,75 @@
  */
 
 const Todoist = {
-    API_BASE: 'https://api.todoist.com/rest/v2',
+    API_REST_BASE: 'https://api.todoist.com/rest/v2',
+    API_SYNC_BASE: 'https://api.todoist.com/sync/v9',
+
+    /**
+     * Resolve Todoist token from settings.
+     * Supports manual token and OAuth token.
+     */
+    getToken: () => {
+        const settings = PetTracker.Settings.get();
+        if (settings.todoistAuthMode === 'oauth') {
+            return settings.todoistOAuthData?.access_token || settings.todoistToken || '';
+        }
+        return settings.todoistToken || settings.todoistOAuthData?.access_token || '';
+    },
 
     /**
      * Check if Todoist is configured
      */
     isConfigured: () => {
         const settings = PetTracker.Settings.get();
-        return !!(settings.todoistEnabled && settings.todoistToken);
+        return !!(settings.todoistEnabled && settings.workerUrl && Todoist.getToken());
     },
 
     /**
      * Make API request to Todoist
      */
-    request: async (method, endpoint, body = null) => {
+    request: async (method, endpoint, body = null, options = {}) => {
         const settings = PetTracker.Settings.get();
+        const token = Todoist.getToken();
 
-        if (!settings.todoistToken) {
+        if (!settings.workerUrl) {
+            throw new Error('Worker URL not configured');
+        }
+
+        if (!token) {
             throw new Error('Todoist token not configured');
         }
 
-        const headers = {
-            'Authorization': `Bearer ${settings.todoistToken}`,
-            'Content-Type': 'application/json'
-        };
+        const { api = 'rest', query = {}, headers: extraHeaders = {} } = options || {};
+        const base = api === 'sync' ? Todoist.API_SYNC_BASE : Todoist.API_REST_BASE;
+        const target = new URL(`${base}${endpoint}`);
+        Object.entries(query || {}).forEach(([k, v]) => {
+            if (v !== undefined && v !== null && v !== '') {
+                target.searchParams.append(k, String(v));
+            }
+        });
+        const proxyUrl = new URL(settings.workerUrl.trim().replace(/\/$/, ''));
+        proxyUrl.searchParams.append('url', target.toString());
 
-        const options = { method, headers };
-        if (body) {
-            options.body = JSON.stringify(body);
+        const headers = {
+            'Authorization': `Bearer ${token}`
+        };
+        if (settings.proxyToken) headers['X-Proxy-Token'] = settings.proxyToken;
+        Object.assign(headers, extraHeaders || {});
+
+        const fetchOptions = { method, headers };
+        if (body !== null && body !== undefined) {
+            headers['Content-Type'] = 'application/json';
+            fetchOptions.body = JSON.stringify(body);
         }
 
-        const res = await fetch(`${Todoist.API_BASE}${endpoint}`, options);
+        const res = await fetch(proxyUrl.toString(), fetchOptions);
 
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
-            throw new Error(err.message || `Todoist API error: ${res.status}`);
+            const message = err.message || err.error || `Todoist API error: ${res.status}`;
+            const error = new Error(message);
+            error.status = res.status;
+            throw error;
         }
 
         // DELETE returns 204 No Content
@@ -46,7 +80,11 @@ const Todoist = {
             return null;
         }
 
-        return res.json();
+        const contentType = res.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+            return null;
+        }
+        return res.json().catch(() => null);
     },
 
     /**
@@ -60,7 +98,18 @@ const Todoist = {
      * Get tasks from a project
      */
     getTasks: async (projectId) => {
-        return Todoist.request('GET', `/tasks?project_id=${projectId}`);
+        return Todoist.request('GET', '/tasks', null, {
+            query: { project_id: projectId }
+        });
+    },
+
+    /**
+     * Get sections for a Todoist project
+     */
+    getSections: async (projectId) => {
+        return Todoist.request('GET', '/sections', null, {
+            query: { project_id: projectId }
+        });
     },
 
     /**
@@ -171,6 +220,10 @@ const Todoist = {
                     taskOptions.project_id = eventType.todoistProject;
                 }
 
+                if (eventType.todoistSection) {
+                    taskOptions.section_id = eventType.todoistSection;
+                }
+
                 if (eventType.todoistLabels) {
                     taskOptions.labels = eventType.todoistLabels.split(',').map(l => l.trim());
                 }
@@ -197,50 +250,65 @@ const Todoist = {
     },
 
     /**
-     * Pull completed tasks from Todoist
+     * Fetch completed Todoist task IDs since a timestamp.
+     */
+    getCompletedTaskIdsSince: async (sinceIso) => {
+        const payload = await Todoist.request(
+            'GET',
+            '/completed/get_all',
+            null,
+            {
+                api: 'sync',
+                query: { since: sinceIso }
+            }
+        );
+        const items = payload?.items || payload?.completed_items || [];
+        const ids = new Set();
+        for (const item of items) {
+            const id = item?.task_id || item?.id || item?.item_id;
+            if (id !== undefined && id !== null && id !== '') {
+                ids.add(String(id));
+            }
+        }
+        return ids;
+    },
+
+    /**
+     * Pull completed tasks from Todoist.
+     * Uses completed history endpoint to avoid false positives from missing/deleted tasks.
      */
     pullCompletedTasks: async () => {
         if (!Todoist.isConfigured()) return;
 
+        const settings = PetTracker.Settings.get();
         // Get all planned events with Todoist task IDs
         const plannedEvents = await PetTracker.DB.query(
             PetTracker.STORES.EVENTS,
             e => e.todoistTaskId && e.status === 'Planned'
         );
+        if (plannedEvents.length === 0) return;
+
+        const nowIso = new Date().toISOString();
+        const oldestPlannedTs = plannedEvents.reduce((minTs, e) => {
+            const ts = new Date(e.startDate || e.updatedAt || Date.now()).getTime();
+            if (Number.isNaN(ts)) return minTs;
+            return Math.min(minTs, ts);
+        }, Date.now());
+        const fallbackSince = new Date(Math.max(0, oldestPlannedTs - (90 * 24 * 60 * 60 * 1000))).toISOString();
+        const sinceIso = settings.todoistLastCompletedSyncAt || fallbackSince;
+        const completedTaskIds = await Todoist.getCompletedTaskIdsSince(sinceIso);
 
         for (const event of plannedEvents) {
-            try {
-                // Check task status in Todoist
-                const task = await Todoist.request('GET', `/tasks/${event.todoistTaskId}`);
-
-                // Task exists and is not completed - nothing to do
-                if (task && !task.is_completed) {
-                    continue;
-                }
-
-                // Task is explicitly marked as completed
-                if (task && task.is_completed) {
-                    await Events.update(event.id, {
-                        status: 'Completed',
-                        updatedAt: new Date().toISOString()
-                    });
-                    console.log(`[Todoist] Marked ${event.title} as completed (task completed)`);
-                }
-            } catch (e) {
-                // Only treat 404 as "task gone/completed"
-                // Retry or skip on network/5xx errors
-                if (e.message?.includes('404') || e.status === 404) {
-                    await Events.update(event.id, {
-                        status: 'Completed',
-                        updatedAt: new Date().toISOString()
-                    });
-                    console.log(`[Todoist] Marked ${event.title} as completed (task deleted)`);
-                } else {
-                    // Network error or 5xx - skip this task, don't mark as completed
-                    console.warn(`[Todoist] Skipping ${event.title} due to API error:`, e.message);
-                }
+            if (completedTaskIds.has(String(event.todoistTaskId))) {
+                await Events.update(event.id, {
+                    status: 'Completed',
+                    updatedAt: new Date().toISOString()
+                });
+                console.log(`[Todoist] Marked ${event.title} as completed`);
             }
         }
+
+        PetTracker.Settings.set({ todoistLastCompletedSyncAt: nowIso });
     },
 
     /**
@@ -295,6 +363,7 @@ const Todoist = {
         const anchor = new Date(eventType.anchorDate);
         const interval = eventType.intervalValue || 1;
         const unit = eventType.intervalUnit || 'Months';
+        const maxOccurrences = Number(eventType.endAfterOccurrences) || null;
 
         if (eventType.scheduleType === 'One-off') {
             // For one-off, return anchor date only if it's in the future
@@ -302,6 +371,7 @@ const Todoist = {
         }
 
         let nextDue = new Date(anchor);
+        let occurrenceIndex = 1;
 
         // Find the next occurrence that is in the future
         while (nextDue <= now) {
@@ -318,6 +388,10 @@ const Todoist = {
                 case 'Years':
                     nextDue.setFullYear(nextDue.getFullYear() + interval);
                     break;
+            }
+            occurrenceIndex += 1;
+            if (maxOccurrences && occurrenceIndex > maxOccurrences) {
+                return null;
             }
         }
 

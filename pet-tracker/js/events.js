@@ -29,6 +29,8 @@ const Events = {
             costCategory: eventData.costCategory || null,
             costCurrency: eventData.costCurrency || null,
             todoistTaskId: eventData.todoistTaskId || null,
+            googleCalendarEventId: eventData.googleCalendarEventId || null,
+            googleCalendarDirty: eventData.googleCalendarDirty !== undefined ? !!eventData.googleCalendarDirty : true,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             synced: false
@@ -60,6 +62,7 @@ const Events = {
         const updated = {
             ...event,
             ...updates,
+            googleCalendarDirty: updates.googleCalendarDirty !== undefined ? !!updates.googleCalendarDirty : true,
             updatedAt: new Date().toISOString(),
             synced: false
         };
@@ -91,7 +94,10 @@ const Events = {
             type: 'delete',
             store: 'events',
             recordId: id,
-            data: { notionId: event.notionId }
+            data: {
+                notionId: event.notionId,
+                googleCalendarEventId: event.googleCalendarEventId || null
+            }
         });
 
         await PetTracker.DB.delete(PetTracker.STORES.EVENTS, id);
@@ -225,6 +231,7 @@ const Events = {
             type: event.eventTypeId || null,
             date,
             time,
+            status: event.status || 'Completed',
             value: event.value ?? '',
             unit: event.unit || '',
             notes: event.notes || '',

@@ -5,6 +5,41 @@
  */
 
 const Care = {
+    advanceDateByInterval: (date, eventType) => {
+        const d = new Date(date);
+        switch (eventType.intervalUnit) {
+            case 'Days':
+                d.setDate(d.getDate() + (eventType.intervalValue || 1));
+                break;
+            case 'Weeks':
+                d.setDate(d.getDate() + ((eventType.intervalValue || 1) * 7));
+                break;
+            case 'Months':
+                d.setMonth(d.getMonth() + (eventType.intervalValue || 1));
+                break;
+            case 'Years':
+                d.setFullYear(d.getFullYear() + (eventType.intervalValue || 1));
+                break;
+            default:
+                d.setDate(d.getDate() + 1);
+        }
+        return d;
+    },
+
+    getFixedOccurrenceIndex: (dateValue, eventType) => {
+        if (!eventType?.anchorDate) return null;
+        const anchor = new Date(eventType.anchorDate);
+        const target = new Date(dateValue);
+        if (Number.isNaN(anchor.getTime()) || Number.isNaN(target.getTime()) || target < anchor) return null;
+        let idx = 1;
+        let cursor = new Date(anchor);
+        while (cursor < target && idx <= 2000) {
+            cursor = Care.advanceDateByInterval(cursor, eventType);
+            idx += 1;
+        }
+        return cursor > target ? null : idx;
+    },
+
     /**
      * Calculate next due date for a recurring event type
      */
@@ -27,22 +62,14 @@ const Care = {
         const anchor = new Date(eventType.anchorDate);
         let nextDue = new Date(anchor);
 
+        let occurrenceIndex = 1;
+        const maxOccurrences = Number(eventType.endAfterOccurrences) || null;
+
         while (nextDue <= now) {
-            switch (eventType.intervalUnit) {
-                case 'Days':
-                    nextDue.setDate(nextDue.getDate() + (eventType.intervalValue || 1));
-                    break;
-                case 'Weeks':
-                    nextDue.setDate(nextDue.getDate() + ((eventType.intervalValue || 1) * 7));
-                    break;
-                case 'Months':
-                    nextDue.setMonth(nextDue.getMonth() + (eventType.intervalValue || 1));
-                    break;
-                case 'Years':
-                    nextDue.setFullYear(nextDue.getFullYear() + (eventType.intervalValue || 1));
-                    break;
-                default:
-                    nextDue.setDate(nextDue.getDate() + 1);
+            nextDue = Care.advanceDateByInterval(nextDue, eventType);
+            occurrenceIndex += 1;
+            if (maxOccurrences && occurrenceIndex > maxOccurrences) {
+                return null;
             }
         }
 
@@ -58,6 +85,8 @@ const Care = {
             return Care.calculateNextDue(eventType);
         }
 
+        const endDateLimit = eventType.endDate ? new Date(eventType.endDate) : null;
+
         // Find last completed event for this event type, optionally filtered by pet
         const events = await PetTracker.DB.query(
             PetTracker.STORES.EVENTS,
@@ -66,7 +95,17 @@ const Care = {
         );
 
         if (events.length === 0) {
+            if (!eventType.anchorDate) return null;
+            const anchorDate = new Date(eventType.anchorDate);
+            if (endDateLimit && !Number.isNaN(endDateLimit.getTime()) && anchorDate > endDateLimit) {
+                return null;
+            }
             return eventType.anchorDate;
+        }
+
+        const maxOccurrences = Number(eventType.endAfterOccurrences) || null;
+        if (maxOccurrences && events.length >= maxOccurrences) {
+            return null;
         }
 
         // Sort by date descending
@@ -75,22 +114,12 @@ const Care = {
         const lastDate = new Date(lastEvent.startDate);
 
         // Add interval
-        switch (eventType.intervalUnit) {
-            case 'Days':
-                lastDate.setDate(lastDate.getDate() + (eventType.intervalValue || 1));
-                break;
-            case 'Weeks':
-                lastDate.setDate(lastDate.getDate() + ((eventType.intervalValue || 1) * 7));
-                break;
-            case 'Months':
-                lastDate.setMonth(lastDate.getMonth() + (eventType.intervalValue || 1));
-                break;
-            case 'Years':
-                lastDate.setFullYear(lastDate.getFullYear() + (eventType.intervalValue || 1));
-                break;
+        const nextDate = Care.advanceDateByInterval(lastDate, eventType);
+        if (endDateLimit && !Number.isNaN(endDateLimit.getTime()) && nextDate > endDateLimit) {
+            return null;
         }
 
-        return PetTracker.UI.localDateYYYYMMDD(lastDate);
+        return PetTracker.UI.localDateYYYYMMDD(nextDate);
     },
 
     /**
@@ -121,23 +150,13 @@ const Care = {
      */
     advanceDueByInterval: (baseDate, eventType) => {
         if (!baseDate) return null;
-        const d = new Date(baseDate);
-        const interval = eventType.intervalValue || 1;
-        switch (eventType.intervalUnit) {
-            case 'Days':
-                d.setDate(d.getDate() + interval);
-                break;
-            case 'Weeks':
-                d.setDate(d.getDate() + (interval * 7));
-                break;
-            case 'Months':
-                d.setMonth(d.getMonth() + interval);
-                break;
-            case 'Years':
-                d.setFullYear(d.getFullYear() + interval);
-                break;
-            default:
-                d.setDate(d.getDate() + 1);
+        const d = Care.advanceDateByInterval(new Date(baseDate), eventType);
+        const maxOccurrences = Number(eventType.endAfterOccurrences) || null;
+        if (maxOccurrences) {
+            const occurrenceIndex = Care.getFixedOccurrenceIndex(d, eventType);
+            if (!occurrenceIndex || occurrenceIndex > maxOccurrences) {
+                return null;
+            }
         }
         return PetTracker.UI.localDateYYYYMMDD(d);
     },
@@ -175,7 +194,7 @@ const Care = {
             // FIX #11: Generate per-pet entries when event type has multiple related pets
             const relatedPets = eventType.relatedPetIds?.length > 0
                 ? eventType.relatedPetIds
-                : [null]; // null = no specific pet
+                : (petIds.length > 0 ? [...petIds] : [null]); // null = no specific pet
 
             for (const petId of relatedPets) {
                 // Filter by pet if specified
@@ -200,7 +219,9 @@ const Care = {
                     upcoming.push({
                         eventTypeId: eventType.id,
                         eventTypeName: eventType.name,
-                        petIds: petId ? [petId] : (eventType.relatedPetIds || []),
+                        petIds: petId
+                            ? [petId]
+                            : (petIds.length > 0 ? [...petIds] : (eventType.relatedPetIds || [])),
                         category: eventType.category,
                         dueDate: nextDue,
                         dueTime: eventType.dueTime,
@@ -226,6 +247,182 @@ const Care = {
         petIds: [],
         categories: []
     },
+    upcomingHorizonOptions: [
+        { value: 7, label: 'Next 7 days' },
+        { value: 14, label: 'Next 14 days' },
+        { value: 30, label: 'Next 30 days' },
+        { value: 90, label: 'Next 90 days' }
+    ],
+    upcomingFilterUI: {
+        openMenu: null,
+        controlsBound: false,
+        availableOptions: {
+            horizon: [],
+            petIds: [],
+            categories: []
+        }
+    },
+
+    updateUpcomingFilters: () => {
+        Care.renderUpcoming();
+    },
+
+    clearUpcomingFilters: () => {
+        Care.upcomingFilters = {
+            horizon: 30,
+            petIds: [],
+            categories: []
+        };
+        Care.upcomingFilterUI.openMenu = null;
+        Care.renderUpcoming();
+    },
+
+    renderUpcomingFilterDropdown: (kind, label, filterKey, options = [], allLabel = 'items') => {
+        const selectedSet = new Set(Care.upcomingFilters[filterKey] || []);
+        const selectedOptions = options.filter(opt => selectedSet.has(opt.value));
+        const summary = selectedOptions.length === 0
+            ? `All ${allLabel}`
+            : (selectedOptions.length <= 2
+                ? selectedOptions.map(opt => opt.label).join(', ')
+                : `${selectedOptions.slice(0, 2).map(opt => opt.label).join(', ')} +${selectedOptions.length - 2}`);
+        const isOpen = Care.upcomingFilterUI.openMenu === kind;
+
+        const optionsHtml = options.length > 0
+            ? options.map(opt => {
+                const encodedValue = encodeURIComponent(String(opt.value));
+                return `
+                    <label class="multiselect-option">
+                        <input type="checkbox" ${selectedSet.has(opt.value) ? 'checked' : ''} onchange="event.stopPropagation(); Care.toggleUpcomingFilterValue('${filterKey}', '${encodedValue}')">
+                        ${opt.color ? `<span class="inline-block w-2.5 h-2.5 rounded-full" style="background:${opt.color}"></span>` : ''}
+                        <span class="multiselect-option-text">${PetTracker.UI.escapeHtml(opt.label || String(opt.value))}</span>
+                    </label>
+                `;
+            }).join('')
+            : '<div class="text-xs text-earth-metal px-2 py-1">No options</div>';
+
+        return `
+            <div class="upcoming-filter-dropdown">
+                <label class="font-mono text-[10px] uppercase text-earth-metal block mb-1">${label}</label>
+                <div class="multiselect-dropdown">
+                    <button type="button" class="multiselect-trigger input-field flex items-center justify-between" onclick="event.stopPropagation(); Care.toggleUpcomingFilterMenu('${kind}')" aria-expanded="${isOpen ? 'true' : 'false'}">
+                        <span class="multiselect-label text-sm ${selectedOptions.length > 0 ? 'text-charcoal' : 'text-earth-metal'}">${PetTracker.UI.escapeHtml(summary)}</span>
+                        <i data-lucide="chevron-down" class="w-4 h-4 text-earth-metal transition-transform"></i>
+                    </button>
+                    <div class="multiselect-menu ${isOpen ? '' : 'hidden'} absolute z-20 mt-1 w-full bg-white-linen border border-oatmeal shadow-lg max-h-72 overflow-y-auto p-2 space-y-2" onclick="event.stopPropagation()">
+                        <div class="space-y-1">${optionsHtml}</div>
+                        <div class="pt-2 border-t border-oatmeal flex gap-2">
+                            <button type="button" onclick="event.stopPropagation(); Care.setUpcomingFilterMode('${filterKey}', 'all')" class="btn-secondary px-2 py-1 font-mono text-[10px] uppercase">All</button>
+                            <button type="button" onclick="event.stopPropagation(); Care.setUpcomingFilterMode('${filterKey}', 'none')" class="btn-secondary px-2 py-1 font-mono text-[10px] uppercase">None</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    renderUpcomingSingleSelectDropdown: (kind, label, selectedValue, options = []) => {
+        const isOpen = Care.upcomingFilterUI.openMenu === kind;
+        const selected = options.find(opt => Number(opt.value) === Number(selectedValue)) || null;
+        const summary = selected?.label || options[0]?.label || '';
+        const optionsHtml = options.length > 0
+            ? options.map(opt => {
+                const isActive = Number(opt.value) === Number(selectedValue);
+                return `
+                    <button type="button" class="multiselect-option multiselect-option-single ${isActive ? 'is-selected' : ''}" onclick="event.stopPropagation(); Care.setUpcomingHorizon(${Number(opt.value)})">
+                        <span class="multiselect-option-text">${PetTracker.UI.escapeHtml(opt.label || String(opt.value))}</span>
+                        ${isActive ? '<i data-lucide="check" class="w-3.5 h-3.5 text-dull-purple"></i>' : ''}
+                    </button>
+                `;
+            }).join('')
+            : '<div class="text-xs text-earth-metal px-2 py-1">No options</div>';
+
+        return `
+            <div class="upcoming-filter-dropdown">
+                <label class="font-mono text-[10px] uppercase text-earth-metal block mb-1">${label}</label>
+                <div class="multiselect-dropdown">
+                    <button type="button" class="multiselect-trigger input-field flex items-center justify-between" onclick="event.stopPropagation(); Care.toggleUpcomingFilterMenu('${kind}')" aria-expanded="${isOpen ? 'true' : 'false'}">
+                        <span class="multiselect-label text-sm text-charcoal">${PetTracker.UI.escapeHtml(summary)}</span>
+                        <i data-lucide="chevron-down" class="w-4 h-4 text-earth-metal transition-transform"></i>
+                    </button>
+                    <div class="multiselect-menu ${isOpen ? '' : 'hidden'} absolute z-20 mt-1 w-full bg-white-linen border border-oatmeal shadow-lg max-h-72 overflow-y-auto p-2 space-y-1" onclick="event.stopPropagation()">
+                        ${optionsHtml}
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    bindUpcomingFilterOutsideClick: () => {
+        if (Care.upcomingFilterUI.controlsBound) return;
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.upcoming-filter-dropdown') && Care.upcomingFilterUI.openMenu) {
+                Care.closeUpcomingFilterMenus();
+            }
+        });
+        Care.upcomingFilterUI.controlsBound = true;
+    },
+
+    toggleUpcomingFilterMenu: (kind) => {
+        Care.upcomingFilterUI.openMenu = Care.upcomingFilterUI.openMenu === kind ? null : kind;
+        Care.renderUpcoming();
+    },
+
+    closeUpcomingFilterMenus: () => {
+        if (!Care.upcomingFilterUI.openMenu) return;
+        Care.upcomingFilterUI.openMenu = null;
+        Care.renderUpcoming();
+    },
+
+    toggleUpcomingFilterValue: (filterKey, encodedValue) => {
+        let value = '';
+        try {
+            value = decodeURIComponent(encodedValue || '');
+        } catch (_) {
+            value = encodedValue || '';
+        }
+        if (!value) return;
+        const current = new Set(Care.upcomingFilters[filterKey] || []);
+        if (current.has(value)) current.delete(value);
+        else current.add(value);
+        Care.upcomingFilters[filterKey] = Array.from(current);
+        Care.renderUpcoming();
+    },
+
+    setUpcomingFilterMode: (filterKey, mode) => {
+        const values = Care.upcomingFilterUI.availableOptions?.[filterKey] || [];
+        Care.upcomingFilters[filterKey] = mode === 'all' ? [...values] : [];
+        Care.renderUpcoming();
+    },
+
+    setUpcomingHorizon: (value) => {
+        const parsed = parseInt(String(value || ''), 10);
+        Care.upcomingFilters.horizon = Number.isFinite(parsed) && parsed > 0 ? parsed : 30;
+        Care.renderUpcoming();
+    },
+
+    normalizePetIdsArg: (petIdsArg) => {
+        if (!petIdsArg) return [];
+        if (Array.isArray(petIdsArg)) {
+            return [...new Set(petIdsArg.filter(Boolean))];
+        }
+        return [...new Set(String(petIdsArg).split(',').map(v => v.trim()).filter(Boolean))];
+    },
+
+    resolveEventPetIds: async (eventType, petIdsArg) => {
+        const explicit = Care.normalizePetIdsArg(petIdsArg);
+        if (explicit.length > 0) return explicit;
+
+        if (Array.isArray(eventType.relatedPetIds) && eventType.relatedPetIds.length > 0) {
+            return [...new Set(eventType.relatedPetIds.filter(Boolean))];
+        }
+
+        if (Array.isArray(Care.upcomingFilters.petIds) && Care.upcomingFilters.petIds.length > 0) {
+            return [...new Set(Care.upcomingFilters.petIds.filter(Boolean))];
+        }
+
+        const pets = await PetTracker.DB.getAll(PetTracker.STORES.PETS);
+        return pets.map(p => p.id).filter(Boolean);
+    },
 
     /**
      * Render upcoming care view
@@ -234,13 +431,32 @@ const Care = {
         const container = document.querySelector('[data-view="upcoming"]');
         if (!container) return;
 
-        const upcoming = await Care.getUpcoming(Care.upcomingFilters);
+        const eventTypes = await PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES);
+        const recurringTypes = eventTypes.filter(et => et.isRecurring && et.active !== false);
+        const categories = [...new Set(recurringTypes.map(et => et.category).filter(Boolean))]
+            .sort((a, b) => a.localeCompare(b));
         const pets = await PetTracker.DB.getAll(PetTracker.STORES.PETS);
+        const petOptions = [...pets]
+            .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+            .map(p => ({ value: p.id, label: p.name || 'Unnamed Pet', color: p.color || '#8b7b8e' }));
+        const categoryOptions = categories.map(c => ({ value: c, label: c }));
+        const horizonOptions = Care.upcomingHorizonOptions;
+        Care.upcomingFilterUI.availableOptions = {
+            horizon: horizonOptions.map(o => o.value),
+            petIds: petOptions.map(o => o.value),
+            categories: categoryOptions.map(o => o.value)
+        };
+        if (!Care.upcomingFilterUI.availableOptions.horizon.includes(Care.upcomingFilters.horizon)) {
+            Care.upcomingFilters.horizon = 30;
+        }
+        Care.upcomingFilters.petIds = (Care.upcomingFilters.petIds || []).filter(id => Care.upcomingFilterUI.availableOptions.petIds.includes(id));
+        Care.upcomingFilters.categories = (Care.upcomingFilters.categories || []).filter(c => Care.upcomingFilterUI.availableOptions.categories.includes(c));
         const petsById = Object.fromEntries(pets.map(p => [p.id, p]));
+        const upcoming = await Care.getUpcoming(Care.upcomingFilters);
 
         let html = `
             <div class="p-4 md:p-6 max-w-4xl mx-auto">
-                <div class="flex items-center justify-between mb-6">
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
                     <div>
                         <h2 class="font-serif text-2xl text-charcoal">Upcoming Care</h2>
                         <p class="text-sm text-earth-metal mt-1">Scheduled events from recurring event types</p>
@@ -248,14 +464,15 @@ const Care = {
                 </div>
 
                 <!-- Filters -->
-                <div class="flex flex-wrap gap-3 mb-6">
-                    <select onchange="Care.upcomingFilters.horizon = parseInt(this.value); Care.renderUpcoming();" 
-                            class="select-field text-sm">
-                        <option value="7" ${Care.upcomingFilters.horizon === 7 ? 'selected' : ''}>Next 7 days</option>
-                        <option value="14" ${Care.upcomingFilters.horizon === 14 ? 'selected' : ''}>Next 14 days</option>
-                        <option value="30" ${Care.upcomingFilters.horizon === 30 ? 'selected' : ''}>Next 30 days</option>
-                        <option value="90" ${Care.upcomingFilters.horizon === 90 ? 'selected' : ''}>Next 90 days</option>
-                    </select>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-6">
+                        ${Care.renderUpcomingSingleSelectDropdown('horizon', 'Horizon', Care.upcomingFilters.horizon, horizonOptions)}
+                        ${Care.renderUpcomingFilterDropdown('pets', 'Pets', 'petIds', petOptions, 'pets')}
+                        ${Care.renderUpcomingFilterDropdown('categories', 'Categories', 'categories', categoryOptions, 'categories')}
+                    <div class="flex items-end">
+                        <button onclick="Care.clearUpcomingFilters()" class="btn-secondary px-3 py-2 font-mono text-xs uppercase w-full sm:w-auto">
+                            Clear Filters
+                        </button>
+                    </div>
                 </div>
         `;
 
@@ -292,7 +509,8 @@ const Care = {
                 `;
 
                 for (const item of items) {
-                    const petNames = (item.petIds || []).map(id => petsById[id]?.name || '').filter(Boolean).join(', ');
+                    const petNames = (item.petIds || []).map(id => petsById[id]?.name || '').filter(Boolean);
+                    const petScope = petNames.length > 0 ? `For ${petNames.join(', ')}` : 'For all pets';
                     const colorHex = Setup?.availableColors?.find(c => c.value === item.color)?.hex || '#6b6357';
 
                     html += `
@@ -303,17 +521,17 @@ const Care = {
                             <div class="flex-1 min-w-0">
                                 <p class="text-sm text-charcoal font-medium truncate">${PetTracker.UI.escapeHtml(item.eventTypeName)}</p>
                                 <p class="text-xs text-earth-metal">
-                                    ${item.category || 'Other'}${petNames ? ` • ${petNames}` : ''}
+                                    ${item.category || 'Other'} • ${PetTracker.UI.escapeHtml(petScope)}
                                     ${item.dueTime ? ` • ${item.dueTime}` : ''}
                                 </p>
                             </div>
-                            <div class="flex gap-2">
-                                <button onclick="Care.markComplete('${item.eventTypeId}', '${item.petIds?.[0] || ''}')" 
-                                        class="btn-primary px-3 py-1 font-mono text-[10px] uppercase">
+                            <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                                <button onclick="Care.markComplete('${item.eventTypeId}', '${(item.petIds || []).join(',')}')" 
+                                        class="btn-primary px-3 py-1 font-mono text-[10px] uppercase w-full sm:w-auto">
                                     Done
                                 </button>
-                                <button onclick="Care.skipOnce('${item.eventTypeId}', '${item.petIds?.[0] || ''}')" 
-                                        class="btn-secondary px-3 py-1 font-mono text-[10px] uppercase">
+                                <button onclick="Care.skipOnce('${item.eventTypeId}', '${(item.petIds || []).join(',')}')" 
+                                        class="btn-secondary px-3 py-1 font-mono text-[10px] uppercase w-full sm:w-auto">
                                     Skip
                                 </button>
                             </div>
@@ -328,20 +546,22 @@ const Care = {
         html += `</div>`;
         container.innerHTML = html;
 
+        Care.bindUpcomingFilterOutsideClick();
         if (window.lucide) lucide.createIcons();
     },
 
     /**
      * Mark a recurring event type item as complete (create event)
      */
-    markComplete: async (eventTypeId, petId = null) => {
+    markComplete: async (eventTypeId, petIdsArg = null) => {
         const eventType = await PetTracker.DB.get(PetTracker.STORES.EVENT_TYPES, eventTypeId);
         if (!eventType) return;
+        const targetPetIds = await Care.resolveEventPetIds(eventType, petIdsArg);
 
         // Create completed event
         await Events.create({
             title: eventType.name,
-            petIds: petId ? [petId] : (eventType.relatedPetIds || []),
+            petIds: targetPetIds,
             eventTypeId: eventType.id,
             startDate: new Date().toISOString(),
             status: 'Completed',
@@ -386,14 +606,15 @@ const Care = {
     /**
      * Skip once (advance to next occurrence)
      */
-    skipOnce: async (eventTypeId, petId = null) => {
+    skipOnce: async (eventTypeId, petIdsArg = null) => {
         const eventType = await PetTracker.DB.get(PetTracker.STORES.EVENT_TYPES, eventTypeId);
         if (!eventType) return;
+        const targetPetIds = await Care.resolveEventPetIds(eventType, petIdsArg);
 
         // Create a missed event
         await Events.create({
             title: eventType.name,
-            petIds: petId ? [petId] : (eventType.relatedPetIds || []),
+            petIds: targetPetIds,
             eventTypeId: eventType.id,
             startDate: eventType.nextDue || PetTracker.UI.localDateYYYYMMDD(),
             status: 'Missed',

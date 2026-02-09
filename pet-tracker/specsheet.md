@@ -1,6 +1,8 @@
 # Pet Tracker Spec Sheet (Client-Only PWA + Notion + AI Auto-Entry)
 Version: 1.2
 
+> Architecture update (2026-02-08): recurring scheduling is implemented on **Event Types**. Legacy references to **Care Plans** in this document are historical and should be interpreted as recurring Event Type schedules.
+
 ## 1) Product Vision and Goals
 This product is a client-only, offline-first pet tracker that uses Notion as the sole backend. It must support multiple pets, flexible tracking styles, and rich analytics without requiring a server-side database. The app should feel fast, minimal, and configurable, while enabling structured data for reminders, correlations, and health insights. The system must run entirely in the browser, remain usable offline, and sync reliably when online. All Notion and Todoist calls must pass through a Cloudflare Worker proxy for CORS and OAuth handling.
 
@@ -8,9 +10,9 @@ This product is a client-only, offline-first pet tracker that uses Notion as the
 - Tracks pet health and routines: symptoms, meds, vaccines, vet visits, habits, activities, and weight.
 - Supports event logging via manual entry, calendar stamping, share-sheet import, and AI-based extraction.
 - Supports custom severity scales and labels, per event type.
-- Provides upcoming schedule view and reminders based on care plans.
+- Provides upcoming schedule view and reminders based on recurring event types.
 - Provides analytics and correlations (calendar overlays, trends, and impact windows).
-- Supports two-way Todoist task sync for selected care plans.
+- Supports two-way Todoist task sync for selected recurring event types.
 
 ## 3) Non-Negotiable Requirements (From User)
 - Client-only PWA, installable, responsive for mobile, tablet, and desktop.
@@ -493,14 +495,14 @@ The prompt must be assembled at runtime with the user's actual configuration:
 - **Thin borders**: 1px borders for card/panel separation.
 
 ### 15.3 Color Palette
-| Name         | Hex       | Usage                                      |
-|--------------|-----------|-------------------------------------------|
-| Oatmeal      | `#d4c8b8` | Secondary backgrounds, subtle fills       |
-| Earth Metal  | `#6b6357` | Secondary text, muted UI elements         |
-| Charcoal     | `#2d2926` | Primary text, solid badges, headers       |
-| White Linen  | `#f8f6f3` | Page background, card surfaces            |
-| Dull Purple  | `#8b7b8e` | Accents, interactive elements, links      |
-| Muted Pink   | `#c9a9a6` | Highlights, status indicators, soft accents|
+| Name        | Hex       | Usage                                       |
+| ----------- | --------- | ------------------------------------------- |
+| Oatmeal     | `#d4c8b8` | Secondary backgrounds, subtle fills         |
+| Earth Metal | `#6b6357` | Secondary text, muted UI elements           |
+| Charcoal    | `#2d2926` | Primary text, solid badges, headers         |
+| White Linen | `#f8f6f3` | Page background, card surfaces              |
+| Dull Purple | `#8b7b8e` | Accents, interactive elements, links        |
+| Muted Pink  | `#c9a9a6` | Highlights, status indicators, soft accents |
 
 ### 15.4 Typography
 - **Display/headings**: Serif font (e.g., Playfair Display, Lora) for pet names, section titles.

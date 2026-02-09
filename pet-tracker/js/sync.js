@@ -287,22 +287,63 @@ const Sync = {
      * Merge event media arrays, preserving upload metadata from local record when queue data is stale.
      */
     mergeEventMediaMetadata: (queueMedia = [], recordMedia = []) => {
-        const recordById = new Map();
-        for (const m of (recordMedia || [])) {
-            const key = m?.localId || m?.id;
-            if (key) recordById.set(key, m);
+        const toKey = (m, i, prefix) => {
+            const localKey = m?.localId || m?.id;
+            if (localKey) return `local:${localKey}`;
+            if (m?.fileUploadId) return `upload:${m.fileUploadId}`;
+            if (typeof m?.url === 'string' && /^https?:\/\//i.test(m.url)) return `url:${m.url}`;
+            return `${prefix}:${i}:${m?.name || 'unknown'}:${m?.type || 'file'}`;
+        };
+
+        const mergedByKey = new Map();
+
+        for (const [i, m] of (recordMedia || []).entries()) {
+            const key = toKey(m, i, 'record');
+            mergedByKey.set(key, { ...(m || {}) });
         }
-        return (queueMedia || []).map(m => {
-            const key = m?.localId || m?.id;
-            const existing = key ? recordById.get(key) : null;
-            if (!existing) return m;
-            return {
+
+        for (const [i, m] of (queueMedia || []).entries()) {
+            const key = toKey(m, i, 'queue');
+            const existing = mergedByKey.get(key) || {};
+            mergedByKey.set(key, {
                 ...existing,
-                ...m,
-                url: m.url || existing.url || '',
-                fileUploadId: m.fileUploadId || existing.fileUploadId || null
-            };
-        });
+                ...(m || {}),
+                url: m?.url || existing.url || '',
+                fileUploadId: m?.fileUploadId || existing.fileUploadId || null
+            });
+        }
+
+        return Array.from(mergedByKey.values());
+    },
+
+    isRemoteMediaUrl: (url) => typeof url === 'string' && /^https?:\/\//i.test(url),
+
+    getMediaLocalId: (media) => media?.localId || media?.id || null,
+
+    hasUploadedMediaReference: (media) => {
+        return !!(media?.fileUploadId || Sync.isRemoteMediaUrl(media?.url));
+    },
+
+    cleanupUploadedLocalBlobsForRecord: async (store, record) => {
+        if (!record || !PetTracker.MediaStore?.delete) return;
+
+        const cleanup = async (items) => {
+            for (const item of (items || [])) {
+                const mediaId = Sync.getMediaLocalId(item);
+                if (!mediaId || !Sync.hasUploadedMediaReference(item)) continue;
+                try {
+                    await PetTracker.MediaStore.delete(`${mediaId}_upload`);
+                } catch (e) {
+                    console.warn(`[Sync] Failed to clean local upload blob for ${mediaId}:`, e.message);
+                }
+            }
+        };
+
+        if (store === 'events') {
+            await cleanup(record.media);
+        } else if (store === 'pets') {
+            await cleanup(record.photo);
+        }
     },
 
     /**
@@ -437,7 +478,9 @@ const Sync = {
                     record.notionId = result.id;
                     record.synced = true;
                     if (Array.isArray(payload?.media)) record.media = payload.media;
+                    if (Array.isArray(payload?.photo)) record.photo = payload.photo;
                     await PetTracker.DB.put(storeConstant, record);
+                    await Sync.cleanupUploadedLocalBlobsForRecord(store, record);
                 }
                 // Return notionId so caller can propagate to dependent queue items
                 return { notionId: result.id };
@@ -474,7 +517,9 @@ const Sync = {
 
                 record.synced = true;
                 if (Array.isArray(payload?.media)) record.media = payload.media;
+                if (Array.isArray(payload?.photo)) record.photo = payload.photo;
                 await PetTracker.DB.put(storeConstant, record);
+                await Sync.cleanupUploadedLocalBlobsForRecord(store, record);
                 break;
             }
 
@@ -487,6 +532,15 @@ const Sync = {
                 const notionId = record?.notionId || data?.notionId;
                 if (notionId) {
                     await PetTracker.API.archivePage(notionId);
+                }
+
+                // Propagate event deletion to Google Calendar when linked.
+                if (store === 'events' && data?.googleCalendarEventId && typeof GoogleCalendar !== 'undefined') {
+                    try {
+                        await GoogleCalendar.deleteEvent(data.googleCalendarEventId);
+                    } catch (e) {
+                        console.warn('[Sync] Google Calendar delete failed:', e);
+                    }
                 }
                 // Only delete if record still exists locally
                 if (record) {
@@ -641,6 +695,18 @@ const Sync = {
 
             if (remoteTime > localTime) {
                 remote.id = local.id;
+                // Preserve local-only fields that may not exist in remote schema.
+                if (store === 'eventTypes' && !remote.todoistSection && local.todoistSection) {
+                    remote.todoistSection = local.todoistSection;
+                }
+                if (store === 'events') {
+                    if (!remote.googleCalendarEventId && local.googleCalendarEventId) {
+                        remote.googleCalendarEventId = local.googleCalendarEventId;
+                    }
+                    if (remote.googleCalendarDirty === undefined && local.googleCalendarDirty !== undefined) {
+                        remote.googleCalendarDirty = local.googleCalendarDirty;
+                    }
+                }
                 await PetTracker.DB.put(storeName, remote);
             } else if (!local.notionId) {
                 // Local is newer but has no notionId - just add the notionId
@@ -909,7 +975,7 @@ const Sync = {
                 const normalizedPhotos = [];
                 const photos = Array.isArray(data.photo) ? data.photo : [];
                 for (const p of photos) {
-                    const remoteUrl = (typeof p?.url === 'string' && /^https?:\/\//i.test(p.url)) ? p.url : '';
+                    const remoteUrl = Sync.isRemoteMediaUrl(p?.url) ? p.url : '';
                     if (p?.fileUploadId || remoteUrl) {
                         const normalized = {
                             ...p,
@@ -924,31 +990,24 @@ const Sync = {
 
                     const mediaId = p?.localId || p?.id;
                     if (!mediaId || typeof Media === 'undefined') {
-                        normalizedPhotos.push(p);
-                        continue;
+                        throw new Error('Pet photo is missing local media metadata. Please reattach and sync again.');
                     }
 
-                    try {
-                        const blob = await PetTracker.MediaStore.get(`${mediaId}_upload`);
-                        if (!blob) {
-                            normalizedPhotos.push(p);
-                            continue;
-                        }
-                        const uploaded = await Media.uploadToNotion(blob, p.name || 'pet-photo.webp');
-                        const normalized = {
-                            ...p,
-                            id: mediaId,
-                            localId: mediaId,
-                            name: p.name || 'pet-photo',
-                            url: uploaded.url || '',
-                            fileUploadId: uploaded.id || null
-                        };
-                        uploadedPhotos.push(normalized);
-                        normalizedPhotos.push(normalized);
-                    } catch (e) {
-                        console.warn(`[Sync] Pet photo upload failed for ${mediaId}:`, e.message);
-                        normalizedPhotos.push(p);
+                    const blob = await PetTracker.MediaStore.get(`${mediaId}_upload`);
+                    if (!blob) {
+                        throw new Error(`Pet photo data is no longer in local storage (${mediaId}). Reattach photo to sync.`);
                     }
+                    const uploaded = await Media.uploadToNotion(blob, p.name || 'pet-photo.webp');
+                    const normalized = {
+                        ...p,
+                        id: mediaId,
+                        localId: mediaId,
+                        name: p.name || 'pet-photo',
+                        url: uploaded.url || '',
+                        fileUploadId: uploaded.id || null
+                    };
+                    uploadedPhotos.push(normalized);
+                    normalizedPhotos.push(normalized);
                 }
 
                 // Keep Photo property explicit so clear/remove operations sync as well.
@@ -1002,35 +1061,36 @@ const Sync = {
                     const uploadedMedia = [];
                     const normalizedMedia = [];
                     for (const m of data.media) {
-                        if (m.url || m.fileUploadId) {
-                            uploadedMedia.push(m);
-                            normalizedMedia.push(m);
+                        const remoteUrl = Sync.isRemoteMediaUrl(m?.url) ? m.url : '';
+                        if (remoteUrl || m.fileUploadId) {
+                            const normalized = {
+                                ...m,
+                                url: remoteUrl || '',
+                                fileUploadId: m.fileUploadId || null
+                            };
+                            uploadedMedia.push(normalized);
+                            normalizedMedia.push(normalized);
                         } else {
                             // Local media - try to upload. Uses localId or id field
                             const mediaId = m.localId || m.id;
-                            if (mediaId && typeof Media !== 'undefined') {
-                                try {
-                                    const blob = await PetTracker.MediaStore.get(`${mediaId}_upload`);
-                                    if (blob) {
-                                        const uploaded = await Media.uploadToNotion(blob, m.name || 'media.webp');
-                                        const normalized = {
-                                            ...m,
-                                            name: m.name || 'media',
-                                            url: uploaded.url || m.url || '',
-                                            fileUploadId: uploaded.id || m.fileUploadId || null
-                                        };
-                                        uploadedMedia.push(normalized);
-                                        normalizedMedia.push(normalized);
-                                    } else {
-                                        normalizedMedia.push(m);
-                                    }
-                                } catch (e) {
-                                    console.warn(`[Sync] Media upload failed for ${mediaId}:`, e.message);
-                                    normalizedMedia.push(m);
-                                }
-                            } else {
-                                normalizedMedia.push(m);
+                            if (!mediaId || typeof Media === 'undefined') {
+                                throw new Error('Attachment is missing local media metadata. Please reattach and sync again.');
                             }
+                            const blob = await PetTracker.MediaStore.get(`${mediaId}_upload`);
+                            if (!blob) {
+                                throw new Error(`Attachment data is no longer in local storage (${mediaId}). Reattach file to sync.`);
+                            }
+                            const uploaded = await Media.uploadToNotion(blob, m.name || 'media.webp');
+                            const normalized = {
+                                ...m,
+                                id: mediaId,
+                                localId: mediaId,
+                                name: m.name || 'media',
+                                url: uploaded.url || '',
+                                fileUploadId: uploaded.id || null
+                            };
+                            uploadedMedia.push(normalized);
+                            normalizedMedia.push(normalized);
                         }
                     }
                     eventProps['Media'] = P.files(uploadedMedia);
@@ -1073,6 +1133,7 @@ const Sync = {
                     'Next Due': P.date(data.nextDue),
                     'Todoist Sync': P.checkbox(data.todoistSync),
                     'Todoist Project': P.richText(data.todoistProject),
+                    'Todoist Section': P.richText(data.todoistSection),
                     'Todoist Labels': P.richText(data.todoistLabels),
                     'Todoist Lead Time': P.number(data.todoistLeadTime),
                     'Default Dose': P.richText(data.defaultDose),
@@ -1181,6 +1242,8 @@ const Sync = {
                     costCategory: E.select(props['Cost Category']),
                     costCurrency: E.select(props['Cost Currency']),
                     todoistTaskId: E.richText(props['Todoist Task ID']),
+                    googleCalendarEventId: E.richText(props['Google Calendar Event ID']) || null,
+                    googleCalendarDirty: false,
                     updatedAt: page.last_edited_time
                 };
 
@@ -1212,6 +1275,7 @@ const Sync = {
                     nextDue: E.date(props['Next Due']),
                     todoistSync: E.checkbox(props['Todoist Sync']),
                     todoistProject: E.richText(props['Todoist Project']),
+                    todoistSection: E.richText(props['Todoist Section']),
                     todoistLabels: E.richText(props['Todoist Labels']),
                     todoistLeadTime: E.number(props['Todoist Lead Time']),
                     defaultDose: E.richText(props['Default Dose']),
@@ -1359,11 +1423,13 @@ const Sync = {
                 // Get recently created/updated events that need to be synced to GCal
                 const events = await PetTracker.DB.getAll(PetTracker.STORES.EVENTS);
                 const recentEvents = events.filter(e =>
-                    e.synced && !e.googleCalendarEventId &&
-                    new Date(e.updatedAt) > new Date(Date.now() - 24 * 60 * 60 * 1000)
+                    e.synced && (
+                        e.googleCalendarDirty === true ||
+                        (!e.googleCalendarEventId && new Date(e.updatedAt) > new Date(Date.now() - 24 * 60 * 60 * 1000))
+                    )
                 );
 
-                for (const event of recentEvents.slice(0, 10)) {
+                for (const event of recentEvents.slice(0, 25)) {
                     if (typeof GoogleCalendar !== 'undefined') {
                         await GoogleCalendar.syncEvent(event);
                     }
@@ -1375,11 +1441,9 @@ const Sync = {
         }
 
         // Sync Todoist if enabled
-        if (settings.todoistEnabled && settings.todoistToken) {
+        if (settings.todoistEnabled && typeof Todoist !== 'undefined' && Todoist.isConfigured()) {
             try {
-                if (typeof Todoist !== 'undefined') {
-                    await Todoist.sync();
-                }
+                await Todoist.sync();
             } catch (e) {
                 console.warn('[Sync] Todoist sync error:', e);
             }

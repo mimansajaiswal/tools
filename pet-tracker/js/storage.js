@@ -449,20 +449,33 @@ const AIQueue = {
  * Media Storage Manager with LRU Eviction
  */
 const MediaStore = {
-    set: async (id, blob) => {
+    isEvictableMeta: (meta) => {
+        if (!meta) return true;
+        if (typeof meta.id === 'string' && meta.id.endsWith('_upload')) return false;
+        if (meta.evictable === false) return false;
+        if (meta.role === 'upload') return false;
+        return true;
+    },
+
+    set: async (id, blob, metadata = {}) => {
         const db = await DB.open();
-        await MediaStore.evictIfNeeded(blob.size);
+        await MediaStore.evictIfNeeded(blob.size, metadata);
 
         return new Promise((resolve, reject) => {
             const tx = db.transaction([STORES.MEDIA, STORES.MEDIA_META], 'readwrite');
             const mediaStore = tx.objectStore(STORES.MEDIA);
             const metaStore = tx.objectStore(STORES.MEDIA_META);
+            const role = metadata.role || 'preview';
+            const evictable = metadata.evictable !== false && role !== 'upload';
 
             mediaStore.put(blob, id);
             metaStore.put({
                 id,
                 size: blob.size,
                 type: blob.type,
+                role,
+                evictable,
+                purpose: metadata.purpose || '',
                 lastAccessed: Date.now(),
                 createdAt: Date.now()
             });
@@ -513,25 +526,32 @@ const MediaStore = {
         });
     },
 
-    getTotalSize: async () => {
+    getTotalSize: async (filterFn = null) => {
         const allMeta = await DB.getAll(STORES.MEDIA_META);
-        return allMeta.reduce((sum, item) => sum + (item.size || 0), 0);
+        const rows = typeof filterFn === 'function' ? allMeta.filter(filterFn) : allMeta;
+        return rows.reduce((sum, item) => sum + (item.size || 0), 0);
     },
 
-    evictIfNeeded: async (incomingSize) => {
+    evictIfNeeded: async (incomingSize, incomingMetadata = {}) => {
         const currentSize = await MediaStore.getTotalSize();
         let targetSize = currentSize + incomingSize;
 
         if (targetSize <= MEDIA_CACHE_LIMIT) return;
 
         const allMeta = await DB.getAll(STORES.MEDIA_META);
-        allMeta.sort((a, b) => a.lastAccessed - b.lastAccessed);
+        const evictableMeta = allMeta
+            .filter(meta => MediaStore.isEvictableMeta(meta))
+            .sort((a, b) => a.lastAccessed - b.lastAccessed);
 
-        for (const meta of allMeta) {
+        for (const meta of evictableMeta) {
             if (targetSize <= MEDIA_CACHE_LIMIT * 0.8) break;
             await MediaStore.delete(meta.id);
             targetSize -= meta.size;
             console.log(`[MediaStore] Evicted ${meta.id} (${Math.round(meta.size / 1024)}KB)`);
+        }
+
+        if (targetSize > MEDIA_CACHE_LIMIT * 0.8 && incomingMetadata?.evictable === false) {
+            console.warn('[MediaStore] Cache above target but only non-evictable upload blobs remain');
         }
     }
 };
@@ -569,7 +589,10 @@ const Settings = {
         aiApiKey: '',
         aiEndpoint: '',
         todoistEnabled: false,
+        todoistAuthMode: 'token',
         todoistToken: '',
+        todoistOAuthData: null,
+        todoistLastCompletedSyncAt: '',
         gcalEnabled: false,
         gcalAccessToken: '',
         gcalCalendarId: '',
@@ -580,16 +603,24 @@ const Settings = {
         calendarView: 'month',
         theme: 'light',
         quickAddPrefixes: {
-            pet: ['pet:', 'p:'],
-            type: ['type:', 't:'],
-            date: ['on:', 'date:', 'd:'],
-            time: ['at:', 'time:'],
-            status: ['status:', 'st:'],
-            severity: ['sev:', 'severity:'],
-            value: ['val:', 'value:'],
-            unit: ['unit:', 'u:'],
-            tags: ['#', 'tag:'],
-            notes: ['notes:', 'note:']
+            pet: ['pet:'],
+            type: ['type:'],
+            date: ['on:'],
+            time: ['at:'],
+            status: ['status:'],
+            severity: ['sev:'],
+            value: ['val:'],
+            unit: ['unit:'],
+            tags: ['#'],
+            notes: ['notes:'],
+            endDate: ['end:'],
+            duration: ['dur:'],
+            provider: ['provider:'],
+            cost: ['$'],
+            costCategory: ['costCat:'],
+            costCurrency: ['currency:'],
+            todoistTaskId: ['todoist:'],
+            attachments: ['attach:']
         }
     },
 
@@ -598,11 +629,13 @@ const Settings = {
             const raw = localStorage.getItem(Settings.KEYS.SETTINGS);
             if (!raw) return { ...Settings.defaults };
             const parsed = JSON.parse(raw);
-            return {
+            const merged = {
                 ...Settings.defaults,
                 ...parsed,
                 quickAddPrefixes: { ...(Settings.defaults.quickAddPrefixes || {}), ...(parsed.quickAddPrefixes || {}) }
             };
+            merged.uploadCapMb = Number(merged.uploadCapMb) >= 20 ? 20 : 5;
+            return merged;
         } catch (e) {
             console.error('[Settings] Error reading:', e);
             return { ...Settings.defaults };
@@ -632,6 +665,7 @@ const Settings = {
                 ? { ...(Settings.defaults.quickAddPrefixes || {}), ...(updates.quickAddPrefixes || {}) }
                 : { ...(current.quickAddPrefixes || Settings.defaults.quickAddPrefixes || {}) }
         };
+        merged.uploadCapMb = Number(merged.uploadCapMb) >= 20 ? 20 : 5;
         localStorage.setItem(Settings.KEYS.SETTINGS, JSON.stringify(merged));
         return merged;
     },

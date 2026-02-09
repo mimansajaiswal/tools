@@ -304,13 +304,41 @@ const Pets = {
         }
     },
 
-    clearPhotoSelection: () => {
+    getModalPhotoMediaId: () => document.getElementById('addPetPhotoMediaId')?.value?.trim() || '',
+
+    getModalOriginalPhotoMediaId: () => document.getElementById('addPetForm')?.dataset?.originalPhotoMediaId || '',
+
+    deleteLocalPhotoMedia: async (mediaId) => {
+        if (!mediaId) return;
+        const variants = [`${mediaId}_upload`, `${mediaId}_preview`, `${mediaId}_poster`];
+        for (const key of variants) {
+            try {
+                await PetTracker.MediaStore.delete(key);
+            } catch (e) {
+                console.warn('[Pets] Failed to remove local photo blob:', key, e.message);
+            }
+        }
+    },
+
+    clearPhotoSelection: async (options = {}) => {
+        const { cleanupLocal = true } = options;
+        const currentId = Pets.getModalPhotoMediaId();
+        const originalId = Pets.getModalOriginalPhotoMediaId();
+        if (cleanupLocal && currentId && currentId !== originalId) {
+            await Pets.deleteLocalPhotoMedia(currentId);
+        }
+
         const mediaIdEl = document.getElementById('addPetPhotoMediaId');
         const urlEl = document.getElementById('addPetPhotoUrl');
         if (mediaIdEl) mediaIdEl.value = '';
         if (urlEl) urlEl.value = '';
         Pets.revokeModalPreviewUrl();
         Pets.setModalPhotoPreview(null);
+    },
+
+    requestCloseModal: async () => {
+        await Pets.clearPhotoSelection({ cleanupLocal: true });
+        PetTracker.UI.closeModal('addPetModal');
     },
 
     /**
@@ -389,7 +417,7 @@ const Pets = {
 
         container.innerHTML = `
             <div class="p-4 space-y-6">
-                <div class="flex items-center justify-between">
+                <div class="flex flex-wrap items-center justify-between gap-3">
                     ${PetTracker.UI.sectionHeader(1, 'Manage Pets')}
                     <button onclick="Pets.showAddModal()" class="btn-primary px-4 py-2 font-mono text-xs uppercase">
                         <i data-lucide="plus" class="w-4 h-4 inline mr-2"></i>Add Pet
@@ -459,6 +487,7 @@ const Pets = {
         Pets.revokeModalPreviewUrl();
         Pets.setModalPhotoPreview(null);
         document.getElementById('addPetForm').dataset.editId = '';
+        document.getElementById('addPetForm').dataset.originalPhotoMediaId = '';
 
         // Reset icon
         const iconInput = document.getElementById('addPetIcon');
@@ -508,6 +537,7 @@ const Pets = {
         if (photoMediaIdEl) {
             photoMediaIdEl.value = localPhotoId || '';
         }
+        document.getElementById('addPetForm').dataset.originalPhotoMediaId = localPhotoId || '';
         Pets.revokeModalPreviewUrl();
         if (photo?.url && Pets.isRemotePhotoUrl(photo.url)) {
             Pets.setModalPhotoPreview(photo.url);
@@ -563,6 +593,7 @@ const Pets = {
     saveFromModal: async () => {
         const form = document.getElementById('addPetForm');
         const editId = form?.dataset.editId;
+        const originalPhotoMediaId = form?.dataset?.originalPhotoMediaId || '';
 
         // Parse icon from hidden input
         let icon = null;
@@ -617,6 +648,12 @@ const Pets = {
                 await Pets.save(data);
                 PetTracker.UI.toast('Pet added', 'success');
             }
+
+            const currentPhotoMediaId = document.getElementById('addPetPhotoMediaId')?.value?.trim() || '';
+            if (originalPhotoMediaId && originalPhotoMediaId !== currentPhotoMediaId) {
+                await Pets.deleteLocalPhotoMedia(originalPhotoMediaId);
+            }
+            if (form) form.dataset.originalPhotoMediaId = currentPhotoMediaId || '';
 
             PetTracker.UI.closeModal('addPetModal');
             Pets.revokeModalPreviewUrl();
@@ -691,7 +728,7 @@ const Pets = {
                 <!-- Pet Header -->
                 <div class="card p-6">
                     <div class="flex flex-col md:flex-row gap-6">
-                        <div class="w-32 h-32 bg-oatmeal flex items-center justify-center flex-shrink-0 overflow-hidden">
+                        <div class="w-24 h-24 md:w-32 md:h-32 bg-oatmeal flex items-center justify-center flex-shrink-0 overflow-hidden">
                             ${(() => {
                 const speciesIcon = PetTracker.UI.getSpeciesIcon(pet.species);
                 const photo = pet.photo?.[0] || null;
@@ -713,12 +750,12 @@ const Pets = {
             })()}
                         </div>
                         <div class="flex-1">
-                            <div class="flex items-center gap-3 mb-2">
-                                <h2 class="font-serif text-3xl text-charcoal">${PetTracker.UI.escapeHtml(pet.name)}</h2>
+                            <div class="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
+                                <h2 class="font-serif text-2xl md:text-3xl text-charcoal">${PetTracker.UI.escapeHtml(pet.name)}</h2>
                                 <div class="pet-dot w-4 h-4" style="background-color: ${pet.color || '#8b7b8e'}"></div>
                                 ${pet.isPrimary ? '<span class="badge badge-accent">PRIMARY</span>' : ''}
                             </div>
-                            <div class="meta-row text-sm space-x-3">
+                            <div class="meta-row text-sm flex flex-wrap items-center gap-x-2 gap-y-1">
                                 <span class="meta-label">SPECIES:</span>
                                 <span class="meta-value">${pet.species || 'Unknown'}</span>
                                 ${pet.breed ? `<span class="meta-separator">//</span><span class="meta-label">BREED:</span><span class="meta-value">${PetTracker.UI.escapeHtml(pet.breed)}</span>` : ''}
@@ -728,16 +765,16 @@ const Pets = {
                             ${pet.notes ? `<p class="text-sm text-charcoal mt-3">${PetTracker.UI.escapeHtml(pet.notes)}</p>` : ''}
                             
                             <div class="flex flex-wrap gap-3 mt-4">
-                                <button onclick="Pets.showEditModal('${pet.id}')" class="btn-secondary px-3 py-2 font-mono text-xs uppercase">
+                                <button onclick="Pets.showEditModal('${pet.id}')" class="btn-secondary px-3 py-2 font-mono text-xs uppercase w-full sm:w-auto">
                                     <i data-lucide="pencil" class="w-3 h-3 inline mr-1"></i>Edit
                                 </button>
-                                <button onclick="App.openAddModal({pet: '${pet.id}'})" class="btn-primary px-3 py-2 font-mono text-xs uppercase">
+                                <button onclick="App.openAddModal({pet: '${pet.id}'})" class="btn-primary px-3 py-2 font-mono text-xs uppercase w-full sm:w-auto">
                                     <i data-lucide="plus" class="w-3 h-3 inline mr-1"></i>Log Event
                                 </button>
-                                <button onclick="Pets.quickWeighIn('${pet.id}')" class="btn-secondary px-3 py-2 font-mono text-xs uppercase">
+                                <button onclick="Pets.quickWeighIn('${pet.id}')" class="btn-secondary px-3 py-2 font-mono text-xs uppercase w-full sm:w-auto">
                                     <i data-lucide="scale" class="w-3 h-3 inline mr-1"></i>Quick Weigh-In
                                 </button>
-                                <button onclick="Pets.confirmDelete('${pet.id}')" class="btn-secondary px-3 py-2 font-mono text-xs uppercase text-muted-pink">
+                                <button onclick="Pets.confirmDelete('${pet.id}')" class="btn-secondary px-3 py-2 font-mono text-xs uppercase text-muted-pink w-full sm:w-auto">
                                     <i data-lucide="trash-2" class="w-3 h-3 inline mr-1"></i>Delete
                                 </button>
                             </div>
@@ -749,7 +786,7 @@ const Pets = {
                 <div>
                     ${PetTracker.UI.sectionHeader(2, 'Weight')}
                     <div class="card p-4 mt-3">
-                        <div class="flex items-center justify-between gap-4">
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div class="flex-1">
                                 ${weightEvents.length > 0 ? `
                                     <div class="flex items-center gap-3">
@@ -762,7 +799,7 @@ const Pets = {
                                 `}
                             </div>
                             ${(pet.targetWeightMin || pet.targetWeightMax) ? `
-                                <div class="text-right">
+                                <div class="sm:text-right">
                                     <p class="font-mono text-xs uppercase text-earth-metal">Target</p>
                                     <p class="text-sm text-charcoal">${pet.targetWeightMin || '?'} - ${pet.targetWeightMax || '?'} ${pet.weightUnit || 'lb'}</p>
                                 </div>

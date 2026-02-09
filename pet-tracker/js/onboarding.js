@@ -593,7 +593,7 @@ const Onboarding = {
             'Schedule Type', 'Interval Value', 'Interval Unit', 'Anchor Date', 'Due Time',
             'Time of Day Preference', 'Window Before', 'Window After', 'End Date',
             'End After Occurrences', 'Next Due', 'Todoist Sync', 'Todoist Project',
-            'Todoist Labels', 'Todoist Lead Time', 'Default Dose', 'Default Route',
+            'Todoist Section', 'Todoist Labels', 'Todoist Lead Time', 'Default Dose', 'Default Route',
             'Active', 'Active Start', 'Active End', 'Related Pets'
         ],
         'Scales': ['Name', 'Value Type', 'Unit', 'Notes'],
@@ -670,9 +670,9 @@ const Onboarding = {
                 const statusClass = autoSelect ? 'text-dull-purple' : (hasMatches ? '' : 'text-muted-pink');
 
                 html += `
-                    <div class="grid grid-cols-3 gap-2 items-center">
-                        <label class="text-[10px] font-mono uppercase text-earth-metal text-right ${statusClass}">${statusIcon} ${reqName}</label>
-                        <select class="col-span-2 select-field text-xs py-1" data-source="${reqName}" onchange="Onboarding.checkDbMapping()">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">
+                        <label class="text-[10px] font-mono uppercase text-earth-metal sm:text-right ${statusClass}">${statusIcon} ${reqName}</label>
+                        <select class="sm:col-span-2 select-field text-xs py-1" data-source="${reqName}" onchange="Onboarding.checkDbMapping()">
                             <option value="">${hasMatches ? '-- Select --' : '-- No matches found --'}</option>
                             ${options}
                         </select>

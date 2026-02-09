@@ -240,7 +240,7 @@ const Contacts = {
 
         container.innerHTML = `
             <div class="p-4 space-y-6">
-                <div class="flex items-center justify-between">
+                <div class="flex flex-wrap items-center justify-between gap-3">
                     ${PetTracker.UI.sectionHeader(5, 'Contacts')}
                     <button onclick="Contacts.showAddModal()" class="btn-primary px-4 py-2 font-mono text-xs uppercase">
                         <i data-lucide="plus" class="w-4 h-4 inline mr-2"></i>Add Contact
