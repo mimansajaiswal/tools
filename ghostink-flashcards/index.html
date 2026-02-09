@@ -493,7 +493,8 @@
                             </div>
 
                             <div id="studyFiltersBanner"
-                                class="hidden mb-3 md:mb-4 px-3 py-2 rounded-lg bg-accent-soft text-accent border border-[color:color-mix(in_srgb,var(--accent)_40%,var(--card-border))] text-xs flex items-center justify-between gap-2">
+                                class="study-filters-banner--inactive mb-3 md:mb-4 px-3 py-2 rounded-lg bg-accent-soft text-accent border border-[color:color-mix(in_srgb,var(--accent)_40%,var(--card-border))] text-xs flex items-center justify-between gap-2"
+                                aria-hidden="true">
                                 <span>Study filters are active.</span>
                                 <button id="studyFiltersBannerBtn" type="button"
                                     class="text-[11px] font-medium underline hover:text-[color:var(--accent-2)]">Review
@@ -502,6 +503,10 @@
 
                             <!-- Always visible: Decks + Mode -->
                             <div class="space-y-3">
+                                <p class="text-[10px] text-muted">
+                                    Filter mode: include, then exclude, then clear.
+                                    <span class="font-mono">+ / -</span> indicators show active mode.
+                                </p>
                                 <div>
                                     <div class="flex items-center justify-between mb-2">
                                         <label class="text-xs text-sub">Study from decks</label>
@@ -517,6 +522,8 @@
                                         </div>
                                     </div>
                                     <div id="selectedDecksDisplay" class="flex flex-wrap gap-1.5 mt-2"></div>
+                                    <p class="text-[10px] text-muted mt-1">Tap deck to cycle: include, exclude,
+                                        clear.</p>
                                 </div>
                                 <div>
                                     <label class="text-xs text-sub block mb-2">Revision mode</label>
@@ -599,6 +606,8 @@
                                             </div>
                                         </div>
                                         <div id="filterTagSelected" class="flex flex-wrap gap-1.5 mt-2"></div>
+                                        <p class="text-[10px] text-muted mt-1">Use dropdown options to cycle include,
+                                            exclude, or clear (includes "No tag").</p>
                                     </div>
                                     <label class="flex items-center gap-2">
                                         <input id="filterMarked" type="checkbox" class="accent-dull-purple">
@@ -611,6 +620,10 @@
                                                 class="text-[11px] text-accent hover:underline">Clear</button>
                                         </div>
                                         <div id="filterFlagSwatches" class="flag-swatch-row">
+                                            <button type="button" class="flag-swatch-btn" data-flag="__NO_VALUE__"
+                                                aria-label="No flag">
+                                                <span class="flag-swatch is-none"></span>
+                                            </button>
                                             <button type="button" class="flag-swatch-btn" data-flag="Red"
                                                 aria-label="Red flag">
                                                 <span class="flag-swatch flag-red"></span>
@@ -636,8 +649,8 @@
                                                 <span class="flag-swatch flag-purple"></span>
                                             </button>
                                         </div>
-                                        <p class="text-[10px] text-muted mt-1">Select one or more to filter. Empty = all
-                                            flags.</p>
+                                        <p class="text-[10px] text-muted mt-1">Tap swatches to cycle include, exclude,
+                                            clear (with a "No flag" option).</p>
                                     </div>
                                     <button id="resetFiltersAll"
                                         class="col-span-2 text-xs text-accent hover:underline text-center py-2">Reset
