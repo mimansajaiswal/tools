@@ -319,6 +319,90 @@ const getNextVariantOrder = (prevOrder, isPrevRoot) => {
     return s + 'a';
 };
 
+const FILTER_MODE_INCLUDE = 'include';
+const FILTER_MODE_EXCLUDE = 'exclude';
+const FILTER_MODE_IGNORE = 'ignore';
+const FILTER_NONE_LABEL = '__NO_VALUE__';
+
+const normalizeFilterMode = (mode) => {
+    if (mode === FILTER_MODE_INCLUDE || mode === FILTER_MODE_EXCLUDE) return mode;
+    return FILTER_MODE_IGNORE;
+};
+
+const cycleFilterMode = (mode) => {
+    const current = normalizeFilterMode(mode);
+    if (current === FILTER_MODE_IGNORE) return FILTER_MODE_INCLUDE;
+    if (current === FILTER_MODE_INCLUDE) return FILTER_MODE_EXCLUDE;
+    return FILTER_MODE_IGNORE;
+};
+
+const normalizeFilterList = (val) => {
+    const raw = Array.isArray(val) ? val : (val === null || val === undefined ? [] : [val]);
+    const seen = new Set();
+    const out = [];
+    for (const item of raw) {
+        const text = (item ?? '').toString().trim();
+        if (!text) continue;
+        if (seen.has(text)) continue;
+        seen.add(text);
+        out.push(text);
+    }
+    return out;
+};
+
+const getListMode = (includeList, excludeList, value) => {
+    const normalized = (value ?? '').toString().trim();
+    if (!normalized) return FILTER_MODE_IGNORE;
+    if (Array.isArray(includeList) && includeList.includes(normalized)) return FILTER_MODE_INCLUDE;
+    if (Array.isArray(excludeList) && excludeList.includes(normalized)) return FILTER_MODE_EXCLUDE;
+    return FILTER_MODE_IGNORE;
+};
+
+const applyListMode = (includeList, excludeList, value, mode) => {
+    const normalized = (value ?? '').toString().trim();
+    let include = normalizeFilterList(includeList).filter(v => v !== normalized);
+    let exclude = normalizeFilterList(excludeList).filter(v => v !== normalized);
+    const next = normalizeFilterMode(mode);
+    if (normalized) {
+        if (next === FILTER_MODE_INCLUDE) include.push(normalized);
+        if (next === FILTER_MODE_EXCLUDE) exclude.push(normalized);
+    }
+    const includeSet = new Set(include);
+    exclude = exclude.filter(v => !includeSet.has(v));
+    return { include, exclude };
+};
+
+const normalizeFilterState = (filters = {}) => {
+    const tags = normalizeFilterList(filters.tags);
+    let tagsExclude = normalizeFilterList(filters.tagsExclude);
+    tagsExclude = tagsExclude.filter(t => !tags.includes(t));
+
+    const flag = normalizeFilterList(filters.flag);
+    let flagExclude = normalizeFilterList(filters.flagExclude);
+    flagExclude = flagExclude.filter(f => !flag.includes(f));
+
+    const studyDecks = normalizeFilterList(filters.studyDecks);
+    let studyDecksExclude = normalizeFilterList(filters.studyDecksExclude);
+    studyDecksExclude = studyDecksExclude.filter(id => !studyDecks.includes(id));
+
+    return {
+        again: !!filters.again,
+        hard: !!filters.hard,
+        addedToday: !!filters.addedToday,
+        tags,
+        tagsExclude,
+        tagEmptyMode: normalizeFilterMode(filters.tagEmptyMode),
+        suspended: typeof filters.suspended === 'boolean' ? filters.suspended : true,
+        leech: typeof filters.leech === 'boolean' ? filters.leech : true,
+        marked: !!filters.marked,
+        flag,
+        flagExclude,
+        flagEmptyMode: normalizeFilterMode(filters.flagEmptyMode),
+        studyDecks,
+        studyDecksExclude
+    };
+};
+
 // Initialize lightbox on module load
 const lightbox = initLightbox();
 
@@ -351,7 +435,7 @@ export const App = {
         selectedDeck: null,
         selectedCard: null,
         // Library filters: suspended/leech true by default (auto-hide)
-        filters: { again: false, hard: false, addedToday: false, tags: [], suspended: true, leech: true, marked: false, flag: [], studyDecks: [] },
+        filters: normalizeFilterState({ suspended: true, leech: true }),
         cardSearch: '',
         deckSearch: '',
         cardLimit: 50,
@@ -447,9 +531,6 @@ export const App = {
         await this.autoVerifyWorker();
         window.addEventListener('online', () => this.handleOnline());
         window.addEventListener('offline', () => this.handleOffline());
-        if (!navigator.onLine) {
-            document.body.classList.add('offline-mode');
-        }
         if (window.matchMedia) {
             const mq = window.matchMedia('(prefers-color-scheme: dark)');
             mq.addEventListener('change', () => this.applyTheme());
@@ -824,13 +905,9 @@ export const App = {
             return;
         }
 
-        // Default to all decks if none selected
-        let deckIds = this.state.filters.studyDecks || [];
+        const deckIds = this.getEffectiveStudyDeckIds();
         if (deckIds.length === 0) {
-            deckIds = this.state.decks.map(d => d.id);
-        }
-        if (deckIds.length === 0) {
-            toast('No decks available');
+            toast('No decks match current deck filter');
             return;
         }
 
@@ -1290,19 +1367,10 @@ export const App = {
             if (typeof uiState.cardSearch === 'string') this.state.cardSearch = uiState.cardSearch;
             if (typeof uiState.deckSearch === 'string') this.state.deckSearch = uiState.deckSearch;
             if (uiState.filters && typeof uiState.filters === 'object') {
-                const f = uiState.filters;
-                this.state.filters = {
+                this.state.filters = normalizeFilterState({
                     ...this.state.filters,
-                    again: !!f.again,
-                    hard: !!f.hard,
-                    addedToday: !!f.addedToday,
-                    tags: Array.isArray(f.tags) ? f.tags.filter(Boolean) : [],
-                    suspended: typeof f.suspended === 'boolean' ? f.suspended : this.state.filters.suspended,
-                    leech: typeof f.leech === 'boolean' ? f.leech : this.state.filters.leech,
-                    marked: !!f.marked,
-                    flag: Array.isArray(f.flag) ? f.flag.filter(Boolean) : (typeof f.flag === 'string' ? f.flag : []),
-                    studyDecks: Array.isArray(f.studyDecks) ? f.studyDecks.filter(Boolean) : []
-                };
+                    ...uiState.filters
+                });
             }
             if (typeof uiState.analyticsRange === 'string') this.state.analyticsRange = uiState.analyticsRange;
             if (typeof uiState.analyticsYear === 'string') this.state.analyticsYear = uiState.analyticsYear;
@@ -1313,6 +1381,7 @@ export const App = {
             if (Array.isArray(uiState.analyticsFlags)) this.state.analyticsFlags = uiState.analyticsFlags.filter(Boolean);
             if (typeof uiState.analyticsMarked === 'boolean') this.state.analyticsMarked = uiState.analyticsMarked;
         }
+        this.state.filters = normalizeFilterState(this.state.filters);
     },
     async seedIfEmpty() {
         return;
@@ -1404,10 +1473,14 @@ export const App = {
             if (this.state.filters?.studyDecks?.length) {
                 this.state.filters.studyDecks = this.state.filters.studyDecks.map(id => deckIdMap[id] || id);
             }
+            if (this.state.filters?.studyDecksExclude?.length) {
+                this.state.filters.studyDecksExclude = this.state.filters.studyDecksExclude.map(id => deckIdMap[id] || id);
+            }
 
             if (this.state.session?.deckIds?.length) {
                 this.state.session.deckIds = this.state.session.deckIds.map(id => deckIdMap[id] || id);
             }
+            this.state.filters = normalizeFilterState(this.state.filters);
         }
 
         if (hasDeckMap) {
@@ -1878,17 +1951,26 @@ export const App = {
         el('#filterMarked').onchange = (e) => { this.state.filters.marked = e.target.checked; this.renderCards(); this.updateActiveFiltersCount(); };
         const filterFlagSwatches = el('#filterFlagSwatches');
         if (filterFlagSwatches) {
-            const normalizeFlags = (val) => Array.isArray(val) ? val : (val ? [val] : []);
-            this.updateFlagSwatchMulti(filterFlagSwatches, normalizeFlags(this.state.filters.flag));
+            this.state.filters = normalizeFilterState(this.state.filters);
+            this.updateFlagSwatchTriState(filterFlagSwatches);
             filterFlagSwatches.onclick = (e) => {
                 const btn = e.target.closest('[data-flag]');
                 if (!btn) return;
                 const flag = btn.dataset.flag || '';
-                const current = new Set(normalizeFlags(this.state.filters.flag));
-                if (current.has(flag)) current.delete(flag); else current.add(flag);
-                this.state.filters.flag = Array.from(current);
-                this.updateFlagSwatchMulti(filterFlagSwatches, this.state.filters.flag);
+                if (flag === FILTER_NONE_LABEL) {
+                    this.state.filters.flagEmptyMode = cycleFilterMode(this.state.filters.flagEmptyMode);
+                } else {
+                    const current = getListMode(this.state.filters.flag, this.state.filters.flagExclude, flag);
+                    const next = cycleFilterMode(current);
+                    const updated = applyListMode(this.state.filters.flag, this.state.filters.flagExclude, flag, next);
+                    this.state.filters.flag = updated.include;
+                    this.state.filters.flagExclude = updated.exclude;
+                }
+                this.state.filters = normalizeFilterState(this.state.filters);
+                this.updateFlagSwatchTriState(filterFlagSwatches);
                 this.renderCards();
+                this.renderStudyDeckSelection();
+                this.renderStudy();
                 this.updateActiveFiltersCount();
             };
         }
@@ -1896,8 +1978,13 @@ export const App = {
         if (filterFlagClear) {
             filterFlagClear.onclick = () => {
                 this.state.filters.flag = [];
-                if (filterFlagSwatches) this.updateFlagSwatchMulti(filterFlagSwatches, []);
+                this.state.filters.flagExclude = [];
+                this.state.filters.flagEmptyMode = FILTER_MODE_IGNORE;
+                this.state.filters = normalizeFilterState(this.state.filters);
+                if (filterFlagSwatches) this.updateFlagSwatchTriState(filterFlagSwatches);
                 this.renderCards();
+                this.renderStudyDeckSelection();
+                this.renderStudy();
                 this.updateActiveFiltersCount();
             };
         }
@@ -1905,6 +1992,8 @@ export const App = {
         if (filterDeckClear) {
             filterDeckClear.onclick = () => {
                 this.state.filters.studyDecks = [];
+                this.state.filters.studyDecksExclude = [];
+                this.state.filters = normalizeFilterState(this.state.filters);
                 this.state.studyNonDue = false;
                 const deckInput = el('#deckSearchInput');
                 if (deckInput) deckInput.value = '';
@@ -1917,8 +2006,13 @@ export const App = {
         if (filterTagClear) {
             filterTagClear.onclick = () => {
                 this.state.filters.tags = [];
+                this.state.filters.tagsExclude = [];
+                this.state.filters.tagEmptyMode = FILTER_MODE_IGNORE;
+                this.state.filters = normalizeFilterState(this.state.filters);
                 this.renderTagFilter();
                 this.renderCards();
+                this.renderStudyDeckSelection();
+                this.renderStudy();
                 this.updateActiveFiltersCount();
                 this.persistUiStateDebounced();
             };
@@ -2196,6 +2290,7 @@ export const App = {
         el('#cardModal').addEventListener('click', (e) => { if (e.target === el('#cardModal')) this.closeCardModal(); });
     },
     renderAll() {
+        this.state.filters = normalizeFilterState(this.state.filters);
         this.renderDecks();
         this.renderCards();
         this.renderConnection();
@@ -2226,6 +2321,8 @@ export const App = {
         if (filterSuspended) filterSuspended.checked = !!this.state.filters.suspended;
         const filterLeech = el('#filterLeech');
         if (filterLeech) filterLeech.checked = !!this.state.filters.leech;
+        const filterFlagSwatches = el('#filterFlagSwatches');
+        if (filterFlagSwatches) this.updateFlagSwatchTriState(filterFlagSwatches);
         // Show/hide STT settings based on whether AI is verified
         const isAiVerified = this.state.settings?.aiVerified;
         el('#sttSettings')?.classList.toggle('hidden', !isAiVerified);
@@ -2299,11 +2396,12 @@ export const App = {
         this.setFiltersPanelOpen(!!isHidden);
     },
     shouldKeepFiltersPanelOpen() {
-        const f = this.state.filters || {};
+        const f = normalizeFilterState(this.state.filters);
         if (f.again || f.hard || f.addedToday) return true;
-        if (f.tags && f.tags.length > 0) return true;
+        if (f.tags.length > 0 || f.tagsExclude.length > 0 || f.tagEmptyMode !== FILTER_MODE_IGNORE) return true;
         if (f.marked) return true;
-        if (Array.isArray(f.flag) ? f.flag.length > 0 : !!f.flag) return true;
+        if (f.flag.length > 0 || f.flagExclude.length > 0 || f.flagEmptyMode !== FILTER_MODE_IGNORE) return true;
+        if (f.studyDecks.length > 0 || f.studyDecksExclude.length > 0) return true;
         const mode = el('#cardSelectionMode')?.value || 'due';
         if (mode !== 'due') return true;
         return false;
@@ -2312,20 +2410,24 @@ export const App = {
         const banner = el('#studyFiltersBanner');
         if (!banner) return;
         const active = this.shouldKeepFiltersPanelOpen();
-        banner.classList.toggle('hidden', !active);
+        banner.classList.toggle('study-filters-banner--inactive', !active);
+        banner.setAttribute('aria-hidden', active ? 'false' : 'true');
     },
     // Update active filters count (for reset button visibility)
     updateActiveFiltersCount() {
-        const f = this.state.filters;
+        const f = normalizeFilterState(this.state.filters);
+        this.state.filters = f;
         let count = 0;
         if (f.again) count++;
         if (f.hard) count++;
         if (f.addedToday) count++;
-        if (f.tags && f.tags.length > 0) count++;
+        const hasTagFilters = f.tags.length > 0 || f.tagsExclude.length > 0 || f.tagEmptyMode !== FILTER_MODE_IGNORE;
+        if (hasTagFilters) count++;
         if (f.marked) count++;
-        const hasFlags = Array.isArray(f.flag) ? f.flag.length > 0 : !!f.flag;
+        const hasFlags = f.flag.length > 0 || f.flagExclude.length > 0 || f.flagEmptyMode !== FILTER_MODE_IGNORE;
         if (hasFlags) count++;
-        if (f.studyDecks && f.studyDecks.length > 0) count++;
+        const hasDeckFilters = f.studyDecks.length > 0 || f.studyDecksExclude.length > 0;
+        if (hasDeckFilters) count++;
         // Show reset button if any filters are active
         const resetBtn = el('#resetFilters');
         if (resetBtn) {
@@ -2341,11 +2443,11 @@ export const App = {
         }
         const deckClear = el('#filterDeckClear');
         if (deckClear) {
-            deckClear.classList.toggle('hidden', !(f.studyDecks && f.studyDecks.length > 0));
+            deckClear.classList.toggle('hidden', !hasDeckFilters);
         }
         const tagClear = el('#filterTagClear');
         if (tagClear) {
-            tagClear.classList.toggle('hidden', !(f.tags && f.tags.length > 0));
+            tagClear.classList.toggle('hidden', !hasTagFilters);
         }
         this.updateFiltersBanner();
         this.persistUiStateDebounced();
@@ -2876,14 +2978,14 @@ export const App = {
         const isCloze = card && (card.type || '').toLowerCase() === 'cloze';
 
         // Check if no cards are due but decks are selected
-        const f = this.state.filters;
-        const hasSelectedDecks = f.studyDecks && f.studyDecks.length > 0;
+        const selectedDeckIds = this.getEffectiveStudyDeckIds();
+        const hasDeckFilter = this.hasStudyDeckFilter();
 
         let hasDue = false;
         let nonDueCount = 0;
 
-        if (!card && hasSelectedDecks && !session) {
-            for (const dId of f.studyDecks) {
+        if (!card && hasDeckFilter && !session) {
+            for (const dId of selectedDeckIds) {
                 const cardIds = this.state.cardDeckIndex?.get(dId);
                 if (!cardIds) continue;
 
@@ -2902,7 +3004,7 @@ export const App = {
             }
         }
 
-        if (!card && hasSelectedDecks && nonDueCount > 0 && !session) {
+        if (!card && hasDeckFilter && nonDueCount > 0 && !session) {
             // No due cards but there are non-due cards available (only show when no session)
             el('#studyDeckLabel').textContent = 'No cards due';
             el('#cardFront').innerHTML = `
@@ -3012,19 +3114,31 @@ export const App = {
         const selectedWrap = el('#filterTagSelected');
         if (!input || !dropdown || !selectedWrap) return;
 
+        const filters = normalizeFilterState(this.state.filters);
+        this.state.filters = filters;
         const allTags = Array.from(this.state.tagRegistry.keys()).sort((a, b) => a.localeCompare(b));
-        const selected = new Set(this.state.filters.tags || []);
+        const included = new Set(filters.tags || []);
+        const noTagMode = normalizeFilterMode(filters.tagEmptyMode);
         const clearBtn = el('#filterTagClear');
-        if (clearBtn) clearBtn.classList.toggle('hidden', selected.size === 0);
+        const hasTagFilter = included.size > 0 || (filters.tagsExclude || []).length > 0 || noTagMode !== FILTER_MODE_IGNORE;
+        if (clearBtn) clearBtn.classList.toggle('hidden', !hasTagFilter);
         const query = (input.value || '').toLowerCase();
-        const options = allTags.filter(name => name.toLowerCase().includes(query));
+        const options = [
+            { value: FILTER_NONE_LABEL, label: 'No tag' },
+            ...allTags.map(name => ({ value: name, label: name }))
+        ].filter(option => option.label.toLowerCase().includes(query));
 
         dropdown.innerHTML = options.length
-            ? options.map(name => {
-                const isSelected = selected.has(name);
-                return `<button class="tag-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 ${isSelected ? 'bg-accent-soft border-lime-200' : 'hover:bg-surface-muted'}" data-tag="${encodeDataAttr(name)}">
- <span class="flex-1">${escapeHtml(name)}</span>
- ${isSelected ? '<span class="text-[11px] text-accent">Selected</span>' : ''}
+            ? options.map(({ value, label }) => {
+                const mode = value === FILTER_NONE_LABEL
+                    ? noTagMode
+                    : getListMode(filters.tags, filters.tagsExclude, value);
+                const isIncluded = mode === FILTER_MODE_INCLUDE;
+                const isExcluded = mode === FILTER_MODE_EXCLUDE;
+                return `<button class="tag-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 ${isIncluded ? 'bg-accent-soft' : ''} ${isExcluded ? 'bg-[color:var(--surface-strong)]' : 'hover:bg-surface-muted'}" data-tag="${encodeDataAttr(value)}">
+ <span class="flex-1">${escapeHtml(label)}</span>
+ ${isIncluded ? '<span class="text-[11px] font-mono text-accent">+</span>' : ''}
+ ${isExcluded ? '<span class="text-[11px] font-mono text-sub">-</span>' : ''}
  </button>`;
             }).join('')
             : `<div class="px-3 py-2 text-sm text-muted ">No tags found</div>`;
@@ -3032,30 +3146,73 @@ export const App = {
         dropdown.querySelectorAll('.tag-option').forEach(btn => {
             btn.onclick = () => {
                 const tag = decodeDataAttr(btn.dataset.tag);
-                if (selected.has(tag)) selected.delete(tag); else selected.add(tag);
-                this.state.filters.tags = Array.from(selected);
+                if (tag === FILTER_NONE_LABEL) {
+                    this.state.filters.tagEmptyMode = cycleFilterMode(this.state.filters.tagEmptyMode);
+                } else {
+                    const current = getListMode(this.state.filters.tags, this.state.filters.tagsExclude, tag);
+                    const next = cycleFilterMode(current);
+                    const updated = applyListMode(this.state.filters.tags, this.state.filters.tagsExclude, tag, next);
+                    this.state.filters.tags = updated.include;
+                    this.state.filters.tagsExclude = updated.exclude;
+                }
+                this.state.filters = normalizeFilterState(this.state.filters);
                 this.renderTagFilter();
                 this.renderCards();
+                this.renderStudyDeckSelection();
+                this.renderStudy();
                 this.updateActiveFiltersCount();
                 this.persistUiStateDebounced();
             };
         });
 
-        selectedWrap.innerHTML = selected.size
-            ? Array.from(selected).map(tag => `
- <span class="tag-pill inline-flex items-center gap-1 px-2 py-1 rounded-full bg-surface-strong text-main text-xs border border-card">
+        const pills = [];
+        for (const tag of filters.tags) {
+            pills.push(`
+ <span class="tag-pill filter-pill--include inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border" data-tag="${encodeDataAttr(tag)}" data-mode="${FILTER_MODE_INCLUDE}">
+ <span class="filter-pill-mode">+</span>
  ${escapeHtml(tag)}
- <button class="remove-tag text-sub" data-tag="${encodeDataAttr(tag)}">&times;</button>
+ <button class="remove-tag text-sub" data-tag="${encodeDataAttr(tag)}" data-mode="${FILTER_MODE_INCLUDE}">&times;</button>
  </span>
- `).join('')
-            : '<span class="text-faint text-xs">All tags included</span>';
+ `);
+        }
+        for (const tag of filters.tagsExclude) {
+            pills.push(`
+ <span class="tag-pill filter-pill--exclude inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border" data-tag="${encodeDataAttr(tag)}" data-mode="${FILTER_MODE_EXCLUDE}">
+ <span class="filter-pill-mode">-</span>
+ ${escapeHtml(tag)}
+ <button class="remove-tag text-sub" data-tag="${encodeDataAttr(tag)}" data-mode="${FILTER_MODE_EXCLUDE}">&times;</button>
+ </span>
+ `);
+        }
+        if (filters.tagEmptyMode !== FILTER_MODE_IGNORE) {
+            const modeLabel = filters.tagEmptyMode === FILTER_MODE_INCLUDE ? '+' : '-';
+            const modeClass = filters.tagEmptyMode === FILTER_MODE_INCLUDE ? 'filter-pill--include' : 'filter-pill--exclude';
+            pills.push(`
+ <span class="tag-pill ${modeClass} inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border" data-tag="${encodeDataAttr(FILTER_NONE_LABEL)}" data-mode="${filters.tagEmptyMode}">
+ <span class="filter-pill-mode">${modeLabel}</span>
+ No tag
+ <button class="remove-tag text-sub" data-tag="${encodeDataAttr(FILTER_NONE_LABEL)}" data-mode="${filters.tagEmptyMode}">&times;</button>
+ </span>
+ `);
+        }
+        selectedWrap.innerHTML = pills.length
+            ? pills.join('')
+            : '<span class="text-faint text-xs">All tags</span>';
 
         selectedWrap.querySelectorAll('.remove-tag').forEach(btn => {
             btn.onclick = () => {
                 const tag = decodeDataAttr(btn.dataset.tag);
-                this.state.filters.tags = this.state.filters.tags.filter(t => t !== tag);
+                if (tag === FILTER_NONE_LABEL) {
+                    this.state.filters.tagEmptyMode = FILTER_MODE_IGNORE;
+                } else {
+                    this.state.filters.tags = normalizeFilterList(this.state.filters.tags).filter(t => t !== tag);
+                    this.state.filters.tagsExclude = normalizeFilterList(this.state.filters.tagsExclude).filter(t => t !== tag);
+                }
+                this.state.filters = normalizeFilterState(this.state.filters);
                 this.renderTagFilter();
                 this.renderCards();
+                this.renderStudyDeckSelection();
+                this.renderStudy();
                 this.updateActiveFiltersCount();
                 this.persistUiStateDebounced();
             };
@@ -3247,6 +3404,30 @@ export const App = {
             const isSelected = selected.has(val);
             btn.classList.toggle('is-selected', isSelected);
             btn.setAttribute('aria-pressed', isSelected);
+        });
+    },
+    updateFlagSwatchTriState(container) {
+        if (!container) return;
+        const f = normalizeFilterState(this.state.filters);
+        this.state.filters = f;
+        container.querySelectorAll('[data-flag]').forEach(btn => {
+            const value = (btn.dataset.flag || '').trim();
+            const mode = value === FILTER_NONE_LABEL
+                ? normalizeFilterMode(f.flagEmptyMode)
+                : getListMode(f.flag, f.flagExclude, value);
+            btn.classList.toggle('is-included', mode === FILTER_MODE_INCLUDE);
+            btn.classList.toggle('is-excluded', mode === FILTER_MODE_EXCLUDE);
+            btn.classList.toggle('is-selected', mode !== FILTER_MODE_IGNORE);
+            btn.dataset.mode = mode;
+            btn.setAttribute('aria-pressed', mode !== FILTER_MODE_IGNORE);
+            let modeLabel = btn.querySelector('.flag-filter-mode');
+            if (!modeLabel) {
+                modeLabel = document.createElement('span');
+                modeLabel.className = 'flag-filter-mode';
+                modeLabel.setAttribute('aria-hidden', 'true');
+                btn.appendChild(modeLabel);
+            }
+            modeLabel.textContent = mode === FILTER_MODE_INCLUDE ? '+' : (mode === FILTER_MODE_EXCLUDE ? '-' : '');
         });
     },
     openFlagPicker(anchor) {
@@ -4984,11 +5165,14 @@ export const App = {
 
         const dueCounts = new Map();
         let totalDue = 0;
-        const f = this.state.filters;
-        const defaultStudyFilters = !f.again && !f.hard && !f.addedToday && (!f.tags || f.tags.length === 0) &&
-            !f.marked && (!f.flag || (Array.isArray(f.flag) ? f.flag.length === 0 : f.flag === ''));
-        const tagsKey = (f.tags || []).slice().sort().join('|');
-        const flagKey = Array.isArray(f.flag) ? f.flag.slice().sort().join('|') : (f.flag || '');
+        const f = normalizeFilterState(this.state.filters);
+        this.state.filters = f;
+        const defaultStudyFilters = !f.again && !f.hard && !f.addedToday &&
+            f.tags.length === 0 && f.tagsExclude.length === 0 && f.tagEmptyMode === FILTER_MODE_IGNORE &&
+            !f.marked &&
+            f.flag.length === 0 && f.flagExclude.length === 0 && f.flagEmptyMode === FILTER_MODE_IGNORE;
+        const tagsKey = `${f.tags.slice().sort().join('|')}::${f.tagsExclude.slice().sort().join('|')}::${f.tagEmptyMode}`;
+        const flagKey = `${f.flag.slice().sort().join('|')}::${f.flagExclude.slice().sort().join('|')}::${f.flagEmptyMode}`;
         const timeBucket = Math.floor(Date.now() / STUDY_DUE_BUCKET_MS);
         const cacheKey = JSON.stringify({
             v: this.state.cardsVersion,
@@ -5035,20 +5219,27 @@ export const App = {
             this.state.studyDeckCache = { key: cacheKey, dueCounts, totalDue };
         }
 
-        const selected = this.state.filters.studyDecks || [];
+        const selectedInclude = this.state.filters.studyDecks || [];
+        const selectedExclude = this.state.filters.studyDecksExclude || [];
         const query = (input.value || '').toLowerCase();
 
         // Render dropdown options
         const filtered = this.state.decks.filter(d => d.name.toLowerCase().includes(query));
         dropdown.innerHTML = filtered.map(d => {
-            const isSelected = selected.includes(d.id);
+            const mode = getListMode(selectedInclude, selectedExclude, d.id);
+            const isIncluded = mode === FILTER_MODE_INCLUDE;
+            const isExcluded = mode === FILTER_MODE_EXCLUDE;
             const dueCount = dueCounts.get(d.id) || 0;
-            return `<div class="deck-option flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-surface-muted ${isSelected ? 'bg-accent-soft' : ''}" data-deck-id="${d.id}">
+            const modeLabel = isIncluded ? '<span class="text-[10px] font-mono text-accent">+</span>' : (isExcluded ? '<span class="text-[10px] font-mono text-sub">-</span>' : '');
+            return `<div class="deck-option flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-surface-muted ${isIncluded ? 'bg-accent-soft' : ''} ${isExcluded ? 'bg-[color:var(--surface-strong)]' : ''}" data-deck-id="${d.id}">
  <span class="flex items-center gap-2">
- ${isSelected ? '<i data-lucide="check" class="w-3 h-3 text-accent"></i>' : '<span class="w-3"></span>'}
+ ${isIncluded ? '<i data-lucide="check" class="w-3 h-3 text-accent"></i>' : (isExcluded ? '<i data-lucide="x" class="w-3 h-3 text-sub"></i>' : '<span class="w-3"></span>')}
  <span class="text-sm">${escapeHtml(d.name)}</span>
  </span>
+ <span class="flex items-center gap-2">
+ ${modeLabel}
  <span class="text-xs text-muted">${dueCount} due</span>
+ </span>
  </div>`;
         }).join('');
         if (filtered.length === 0) {
@@ -5056,35 +5247,49 @@ export const App = {
         }
 
         // Render selected deck pills
-        display.innerHTML = selected.map(id => {
+        const pills = [];
+        for (const id of selectedInclude) {
             const d = this.deckById(id);
-            if (!d) return '';
-            return `<span class="selected-deck-pill inline-flex items-center gap-1 px-2 py-1 rounded-full bg-[color:var(--accent)] text-[color:var(--badge-text)] text-xs" data-deck-id="${id}">
+            if (!d) continue;
+            pills.push(`<span class="selected-deck-pill filter-pill--include inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border" data-deck-id="${id}" data-mode="${FILTER_MODE_INCLUDE}">
+ <span class="filter-pill-mode">+</span>
  ${escapeHtml(d.name)}
  <button class="remove-deck-btn hover:bg-surface-muted rounded-full p-0.5" data-deck-id="${id}">
  <i data-lucide="x" class="w-3 h-3 pointer-events-none"></i>
  </button>
- </span>`;
-        }).join('');
-        if (selected.length === 0) {
+ </span>`);
+        }
+        for (const id of selectedExclude) {
+            const d = this.deckById(id);
+            if (!d) continue;
+            pills.push(`<span class="selected-deck-pill filter-pill--exclude inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border" data-deck-id="${id}" data-mode="${FILTER_MODE_EXCLUDE}">
+ <span class="filter-pill-mode">-</span>
+ ${escapeHtml(d.name)}
+ <button class="remove-deck-btn hover:bg-surface-muted rounded-full p-0.5" data-deck-id="${id}">
+ <i data-lucide="x" class="w-3 h-3 pointer-events-none"></i>
+ </button>
+ </span>`);
+        }
+        display.innerHTML = pills.join('');
+        if (pills.length === 0) {
             display.innerHTML = `<span class="text-accent text-xs italic">All decks (${totalDue} due)</span>`;
         }
         createIconsInScope(dropdown);
         createIconsInScope(display);
     },
     getStudyFilterCandidates(filters) {
-        const f = filters || this.state.filters;
-        const tags = Array.isArray(f.tags) ? f.tags.map(t => (t || '').trim()).filter(Boolean) : [];
-        const flags = Array.isArray(f.flag)
-            ? f.flag.map(v => (v || '').trim()).filter(Boolean)
-            : [(f.flag || '').trim()].filter(Boolean);
+        const f = normalizeFilterState(filters || this.state.filters);
+        const tags = normalizeFilterList(f.tags);
+        const flags = normalizeFilterList(f.flag);
         const needsMarked = !!f.marked;
         const needsAgain = !!f.again;
         const needsHard = !!f.hard;
         const needsToday = !!f.addedToday;
+        const includeNoTag = normalizeFilterMode(f.tagEmptyMode) === FILTER_MODE_INCLUDE;
+        const includeNoFlag = normalizeFilterMode(f.flagEmptyMode) === FILTER_MODE_INCLUDE;
 
         let candidates = null;
-        if (tags.length > 0) {
+        if (tags.length > 0 && !includeNoTag) {
             const union = new Set();
             for (const tag of tags) {
                 const set = this.state.tagIndex.get(tag);
@@ -5092,7 +5297,7 @@ export const App = {
             }
             candidates = union;
         }
-        if (flags.length > 0) {
+        if (flags.length > 0 && !includeNoFlag) {
             const union = new Set();
             for (const flag of flags) {
                 const set = this.state.flagIndex.get(flag);
@@ -5182,12 +5387,12 @@ export const App = {
             const option = e.target.closest('.deck-option');
             if (option) {
                 const deckId = option.dataset.deckId;
-                const idx = this.state.filters.studyDecks.indexOf(deckId);
-                if (idx >= 0) {
-                    this.state.filters.studyDecks.splice(idx, 1);
-                } else {
-                    this.state.filters.studyDecks.push(deckId);
-                }
+                const current = getListMode(this.state.filters.studyDecks, this.state.filters.studyDecksExclude, deckId);
+                const next = cycleFilterMode(current);
+                const updated = applyListMode(this.state.filters.studyDecks, this.state.filters.studyDecksExclude, deckId, next);
+                this.state.filters.studyDecks = updated.include;
+                this.state.filters.studyDecksExclude = updated.exclude;
+                this.state.filters = normalizeFilterState(this.state.filters);
                 // Reset non-due study mode when decks change
                 this.state.studyNonDue = false;
                 this.renderStudyDeckSelection();
@@ -5200,15 +5405,14 @@ export const App = {
             const btn = e.target.closest('.remove-deck-btn');
             if (btn) {
                 const deckId = btn.dataset.deckId;
-                const idx = this.state.filters.studyDecks.indexOf(deckId);
-                if (idx >= 0) {
-                    this.state.filters.studyDecks.splice(idx, 1);
-                    // Reset non-due study mode when decks change
-                    this.state.studyNonDue = false;
-                    this.renderStudyDeckSelection();
-                    this.renderStudy();
-                    this.updateActiveFiltersCount();
-                }
+                this.state.filters.studyDecks = normalizeFilterList(this.state.filters.studyDecks).filter(id => id !== deckId);
+                this.state.filters.studyDecksExclude = normalizeFilterList(this.state.filters.studyDecksExclude).filter(id => id !== deckId);
+                this.state.filters = normalizeFilterState(this.state.filters);
+                // Reset non-due study mode when decks change
+                this.state.studyNonDue = false;
+                this.renderStudyDeckSelection();
+                this.renderStudy();
+                this.updateActiveFiltersCount();
             }
         };
     },
@@ -5589,6 +5793,10 @@ export const App = {
         if (this.state.filters.studyDecks) {
             this.state.filters.studyDecks = this.state.filters.studyDecks.filter(id => id !== deck.id);
         }
+        if (this.state.filters.studyDecksExclude) {
+            this.state.filters.studyDecksExclude = this.state.filters.studyDecksExclude.filter(id => id !== deck.id);
+        }
+        this.state.filters = normalizeFilterState(this.state.filters);
 
         // Archive in Notion (deck + cards), then remove locally
         if (deck.notionId) {
@@ -6236,6 +6444,10 @@ export const App = {
                 if (this.state.filters.studyDecks) {
                     this.state.filters.studyDecks = this.state.filters.studyDecks.filter(id => id !== deck.id);
                 }
+                if (this.state.filters.studyDecksExclude) {
+                    this.state.filters.studyDecksExclude = this.state.filters.studyDecksExclude.filter(id => id !== deck.id);
+                }
+                this.state.filters = normalizeFilterState(this.state.filters);
                 if (Array.isArray(this.state.analyticsDecks)) {
                     this.state.analyticsDecks = this.state.analyticsDecks.filter(id => id !== deck.id);
                 }
@@ -7302,14 +7514,12 @@ export const App = {
         }
     },
     handleOnline() {
-        document.body.classList.remove('offline-mode');
         toast('Back online');
         this.renderConnection();
         this.processDyContextQueue();
         this.requestAutoSyncSoon(250);
     },
     handleOffline() {
-        document.body.classList.add('offline-mode');
         toast('You are offline - changes will sync when online');
         this.renderConnection();
         this.updateSyncButtonState();
@@ -7414,7 +7624,7 @@ export const App = {
         setTimeout(() => document.addEventListener('click', closeOnClickOutside), 0);
     },
     passFilters(card, opts = {}) {
-        const f = this.state.filters;
+        const f = normalizeFilterState(this.state.filters);
         const context = opts.context || 'library';
         const allowSubItems = opts.allowSubItems === true;
 
@@ -7450,10 +7660,29 @@ export const App = {
                 }
             }
             if (f.addedToday && card.createdAt && new Date(card.createdAt).toDateString() !== now.toDateString()) return false;
-            if (f.tags.length && !f.tags.some(t => card.tags.some(ct => ct.name === t))) return false;
+            const cardTagNames = this.normalizeTagNames(card.tags);
+            const hasTags = cardTagNames.length > 0;
+            const includeNoTag = f.tagEmptyMode === FILTER_MODE_INCLUDE;
+            const excludeNoTag = f.tagEmptyMode === FILTER_MODE_EXCLUDE;
+            if (f.tags.length > 0 || includeNoTag) {
+                const includeMatch = (f.tags.length > 0 && f.tags.some(t => cardTagNames.includes(t))) ||
+                    (includeNoTag && !hasTags);
+                if (!includeMatch) return false;
+            }
+            if (f.tagsExclude.length > 0 && f.tagsExclude.some(t => cardTagNames.includes(t))) return false;
+            if (excludeNoTag && !hasTags) return false;
             if (f.marked && !card.marked) return false;
-            const flagFilter = Array.isArray(f.flag) ? f.flag : (f.flag ? [f.flag] : []);
-            if (flagFilter.length > 0 && !flagFilter.includes(card.flag || '')) return false;
+            const cardFlag = (card.flag || '').trim();
+            const hasFlag = !!cardFlag;
+            const includeNoFlag = f.flagEmptyMode === FILTER_MODE_INCLUDE;
+            const excludeNoFlag = f.flagEmptyMode === FILTER_MODE_EXCLUDE;
+            if (f.flag.length > 0 || includeNoFlag) {
+                const includeMatch = (f.flag.length > 0 && f.flag.includes(cardFlag)) ||
+                    (includeNoFlag && !hasFlag);
+                if (!includeMatch) return false;
+            }
+            if (f.flagExclude.length > 0 && f.flagExclude.includes(cardFlag)) return false;
+            if (excludeNoFlag && !hasFlag) return false;
 
             return true;
         } else {
@@ -7498,10 +7727,7 @@ export const App = {
             return null;
         }
 
-        const f = this.state.filters;
-        const deckIds = (f.studyDecks && f.studyDecks.length > 0)
-            ? f.studyDecks
-            : this.state.decks.map(d => d.id);
+        const deckIds = this.getEffectiveStudyDeckIds();
         const queue = this.generateCardQueue(deckIds, this.state.studyNonDue, { precomputeReverse: false });
         if (!queue.length) return null;
         return this.cardById(queue[0].cardId) || null;
@@ -8279,6 +8505,18 @@ export const App = {
     deckName(id) {
         return this.deckById(id)?.name ?? '—';
     },
+    hasStudyDeckFilter() {
+        const f = normalizeFilterState(this.state.filters);
+        return (f.studyDecks.length > 0) || (f.studyDecksExclude.length > 0);
+    },
+    getEffectiveStudyDeckIds() {
+        const f = normalizeFilterState(this.state.filters);
+        const allDeckIds = this.state.decks.map(d => d.id);
+        const include = f.studyDecks.filter(id => allDeckIds.includes(id));
+        const exclude = new Set(f.studyDecksExclude.filter(id => allDeckIds.includes(id)));
+        const base = include.length > 0 ? include : allDeckIds;
+        return base.filter(id => !exclude.has(id));
+    },
     getDeckLabel(deckIds) {
         if (!deckIds || deckIds.length === 0) return 'No decks';
         const allDeckIds = this.state.decks.map(d => d.id);
@@ -8289,8 +8527,23 @@ export const App = {
         return `${deckIds.length} decks`;
     },
     resetFilters() {
-        const { suspended, leech } = this.state.filters;
-        this.state.filters = { again: false, hard: false, addedToday: false, tags: [], suspended, leech, marked: false, flag: [], studyDecks: [] };
+        const { suspended, leech } = normalizeFilterState(this.state.filters);
+        this.state.filters = normalizeFilterState({
+            again: false,
+            hard: false,
+            addedToday: false,
+            tags: [],
+            tagsExclude: [],
+            tagEmptyMode: FILTER_MODE_IGNORE,
+            suspended,
+            leech,
+            marked: false,
+            flag: [],
+            flagExclude: [],
+            flagEmptyMode: FILTER_MODE_IGNORE,
+            studyDecks: [],
+            studyDecksExclude: []
+        });
         el('#filterAgain').checked = false;
         el('#filterHard').checked = false;
         el('#filterAddedToday').checked = false;
@@ -8300,7 +8553,7 @@ export const App = {
         if (filterLeech) filterLeech.checked = !!leech;
         el('#filterMarked').checked = false;
         const filterFlagSwatches = el('#filterFlagSwatches');
-        if (filterFlagSwatches) this.updateFlagSwatchMulti(filterFlagSwatches, []);
+        if (filterFlagSwatches) this.updateFlagSwatchTriState(filterFlagSwatches);
         this.renderStudyDeckSelection();
         this.renderTagFilter();
         this.renderStudy();
