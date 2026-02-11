@@ -69,6 +69,80 @@
             margin: 16px 0 18px;
         }
 
+        .tab-row--scroll {
+            flex-wrap: wrap;
+        }
+
+        .example-tabs {
+            display: grid;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .tab-select {
+            position: relative;
+        }
+
+        .tab-select-trigger {
+            width: 100%;
+            border: 1px solid var(--line);
+            background: var(--surface);
+            color: var(--ink);
+            border-radius: 12px;
+            padding: 10px 12px;
+            cursor: pointer;
+            font: 500 13px/1 "JetBrains Mono", monospace;
+            letter-spacing: 0.01em;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .tab-select-trigger::after {
+            content: "▾";
+            color: var(--ink-soft);
+            font-size: 12px;
+        }
+
+        .tab-select-menu {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            right: 0;
+            border: 1px solid var(--line);
+            background: #fff;
+            border-radius: 12px;
+            padding: 6px;
+            display: none;
+            box-shadow: 0 16px 40px rgba(32, 27, 22, 0.12);
+            z-index: 20;
+            max-height: 280px;
+            overflow-y: auto;
+        }
+
+        .tab-select.open .tab-select-menu {
+            display: grid;
+            gap: 4px;
+        }
+
+        .tab-select-option {
+            border: 1px solid transparent;
+            background: #fff;
+            color: var(--ink);
+            border-radius: 10px;
+            padding: 8px 10px;
+            cursor: pointer;
+            text-align: left;
+            font: 500 13px/1 "JetBrains Mono", monospace;
+        }
+
+        .tab-select-option.active {
+            border-color: var(--accent);
+            background: var(--accent-soft);
+            color: var(--accent);
+        }
+
         .tab-btn {
             border: 1px solid var(--line);
             background: var(--surface);
@@ -109,6 +183,39 @@
             to {
                 opacity: 1;
                 transform: translateY(0);
+            }
+        }
+
+        @media (min-width: 720px) {
+            .tab-row--scroll {
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                padding-bottom: 4px;
+                scroll-snap-type: x proximity;
+            }
+
+            .tab-row--scroll .tab-btn {
+                flex: 0 0 auto;
+                scroll-snap-align: start;
+            }
+
+            .tab-row--scroll::-webkit-scrollbar {
+                height: 6px;
+            }
+
+            .tab-row--scroll::-webkit-scrollbar-thumb {
+                background: #d7caba;
+                border-radius: 999px;
+            }
+
+            .example-tabs .tab-select {
+                display: none;
+            }
+        }
+
+        @media (max-width: 719px) {
+            #exampleTabs {
+                display: none;
             }
         }
 
@@ -211,6 +318,51 @@
             display: inline-flex;
             align-items: center;
             gap: 6px;
+        }
+
+        .ai-runtime {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 8px;
+            margin: 0;
+            padding: 8px 10px 10px;
+            border-bottom: 1px solid var(--line);
+            background: #fffcf7;
+        }
+
+        .ai-runtime-field {
+            display: grid;
+            gap: 4px;
+            font: 500 11px/1.2 "JetBrains Mono", monospace;
+            color: var(--ink-soft);
+            min-width: 0;
+        }
+
+        .ai-runtime-input {
+            width: 100%;
+            min-width: 0;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 6px 8px;
+            background: #fff;
+            color: var(--ink);
+            font: 500 12px/1.2 "JetBrains Mono", monospace;
+        }
+
+        .ai-runtime-row {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .ai-runtime-check {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font: 500 11px/1.2 "JetBrains Mono", monospace;
+            color: var(--ink-soft);
         }
 
         .config-btn {
@@ -457,16 +609,37 @@
             <div class="quickadd-intro">
                 <p>Gallery scaffold for reusable UI components. Quick Add Parser is wired with live schema-driven
                     parsing
-                    and four variant demos.</p>
+                    and six variant demos.</p>
                 <div class="import-note">Single-file import:
                     <code>&lt;script src=\"./quick-add/quick-add-component.js\"&gt;&lt;/script&gt;</code>
                 </div>
             </div>
-            <div class="tab-row" id="exampleTabs">
-                <button class="tab-btn active" data-example="example1">Example 1: Tasks</button>
-                <button class="tab-btn" data-example="example2">Example 2: Pet Log</button>
-                <button class="tab-btn" data-example="example3">Example 3: Expenses</button>
-                <button class="tab-btn" data-example="example4">Example 4: Modal Embed</button>
+            <div class="example-tabs" id="exampleTabsWrap">
+                <div class="tab-select" id="exampleTabsSelect">
+                    <button class="tab-select-trigger" type="button" id="exampleTabsTrigger">Example 1: Tasks</button>
+                    <div class="tab-select-menu" id="exampleTabsMenu">
+                        <button class="tab-select-option active" type="button" data-example="example1">Example 1:
+                            Tasks</button>
+                        <button class="tab-select-option" type="button" data-example="example2">Example 2: Pet
+                            Log</button>
+                        <button class="tab-select-option" type="button" data-example="example3">Example 3:
+                            Expenses</button>
+                        <button class="tab-select-option" type="button" data-example="example4">Example 4: Modal
+                            Embed</button>
+                        <button class="tab-select-option" type="button" data-example="example5">Example 5: AI
+                            Structured</button>
+                        <button class="tab-select-option" type="button" data-example="example6">Example 6: AI
+                            Inline Pills</button>
+                    </div>
+                </div>
+                <div class="tab-row tab-row--scroll" id="exampleTabs">
+                    <button class="tab-btn active" data-example="example1">Example 1: Tasks</button>
+                    <button class="tab-btn" data-example="example2">Example 2: Pet Log</button>
+                    <button class="tab-btn" data-example="example3">Example 3: Expenses</button>
+                    <button class="tab-btn" data-example="example4">Example 4: Modal Embed</button>
+                    <button class="tab-btn" data-example="example5">Example 5: AI Structured</button>
+                    <button class="tab-btn" data-example="example6">Example 6: AI Inline Pills</button>
+                </div>
             </div>
 
             <article class="example-wrap active" data-example-panel="example1">
@@ -575,6 +748,116 @@
                     </section>
                 </div>
             </article>
+
+            <article class="example-wrap" style="display:none" data-example-panel="example5">
+                <div class="example-head">
+                    <h2>AI Structured Variant</h2>
+                    <p>Same <code>QuickAdd</code> component in <code>mode: "ai"</code>. Includes provider-compatible
+                        API wiring, mock provider for synthetic testing, Parse/Queue/Process Queue controls, inline
+                        edit,
+                        remove/restore, optional separator-aware AI parsing, and offline queue persistence.</p>
+                    <div class="meta" id="meta5"></div>
+                    <details class="config-box">
+                        <summary>Config + Options</summary>
+                        <div class="config-tools">
+                            <span class="config-hint">Playground JSON (editable)</span>
+                            <div class="config-actions">
+                                <button class="config-btn" type="button" id="applyConfig5">Apply</button>
+                                <button class="config-btn" type="button" id="resetConfig5">Reset</button>
+                            </div>
+                        </div>
+                        <div class="ai-runtime" id="aiRuntime5">
+                            <label class="ai-runtime-field">Provider
+                                <select class="ai-runtime-input" id="aiProvider5">
+                                    <option value="openai">OpenAI</option>
+                                    <option value="anthropic">Anthropic</option>
+                                    <option value="google">Google</option>
+                                    <option value="custom">Custom</option>
+                                </select>
+                            </label>
+                            <label class="ai-runtime-field">API Key
+                                <input class="ai-runtime-input" id="aiApiKey5" type="password" placeholder="sk-..." />
+                            </label>
+                            <label class="ai-runtime-field">Model
+                                <input class="ai-runtime-input" id="aiModel5" type="text" placeholder="gpt-4o-mini" />
+                            </label>
+                            <label class="ai-runtime-field">Custom Endpoint
+                                <input class="ai-runtime-input" id="aiEndpoint5" type="text"
+                                    placeholder="https://.../chat/completions" />
+                            </label>
+                            <div class="ai-runtime-row">
+                                <label class="ai-runtime-check">
+                                    <input id="aiUseMock5" type="checkbox" checked />
+                                    Use demo mock response
+                                </label>
+                                <button class="config-btn" type="button" id="aiApply5">Apply AI Runtime</button>
+                            </div>
+                        </div>
+                        <textarea id="config5" class="config-editor" spellcheck="false"></textarea>
+                        <div class="config-status" id="config5Status" aria-live="polite"></div>
+                        <details class="config-errors" id="config5ErrorsBox" hidden>
+                            <summary id="config5ErrorsSummary">Show all errors</summary>
+                            <ul class="config-errors-list" id="config5Errors"></ul>
+                        </details>
+                    </details>
+                </div>
+                <div id="quickAddExample5"></div>
+            </article>
+
+            <article class="example-wrap" style="display:none" data-example-panel="example6">
+                <div class="example-head">
+                    <h2>AI Inline Pills Variant</h2>
+                    <p>AI mode with optional inline-pill overlays enabled. Uses dummy AI output with span offsets and
+                        supports separator-aware parsing by newline, plus full provider/API-key runtime switching to
+                        test
+                        real calls.</p>
+                    <div class="meta" id="meta6"></div>
+                    <details class="config-box">
+                        <summary>Config + Options</summary>
+                        <div class="config-tools">
+                            <span class="config-hint">Playground JSON (editable)</span>
+                            <div class="config-actions">
+                                <button class="config-btn" type="button" id="applyConfig6">Apply</button>
+                                <button class="config-btn" type="button" id="resetConfig6">Reset</button>
+                            </div>
+                        </div>
+                        <div class="ai-runtime" id="aiRuntime6">
+                            <label class="ai-runtime-field">Provider
+                                <select class="ai-runtime-input" id="aiProvider6">
+                                    <option value="openai">OpenAI</option>
+                                    <option value="anthropic">Anthropic</option>
+                                    <option value="google">Google</option>
+                                    <option value="custom">Custom</option>
+                                </select>
+                            </label>
+                            <label class="ai-runtime-field">API Key
+                                <input class="ai-runtime-input" id="aiApiKey6" type="password" placeholder="sk-..." />
+                            </label>
+                            <label class="ai-runtime-field">Model
+                                <input class="ai-runtime-input" id="aiModel6" type="text" placeholder="gpt-4o-mini" />
+                            </label>
+                            <label class="ai-runtime-field">Custom Endpoint
+                                <input class="ai-runtime-input" id="aiEndpoint6" type="text"
+                                    placeholder="https://.../chat/completions" />
+                            </label>
+                            <div class="ai-runtime-row">
+                                <label class="ai-runtime-check">
+                                    <input id="aiUseMock6" type="checkbox" checked />
+                                    Use demo mock response
+                                </label>
+                                <button class="config-btn" type="button" id="aiApply6">Apply AI Runtime</button>
+                            </div>
+                        </div>
+                        <textarea id="config6" class="config-editor" spellcheck="false"></textarea>
+                        <div class="config-status" id="config6Status" aria-live="polite"></div>
+                        <details class="config-errors" id="config6ErrorsBox" hidden>
+                            <summary id="config6ErrorsSummary">Show all errors</summary>
+                            <ul class="config-errors-list" id="config6Errors"></ul>
+                        </details>
+                    </details>
+                </div>
+                <div id="quickAddExample6"></div>
+            </article>
         </section>
 
     </main>
@@ -582,7 +865,7 @@
     <script src="https://unpkg.com/chrono-node@2.7.7/dist/chrono.min.js"></script>
     <script src="./quick-add/quick-add-component.js"></script>
     <script>
-        function connectTabs(tabContainerId, attrName, panelSelector) {
+        function connectTabs(tabContainerId, attrName, panelSelector, opts = {}) {
             const container = document.getElementById(tabContainerId);
             if (!container) return;
             container.addEventListener('click', (event) => {
@@ -598,11 +881,26 @@
                     panel.classList.toggle('active', active);
                     panel.style.display = active ? '' : 'none';
                 });
+                if (typeof opts.onChange === 'function') {
+                    opts.onChange(value, btn);
+                }
             });
         }
 
         connectTabs('componentTabs', 'data-page', '.page');
-        connectTabs('exampleTabs', 'data-example', '[data-example-panel]');
+        connectTabs('exampleTabs', 'data-example', '[data-example-panel]', {
+            onChange: (value, btn) => {
+                const selectEl = document.getElementById('exampleTabsSelect');
+                if (!selectEl) return;
+                selectEl.querySelectorAll('[data-example]').forEach((option) => {
+                    option.classList.toggle('active', option.getAttribute('data-example') === value);
+                });
+                const trigger = document.getElementById('exampleTabsTrigger');
+                if (trigger) {
+                    trigger.textContent = btn.textContent.trim();
+                }
+            }
+        });
 
         function cloneJson(value) {
             return JSON.parse(JSON.stringify(value));
@@ -625,6 +923,7 @@
         }
 
         const ALLOWED_TOP_LEVEL_KEYS = new Set([
+            'mode',
             'debounceMs',
             'allowMultipleEntries',
             'entrySeparator',
@@ -647,9 +946,31 @@
             'placeholder',
             'hintText',
             'schema',
+            'ai',
             'classNames',
             'tokens'
         ]);
+        const ALLOWED_AI_KEYS = new Set([
+            'enabled',
+            'autoParse',
+            'debounceMs',
+            'minInputLength',
+            'preserveEditedEntries',
+            'separatorAware',
+            'inlinePills',
+            'forceJson',
+            'provider',
+            'apiKey',
+            'model',
+            'endpoint',
+            'temperature',
+            'systemPrompt',
+            'mockResponse',
+            'mockLatencyMs',
+            'queueStorageKey',
+            'experimental'
+        ]);
+        const ALLOWED_AI_EXPERIMENTAL_KEYS = new Set(['inlinePills']);
         const ALLOWED_SCHEMA_KEYS = new Set(['fields']);
         const ALLOWED_FIELD_KEYS = new Set([
             'key',
@@ -686,6 +1007,8 @@
         const ALLOWED_CONDITION_KEYS = new Set(['field', 'op', 'value', 'values', 'and', 'or', 'not', 'when', 'message']);
         const VALID_FIELD_TYPES = new Set(['string', 'number', 'options', 'date', 'datetime', 'boolean']);
         const VALID_FIELD_TERMINATOR_MODES = new Set(['strict', 'or-next-prefix', 'or-end']);
+        const VALID_QA_MODES = new Set(['deterministic', 'ai']);
+        const VALID_AI_PROVIDERS = new Set(['openai', 'anthropic', 'google', 'custom']);
         const VALID_CONDITION_OPERATORS = new Set([
             'eq',
             'neq',
@@ -896,6 +1219,11 @@
             if (config.hintText !== undefined && typeof config.hintText !== 'string') {
                 pushValidationError(errors, 'config.hintText', 'must be a string');
             }
+            if (config.mode !== undefined) {
+                if (typeof config.mode !== 'string' || !VALID_QA_MODES.has(config.mode)) {
+                    pushValidationError(errors, 'config.mode', `must be one of: ${Array.from(VALID_QA_MODES).join(', ')}`);
+                }
+            }
 
             [
                 'allowMultipleEntries',
@@ -944,6 +1272,54 @@
                             pushValidationError(errors, `config.tokens.${key}`, 'must be a string or number');
                         }
                     });
+                }
+            }
+
+            if (config.ai !== undefined) {
+                if (!isPlainObject(config.ai)) {
+                    pushValidationError(errors, 'config.ai', 'must be an object');
+                } else {
+                    validateAllowedKeys(config.ai, ALLOWED_AI_KEYS, 'config.ai', errors);
+                    ['enabled', 'autoParse', 'preserveEditedEntries', 'separatorAware', 'inlinePills', 'forceJson']
+                        .forEach((key) => {
+                            if (config.ai[key] !== undefined && typeof config.ai[key] !== 'boolean') {
+                                pushValidationError(errors, `config.ai.${key}`, 'must be a boolean');
+                            }
+                        });
+                    ['debounceMs', 'minInputLength', 'temperature', 'mockLatencyMs']
+                        .forEach((key) => {
+                            if (config.ai[key] !== undefined && typeof config.ai[key] !== 'number') {
+                                pushValidationError(errors, `config.ai.${key}`, 'must be a number');
+                            }
+                        });
+                    ['provider', 'apiKey', 'model', 'endpoint', 'systemPrompt', 'queueStorageKey']
+                        .forEach((key) => {
+                            if (config.ai[key] !== undefined && typeof config.ai[key] !== 'string') {
+                                pushValidationError(errors, `config.ai.${key}`, 'must be a string');
+                            }
+                        });
+                    if (config.ai.mockResponse !== undefined) {
+                        const value = config.ai.mockResponse;
+                        const isString = typeof value === 'string';
+                        const isObject = isPlainObject(value);
+                        const isNull = value === null;
+                        if (!isString && !isObject && !isNull) {
+                            pushValidationError(errors, 'config.ai.mockResponse', 'must be a JSON object, JSON string, or null');
+                        }
+                    }
+                    if (config.ai.provider !== undefined && !VALID_AI_PROVIDERS.has(String(config.ai.provider || '').toLowerCase())) {
+                        pushValidationError(errors, 'config.ai.provider', `must be one of: ${Array.from(VALID_AI_PROVIDERS).join(', ')}`);
+                    }
+                    if (config.ai.experimental !== undefined) {
+                        if (!isPlainObject(config.ai.experimental)) {
+                            pushValidationError(errors, 'config.ai.experimental', 'must be an object');
+                        } else {
+                            validateAllowedKeys(config.ai.experimental, ALLOWED_AI_EXPERIMENTAL_KEYS, 'config.ai.experimental', errors);
+                            if (config.ai.experimental.inlinePills !== undefined && typeof config.ai.experimental.inlinePills !== 'boolean') {
+                                pushValidationError(errors, 'config.ai.experimental.inlinePills', 'must be a boolean');
+                            }
+                        }
+                    }
                 }
             }
 
@@ -1073,6 +1449,13 @@
 
                 const currentInput = component.getResult()?.input || defaultInput || '';
                 const nextConfig = Object.assign({}, baseConfig, parsed, {
+                    ai: Object.assign({}, baseConfig.ai || {}, parsed.ai || {}, {
+                        experimental: Object.assign(
+                            {},
+                            (baseConfig.ai && baseConfig.ai.experimental) || {},
+                            (parsed.ai && parsed.ai.experimental) || {}
+                        )
+                    }),
                     mount: baseConfig.mount,
                     onParse: baseConfig.onParse
                 });
@@ -1088,6 +1471,7 @@
                 }
                 setConfigStatus(statusEl, 'Applied.', 'ok');
                 renderValidationErrors([]);
+                return true;
             }
 
             applyBtn.addEventListener('click', applyFromEditor);
@@ -1102,6 +1486,95 @@
                 scheduleValidation();
             });
             refreshValidationUI();
+
+            return {
+                editorEl,
+                applyBtn,
+                resetBtn,
+                applyFromEditor,
+                parseAndValidateEditor,
+                refreshValidationUI,
+                setConfigStatus: (text, type) => setConfigStatus(statusEl, text, type)
+            };
+        }
+
+        function setupAiRuntimeControls(options) {
+            const {
+                playground,
+                providerId,
+                apiKeyId,
+                modelId,
+                endpointId,
+                useMockId,
+                applyId
+            } = options || {};
+            if (!playground) {
+                return;
+            }
+            const providerEl = document.getElementById(providerId);
+            const apiKeyEl = document.getElementById(apiKeyId);
+            const modelEl = document.getElementById(modelId);
+            const endpointEl = document.getElementById(endpointId);
+            const useMockEl = document.getElementById(useMockId);
+            const applyEl = document.getElementById(applyId);
+            if (!providerEl || !apiKeyEl || !modelEl || !endpointEl || !useMockEl || !applyEl) {
+                return;
+            }
+
+            function readEditorConfig() {
+                try {
+                    return JSON.parse(playground.editorEl.value || '{}');
+                } catch (error) {
+                    return null;
+                }
+            }
+
+            function syncControlsFromEditor() {
+                const parsed = readEditorConfig();
+                const ai = (parsed && parsed.ai && typeof parsed.ai === 'object') ? parsed.ai : {};
+                providerEl.value = String(ai.provider || 'openai');
+                apiKeyEl.value = String(ai.apiKey || '');
+                modelEl.value = String(ai.model || '');
+                endpointEl.value = String(ai.endpoint || '');
+                useMockEl.checked = !(Object.prototype.hasOwnProperty.call(ai, 'mockResponse') && ai.mockResponse === null);
+            }
+
+            function applyRuntimeToEditor() {
+                const parsed = readEditorConfig();
+                if (!parsed || typeof parsed !== 'object') {
+                    playground.setConfigStatus('Invalid JSON: cannot apply runtime controls.', 'error');
+                    return;
+                }
+                parsed.ai = (parsed.ai && typeof parsed.ai === 'object') ? parsed.ai : {};
+                parsed.ai.provider = String(providerEl.value || 'openai');
+                parsed.ai.apiKey = String(apiKeyEl.value || '');
+                parsed.ai.model = String(modelEl.value || '');
+                parsed.ai.endpoint = String(endpointEl.value || '');
+                parsed.ai.forceJson = true;
+
+                if (useMockEl.checked) {
+                    delete parsed.ai.mockResponse;
+                } else {
+                    parsed.ai.mockResponse = null;
+                }
+
+                playground.editorEl.value = JSON.stringify(parsed, null, 2);
+                const applied = playground.applyFromEditor();
+                if (applied) {
+                    const modeLabel = useMockEl.checked ? 'mock mode' : 'real provider mode';
+                    playground.setConfigStatus(`Applied AI runtime (${modeLabel}).`, 'ok');
+                    syncControlsFromEditor();
+                }
+            }
+
+            applyEl.addEventListener('click', applyRuntimeToEditor);
+            playground.applyBtn.addEventListener('click', () => {
+                window.requestAnimationFrame(syncControlsFromEditor);
+            });
+            playground.resetBtn.addEventListener('click', () => {
+                window.requestAnimationFrame(syncControlsFromEditor);
+            });
+            syncControlsFromEditor();
         }
 
         const taskConfig = {
@@ -1414,10 +1887,309 @@
         const modalAdd = QuickAdd.create(modalConfig);
         modalAdd.setInput(modalDefaultInput);
 
+        function buildDemoAiEntriesForSegment(text) {
+            const source = String(text || '').trim();
+            const lower = source.toLowerCase();
+            const attachments = Array.from(new Set((source.match(/\b\d+\b/g) || [])));
+            const pets = [];
+            if (lower.includes('luna')) pets.push('Luna');
+            if (lower.includes('max')) pets.push('Max');
+            if (!pets.length) pets.push('Primary Pet');
+
+            const hasCough = lower.includes('cough');
+            const hasVomit = lower.includes('vomit');
+            const eventType = hasVomit ? 'Symptoms GI' : (hasCough ? 'Symptoms Respiratory' : 'General Note');
+            const title = hasVomit ? 'GI symptom check' : (hasCough ? 'Respiratory symptom check' : 'Health note');
+
+            return pets.map((pet, idx) => ({
+                title,
+                petName: pet,
+                eventType,
+                date: '2026-02-11',
+                time: hasVomit ? '08:20' : '18:30',
+                status: 'Completed',
+                severityLabel: hasVomit ? 'Mild' : 'Moderate',
+                notes: source || 'Synthetic AI parse',
+                tags: hasVomit ? ['gi'] : ['respiratory'],
+                attachments,
+                confidence: Math.max(0.55, Math.min(0.97, 0.82 + (idx * 0.05)))
+            }));
+        }
+
+        function buildDemoAiStructuredResponse(input) {
+            const text = String(input || '').trim();
+            return {
+                entries: buildDemoAiEntriesForSegment(text),
+                missing: [],
+                warnings: ['Synthetic response enabled in demo (config.ai.mockResponse).']
+            };
+        }
+
+        function buildDemoAiInlineResponse(input) {
+            const text = String(input || '').trim();
+            const lower = text.toLowerCase();
+            const entries = buildDemoAiEntriesForSegment(text).map((entry) => {
+                const spans = [];
+                const addSpan = (field, phrase) => {
+                    if (!phrase) return;
+                    const start = lower.indexOf(String(phrase).toLowerCase());
+                    if (start < 0) return;
+                    spans.push({
+                        field,
+                        value: text.slice(start, start + String(phrase).length),
+                        start,
+                        end: start + String(phrase).length
+                    });
+                };
+                addSpan('petName', entry.petName);
+                if (lower.includes('cough')) addSpan('eventType', 'cough');
+                if (lower.includes('vomit')) addSpan('eventType', 'vomit');
+                return Object.assign({}, entry, { spans });
+            });
+            return {
+                entries,
+                missing: [],
+                warnings: ['Synthetic response enabled in demo (config.ai.mockResponse).']
+            };
+        }
+
+        const aiConfig5 = {
+            mount: '#quickAddExample5',
+            mode: 'ai',
+            debounceMs: 260,
+            showInlinePills: false,
+            showEntryPills: false,
+            fieldTerminator: ';;',
+            entrySeparator: '\n',
+            placeholder: 'Example (newline-separated): Luna had cough yesterday evening and photo 1\nMax vomited this morning with photo 2',
+            schema: {
+                fields: [
+                    { key: 'title', type: 'string' },
+                    { key: 'petName', type: 'string' },
+                    { key: 'eventType', type: 'string' },
+                    { key: 'date', type: 'date' },
+                    { key: 'time', type: 'string' },
+                    { key: 'status', type: 'string' },
+                    { key: 'notes', type: 'string' },
+                    { key: 'attachments', type: 'string', multiple: true }
+                ]
+            },
+            ai: {
+                enabled: true,
+                autoParse: true,
+                debounceMs: 900,
+                minInputLength: 8,
+                separatorAware: true,
+                inlinePills: false,
+                provider: 'openai',
+                apiKey: 'demo-key',
+                model: 'gpt-4o-mini',
+                mockLatencyMs: 420,
+                mockResponse: (input) => buildDemoAiStructuredResponse(input)
+            },
+            tokens: {
+                '--qa-bg': '#f8fbff',
+                '--qa-border': '#c8d7e9',
+                '--qa-accent': '#0f5f8e',
+                '--qa-accent-soft': '#e2eff8'
+            },
+            onParse: (result) => {
+                document.getElementById('meta5').textContent =
+                    `mode=${result.mode || 'deterministic'}, entries=${result.entryCount}, valid=${result.validCount}, queued=${result.queueCount || 0}`;
+            }
+        };
+        const aiDefaultInput5 =
+            'Luna had cough yesterday evening after walk and photo 1.\n' +
+            'Max vomited this morning and photo 2.';
+        const aiAdd5 = QuickAdd.create(aiConfig5);
+        aiAdd5.setInput(aiDefaultInput5);
+        const aiPlayground5 = setupConfigPlayground({
+            editorId: 'config5',
+            applyButtonId: 'applyConfig5',
+            resetButtonId: 'resetConfig5',
+            statusId: 'config5Status',
+            errorsBoxId: 'config5ErrorsBox',
+            errorsSummaryId: 'config5ErrorsSummary',
+            errorsListId: 'config5Errors',
+            component: aiAdd5,
+            baseConfig: aiConfig5,
+            defaultInput: aiDefaultInput5
+        });
+        setupAiRuntimeControls({
+            playground: aiPlayground5,
+            providerId: 'aiProvider5',
+            apiKeyId: 'aiApiKey5',
+            modelId: 'aiModel5',
+            endpointId: 'aiEndpoint5',
+            useMockId: 'aiUseMock5',
+            applyId: 'aiApply5'
+        });
+
+        const aiConfig6 = {
+            mount: '#quickAddExample6',
+            mode: 'ai',
+            debounceMs: 260,
+            showInlinePills: true,
+            showEntryPills: false,
+            fieldTerminator: ';;',
+            entrySeparator: '\n',
+            placeholder: 'Inline pills demo: Luna had cough yesterday evening and photo 1\nMax vomited this morning and photo 2',
+            schema: {
+                fields: [
+                    { key: 'title', type: 'string' },
+                    { key: 'petName', type: 'string' },
+                    { key: 'eventType', type: 'string' },
+                    { key: 'date', type: 'date' },
+                    { key: 'time', type: 'string' },
+                    { key: 'status', type: 'string' },
+                    { key: 'notes', type: 'string' },
+                    { key: 'attachments', type: 'string', multiple: true }
+                ]
+            },
+            ai: {
+                enabled: true,
+                autoParse: true,
+                debounceMs: 900,
+                minInputLength: 8,
+                separatorAware: true,
+                inlinePills: true,
+                provider: 'openai',
+                apiKey: 'demo-key',
+                model: 'gpt-4o-mini',
+                mockLatencyMs: 420,
+                mockResponse: (input) => buildDemoAiInlineResponse(input),
+                inlinePillHarness: ({ input, entries }) => {
+                    const rawInput = String(input || '');
+                    const marks = [];
+                    const pushMark = (mark) => {
+                        if (!mark) return;
+                        const start = Number(mark.start);
+                        const end = Number(mark.end);
+                        if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+                            return;
+                        }
+                        if (start < 0 || end > rawInput.length) {
+                            return;
+                        }
+                        marks.push({
+                            start,
+                            end,
+                            label: String(mark.label || rawInput.slice(start, end)),
+                            inferred: true
+                        });
+                    };
+                    (entries || []).forEach((entry) => {
+                        const segmentStart = Number.isFinite(Number(entry && entry._sourceStart))
+                            ? Number(entry._sourceStart)
+                            : 0;
+                        const segmentEnd = Number.isFinite(Number(entry && entry._sourceEnd))
+                            ? Number(entry._sourceEnd)
+                            : rawInput.length;
+                        const segmentSafeStart = Math.max(0, Math.min(segmentStart, rawInput.length));
+                        const segmentSafeEnd = Math.max(segmentSafeStart, Math.min(segmentEnd, rawInput.length));
+                        const segmentLength = Math.max(0, segmentSafeEnd - segmentSafeStart);
+                        const segmentSlice = rawInput.slice(segmentSafeStart, segmentSafeEnd);
+
+                        (entry.spans || []).forEach((span) => {
+                            const rawStart = Number(span && span.start);
+                            const rawEnd = Number(span && span.end);
+                            const spanValue = String((span && span.value) || '').trim();
+                            const hasNumeric = Number.isFinite(rawStart) && Number.isFinite(rawEnd) && rawEnd > rawStart;
+                            let start = NaN;
+                            let end = NaN;
+
+                            if (hasNumeric) {
+                                const appearsGlobal = rawStart >= segmentSafeStart && rawEnd <= segmentSafeEnd;
+                                const appearsRelative = rawStart >= 0 && rawEnd <= segmentLength;
+                                if (appearsGlobal) {
+                                    start = rawStart;
+                                    end = rawEnd;
+                                } else if (appearsRelative) {
+                                    start = segmentSafeStart + rawStart;
+                                    end = segmentSafeStart + rawEnd;
+                                } else {
+                                    start = rawStart;
+                                    end = rawEnd;
+                                }
+                            }
+
+                            const isValidRange = Number.isFinite(start) && Number.isFinite(end) && end > start;
+                            const inBounds = isValidRange && start >= 0 && end <= rawInput.length;
+                            const snippet = inBounds ? rawInput.slice(start, end) : '';
+                            const valueMatches = !spanValue
+                                || snippet.toLowerCase().includes(spanValue.toLowerCase());
+
+                            if (!inBounds || !valueMatches) {
+                                if (!spanValue || !segmentSlice) {
+                                    return;
+                                }
+                                const rel = segmentSlice.toLowerCase().indexOf(spanValue.toLowerCase());
+                                if (rel < 0) {
+                                    return;
+                                }
+                                start = segmentSafeStart + rel;
+                                end = start + spanValue.length;
+                            }
+
+                            if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+                                return;
+                            }
+
+                            pushMark({
+                                start,
+                                end,
+                                label: `${span.field || 'field'}: ${span.value || ''}`,
+                                inferred: true
+                            });
+                        });
+                    });
+                    return marks;
+                }
+            },
+            tokens: {
+                '--qa-bg': '#f5fbf8',
+                '--qa-border': '#c2dfcf',
+                '--qa-accent': '#1e7d5e',
+                '--qa-accent-soft': '#ddf1e8'
+            },
+            onParse: (result) => {
+                document.getElementById('meta6').textContent =
+                    `mode=${result.mode || 'deterministic'}, entries=${result.entryCount}, valid=${result.validCount}, queued=${result.queueCount || 0}`;
+            }
+        };
+        const aiDefaultInput6 =
+            'Luna had cough yesterday evening after walk and photo 1.\n' +
+            'Max vomited this morning and photo 2.';
+        const aiAdd6 = QuickAdd.create(aiConfig6);
+        aiAdd6.setInput(aiDefaultInput6);
+        const aiPlayground6 = setupConfigPlayground({
+            editorId: 'config6',
+            applyButtonId: 'applyConfig6',
+            resetButtonId: 'resetConfig6',
+            statusId: 'config6Status',
+            errorsBoxId: 'config6ErrorsBox',
+            errorsSummaryId: 'config6ErrorsSummary',
+            errorsListId: 'config6Errors',
+            component: aiAdd6,
+            baseConfig: aiConfig6,
+            defaultInput: aiDefaultInput6
+        });
+        setupAiRuntimeControls({
+            playground: aiPlayground6,
+            providerId: 'aiProvider6',
+            apiKeyId: 'aiApiKey6',
+            modelId: 'aiModel6',
+            endpointId: 'aiEndpoint6',
+            useMockId: 'aiUseMock6',
+            applyId: 'aiApply6'
+        });
+
         const modalBackdropEl = document.getElementById('quickAddModalBackdrop');
         const openModalBtn = document.getElementById('openQuickAddModal');
         const closeModalBtn = document.getElementById('closeQuickAddModal');
         const exampleTabsEl = document.getElementById('exampleTabs');
+        const exampleTabsSelectEl = document.getElementById('exampleTabsSelect');
+        const exampleTabsTriggerEl = document.getElementById('exampleTabsTrigger');
         const openModal = () => {
             if (!modalBackdropEl) return;
             modalBackdropEl.hidden = false;
@@ -1452,6 +2224,26 @@
                 const tab = event.target.closest('[data-example]');
                 if (tab && tab.getAttribute('data-example') !== 'example4') {
                     closeModal();
+                }
+            });
+        }
+        if (exampleTabsSelectEl && exampleTabsTriggerEl) {
+            exampleTabsTriggerEl.addEventListener('click', () => {
+                exampleTabsSelectEl.classList.toggle('open');
+            });
+            exampleTabsSelectEl.addEventListener('click', (event) => {
+                const option = event.target.closest('[data-example]');
+                if (!option) return;
+                const value = option.getAttribute('data-example');
+                const match = exampleTabsEl?.querySelector(`[data-example="${value}"]`);
+                if (match) {
+                    match.click();
+                }
+                exampleTabsSelectEl.classList.remove('open');
+            });
+            document.addEventListener('click', (event) => {
+                if (!exampleTabsSelectEl.contains(event.target)) {
+                    exampleTabsSelectEl.classList.remove('open');
                 }
             });
         }

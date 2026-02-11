@@ -93,11 +93,51 @@
         blockedInfoIcon: 'qa-blocked-info-icon',
         blockedInfoText: 'qa-blocked-info-text',
         pillBlocked: 'qa-pill-blocked',
-        pillBlockedIcon: 'qa-pill-blocked-icon'
+        pillBlockedIcon: 'qa-pill-blocked-icon',
+        aiMetaRow: 'qa-ai-meta-row',
+        aiMetaItem: 'qa-ai-meta-item',
+        aiActions: 'qa-ai-actions',
+        aiActionBtn: 'qa-ai-action-btn',
+        aiActionBtnPrimary: 'qa-ai-action-btn-primary',
+        aiActionBtnDanger: 'qa-ai-action-btn-danger',
+        aiActionBtnGhost: 'qa-ai-action-btn-ghost',
+        aiEditor: 'qa-ai-editor',
+        aiEditorLabel: 'qa-ai-editor-label',
+        aiEditorInput: 'qa-ai-editor-input'
+    };
+
+    const DEFAULT_AI_CONFIG = {
+        enabled: false,
+        autoParse: true,
+        debounceMs: 1200,
+        minInputLength: 10,
+        preserveEditedEntries: true,
+        separatorAware: false,
+        inlinePills: false,
+        forceJson: true,
+        provider: 'openai',
+        apiKey: '',
+        model: '',
+        endpoint: '',
+        temperature: 0.3,
+        systemPrompt: '',
+        request: null,
+        splitInput: null,
+        buildPrompt: null,
+        parseResponse: null,
+        inlinePillHarness: null,
+        mockResponse: null,
+        mockLatencyMs: 0,
+        experimental: {}
+    };
+
+    const DEFAULT_AI_EXPERIMENTAL_CONFIG = {
+        inlinePills: false
     };
 
     const DEFAULT_CONFIG = {
         mount: null,
+        mode: 'deterministic', // deterministic | ai
         debounceMs: 300,
         allowMultipleEntries: true,
         entrySeparator: '\n',
@@ -122,6 +162,7 @@
         schema: {
             fields: []
         },
+        ai: {},
         classNames: {},
         tokens: {},
         onParse: null
@@ -162,6 +203,8 @@
         const merged = Object.assign({}, DEFAULT_CONFIG, userConfig || {});
         merged.schema = Object.assign({}, DEFAULT_CONFIG.schema, merged.schema || {});
         merged.schema.fields = Array.isArray(merged.schema.fields) ? merged.schema.fields.slice() : [];
+        merged.ai = Object.assign({}, DEFAULT_AI_CONFIG, merged.ai || {});
+        merged.ai.experimental = Object.assign({}, DEFAULT_AI_EXPERIMENTAL_CONFIG, merged.ai.experimental || {});
         merged.classNames = Object.assign({}, DEFAULT_CLASSNAMES, merged.classNames || {});
         if (typeof merged.allowedAttachmentTypes === 'string') {
             merged.allowedAttachmentTypes = merged.allowedAttachmentTypes
@@ -170,6 +213,14 @@
                 .filter(Boolean);
         } else if (!Array.isArray(merged.allowedAttachmentTypes)) {
             merged.allowedAttachmentTypes = [];
+        }
+        const mode = String(merged.mode || '').toLowerCase();
+        if (mode === 'ai' || merged.ai.enabled === true) {
+            merged.mode = 'ai';
+            merged.ai.enabled = true;
+        } else {
+            merged.mode = 'deterministic';
+            merged.ai.enabled = false;
         }
         return merged;
     }
@@ -1938,7 +1989,24 @@
         this.timer = null;
         this.isRenderingInput = false;
         this.inputText = '';
-        this.lastResult = parseInput('', this.config);
+        this.aiState = {
+            isProcessing: false,
+            requestSeq: 0,
+            activeRequestSeq: 0,
+            lastParsedInput: '',
+            entries: [],
+            editedEntries: new Set(),
+            deletedEntries: new Set(),
+            editingEntryId: '',
+            warnings: [],
+            missing: [],
+            error: '',
+            providerRawResponse: ''
+        };
+        this.aiQueueMemory = [];
+        this.lastResult = this.config.mode === 'ai'
+            ? this.buildAIResult()
+            : parseInput('', this.config);
         this.tokenMap = {};
         this.dismissedSelections = new Set();
         this.attachmentsByEntry = new Map();
@@ -1961,8 +2029,761 @@
     }
 
     QuickAddComponent.prototype.defaultHintText = function defaultHintText() {
+        if (this.isAiMode()) {
+            return 'AI mode: type natural language and pause to extract structured entries.';
+        }
         const separator = this.config.entrySeparator === '\n' ? 'newline' : this.config.entrySeparator;
         return `Field terminator: "${this.config.fieldTerminator}" | Entry separator: "${separator}"`;
+    };
+
+    QuickAddComponent.prototype.isAiMode = function isAiMode() {
+        return this.config.mode === 'ai' && !!(this.config.ai && this.config.ai.enabled);
+    };
+
+    QuickAddComponent.prototype.isAIInlinePillsEnabled = function isAIInlinePillsEnabled() {
+        if (!this.isAiMode()) {
+            return false;
+        }
+        return this.config.showInlinePills !== false
+            && !!(this.config.ai
+                && (
+                    this.config.ai.inlinePills
+                    || (this.config.ai.experimental && this.config.ai.experimental.inlinePills)
+                ));
+    };
+
+    QuickAddComponent.prototype.isAISeparatorAwareEnabled = function isAISeparatorAwareEnabled() {
+        if (!this.isAiMode()) {
+            return false;
+        }
+        if (!this.config.ai || !this.config.ai.separatorAware) {
+            return false;
+        }
+        if (this.config.allowMultipleEntries === false) {
+            return false;
+        }
+        return typeof this.config.entrySeparator === 'string' && this.config.entrySeparator.length > 0;
+    };
+
+    QuickAddComponent.prototype.normalizeAIStatus = function normalizeAIStatus(rawStatus) {
+        const status = String(rawStatus || '').trim().toLowerCase();
+        if (!status) return 'Completed';
+        if (['completed', 'done', 'complete'].includes(status)) return 'Completed';
+        if (['planned', 'plan', 'scheduled', 'schedule'].includes(status)) return 'Planned';
+        if (['missed', 'skip', 'skipped', 'cancelled', 'canceled'].includes(status)) return 'Missed';
+        return 'Completed';
+    };
+
+    QuickAddComponent.prototype.normalizeAIAttachmentRefs = function normalizeAIAttachmentRefs(raw) {
+        if (raw === undefined || raw === null || raw === '') return [];
+        if (Array.isArray(raw)) {
+            return raw.map((item) => String(item || '').trim()).filter(Boolean);
+        }
+        return String(raw).split(/[,\n]+/).map((item) => item.trim()).filter(Boolean);
+    };
+
+    QuickAddComponent.prototype.makeAIEntryId = function makeAIEntryId(seed) {
+        const chunk = String(seed || Date.now());
+        return `ai_${Date.now()}_${chunk}_${Math.random().toString(36).slice(2, 8)}`;
+    };
+
+    QuickAddComponent.prototype.normalizeAIEntry = function normalizeAIEntry(entry, idx, keepId) {
+        const source = entry && typeof entry === 'object' ? entry : {};
+        return Object.assign({}, source, {
+            _id: keepId || source._id || this.makeAIEntryId(idx),
+            title: source.title || source.eventType || 'Event',
+            petName: source.petName || '',
+            eventType: source.eventType || '',
+            date: source.date || '',
+            time: source.time || '',
+            status: this.normalizeAIStatus(source.status),
+            severityLabel: source.severityLabel || null,
+            value: source.value !== undefined ? source.value : null,
+            unit: source.unit !== undefined ? source.unit : null,
+            durationMinutes: source.durationMinutes !== undefined ? source.durationMinutes : null,
+            notes: source.notes || '',
+            tags: Array.isArray(source.tags) ? source.tags : [],
+            attachments: this.normalizeAIAttachmentRefs(source.attachments || source.attachmentRefs),
+            confidence: Number.isFinite(Number(source.confidence)) ? Number(source.confidence) : 0
+        });
+    };
+
+    QuickAddComponent.prototype.aiEntrySignature = function aiEntrySignature(entry) {
+        const parts = [
+            String(entry.petName || '').toLowerCase().trim(),
+            String(entry.eventType || '').toLowerCase().trim(),
+            String(entry.date || '').trim(),
+            String(entry.time || '').trim(),
+            String(entry.title || '').toLowerCase().trim()
+        ];
+        return parts.join('|');
+    };
+
+    QuickAddComponent.prototype.mergeAIEntries = function mergeAIEntries(incomingEntries) {
+        const nextEntries = Array.isArray(this.aiState.entries) ? this.aiState.entries.slice() : [];
+        const preserveEdited = this.config.ai.preserveEditedEntries !== false;
+
+        incomingEntries.forEach((entry, idx) => {
+            const normalized = this.normalizeAIEntry(entry, idx, null);
+            const signature = this.aiEntrySignature(normalized);
+            const existingIndex = nextEntries.findIndex((item) => {
+                if (preserveEdited && this.aiState.editedEntries.has(item._id)) {
+                    return false;
+                }
+                return this.aiEntrySignature(item) === signature;
+            });
+            if (existingIndex >= 0) {
+                normalized._id = nextEntries[existingIndex]._id;
+                nextEntries[existingIndex] = normalized;
+                return;
+            }
+            nextEntries.push(normalized);
+        });
+
+        this.aiState.entries = nextEntries;
+    };
+
+    QuickAddComponent.prototype.extractJsonFromText = function extractJsonFromText(text) {
+        const raw = String(text || '').trim();
+        if (!raw) {
+            return '';
+        }
+        const codeMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+        if (codeMatch && codeMatch[1]) {
+            return codeMatch[1].trim();
+        }
+        return raw;
+    };
+
+    QuickAddComponent.prototype.normalizeAIResponse = function normalizeAIResponse(response) {
+        const data = (response && typeof response === 'object') ? response : {};
+        return {
+            entries: Array.isArray(data.entries) ? data.entries : [],
+            missing: Array.isArray(data.missing) ? data.missing.map((item) => String(item)) : [],
+            warnings: Array.isArray(data.warnings) ? data.warnings.map((item) => String(item)) : []
+        };
+    };
+
+    QuickAddComponent.prototype.parseAIResponse = function parseAIResponse(responseText) {
+        if (typeof this.config.ai.parseResponse === 'function') {
+            const custom = this.config.ai.parseResponse(responseText, this);
+            return this.normalizeAIResponse(custom);
+        }
+        if (responseText && typeof responseText === 'object') {
+            return this.normalizeAIResponse(responseText);
+        }
+        const raw = String(responseText || '').trim();
+        if (!raw) {
+            return this.normalizeAIResponse({ entries: [], missing: [], warnings: ['Empty AI response'] });
+        }
+
+        const attempts = [];
+        const primary = this.extractJsonFromText(raw);
+        attempts.push(primary);
+        const firstBrace = raw.indexOf('{');
+        const lastBrace = raw.lastIndexOf('}');
+        if (firstBrace >= 0 && lastBrace > firstBrace) {
+            attempts.push(raw.slice(firstBrace, lastBrace + 1));
+        }
+
+        for (let i = 0; i < attempts.length; i++) {
+            const candidate = String(attempts[i] || '').trim();
+            if (!candidate) {
+                continue;
+            }
+            try {
+                const parsed = JSON.parse(candidate);
+                return this.normalizeAIResponse(parsed);
+            } catch (err) {
+                // Try next candidate.
+            }
+        }
+
+        return this.normalizeAIResponse({
+            entries: [],
+            missing: [],
+            warnings: ['Failed to parse AI JSON response']
+        });
+    };
+
+    QuickAddComponent.prototype.getAIResponseText = function getAIResponseText(data) {
+        if (!data || typeof data !== 'object') {
+            return String(data || '');
+        }
+        return (
+            data.choices?.[0]?.message?.content
+            || data.content?.[0]?.text
+            || data.candidates?.[0]?.content?.parts?.[0]?.text
+            || data.output_text
+            || ''
+        );
+    };
+
+    QuickAddComponent.prototype.buildAIPrompt = async function buildAIPrompt(input) {
+        if (typeof this.config.ai.buildPrompt === 'function') {
+            return this.config.ai.buildPrompt(input, this.config, this);
+        }
+        const fields = (this.normalizedSchema && Array.isArray(this.normalizedSchema.fields))
+            ? this.normalizedSchema.fields.map((field) => field.key).filter(Boolean)
+            : [];
+        const fallbackFields = [
+            'title', 'petName', 'eventType', 'date', 'time', 'status',
+            'severityLabel', 'value', 'unit', 'durationMinutes', 'notes',
+            'tags', 'attachments', 'confidence'
+        ];
+        const requiredFields = Array.from(new Set(fallbackFields.concat(fields)));
+        const schemaHint = requiredFields.join(', ');
+        const system = this.config.ai.systemPrompt
+            ? `${this.config.ai.systemPrompt}\n\n`
+            : '';
+        const now = new Date();
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+        const separatorHint = this.isAISeparatorAwareEnabled()
+            ? `\nInput may be one segment split by entrySeparator from a larger note. Parse only this segment independently.`
+            : '';
+        const spanHint = this.isAIInlinePillsEnabled()
+            ? '\nIf possible include `spans` per entry (0-based offsets relative to this input segment): [{"field":"petName","value":"Luna","start":3,"end":7}].'
+            : '';
+        return `${system}You are an information extraction engine.\n` +
+            `Output must be one valid JSON object only. No markdown. No prose. No code fences.\n` +
+            `Current date: ${now.toISOString().slice(0, 10)}\n` +
+            `Timezone: ${timezone}\n` +
+            `Return exactly this top-level shape:\n` +
+            `{"entries":[...],"missing":[],"warnings":[]}\n` +
+            `For each entry use keys: ${schemaHint}\n` +
+            `Rules:\n` +
+            `- date: YYYY-MM-DD if known, else ""\n` +
+            `- time: HH:mm (24h) or ""\n` +
+            `- status: Completed, Planned, or Missed\n` +
+            `- tags: array of strings\n` +
+            `- attachments: array of string refs\n` +
+            `- confidence: number between 0 and 1\n` +
+            `- Keep unknown optional fields as null or empty string/array\n` +
+            `- If multiple pets/events are present, create separate entries\n` +
+            `- Put unresolved entities in "missing"\n` +
+            `- Put ambiguity/assumptions in "warnings"${separatorHint}${spanHint}\n` +
+            `Input:\n${String(input || '')}`;
+    };
+
+    QuickAddComponent.prototype.callOpenAI = async function callOpenAI(apiKey, model, prompt) {
+        const forceJson = this.config.ai.forceJson !== false;
+        const payload = {
+            model: model || 'gpt-4o-mini',
+            messages: [
+                { role: 'system', content: 'Return only valid JSON object output.' },
+                { role: 'user', content: prompt }
+            ],
+            temperature: Number(this.config.ai.temperature || 0.3)
+        };
+        if (forceJson) {
+            payload.response_format = { type: 'json_object' };
+        }
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error?.message || `OpenAI API error: ${res.status}`);
+        }
+        const data = await res.json();
+        return this.getAIResponseText(data);
+    };
+
+    QuickAddComponent.prototype.callAnthropic = async function callAnthropic(apiKey, model, prompt) {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: model || 'claude-3-haiku-20240307',
+                max_tokens: 2048,
+                system: 'Return one valid JSON object only. No markdown.',
+                messages: [{ role: 'user', content: prompt }]
+            })
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error?.message || `Anthropic API error: ${res.status}`);
+        }
+        const data = await res.json();
+        return this.getAIResponseText(data);
+    };
+
+    QuickAddComponent.prototype.callGoogle = async function callGoogle(apiKey, model, prompt) {
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model || 'gemini-1.5-flash')}:generateContent?key=${encodeURIComponent(apiKey)}`;
+        const forceJson = this.config.ai.forceJson !== false;
+        const generationConfig = { temperature: Number(this.config.ai.temperature || 0.3) };
+        if (forceJson) {
+            generationConfig.responseMimeType = 'application/json';
+        }
+        const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig
+            })
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error?.message || `Google API error: ${res.status}`);
+        }
+        const data = await res.json();
+        return this.getAIResponseText(data);
+    };
+
+    QuickAddComponent.prototype.callCustom = async function callCustom(endpoint, apiKey, model, prompt) {
+        const forceJson = this.config.ai.forceJson !== false;
+        const payload = {
+            model: model || 'default',
+            messages: [
+                { role: 'system', content: 'Return only valid JSON object output.' },
+                { role: 'user', content: prompt }
+            ],
+            temperature: Number(this.config.ai.temperature || 0.3)
+        };
+        if (forceJson) {
+            payload.response_format = { type: 'json_object' };
+        }
+        const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error?.message || `Custom API error: ${res.status}`);
+        }
+        const data = await res.json();
+        return this.getAIResponseText(data);
+    };
+
+    QuickAddComponent.prototype.callAIProvider = async function callAIProvider(input) {
+        const ai = this.config.ai || {};
+        const text = String(input || '').trim();
+        if (!text) {
+            return this.normalizeAIResponse({ entries: [], missing: [], warnings: [] });
+        }
+        if (ai.mockResponse !== null && ai.mockResponse !== undefined) {
+            const latency = Math.max(0, Number(ai.mockLatencyMs || 0));
+            if (latency > 0) {
+                await new Promise((resolve) => setTimeout(resolve, latency));
+            }
+            const mock = (typeof ai.mockResponse === 'function')
+                ? await ai.mockResponse(text, this.config, this)
+                : ai.mockResponse;
+            if (typeof mock === 'string' || (mock && typeof mock === 'object')) {
+                return this.parseAIResponse(mock);
+            }
+            return this.normalizeAIResponse(mock);
+        }
+
+        if (typeof ai.request === 'function') {
+            const customResponse = await ai.request({
+                input: text,
+                prompt: await this.buildAIPrompt(text),
+                config: this.config,
+                component: this
+            });
+            if (typeof customResponse === 'string' || (customResponse && typeof customResponse === 'object')) {
+                return this.parseAIResponse(customResponse);
+            }
+            return this.normalizeAIResponse(customResponse);
+        }
+
+        const provider = String(ai.provider || '').toLowerCase();
+        const apiKey = ai.apiKey || '';
+        const model = ai.model || '';
+        const endpoint = ai.endpoint || '';
+        if (!apiKey && provider !== 'custom') {
+            throw new Error('Missing ai.apiKey');
+        }
+        if (provider === 'custom' && !endpoint) {
+            throw new Error('Missing ai.endpoint for custom provider');
+        }
+        const prompt = await this.buildAIPrompt(text);
+
+        let responseText = '';
+        if (provider === 'openai') {
+            responseText = await this.callOpenAI(apiKey, model, prompt);
+        } else if (provider === 'anthropic') {
+            responseText = await this.callAnthropic(apiKey, model, prompt);
+        } else if (provider === 'google') {
+            responseText = await this.callGoogle(apiKey, model, prompt);
+        } else if (provider === 'custom') {
+            responseText = await this.callCustom(endpoint, apiKey, model, prompt);
+        } else {
+            throw new Error(`Unknown AI provider: ${provider}`);
+        }
+
+        this.aiState.providerRawResponse = String(responseText || '');
+        return this.parseAIResponse(responseText);
+    };
+
+    QuickAddComponent.prototype.getAIQueueStorageKey = function getAIQueueStorageKey() {
+        const custom = String((this.config.ai && this.config.ai.queueStorageKey) || '').trim();
+        if (custom) {
+            return custom;
+        }
+        const mountId = this.mountEl && this.mountEl.id ? this.mountEl.id : 'quickadd';
+        return `quickadd_ai_queue_${mountId}`;
+    };
+
+    QuickAddComponent.prototype.readAIQueue = function readAIQueue() {
+        const key = this.getAIQueueStorageKey();
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                const raw = window.localStorage.getItem(key);
+                if (!raw) return [];
+                const parsed = JSON.parse(raw);
+                return Array.isArray(parsed) ? parsed : [];
+            }
+        } catch (err) {
+            // Fallback to in-memory queue.
+        }
+        return Array.isArray(this.aiQueueMemory) ? this.aiQueueMemory.slice() : [];
+    };
+
+    QuickAddComponent.prototype.writeAIQueue = function writeAIQueue(items) {
+        const normalized = Array.isArray(items) ? items : [];
+        const key = this.getAIQueueStorageKey();
+        this.aiQueueMemory = normalized.slice();
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.setItem(key, JSON.stringify(normalized));
+            }
+        } catch (err) {
+            // Keep in-memory value only.
+        }
+    };
+
+    QuickAddComponent.prototype.getAIPendingQueueCount = function getAIPendingQueueCount() {
+        return this.readAIQueue().filter((item) => item && item.status === 'pending').length;
+    };
+
+    QuickAddComponent.prototype.enqueueAIInput = function enqueueAIInput(text) {
+        const value = String(text || '').trim();
+        if (!value) {
+            return false;
+        }
+        const queue = this.readAIQueue();
+        const exists = queue.some((item) => item && item.status === 'pending' && String(item.text || '').trim() === value);
+        if (exists) {
+            return false;
+        }
+        queue.push({
+            id: this.makeAIEntryId('queue'),
+            text: value,
+            status: 'pending',
+            createdAt: new Date().toISOString()
+        });
+        this.writeAIQueue(queue);
+        return true;
+    };
+
+    QuickAddComponent.prototype.isLikelyNetworkError = function isLikelyNetworkError(error) {
+        if (!error) {
+            return false;
+        }
+        if (typeof navigator !== 'undefined' && navigator && navigator.onLine === false) {
+            return true;
+        }
+        if (error instanceof TypeError) {
+            return true;
+        }
+        const msg = String(error.message || error);
+        return /network|offline|failed to fetch|econnrefused/i.test(msg);
+    };
+
+    QuickAddComponent.prototype.applyAIParseResult = function applyAIParseResult(result) {
+        const normalized = this.normalizeAIResponse(result);
+        this.aiState.warnings = normalized.warnings;
+        this.aiState.missing = normalized.missing;
+        this.aiState.error = '';
+        this.mergeAIEntries(normalized.entries || []);
+    };
+
+    QuickAddComponent.prototype.annotateAIEntriesWithSource = function annotateAIEntriesWithSource(entries, sourceStart, sourceEnd, segmentIndex) {
+        const list = Array.isArray(entries) ? entries : [];
+        return list.map((entry) => {
+            const next = Object.assign({}, entry, {
+                _sourceStart: Number.isFinite(Number(sourceStart)) ? Number(sourceStart) : 0,
+                _sourceEnd: Number.isFinite(Number(sourceEnd)) ? Number(sourceEnd) : 0,
+                _segmentIndex: Number.isFinite(Number(segmentIndex)) ? Number(segmentIndex) : 0
+            });
+            if (!Array.isArray(next.spans)) {
+                return next;
+            }
+            next.spans = next.spans
+                .map((span) => {
+                    const item = span && typeof span === 'object' ? span : {};
+                    const start = Number(item.start);
+                    const end = Number(item.end);
+                    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+                        return null;
+                    }
+                    return Object.assign({}, item, {
+                        start: start + next._sourceStart,
+                        end: end + next._sourceStart
+                    });
+                })
+                .filter(Boolean);
+            return next;
+        });
+    };
+
+    QuickAddComponent.prototype.resolveAIInputChunks = function resolveAIInputChunks(input) {
+        const text = String(input || '');
+        if (!this.isAISeparatorAwareEnabled()) {
+            return [{ raw: text, start: 0, end: text.length, index: 0 }];
+        }
+
+        const ai = this.config.ai || {};
+        if (typeof ai.splitInput === 'function') {
+            const custom = ai.splitInput(text, this.config, this);
+            if (Array.isArray(custom) && custom.length > 0) {
+                return custom
+                    .map((item, idx) => {
+                        if (item && typeof item === 'object') {
+                            const raw = String(item.raw || '');
+                            const start = Number.isFinite(Number(item.start)) ? Number(item.start) : 0;
+                            const end = Number.isFinite(Number(item.end)) ? Number(item.end) : (start + raw.length);
+                            return { raw, start, end, index: idx };
+                        }
+                        const raw = String(item || '');
+                        return { raw, start: 0, end: raw.length, index: idx };
+                    })
+                    .filter((item) => String(item.raw || '').trim().length > 0);
+            }
+        }
+
+        return splitEntriesWithPositions(text, this.config.entrySeparator, this.config.escapeChar)
+            .filter((chunk) => chunk && String(chunk.raw || '').trim().length > 0)
+            .map((chunk, idx) => ({
+                raw: chunk.raw,
+                start: chunk.start,
+                end: chunk.end,
+                index: idx
+            }));
+    };
+
+    QuickAddComponent.prototype.extractAIFromInput = async function extractAIFromInput(input) {
+        const text = String(input || '');
+        const chunks = this.resolveAIInputChunks(text);
+        if (!chunks.length) {
+            return { entries: [], missing: [], warnings: [] };
+        }
+
+        if (chunks.length === 1) {
+            const single = await this.callAIProvider(chunks[0].raw);
+            const normalizedSingle = this.normalizeAIResponse(single);
+            normalizedSingle.entries = this.annotateAIEntriesWithSource(
+                normalizedSingle.entries,
+                chunks[0].start,
+                chunks[0].end,
+                chunks[0].index
+            );
+            return normalizedSingle;
+        }
+
+        const merged = { entries: [], missing: [], warnings: [] };
+        for (let i = 0; i < chunks.length; i++) {
+            const chunk = chunks[i];
+            const item = await this.callAIProvider(chunk.raw);
+            const normalizedItem = this.normalizeAIResponse(item);
+            merged.entries = merged.entries.concat(
+                this.annotateAIEntriesWithSource(
+                    normalizedItem.entries,
+                    chunk.start,
+                    chunk.end,
+                    chunk.index
+                )
+            );
+            if (normalizedItem.missing && normalizedItem.missing.length) {
+                merged.missing = merged.missing.concat(normalizedItem.missing.map((missing) => `entry ${i + 1}: ${missing}`));
+            }
+            if (normalizedItem.warnings && normalizedItem.warnings.length) {
+                merged.warnings = merged.warnings.concat(normalizedItem.warnings.map((warning) => `entry ${i + 1}: ${warning}`));
+            }
+        }
+        return merged;
+    };
+
+    QuickAddComponent.prototype.parseAI = async function parseAI(options) {
+        if (!this.isAiMode()) {
+            return;
+        }
+        const opts = options || {};
+        const input = String(this.inputText || this.readInputText() || '').trim();
+        const minInputLength = Math.max(0, Number(this.config.ai.minInputLength || 0));
+        if (!input || (!opts.force && input.length < minInputLength)) {
+            return;
+        }
+
+        const requestId = ++this.aiState.requestSeq;
+        this.aiState.activeRequestSeq = requestId;
+        this.aiState.isProcessing = true;
+        this.aiState.error = '';
+        this.parseAndRender({ source: this.inputText, preserveSelection: true });
+
+        try {
+            const result = await this.extractAIFromInput(input);
+            if (requestId !== this.aiState.requestSeq) {
+                return;
+            }
+            this.applyAIParseResult(result);
+            this.aiState.lastParsedInput = input;
+        } catch (err) {
+            if (requestId !== this.aiState.requestSeq) {
+                return;
+            }
+            this.aiState.error = err && err.message ? err.message : String(err || 'AI parse failed');
+            if (this.isLikelyNetworkError(err)) {
+                this.enqueueAIInput(input);
+            }
+        } finally {
+            if (requestId === this.aiState.requestSeq) {
+                this.aiState.isProcessing = false;
+            }
+            this.parseAndRender({ source: this.inputText, preserveSelection: true });
+        }
+    };
+
+    QuickAddComponent.prototype.queueCurrentInputForAI = function queueCurrentInputForAI() {
+        if (!this.isAiMode()) {
+            return false;
+        }
+        const queued = this.enqueueAIInput(this.inputText || this.readInputText());
+        this.parseAndRender({ source: this.inputText, preserveSelection: true });
+        return queued;
+    };
+
+    QuickAddComponent.prototype.processAIQueue = async function processAIQueue() {
+        if (!this.isAiMode()) {
+            return { processed: 0, failed: 0 };
+        }
+        const queue = this.readAIQueue();
+        const pending = queue.filter((item) => item && item.status === 'pending');
+        if (!pending.length) {
+            return { processed: 0, failed: 0 };
+        }
+        if (typeof navigator !== 'undefined' && navigator && navigator.onLine === false) {
+            this.aiState.error = 'Cannot process queue while offline.';
+            this.parseAndRender({ source: this.inputText, preserveSelection: true });
+            return { processed: 0, failed: pending.length };
+        }
+
+        this.aiState.isProcessing = true;
+        this.aiState.error = '';
+        this.parseAndRender({ source: this.inputText, preserveSelection: true });
+
+        let processed = 0;
+        let failed = 0;
+        const nextQueue = queue.slice();
+
+        for (let i = 0; i < nextQueue.length; i++) {
+            const item = nextQueue[i];
+            if (!item || item.status !== 'pending') {
+                continue;
+            }
+            try {
+                const result = await this.extractAIFromInput(item.text || '');
+                this.applyAIParseResult(result);
+                processed += 1;
+                nextQueue[i] = Object.assign({}, item, { status: 'completed', processedAt: new Date().toISOString() });
+            } catch (err) {
+                failed += 1;
+                nextQueue[i] = Object.assign({}, item, {
+                    status: 'pending',
+                    error: err && err.message ? err.message : String(err || 'Queue item failed')
+                });
+                if (this.isLikelyNetworkError(err)) {
+                    break;
+                }
+            }
+        }
+
+        this.writeAIQueue(nextQueue.filter((item) => item && item.status === 'pending'));
+        this.aiState.isProcessing = false;
+        this.parseAndRender({ source: this.inputText, preserveSelection: true });
+        return { processed, failed };
+    };
+
+    QuickAddComponent.prototype.clearAIEntries = function clearAIEntries() {
+        this.aiState.entries = [];
+        this.aiState.editedEntries.clear();
+        this.aiState.deletedEntries.clear();
+        this.aiState.editingEntryId = '';
+        this.aiState.warnings = [];
+        this.aiState.missing = [];
+        this.aiState.error = '';
+    };
+
+    QuickAddComponent.prototype.markAIEntryDeleted = function markAIEntryDeleted(entryId, deleted) {
+        if (!entryId) {
+            return;
+        }
+        if (deleted) {
+            this.aiState.deletedEntries.add(entryId);
+        } else {
+            this.aiState.deletedEntries.delete(entryId);
+        }
+    };
+
+    QuickAddComponent.prototype.buildAIResult = function buildAIResult() {
+        const entries = (this.aiState.entries || []).map((entry, idx) => {
+            const deleted = this.aiState.deletedEntries.has(entry._id);
+            return {
+                index: idx,
+                raw: this.inputText || '',
+                fields: Object.assign({}, entry),
+                explicitValues: {},
+                inferred: [],
+                pending: [],
+                errors: [],
+                tokens: [],
+                blocked: [],
+                isValid: !deleted,
+                aiMeta: {
+                    id: entry._id,
+                    deleted,
+                    edited: this.aiState.editedEntries.has(entry._id)
+                }
+            };
+        });
+        const validCount = entries.filter((entry) => entry.isValid).length;
+        return {
+            mode: 'ai',
+            input: this.inputText || '',
+            entries,
+            entryCount: entries.length,
+            validCount,
+            invalidCount: Math.max(0, entries.length - validCount),
+            warnings: this.aiState.warnings.slice(),
+            missing: this.aiState.missing.slice(),
+            error: this.aiState.error || '',
+            isProcessing: !!this.aiState.isProcessing,
+            queueCount: this.getAIPendingQueueCount()
+        };
+    };
+
+    QuickAddComponent.prototype.getAIEditInputId = function getAIEditInputId(entryId, field) {
+        const safeEntryId = String(entryId || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+        const safeField = String(field || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+        return `qa_ai_edit_${safeEntryId}_${safeField}`;
     };
 
     QuickAddComponent.prototype.renderShell = function renderShell() {
@@ -2450,6 +3271,27 @@
             if (this.timer) {
                 clearTimeout(this.timer);
             }
+            if (this.isAiMode()) {
+                this.inputText = this.readInputText();
+                this.lastResult = this.buildAIResult();
+                if (typeof this.config.onParse === 'function') {
+                    this.config.onParse(this.lastResult);
+                }
+                const autoParse = this.config.ai.autoParse !== false;
+                const threshold = Math.max(0, Number(this.config.ai.minInputLength || 0));
+                if (!autoParse) {
+                    return;
+                }
+                const latest = String(this.inputText || this.readInputText() || '').trim();
+                if (!latest || latest.length < threshold) {
+                    return;
+                }
+                const waitMs = Math.max(50, Number(this.config.ai.debounceMs || 1000));
+                this.timer = setTimeout(() => {
+                    this.parseAI();
+                }, waitMs);
+                return;
+            }
             this.timer = setTimeout(() => {
                 this.parseAndRender();
             }, this.config.debounceMs);
@@ -2524,6 +3366,9 @@
         };
 
         this.onInputClick = (event) => {
+            if (this.isAiMode()) {
+                return;
+            }
             const blocked = event.target.closest('[data-qa-blocked="1"]');
             if (blocked) {
                 event.preventDefault();
@@ -2559,6 +3404,76 @@
         };
 
         this.onPreviewClick = (event) => {
+            if (this.isAiMode()) {
+                const actionEl = event.target.closest('[data-ai-action]');
+                if (!actionEl) {
+                    return;
+                }
+                event.preventDefault();
+                event.stopPropagation();
+                const action = actionEl.getAttribute('data-ai-action') || '';
+                const entryId = actionEl.getAttribute('data-ai-entry-id') || '';
+                if (action === 'parse-now') {
+                    this.parseAI({ force: true });
+                    return;
+                }
+                if (action === 'queue-input') {
+                    this.queueCurrentInputForAI();
+                    return;
+                }
+                if (action === 'process-queue') {
+                    this.processAIQueue();
+                    return;
+                }
+                if (action === 'clear-entries') {
+                    this.clearAIEntries();
+                    this.parseAndRender({ source: this.inputText, preserveSelection: true });
+                    return;
+                }
+                if (action === 'edit-entry') {
+                    this.aiState.editingEntryId = entryId;
+                    this.parseAndRender({ source: this.inputText, preserveSelection: true });
+                    return;
+                }
+                if (action === 'cancel-edit') {
+                    this.aiState.editingEntryId = '';
+                    this.parseAndRender({ source: this.inputText, preserveSelection: true });
+                    return;
+                }
+                if (action === 'save-edit') {
+                    const targetEntry = this.aiState.entries.find((item) => item._id === entryId);
+                    if (targetEntry) {
+                        const readField = (field) => {
+                            const inputId = this.getAIEditInputId(entryId, field);
+                            const node = document.getElementById(inputId);
+                            return node ? String(node.value || '').trim() : '';
+                        };
+                        targetEntry.title = readField('title');
+                        targetEntry.petName = readField('petName');
+                        targetEntry.eventType = readField('eventType');
+                        targetEntry.date = readField('date');
+                        targetEntry.time = readField('time');
+                        targetEntry.status = this.normalizeAIStatus(readField('status'));
+                        targetEntry.notes = readField('notes');
+                        targetEntry.attachments = this.normalizeAIAttachmentRefs(readField('attachments'));
+                        this.aiState.editedEntries.add(entryId);
+                    }
+                    this.aiState.editingEntryId = '';
+                    this.parseAndRender({ source: this.inputText, preserveSelection: true });
+                    return;
+                }
+                if (action === 'delete-entry') {
+                    this.markAIEntryDeleted(entryId, true);
+                    this.aiState.editingEntryId = '';
+                    this.parseAndRender({ source: this.inputText, preserveSelection: true });
+                    return;
+                }
+                if (action === 'restore-entry') {
+                    this.markAIEntryDeleted(entryId, false);
+                    this.parseAndRender({ source: this.inputText, preserveSelection: true });
+                }
+                return;
+            }
             const removeBtn = event.target.closest('[data-entry-attachment-remove="1"]');
             if (removeBtn) {
                 event.preventDefault();
@@ -3289,6 +4204,231 @@
         }
     };
 
+    QuickAddComponent.prototype.findInlineRangeCaseInsensitive = function findInlineRangeCaseInsensitive(raw, needle, minStart, maxEnd, usedRanges) {
+        const source = String(raw || '');
+        const target = String(needle || '').trim();
+        if (!target || target.length < 2) {
+            return null;
+        }
+        const lowerSource = source.toLowerCase();
+        const lowerTarget = target.toLowerCase();
+        const startAt = Math.max(0, Number(minStart || 0));
+        const endAt = Number.isFinite(Number(maxEnd)) ? Math.min(source.length, Number(maxEnd)) : source.length;
+        if (endAt <= startAt) {
+            return null;
+        }
+        let idx = lowerSource.indexOf(lowerTarget, startAt);
+        while (idx >= 0) {
+            const end = idx + target.length;
+            if (idx >= endAt || end > endAt) {
+                return null;
+            }
+            const overlaps = (usedRanges || []).some((range) => idx < range.end && end > range.start);
+            if (!overlaps) {
+                return { start: idx, end };
+            }
+            idx = lowerSource.indexOf(lowerTarget, idx + 1);
+        }
+        return null;
+    };
+
+    QuickAddComponent.prototype.buildAIInlineMarks = function buildAIInlineMarks() {
+        const marks = [];
+        const raw = String(this.inputText || '');
+        if (!raw) {
+            return marks;
+        }
+
+        const ai = this.config.ai || {};
+        if (typeof ai.inlinePillHarness === 'function') {
+            const custom = ai.inlinePillHarness({
+                input: raw,
+                entries: (this.aiState.entries || []).slice(),
+                config: this.config,
+                component: this
+            });
+            if (Array.isArray(custom)) {
+                return custom
+                    .map((item) => {
+                        const mark = item && typeof item === 'object' ? item : {};
+                        const start = Number(mark.start);
+                        const end = Number(mark.end);
+                        if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+                            return null;
+                        }
+                        if (start < 0 || end > raw.length) {
+                            return null;
+                        }
+                        return {
+                            start,
+                            end,
+                            label: String(mark.label || raw.slice(start, end)),
+                            inferred: mark.inferred !== false
+                        };
+                    })
+                    .filter(Boolean)
+                    .sort((a, b) => a.start - b.start || a.end - b.end);
+            }
+        }
+
+        const usedRanges = [];
+        const entries = Array.isArray(this.aiState.entries) ? this.aiState.entries : [];
+
+        entries.forEach((entry, idx) => {
+            const sourceStart = Number.isFinite(Number(entry._sourceStart)) ? Number(entry._sourceStart) : 0;
+            const sourceEnd = Number.isFinite(Number(entry._sourceEnd)) ? Number(entry._sourceEnd) : raw.length;
+
+            if (Array.isArray(entry.spans) && entry.spans.length) {
+                entry.spans.forEach((span) => {
+                    const start = Number(span && span.start);
+                    const end = Number(span && span.end);
+                    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+                        return;
+                    }
+                    if (start < 0 || end > raw.length) {
+                        return;
+                    }
+                    const overlaps = usedRanges.some((range) => start < range.end && end > range.start);
+                    if (overlaps) {
+                        return;
+                    }
+                    usedRanges.push({ start, end });
+                    marks.push({
+                        start,
+                        end,
+                        label: `${span.field || 'field'}: ${span.value || raw.slice(start, end)}`,
+                        inferred: true
+                    });
+                });
+                return;
+            }
+
+            const candidates = [
+                { key: 'petName', value: entry.petName },
+                { key: 'eventType', value: entry.eventType },
+                { key: 'severity', value: entry.severityLabel },
+                { key: 'status', value: entry.status },
+                { key: 'title', value: entry.title }
+            ];
+
+            candidates.forEach((candidate) => {
+                const range = this.findInlineRangeCaseInsensitive(
+                    raw,
+                    candidate.value,
+                    sourceStart,
+                    sourceEnd,
+                    usedRanges
+                );
+                if (!range) {
+                    return;
+                }
+                usedRanges.push(range);
+                marks.push({
+                    start: range.start,
+                    end: range.end,
+                    label: `${candidate.key}: ${candidate.value}`,
+                    inferred: true
+                });
+            });
+
+            if (this.isAISeparatorAwareEnabled()) {
+                const fallbackRange = this.findInlineRangeCaseInsensitive(
+                    raw,
+                    entry.petName || entry.title || `entry ${idx + 1}`,
+                    sourceStart,
+                    sourceEnd,
+                    usedRanges
+                );
+                if (!fallbackRange && sourceEnd > sourceStart) {
+                    const segmentStart = Math.max(0, sourceStart);
+                    const segmentEnd = Math.min(raw.length, sourceEnd);
+                    const overlaps = usedRanges.some((range) => segmentStart < range.end && segmentEnd > range.start);
+                    if (!overlaps && segmentEnd - segmentStart <= 48) {
+                        usedRanges.push({ start: segmentStart, end: segmentEnd });
+                        marks.push({
+                            start: segmentStart,
+                            end: segmentEnd,
+                            label: `entry ${idx + 1}`,
+                            inferred: true
+                        });
+                    }
+                }
+            }
+        });
+
+        marks.sort((a, b) => a.start - b.start || a.end - b.end);
+        return marks;
+    };
+
+    QuickAddComponent.prototype.renderAIInlineLayer = function renderAIInlineLayer(options) {
+        const c = this.config.classNames;
+        const opts = options || {};
+        const raw = String(this.inputText || '');
+
+        const preserveCaret = !opts.skipCaretPreserve && document.activeElement === this.inputEl;
+        const caretOffset = typeof opts.caretOffset === 'number'
+            ? opts.caretOffset
+            : (preserveCaret ? this.getCaretOffset() : null);
+
+        if (!raw) {
+            this.isRenderingInput = true;
+            this.inputEl.innerHTML = '';
+            this.isRenderingInput = false;
+            if (typeof caretOffset === 'number') {
+                this.setCaretOffset(0, !!opts.focusInput);
+            }
+            return;
+        }
+
+        const isSnapshotMatch = String(this.aiState.lastParsedInput || '') === raw;
+        if (!this.isAIInlinePillsEnabled() || !isSnapshotMatch) {
+            this.isRenderingInput = true;
+            this.inputEl.innerHTML = `<span class="${c.inlineText}">${escHtml(raw)}</span>`;
+            this.isRenderingInput = false;
+            if (typeof caretOffset === 'number') {
+                this.setCaretOffset(Math.min(caretOffset, raw.length), !!opts.focusInput);
+            }
+            return;
+        }
+
+        const marks = this.buildAIInlineMarks();
+        if (!marks.length) {
+            this.isRenderingInput = true;
+            this.inputEl.innerHTML = `<span class="${c.inlineText}">${escHtml(raw)}</span>`;
+            this.isRenderingInput = false;
+            if (typeof caretOffset === 'number') {
+                this.setCaretOffset(Math.min(caretOffset, raw.length), !!opts.focusInput);
+            }
+            return;
+        }
+
+        let cursor = 0;
+        const parts = [];
+        marks.forEach((mark) => {
+            if (mark.start < cursor) {
+                return;
+            }
+            if (mark.start > cursor) {
+                parts.push(escHtml(raw.slice(cursor, mark.start)));
+            }
+            const chunk = raw.slice(mark.start, mark.end);
+            const classes = [c.inlineMark, c.inlineMarkInferred].filter(Boolean).join(' ');
+            const title = escHtml(mark.label || 'AI highlight');
+            parts.push(`<span class="${classes}" title="${title}"><span class="${c.inlineMarkLabel}">${escHtml(chunk)}</span></span>`);
+            cursor = mark.end;
+        });
+        if (cursor < raw.length) {
+            parts.push(escHtml(raw.slice(cursor)));
+        }
+
+        this.isRenderingInput = true;
+        this.inputEl.innerHTML = `<span class="${c.inlineText}">${parts.join('')}<span class="${c.inputTail}" data-qa-tail="1" data-qa-ignore="1" contenteditable="false" aria-hidden="true"></span></span>`;
+        this.isRenderingInput = false;
+        if (typeof caretOffset === 'number') {
+            this.setCaretOffset(Math.min(caretOffset, raw.length), !!opts.focusInput);
+        }
+    };
+
     QuickAddComponent.prototype.parseAndRender = function parseAndRender(options) {
         const opts = options || {};
         if (typeof opts.source === 'string') {
@@ -3299,17 +4439,26 @@
         this.closeBlockedInfo();
 
         const input = this.inputText || '';
-        this.lastResult = parseInput(input, this.config);
-        this.lastResult = this.applyDismissedSelections(this.lastResult);
-        this.lastResult = this.syncEntryAttachmentMeta(this.lastResult);
-        this.rebuildTokenMap(this.lastResult);
-        this.renderInlineLayer(this.lastResult, opts);
-        this.renderResult(this.lastResult);
+        if (this.isAiMode()) {
+            this.lastResult = this.buildAIResult();
+            this.rebuildTokenMap({ entries: [] });
+            this.renderAIInlineLayer(opts);
+            this.renderResult(this.lastResult);
+            this.closeDropdown();
+            this.closeDatePicker();
+        } else {
+            this.lastResult = parseInput(input, this.config);
+            this.lastResult = this.applyDismissedSelections(this.lastResult);
+            this.lastResult = this.syncEntryAttachmentMeta(this.lastResult);
+            this.rebuildTokenMap(this.lastResult);
+            this.renderInlineLayer(this.lastResult, opts);
+            this.renderResult(this.lastResult);
 
-        const caretOffset = typeof opts.caretOffset === 'number'
-            ? opts.caretOffset
-            : this.getCaretOffset();
-        this.syncTypingDropdown(caretOffset);
+            const caretOffset = typeof opts.caretOffset === 'number'
+                ? opts.caretOffset
+                : this.getCaretOffset();
+            this.syncTypingDropdown(caretOffset);
+        }
 
         if (typeof this.config.onParse === 'function') {
             this.config.onParse(this.lastResult);
@@ -3860,7 +5009,177 @@
         return `<div class="${c.pillRow}">${pills.join('')}</div>`;
     };
 
+    QuickAddComponent.prototype.renderAIEntryEditor = function renderAIEntryEditor(entry) {
+        const c = this.config.classNames;
+        const titleId = escHtml(this.getAIEditInputId(entry._id, 'title'));
+        const petId = escHtml(this.getAIEditInputId(entry._id, 'petName'));
+        const eventTypeId = escHtml(this.getAIEditInputId(entry._id, 'eventType'));
+        const dateId = escHtml(this.getAIEditInputId(entry._id, 'date'));
+        const timeId = escHtml(this.getAIEditInputId(entry._id, 'time'));
+        const statusId = escHtml(this.getAIEditInputId(entry._id, 'status'));
+        const notesId = escHtml(this.getAIEditInputId(entry._id, 'notes'));
+        const attachmentsId = escHtml(this.getAIEditInputId(entry._id, 'attachments'));
+        return `
+            <div class="${c.aiEditor}">
+                <label class="${c.aiEditorLabel}">Title
+                    <input class="${c.aiEditorInput}" id="${titleId}" type="text" data-ai-edit-field="title" value="${escHtml(entry.title || '')}" />
+                </label>
+                <label class="${c.aiEditorLabel}">Pet
+                    <input class="${c.aiEditorInput}" id="${petId}" type="text" data-ai-edit-field="petName" value="${escHtml(entry.petName || '')}" />
+                </label>
+                <label class="${c.aiEditorLabel}">Event Type
+                    <input class="${c.aiEditorInput}" id="${eventTypeId}" type="text" data-ai-edit-field="eventType" value="${escHtml(entry.eventType || '')}" />
+                </label>
+                <label class="${c.aiEditorLabel}">Date
+                    <input class="${c.aiEditorInput}" id="${dateId}" type="text" data-ai-edit-field="date" value="${escHtml(entry.date || '')}" />
+                </label>
+                <label class="${c.aiEditorLabel}">Time
+                    <input class="${c.aiEditorInput}" id="${timeId}" type="text" data-ai-edit-field="time" value="${escHtml(entry.time || '')}" />
+                </label>
+                <label class="${c.aiEditorLabel}">Status
+                    <input class="${c.aiEditorInput}" id="${statusId}" type="text" data-ai-edit-field="status" value="${escHtml(entry.status || '')}" />
+                </label>
+                <label class="${c.aiEditorLabel}">Notes
+                    <textarea class="${c.aiEditorInput}" id="${notesId}" data-ai-edit-field="notes" rows="2">${escHtml(entry.notes || '')}</textarea>
+                </label>
+                <label class="${c.aiEditorLabel}">Attachments (comma separated refs)
+                    <input class="${c.aiEditorInput}" id="${attachmentsId}" type="text" data-ai-edit-field="attachments" value="${escHtml((entry.attachments || []).join(', '))}" />
+                </label>
+                <div class="${c.aiActions}">
+                    <button type="button" class="${c.aiActionBtn} ${c.aiActionBtnGhost}" data-ai-action="cancel-edit" data-ai-entry-id="${escHtml(entry._id)}">Cancel</button>
+                    <button type="button" class="${c.aiActionBtn} ${c.aiActionBtnPrimary}" data-ai-action="save-edit" data-ai-entry-id="${escHtml(entry._id)}">Save</button>
+                </div>
+            </div>
+        `;
+    };
+
+    QuickAddComponent.prototype.renderAIEntryCard = function renderAIEntryCard(entry) {
+        const c = this.config.classNames;
+        const deleted = this.aiState.deletedEntries.has(entry._id);
+        const edited = this.aiState.editedEntries.has(entry._id);
+        const editing = this.aiState.editingEntryId === entry._id;
+        const cardClasses = [
+            c.entry,
+            deleted ? c.pillBlocked : ''
+        ].filter(Boolean).join(' ');
+        const confidence = Number.isFinite(Number(entry.confidence))
+            ? `${Math.round(Math.max(0, Math.min(1, Number(entry.confidence))) * 100)}%`
+            : '-';
+        const headerBadges = [
+            edited ? 'edited' : '',
+            deleted ? 'removed' : ''
+        ].filter(Boolean);
+        const badges = headerBadges.length
+            ? headerBadges.map((item) => `<span class="${c.badge}">${escHtml(item)}</span>`).join('')
+            : `<span class="${c.badge}">parsed</span>`;
+        const actionRow = deleted
+            ? `<button type="button" class="${c.aiActionBtn} ${c.aiActionBtnGhost}" data-ai-action="restore-entry" data-ai-entry-id="${escHtml(entry._id)}">Restore</button>`
+            : `
+                <button type="button" class="${c.aiActionBtn} ${c.aiActionBtnGhost}" data-ai-action="edit-entry" data-ai-entry-id="${escHtml(entry._id)}">Edit</button>
+                <button type="button" class="${c.aiActionBtn} ${c.aiActionBtnDanger}" data-ai-action="delete-entry" data-ai-entry-id="${escHtml(entry._id)}">Remove</button>
+            `;
+
+        if (editing) {
+            return `
+                <article class="${cardClasses}" data-ai-entry-id="${escHtml(entry._id)}">
+                    <div class="${c.entryHeader}">
+                        <div class="${c.entryTitle}">AI Entry</div>
+                        <div class="${c.badges}">${badges}</div>
+                    </div>
+                    ${this.renderAIEntryEditor(entry)}
+                </article>
+            `;
+        }
+
+        return `
+            <article class="${cardClasses}" data-ai-entry-id="${escHtml(entry._id)}">
+                <div class="${c.entryHeader}">
+                    <div class="${c.entryTitle}">${escHtml(entry.title || entry.eventType || 'Event')}</div>
+                    <div class="${c.badges}">${badges}</div>
+                </div>
+                <div class="${c.aiMetaRow}">
+                    <span class="${c.aiMetaItem}">pet: ${escHtml(entry.petName || 'n/a')}</span>
+                    <span class="${c.aiMetaItem}">event: ${escHtml(entry.eventType || 'n/a')}</span>
+                    <span class="${c.aiMetaItem}">date: ${escHtml(entry.date || 'n/a')}</span>
+                    <span class="${c.aiMetaItem}">time: ${escHtml(entry.time || 'n/a')}</span>
+                    <span class="${c.aiMetaItem}">status: ${escHtml(entry.status || 'Completed')}</span>
+                    <span class="${c.aiMetaItem}">confidence: ${escHtml(confidence)}</span>
+                </div>
+                ${entry.notes ? `<div class="${c.issues}"><div class="${c.issue}">${escHtml(entry.notes)}</div></div>` : ''}
+                ${Array.isArray(entry.attachments) && entry.attachments.length
+                ? `<div class="${c.issues}"><div class="${c.issue}">attachments: ${escHtml(entry.attachments.join(', '))}</div></div>`
+                : ''}
+                <div class="${c.aiActions}">
+                    ${actionRow}
+                </div>
+            </article>
+        `;
+    };
+
+    QuickAddComponent.prototype.renderAIResult = function renderAIResult(result) {
+        const c = this.config.classNames;
+        const queueCount = Number(result.queueCount || 0);
+        const activeCount = (this.aiState.entries || []).filter((entry) => !this.aiState.deletedEntries.has(entry._id)).length;
+        const statusParts = [];
+        if (result.isProcessing) {
+            statusParts.push('AI processing...');
+        } else {
+            statusParts.push(`${activeCount} active entries`);
+        }
+        statusParts.push(`${queueCount} queued`);
+        if (result.error) {
+            statusParts.push(`error: ${result.error}`);
+        }
+        this.statusEl.textContent = statusParts.join(' | ');
+
+        const actionsHtml = `
+            <div class="${c.aiActions}">
+                <button type="button" class="${c.aiActionBtn} ${c.aiActionBtnPrimary}" data-ai-action="parse-now">Parse Now</button>
+                <button type="button" class="${c.aiActionBtn}" data-ai-action="queue-input">Queue Input</button>
+                <button type="button" class="${c.aiActionBtn}" data-ai-action="process-queue">Process Queue</button>
+                <button type="button" class="${c.aiActionBtn} ${c.aiActionBtnGhost}" data-ai-action="clear-entries">Clear Entries</button>
+            </div>
+        `;
+        const warningRows = []
+            .concat((result.warnings || []).map((item) => `<div class="${c.issue}">Warning: ${escHtml(item)}</div>`))
+            .concat((result.missing || []).map((item) => `<div class="${c.issue}">Unknown: ${escHtml(item)}</div>`));
+        const warningsHtml = warningRows.length
+            ? `<div class="${c.issues}">${warningRows.join('')}</div>`
+            : '';
+
+        if (this.aiState.entries.length === 0) {
+            this.previewEl.innerHTML = `
+                ${actionsHtml}
+                ${warningsHtml}
+                <article class="${c.entry}">No AI entries yet. Type text and pause to trigger extraction.</article>
+            `;
+        } else {
+            this.previewEl.innerHTML = `
+                ${actionsHtml}
+                ${warningsHtml}
+                ${this.aiState.entries.map((entry) => this.renderAIEntryCard(entry)).join('')}
+            `;
+        }
+
+        if (this.outputEl) {
+            this.outputEl.textContent = JSON.stringify({
+                mode: 'ai',
+                input: this.inputText,
+                entries: this.aiState.entries,
+                editedEntryIds: Array.from(this.aiState.editedEntries),
+                deletedEntryIds: Array.from(this.aiState.deletedEntries),
+                warnings: result.warnings || [],
+                missing: result.missing || [],
+                queueCount
+            }, null, 2);
+        }
+    };
+
     QuickAddComponent.prototype.renderResult = function renderResult(result) {
+        if (this.isAiMode()) {
+            this.renderAIResult(result || this.buildAIResult());
+            return;
+        }
         const c = this.config.classNames;
         const showEntryCards = this.config.showEntryCards !== false;
         const showEntryHeader = this.config.showEntryHeader !== false;
@@ -4426,11 +5745,20 @@
     };
 
     QuickAddComponent.prototype.updateConfig = function updateConfig(nextConfig) {
+        const wasAiMode = this.isAiMode();
         this.config = mergeConfig(Object.assign({}, this.config, nextConfig || {}));
         this.normalizedSchema = normalizeSchema(this.config.schema, this.config.fallbackField);
+        const isAiModeNow = this.isAiMode();
+
+        if (!isAiModeNow) {
+            this.clearAIEntries();
+        } else if (!wasAiMode && isAiModeNow) {
+            this.clearAIEntries();
+        }
 
         this.closeDropdown();
         this.closeBlockedInfo();
+        this.closeDatePicker();
         this.unbindEvents();
         this.renderShell();
         this.applyTokens();
@@ -4442,8 +5770,11 @@
         if (this.timer) {
             clearTimeout(this.timer);
         }
+        this.timer = null;
         this.unbindEvents();
         this.closeBlockedInfo();
+        this.closeDatePicker();
+        this.closeDropdown();
 
         this.mountEl.innerHTML = '';
     };
