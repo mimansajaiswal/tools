@@ -495,7 +495,7 @@
                             <div id="studyFiltersBanner"
                                 class="study-filters-banner--inactive mb-3 md:mb-4 px-3 py-2 rounded-lg bg-accent-soft text-accent border border-[color:color-mix(in_srgb,var(--accent)_40%,var(--card-border))] text-xs flex items-center justify-between gap-2"
                                 aria-hidden="true">
-                                <span>Study filters are active.</span>
+                                <span id="studyFiltersBannerText">No filters are applied.</span>
                                 <button id="studyFiltersBannerBtn" type="button"
                                     class="text-[11px] font-medium underline hover:text-[color:var(--accent-2)]">Review
                                     filters</button>
@@ -530,6 +530,7 @@
                                     <select id="revisionMode"
                                         class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2 text-sm">
                                         <option value="manual">Reveal</option>
+                                        <option value="typein">Type In</option>
                                         <option value="ai">AI</option>
                                     </select>
                                 </div>
@@ -718,6 +719,19 @@
                                         </div>
                                         <div id="aiFeedback"
                                             class="md-content hidden text-sm text-sub-strong bg-[var(--surface)] border border-weak rounded-lg p-2">
+                                        </div>
+                                    </div>
+                                    <div id="ghostinkControls" class="hidden space-y-2">
+                                        <textarea id="ghostinkAnswer" rows="3" placeholder="Type your answer..."
+                                            class="w-full rounded-lg border border-[color:var(--card-border)] bg-[color:var(--surface)] px-3 py-2 text-sm"></textarea>
+                                        <button id="ghostinkCheck"
+                                            class="relative px-3 py-2 rounded-lg bg-[color:var(--accent)] text-[color:var(--badge-text)] text-sm hover:bg-[color:var(--accent-hover)] transition-all w-full">
+                                            Check match
+                                            <kbd
+                                                class="hidden md:inline-block hotkey-chip absolute right-3 top-1/2 -translate-y-1/2 text-[10px] px-1.5 py-0.5 rounded font-medium">Space</kbd>
+                                        </button>
+                                        <div id="ghostinkFeedback"
+                                            class="hidden text-[11px] text-[color:var(--text-sub)]">
                                         </div>
                                     </div>
                                 </div>
@@ -1999,6 +2013,7 @@ export default {
                     <p class="shortcuts-section-title">Study</p>
                     <div class="shortcuts-list">
                         <div class="shortcut-row"><span>Reveal</span><kbd class="shortcut-key">Space</kbd></div>
+                        <div class="shortcut-row"><span>Type In check</span><kbd class="shortcut-key">Space</kbd></div>
                         <div class="shortcut-row"><span>Skip</span><kbd class="shortcut-key">S</kbd></div>
                         <div class="shortcut-row"><span>Again / Hard / Good / Easy</span><kbd
                                 class="shortcut-key">1–4</kbd></div>
