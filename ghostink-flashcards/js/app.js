@@ -166,6 +166,198 @@ const normalizeContentForComparison = (content) => {
         .trim();
 };
 
+const GHOSTINK_CLOZE_REGEX = /\{\{c(\d+)::((?:[^{}]|\{(?!\{)|\}(?!\}))*?)(?:::((?:[^{}]|\{(?!\{)|\}(?!\}))*?))?\}\}/g;
+const GHOSTINK_HAS_CLOZE_REGEX = /\{\{c\d+::.+?\}\}/i;
+const ghostinkPunctuationRegex = (() => {
+    try {
+        return new RegExp('[\\p{P}\\p{S}]', 'gu');
+    } catch (_) {
+        return /[^\w\s]|_/g;
+    }
+})();
+const ghostinkGraphemeSegmenter = (typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function')
+    ? new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+    : null;
+
+const markdownToPlainText = (value) => {
+    const raw = String(value || '');
+    if (!raw.trim()) return '';
+    if (typeof document === 'undefined' || !document.createElement) {
+        return raw.replace(/\s+/g, ' ').trim();
+    }
+    const node = document.createElement('div');
+    node.innerHTML = safeMarkdownParse(raw);
+    return (node.textContent || '').replace(/\s+/g, ' ').trim();
+};
+
+const normalizeGhostInkText = (value) => {
+    const raw = String(value || '');
+    if (!raw) return '';
+    const folded = raw.normalize('NFKC').toLocaleLowerCase();
+    return folded
+        .replace(ghostinkPunctuationRegex, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+};
+
+const splitGraphemes = (value) => {
+    const text = String(value || '');
+    if (!text) return [];
+    if (ghostinkGraphemeSegmenter) {
+        return Array.from(ghostinkGraphemeSegmenter.segment(text), part => part.segment);
+    }
+    return Array.from(text);
+};
+
+const levenshteinDistance = (a, b) => {
+    const aa = splitGraphemes(a);
+    const bb = splitGraphemes(b);
+    if (aa.length === 0) return bb.length;
+    if (bb.length === 0) return aa.length;
+
+    const prev = new Array(bb.length + 1);
+    const curr = new Array(bb.length + 1);
+    for (let j = 0; j <= bb.length; j++) prev[j] = j;
+
+    for (let i = 1; i <= aa.length; i++) {
+        curr[0] = i;
+        for (let j = 1; j <= bb.length; j++) {
+            const cost = aa[i - 1] === bb[j - 1] ? 0 : 1;
+            curr[j] = Math.min(
+                prev[j] + 1,
+                curr[j - 1] + 1,
+                prev[j - 1] + cost
+            );
+        }
+        for (let j = 0; j <= bb.length; j++) prev[j] = curr[j];
+    }
+    return prev[bb.length];
+};
+
+const computeGhostInkSimilarity = (typed, expected) => {
+    const left = normalizeGhostInkText(typed);
+    const right = normalizeGhostInkText(expected);
+    if (!left && !right) return 1;
+    if (!left || !right) return 0;
+    const dist = levenshteinDistance(left, right);
+    const maxLen = Math.max(splitGraphemes(left).length, splitGraphemes(right).length);
+    if (maxLen === 0) return 1;
+    return Math.max(0, 1 - (dist / maxLen));
+};
+
+const splitGhostInkInputLines = (rawInput, expectedCount) => {
+    const lines = String(rawInput || '')
+        .replace(/\r/g, '')
+        .split('\n')
+        .map(line => line.trim());
+    while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
+    if ((expectedCount || 1) <= 1) return [lines.join(' ').trim()];
+    return lines;
+};
+
+const getClozeSourceForGhostInk = (card) => {
+    const name = String(card?.name || '');
+    const back = String(card?.back || '');
+    const hasInName = GHOSTINK_HAS_CLOZE_REGEX.test(name);
+    const hasInBack = GHOSTINK_HAS_CLOZE_REGEX.test(back);
+    if (!hasInName && hasInBack) return back;
+    return name;
+};
+
+const extractGhostInkClozeAnswers = (source, subItemIndex = null) => {
+    const text = String(source || '');
+    if (!text) return [];
+    const eqPlaceholders = [];
+    const protectedText = text.replace(/<span class="notion-equation">([\s\S]*?)<\/span>/g, (match) => {
+        const idx = eqPlaceholders.length;
+        eqPlaceholders.push(match);
+        return `\x00EQ${idx}\x00`;
+    });
+    const restoreEq = (value) => value.replace(/\x00EQ(\d+)\x00/g, (_, idx) => eqPlaceholders[parseInt(idx, 10)] || '');
+
+    const out = [];
+    const re = new RegExp(GHOSTINK_CLOZE_REGEX.source, 'g');
+    let match;
+    while ((match = re.exec(protectedText)) !== null) {
+        const clozeNum = parseInt(match[1], 10);
+        if (subItemIndex !== null && clozeNum !== subItemIndex) continue;
+        const answer = restoreEq(match[2] || '');
+        const plain = markdownToPlainText(answer);
+        if (plain) out.push(plain);
+    }
+    return out;
+};
+
+const getGhostInkExpectedAnswers = (card, isReversed) => {
+    if (!card) return [];
+    const typeKey = (card.type || '').toLowerCase();
+    if (typeKey === 'cloze') {
+        const source = getClozeSourceForGhostInk(card);
+        const subItemIndex = isSubItem(card) ? parseInt(card.clozeIndexes, 10) : null;
+        return extractGhostInkClozeAnswers(source, Number.isFinite(subItemIndex) ? subItemIndex : null);
+    }
+    const answer = isReversed ? card.name : card.back;
+    const plain = markdownToPlainText(answer);
+    return plain ? [plain] : [];
+};
+
+const ghostinkToneClass = (percent) => {
+    if (percent >= 90) return 'ghostink-score-fill--strong';
+    if (percent >= 70) return 'ghostink-score-fill--close';
+    return 'ghostink-score-fill--weak';
+};
+
+const buildGhostInkFeedbackHtml = (result) => {
+    const overallTone = ghostinkToneClass(result.percent);
+    return `
+<div class="space-y-1">
+ <div class="flex items-center justify-between text-[11px] text-[color:var(--text-sub)]">
+ <span>Normalized and lowercased match</span>
+ <span class="font-medium tabular-nums">${result.percent}%</span>
+ </div>
+ <div class="ghostink-score-track">
+ <span class="ghostink-score-fill ${overallTone}" style="width:${result.percent}%"></span>
+ </div>
+</div>
+`;
+};
+
+const evaluateGhostInkAnswer = (rawInput, expectedAnswers) => {
+    const expected = (Array.isArray(expectedAnswers) ? expectedAnswers : [])
+        .map(v => markdownToPlainText(v))
+        .filter(v => !!v);
+    if (expected.length === 0) {
+        return {
+            percent: 0,
+            lines: [],
+            summary: 'No expected answer found for this card.'
+        };
+    }
+
+    const typedLines = splitGhostInkInputLines(rawInput, expected.length);
+    const compareCount = Math.max(expected.length, typedLines.length);
+    const lines = [];
+    let total = 0;
+    for (let i = 0; i < compareCount; i++) {
+        const typed = typedLines[i] || '';
+        const expectedLine = expected[i] || '';
+        const similarity = computeGhostInkSimilarity(typed, expectedLine);
+        const percent = Math.round(similarity * 100);
+        total += similarity;
+        lines.push({ percent, typed, expected: expectedLine });
+    }
+    const overall = compareCount > 0 ? (total / compareCount) : 0;
+    const overallPercent = Math.round(overall * 100);
+    const summary = expected.length > 1
+        ? `Expected ${expected.length} blanks. Enter one answer per line.`
+        : 'Compared with Unicode normalization, case-insensitive and punctuation-insensitive matching.';
+    return {
+        percent: overallPercent,
+        lines,
+        summary
+    };
+};
+
 const createIconsInScope = (container) => {
     if (typeof lucide === 'undefined') return;
     if (container && container.querySelectorAll) {
@@ -227,6 +419,443 @@ const focusTrap = {
         focusTrap.active = null;
         document.removeEventListener('keydown', focusTrap.handleKeydown);
     }
+};
+
+class GhostInkSelect extends HTMLElement {
+    static instances = new Set();
+    static globalsBound = false;
+
+    constructor() {
+        super();
+        this.attachShadow({ mode: 'open' });
+        this._ready = false;
+        this._activeIndex = -1;
+        this._value = '';
+        this._observer = null;
+        this._trigger = null;
+        this._menu = null;
+        this._optionsWrap = null;
+        this._label = null;
+    }
+
+    connectedCallback() {
+        if (!this._ready) this._mount();
+        GhostInkSelect.instances.add(this);
+        this._syncFromLightOptions();
+        this._bindGlobals();
+    }
+
+    disconnectedCallback() {
+        GhostInkSelect.instances.delete(this);
+        if (this._observer) this._observer.disconnect();
+    }
+
+    static closeAll(except = null) {
+        for (const inst of GhostInkSelect.instances) {
+            if (except && inst === except) continue;
+            inst.close();
+        }
+    }
+
+    _bindGlobals() {
+        if (GhostInkSelect.globalsBound) return;
+        document.addEventListener('click', (e) => {
+            const path = e.composedPath ? e.composedPath() : [];
+            for (const inst of GhostInkSelect.instances) {
+                if (path.includes(inst)) return;
+            }
+            GhostInkSelect.closeAll();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') GhostInkSelect.closeAll();
+        });
+        window.addEventListener('resize', () => GhostInkSelect.closeAll());
+        GhostInkSelect.globalsBound = true;
+    }
+
+    _mount() {
+        this._ready = true;
+        this.shadowRoot.innerHTML = `
+<style>
+:host {
+  display: block;
+  width: 100%;
+  position: relative;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+}
+:host([hidden]) { display: none; }
+button { font: inherit; }
+.trigger {
+  width: 100%;
+  min-height: 2rem;
+  border-radius: 5px;
+  border: 1px solid var(--card-border);
+  background: var(--surface);
+  color: var(--text-main);
+  padding: 0.42rem 0.65rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  text-align: left;
+  font-size: 0.8125rem;
+  line-height: 1.15rem;
+  box-shadow: none;
+  transition: border-color .14s ease, background-color .14s ease, box-shadow .14s ease;
+}
+.trigger:hover:not(:disabled) {
+  background: var(--surface-muted);
+}
+:host([open]) .trigger, .trigger:focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--card-border));
+  background: var(--surface);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+:host([disabled]) .trigger {
+  cursor: not-allowed;
+  color: var(--text-faint);
+  border-color: var(--border-weak);
+  background: var(--surface-strong);
+  opacity: .92;
+  box-shadow: none;
+}
+.label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.chevron {
+  width: .56rem;
+  height: .56rem;
+  border-right: 2px solid var(--text-sub);
+  border-bottom: 2px solid var(--text-sub);
+  transform: rotate(45deg) translateY(-1px);
+  flex: 0 0 auto;
+  transition: transform .14s ease;
+}
+:host([open]) .chevron {
+  transform: rotate(-135deg) translateX(-1px);
+}
+.menu {
+  position: absolute;
+  top: calc(100% + .25rem);
+  left: 0;
+  right: 0;
+  z-index: 180;
+  border-radius: 5px;
+  border: 1px solid var(--card-border);
+  background: var(--card-bg);
+  box-shadow: 0 10px 24px rgb(18 14 10 / 0.16);
+  padding: 0;
+}
+:host([drop-up]) .menu {
+  top: auto;
+  bottom: calc(100% + .25rem);
+}
+.menu[hidden] { display: none; }
+.options { max-height: 9.5rem; overflow-y: auto; }
+.option {
+  width: 100%;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-main);
+  text-align: left;
+  padding: .38rem .65rem;
+  font-size: .8125rem;
+  line-height: 1.18;
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  cursor: pointer;
+  transition: background-color .12s ease, color .12s ease;
+}
+.option:hover:not(:disabled), .option.is-active {
+  background: var(--surface-muted);
+}
+.option.is-selected {
+  background: var(--accent-soft);
+  color: var(--text-main);
+  font-weight: 500;
+}
+.option:disabled {
+  color: var(--text-faint);
+  cursor: not-allowed;
+  opacity: .86;
+}
+.mark {
+  width: .9rem;
+  flex: 0 0 .9rem;
+  color: var(--accent);
+  font-size: .78rem;
+  line-height: 1;
+  opacity: 0;
+}
+.option.is-selected .mark { opacity: 1; }
+@media (max-width: 640px) {
+  .trigger { min-height: 40px; font-size: 14px; }
+  .option { min-height: 36px; font-size: 14px; }
+}
+</style>
+<button type="button" class="trigger" aria-haspopup="listbox" aria-expanded="false">
+  <span class="label"></span>
+  <span class="chevron" aria-hidden="true"></span>
+</button>
+<div class="menu" hidden>
+  <div class="options" role="listbox"></div>
+</div>
+`;
+
+        this._trigger = this.shadowRoot.querySelector('.trigger');
+        this._menu = this.shadowRoot.querySelector('.menu');
+        this._optionsWrap = this.shadowRoot.querySelector('.options');
+        this._label = this.shadowRoot.querySelector('.label');
+
+        this._trigger.addEventListener('click', () => {
+            if (this.disabled) return;
+            if (this.hasAttribute('open')) this.close();
+            else this.open();
+        });
+
+        this._trigger.addEventListener('keydown', (e) => this._onTriggerKeydown(e));
+
+        this._observer = new MutationObserver(() => this._syncFromLightOptions());
+        this._observer.observe(this, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ['disabled', 'selected', 'value']
+        });
+    }
+
+    _onTriggerKeydown(e) {
+        if (this.disabled) return;
+        const optionCount = this.options.length;
+        const isOpen = this.hasAttribute('open');
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (!isOpen) this.open();
+            this._setActiveIndex(Math.min((this._activeIndex < 0 ? 0 : this._activeIndex + 1), Math.max(0, optionCount - 1)), true);
+            return;
+        }
+        if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (!isOpen) this.open();
+            this._setActiveIndex(Math.max((this._activeIndex < 0 ? 0 : this._activeIndex - 1), 0), true);
+            return;
+        }
+        if (e.key === 'Home') {
+            e.preventDefault();
+            if (!isOpen) this.open();
+            this._setActiveIndex(0, true);
+            return;
+        }
+        if (e.key === 'End') {
+            e.preventDefault();
+            if (!isOpen) this.open();
+            this._setActiveIndex(Math.max(0, optionCount - 1), true);
+            return;
+        }
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            if (!isOpen) {
+                this.open();
+                return;
+            }
+            const idx = this._activeIndex >= 0 ? this._activeIndex : this.selectedIndex;
+            const opt = this.options[idx];
+            if (opt && !opt.disabled) this._setValue(opt.value, { emit: true });
+            this.close();
+            return;
+        }
+        if (e.key === 'Escape' && isOpen) {
+            e.preventDefault();
+            this.close();
+        }
+    }
+
+    get options() {
+        return Array.from(this.querySelectorAll('option'));
+    }
+
+    get selectedIndex() {
+        return this.options.findIndex(o => o.value === this.value);
+    }
+
+    set selectedIndex(i) {
+        const idx = Number(i);
+        const opts = this.options;
+        const opt = opts[idx];
+        if (opt) this._setValue(opt.value, { emit: false });
+    }
+
+    get value() {
+        return this._value || '';
+    }
+
+    set value(next) {
+        this._setValue(String(next ?? ''), { emit: false });
+    }
+
+    get disabled() {
+        return this.hasAttribute('disabled');
+    }
+
+    set disabled(on) {
+        if (on) this.setAttribute('disabled', '');
+        else this.removeAttribute('disabled');
+        if (this._trigger) this._trigger.disabled = !!on;
+    }
+
+    focus() {
+        this._trigger?.focus();
+    }
+
+    open() {
+        if (this.disabled) return;
+        GhostInkSelect.closeAll(this);
+        this.setAttribute('open', '');
+        this._menu.hidden = false;
+        this._trigger?.setAttribute('aria-expanded', 'true');
+        this._updateMenuPlacement();
+        const idx = Math.max(0, this.selectedIndex);
+        this._setActiveIndex(idx, true);
+        requestAnimationFrame(() => this._updateMenuPlacement());
+    }
+
+    close() {
+        this.removeAttribute('open');
+        this.removeAttribute('drop-up');
+        if (this._menu) this._menu.hidden = true;
+        if (this._optionsWrap) this._optionsWrap.style.maxHeight = '';
+        this._trigger?.setAttribute('aria-expanded', 'false');
+    }
+
+    _updateMenuPlacement() {
+        if (!this.hasAttribute('open') || !this._optionsWrap) return;
+        const rect = this.getBoundingClientRect();
+        const viewportH = window.innerHeight || document.documentElement.clientHeight || 800;
+        const gap = 8;
+        const minPanelHeight = 120;
+        const availableBelow = Math.max(0, viewportH - rect.bottom - gap);
+        const availableAbove = Math.max(0, rect.top - gap);
+        const openUp = availableBelow < minPanelHeight && availableAbove > availableBelow;
+        if (openUp) this.setAttribute('drop-up', '');
+        else this.removeAttribute('drop-up');
+        const chosenSpace = openUp ? availableAbove : availableBelow;
+        const maxHeight = Math.max(minPanelHeight, Math.min(360, chosenSpace - 8));
+        this._optionsWrap.style.maxHeight = `${maxHeight}px`;
+    }
+
+    _setActiveIndex(index, scroll = false) {
+        const buttons = Array.from(this.shadowRoot.querySelectorAll('.option'));
+        if (!buttons.length) return;
+        const bounded = Math.max(0, Math.min(index, buttons.length - 1));
+        this._activeIndex = bounded;
+        buttons.forEach((btn, idx) => btn.classList.toggle('is-active', idx === bounded));
+        if (scroll) buttons[bounded].scrollIntoView({ block: 'nearest' });
+    }
+
+    _syncFromLightOptions() {
+        const opts = this.options;
+        if (!opts.length) {
+            this._value = '';
+            this._renderOptions();
+            this._refreshLabel();
+            return;
+        }
+
+        let next = this._value || this.getAttribute('value') || '';
+        const selectedLight = opts.find(o => o.selected);
+        if ((!next || !opts.some(o => o.value === next)) && selectedLight) next = selectedLight.value;
+        if (!opts.some(o => o.value === next)) next = opts[0].value || '';
+        this._setValue(next, { emit: false, force: true });
+    }
+
+    _setValue(next, { emit = false, force = false } = {}) {
+        const opts = this.options;
+        if (!opts.length) {
+            this._value = '';
+            this._refreshLabel();
+            return;
+        }
+        const valid = opts.some(o => o.value === next);
+        const value = valid ? next : (opts[0].value || '');
+        const changed = force || value !== this._value;
+        this._value = value;
+        opts.forEach(o => { o.selected = (o.value === value); });
+        this._renderOptions();
+        this._refreshLabel();
+        if (emit && changed) {
+            this.dispatchEvent(new Event('input', { bubbles: true }));
+            this.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+
+    _refreshLabel() {
+        if (!this._label) return;
+        const current = this.options.find(o => o.value === this._value);
+        this._label.textContent = (current?.textContent || '').trim() || 'Select';
+        this._trigger.disabled = this.disabled;
+    }
+
+    _renderOptions() {
+        if (!this._optionsWrap) return;
+        const opts = this.options;
+        if (!opts.length) {
+            this._optionsWrap.innerHTML = '<div style="padding:.5rem .55rem;font-size:.78rem;color:var(--text-sub)">No options</div>';
+            return;
+        }
+        this._optionsWrap.innerHTML = opts.map((opt, idx) => `
+<button type="button" class="option ${opt.value === this._value ? 'is-selected' : ''}" role="option" aria-selected="${opt.value === this._value ? 'true' : 'false'}" data-index="${idx}" data-value="${encodeDataAttr(opt.value || '')}" ${opt.disabled ? 'disabled' : ''}>
+  <span class="mark">✓</span>
+  <span>${escapeHtml(opt.textContent || '')}</span>
+</button>
+`).join('');
+
+        this._optionsWrap.querySelectorAll('.option').forEach(btn => {
+            btn.addEventListener('mouseenter', () => {
+                const idx = Number(btn.dataset.index || 0);
+                this._setActiveIndex(idx, false);
+            });
+            btn.addEventListener('click', () => {
+                if (btn.disabled) return;
+                const value = decodeDataAttr(btn.dataset.value || '');
+                this._setValue(value, { emit: true });
+                this.close();
+                this.focus();
+            });
+        });
+    }
+}
+
+if (!customElements.get('gi-select')) {
+    customElements.define('gi-select', GhostInkSelect);
+}
+
+const upgradeNativeSelects = () => {
+    document.querySelectorAll('select').forEach((nativeSelect) => {
+        const custom = document.createElement('gi-select');
+        for (const attr of Array.from(nativeSelect.attributes)) {
+            const name = attr.name;
+            if (name === 'class' || name === 'style') continue;
+            custom.setAttribute(name, attr.value);
+        }
+        custom.innerHTML = nativeSelect.innerHTML;
+        const currentValue = nativeSelect.value || '';
+        if (currentValue) custom.setAttribute('value', currentValue);
+        nativeSelect.replaceWith(custom);
+    });
 };
 
 // Helper for natural sorting (e.g. 1.1, 1.2, 1.10)
@@ -319,6 +948,99 @@ const getNextVariantOrder = (prevOrder, isPrevRoot) => {
     return s + 'a';
 };
 
+const FILTER_MODE_INCLUDE = 'include';
+const FILTER_MODE_EXCLUDE = 'exclude';
+const FILTER_MODE_IGNORE = 'ignore';
+const FILTER_NONE_LABEL = '__NO_VALUE__';
+const REVISION_MODE_MANUAL = 'manual';
+const REVISION_MODE_TYPEIN = 'typein';
+const REVISION_MODE_AI = 'ai';
+
+const normalizeRevisionMode = (mode) => {
+    if (mode === 'ghostink') return REVISION_MODE_TYPEIN; // legacy migration
+    if (mode === REVISION_MODE_AI || mode === REVISION_MODE_TYPEIN) return mode;
+    return REVISION_MODE_MANUAL;
+};
+
+const normalizeFilterMode = (mode) => {
+    if (mode === FILTER_MODE_INCLUDE || mode === FILTER_MODE_EXCLUDE) return mode;
+    return FILTER_MODE_IGNORE;
+};
+
+const cycleFilterMode = (mode) => {
+    const current = normalizeFilterMode(mode);
+    if (current === FILTER_MODE_IGNORE) return FILTER_MODE_INCLUDE;
+    if (current === FILTER_MODE_INCLUDE) return FILTER_MODE_EXCLUDE;
+    return FILTER_MODE_IGNORE;
+};
+
+const normalizeFilterList = (val) => {
+    const raw = Array.isArray(val) ? val : (val === null || val === undefined ? [] : [val]);
+    const seen = new Set();
+    const out = [];
+    for (const item of raw) {
+        const text = (item ?? '').toString().trim();
+        if (!text) continue;
+        if (seen.has(text)) continue;
+        seen.add(text);
+        out.push(text);
+    }
+    return out;
+};
+
+const getListMode = (includeList, excludeList, value) => {
+    const normalized = (value ?? '').toString().trim();
+    if (!normalized) return FILTER_MODE_IGNORE;
+    if (Array.isArray(includeList) && includeList.includes(normalized)) return FILTER_MODE_INCLUDE;
+    if (Array.isArray(excludeList) && excludeList.includes(normalized)) return FILTER_MODE_EXCLUDE;
+    return FILTER_MODE_IGNORE;
+};
+
+const applyListMode = (includeList, excludeList, value, mode) => {
+    const normalized = (value ?? '').toString().trim();
+    let include = normalizeFilterList(includeList).filter(v => v !== normalized);
+    let exclude = normalizeFilterList(excludeList).filter(v => v !== normalized);
+    const next = normalizeFilterMode(mode);
+    if (normalized) {
+        if (next === FILTER_MODE_INCLUDE) include.push(normalized);
+        if (next === FILTER_MODE_EXCLUDE) exclude.push(normalized);
+    }
+    const includeSet = new Set(include);
+    exclude = exclude.filter(v => !includeSet.has(v));
+    return { include, exclude };
+};
+
+const normalizeFilterState = (filters = {}) => {
+    const tags = normalizeFilterList(filters.tags);
+    let tagsExclude = normalizeFilterList(filters.tagsExclude);
+    tagsExclude = tagsExclude.filter(t => !tags.includes(t));
+
+    const flag = normalizeFilterList(filters.flag);
+    let flagExclude = normalizeFilterList(filters.flagExclude);
+    flagExclude = flagExclude.filter(f => !flag.includes(f));
+
+    const studyDecks = normalizeFilterList(filters.studyDecks);
+    let studyDecksExclude = normalizeFilterList(filters.studyDecksExclude);
+    studyDecksExclude = studyDecksExclude.filter(id => !studyDecks.includes(id));
+
+    return {
+        again: !!filters.again,
+        hard: !!filters.hard,
+        addedToday: !!filters.addedToday,
+        tags,
+        tagsExclude,
+        tagEmptyMode: normalizeFilterMode(filters.tagEmptyMode),
+        suspended: typeof filters.suspended === 'boolean' ? filters.suspended : true,
+        leech: typeof filters.leech === 'boolean' ? filters.leech : true,
+        marked: !!filters.marked,
+        flag,
+        flagExclude,
+        flagEmptyMode: normalizeFilterMode(filters.flagEmptyMode),
+        studyDecks,
+        studyDecksExclude
+    };
+};
+
 // Initialize lightbox on module load
 const lightbox = initLightbox();
 
@@ -351,7 +1073,7 @@ export const App = {
         selectedDeck: null,
         selectedCard: null,
         // Library filters: suspended/leech true by default (auto-hide)
-        filters: { again: false, hard: false, addedToday: false, tags: [], suspended: true, leech: true, marked: false, flag: [], studyDecks: [] },
+        filters: normalizeFilterState({ suspended: true, leech: true }),
         cardSearch: '',
         deckSearch: '',
         cardLimit: 50,
@@ -419,7 +1141,10 @@ export const App = {
         confirmLabel: 'Delete'
     },
     isAiModeSelected() {
-        return el('#revisionMode')?.value === 'ai';
+        return normalizeRevisionMode(el('#revisionMode')?.value) === REVISION_MODE_AI;
+    },
+    isTypeInModeSelected() {
+        return normalizeRevisionMode(el('#revisionMode')?.value) === REVISION_MODE_TYPEIN;
     },
     isAiModeUsable() {
         if (!this.isAiModeSelected()) return false;
@@ -441,15 +1166,13 @@ export const App = {
         }
         await this.loadSession(); // Load any active study session (async for IndexedDB)
         this.captureOAuth();
+        upgradeNativeSelects();
         this.bind();
         this.seedIfEmpty();
         this.renderAll();
         await this.autoVerifyWorker();
         window.addEventListener('online', () => this.handleOnline());
         window.addEventListener('offline', () => this.handleOffline());
-        if (!navigator.onLine) {
-            document.body.classList.add('offline-mode');
-        }
         if (window.matchMedia) {
             const mq = window.matchMedia('(prefers-color-scheme: dark)');
             mq.addEventListener('change', () => this.applyTheme());
@@ -676,6 +1399,24 @@ export const App = {
         this.setMicVisualState(listening);
         this.updateMobileFab();
     },
+    updateGhostInkControlsState() {
+        const answerField = el('#ghostinkAnswer');
+        const checkBtn = el('#ghostinkCheck');
+        if (!answerField || !checkBtn) return;
+
+        const hasText = (answerField.value || '').trim().length > 0;
+        const inGhostInkMode = this.isTypeInModeSelected();
+        const locked = this.state.answerRevealed;
+
+        answerField.disabled = !inGhostInkMode || locked;
+        answerField.readOnly = !inGhostInkMode || locked;
+        answerField.classList.toggle('pointer-events-none', !inGhostInkMode || locked);
+        answerField.classList.toggle('opacity-60', !inGhostInkMode || locked);
+
+        checkBtn.disabled = !inGhostInkMode || locked || !hasText;
+        checkBtn.classList.toggle('opacity-50', checkBtn.disabled);
+        checkBtn.classList.toggle('cursor-not-allowed', checkBtn.disabled);
+    },
     generateCardQueue(deckIds, includeNonDue = false, opts = {}) {
         const { precomputeReverse = true, isCram = false } = opts || {};
         const validIds = (deckIds || []).filter(id => !!this.deckById(id));
@@ -824,22 +1565,18 @@ export const App = {
             return;
         }
 
-        // Default to all decks if none selected
-        let deckIds = this.state.filters.studyDecks || [];
+        const deckIds = this.getEffectiveStudyDeckIds();
         if (deckIds.length === 0) {
-            deckIds = this.state.decks.map(d => d.id);
-        }
-        if (deckIds.length === 0) {
-            toast('No decks available');
+            toast('No decks match current deck filter');
             return;
         }
 
         // Check card selection mode (due only vs all vs cram)
         const cardSelectionMode = el('#cardSelectionMode')?.value || 'due';
-        let revisionMode = el('#revisionMode')?.value || 'manual';
+        let revisionMode = normalizeRevisionMode(el('#revisionMode')?.value);
 
-        if (revisionMode === 'ai' && !navigator.onLine) {
-            revisionMode = 'manual';
+        if (revisionMode === REVISION_MODE_AI && !navigator.onLine) {
+            revisionMode = REVISION_MODE_MANUAL;
             toast('Offline: switched to Manual mode');
         }
 
@@ -1290,19 +2027,10 @@ export const App = {
             if (typeof uiState.cardSearch === 'string') this.state.cardSearch = uiState.cardSearch;
             if (typeof uiState.deckSearch === 'string') this.state.deckSearch = uiState.deckSearch;
             if (uiState.filters && typeof uiState.filters === 'object') {
-                const f = uiState.filters;
-                this.state.filters = {
+                this.state.filters = normalizeFilterState({
                     ...this.state.filters,
-                    again: !!f.again,
-                    hard: !!f.hard,
-                    addedToday: !!f.addedToday,
-                    tags: Array.isArray(f.tags) ? f.tags.filter(Boolean) : [],
-                    suspended: typeof f.suspended === 'boolean' ? f.suspended : this.state.filters.suspended,
-                    leech: typeof f.leech === 'boolean' ? f.leech : this.state.filters.leech,
-                    marked: !!f.marked,
-                    flag: Array.isArray(f.flag) ? f.flag.filter(Boolean) : (typeof f.flag === 'string' ? f.flag : []),
-                    studyDecks: Array.isArray(f.studyDecks) ? f.studyDecks.filter(Boolean) : []
-                };
+                    ...uiState.filters
+                });
             }
             if (typeof uiState.analyticsRange === 'string') this.state.analyticsRange = uiState.analyticsRange;
             if (typeof uiState.analyticsYear === 'string') this.state.analyticsYear = uiState.analyticsYear;
@@ -1313,6 +2041,7 @@ export const App = {
             if (Array.isArray(uiState.analyticsFlags)) this.state.analyticsFlags = uiState.analyticsFlags.filter(Boolean);
             if (typeof uiState.analyticsMarked === 'boolean') this.state.analyticsMarked = uiState.analyticsMarked;
         }
+        this.state.filters = normalizeFilterState(this.state.filters);
     },
     async seedIfEmpty() {
         return;
@@ -1404,10 +2133,14 @@ export const App = {
             if (this.state.filters?.studyDecks?.length) {
                 this.state.filters.studyDecks = this.state.filters.studyDecks.map(id => deckIdMap[id] || id);
             }
+            if (this.state.filters?.studyDecksExclude?.length) {
+                this.state.filters.studyDecksExclude = this.state.filters.studyDecksExclude.map(id => deckIdMap[id] || id);
+            }
 
             if (this.state.session?.deckIds?.length) {
                 this.state.session.deckIds = this.state.session.deckIds.map(id => deckIdMap[id] || id);
             }
+            this.state.filters = normalizeFilterState(this.state.filters);
         }
 
         if (hasDeckMap) {
@@ -1878,17 +2611,26 @@ export const App = {
         el('#filterMarked').onchange = (e) => { this.state.filters.marked = e.target.checked; this.renderCards(); this.updateActiveFiltersCount(); };
         const filterFlagSwatches = el('#filterFlagSwatches');
         if (filterFlagSwatches) {
-            const normalizeFlags = (val) => Array.isArray(val) ? val : (val ? [val] : []);
-            this.updateFlagSwatchMulti(filterFlagSwatches, normalizeFlags(this.state.filters.flag));
+            this.state.filters = normalizeFilterState(this.state.filters);
+            this.updateFlagSwatchTriState(filterFlagSwatches);
             filterFlagSwatches.onclick = (e) => {
                 const btn = e.target.closest('[data-flag]');
                 if (!btn) return;
                 const flag = btn.dataset.flag || '';
-                const current = new Set(normalizeFlags(this.state.filters.flag));
-                if (current.has(flag)) current.delete(flag); else current.add(flag);
-                this.state.filters.flag = Array.from(current);
-                this.updateFlagSwatchMulti(filterFlagSwatches, this.state.filters.flag);
+                if (flag === FILTER_NONE_LABEL) {
+                    this.state.filters.flagEmptyMode = cycleFilterMode(this.state.filters.flagEmptyMode);
+                } else {
+                    const current = getListMode(this.state.filters.flag, this.state.filters.flagExclude, flag);
+                    const next = cycleFilterMode(current);
+                    const updated = applyListMode(this.state.filters.flag, this.state.filters.flagExclude, flag, next);
+                    this.state.filters.flag = updated.include;
+                    this.state.filters.flagExclude = updated.exclude;
+                }
+                this.state.filters = normalizeFilterState(this.state.filters);
+                this.updateFlagSwatchTriState(filterFlagSwatches);
                 this.renderCards();
+                this.renderStudyDeckSelection();
+                this.renderStudy();
                 this.updateActiveFiltersCount();
             };
         }
@@ -1896,8 +2638,13 @@ export const App = {
         if (filterFlagClear) {
             filterFlagClear.onclick = () => {
                 this.state.filters.flag = [];
-                if (filterFlagSwatches) this.updateFlagSwatchMulti(filterFlagSwatches, []);
+                this.state.filters.flagExclude = [];
+                this.state.filters.flagEmptyMode = FILTER_MODE_IGNORE;
+                this.state.filters = normalizeFilterState(this.state.filters);
+                if (filterFlagSwatches) this.updateFlagSwatchTriState(filterFlagSwatches);
                 this.renderCards();
+                this.renderStudyDeckSelection();
+                this.renderStudy();
                 this.updateActiveFiltersCount();
             };
         }
@@ -1905,6 +2652,8 @@ export const App = {
         if (filterDeckClear) {
             filterDeckClear.onclick = () => {
                 this.state.filters.studyDecks = [];
+                this.state.filters.studyDecksExclude = [];
+                this.state.filters = normalizeFilterState(this.state.filters);
                 this.state.studyNonDue = false;
                 const deckInput = el('#deckSearchInput');
                 if (deckInput) deckInput.value = '';
@@ -1917,8 +2666,13 @@ export const App = {
         if (filterTagClear) {
             filterTagClear.onclick = () => {
                 this.state.filters.tags = [];
+                this.state.filters.tagsExclude = [];
+                this.state.filters.tagEmptyMode = FILTER_MODE_IGNORE;
+                this.state.filters = normalizeFilterState(this.state.filters);
                 this.renderTagFilter();
                 this.renderCards();
+                this.renderStudyDeckSelection();
+                this.renderStudy();
                 this.updateActiveFiltersCount();
                 this.persistUiStateDebounced();
             };
@@ -1979,8 +2733,11 @@ export const App = {
             if (!this.state.session) return;
 
             const isAiMode = this.isAiModeUsable();
+            const isGhostInkMode = this.isTypeInModeSelected();
             const aiAnswer = el('#aiAnswer');
             const hasAiText = (aiAnswer?.value || '').trim().length > 0;
+            const ghostinkAnswer = el('#ghostinkAnswer');
+            const hasGhostInkText = (ghostinkAnswer?.value || '').trim().length > 0;
             // Option/Alt+Shift+S can produce a different printable character on macOS, so prefer physical key detection.
             const isSkipCombo = !!(e.altKey && e.shiftKey && (
                 (e.code === 'KeyS') ||
@@ -2003,8 +2760,13 @@ export const App = {
                     this.submitToAI();
                     return;
                 }
-                // In non-AI mode, allow reveal via Cmd/Ctrl+Enter
-                if (!this.isAiModeSelected() && !this.state.answerRevealed) {
+                if (isGhostInkMode && hasGhostInkText && !this.state.answerRevealed) {
+                    e.preventDefault();
+                    this.submitGhostInkAnswer();
+                    return;
+                }
+                // In Reveal mode, allow reveal via Cmd/Ctrl+Enter
+                if (!this.isAiModeSelected() && !isGhostInkMode && !this.state.answerRevealed) {
                     e.preventDefault();
                     this.reveal();
                     return;
@@ -2032,6 +2794,9 @@ export const App = {
                     const btn = el('#aiSubmit');
                     // If text area has content (button enabled), Send. Otherwise do nothing.
                     if (!btn.disabled && !this.state.aiLocked) this.submitToAI();
+                } else if (this.isTypeInModeSelected()) {
+                    const btn = el('#ghostinkCheck');
+                    if (btn && !btn.disabled) this.submitGhostInkAnswer();
                 } else {
                     this.reveal();
                 }
@@ -2134,26 +2899,30 @@ export const App = {
         el('#settingsModal').addEventListener('click', (e) => { if (e.target === el('#settingsModal')) this.closeSettings(); });
         el('#workerHelpModal').addEventListener('click', (e) => { if (e.target === el('#workerHelpModal')) this.closeModal('workerHelpModal'); });
         el('#revisionMode').onchange = (e) => {
-            if (e.target.value === 'ai') {
+            const nextMode = normalizeRevisionMode(e.target.value);
+            if (nextMode !== e.target.value) e.target.value = nextMode;
+            if (nextMode === REVISION_MODE_AI) {
                 if (!navigator.onLine) {
-                    e.target.value = 'manual';
+                    e.target.value = REVISION_MODE_MANUAL;
                     this.showAiBlockedModal('offline');
                     return;
                 }
                 if (!this.state.settings.aiVerified) {
-                    e.target.value = 'manual';
+                    e.target.value = REVISION_MODE_MANUAL;
                     this.showAiBlockedModal('unverified');
                     return;
                 }
                 if (!this.state.settings.aiKey) {
-                    e.target.value = 'manual';
+                    e.target.value = REVISION_MODE_MANUAL;
                     this.showAiBlockedModal('unverified');
                     return;
                 }
             }
             const on = this.isAiModeUsable();
             el('#aiControls').classList.toggle('hidden', !on);
+            el('#ghostinkControls').classList.toggle('hidden', !this.isTypeInModeSelected());
             this.updateSkipHotkeyLabel(on);
+            this.updateGhostInkControlsState();
             this.updateMobileFab();
             this.renderStudy();
         };
@@ -2176,6 +2945,8 @@ export const App = {
             btn.dataset.empty = hasText ? '0' : '1';
             this.setAiControlsLocked(this.state.aiLocked);
         };
+        el('#ghostinkCheck').onclick = () => this.submitGhostInkAnswer();
+        el('#ghostinkAnswer').oninput = () => this.updateGhostInkControlsState();
         el('#aiRecord').onclick = () => {
             if (!this.isAiModeUsable() || !this.isSttEnabled() || this.state.answerRevealed || this.state.aiLocked) return;
             this.state.activeMicButton = 'inline';
@@ -2196,6 +2967,7 @@ export const App = {
         el('#cardModal').addEventListener('click', (e) => { if (e.target === el('#cardModal')) this.closeCardModal(); });
     },
     renderAll() {
+        this.state.filters = normalizeFilterState(this.state.filters);
         this.renderDecks();
         this.renderCards();
         this.renderConnection();
@@ -2226,6 +2998,8 @@ export const App = {
         if (filterSuspended) filterSuspended.checked = !!this.state.filters.suspended;
         const filterLeech = el('#filterLeech');
         if (filterLeech) filterLeech.checked = !!this.state.filters.leech;
+        const filterFlagSwatches = el('#filterFlagSwatches');
+        if (filterFlagSwatches) this.updateFlagSwatchTriState(filterFlagSwatches);
         // Show/hide STT settings based on whether AI is verified
         const isAiVerified = this.state.settings?.aiVerified;
         el('#sttSettings')?.classList.toggle('hidden', !isAiVerified);
@@ -2299,11 +3073,12 @@ export const App = {
         this.setFiltersPanelOpen(!!isHidden);
     },
     shouldKeepFiltersPanelOpen() {
-        const f = this.state.filters || {};
+        const f = normalizeFilterState(this.state.filters);
         if (f.again || f.hard || f.addedToday) return true;
-        if (f.tags && f.tags.length > 0) return true;
+        if (f.tags.length > 0 || f.tagsExclude.length > 0 || f.tagEmptyMode !== FILTER_MODE_IGNORE) return true;
         if (f.marked) return true;
-        if (Array.isArray(f.flag) ? f.flag.length > 0 : !!f.flag) return true;
+        if (f.flag.length > 0 || f.flagExclude.length > 0 || f.flagEmptyMode !== FILTER_MODE_IGNORE) return true;
+        if (f.studyDecks.length > 0 || f.studyDecksExclude.length > 0) return true;
         const mode = el('#cardSelectionMode')?.value || 'due';
         if (mode !== 'due') return true;
         return false;
@@ -2311,21 +3086,33 @@ export const App = {
     updateFiltersBanner() {
         const banner = el('#studyFiltersBanner');
         if (!banner) return;
+        const btn = el('#studyFiltersBannerBtn');
         const active = this.shouldKeepFiltersPanelOpen();
-        banner.classList.toggle('hidden', !active);
+        const text = el('#studyFiltersBannerText');
+        if (text) {
+            text.textContent = active
+                ? 'Study filters are active.'
+                : 'No filters are applied.';
+        }
+        if (btn) btn.classList.toggle('hidden', !active);
+        banner.classList.toggle('study-filters-banner--inactive', !active);
+        banner.setAttribute('aria-hidden', 'false');
     },
     // Update active filters count (for reset button visibility)
     updateActiveFiltersCount() {
-        const f = this.state.filters;
+        const f = normalizeFilterState(this.state.filters);
+        this.state.filters = f;
         let count = 0;
         if (f.again) count++;
         if (f.hard) count++;
         if (f.addedToday) count++;
-        if (f.tags && f.tags.length > 0) count++;
+        const hasTagFilters = f.tags.length > 0 || f.tagsExclude.length > 0 || f.tagEmptyMode !== FILTER_MODE_IGNORE;
+        if (hasTagFilters) count++;
         if (f.marked) count++;
-        const hasFlags = Array.isArray(f.flag) ? f.flag.length > 0 : !!f.flag;
+        const hasFlags = f.flag.length > 0 || f.flagExclude.length > 0 || f.flagEmptyMode !== FILTER_MODE_IGNORE;
         if (hasFlags) count++;
-        if (f.studyDecks && f.studyDecks.length > 0) count++;
+        const hasDeckFilters = f.studyDecks.length > 0 || f.studyDecksExclude.length > 0;
+        if (hasDeckFilters) count++;
         // Show reset button if any filters are active
         const resetBtn = el('#resetFilters');
         if (resetBtn) {
@@ -2341,11 +3128,11 @@ export const App = {
         }
         const deckClear = el('#filterDeckClear');
         if (deckClear) {
-            deckClear.classList.toggle('hidden', !(f.studyDecks && f.studyDecks.length > 0));
+            deckClear.classList.toggle('hidden', !hasDeckFilters);
         }
         const tagClear = el('#filterTagClear');
         if (tagClear) {
-            tagClear.classList.toggle('hidden', !(f.tags && f.tags.length > 0));
+            tagClear.classList.toggle('hidden', !hasTagFilters);
         }
         this.updateFiltersBanner();
         this.persistUiStateDebounced();
@@ -2821,7 +3608,12 @@ export const App = {
         const session = this.state.session;
         const revisionSelect = el('#revisionMode');
         if (session?.settings?.revisionMode && revisionSelect) {
-            revisionSelect.value = session.settings.revisionMode;
+            const normalized = normalizeRevisionMode(session.settings.revisionMode);
+            if (session.settings.revisionMode !== normalized) {
+                session.settings.revisionMode = normalized;
+                this.saveSessionDebounced();
+            }
+            revisionSelect.value = normalized;
         }
         const activeBar = el('#sessionActiveBar');
         const progressText = el('#sessionProgressText');
@@ -2864,6 +3656,7 @@ export const App = {
             el('#cardBack').innerHTML = '';
             el('#cardBack').classList.add('hidden');
             el('#aiControls').classList.add('hidden');
+            el('#ghostinkControls').classList.add('hidden');
             this.state.answerRevealed = false;
             this.setRatingEnabled(false);
             this.updateMobileFab();
@@ -2876,14 +3669,14 @@ export const App = {
         const isCloze = card && (card.type || '').toLowerCase() === 'cloze';
 
         // Check if no cards are due but decks are selected
-        const f = this.state.filters;
-        const hasSelectedDecks = f.studyDecks && f.studyDecks.length > 0;
+        const selectedDeckIds = this.getEffectiveStudyDeckIds();
+        const hasDeckFilter = this.hasStudyDeckFilter();
 
         let hasDue = false;
         let nonDueCount = 0;
 
-        if (!card && hasSelectedDecks && !session) {
-            for (const dId of f.studyDecks) {
+        if (!card && hasDeckFilter && !session) {
+            for (const dId of selectedDeckIds) {
                 const cardIds = this.state.cardDeckIndex?.get(dId);
                 if (!cardIds) continue;
 
@@ -2902,7 +3695,7 @@ export const App = {
             }
         }
 
-        if (!card && hasSelectedDecks && nonDueCount > 0 && !session) {
+        if (!card && hasDeckFilter && nonDueCount > 0 && !session) {
             // No due cards but there are non-due cards available (only show when no session)
             el('#studyDeckLabel').textContent = 'No cards due';
             el('#cardFront').innerHTML = `
@@ -2917,6 +3710,7 @@ export const App = {
             el('#cardBack').innerHTML = '';
             el('#cardBack').classList.add('hidden');
             el('#aiControls').classList.add('hidden');
+            el('#ghostinkControls').classList.add('hidden');
             this.state.answerRevealed = false;
             this.setRatingEnabled(false);
             this.updateMobileFab();
@@ -2945,6 +3739,7 @@ export const App = {
         document.querySelectorAll('#cardFront .cloze-blank').forEach(span => span.classList.remove('revealed'));
         el('#cardBack').classList.add('hidden');
         el('#aiControls').classList.add('hidden');
+        el('#ghostinkControls').classList.add('hidden');
         // Show study controls (may have been hidden by session complete)
         const studyControls = el('#studyControls');
         if (studyControls) studyControls.classList.remove('hidden');
@@ -2956,11 +3751,13 @@ export const App = {
 
         this.updateSkipHotkeyLabel(isAiMode);
         this.setAiControlsLocked(false);
+        this.updateGhostInkControlsState();
         if (revealBtn) {
             revealBtn.disabled = false;
             revealBtn.classList.remove('opacity-50', 'cursor-not-allowed');
         }
 
+        const isGhostInkMode = this.isTypeInModeSelected();
         if (isAiMode) {
             if (revealBtn) revealBtn.classList.add('hidden');
             el('#aiControls').classList.remove('hidden');
@@ -2970,9 +3767,24 @@ export const App = {
             if (feedback) { feedback.classList.add('hidden'); feedback.innerHTML = ''; }
             this.setAiControlsLocked(false);
             setTimeout(() => el('#aiAnswer').focus(), 50);
+        } else if (isGhostInkMode) {
+            if (revealBtn) revealBtn.classList.add('hidden');
+            el('#ghostinkControls').classList.remove('hidden');
+            const expected = getGhostInkExpectedAnswers(card, this.state.cardReversed);
+            const answerField = el('#ghostinkAnswer');
+            if (answerField) {
+                answerField.placeholder = expected.length > 1
+                    ? `Type ${expected.length} answers, one per line`
+                    : 'Type your answer...';
+            }
+            const feedback = el('#ghostinkFeedback');
+            if (feedback) { feedback.classList.add('hidden'); feedback.innerHTML = ''; }
+            this.updateGhostInkControlsState();
+            setTimeout(() => el('#ghostinkAnswer')?.focus(), 50);
         } else {
             if (revealBtn) revealBtn.classList.remove('hidden');
             el('#aiControls').classList.add('hidden');
+            el('#ghostinkControls').classList.add('hidden');
         }
 
         // Hide copy button until reveal (shows answer content)
@@ -2995,6 +3807,10 @@ export const App = {
         el('#aiAnswer').value = '';
         el('#aiFeedback').innerHTML = '';
         el('#aiFeedback').classList.add('hidden');
+        el('#ghostinkAnswer').value = '';
+        el('#ghostinkFeedback').innerHTML = '';
+        el('#ghostinkFeedback').classList.add('hidden');
+        this.updateGhostInkControlsState();
         createIconsInScope(el('#studyTab') || studyCardSection || document.body);
     },
     renderNotes() {
@@ -3012,19 +3828,31 @@ export const App = {
         const selectedWrap = el('#filterTagSelected');
         if (!input || !dropdown || !selectedWrap) return;
 
+        const filters = normalizeFilterState(this.state.filters);
+        this.state.filters = filters;
         const allTags = Array.from(this.state.tagRegistry.keys()).sort((a, b) => a.localeCompare(b));
-        const selected = new Set(this.state.filters.tags || []);
+        const included = new Set(filters.tags || []);
+        const noTagMode = normalizeFilterMode(filters.tagEmptyMode);
         const clearBtn = el('#filterTagClear');
-        if (clearBtn) clearBtn.classList.toggle('hidden', selected.size === 0);
+        const hasTagFilter = included.size > 0 || (filters.tagsExclude || []).length > 0 || noTagMode !== FILTER_MODE_IGNORE;
+        if (clearBtn) clearBtn.classList.toggle('hidden', !hasTagFilter);
         const query = (input.value || '').toLowerCase();
-        const options = allTags.filter(name => name.toLowerCase().includes(query));
+        const options = [
+            { value: FILTER_NONE_LABEL, label: 'No tag' },
+            ...allTags.map(name => ({ value: name, label: name }))
+        ].filter(option => option.label.toLowerCase().includes(query));
 
         dropdown.innerHTML = options.length
-            ? options.map(name => {
-                const isSelected = selected.has(name);
-                return `<button class="tag-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 ${isSelected ? 'bg-accent-soft border-lime-200' : 'hover:bg-surface-muted'}" data-tag="${encodeDataAttr(name)}">
- <span class="flex-1">${escapeHtml(name)}</span>
- ${isSelected ? '<span class="text-[11px] text-accent">Selected</span>' : ''}
+            ? options.map(({ value, label }) => {
+                const mode = value === FILTER_NONE_LABEL
+                    ? noTagMode
+                    : getListMode(filters.tags, filters.tagsExclude, value);
+                const isIncluded = mode === FILTER_MODE_INCLUDE;
+                const isExcluded = mode === FILTER_MODE_EXCLUDE;
+                return `<button class="tag-option w-full text-left px-3 py-1.5 text-[13px] flex items-center gap-1.5 ${isIncluded ? 'bg-accent-soft' : ''} ${isExcluded ? 'bg-[color:var(--surface-strong)]' : 'hover:bg-surface-muted'}" data-tag="${encodeDataAttr(value)}">
+ <span class="flex-1">${escapeHtml(label)}</span>
+ ${isIncluded ? '<span class="text-[11px] font-mono text-accent">+</span>' : ''}
+ ${isExcluded ? '<span class="text-[11px] font-mono text-sub">-</span>' : ''}
  </button>`;
             }).join('')
             : `<div class="px-3 py-2 text-sm text-muted ">No tags found</div>`;
@@ -3032,30 +3860,73 @@ export const App = {
         dropdown.querySelectorAll('.tag-option').forEach(btn => {
             btn.onclick = () => {
                 const tag = decodeDataAttr(btn.dataset.tag);
-                if (selected.has(tag)) selected.delete(tag); else selected.add(tag);
-                this.state.filters.tags = Array.from(selected);
+                if (tag === FILTER_NONE_LABEL) {
+                    this.state.filters.tagEmptyMode = cycleFilterMode(this.state.filters.tagEmptyMode);
+                } else {
+                    const current = getListMode(this.state.filters.tags, this.state.filters.tagsExclude, tag);
+                    const next = cycleFilterMode(current);
+                    const updated = applyListMode(this.state.filters.tags, this.state.filters.tagsExclude, tag, next);
+                    this.state.filters.tags = updated.include;
+                    this.state.filters.tagsExclude = updated.exclude;
+                }
+                this.state.filters = normalizeFilterState(this.state.filters);
                 this.renderTagFilter();
                 this.renderCards();
+                this.renderStudyDeckSelection();
+                this.renderStudy();
                 this.updateActiveFiltersCount();
                 this.persistUiStateDebounced();
             };
         });
 
-        selectedWrap.innerHTML = selected.size
-            ? Array.from(selected).map(tag => `
- <span class="tag-pill inline-flex items-center gap-1 px-2 py-1 rounded-full bg-surface-strong text-main text-xs border border-card">
+        const pills = [];
+        for (const tag of filters.tags) {
+            pills.push(`
+ <span class="tag-pill filter-pill--include inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border" data-tag="${encodeDataAttr(tag)}" data-mode="${FILTER_MODE_INCLUDE}">
+ <span class="filter-pill-mode">+</span>
  ${escapeHtml(tag)}
- <button class="remove-tag text-sub" data-tag="${encodeDataAttr(tag)}">&times;</button>
+ <button class="remove-tag text-sub" data-tag="${encodeDataAttr(tag)}" data-mode="${FILTER_MODE_INCLUDE}">&times;</button>
  </span>
- `).join('')
-            : '<span class="text-faint text-xs">All tags included</span>';
+ `);
+        }
+        for (const tag of filters.tagsExclude) {
+            pills.push(`
+ <span class="tag-pill filter-pill--exclude inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border" data-tag="${encodeDataAttr(tag)}" data-mode="${FILTER_MODE_EXCLUDE}">
+ <span class="filter-pill-mode">-</span>
+ ${escapeHtml(tag)}
+ <button class="remove-tag text-sub" data-tag="${encodeDataAttr(tag)}" data-mode="${FILTER_MODE_EXCLUDE}">&times;</button>
+ </span>
+ `);
+        }
+        if (filters.tagEmptyMode !== FILTER_MODE_IGNORE) {
+            const modeLabel = filters.tagEmptyMode === FILTER_MODE_INCLUDE ? '+' : '-';
+            const modeClass = filters.tagEmptyMode === FILTER_MODE_INCLUDE ? 'filter-pill--include' : 'filter-pill--exclude';
+            pills.push(`
+ <span class="tag-pill ${modeClass} inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border" data-tag="${encodeDataAttr(FILTER_NONE_LABEL)}" data-mode="${filters.tagEmptyMode}">
+ <span class="filter-pill-mode">${modeLabel}</span>
+ No tag
+ <button class="remove-tag text-sub" data-tag="${encodeDataAttr(FILTER_NONE_LABEL)}" data-mode="${filters.tagEmptyMode}">&times;</button>
+ </span>
+ `);
+        }
+        selectedWrap.innerHTML = pills.length
+            ? pills.join('')
+            : '<span class="text-faint text-xs">All tags</span>';
 
         selectedWrap.querySelectorAll('.remove-tag').forEach(btn => {
             btn.onclick = () => {
                 const tag = decodeDataAttr(btn.dataset.tag);
-                this.state.filters.tags = this.state.filters.tags.filter(t => t !== tag);
+                if (tag === FILTER_NONE_LABEL) {
+                    this.state.filters.tagEmptyMode = FILTER_MODE_IGNORE;
+                } else {
+                    this.state.filters.tags = normalizeFilterList(this.state.filters.tags).filter(t => t !== tag);
+                    this.state.filters.tagsExclude = normalizeFilterList(this.state.filters.tagsExclude).filter(t => t !== tag);
+                }
+                this.state.filters = normalizeFilterState(this.state.filters);
                 this.renderTagFilter();
                 this.renderCards();
+                this.renderStudyDeckSelection();
+                this.renderStudy();
                 this.updateActiveFiltersCount();
                 this.persistUiStateDebounced();
             };
@@ -3247,6 +4118,30 @@ export const App = {
             const isSelected = selected.has(val);
             btn.classList.toggle('is-selected', isSelected);
             btn.setAttribute('aria-pressed', isSelected);
+        });
+    },
+    updateFlagSwatchTriState(container) {
+        if (!container) return;
+        const f = normalizeFilterState(this.state.filters);
+        this.state.filters = f;
+        container.querySelectorAll('[data-flag]').forEach(btn => {
+            const value = (btn.dataset.flag || '').trim();
+            const mode = value === FILTER_NONE_LABEL
+                ? normalizeFilterMode(f.flagEmptyMode)
+                : getListMode(f.flag, f.flagExclude, value);
+            btn.classList.toggle('is-included', mode === FILTER_MODE_INCLUDE);
+            btn.classList.toggle('is-excluded', mode === FILTER_MODE_EXCLUDE);
+            btn.classList.toggle('is-selected', mode !== FILTER_MODE_IGNORE);
+            btn.dataset.mode = mode;
+            btn.setAttribute('aria-pressed', mode !== FILTER_MODE_IGNORE);
+            let modeLabel = btn.querySelector('.flag-filter-mode');
+            if (!modeLabel) {
+                modeLabel = document.createElement('span');
+                modeLabel.className = 'flag-filter-mode';
+                modeLabel.setAttribute('aria-hidden', 'true');
+                btn.appendChild(modeLabel);
+            }
+            modeLabel.textContent = mode === FILTER_MODE_INCLUDE ? '+' : (mode === FILTER_MODE_EXCLUDE ? '-' : '');
         });
     },
     openFlagPicker(anchor) {
@@ -3942,7 +4837,7 @@ export const App = {
                         const deckName = escapeHtml(d.name);
                         const deckNameKey = escapeHtml((d.name || '').toLowerCase());
                         return `
- <button type="button" class="analytics-menu-option analytics-deck-option w-full text-left px-3 py-2 text-sm rounded-md inline-flex items-start justify-between gap-2 ${active ? 'bg-surface-muted' : 'hover:bg-surface-muted'}" data-deck="${d.id}" data-deck-name="${deckNameKey}">
+ <button type="button" class="analytics-menu-option analytics-deck-option w-full text-left px-3 py-1.5 text-[13px] rounded-md inline-flex items-start justify-between gap-1.5 ${active ? 'bg-surface-muted' : 'hover:bg-surface-muted'}" data-deck="${d.id}" data-deck-name="${deckNameKey}">
  <span class="analytics-deck-name">${deckName}</span>
  ${active ? '<i data-lucide="check" class="w-3 h-3 text-accent mt-0.5"></i>' : '<span class="w-3 h-3 mt-0.5"></span>'}
  </button>
@@ -3956,7 +4851,7 @@ export const App = {
  </div>
  ` : '';
                 deckMenu.innerHTML = `
- <button type="button" class="analytics-menu-option w-full text-left px-3 py-2 text-sm rounded-md inline-flex items-center justify-between ${allSelected ? 'bg-surface-muted' : 'hover:bg-surface-muted'}" data-deck="all">
+ <button type="button" class="analytics-menu-option w-full text-left px-3 py-1.5 text-[13px] rounded-md inline-flex items-center justify-between ${allSelected ? 'bg-surface-muted' : 'hover:bg-surface-muted'}" data-deck="all">
  <span>No filter (all decks)</span>
  ${allCheck}
  </button>
@@ -4014,7 +4909,7 @@ export const App = {
                         const active = selectedTags.has(opt.name);
                         const tagName = opt.name || '';
                         return `
- <button type="button" class="analytics-menu-option analytics-tag-option w-full text-left px-3 py-2 text-sm rounded-md inline-flex items-center justify-between ${active ? 'bg-surface-muted' : 'hover:bg-surface-muted'}" data-analytic-tag="${encodeDataAttr(tagName)}" data-tag-name="${encodeDataAttr(tagName.toLowerCase())}">
+ <button type="button" class="analytics-menu-option analytics-tag-option w-full text-left px-3 py-1.5 text-[13px] rounded-md inline-flex items-center justify-between ${active ? 'bg-surface-muted' : 'hover:bg-surface-muted'}" data-analytic-tag="${encodeDataAttr(tagName)}" data-tag-name="${encodeDataAttr(tagName.toLowerCase())}">
  <span class="truncate">${escapeHtml(tagName)}</span>
  ${active ? '<i data-lucide="check" class="w-3 h-3 text-accent"></i>' : '<span class="w-3 h-3"></span>'}
  </button>
@@ -4063,7 +4958,7 @@ export const App = {
  <span>Include suspended</span>
  </label>
  <div class="h-px bg-[color:var(--card-border)] my-2"></div>
- <button type="button" class="analytics-menu-option w-full text-left px-3 py-2 text-sm rounded-md bg-[color:color-mix(in_srgb,var(--accent)_10%,transparent)] text-[color:var(--accent)] hover:bg-[color:color-mix(in_srgb,var(--accent)_20%,transparent)]" data-analytic-clear="1">Clear filters</button>
+ <button type="button" class="analytics-menu-option w-full text-left px-3 py-1.5 text-[13px] rounded-md bg-[color:color-mix(in_srgb,var(--accent)_10%,transparent)] text-[color:var(--accent)] hover:bg-[color:color-mix(in_srgb,var(--accent)_20%,transparent)]" data-analytic-clear="1">Clear filters</button>
  `;
 
                 const flagRow = filterMenu.querySelector('#analyticsFlagSwatches');
@@ -4874,7 +5769,7 @@ export const App = {
  ${canAdd ? `<button class="tag-add-option w-full text-left px-3 py-2 text-sm text-accent hover:bg-accent-soft" data-add="${encodeDataAttr(input.value.trim())}">+ Add "${escapeHtml(input.value.trim())}"</button>` : ''}
  ${options.map(opt => {
             const active = selected.has(opt.name);
-            return `<button class="tag-option w-full text-left px-3 py-2 text-sm flex items-center gap-2 ${active ? 'bg-accent-soft border-lime-200' : 'hover:bg-surface-muted'}" data-tag="${encodeDataAttr(opt.name)}">
+            return `<button class="tag-option w-full text-left px-3 py-1.5 text-[13px] flex items-center gap-1.5 ${active ? 'bg-accent-soft border-lime-200' : 'hover:bg-surface-muted'}" data-tag="${encodeDataAttr(opt.name)}">
  <span class="flex-1">${escapeHtml(opt.name)}</span>
  ${active ? '<span class="text-[11px] text-accent">Selected</span>' : ''}
  </button>`;
@@ -4984,11 +5879,14 @@ export const App = {
 
         const dueCounts = new Map();
         let totalDue = 0;
-        const f = this.state.filters;
-        const defaultStudyFilters = !f.again && !f.hard && !f.addedToday && (!f.tags || f.tags.length === 0) &&
-            !f.marked && (!f.flag || (Array.isArray(f.flag) ? f.flag.length === 0 : f.flag === ''));
-        const tagsKey = (f.tags || []).slice().sort().join('|');
-        const flagKey = Array.isArray(f.flag) ? f.flag.slice().sort().join('|') : (f.flag || '');
+        const f = normalizeFilterState(this.state.filters);
+        this.state.filters = f;
+        const defaultStudyFilters = !f.again && !f.hard && !f.addedToday &&
+            f.tags.length === 0 && f.tagsExclude.length === 0 && f.tagEmptyMode === FILTER_MODE_IGNORE &&
+            !f.marked &&
+            f.flag.length === 0 && f.flagExclude.length === 0 && f.flagEmptyMode === FILTER_MODE_IGNORE;
+        const tagsKey = `${f.tags.slice().sort().join('|')}::${f.tagsExclude.slice().sort().join('|')}::${f.tagEmptyMode}`;
+        const flagKey = `${f.flag.slice().sort().join('|')}::${f.flagExclude.slice().sort().join('|')}::${f.flagEmptyMode}`;
         const timeBucket = Math.floor(Date.now() / STUDY_DUE_BUCKET_MS);
         const cacheKey = JSON.stringify({
             v: this.state.cardsVersion,
@@ -5035,56 +5933,77 @@ export const App = {
             this.state.studyDeckCache = { key: cacheKey, dueCounts, totalDue };
         }
 
-        const selected = this.state.filters.studyDecks || [];
+        const selectedInclude = this.state.filters.studyDecks || [];
+        const selectedExclude = this.state.filters.studyDecksExclude || [];
         const query = (input.value || '').toLowerCase();
 
         // Render dropdown options
         const filtered = this.state.decks.filter(d => d.name.toLowerCase().includes(query));
         dropdown.innerHTML = filtered.map(d => {
-            const isSelected = selected.includes(d.id);
+            const mode = getListMode(selectedInclude, selectedExclude, d.id);
+            const isIncluded = mode === FILTER_MODE_INCLUDE;
+            const isExcluded = mode === FILTER_MODE_EXCLUDE;
             const dueCount = dueCounts.get(d.id) || 0;
-            return `<div class="deck-option flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-surface-muted ${isSelected ? 'bg-accent-soft' : ''}" data-deck-id="${d.id}">
+            const modeLabel = isIncluded ? '<span class="text-[10px] font-mono text-accent">+</span>' : (isExcluded ? '<span class="text-[10px] font-mono text-sub">-</span>' : '');
+            return `<div class="deck-option flex items-center justify-between px-3 py-1.5 cursor-pointer hover:bg-surface-muted ${isIncluded ? 'bg-accent-soft' : ''} ${isExcluded ? 'bg-[color:var(--surface-strong)]' : ''}" data-deck-id="${d.id}">
  <span class="flex items-center gap-2">
- ${isSelected ? '<i data-lucide="check" class="w-3 h-3 text-accent"></i>' : '<span class="w-3"></span>'}
- <span class="text-sm">${escapeHtml(d.name)}</span>
+ ${isIncluded ? '<i data-lucide="check" class="w-3 h-3 text-accent"></i>' : (isExcluded ? '<i data-lucide="x" class="w-3 h-3 text-sub"></i>' : '<span class="w-3"></span>')}
+ <span class="text-[13px]">${escapeHtml(d.name)}</span>
  </span>
- <span class="text-xs text-muted">${dueCount} due</span>
+ <span class="flex items-center gap-2 shrink-0 ml-2">
+ ${modeLabel}
+ <span class="text-xs text-accent font-medium tabular-nums whitespace-nowrap">${dueCount}</span>
+ </span>
  </div>`;
         }).join('');
         if (filtered.length === 0) {
-            dropdown.innerHTML = '<div class="px-3 py-2 text-sm text-muted italic">No decks found</div>';
+            dropdown.innerHTML = '<div class="px-3 py-1.5 text-xs text-muted italic">No decks found</div>';
         }
 
         // Render selected deck pills
-        display.innerHTML = selected.map(id => {
+        const pills = [];
+        for (const id of selectedInclude) {
             const d = this.deckById(id);
-            if (!d) return '';
-            return `<span class="selected-deck-pill inline-flex items-center gap-1 px-2 py-1 rounded-full bg-[color:var(--accent)] text-[color:var(--badge-text)] text-xs" data-deck-id="${id}">
+            if (!d) continue;
+            pills.push(`<span class="selected-deck-pill filter-pill--include inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border" data-deck-id="${id}" data-mode="${FILTER_MODE_INCLUDE}">
+ <span class="filter-pill-mode">+</span>
  ${escapeHtml(d.name)}
  <button class="remove-deck-btn hover:bg-surface-muted rounded-full p-0.5" data-deck-id="${id}">
  <i data-lucide="x" class="w-3 h-3 pointer-events-none"></i>
  </button>
- </span>`;
-        }).join('');
-        if (selected.length === 0) {
-            display.innerHTML = `<span class="text-accent text-xs italic">All decks (${totalDue} due)</span>`;
+ </span>`);
+        }
+        for (const id of selectedExclude) {
+            const d = this.deckById(id);
+            if (!d) continue;
+            pills.push(`<span class="selected-deck-pill filter-pill--exclude inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border" data-deck-id="${id}" data-mode="${FILTER_MODE_EXCLUDE}">
+ <span class="filter-pill-mode">-</span>
+ ${escapeHtml(d.name)}
+ <button class="remove-deck-btn hover:bg-surface-muted rounded-full p-0.5" data-deck-id="${id}">
+ <i data-lucide="x" class="w-3 h-3 pointer-events-none"></i>
+ </button>
+ </span>`);
+        }
+        display.innerHTML = pills.join('');
+        if (pills.length === 0) {
+            display.innerHTML = `<span class="text-accent text-xs italic">All decks (${totalDue})</span>`;
         }
         createIconsInScope(dropdown);
         createIconsInScope(display);
     },
     getStudyFilterCandidates(filters) {
-        const f = filters || this.state.filters;
-        const tags = Array.isArray(f.tags) ? f.tags.map(t => (t || '').trim()).filter(Boolean) : [];
-        const flags = Array.isArray(f.flag)
-            ? f.flag.map(v => (v || '').trim()).filter(Boolean)
-            : [(f.flag || '').trim()].filter(Boolean);
+        const f = normalizeFilterState(filters || this.state.filters);
+        const tags = normalizeFilterList(f.tags);
+        const flags = normalizeFilterList(f.flag);
         const needsMarked = !!f.marked;
         const needsAgain = !!f.again;
         const needsHard = !!f.hard;
         const needsToday = !!f.addedToday;
+        const includeNoTag = normalizeFilterMode(f.tagEmptyMode) === FILTER_MODE_INCLUDE;
+        const includeNoFlag = normalizeFilterMode(f.flagEmptyMode) === FILTER_MODE_INCLUDE;
 
         let candidates = null;
-        if (tags.length > 0) {
+        if (tags.length > 0 && !includeNoTag) {
             const union = new Set();
             for (const tag of tags) {
                 const set = this.state.tagIndex.get(tag);
@@ -5092,7 +6011,7 @@ export const App = {
             }
             candidates = union;
         }
-        if (flags.length > 0) {
+        if (flags.length > 0 && !includeNoFlag) {
             const union = new Set();
             for (const flag of flags) {
                 const set = this.state.flagIndex.get(flag);
@@ -5182,12 +6101,12 @@ export const App = {
             const option = e.target.closest('.deck-option');
             if (option) {
                 const deckId = option.dataset.deckId;
-                const idx = this.state.filters.studyDecks.indexOf(deckId);
-                if (idx >= 0) {
-                    this.state.filters.studyDecks.splice(idx, 1);
-                } else {
-                    this.state.filters.studyDecks.push(deckId);
-                }
+                const current = getListMode(this.state.filters.studyDecks, this.state.filters.studyDecksExclude, deckId);
+                const next = cycleFilterMode(current);
+                const updated = applyListMode(this.state.filters.studyDecks, this.state.filters.studyDecksExclude, deckId, next);
+                this.state.filters.studyDecks = updated.include;
+                this.state.filters.studyDecksExclude = updated.exclude;
+                this.state.filters = normalizeFilterState(this.state.filters);
                 // Reset non-due study mode when decks change
                 this.state.studyNonDue = false;
                 this.renderStudyDeckSelection();
@@ -5200,15 +6119,14 @@ export const App = {
             const btn = e.target.closest('.remove-deck-btn');
             if (btn) {
                 const deckId = btn.dataset.deckId;
-                const idx = this.state.filters.studyDecks.indexOf(deckId);
-                if (idx >= 0) {
-                    this.state.filters.studyDecks.splice(idx, 1);
-                    // Reset non-due study mode when decks change
-                    this.state.studyNonDue = false;
-                    this.renderStudyDeckSelection();
-                    this.renderStudy();
-                    this.updateActiveFiltersCount();
-                }
+                this.state.filters.studyDecks = normalizeFilterList(this.state.filters.studyDecks).filter(id => id !== deckId);
+                this.state.filters.studyDecksExclude = normalizeFilterList(this.state.filters.studyDecksExclude).filter(id => id !== deckId);
+                this.state.filters = normalizeFilterState(this.state.filters);
+                // Reset non-due study mode when decks change
+                this.state.studyNonDue = false;
+                this.renderStudyDeckSelection();
+                this.renderStudy();
+                this.updateActiveFiltersCount();
             }
         };
     },
@@ -5589,6 +6507,10 @@ export const App = {
         if (this.state.filters.studyDecks) {
             this.state.filters.studyDecks = this.state.filters.studyDecks.filter(id => id !== deck.id);
         }
+        if (this.state.filters.studyDecksExclude) {
+            this.state.filters.studyDecksExclude = this.state.filters.studyDecksExclude.filter(id => id !== deck.id);
+        }
+        this.state.filters = normalizeFilterState(this.state.filters);
 
         // Archive in Notion (deck + cards), then remove locally
         if (deck.notionId) {
@@ -6236,6 +7158,10 @@ export const App = {
                 if (this.state.filters.studyDecks) {
                     this.state.filters.studyDecks = this.state.filters.studyDecks.filter(id => id !== deck.id);
                 }
+                if (this.state.filters.studyDecksExclude) {
+                    this.state.filters.studyDecksExclude = this.state.filters.studyDecksExclude.filter(id => id !== deck.id);
+                }
+                this.state.filters = normalizeFilterState(this.state.filters);
                 if (Array.isArray(this.state.analyticsDecks)) {
                     this.state.analyticsDecks = this.state.analyticsDecks.filter(id => id !== deck.id);
                 }
@@ -7302,14 +8228,12 @@ export const App = {
         }
     },
     handleOnline() {
-        document.body.classList.remove('offline-mode');
         toast('Back online');
         this.renderConnection();
         this.processDyContextQueue();
         this.requestAutoSyncSoon(250);
     },
     handleOffline() {
-        document.body.classList.add('offline-mode');
         toast('You are offline - changes will sync when online');
         this.renderConnection();
         this.updateSyncButtonState();
@@ -7414,7 +8338,7 @@ export const App = {
         setTimeout(() => document.addEventListener('click', closeOnClickOutside), 0);
     },
     passFilters(card, opts = {}) {
-        const f = this.state.filters;
+        const f = normalizeFilterState(this.state.filters);
         const context = opts.context || 'library';
         const allowSubItems = opts.allowSubItems === true;
 
@@ -7450,10 +8374,29 @@ export const App = {
                 }
             }
             if (f.addedToday && card.createdAt && new Date(card.createdAt).toDateString() !== now.toDateString()) return false;
-            if (f.tags.length && !f.tags.some(t => card.tags.some(ct => ct.name === t))) return false;
+            const cardTagNames = this.normalizeTagNames(card.tags);
+            const hasTags = cardTagNames.length > 0;
+            const includeNoTag = f.tagEmptyMode === FILTER_MODE_INCLUDE;
+            const excludeNoTag = f.tagEmptyMode === FILTER_MODE_EXCLUDE;
+            if (f.tags.length > 0 || includeNoTag) {
+                const includeMatch = (f.tags.length > 0 && f.tags.some(t => cardTagNames.includes(t))) ||
+                    (includeNoTag && !hasTags);
+                if (!includeMatch) return false;
+            }
+            if (f.tagsExclude.length > 0 && f.tagsExclude.some(t => cardTagNames.includes(t))) return false;
+            if (excludeNoTag && !hasTags) return false;
             if (f.marked && !card.marked) return false;
-            const flagFilter = Array.isArray(f.flag) ? f.flag : (f.flag ? [f.flag] : []);
-            if (flagFilter.length > 0 && !flagFilter.includes(card.flag || '')) return false;
+            const cardFlag = (card.flag || '').trim();
+            const hasFlag = !!cardFlag;
+            const includeNoFlag = f.flagEmptyMode === FILTER_MODE_INCLUDE;
+            const excludeNoFlag = f.flagEmptyMode === FILTER_MODE_EXCLUDE;
+            if (f.flag.length > 0 || includeNoFlag) {
+                const includeMatch = (f.flag.length > 0 && f.flag.includes(cardFlag)) ||
+                    (includeNoFlag && !hasFlag);
+                if (!includeMatch) return false;
+            }
+            if (f.flagExclude.length > 0 && f.flagExclude.includes(cardFlag)) return false;
+            if (excludeNoFlag && !hasFlag) return false;
 
             return true;
         } else {
@@ -7498,10 +8441,7 @@ export const App = {
             return null;
         }
 
-        const f = this.state.filters;
-        const deckIds = (f.studyDecks && f.studyDecks.length > 0)
-            ? f.studyDecks
-            : this.state.decks.map(d => d.id);
+        const deckIds = this.getEffectiveStudyDeckIds();
         const queue = this.generateCardQueue(deckIds, this.state.studyNonDue, { precomputeReverse: false });
         if (!queue.length) return null;
         return this.cardById(queue[0].cardId) || null;
@@ -7626,13 +8566,17 @@ export const App = {
         }
         this.state.activeMicButton = null;
         this.state.lockAiUntilNextCard = true;
+        this.updateGhostInkControlsState();
     },
     async rate(rating) {
         const card = this.state.selectedCard;
         if (!card) return;
         if (!this.state.answerRevealed) {
-            const mode = el('#revisionMode').value;
-            toast(mode === 'ai' ? 'Judge the answer first' : 'Reveal the answer first');
+            const mode = normalizeRevisionMode(el('#revisionMode').value);
+            const hint = mode === REVISION_MODE_AI
+                ? 'Judge the answer first'
+                : (mode === REVISION_MODE_TYPEIN ? 'Check your typed answer first' : 'Reveal the answer first');
+            toast(hint);
             return;
         }
         if (this.isAiModeSelected() && navigator.onLine && !this.state.settings.aiKey) {
@@ -8279,6 +9223,18 @@ export const App = {
     deckName(id) {
         return this.deckById(id)?.name ?? '—';
     },
+    hasStudyDeckFilter() {
+        const f = normalizeFilterState(this.state.filters);
+        return (f.studyDecks.length > 0) || (f.studyDecksExclude.length > 0);
+    },
+    getEffectiveStudyDeckIds() {
+        const f = normalizeFilterState(this.state.filters);
+        const allDeckIds = this.state.decks.map(d => d.id);
+        const include = f.studyDecks.filter(id => allDeckIds.includes(id));
+        const exclude = new Set(f.studyDecksExclude.filter(id => allDeckIds.includes(id)));
+        const base = include.length > 0 ? include : allDeckIds;
+        return base.filter(id => !exclude.has(id));
+    },
     getDeckLabel(deckIds) {
         if (!deckIds || deckIds.length === 0) return 'No decks';
         const allDeckIds = this.state.decks.map(d => d.id);
@@ -8289,8 +9245,23 @@ export const App = {
         return `${deckIds.length} decks`;
     },
     resetFilters() {
-        const { suspended, leech } = this.state.filters;
-        this.state.filters = { again: false, hard: false, addedToday: false, tags: [], suspended, leech, marked: false, flag: [], studyDecks: [] };
+        const { suspended, leech } = normalizeFilterState(this.state.filters);
+        this.state.filters = normalizeFilterState({
+            again: false,
+            hard: false,
+            addedToday: false,
+            tags: [],
+            tagsExclude: [],
+            tagEmptyMode: FILTER_MODE_IGNORE,
+            suspended,
+            leech,
+            marked: false,
+            flag: [],
+            flagExclude: [],
+            flagEmptyMode: FILTER_MODE_IGNORE,
+            studyDecks: [],
+            studyDecksExclude: []
+        });
         el('#filterAgain').checked = false;
         el('#filterHard').checked = false;
         el('#filterAddedToday').checked = false;
@@ -8300,7 +9271,7 @@ export const App = {
         if (filterLeech) filterLeech.checked = !!leech;
         el('#filterMarked').checked = false;
         const filterFlagSwatches = el('#filterFlagSwatches');
-        if (filterFlagSwatches) this.updateFlagSwatchMulti(filterFlagSwatches, []);
+        if (filterFlagSwatches) this.updateFlagSwatchTriState(filterFlagSwatches);
         this.renderStudyDeckSelection();
         this.renderTagFilter();
         this.renderStudy();
@@ -9191,7 +10162,7 @@ export const App = {
         const model = el('#sttModel').value.trim();
         const key = el('#sttKey').value.trim();
         const prompt = el('#sttPrompt').value.trim();
-        const inAiMode = el('#revisionMode').value === 'ai';
+        const inAiMode = normalizeRevisionMode(el('#revisionMode').value) === REVISION_MODE_AI;
 
         if (!provider) {
             this.state.settings.sttProvider = '';
@@ -9821,7 +10792,8 @@ export const App = {
         if (s.fontMode) this.state.settings.fontMode = s.fontMode;
         this.applyTheme();
         this.applyFontMode();
-        this.updateSkipHotkeyLabel(el('#revisionMode')?.value === 'ai');
+        this.updateSkipHotkeyLabel(normalizeRevisionMode(el('#revisionMode')?.value) === REVISION_MODE_AI);
+        this.updateGhostInkControlsState();
         // Toggle provider field visibility based on current selection
         this.toggleAiProviderFields();
         this.updateDyContextSettingsUI();
@@ -9959,6 +10931,32 @@ export const App = {
         this.setAiControlsLocked(this.state.aiLocked);
         this.updateMobileFab();
     },
+    submitGhostInkAnswer() {
+        if (!this.isTypeInModeSelected()) return;
+        if (!this.state.selectedCard) return;
+        if (this.state.answerRevealed) {
+            toast('Answer already checked. Go to the next card.');
+            return;
+        }
+        const answerField = el('#ghostinkAnswer');
+        const feedback = el('#ghostinkFeedback');
+        const rawInput = answerField?.value || '';
+        if (!rawInput.trim()) {
+            toast('Type an answer first');
+            return;
+        }
+
+        const expected = getGhostInkExpectedAnswers(this.state.selectedCard, this.state.cardReversed);
+        const result = evaluateGhostInkAnswer(rawInput, expected);
+
+        if (feedback) {
+            feedback.classList.remove('hidden');
+            feedback.innerHTML = buildGhostInkFeedbackHtml(result);
+            applyMediaEmbeds(feedback);
+            this.renderMath(feedback);
+        }
+        this.reveal();
+    },
     async submitToAI() {
         if (this.state.aiLocked) return;
         if (!this.state.selectedCard) return;
@@ -10036,7 +11034,7 @@ export const App = {
                 const switchBtn = el('#switchToRevealBtn');
                 if (switchBtn) {
                     switchBtn.onclick = () => {
-                        el('#revisionMode').value = 'manual';
+                        el('#revisionMode').value = REVISION_MODE_MANUAL;
                         el('#aiControls').classList.add('hidden');
                         this.state.aiLocked = false;
                         this.updateMobileFab();
@@ -10269,8 +11267,8 @@ export const App = {
         const hasCard = !!this.state.selectedCard;
         const inSession = !!this.state.session;
         const revealed = this.state.answerRevealed;
-        const revisionMode = el('#revisionMode')?.value || 'manual';
-        const isAiMode = revisionMode === 'ai';
+        const revisionMode = normalizeRevisionMode(el('#revisionMode')?.value);
+        const isAiMode = revisionMode === REVISION_MODE_AI;
         const sttEnabled = this.isSttEnabled();
         // Check if the actual reveal button in the card is visible (not hidden)
         const revealBtnVisible = el('#revealBtn') && !el('#revealBtn').classList.contains('hidden');
@@ -10353,7 +11351,7 @@ export const App = {
         });
     },
     async recordAnswer() {
-        const isAiMode = el('#revisionMode')?.value === 'ai';
+        const isAiMode = normalizeRevisionMode(el('#revisionMode')?.value) === REVISION_MODE_AI;
         if (!isAiMode) {
             toast('Mic is available in AI mode only.');
             return;

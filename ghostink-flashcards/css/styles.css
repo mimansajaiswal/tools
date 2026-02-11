@@ -430,6 +430,42 @@ html[data-theme="dark"] .dash {
     background: rgb(var(--dull-purple-rgb) / 0.12);
 }
 
+.filter-pill-mode {
+    font-size: 10px;
+    font-family: "JetBrains Mono", monospace;
+    letter-spacing: 0.04em;
+    opacity: 0.75;
+    min-width: 0.8em;
+    text-align: center;
+}
+
+.filter-pill--include {
+    background: var(--accent-soft);
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--card-border));
+}
+
+.filter-pill--exclude {
+    background: var(--surface-strong);
+    border-color: var(--card-border);
+    border-style: dashed;
+}
+
+#studyFiltersBanner {
+    min-height: 36px;
+    transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+}
+
+#studyFiltersBanner.study-filters-banner--inactive {
+    background: color-mix(in srgb, var(--surface) 88%, var(--accent-soft) 12%);
+    color: var(--text-sub);
+    border-color: var(--card-border);
+}
+
+#studyFiltersBanner.study-filters-banner--inactive #studyFiltersBannerBtn {
+    color: var(--text-sub);
+    text-decoration-color: color-mix(in srgb, var(--text-sub) 52%, transparent);
+}
+
 
 
 /* Library cloze rows */
@@ -557,6 +593,7 @@ kbd {
     justify-content: center;
     width: 26px;
     height: 26px;
+    position: relative;
     border-radius: 8px;
     border: 1px solid var(--card-border);
     background: var(--surface);
@@ -570,6 +607,30 @@ kbd {
 .flag-swatch-btn.is-selected {
     border-color: var(--accent);
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.flag-swatch-btn.is-excluded {
+    border-color: var(--card-border);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-sub) 20%, transparent);
+}
+
+.flag-swatch-btn.is-excluded .flag-swatch {
+    opacity: 0.35;
+}
+
+.flag-filter-mode {
+    position: absolute;
+    right: 2px;
+    bottom: 1px;
+    font-size: 9px;
+    line-height: 1;
+    font-weight: 700;
+    color: var(--text-main);
+    pointer-events: none;
+}
+
+.flag-swatch-btn.is-excluded .flag-filter-mode {
+    color: var(--text-sub);
 }
 
 .flag-swatch {
@@ -853,6 +914,7 @@ html[data-theme="dark"] .notion-color-red-background {
 #cardBack a,
 #notesPreview a,
 #aiFeedback a,
+#ghostinkFeedback a,
 #blockNotePreview a {
     color: var(--dull-purple);
     text-decoration: underline;
@@ -862,8 +924,44 @@ html[data-theme="dark"] .notion-color-red-background {
 #cardBack a:hover,
 #notesPreview a:hover,
 #aiFeedback a:hover,
+#ghostinkFeedback a:hover,
 #blockNotePreview a:hover {
     opacity: 0.8;
+}
+
+.ghostink-score-track {
+    width: 100%;
+    height: 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--surface-strong) 85%, var(--card-border));
+    overflow: hidden;
+}
+
+.ghostink-score-fill {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    transition: width 160ms ease;
+}
+
+.ghostink-score-fill--strong {
+    background: var(--rating-good-bg);
+}
+
+.ghostink-score-fill--close {
+    background: var(--rating-hard-bg);
+}
+
+.ghostink-score-fill--weak {
+    background: var(--rating-again-bg);
+}
+
+.ghostink-row {
+    margin-top: 0.5rem;
+}
+
+.ghostink-row:first-child {
+    margin-top: 0;
 }
 
 /* Minimal markdown typography (works without Tailwind Typography plugin) */
@@ -1434,21 +1532,76 @@ html[data-theme="dark"] .shortcut-key {
     display: none;
 }
 
-/* Fix select dropdown positioning on mobile */
+/* Custom select styling (all native dropdowns/combo boxes) */
 select {
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236a625a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 0.75rem center;
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-lg);
+    background-color: var(--surface);
+    color: var(--text-main);
+    line-height: 1.35;
     padding-right: 2rem;
     position: relative;
     z-index: 1;
+    box-shadow: none;
+    transition:
+        border-color 0.16s ease,
+        background-color 0.16s ease;
+    background-image:
+        linear-gradient(45deg, transparent 50%, var(--text-sub) 50%),
+        linear-gradient(135deg, var(--text-sub) 50%, transparent 50%);
+    background-repeat: no-repeat;
+    background-position:
+        calc(100% - 0.88rem) calc(50% - 0.12rem),
+        calc(100% - 0.58rem) calc(50% - 0.12rem);
+    background-size:
+        0.34rem 0.34rem,
+        0.34rem 0.34rem;
+}
+
+select:hover:not(:disabled) {
+    background-color: var(--surface-muted);
+}
+
+select:focus,
+select:focus-visible {
+    outline: none;
+    border-color: color-mix(in srgb, var(--accent) 52%, var(--card-border));
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+select:disabled {
+    color: var(--text-faint);
+    border-color: var(--border-weak);
+    background-color: var(--surface-strong);
+    cursor: not-allowed;
+    opacity: 0.88;
+    box-shadow: none;
+    background-image:
+        linear-gradient(45deg, transparent 50%, var(--text-faint) 50%),
+        linear-gradient(135deg, var(--text-faint) 50%, transparent 50%);
+}
+
+select option {
+    background: var(--surface);
+    color: var(--text-main);
+}
+
+/* Multi-selects or size-based listboxes should not use chevron treatment */
+select[multiple],
+select[size]:not([size="1"]) {
+    background-image: none;
+    padding-right: 0.75rem;
+}
+
+select::-ms-expand {
+    display: none;
 }
 
 html[data-theme="dark"] select {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23d7d0c6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    box-shadow: none;
 }
 
 /* Mobile select touch optimization */
@@ -1465,66 +1618,6 @@ html[data-theme="dark"] select {
 @media (forced-colors: active) {
     select {
         background-image: none !important;
-    }
-}
-
-/* Offline mode indicator */
-body.offline-mode::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, var(--dull-purple), var(--muted-pink), var(--dull-purple));
-    background-size: 200% 100%;
-    animation: offline-stripe 2s linear infinite;
-    z-index: 150;
-    pointer-events: none;
-}
-
-body.offline-mode::after {
-    content: 'Offline';
-    position: fixed;
-    top: 8px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 4px 12px;
-    background: var(--dull-purple);
-    color: white;
-    font-size: 11px;
-    font-weight: 500;
-    border-radius: var(--radius-pill);
-    z-index: 150;
-    opacity: 0.9;
-    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12);
-    pointer-events: none;
-}
-
-@keyframes offline-stripe {
-    0% {
-        background-position: 200% 0;
-    }
-
-    100% {
-        background-position: -200% 0;
-    }
-}
-
-/* Reduce visual clutter by fading the offline badge after a few seconds */
-body.offline-mode::after {
-    animation: offline-badge-fade 5s ease-in-out forwards;
-}
-
-@keyframes offline-badge-fade {
-
-    0%,
-    60% {
-        opacity: 0.9;
-    }
-
-    100% {
-        opacity: 0.5;
     }
 }
 
