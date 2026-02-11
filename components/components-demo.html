@@ -319,6 +319,110 @@
             overflow: auto;
         }
 
+        .modal-demo-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .modal-demo-btn {
+            border: 1px solid var(--line);
+            background: #fff;
+            color: var(--ink);
+            border-radius: 8px;
+            padding: 7px 12px;
+            cursor: pointer;
+            font: 600 12px/1 "JetBrains Mono", monospace;
+        }
+
+        .modal-demo-btn:hover {
+            border-color: var(--ink-soft);
+        }
+
+        .modal-demo-note {
+            color: var(--ink-soft);
+            font: 500 11px/1.4 "JetBrains Mono", monospace;
+        }
+
+        .qa-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 12000;
+            background: rgba(20, 18, 16, 0.46);
+            display: grid;
+            place-items: center;
+            padding: 14px;
+        }
+
+        .qa-modal-backdrop[hidden] {
+            display: none !important;
+        }
+
+        .qa-modal {
+            width: min(760px, 100%);
+            max-height: min(82vh, 700px);
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: #fffaf3;
+            color: var(--ink);
+            box-shadow: 0 28px 80px rgba(0, 0, 0, 0.28);
+            display: grid;
+            grid-template-rows: auto minmax(0, 1fr);
+            overflow: hidden;
+        }
+
+        .qa-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--line);
+            background: #f8f3ea;
+        }
+
+        .qa-modal-title {
+            margin: 0;
+            font: 700 15px/1.2 "Fraunces", serif;
+        }
+
+        .qa-modal-body {
+            min-height: 0;
+            overflow: auto;
+            padding: 12px;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.65)),
+                repeating-linear-gradient(0deg, transparent 0, transparent 24px, rgba(207, 194, 175, 0.17) 24px, rgba(207, 194, 175, 0.17) 25px);
+        }
+
+        body.qa-modal-open {
+            overflow: hidden;
+        }
+
+        @media (max-width: 640px) {
+            .qa-modal-backdrop {
+                padding: 8px;
+            }
+
+            .qa-modal {
+                max-height: calc(100vh - 16px);
+                border-radius: 8px;
+            }
+
+            .qa-modal-header {
+                padding: 8px 9px;
+            }
+
+            .qa-modal-title {
+                font-size: 14px;
+            }
+
+            .qa-modal-body {
+                padding: 8px;
+            }
+        }
+
         /* Example 2 custom classNames */
         .petqa-root {
             --qa-bg: #eef8f3;
@@ -328,7 +432,7 @@
             --qa-accent: #1d7d5e;
             --qa-accent-soft: #d8efe5;
             --qa-danger: #8e3737;
-            --qa-radius: 16px;
+            --qa-radius: 8px;
             --qa-font: "JetBrains Mono", monospace;
             box-shadow: 0 10px 30px rgba(29, 125, 94, 0.08);
         }
@@ -353,7 +457,7 @@
             <div class="quickadd-intro">
                 <p>Gallery scaffold for reusable UI components. Quick Add Parser is wired with live schema-driven
                     parsing
-                    and three variant demos.</p>
+                    and four variant demos.</p>
                 <div class="import-note">Single-file import:
                     <code>&lt;script src=\"./quick-add/quick-add-component.js\"&gt;&lt;/script&gt;</code>
                 </div>
@@ -362,6 +466,7 @@
                 <button class="tab-btn active" data-example="example1">Example 1: Tasks</button>
                 <button class="tab-btn" data-example="example2">Example 2: Pet Log</button>
                 <button class="tab-btn" data-example="example3">Example 3: Expenses</button>
+                <button class="tab-btn" data-example="example4">Example 4: Modal Embed</button>
             </div>
 
             <article class="example-wrap active" data-example-panel="example1">
@@ -445,6 +550,31 @@
                 </div>
                 <div id="quickAddExample3"></div>
             </article>
+
+            <article class="example-wrap" style="display:none" data-example-panel="example4">
+                <div class="example-head">
+                    <h2>Modal Embed Variant</h2>
+                    <p>Simulates usage inside a constrained modal container (scrolling body, clipped parent, fixed
+                        overlay). Use this to validate floating menus/pickers in app-like dialogs.</p>
+                    <div class="meta" id="meta4"></div>
+                </div>
+                <div class="modal-demo-controls">
+                    <button class="modal-demo-btn" type="button" id="openQuickAddModal">Open Quick Add Modal</button>
+                    <span class="modal-demo-note">The modal body is intentionally constrained to mimic embedded app
+                        layouts.</span>
+                </div>
+                <div class="qa-modal-backdrop" id="quickAddModalBackdrop" hidden>
+                    <section class="qa-modal" role="dialog" aria-modal="true" aria-labelledby="quickAddModalTitle">
+                        <header class="qa-modal-header">
+                            <h3 class="qa-modal-title" id="quickAddModalTitle">Quick Add In Modal</h3>
+                            <button class="modal-demo-btn" type="button" id="closeQuickAddModal">Close</button>
+                        </header>
+                        <div class="qa-modal-body">
+                            <div id="quickAddExample4"></div>
+                        </div>
+                    </section>
+                </div>
+            </article>
         </section>
 
     </main>
@@ -512,6 +642,8 @@
             'allowedAttachmentTypes',
             'autoDetectOptionsWithoutPrefix',
             'reduceInferredOptions',
+            'inferredMatchMode',
+            'inferredMatchThreshold',
             'placeholder',
             'hintText',
             'schema',
@@ -529,6 +661,9 @@
             'required',
             'multiple',
             'naturalDate',
+            'allowDateOnly',
+            'defaultTime',
+            'timeFormat',
             'color',
             'autoDetectWithoutPrefix',
             'reduceInferredOptions',
@@ -549,7 +684,7 @@
             'constraint'
         ]);
         const ALLOWED_CONDITION_KEYS = new Set(['field', 'op', 'value', 'values', 'and', 'or', 'not', 'when', 'message']);
-        const VALID_FIELD_TYPES = new Set(['string', 'number', 'options', 'date', 'boolean']);
+        const VALID_FIELD_TYPES = new Set(['string', 'number', 'options', 'date', 'datetime', 'boolean']);
         const VALID_FIELD_TERMINATOR_MODES = new Set(['strict', 'or-next-prefix', 'or-end']);
         const VALID_CONDITION_OPERATORS = new Set([
             'eq',
@@ -700,12 +835,21 @@
                     field.options.forEach((option, index) => validateOption(option, `${path}.options[${index}]`, errors));
                 }
             }
-            ['required', 'multiple', 'naturalDate', 'autoDetectWithoutPrefix', 'reduceInferredOptions', 'allowCustom', 'exhaustive']
+            ['required', 'multiple', 'naturalDate', 'allowDateOnly', 'autoDetectWithoutPrefix', 'reduceInferredOptions', 'allowCustom', 'exhaustive']
                 .forEach((key) => {
                     if (field[key] !== undefined && typeof field[key] !== 'boolean') {
                         pushValidationError(errors, `${path}.${key}`, 'must be a boolean');
                     }
                 });
+            if (field.defaultTime !== undefined && typeof field.defaultTime !== 'string') {
+                pushValidationError(errors, `${path}.defaultTime`, 'must be a string in HH:mm format');
+            }
+            if (field.timeFormat !== undefined) {
+                const format = String(field.timeFormat).toLowerCase();
+                if (format !== '24h' && format !== 'ampm') {
+                    pushValidationError(errors, `${path}.timeFormat`, 'must be "24h" or "ampm"');
+                }
+            }
             if (field.color !== undefined && typeof field.color !== 'string') {
                 pushValidationError(errors, `${path}.color`, 'must be a string');
             }
@@ -997,7 +1141,7 @@
                             { value: 'errands', color: '#475569' }
                         ]
                     },
-                    { key: 'due', type: 'date', naturalDate: true, prefixes: ['due:'] },
+                    { key: 'due', type: 'datetime', naturalDate: true, allowDateOnly: true, defaultTime: '08:00', prefixes: ['due:'] },
                     { key: 'owner', type: 'string', prefixes: ['@'] }
                 ]
             },
@@ -1012,8 +1156,8 @@
             }
         };
         const taskDefaultInput =
-            'Book vet appointment then call clinic !p3;; shift to urgent !p1;; prep records #health;; and confirm slot due:tomorrow;; with @Mimansa;; before breakfast\n\n' +
-            'Pick up supplements !p2;; #errands;; due:in 2 days;; @Mimansa;;';
+            'Book vet appointment then call clinic !p3;; shift to urgent !p1;; prep records #health;; and confirm slot due:23 feb 26 at 3pm;; with @Mimansa;; before breakfast\n\n' +
+            'Pick up supplements !p2;; #errands;; due:next week at 9:15am;; @Mimansa;;';
         const taskAdd = QuickAdd.create(taskConfig);
         taskAdd.setInput(taskDefaultInput);
         setupConfigPlayground({
@@ -1038,6 +1182,8 @@
             showEntryHeader: false,
             autoDetectOptionsWithoutPrefix: true,
             reduceInferredOptions: false,
+            inferredMatchMode: 'fuzzy',
+            inferredMatchThreshold: 0.8,
             fallbackField: 'note',
             placeholder: 'Use ; for new entry. Example: pet:Luna~~ event:walk~~ due:2025-02-01~~ at:yesterday~~',
             classNames: {
@@ -1115,8 +1261,8 @@
             }
         };
         const petDefaultInput =
-            'pet:Luna~~ event:litter~~ due:2025-02-01~~ sev:2~~ at:yesterday~~ cough and appetite normal;' +
-            ' pet:Mochi~~ event:groom~~ due:2026-03-01~~ sev:3~~ at:today~~ low energy and slept longer than usual';
+            'pet:Luna~~ event:litter~~ due:2025-02-01~~ sev:2~~ at:yesterday~~ cogh and appetite normal;' +
+            ' pet:Mochi~~ event:groom~~ due:2026-03-01~~ sev:3~~ at:today~~ low enery and slept longer than usyal';
         const petAdd = QuickAdd.create(petConfig);
         petAdd.setInput(petDefaultInput);
         setupConfigPlayground({
@@ -1213,6 +1359,113 @@
             baseConfig: expenseConfig,
             defaultInput: expenseDefaultInput
         });
+
+        const modalConfig = {
+            mount: '#quickAddExample4',
+            debounceMs: 260,
+            entrySeparator: '\n\n',
+            fieldTerminator: ';;',
+            fieldTerminatorMode: 'or-next-prefix',
+            fallbackField: 'title',
+            placeholder: 'Try: prep update !p2;; due:next week at 9:15am;; @Mimansa;;',
+            schema: {
+                fields: [
+                    { key: 'title', type: 'string', required: true },
+                    {
+                        key: 'priority',
+                        type: 'options',
+                        prefixes: ['!'],
+                        exhaustive: true,
+                        options: [
+                            { value: 'p1', color: '#dc2626' },
+                            { value: 'p2', color: '#d97706' },
+                            { value: 'p3', color: '#0284c7' }
+                        ]
+                    },
+                    {
+                        key: 'status',
+                        type: 'options',
+                        prefixes: ['st:'],
+                        exhaustive: true,
+                        options: [
+                            { value: 'todo', color: '#475569' },
+                            { value: 'doing', color: '#0ea5e9' },
+                            { value: 'done', color: '#16a34a' }
+                        ]
+                    },
+                    { key: 'due', type: 'datetime', naturalDate: true, allowDateOnly: true, defaultTime: '08:00', prefixes: ['due:'] },
+                    { key: 'owner', type: 'string', prefixes: ['@'] }
+                ]
+            },
+            tokens: {
+                '--qa-bg': '#fff9f1',
+                '--qa-border': '#d9ccb8',
+                '--qa-accent': '#7c4a2a',
+                '--qa-accent-soft': '#efe2d5',
+                '--qa-max-width': '100%'
+            },
+            onParse: (result) => {
+                document.getElementById('meta4').textContent = `entries=${result.entryCount}, valid=${result.validCount}, invalid=${result.invalidCount}`;
+            }
+        };
+        const modalDefaultInput =
+            'Finalize investor update !p2;; st:doing;; due:23 feb 26 at 3pm;; @Mimansa;;\n\n' +
+            'Book dentist !p1;; st:todo;; due:next week at 9:15am;; @Mimansa;;';
+        const modalAdd = QuickAdd.create(modalConfig);
+        modalAdd.setInput(modalDefaultInput);
+
+        const modalBackdropEl = document.getElementById('quickAddModalBackdrop');
+        const openModalBtn = document.getElementById('openQuickAddModal');
+        const closeModalBtn = document.getElementById('closeQuickAddModal');
+        const exampleTabsEl = document.getElementById('exampleTabs');
+        const openModal = () => {
+            if (!modalBackdropEl) return;
+            modalBackdropEl.hidden = false;
+            document.body.classList.add('qa-modal-open');
+            window.requestAnimationFrame(() => {
+                const input = modalBackdropEl.querySelector('[data-role="input"]');
+                if (input && typeof input.focus === 'function') {
+                    input.focus();
+                }
+            });
+        };
+        const closeModal = () => {
+            if (!modalBackdropEl) return;
+            modalBackdropEl.hidden = true;
+            document.body.classList.remove('qa-modal-open');
+        };
+        if (openModalBtn) {
+            openModalBtn.addEventListener('click', openModal);
+        }
+        if (closeModalBtn) {
+            closeModalBtn.addEventListener('click', closeModal);
+        }
+        if (modalBackdropEl) {
+            modalBackdropEl.addEventListener('click', (event) => {
+                if (event.target === modalBackdropEl) {
+                    closeModal();
+                }
+            });
+        }
+        if (exampleTabsEl) {
+            exampleTabsEl.addEventListener('click', (event) => {
+                const tab = event.target.closest('[data-example]');
+                if (tab && tab.getAttribute('data-example') !== 'example4') {
+                    closeModal();
+                }
+            });
+        }
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && modalBackdropEl && !modalBackdropEl.hidden) {
+                const hasOpenQuickAddPopup = !!modalBackdropEl.querySelector(
+                    '[data-role="datePicker"]:not([hidden]), [data-role="dropdown"]:not([hidden]), [data-role="blockedInfo"]:not([hidden])'
+                );
+                if (hasOpenQuickAddPopup) {
+                    return;
+                }
+                closeModal();
+            }
+        }, true);
     </script>
 </body>
 

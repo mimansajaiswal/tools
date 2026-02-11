@@ -56,6 +56,34 @@
         dropdownAdd: 'qa-dropdown-add',
         dropdownColor: 'qa-dropdown-color',
         dropdownMeta: 'qa-dropdown-meta',
+        datePicker: 'qa-date-picker',
+        datePickerHeader: 'qa-date-picker-header',
+        datePickerTitle: 'qa-date-picker-title',
+        datePickerTitleControl: 'qa-date-picker-title-control',
+        datePickerTitleSelect: 'qa-date-picker-title-select',
+        datePickerTitleChevron: 'qa-date-picker-title-chevron',
+        datePickerTitleMenu: 'qa-date-picker-title-menu',
+        datePickerTitleMenuOpen: 'qa-date-picker-title-menu-open',
+        datePickerTitleOption: 'qa-date-picker-title-option',
+        datePickerTitleOptionCurrent: 'qa-date-picker-title-option-current',
+        datePickerNav: 'qa-date-picker-nav',
+        datePickerNavBtn: 'qa-date-picker-nav-btn',
+        datePickerWeekdays: 'qa-date-picker-weekdays',
+        datePickerGrid: 'qa-date-picker-grid',
+        datePickerDay: 'qa-date-picker-day',
+        datePickerDayMuted: 'qa-date-picker-day-muted',
+        datePickerDaySelected: 'qa-date-picker-day-selected',
+        datePickerDayToday: 'qa-date-picker-day-today',
+        datePickerFooter: 'qa-date-picker-footer',
+        datePickerQuick: 'qa-date-picker-quick',
+        datePickerQuickList: 'qa-date-picker-quick-list',
+        datePickerQuickBtnBreak: 'qa-date-picker-quick-btn-break',
+        datePickerQuickBtn: 'qa-date-picker-quick-btn',
+        datePickerTime: 'qa-date-picker-time',
+        datePickerTimeLabel: 'qa-date-picker-time-label',
+        datePickerTimeInput: 'qa-date-picker-time-input',
+        datePickerTimeHint: 'qa-date-picker-time-hint',
+        datePickerWithTime: 'qa-date-picker-with-time',
         blockedInfo: 'qa-blocked-info',
         blockedInfoAnchored: 'qa-blocked-info-anchored',
         blockedInfoAnchorBelowStart: 'qa-blocked-info-anchor-below-start',
@@ -87,6 +115,8 @@
         allowedAttachmentTypes: [],
         autoDetectOptionsWithoutPrefix: false,
         reduceInferredOptions: true,
+        inferredMatchMode: 'exact', // exact | fuzzy
+        inferredMatchThreshold: 0.78,
         placeholder: 'Type entries with prefixes and terminators...',
         hintText: '',
         schema: {
@@ -96,6 +126,7 @@
         tokens: {},
         onParse: null
     };
+    const DEFAULT_DATETIME_TIME = '08:00';
 
     function ensureQuickAddStyles() {
         if (typeof document === 'undefined') {
@@ -168,12 +199,15 @@
             key: '',
             label: '',
             prefixes: [],
-            type: 'string', // string | number | options | date | boolean
+            type: 'string', // string | number | options | date | datetime | boolean
             enum: [],
             options: [],
             required: false,
             multiple: false,
             naturalDate: false,
+            allowDateOnly: true,
+            defaultTime: DEFAULT_DATETIME_TIME,
+            timeFormat: '24h',
             color: null,
             autoDetectWithoutPrefix: false,
             reduceInferredOptions: undefined,
@@ -194,6 +228,13 @@
         if (typeof normalized.allowCustom !== 'boolean') {
             normalized.allowCustom = false;
         }
+
+        if (typeof normalized.allowDateOnly !== 'boolean') {
+            normalized.allowDateOnly = true;
+        }
+
+        normalized.defaultTime = normalizeTime24(normalized.defaultTime, DEFAULT_DATETIME_TIME);
+        normalized.timeFormat = String(normalized.timeFormat || '24h').toLowerCase() === 'ampm' ? 'ampm' : '24h';
 
         return normalized;
     }
@@ -337,6 +378,254 @@
         return `${y}-${m}-${d}`;
     }
 
+    function isDateFieldType(type) {
+        return type === 'date' || type === 'datetime';
+    }
+
+    function normalizeTime24(rawValue, fallbackValue) {
+        const fallback = String(fallbackValue || DEFAULT_DATETIME_TIME);
+        const raw = String(rawValue || '').trim().toLowerCase();
+        if (!raw) {
+            return fallback;
+        }
+        const match = raw.match(/^(\d{1,2})(?::(\d{1,2}))?\s*(am|pm)?$/i);
+        if (!match) {
+            return fallback;
+        }
+        let hour = Number(match[1]);
+        const minute = match[2] === undefined ? 0 : Number(match[2]);
+        const period = match[3] ? match[3].toLowerCase() : '';
+        if (Number.isNaN(hour) || Number.isNaN(minute) || minute < 0 || minute > 59) {
+            return fallback;
+        }
+        if (period) {
+            if (hour < 1 || hour > 12) {
+                return fallback;
+            }
+            if (period === 'pm' && hour < 12) {
+                hour += 12;
+            } else if (period === 'am' && hour === 12) {
+                hour = 0;
+            }
+        }
+        if (!period && (hour < 0 || hour > 23)) {
+            return fallback;
+        }
+        return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+    }
+
+    function formatDateForAria(date) {
+        try {
+            return date.toLocaleDateString(undefined, {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        } catch (err) {
+            return toYMD(date);
+        }
+    }
+
+    function isRelativeDatePhrase(rawValue) {
+        const value = String(rawValue || '').trim().toLowerCase();
+        if (!value) {
+            return false;
+        }
+        if (
+            value === 'today'
+            || value === 'yesterday'
+            || value === 'tomorrow'
+            || value === 'tonight'
+        ) {
+            return true;
+        }
+        if (/^in\s+\d+\s+(day|days|week|weeks|month|months|year|years)$/.test(value)) {
+            return true;
+        }
+        return /\b(next|last|this)\s+(day|week|month|year|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/.test(value);
+    }
+
+    function looksLikeExplicitDateInput(rawValue) {
+        const raw = String(rawValue || '').trim();
+        if (!raw) {
+            return false;
+        }
+        if (/\d{4}[-/.]\d{1,2}[-/.]\d{1,2}/.test(raw)) {
+            return true;
+        }
+        if (/\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}/.test(raw)) {
+            return true;
+        }
+        if (/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b/i.test(raw)) {
+            return true;
+        }
+        if (/\b\d{1,2}\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b/i.test(raw)) {
+            return true;
+        }
+        return false;
+    }
+
+    function hasExplicitTimeToken(rawValue) {
+        const raw = String(rawValue || '').trim();
+        if (!raw) {
+            return false;
+        }
+        if (/\b\d{1,2}:\d{2}\s*(am|pm)?\b/i.test(raw)) {
+            return true;
+        }
+        return /\b(?:at\s+)?\d{1,2}\s*(am|pm)\b/i.test(raw);
+    }
+
+    function normalizeYearNumber(rawYear) {
+        const year = Number(rawYear);
+        if (Number.isNaN(year)) {
+            return null;
+        }
+        if (String(rawYear).length >= 4) {
+            return year;
+        }
+        if (year >= 0 && year <= 69) {
+            return 2000 + year;
+        }
+        return 1900 + year;
+    }
+
+    function parseTimeToken(rawValue) {
+        const raw = String(rawValue || '').trim().toLowerCase();
+        if (!raw) {
+            return { ok: true, value: null };
+        }
+        const compact = raw.replace(/\s+/g, '');
+        const match = compact.match(/^(\d{1,2})(?::(\d{1,2}))?(am|pm)?$/i);
+        if (!match) {
+            return { ok: false, error: 'Invalid time value' };
+        }
+        const minute = match[2] === undefined ? '00' : match[2];
+        const normalized = normalizeTime24(`${match[1]}:${minute}${match[3] || ''}`, '');
+        if (!normalized) {
+            return { ok: false, error: 'Invalid time value' };
+        }
+        return { ok: true, value: normalized };
+    }
+
+    function buildExplicitDate(yearRaw, monthRaw, dayRaw) {
+        const year = normalizeYearNumber(yearRaw);
+        const month = Number(monthRaw);
+        const day = Number(dayRaw);
+        if (!year || Number.isNaN(month) || Number.isNaN(day)) {
+            return null;
+        }
+        const date = new Date(year, month - 1, day);
+        if (
+            Number.isNaN(date.getTime())
+            || date.getFullYear() !== year
+            || date.getMonth() !== month - 1
+            || date.getDate() !== day
+        ) {
+            return null;
+        }
+        return toYMD(date);
+    }
+
+    function parseExplicitDateTimeLiteral(rawValue) {
+        const raw = String(rawValue || '').trim();
+        if (!raw) {
+            return null;
+        }
+        const monthMap = {
+            jan: 1,
+            feb: 2,
+            mar: 3,
+            apr: 4,
+            may: 5,
+            jun: 6,
+            jul: 7,
+            aug: 8,
+            sep: 9,
+            sept: 9,
+            oct: 10,
+            nov: 11,
+            dec: 12
+        };
+
+        const dayMonthYear = raw.match(/^(\d{1,2})\s+([a-z]{3,9})\.?,?\s+(\d{2,4})(?:\s+(?:at\s+)?(.+))?$/i);
+        if (dayMonthYear) {
+            const monthToken = dayMonthYear[2].slice(0, 4).toLowerCase();
+            const month = monthMap[monthToken] || monthMap[monthToken.slice(0, 3)];
+            if (!month) {
+                return null;
+            }
+            const dateValue = buildExplicitDate(dayMonthYear[3], month, dayMonthYear[1]);
+            if (!dateValue) {
+                return null;
+            }
+            const parsedTime = parseTimeToken(dayMonthYear[4] || '');
+            if (!parsedTime.ok) {
+                return null;
+            }
+            return { dateValue, timeValue: parsedTime.value, hasTime: !!parsedTime.value };
+        }
+
+        const monthDayYear = raw.match(/^([a-z]{3,9})\.?,?\s+(\d{1,2}),?\s+(\d{2,4})(?:\s+(?:at\s+)?(.+))?$/i);
+        if (monthDayYear) {
+            const monthToken = monthDayYear[1].slice(0, 4).toLowerCase();
+            const month = monthMap[monthToken] || monthMap[monthToken.slice(0, 3)];
+            if (!month) {
+                return null;
+            }
+            const dateValue = buildExplicitDate(monthDayYear[3], month, monthDayYear[2]);
+            if (!dateValue) {
+                return null;
+            }
+            const parsedTime = parseTimeToken(monthDayYear[4] || '');
+            if (!parsedTime.ok) {
+                return null;
+            }
+            return { dateValue, timeValue: parsedTime.value, hasTime: !!parsedTime.value };
+        }
+
+        const yearFirst = raw.match(/^(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})(?:\s+(?:at\s+)?(.+))?$/i);
+        if (yearFirst) {
+            const dateValue = buildExplicitDate(yearFirst[1], yearFirst[2], yearFirst[3]);
+            if (!dateValue) {
+                return null;
+            }
+            const parsedTime = parseTimeToken(yearFirst[4] || '');
+            if (!parsedTime.ok) {
+                return null;
+            }
+            return { dateValue, timeValue: parsedTime.value, hasTime: !!parsedTime.value };
+        }
+
+        const dayOrMonthFirst = raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})(?:\s+(?:at\s+)?(.+))?$/i);
+        if (dayOrMonthFirst) {
+            const first = Number(dayOrMonthFirst[1]);
+            const second = Number(dayOrMonthFirst[2]);
+            if (Number.isNaN(first) || Number.isNaN(second)) {
+                return null;
+            }
+            let day = first;
+            let month = second;
+            // If impossible as day/month, flip to month/day. If both are valid, prefer day/month.
+            if (day <= 12 && month > 12) {
+                day = second;
+                month = first;
+            }
+            const dateValue = buildExplicitDate(dayOrMonthFirst[3], month, day);
+            if (!dateValue) {
+                return null;
+            }
+            const parsedTime = parseTimeToken(dayOrMonthFirst[4] || '');
+            if (!parsedTime.ok) {
+                return null;
+            }
+            return { dateValue, timeValue: parsedTime.value, hasTime: !!parsedTime.value };
+        }
+
+        return null;
+    }
+
     function parseDate(rawValue, naturalDate) {
         const raw = String(rawValue).trim();
         const value = raw.toLowerCase();
@@ -344,9 +633,21 @@
             return { ok: false, error: 'Missing date value' };
         }
 
-        if (naturalDate) {
+        // Preserve explicit YYYY-MM-DD values exactly; avoid timezone shifts from natural parsers.
+        const strict = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (strict) {
+            return { ok: true, value: `${strict[1]}-${strict[2]}-${strict[3]}` };
+        }
+
+        const explicitDate = parseExplicitDateTimeLiteral(raw);
+        if (explicitDate && explicitDate.dateValue) {
+            return { ok: true, value: explicitDate.dateValue };
+        }
+
+        const allowLooseDate = naturalDate || looksLikeExplicitDateInput(raw);
+        if (allowLooseDate) {
             const now = new Date();
-            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const isRelative = isRelativeDatePhrase(raw);
 
             const chrono = (typeof globalThis !== 'undefined' && globalThis.chrono && typeof globalThis.chrono.parseDate === 'function')
                 ? globalThis.chrono
@@ -354,10 +655,21 @@
             if (chrono) {
                 const chronoDate = chrono.parseDate(raw, now, { forwardDate: true });
                 if (chronoDate && !Number.isNaN(chronoDate.getTime())) {
-                    return { ok: true, value: toYMD(chronoDate) };
+                    if (naturalDate || !isRelative) {
+                        return { ok: true, value: toYMD(chronoDate) };
+                    }
                 }
             }
 
+            const parsedNatural = new Date(raw);
+            if (!Number.isNaN(parsedNatural.getTime()) && (naturalDate || !isRelative)) {
+                return { ok: true, value: toYMD(parsedNatural) };
+            }
+        }
+
+        if (naturalDate) {
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             if (value === 'today') {
                 return { ok: true, value: toYMD(today) };
             }
@@ -386,18 +698,219 @@
                 return { ok: true, value: toYMD(d) };
             }
 
-            const parsedNatural = new Date(raw);
-            if (!Number.isNaN(parsedNatural.getTime())) {
-                return { ok: true, value: toYMD(parsedNatural) };
+            if (value === 'next week') {
+                const d = new Date(today);
+                d.setDate(d.getDate() + 7);
+                return { ok: true, value: toYMD(d) };
+            }
+            if (value === 'next month') {
+                const d = new Date(today);
+                d.setMonth(d.getMonth() + 1);
+                return { ok: true, value: toYMD(d) };
+            }
+            if (value === 'next year') {
+                const d = new Date(today);
+                d.setFullYear(d.getFullYear() + 1);
+                return { ok: true, value: toYMD(d) };
             }
         }
 
-        const strict = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-        if (!strict) {
-            return { ok: false, error: 'Date must be YYYY-MM-DD' };
+        return { ok: false, error: 'Date must be a valid date (for example YYYY-MM-DD or 23 Feb 2026)' };
+    }
+
+    function parseDateTime(rawValue, naturalDate, options) {
+        const opts = options || {};
+        const allowDateOnly = opts.allowDateOnly !== false;
+        const defaultTime = normalizeTime24(opts.defaultTime, DEFAULT_DATETIME_TIME);
+        const raw = String(rawValue || '').trim();
+        if (!raw) {
+            return { ok: false, error: 'Missing datetime value' };
         }
 
-        return { ok: true, value: `${strict[1]}-${strict[2]}-${strict[3]}` };
+        const strictDateTime = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::\d{2})?$/);
+        if (strictDateTime) {
+            const dateValue = `${strictDateTime[1]}-${strictDateTime[2]}-${strictDateTime[3]}`;
+            const timeValue = normalizeTime24(`${strictDateTime[4]}:${strictDateTime[5]}`, defaultTime);
+            if (!fromYMD(dateValue)) {
+                return { ok: false, error: 'Invalid date value' };
+            }
+            return {
+                ok: true,
+                value: `${dateValue}T${timeValue}`,
+                dateValue,
+                timeValue
+            };
+        }
+
+        const strictDateTimeAmPm = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{1,2})(?::(\d{1,2}))?\s*(am|pm)$/i);
+        if (strictDateTimeAmPm) {
+            const dateValue = `${strictDateTimeAmPm[1]}-${strictDateTimeAmPm[2]}-${strictDateTimeAmPm[3]}`;
+            const minuteRaw = strictDateTimeAmPm[5] !== undefined ? strictDateTimeAmPm[5] : '00';
+            const timeValue = normalizeTime24(`${strictDateTimeAmPm[4]}:${minuteRaw}${strictDateTimeAmPm[6]}`, defaultTime);
+            if (!fromYMD(dateValue)) {
+                return { ok: false, error: 'Invalid date value' };
+            }
+            return {
+                ok: true,
+                value: `${dateValue}T${timeValue}`,
+                dateValue,
+                timeValue
+            };
+        }
+
+        const strictDate = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (strictDate) {
+            if (!allowDateOnly) {
+                return { ok: false, error: 'Datetime must include time (YYYY-MM-DDTHH:mm)' };
+            }
+            const dateValue = `${strictDate[1]}-${strictDate[2]}-${strictDate[3]}`;
+            if (!fromYMD(dateValue)) {
+                return { ok: false, error: 'Invalid date value' };
+            }
+            return {
+                ok: true,
+                value: `${dateValue}T${defaultTime}`,
+                dateValue,
+                timeValue: defaultTime,
+                impliedTime: true
+            };
+        }
+
+        const explicitDateTime = parseExplicitDateTimeLiteral(raw);
+        if (explicitDateTime && explicitDateTime.dateValue) {
+            if (!allowDateOnly && !explicitDateTime.hasTime) {
+                return { ok: false, error: 'Datetime must include time' };
+            }
+            const timeValue = explicitDateTime.hasTime ? explicitDateTime.timeValue : defaultTime;
+            return {
+                ok: true,
+                value: `${explicitDateTime.dateValue}T${timeValue}`,
+                dateValue: explicitDateTime.dateValue,
+                timeValue,
+                impliedTime: !explicitDateTime.hasTime
+            };
+        }
+
+        if (naturalDate) {
+            const withTimeSuffix = raw.match(/^(.+?)\s+(?:at\s+)?(\d{1,2}(?::\d{1,2})?\s*(?:am|pm))$/i);
+            if (withTimeSuffix) {
+                const parsedDate = parseDate(withTimeSuffix[1], true);
+                const parsedTime = parseTimeToken(withTimeSuffix[2]);
+                if (parsedDate.ok && parsedTime.ok && parsedTime.value) {
+                    return {
+                        ok: true,
+                        value: `${parsedDate.value}T${parsedTime.value}`,
+                        dateValue: parsedDate.value,
+                        timeValue: parsedTime.value,
+                        impliedTime: false
+                    };
+                }
+            }
+        }
+
+        const allowLooseDateTime = naturalDate || looksLikeExplicitDateInput(raw) || hasExplicitTimeToken(raw);
+        if (allowLooseDateTime) {
+            const now = new Date();
+            const isRelative = isRelativeDatePhrase(raw);
+            const chrono = (typeof globalThis !== 'undefined' && globalThis.chrono)
+                ? globalThis.chrono
+                : null;
+            if (chrono && typeof chrono.parse === 'function') {
+                const parsed = chrono.parse(raw, now, { forwardDate: true });
+                if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].start && typeof parsed[0].start.date === 'function') {
+                    const ref = parsed[0];
+                    const date = ref.start.date();
+                    const hasHour = typeof ref.start.isCertain === 'function' ? ref.start.isCertain('hour') : false;
+                    const hasMinute = typeof ref.start.isCertain === 'function' ? ref.start.isCertain('minute') : false;
+                    if (!naturalDate && isRelative) {
+                        return { ok: false, error: 'Datetime must use an explicit date when naturalDate is disabled' };
+                    }
+                    if (!allowDateOnly && !(hasHour || hasMinute)) {
+                        return { ok: false, error: 'Datetime must include time' };
+                    }
+                    const timeValue = (hasHour || hasMinute)
+                        ? normalizeTime24(`${date.getHours()}:${date.getMinutes()}`, defaultTime)
+                        : defaultTime;
+                    const dateValue = toYMD(date);
+                    return {
+                        ok: true,
+                        value: `${dateValue}T${timeValue}`,
+                        dateValue,
+                        timeValue,
+                        impliedTime: !(hasHour || hasMinute)
+                    };
+                }
+            }
+
+            const parsedNative = new Date(raw);
+            if (!Number.isNaN(parsedNative.getTime())) {
+                if (!naturalDate && isRelative) {
+                    return { ok: false, error: 'Datetime must use an explicit date when naturalDate is disabled' };
+                }
+                const hasExplicitTime = hasExplicitTimeToken(raw);
+                if (!allowDateOnly && !hasExplicitTime) {
+                    return { ok: false, error: 'Datetime must include time' };
+                }
+                const dateValue = toYMD(parsedNative);
+                const timeValue = hasExplicitTime
+                    ? normalizeTime24(`${parsedNative.getHours()}:${parsedNative.getMinutes()}`, defaultTime)
+                    : defaultTime;
+                return {
+                    ok: true,
+                    value: `${dateValue}T${timeValue}`,
+                    dateValue,
+                    timeValue,
+                    impliedTime: !hasExplicitTime
+                };
+            }
+
+            const parsedDate = parseDate(raw, naturalDate || looksLikeExplicitDateInput(raw));
+            if (parsedDate.ok && allowDateOnly) {
+                return {
+                    ok: true,
+                    value: `${parsedDate.value}T${defaultTime}`,
+                    dateValue: parsedDate.value,
+                    timeValue: defaultTime,
+                    impliedTime: true
+                };
+            }
+        }
+
+        return { ok: false, error: 'Datetime must be valid (for example YYYY-MM-DDTHH:mm or 23 Feb 2026 at 3pm)' };
+    }
+
+    function parseFieldDateValue(field, rawValue) {
+        if (!field || !isDateFieldType(field.type)) {
+            return { ok: false, error: 'Not a date field' };
+        }
+        if (field.type === 'datetime') {
+            return parseDateTime(rawValue, !!field.naturalDate, field);
+        }
+        const parsed = parseDate(rawValue, !!field.naturalDate);
+        if (!parsed.ok) {
+            return parsed;
+        }
+        return {
+            ok: true,
+            value: parsed.value,
+            dateValue: parsed.value
+        };
+    }
+
+    function fromYMD(value) {
+        const match = String(value || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!match) {
+            return null;
+        }
+        const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+        if (Number.isNaN(date.getTime())) {
+            return null;
+        }
+        return date;
+    }
+
+    function daysInMonth(year, monthIndex) {
+        return new Date(year, monthIndex + 1, 0).getDate();
     }
 
     function parseOption(field, rawValue) {
@@ -440,6 +953,10 @@
 
         if (field.type === 'date') {
             return parseDate(value, !!field.naturalDate);
+        }
+
+        if (field.type === 'datetime') {
+            return parseDateTime(value, !!field.naturalDate, field);
         }
 
         if (field.type === 'boolean') {
@@ -897,6 +1414,17 @@
         return /[A-Za-z0-9]/.test(ch || '');
     }
 
+    function normalizeMatchThreshold(value, fallback) {
+        if (typeof value !== 'number' || Number.isNaN(value)) {
+            return fallback;
+        }
+        const normalized = value > 1 ? value / 100 : value;
+        if (!Number.isFinite(normalized)) {
+            return fallback;
+        }
+        return Math.min(1, Math.max(0, normalized));
+    }
+
     function findBoundaryMatches(text, phrase) {
         const out = [];
         if (!phrase) {
@@ -926,6 +1454,107 @@
                 out.push({ start: at, end });
             }
             from = at + 1;
+        }
+
+        return out;
+    }
+
+    function tokenizeWordSpans(text) {
+        const out = [];
+        const regex = /[A-Za-z0-9]+/g;
+        const hay = String(text || '');
+        let match;
+        while ((match = regex.exec(hay))) {
+            out.push({
+                value: match[0],
+                start: match.index,
+                end: match.index + match[0].length
+            });
+        }
+        return out;
+    }
+
+    function levenshteinDistance(a, b) {
+        const left = String(a || '');
+        const right = String(b || '');
+        const leftLen = left.length;
+        const rightLen = right.length;
+        if (!leftLen) {
+            return rightLen;
+        }
+        if (!rightLen) {
+            return leftLen;
+        }
+
+        const prev = new Array(rightLen + 1);
+        for (let j = 0; j <= rightLen; j++) {
+            prev[j] = j;
+        }
+
+        for (let i = 1; i <= leftLen; i++) {
+            let next = i;
+            let prevDiag = i - 1;
+            for (let j = 1; j <= rightLen; j++) {
+                const prevValue = prev[j];
+                const cost = left.charAt(i - 1) === right.charAt(j - 1) ? 0 : 1;
+                const insert = next + 1;
+                const remove = prevValue + 1;
+                const replace = prevDiag + cost;
+                next = Math.min(insert, remove, replace);
+                prevDiag = prevValue;
+                prev[j] = next;
+            }
+        }
+
+        return prev[rightLen];
+    }
+
+    function similarityScore(a, b) {
+        const left = String(a || '');
+        const right = String(b || '');
+        const maxLen = Math.max(left.length, right.length);
+        if (!maxLen) {
+            return 1;
+        }
+        const distance = levenshteinDistance(left, right);
+        return Math.max(0, 1 - distance / maxLen);
+    }
+
+    function findFuzzyMatches(text, phrase, threshold) {
+        const out = [];
+        const needle = String(phrase || '').trim();
+        if (!needle) {
+            return out;
+        }
+        const needleTokens = tokenizeWordSpans(needle);
+        if (!needleTokens.length) {
+            return out;
+        }
+        const hayTokens = tokenizeWordSpans(text);
+        if (!hayTokens.length) {
+            return out;
+        }
+
+        const needlePhrase = needleTokens.map((token) => token.value.toLowerCase()).join(' ');
+        const needleCount = needleTokens.length;
+
+        if (needleCount === 1) {
+            hayTokens.forEach((token) => {
+                const score = similarityScore(token.value.toLowerCase(), needlePhrase);
+                if (score >= threshold) {
+                    out.push({ start: token.start, end: token.end, score });
+                }
+            });
+            return out;
+        }
+
+        for (let i = 0; i <= hayTokens.length - needleCount; i++) {
+            const slice = hayTokens.slice(i, i + needleCount);
+            const candidate = slice.map((token) => token.value.toLowerCase()).join(' ');
+            const score = similarityScore(candidate, needlePhrase);
+            if (score >= threshold) {
+                out.push({ start: slice[0].start, end: slice[slice.length - 1].end, score });
+            }
         }
 
         return out;
@@ -1101,6 +1730,8 @@
 
         const inferred = [];
         const autoDetectGlobal = !!config.autoDetectOptionsWithoutPrefix;
+        const matchMode = (config.inferredMatchMode || 'exact').toLowerCase();
+        const matchThreshold = normalizeMatchThreshold(config.inferredMatchThreshold, DEFAULT_CONFIG.inferredMatchThreshold);
         normalizedSchema.fields.forEach((field) => {
             if (field.type !== 'options') {
                 return;
@@ -1122,13 +1753,17 @@
             options.forEach((option) => {
                 const labels = [option.label, option.value].filter(Boolean);
                 labels.forEach((label) => {
-                    findBoundaryMatches(rawEntry, label).forEach((match) => {
+                    const matches = matchMode === 'fuzzy'
+                        ? findFuzzyMatches(rawEntry, label, matchThreshold)
+                        : findBoundaryMatches(rawEntry, label);
+                    matches.forEach((match) => {
                         candidates.push({
                             fieldKey: field.key,
                             value: option.value,
                             label: option.label || option.value,
                             start: match.start,
-                            end: match.end
+                            end: match.end,
+                            score: match.score || 1
                         });
                     });
                 });
@@ -1166,6 +1801,7 @@
                         localEnd: candidate.end,
                         globalStart: globalStart + candidate.start,
                         globalEnd: globalStart + candidate.end,
+                        matchScore: candidate.score,
                         inferred: true
                     });
                 });
@@ -1188,6 +1824,7 @@
                 localEnd: chosen.end,
                 globalStart: globalStart + chosen.start,
                 globalEnd: globalStart + chosen.end,
+                matchScore: chosen.score,
                 inferred: true
             });
         });
@@ -1262,6 +1899,17 @@
             .replace(/'/g, '&#39;');
     }
 
+    function eventTargetElement(event) {
+        const target = event && event.target ? event.target : null;
+        if (target && typeof target.closest === 'function') {
+            return target;
+        }
+        if (target && target.parentElement && typeof target.parentElement.closest === 'function') {
+            return target.parentElement;
+        }
+        return null;
+    }
+
     function normValue(value) {
         return String(value).toLowerCase().trim();
     }
@@ -1296,6 +1944,9 @@
         this.attachmentsByEntry = new Map();
         this.attachmentCounter = 0;
         this.dropdownState = null;
+        this.datePickerState = null;
+        this.datePickerSuppressUntil = 0;
+        this.datePickerInternalClickUntil = 0;
         this.blockedInfoState = null;
         this.blockedAnchorEl = null;
         this.anchorSupportChecked = false;
@@ -1344,6 +1995,21 @@
                     <input class="${c.dropdownSearch}" data-role="dropdownSearch" type="text" placeholder="Filter options..." />
                     <div class="${c.dropdownList}" data-role="dropdownList"></div>
                 </div>
+                <div class="${c.datePicker}" data-role="datePicker" role="dialog" aria-modal="false" aria-label="Choose date" tabindex="-1" hidden>
+                    <div class="${c.datePickerHeader}">
+                        <div class="${c.datePickerTitle}" data-role="datePickerTitle"></div>
+                        <div class="${c.datePickerNav}">
+                            <button type="button" class="${c.datePickerNavBtn}" data-date-nav="prev" aria-label="Previous month">‹</button>
+                            <button type="button" class="${c.datePickerNavBtn}" data-date-nav="next" aria-label="Next month">›</button>
+                        </div>
+                    </div>
+                    <div class="${c.datePickerWeekdays}" data-role="datePickerWeekdays" aria-hidden="true"></div>
+                    <div class="${c.datePickerGrid}" data-role="datePickerGrid" role="grid" aria-label="Calendar dates"></div>
+                    <div class="${c.datePickerFooter}" data-role="datePickerFooter">
+                        <div class="${c.datePickerQuick}" data-role="datePickerQuick"></div>
+                        <div class="${c.datePickerTime}" data-role="datePickerTime" hidden></div>
+                    </div>
+                </div>
             </div>
         `;
 
@@ -1356,6 +2022,12 @@
         this.dropdownEl = this.mountEl.querySelector('[data-role="dropdown"]');
         this.dropdownSearchEl = this.mountEl.querySelector('[data-role="dropdownSearch"]');
         this.dropdownListEl = this.mountEl.querySelector('[data-role="dropdownList"]');
+        this.datePickerEl = this.mountEl.querySelector('[data-role="datePicker"]');
+        this.datePickerTitleEl = this.mountEl.querySelector('[data-role="datePickerTitle"]');
+        this.datePickerWeekdaysEl = this.mountEl.querySelector('[data-role="datePickerWeekdays"]');
+        this.datePickerGridEl = this.mountEl.querySelector('[data-role="datePickerGrid"]');
+        this.datePickerQuickEl = this.mountEl.querySelector('[data-role="datePickerQuick"]');
+        this.datePickerTimeEl = this.mountEl.querySelector('[data-role="datePickerTime"]');
         this.blockedInfoEl = null;
     };
 
@@ -1368,6 +2040,405 @@
         });
     };
 
+    QuickAddComponent.prototype.getDatePickerInitialDate = function getDatePickerInitialDate(token, field) {
+        const parsed = parseFieldDateValue(field, token.value || '');
+        if (parsed.ok && parsed.dateValue) {
+            const parsedDate = fromYMD(parsed.dateValue);
+            if (parsedDate) {
+                return parsedDate;
+            }
+        }
+        return new Date();
+    };
+
+    QuickAddComponent.prototype.openDatePicker = function openDatePicker(options) {
+        if (!options || !options.token || !options.field) {
+            return;
+        }
+        this.closeBlockedInfo();
+        this.closeDropdown();
+        const defaultTime = normalizeTime24(options.field.defaultTime, DEFAULT_DATETIME_TIME);
+        const parsed = parseFieldDateValue(options.field, options.token.value || '');
+        const selectedValue = parsed.ok ? parsed.value : '';
+        const selectedDateValue = parsed.ok && parsed.dateValue ? parsed.dateValue : '';
+        const selectedTimeValue = parsed.ok && parsed.timeValue ? parsed.timeValue : defaultTime;
+        this.datePickerState = {
+            fieldKey: options.field.key,
+            tokenId: options.token.id,
+            entryIndex: options.entryIndex,
+            anchorEl: options.anchorEl || null,
+            fieldType: options.field.type,
+            naturalDate: !!options.field.naturalDate,
+            allowDateOnly: options.field.allowDateOnly !== false,
+            defaultTime,
+            timeFormat: options.field.timeFormat === 'ampm' ? 'ampm' : '24h',
+            activeDate: options.activeDate || this.getDatePickerInitialDate(options.token, options.field),
+            selectedValue,
+            selectedDateValue,
+            selectedTimeValue,
+            titleMenu: ''
+        };
+        this.renderDatePicker();
+        this.positionDatePicker(options.anchorEl || this.inputEl);
+        this.datePickerEl.style.removeProperty('display');
+        this.datePickerEl.hidden = false;
+        const focusValue = this.datePickerState.selectedDateValue || toYMD(this.datePickerState.activeDate || new Date());
+        window.requestAnimationFrame(() => {
+            if (!this.focusDatePickerDate(focusValue) && this.datePickerEl) {
+                this.datePickerEl.focus();
+            }
+        });
+    };
+
+    QuickAddComponent.prototype.closeDatePicker = function closeDatePicker() {
+        this.datePickerState = null;
+        if (!this.datePickerEl) {
+            return;
+        }
+        this.datePickerEl.hidden = true;
+        this.datePickerEl.style.setProperty('display', 'none', 'important');
+        this.datePickerEl.classList.remove(this.config.classNames.datePickerWithTime);
+        this.datePickerGridEl.innerHTML = '';
+        this.datePickerQuickEl.innerHTML = '';
+        if (this.datePickerTimeEl) {
+            this.datePickerTimeEl.innerHTML = '';
+            this.datePickerTimeEl.hidden = true;
+        }
+    };
+
+    QuickAddComponent.prototype.renderDatePicker = function renderDatePicker() {
+        if (!this.datePickerState) {
+            return;
+        }
+        const c = this.config.classNames;
+        const active = this.datePickerState.activeDate;
+        const year = active.getFullYear();
+        const month = active.getMonth();
+        const monthName = new Date(year, month, 1).toLocaleString('default', { month: 'long' });
+        this.datePickerGridEl.setAttribute('aria-label', `${monthName} ${year} calendar`);
+        const monthOptions = Array.from({ length: 12 }, (_, idx) => {
+            const label = new Date(2000, idx, 1).toLocaleString('default', { month: 'long' });
+            const selected = idx === month;
+            return `
+                <button
+                    type="button"
+                    class="${c.dropdownOption} ${c.datePickerTitleOption}${selected ? ` ${c.datePickerTitleOptionCurrent}` : ''}"
+                    data-date-month-option="${idx}"
+                    role="option"
+                    aria-selected="${selected ? 'true' : 'false'}"
+                >${escHtml(label)}</button>
+            `;
+        }).join('');
+        const yearOptions = Array.from({ length: 31 }, (_, idx) => {
+            const y = year - 15 + idx;
+            const selected = y === year;
+            return `
+                <button
+                    type="button"
+                    class="${c.dropdownOption} ${c.datePickerTitleOption}${selected ? ` ${c.datePickerTitleOptionCurrent}` : ''}"
+                    data-date-year-option="${y}"
+                    role="option"
+                    aria-selected="${selected ? 'true' : 'false'}"
+                >${y}</button>
+            `;
+        }).join('');
+        const monthMenuOpen = this.datePickerState.titleMenu === 'month';
+        const yearMenuOpen = this.datePickerState.titleMenu === 'year';
+        this.datePickerTitleEl.innerHTML = `
+            <span class="${c.datePickerTitleControl}${monthMenuOpen ? ` ${c.datePickerTitleMenuOpen}` : ''}">
+                <button
+                    type="button"
+                    class="${c.datePickerTitleSelect}"
+                    data-date-title-toggle="month"
+                    aria-label="Choose month"
+                    aria-haspopup="listbox"
+                    aria-expanded="${monthMenuOpen ? 'true' : 'false'}"
+                >${escHtml(monthName)}</button>
+                <span class="${c.datePickerTitleChevron}" aria-hidden="true"></span>
+                <div
+                    class="${c.datePickerTitleMenu}${monthMenuOpen ? ` ${c.datePickerTitleMenuOpen}` : ''}"
+                    data-date-title-menu="month"
+                    role="listbox"
+                    aria-label="Month options"
+                    ${monthMenuOpen ? '' : 'hidden'}
+                >${monthOptions}</div>
+            </span>
+            <span class="${c.datePickerTitleControl}${yearMenuOpen ? ` ${c.datePickerTitleMenuOpen}` : ''}">
+                <button
+                    type="button"
+                    class="${c.datePickerTitleSelect}"
+                    data-date-title-toggle="year"
+                    aria-label="Choose year"
+                    aria-haspopup="listbox"
+                    aria-expanded="${yearMenuOpen ? 'true' : 'false'}"
+                >${year}</button>
+                <span class="${c.datePickerTitleChevron}" aria-hidden="true"></span>
+                <div
+                    class="${c.datePickerTitleMenu}${yearMenuOpen ? ` ${c.datePickerTitleMenuOpen}` : ''}"
+                    data-date-title-menu="year"
+                    role="listbox"
+                    aria-label="Year options"
+                    ${yearMenuOpen ? '' : 'hidden'}
+                >${yearOptions}</div>
+            </span>
+        `;
+
+        if (!this.datePickerWeekdaysEl.dataset.ready) {
+            const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+            this.datePickerWeekdaysEl.innerHTML = weekdays.map((day) => `<span>${day}</span>`).join('');
+            this.datePickerWeekdaysEl.dataset.ready = '1';
+        }
+
+        const firstDay = new Date(year, month, 1);
+        const startOffset = (firstDay.getDay() + 6) % 7;
+        const daysCurrent = daysInMonth(year, month);
+        const daysPrev = daysInMonth(year, month - 1);
+        const totalCells = 42;
+        const cells = [];
+        const selected = this.datePickerState.selectedDateValue;
+        const todayValue = toYMD(new Date());
+        const focusValue = selected || toYMD(active);
+
+        for (let i = 0; i < totalCells; i++) {
+            const cellIndex = i - startOffset + 1;
+            let day = cellIndex;
+            let cellMonth = month;
+            let cellYear = year;
+            let muted = false;
+            if (cellIndex < 1) {
+                day = daysPrev + cellIndex;
+                cellMonth = month - 1;
+                muted = true;
+            } else if (cellIndex > daysCurrent) {
+                day = cellIndex - daysCurrent;
+                cellMonth = month + 1;
+                muted = true;
+            }
+            const cellDate = new Date(cellYear, cellMonth, day);
+            const ymd = toYMD(cellDate);
+            const classes = [c.datePickerDay];
+            if (muted) {
+                classes.push(c.datePickerDayMuted);
+            }
+            if (selected && ymd === selected) {
+                classes.push(c.datePickerDaySelected);
+            }
+            if (ymd === todayValue) {
+                classes.push(c.datePickerDayToday);
+            }
+            const isSelected = !!selected && ymd === selected;
+            const isToday = ymd === todayValue;
+            const tabIndex = ymd === focusValue ? '0' : '-1';
+            const currentAttr = isToday ? ' aria-current="date"' : '';
+            cells.push(`<button type="button" class="${classes.join(' ')}" data-date-day="1" data-date-value="${ymd}" aria-label="${escHtml(formatDateForAria(cellDate))}" aria-selected="${isSelected ? 'true' : 'false'}"${currentAttr} tabindex="${tabIndex}">${day}</button>`);
+        }
+
+        this.datePickerGridEl.innerHTML = cells.join('');
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const inDays = (days) => toYMD(new Date(today.getFullYear(), today.getMonth(), today.getDate() + days));
+        const quicks = [
+            { label: 'Yesterday', value: inDays(-1) },
+            { label: 'Today', value: toYMD(today) },
+            { label: 'Tomorrow', value: inDays(1) },
+            { label: 'Next Week', value: inDays(7) }
+        ];
+        this.datePickerQuickEl.innerHTML = `<div class="${c.datePickerQuickList}">${quicks.map((item) => {
+            const breakClass = item.breakBefore ? ` ${c.datePickerQuickBtnBreak}` : '';
+            return `<button type="button" class="${c.datePickerQuickBtn}${breakClass}" data-date-value="${item.value}">${item.label}</button>`;
+        }).join('')}</div>`;
+
+        const hasTime = this.datePickerState.fieldType === 'datetime';
+        this.datePickerEl.classList.toggle(c.datePickerWithTime, hasTime);
+        if (!this.datePickerTimeEl) {
+            return;
+        }
+        if (!hasTime) {
+            this.datePickerTimeEl.hidden = true;
+            this.datePickerTimeEl.innerHTML = '';
+            return;
+        }
+        const timeValue = normalizeTime24(this.datePickerState.selectedTimeValue, this.datePickerState.defaultTime);
+        this.datePickerState.selectedTimeValue = timeValue;
+        this.datePickerTimeEl.hidden = false;
+        this.datePickerTimeEl.innerHTML = `
+            <label class="${c.datePickerTimeLabel}">
+                Time
+                <input type="time" class="${c.datePickerTimeInput}" data-date-time-input aria-label="Choose time" step="300" value="${escHtml(timeValue)}" />
+            </label>
+        `;
+    };
+
+    QuickAddComponent.prototype.focusDatePickerDate = function focusDatePickerDate(value) {
+        if (!this.datePickerEl || this.datePickerEl.hidden || !value) {
+            return false;
+        }
+        const btn = this.datePickerEl.querySelector(`[data-date-day="1"][data-date-value="${value}"]`);
+        if (btn && typeof btn.focus === 'function') {
+            btn.focus();
+            return true;
+        }
+        return false;
+    };
+
+    QuickAddComponent.prototype.getFloatingBounds = function getFloatingBounds(anchorEl) {
+        const viewport = {
+            left: 0,
+            top: 0,
+            right: window.innerWidth,
+            bottom: window.innerHeight
+        };
+        const isValidRect = (rect) => rect && (rect.right - rect.left) > 120 && (rect.bottom - rect.top) > 120;
+        const getClipAxes = (style) => {
+            const overflowX = String(style.overflowX || style.overflow || '').toLowerCase();
+            const overflowY = String(style.overflowY || style.overflow || '').toLowerCase();
+            const clips = (value) => value === 'auto' || value === 'scroll' || value === 'hidden' || value === 'clip';
+            return {
+                x: clips(overflowX),
+                y: clips(overflowY)
+            };
+        };
+
+        let bounds = viewport;
+        const visited = new Set();
+        const applyAncestors = (startEl) => {
+            let el = startEl;
+            while (el && el !== document.body && el !== document.documentElement) {
+                if (visited.has(el)) {
+                    el = el.parentElement;
+                    continue;
+                }
+                visited.add(el);
+                const style = window.getComputedStyle(el);
+                const clipAxes = getClipAxes(style);
+                if (clipAxes.x || clipAxes.y) {
+                    const rect = el.getBoundingClientRect();
+                    if (clipAxes.x) {
+                        bounds.left = Math.max(bounds.left, rect.left);
+                        bounds.right = Math.min(bounds.right, rect.right);
+                    }
+                    if (clipAxes.y) {
+                        bounds.top = Math.max(bounds.top, rect.top);
+                        bounds.bottom = Math.min(bounds.bottom, rect.bottom);
+                    }
+                }
+                if (style.position === 'fixed') {
+                    break;
+                }
+                el = el.parentElement;
+            }
+        };
+
+        if (anchorEl && anchorEl.parentElement) {
+            applyAncestors(anchorEl.parentElement);
+        }
+        if (this.mountEl && this.mountEl.parentElement) {
+            applyAncestors(this.mountEl.parentElement);
+        }
+
+        return isValidRect(bounds) ? bounds : viewport;
+    };
+
+    QuickAddComponent.prototype.positionDatePicker = function positionDatePicker(anchorEl) {
+        if (!this.datePickerEl) {
+            return;
+        }
+        const rect = anchorEl && anchorEl.getBoundingClientRect
+            ? anchorEl.getBoundingClientRect()
+            : this.inputEl.getBoundingClientRect();
+        const bounds = this.getFloatingBounds(anchorEl || this.inputEl);
+        const hasTime = !!(this.datePickerState && this.datePickerState.fieldType === 'datetime');
+        const pad = window.innerWidth <= 480 ? 8 : 10;
+        const viewportWidth = Math.max(0, (bounds.right - bounds.left) - (pad * 2));
+        const compactMax = window.innerWidth <= 480
+            ? (hasTime ? 328 : 304)
+            : (hasTime ? 356 : 324);
+        const compactMin = window.innerWidth <= 480
+            ? (hasTime ? 278 : 252)
+            : (hasTime ? 308 : 286);
+        const preferredWidth = Math.max(compactMin, (rect.width || 0) + 28);
+        const width = Math.min(compactMax, viewportWidth, preferredWidth);
+        const minLeft = bounds.left + pad;
+        const maxLeft = bounds.right - width - pad;
+        const left = Math.max(minLeft, Math.min(rect.left || minLeft, maxLeft));
+        const prevHidden = this.datePickerEl.hidden;
+        const prevVisibility = this.datePickerEl.style.visibility;
+        const prevDisplay = this.datePickerEl.style.display;
+        this.datePickerEl.hidden = false;
+        this.datePickerEl.style.visibility = 'hidden';
+        this.datePickerEl.style.removeProperty('display');
+        this.datePickerEl.style.width = `${width}px`;
+        const measuredHeight = Math.ceil(this.datePickerEl.getBoundingClientRect().height || this.datePickerEl.scrollHeight || 0);
+        if (prevHidden) {
+            this.datePickerEl.hidden = true;
+        }
+        this.datePickerEl.style.visibility = prevVisibility;
+        if (prevDisplay) {
+            this.datePickerEl.style.display = prevDisplay;
+        } else {
+            this.datePickerEl.style.removeProperty('display');
+        }
+        const fallbackHeight = window.innerWidth <= 480
+            ? (hasTime ? 410 : 290)
+            : (hasTime ? 360 : 280);
+        const approxHeight = measuredHeight || fallbackHeight;
+        const belowTop = (rect.bottom || rect.top || 0) + 8;
+        const minTop = bounds.top + pad;
+        const maxBottom = bounds.bottom - pad;
+        let top = belowTop;
+        if (belowTop + approxHeight > maxBottom) {
+            top = Math.max(minTop, (rect.top || 0) - approxHeight - 8);
+        }
+        if (top + approxHeight > maxBottom) {
+            top = Math.max(minTop, maxBottom - approxHeight);
+        }
+        this.datePickerEl.style.position = 'fixed';
+        this.datePickerEl.style.left = `${left}px`;
+        this.datePickerEl.style.top = `${top}px`;
+        this.datePickerEl.style.width = `${width}px`;
+        this.datePickerEl.style.maxWidth = `${Math.max(0, bounds.right - bounds.left - (pad * 2))}px`;
+        this.datePickerEl.style.zIndex = '9999';
+    };
+
+    QuickAddComponent.prototype.applyDateSelection = function applyDateSelection(nextValue) {
+        if (!this.datePickerState) {
+            return;
+        }
+        const nextDateValue = String(nextValue || '').trim();
+        if (!fromYMD(nextDateValue)) {
+            return;
+        }
+        this.datePickerState.selectedDateValue = nextDateValue;
+
+        let commitValue = nextDateValue;
+        if (this.datePickerState.fieldType === 'datetime') {
+            const timeValue = normalizeTime24(this.datePickerState.selectedTimeValue, this.datePickerState.defaultTime);
+            this.datePickerState.selectedTimeValue = timeValue;
+            commitValue = `${nextDateValue}T${timeValue}`;
+        }
+        this.datePickerState.selectedValue = commitValue;
+
+        const token = this.tokenMap[this.datePickerState.tokenId];
+        if (!token) {
+            this.closeDatePicker();
+            return;
+        }
+        const source = this.inputText || this.readInputText();
+        let updated = this.replaceRange(source, token.globalValueStart, token.globalValueEnd, commitValue);
+        let caret = token.globalValueStart + String(commitValue).length;
+        const terminator = String(this.config.fieldTerminator || '');
+        if (!token.committed && terminator) {
+            const tokenTail = updated.slice(caret, caret + terminator.length);
+            if (tokenTail !== terminator) {
+                updated = this.replaceRange(updated, caret, caret, terminator);
+                caret += terminator.length;
+            }
+        }
+        this.datePickerSuppressUntil = Date.now() + 150;
+        this.closeDatePicker();
+        this.parseAndRender({ source: updated, caretOffset: caret, focusInput: true });
+    };
+
     QuickAddComponent.prototype.bindEvents = function bindEvents() {
         this.onInput = () => {
             if (this.isRenderingInput) {
@@ -1375,6 +2446,7 @@
             }
             this.closeDropdown();
             this.closeBlockedInfo();
+            this.closeDatePicker();
             if (this.timer) {
                 clearTimeout(this.timer);
             }
@@ -1522,6 +2594,159 @@
             this.handlePillClick(pill);
         };
 
+        this.onDatePickerClick = (event) => {
+            const targetEl = eventTargetElement(event);
+            if (!targetEl) {
+                return;
+            }
+            const titleToggle = targetEl.closest('[data-date-title-toggle]');
+            if (titleToggle && this.datePickerState) {
+                event.preventDefault();
+                const menu = titleToggle.getAttribute('data-date-title-toggle') || '';
+                this.datePickerState.titleMenu = this.datePickerState.titleMenu === menu ? '' : menu;
+                this.datePickerInternalClickUntil = Date.now() + 160;
+                this.renderDatePicker();
+                return;
+            }
+            const monthOption = targetEl.closest('[data-date-month-option]');
+            if (monthOption && this.datePickerState) {
+                event.preventDefault();
+                const monthValue = Number(monthOption.getAttribute('data-date-month-option'));
+                if (!Number.isNaN(monthValue) && monthValue >= 0 && monthValue <= 11) {
+                    const active = this.datePickerState.activeDate || new Date();
+                    this.datePickerState.activeDate = new Date(active.getFullYear(), monthValue, 1);
+                    this.datePickerState.titleMenu = '';
+                    this.datePickerInternalClickUntil = Date.now() + 160;
+                    this.renderDatePicker();
+                }
+                return;
+            }
+            const yearOption = targetEl.closest('[data-date-year-option]');
+            if (yearOption && this.datePickerState) {
+                event.preventDefault();
+                const yearValue = Number(yearOption.getAttribute('data-date-year-option'));
+                if (!Number.isNaN(yearValue) && yearValue >= 1 && yearValue <= 9999) {
+                    const active = this.datePickerState.activeDate || new Date();
+                    this.datePickerState.activeDate = new Date(yearValue, active.getMonth(), 1);
+                    this.datePickerState.titleMenu = '';
+                    this.datePickerInternalClickUntil = Date.now() + 160;
+                    this.renderDatePicker();
+                }
+                return;
+            }
+            const navBtn = targetEl.closest('[data-date-nav]');
+            if (navBtn) {
+                event.preventDefault();
+                const direction = navBtn.getAttribute('data-date-nav');
+                if (this.datePickerState) {
+                    const active = this.datePickerState.activeDate;
+                    const offset = direction === 'prev' ? -1 : 1;
+                    this.datePickerState.activeDate = new Date(active.getFullYear(), active.getMonth() + offset, 1);
+                    this.datePickerState.titleMenu = '';
+                    this.datePickerInternalClickUntil = Date.now() + 160;
+                    this.renderDatePicker();
+                }
+                return;
+            }
+            const dayBtn = targetEl.closest('[data-date-value]');
+            if (dayBtn) {
+                event.preventDefault();
+                const value = dayBtn.getAttribute('data-date-value');
+                if (value) {
+                    if (this.datePickerState) {
+                        this.datePickerState.titleMenu = '';
+                    }
+                    this.applyDateSelection(value);
+                }
+            }
+        };
+
+        this.onDatePickerChange = (event) => {
+            const targetEl = eventTargetElement(event);
+            if (!targetEl || !this.datePickerState) {
+                return;
+            }
+            if (targetEl.hasAttribute('data-date-time-input')) {
+                const nextTime = normalizeTime24(targetEl.value, this.datePickerState.defaultTime);
+                this.datePickerState.selectedTimeValue = nextTime;
+                targetEl.value = nextTime;
+                return;
+            }
+        };
+
+        this.onDatePickerKeyDown = (event) => {
+            if (!this.datePickerState) {
+                return;
+            }
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                if (this.datePickerState.titleMenu) {
+                    this.datePickerState.titleMenu = '';
+                    this.renderDatePicker();
+                    return;
+                }
+                this.closeDatePicker();
+                return;
+            }
+            const targetEl = eventTargetElement(event);
+            if (!targetEl) {
+                return;
+            }
+            if (targetEl.hasAttribute('data-date-time-input')) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    const nextTime = normalizeTime24(targetEl.value, this.datePickerState.defaultTime);
+                    this.datePickerState.selectedTimeValue = nextTime;
+                    targetEl.value = nextTime;
+                    this.applyDateSelection(this.datePickerState.selectedDateValue || toYMD(this.datePickerState.activeDate || new Date()));
+                }
+                return;
+            }
+            const dayBtn = targetEl.closest('[data-date-day="1"]');
+            if (!dayBtn) {
+                return;
+            }
+            const currentValue = dayBtn.getAttribute('data-date-value') || '';
+            const currentDate = fromYMD(currentValue);
+            if (!currentDate) {
+                return;
+            }
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                this.applyDateSelection(currentValue);
+                return;
+            }
+            let nextDate = null;
+            if (event.key === 'ArrowLeft') {
+                nextDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() - 1);
+            } else if (event.key === 'ArrowRight') {
+                nextDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() + 1);
+            } else if (event.key === 'ArrowUp') {
+                nextDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() - 7);
+            } else if (event.key === 'ArrowDown') {
+                nextDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() + 7);
+            } else if (event.key === 'PageUp') {
+                nextDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, currentDate.getDate());
+            } else if (event.key === 'PageDown') {
+                nextDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, currentDate.getDate());
+            } else if (event.key === 'Home') {
+                const weekday = (currentDate.getDay() + 6) % 7;
+                nextDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() - weekday);
+            } else if (event.key === 'End') {
+                const weekday = (currentDate.getDay() + 6) % 7;
+                nextDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate() + (6 - weekday));
+            }
+            if (!nextDate) {
+                return;
+            }
+            event.preventDefault();
+            this.datePickerState.activeDate = new Date(nextDate.getFullYear(), nextDate.getMonth(), 1);
+            this.renderDatePicker();
+            if (!this.focusDatePickerDate(toYMD(nextDate)) && this.datePickerEl) {
+                this.datePickerEl.focus();
+            }
+        };
+
         this.onPreviewChange = (event) => {
             const input = event.target.closest('[data-entry-attachment-input="1"]');
             if (!input || !input.files) {
@@ -1549,22 +2774,48 @@
             this.applyDropdownSelection(value);
         };
 
+        this.onDocumentPointerDown = (event) => {
+            const targetEl = eventTargetElement(event);
+            if (!targetEl) {
+                return;
+            }
+            if (this.datePickerEl && !this.datePickerEl.hidden) {
+                if (Date.now() < this.datePickerInternalClickUntil) {
+                    return;
+                }
+                if (!this.datePickerEl.contains(targetEl) && !targetEl.closest('[data-qa-date-pill="1"]')) {
+                    this.closeDatePicker();
+                }
+            }
+        };
+
         this.onDocumentClick = (event) => {
+            const targetEl = eventTargetElement(event);
+            if (!targetEl) {
+                return;
+            }
             if (this.blockedInfoEl && !this.blockedInfoEl.hidden) {
-                if (!this.blockedInfoEl.contains(event.target) && !event.target.closest('[data-qa-blocked="1"]')) {
+                if (!this.blockedInfoEl.contains(targetEl) && !targetEl.closest('[data-qa-blocked="1"]')) {
                     this.closeBlockedInfo();
                 }
             }
-            if (!this.dropdownEl || this.dropdownEl.hidden) {
-                return;
+            if (this.datePickerEl && !this.datePickerEl.hidden) {
+                if (Date.now() < this.datePickerInternalClickUntil) {
+                    return;
+                }
+                if (!this.datePickerEl.contains(targetEl) && !targetEl.closest('[data-qa-date-pill="1"]')) {
+                    this.closeDatePicker();
+                }
             }
-            if (this.dropdownEl.contains(event.target)) {
-                return;
+            if (this.dropdownEl && !this.dropdownEl.hidden) {
+                if (this.dropdownEl.contains(targetEl)) {
+                    return;
+                }
+                if (targetEl.closest('[data-qa-pill="1"]')) {
+                    return;
+                }
+                this.closeDropdown();
             }
-            if (event.target.closest('[data-qa-pill="1"]')) {
-                return;
-            }
-            this.closeDropdown();
         };
 
         this.onDocumentKeyDown = (event) => {
@@ -1573,6 +2824,10 @@
             }
             if (event.key === 'Escape' && this.blockedInfoState) {
                 this.closeBlockedInfo();
+            }
+            if (event.key === 'Escape' && this.datePickerState) {
+                event.preventDefault();
+                this.closeDatePicker();
             }
         };
 
@@ -1587,6 +2842,10 @@
         this.previewEl.addEventListener('change', this.onPreviewChange);
         this.dropdownSearchEl.addEventListener('input', this.onDropdownInput);
         this.dropdownListEl.addEventListener('click', this.onDropdownListClick);
+        this.datePickerEl.addEventListener('click', this.onDatePickerClick);
+        this.datePickerEl.addEventListener('change', this.onDatePickerChange);
+        this.datePickerEl.addEventListener('keydown', this.onDatePickerKeyDown);
+        document.addEventListener('pointerdown', this.onDocumentPointerDown, true);
         document.addEventListener('click', this.onDocumentClick);
         document.addEventListener('keydown', this.onDocumentKeyDown);
     };
@@ -1625,6 +2884,16 @@
         if (this.dropdownListEl && this.onDropdownListClick) {
             this.dropdownListEl.removeEventListener('click', this.onDropdownListClick);
         }
+        if (this.datePickerEl && this.onDatePickerClick) {
+            this.datePickerEl.removeEventListener('click', this.onDatePickerClick);
+        }
+        if (this.datePickerEl && this.onDatePickerChange) {
+            this.datePickerEl.removeEventListener('change', this.onDatePickerChange);
+        }
+        if (this.datePickerEl && this.onDatePickerKeyDown) {
+            this.datePickerEl.removeEventListener('keydown', this.onDatePickerKeyDown);
+        }
+        document.removeEventListener('pointerdown', this.onDocumentPointerDown, true);
         document.removeEventListener('click', this.onDocumentClick);
         document.removeEventListener('keydown', this.onDocumentKeyDown);
     };
@@ -2088,6 +3357,9 @@
         if (!field) {
             return false;
         }
+        if (isDateFieldType(field.type)) {
+            return true;
+        }
         return field.type === 'options' && !field.multiple && getFieldOptions(field).length > 0;
     };
 
@@ -2107,7 +3379,7 @@
         ].filter(Boolean).join(' ');
 
         const interactionAttrs = interactive
-            ? ` data-qa-pill="1" data-pill-field="${escHtml(data.fieldKey)}" data-pill-token="${escHtml(data.tokenId)}" data-pill-entry="${data.entryIndex}"`
+            ? ` data-qa-pill="1" data-qa-date-pill="${field && isDateFieldType(field.type) ? '1' : '0'}" data-pill-field="${escHtml(data.fieldKey)}" data-pill-token="${escHtml(data.tokenId)}" data-pill-entry="${data.entryIndex}"`
             : '';
         const blockedAttrs = blocked
             ? ` data-qa-blocked="1" data-blocked-reason="${escHtml(data.reason || 'Blocked by constraints')}"`
@@ -2139,7 +3411,7 @@
             token.blocked ? c.inlineMarkBlocked : ''
         ].filter(Boolean).join(' ');
         const attrs = (interactive && !token.blocked)
-            ? ` data-qa-pill="1" data-pill-field="${escHtml(token.key)}" data-pill-token="${escHtml(token.id)}" data-pill-entry="${token.entryIndex}"`
+            ? ` data-qa-pill="1" data-qa-date-pill="${field && isDateFieldType(field.type) ? '1' : '0'}" data-pill-field="${escHtml(token.key)}" data-pill-token="${escHtml(token.id)}" data-pill-entry="${token.entryIndex}"`
             : '';
         const blockedAttrs = token.blocked
             ? ` data-qa-blocked="1" data-blocked-reason="${escHtml(token.reason || 'Blocked by constraints')}"`
@@ -2343,7 +3615,7 @@
                     value: item,
                     label: `${fieldKey}: ${item}`,
                     entryIndex: entry.index,
-                    tokenId: token ? token.id : null,
+                    tokenId: token ? token.id : (inferredItem ? inferredItem.id : null),
                     token: token || null,
                     inferredItem: inferredItem || null,
                     inferred: !!inferredItem && !token,
@@ -2752,12 +4024,34 @@
         }
 
         const field = this.getFieldDefinition(fieldKey);
-        if (!field || field.type !== 'options') {
+        if (!field) {
             return;
         }
 
         const token = this.tokenMap[tokenId];
         if (!token) {
+            return;
+        }
+
+        if (isDateFieldType(field.type)) {
+            if (Date.now() < this.datePickerSuppressUntil) {
+                return;
+            }
+            if (this.datePickerState && this.datePickerState.tokenId === tokenId) {
+                this.closeDatePicker();
+                return;
+            }
+            pillEl.setAttribute('data-qa-date-pill', '1');
+            this.openDatePicker({
+                field,
+                token,
+                entryIndex,
+                anchorEl: pillEl
+            });
+            return;
+        }
+
+        if (field.type !== 'options') {
             return;
         }
 
@@ -2811,33 +4105,38 @@
         this.setCaretOffset(caretOffset, true);
     };
 
-    QuickAddComponent.prototype.positionDropdownAtRect = function positionDropdownAtRect(rect) {
+    QuickAddComponent.prototype.positionDropdownAtRect = function positionDropdownAtRect(rect, anchorEl) {
+        const bounds = this.getFloatingBounds(anchorEl || this.inputEl);
         const pad = window.innerWidth <= 480 ? 8 : 10;
-        const viewportWidth = Math.max(0, window.innerWidth - (pad * 2));
+        const viewportWidth = Math.max(0, (bounds.right - bounds.left) - (pad * 2));
         const preferredWidth = Math.max(200, (rect.width || 0) + 40);
         const width = Math.min(360, viewportWidth, preferredWidth);
-        const left = Math.max(pad, Math.min(rect.left || 0, window.innerWidth - width - pad));
+        const minLeft = bounds.left + pad;
+        const maxLeft = bounds.right - width - pad;
+        const left = Math.max(minLeft, Math.min(rect.left || minLeft, maxLeft));
 
         const belowTop = (rect.bottom || rect.top || 0) + 8;
         const approxHeight = 280;
+        const minTop = bounds.top + pad;
+        const maxBottom = bounds.bottom - pad;
         let top = belowTop;
-        if (belowTop + approxHeight > window.innerHeight) {
-            top = Math.max(pad, (rect.top || 0) - approxHeight - 8);
+        if (belowTop + approxHeight > maxBottom) {
+            top = Math.max(minTop, (rect.top || 0) - approxHeight - 8);
         }
-        if (top + approxHeight > window.innerHeight - pad) {
-            top = Math.max(pad, window.innerHeight - approxHeight - pad);
+        if (top + approxHeight > maxBottom) {
+            top = Math.max(minTop, maxBottom - approxHeight);
         }
 
         this.dropdownEl.style.position = 'fixed';
         this.dropdownEl.style.left = `${left}px`;
         this.dropdownEl.style.top = `${top}px`;
         this.dropdownEl.style.width = `${width}px`;
-        this.dropdownEl.style.maxWidth = `${viewportWidth}px`;
+        this.dropdownEl.style.maxWidth = `${Math.max(0, bounds.right - bounds.left - (pad * 2))}px`;
         this.dropdownEl.style.zIndex = '9999';
     };
 
     QuickAddComponent.prototype.positionDropdown = function positionDropdown(anchorEl) {
-        this.positionDropdownAtRect(anchorEl.getBoundingClientRect());
+        this.positionDropdownAtRect(anchorEl.getBoundingClientRect(), anchorEl);
     };
 
     QuickAddComponent.prototype.supportsCssAnchorPositioning = function supportsCssAnchorPositioning() {
