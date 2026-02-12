@@ -4891,6 +4891,7 @@
             if (exists) {
                 return;
             }
+            const isImage = file.type && file.type.startsWith('image/');
             next.push({
                 id: `att_${entryIndex}_${++this.attachmentCounter}`,
                 fingerprint,
@@ -4898,7 +4899,8 @@
                 name: file.name || 'attachment',
                 size: Number(file.size || 0),
                 type: file.type || '',
-                lastModified: Number(file.lastModified || 0)
+                lastModified: Number(file.lastModified || 0),
+                previewUrl: isImage ? URL.createObjectURL(file) : null
             });
         });
 
@@ -4919,7 +4921,23 @@
         if (!current.length) {
             return;
         }
-        const next = current.filter((item) => item.id !== attachmentId);
+        const next = [];
+        let removed = false;
+        current.forEach((item) => {
+            if (item.id === attachmentId) {
+                if (item.previewUrl) {
+                    URL.revokeObjectURL(item.previewUrl);
+                }
+                removed = true;
+            } else {
+                next.push(item);
+            }
+        });
+
+        if (!removed) {
+            return;
+        }
+
         if (next.length > 0) {
             this.attachmentsByEntry.set(entryIndex, next);
         } else {
@@ -4943,13 +4961,32 @@
         const multipleAttr = this.config.allowMultipleAttachments !== false ? ' multiple' : '';
         const inputId = `qa_att_input_${entry.index}`;
 
+        // Icons
+        const iconPdf = `<svg class="qa-attachment-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>`;
+        const iconFile = `<svg class="qa-attachment-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>`;
+
         const listHtml = attachments.length
             ? `
                 <div class="${c.attachmentList}">
-                    ${attachments.map((item) => `
-                        <div class="${c.attachmentItem}">
-                            <span class="${c.attachmentName}" title="${escHtml(item.name)}">${escHtml(item.name)}</span>
-                            <span class="${c.attachmentMeta}">${escHtml(this.formatAttachmentSize(item.size))}</span>
+                    ${attachments.map((item) => {
+                        const isImage = !!item.previewUrl;
+                        const isPdf = item.type === 'application/pdf';
+                        let content = '';
+                        let itemClass = c.attachmentItem;
+
+                        if (isImage) {
+                            itemClass += ' qa-is-image';
+                            content = `<img src="${escHtml(item.previewUrl)}" class="${c.attachmentPreview || 'qa-attachment-preview-img'}" alt="${escHtml(item.name)}" />`;
+                        } else {
+                            content = `
+                                ${isPdf ? iconPdf : iconFile}
+                                <span class="${c.attachmentName}" title="${escHtml(item.name)}">${escHtml(item.name)}</span>
+                            `;
+                        }
+
+                        return `
+                        <div class="${itemClass}">
+                            ${content}
                             <button
                                 type="button"
                                 class="${c.attachmentRemove}"
@@ -4957,9 +4994,10 @@
                                 data-entry-index="${entry.index}"
                                 data-attachment-id="${escHtml(item.id)}"
                                 aria-label="Remove attachment"
-                            >x</button>
+                            >✕</button>
                         </div>
-                    `).join('')}
+                        `;
+                    }).join('')}
                 </div>
             `
             : '';

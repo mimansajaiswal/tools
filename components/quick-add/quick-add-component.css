@@ -515,47 +515,85 @@
 
 .qa-attachment-list {
     display: grid;
-    gap: 5px;
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: 8px;
+    margin-top: 8px;
 }
 
 .qa-attachment-item {
+    position: relative;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 6px;
-    min-width: 0;
+    justify-content: center;
+    aspect-ratio: 1;
     border: var(--qa-border-line);
-    border-radius: var(--qa-radius-pill);
-    padding: 3px 8px;
-    background: color-mix(in srgb, var(--qa-accent-soft) 45%, transparent);
-}
-
-.qa-attachment-name {
-    min-width: 0;
+    border-radius: var(--qa-radius-card);
+    background: var(--qa-card-bg);
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    padding: 4px;
+    text-align: center;
 }
 
-.qa-attachment-meta {
-    color: var(--qa-muted);
-    font-size: 11px;
-    white-space: nowrap;
-}
-
-.qa-attachment-remove {
-    margin-left: auto;
-    border: 0;
-    background: transparent;
-    color: inherit;
-    cursor: pointer;
-    font: inherit;
-    line-height: 1;
+.qa-attachment-item.qa-is-image {
     padding: 0;
-    opacity: 0.8;
+    border: 0;
+}
+
+.qa-attachment-preview-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.qa-attachment-icon {
+    width: 32px;
+    height: 32px;
+    margin-bottom: 4px;
+    color: var(--qa-muted);
     flex-shrink: 0;
 }
 
+.qa-attachment-name {
+    font-size: 10px;
+    width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    padding: 0 4px;
+    line-height: 1.2;
+    color: var(--qa-card-fg);
+}
+
+.qa-attachment-meta {
+    display: none;
+}
+
+.qa-attachment-remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: rgba(0, 0, 0, 0.5);
+    color: #fff;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    padding: 0;
+    margin: 0;
+    transition: background-color 0.2s;
+    z-index: 2;
+}
+
 .qa-attachment-remove:hover {
+    background: rgba(220, 38, 38, 0.9);
     opacity: 1;
 }
 
