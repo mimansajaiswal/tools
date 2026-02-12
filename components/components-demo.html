@@ -592,6 +592,111 @@
         .petqa-entry {
             background: linear-gradient(180deg, #ffffff 0%, #f7fcf9 100%);
         }
+
+        .ai-config-details {
+            margin-top: 8px;
+            border: 1px solid var(--line);
+            background: #fff;
+            border-radius: 10px;
+            overflow: hidden;
+            max-width: 100%;
+        }
+
+        .ai-config-details>summary {
+            cursor: pointer;
+            list-style: none;
+            padding: 8px 10px;
+            font: 500 12px/1 "JetBrains Mono", monospace;
+            color: var(--ink);
+            background: #f8f3ea;
+            border-bottom: 1px solid var(--line);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .ai-config-details>summary::after {
+            content: "▸";
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--ink-soft);
+            transform: rotate(0deg);
+            transition: transform 140ms ease;
+        }
+
+        .ai-config-details[open]>summary::after {
+            transform: rotate(90deg);
+        }
+
+        .ai-config-details>summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .custom-select {
+            position: relative;
+            min-width: 140px;
+        }
+
+        .custom-select-trigger {
+            width: 100%;
+            border: 1px solid var(--line);
+            background: #fff;
+            color: var(--ink);
+            border-radius: 8px;
+            padding: 6px 10px;
+            cursor: pointer;
+            font: 500 12px/1.2 "JetBrains Mono", monospace;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .custom-select-trigger::after {
+            content: "▾";
+            color: var(--ink-soft);
+            font-size: 10px;
+        }
+
+        .custom-select-menu {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            border: 1px solid var(--line);
+            background: #fff;
+            border-radius: 8px;
+            padding: 4px;
+            display: none;
+            box-shadow: 0 10px 24px rgba(32, 27, 22, 0.12);
+            z-index: 20;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .custom-select.open .custom-select-menu {
+            display: grid;
+            gap: 2px;
+        }
+
+        .custom-select-option {
+            border: 0;
+            background: #fff;
+            color: var(--ink);
+            border-radius: 6px;
+            padding: 6px 8px;
+            cursor: pointer;
+            text-align: left;
+            font: 500 12px/1 "JetBrains Mono", monospace;
+        }
+
+        .custom-select-option:hover,
+        .custom-select-option.selected {
+            background: var(--accent-soft);
+            color: var(--accent);
+        }
     </style>
 </head>
 
@@ -674,9 +779,9 @@
                 <div class="example-head">
                     <h2>Pet Event Variant</h2>
                     <p>Semicolon bulk separator, strict terminator <code>~~</code>, option auto-detect from free text,
-                        dependency-aware event options by pet, and inferred reduction control (global off, symptom field
-                        on). Includes self + conditional date constraints; blocked tokens are striped and clickable for
-                        details.</p>
+                        dependency-aware event options by pet, inferred reduction, and <strong>auto-today</strong> date
+                        defaulting. Includes self + conditional date constraints; blocked tokens are striped and
+                        clickable for details.</p>
                     <div class="meta" id="meta2"></div>
                     <details class="config-box">
                         <summary>Config + Options</summary>
@@ -766,33 +871,45 @@
                                 <button class="config-btn" type="button" id="resetConfig5">Reset</button>
                             </div>
                         </div>
-                        <div class="ai-runtime" id="aiRuntime5">
-                            <label class="ai-runtime-field">Provider
-                                <select class="ai-runtime-input" id="aiProvider5">
-                                    <option value="openai">OpenAI</option>
-                                    <option value="anthropic">Anthropic</option>
-                                    <option value="google">Google</option>
-                                    <option value="custom">Custom</option>
-                                </select>
-                            </label>
-                            <label class="ai-runtime-field">API Key
-                                <input class="ai-runtime-input" id="aiApiKey5" type="password" placeholder="sk-..." />
-                            </label>
-                            <label class="ai-runtime-field">Model
-                                <input class="ai-runtime-input" id="aiModel5" type="text" placeholder="gpt-4o-mini" />
-                            </label>
-                            <label class="ai-runtime-field">Custom Endpoint
-                                <input class="ai-runtime-input" id="aiEndpoint5" type="text"
-                                    placeholder="https://.../chat/completions" />
-                            </label>
-                            <div class="ai-runtime-row">
-                                <label class="ai-runtime-check">
-                                    <input id="aiUseMock5" type="checkbox" checked />
-                                    Use demo mock response
+                        <details class="ai-config-details" id="aiRuntime5" open>
+                            <summary>AI Provider Details</summary>
+                            <div class="ai-runtime">
+                                <label class="ai-runtime-field">Provider
+                                    <div class="custom-select" id="aiProviderSelect5">
+                                        <button class="custom-select-trigger" type="button"
+                                            id="aiProviderTrigger5">Demo</button>
+                                        <div class="custom-select-menu">
+                                            <button class="custom-select-option" type="button"
+                                                data-value="demo">Demo</button>
+                                            <button class="custom-select-option" type="button"
+                                                data-value="openai">OpenAI</button>
+                                            <button class="custom-select-option" type="button"
+                                                data-value="anthropic">Anthropic</button>
+                                            <button class="custom-select-option" type="button"
+                                                data-value="google">Google</button>
+                                            <button class="custom-select-option" type="button"
+                                                data-value="custom">Custom</button>
+                                        </div>
+                                        <input type="hidden" id="aiProvider5" value="demo">
+                                    </div>
                                 </label>
-                                <button class="config-btn" type="button" id="aiApply5">Apply AI Runtime</button>
+                                <label class="ai-runtime-field">API Key
+                                    <input class="ai-runtime-input" id="aiApiKey5" type="password"
+                                        placeholder="sk-..." />
+                                </label>
+                                <label class="ai-runtime-field">Model
+                                    <input class="ai-runtime-input" id="aiModel5" type="text"
+                                        placeholder="gpt-4o-mini" />
+                                </label>
+                                <label class="ai-runtime-field">Custom Endpoint
+                                    <input class="ai-runtime-input" id="aiEndpoint5" type="text"
+                                        placeholder="https://.../chat/completions" />
+                                </label>
+                                <div class="ai-runtime-row">
+                                    <button class="config-btn" type="button" id="aiApply5">Apply AI Details</button>
+                                </div>
                             </div>
-                        </div>
+                        </details>
                         <textarea id="config5" class="config-editor" spellcheck="false"></textarea>
                         <div class="config-status" id="config5Status" aria-live="polite"></div>
                         <details class="config-errors" id="config5ErrorsBox" hidden>
@@ -821,33 +938,45 @@
                                 <button class="config-btn" type="button" id="resetConfig6">Reset</button>
                             </div>
                         </div>
-                        <div class="ai-runtime" id="aiRuntime6">
-                            <label class="ai-runtime-field">Provider
-                                <select class="ai-runtime-input" id="aiProvider6">
-                                    <option value="openai">OpenAI</option>
-                                    <option value="anthropic">Anthropic</option>
-                                    <option value="google">Google</option>
-                                    <option value="custom">Custom</option>
-                                </select>
-                            </label>
-                            <label class="ai-runtime-field">API Key
-                                <input class="ai-runtime-input" id="aiApiKey6" type="password" placeholder="sk-..." />
-                            </label>
-                            <label class="ai-runtime-field">Model
-                                <input class="ai-runtime-input" id="aiModel6" type="text" placeholder="gpt-4o-mini" />
-                            </label>
-                            <label class="ai-runtime-field">Custom Endpoint
-                                <input class="ai-runtime-input" id="aiEndpoint6" type="text"
-                                    placeholder="https://.../chat/completions" />
-                            </label>
-                            <div class="ai-runtime-row">
-                                <label class="ai-runtime-check">
-                                    <input id="aiUseMock6" type="checkbox" checked />
-                                    Use demo mock response
+                        <details class="ai-config-details" id="aiRuntime6" open>
+                            <summary>AI Provider Details</summary>
+                            <div class="ai-runtime">
+                                <label class="ai-runtime-field">Provider
+                                    <div class="custom-select" id="aiProviderSelect6">
+                                        <button class="custom-select-trigger" type="button"
+                                            id="aiProviderTrigger6">Demo</button>
+                                        <div class="custom-select-menu">
+                                            <button class="custom-select-option" type="button"
+                                                data-value="demo">Demo</button>
+                                            <button class="custom-select-option" type="button"
+                                                data-value="openai">OpenAI</button>
+                                            <button class="custom-select-option" type="button"
+                                                data-value="anthropic">Anthropic</button>
+                                            <button class="custom-select-option" type="button"
+                                                data-value="google">Google</button>
+                                            <button class="custom-select-option" type="button"
+                                                data-value="custom">Custom</button>
+                                        </div>
+                                        <input type="hidden" id="aiProvider6" value="demo">
+                                    </div>
                                 </label>
-                                <button class="config-btn" type="button" id="aiApply6">Apply AI Runtime</button>
+                                <label class="ai-runtime-field">API Key
+                                    <input class="ai-runtime-input" id="aiApiKey6" type="password"
+                                        placeholder="sk-..." />
+                                </label>
+                                <label class="ai-runtime-field">Model
+                                    <input class="ai-runtime-input" id="aiModel6" type="text"
+                                        placeholder="gpt-4o-mini" />
+                                </label>
+                                <label class="ai-runtime-field">Custom Endpoint
+                                    <input class="ai-runtime-input" id="aiEndpoint6" type="text"
+                                        placeholder="https://.../chat/completions" />
+                                </label>
+                                <div class="ai-runtime-row">
+                                    <button class="config-btn" type="button" id="aiApply6">Apply AI Details</button>
+                                </div>
                             </div>
-                        </div>
+                        </details>
                         <textarea id="config6" class="config-editor" spellcheck="false"></textarea>
                         <div class="config-status" id="config6Status" aria-live="polite"></div>
                         <details class="config-errors" id="config6ErrorsBox" hidden>
@@ -1501,24 +1630,48 @@
         function setupAiRuntimeControls(options) {
             const {
                 playground,
-                providerId,
+                providerSelectId,
+                providerTriggerId,
+                providerInputId,
                 apiKeyId,
                 modelId,
                 endpointId,
-                useMockId,
                 applyId
             } = options || {};
             if (!playground) {
                 return;
             }
-            const providerEl = document.getElementById(providerId);
+            const providerSelectEl = document.getElementById(providerSelectId);
+            const providerTriggerEl = document.getElementById(providerTriggerId);
+            const providerInputEl = document.getElementById(providerInputId);
             const apiKeyEl = document.getElementById(apiKeyId);
             const modelEl = document.getElementById(modelId);
             const endpointEl = document.getElementById(endpointId);
-            const useMockEl = document.getElementById(useMockId);
             const applyEl = document.getElementById(applyId);
-            if (!providerEl || !apiKeyEl || !modelEl || !endpointEl || !useMockEl || !applyEl) {
+
+            if (!providerInputEl || !apiKeyEl || !modelEl || !endpointEl || !applyEl) {
                 return;
+            }
+
+            // Custom Select Logic
+            if (providerSelectEl && providerTriggerEl) {
+                providerTriggerEl.addEventListener('click', () => {
+                    providerSelectEl.classList.toggle('open');
+                });
+                providerSelectEl.addEventListener('click', (event) => {
+                    const option = event.target.closest('.custom-select-option');
+                    if (!option) return;
+                    const value = option.getAttribute('data-value');
+                    const text = option.textContent;
+                    providerInputEl.value = value;
+                    providerTriggerEl.textContent = text;
+                    providerSelectEl.classList.remove('open');
+                });
+                document.addEventListener('click', (event) => {
+                    if (!providerSelectEl.contains(event.target)) {
+                        providerSelectEl.classList.remove('open');
+                    }
+                });
             }
 
             function readEditorConfig() {
@@ -1532,11 +1685,23 @@
             function syncControlsFromEditor() {
                 const parsed = readEditorConfig();
                 const ai = (parsed && parsed.ai && typeof parsed.ai === 'object') ? parsed.ai : {};
-                providerEl.value = String(ai.provider || 'openai');
+                let activeProvider = String(ai.provider || 'openai');
+
+                // If mockResponse is NOT explicitly null, it implies demo mode (since base config has it)
+                // In JSON editor, function is missing (undefined). null means disabled.
+                if (ai.mockResponse !== null) {
+                    activeProvider = 'demo';
+                }
+
+                providerInputEl.value = activeProvider;
+                if (providerTriggerEl && providerSelectEl) {
+                    const option = providerSelectEl.querySelector(`[data-value="${activeProvider}"]`);
+                    providerTriggerEl.textContent = option ? option.textContent : activeProvider;
+                }
+
                 apiKeyEl.value = String(ai.apiKey || '');
                 modelEl.value = String(ai.model || '');
                 endpointEl.value = String(ai.endpoint || '');
-                useMockEl.checked = !(Object.prototype.hasOwnProperty.call(ai, 'mockResponse') && ai.mockResponse === null);
             }
 
             function applyRuntimeToEditor() {
@@ -1546,23 +1711,25 @@
                     return;
                 }
                 parsed.ai = (parsed.ai && typeof parsed.ai === 'object') ? parsed.ai : {};
-                parsed.ai.provider = String(providerEl.value || 'openai');
+                const chosenProvider = providerInputEl.value;
+
+                if (chosenProvider === 'demo') {
+                    // Remove mockResponse from JSON so base config's function applies
+                    delete parsed.ai.mockResponse;
+                } else {
+                    parsed.ai.provider = chosenProvider;
+                    parsed.ai.mockResponse = null; // Disable mock
+                }
+
                 parsed.ai.apiKey = String(apiKeyEl.value || '');
                 parsed.ai.model = String(modelEl.value || '');
                 parsed.ai.endpoint = String(endpointEl.value || '');
                 parsed.ai.forceJson = true;
 
-                if (useMockEl.checked) {
-                    delete parsed.ai.mockResponse;
-                } else {
-                    parsed.ai.mockResponse = null;
-                }
-
                 playground.editorEl.value = JSON.stringify(parsed, null, 2);
                 const applied = playground.applyFromEditor();
                 if (applied) {
-                    const modeLabel = useMockEl.checked ? 'mock mode' : 'real provider mode';
-                    playground.setConfigStatus(`Applied AI runtime (${modeLabel}).`, 'ok');
+                    playground.setConfigStatus(`Applied AI details (${chosenProvider}).`, 'ok');
                     syncControlsFromEditor();
                 }
             }
@@ -1658,7 +1825,7 @@
             inferredMatchMode: 'fuzzy',
             inferredMatchThreshold: 0.8,
             fallbackField: 'note',
-            placeholder: 'Use ; for new entry. Example: pet:Luna~~ event:walk~~ due:2025-02-01~~ at:yesterday~~',
+            placeholder: 'Use ; for new entry. Example: pet:Luna~~ event:walk~~ due:2025-02-01~~ at:yesterday~~ (at: defaults to today if omitted)',
             classNames: {
                 root: 'qa-root petqa-root',
                 entry: 'qa-entry petqa-entry'
@@ -1726,7 +1893,7 @@
                         ]
                     },
                     { key: 'severity', type: 'number', prefixes: ['sev:'] },
-                    { key: 'at', type: 'date', naturalDate: true, prefixes: ['at:'], required: true }
+                    { key: 'at', type: 'date', naturalDate: true, prefixes: ['at:'], required: true, autoToday: true }
                 ]
             },
             onParse: (result) => {
@@ -1735,7 +1902,8 @@
         };
         const petDefaultInput =
             'pet:Luna~~ event:litter~~ due:2025-02-01~~ sev:2~~ at:yesterday~~ cogh and appetite normal;' +
-            ' pet:Mochi~~ event:groom~~ due:2026-03-01~~ sev:3~~ at:today~~ low enery and slept longer than usyal';
+            ' pet:Mochi~~ event:groom~~ due:2026-03-01~~ sev:3~~ at:today~~ low enery and slept longer than usyal;' +
+            ' pet:Pico~~ event:vet~~ due:2026-04-01~~ checkup (auto-dated)';
         const petAdd = QuickAdd.create(petConfig);
         petAdd.setInput(petDefaultInput);
         setupConfigPlayground({
@@ -1959,17 +2127,20 @@
             debounceMs: 260,
             showInlinePills: false,
             showEntryPills: false,
+            allowEntryAttachments: true,
+            allowMultipleAttachments: true,
+            allowedAttachmentTypes: ['.pdf', '.png', '.jpg', 'image/*'],
             fieldTerminator: ';;',
             entrySeparator: '\n',
             placeholder: 'Example (newline-separated): Luna had cough yesterday evening and photo 1\nMax vomited this morning with photo 2',
             schema: {
                 fields: [
                     { key: 'title', type: 'string' },
-                    { key: 'petName', type: 'string' },
-                    { key: 'eventType', type: 'string' },
-                    { key: 'date', type: 'date' },
+                    { key: 'petName', type: 'string', color: '#eab308' },
+                    { key: 'eventType', type: 'string', color: '#ef4444' },
+                    { key: 'date', type: 'date', color: '#3b82f6' },
                     { key: 'time', type: 'string' },
-                    { key: 'status', type: 'string' },
+                    { key: 'status', type: 'string', color: '#22c55e' },
                     { key: 'notes', type: 'string' },
                     { key: 'attachments', type: 'string', multiple: true }
                 ]
@@ -1985,7 +2156,8 @@
                 apiKey: 'demo-key',
                 model: 'gpt-4o-mini',
                 mockLatencyMs: 420,
-                mockResponse: (input) => buildDemoAiStructuredResponse(input)
+                mockResponse: (input) => buildDemoAiStructuredResponse(input),
+                controls: { parse: true, queue: true, process: true, clear: true }
             },
             tokens: {
                 '--qa-bg': '#f8fbff',
@@ -2017,11 +2189,12 @@
         });
         setupAiRuntimeControls({
             playground: aiPlayground5,
-            providerId: 'aiProvider5',
+            providerSelectId: 'aiProviderSelect5',
+            providerTriggerId: 'aiProviderTrigger5',
+            providerInputId: 'aiProvider5',
             apiKeyId: 'aiApiKey5',
             modelId: 'aiModel5',
             endpointId: 'aiEndpoint5',
-            useMockId: 'aiUseMock5',
             applyId: 'aiApply5'
         });
 
@@ -2031,6 +2204,9 @@
             debounceMs: 260,
             showInlinePills: true,
             showEntryPills: false,
+            allowEntryAttachments: true,
+            allowMultipleAttachments: true,
+            allowedAttachmentTypes: ['.pdf', '.png', '.jpg', 'image/*'],
             fieldTerminator: ';;',
             entrySeparator: '\n',
             placeholder: 'Inline pills demo: Luna had cough yesterday evening and photo 1\nMax vomited this morning and photo 2',
@@ -2176,11 +2352,12 @@
         });
         setupAiRuntimeControls({
             playground: aiPlayground6,
-            providerId: 'aiProvider6',
+            providerSelectId: 'aiProviderSelect6',
+            providerTriggerId: 'aiProviderTrigger6',
+            providerInputId: 'aiProvider6',
             apiKeyId: 'aiApiKey6',
             modelId: 'aiModel6',
             endpointId: 'aiEndpoint6',
-            useMockId: 'aiUseMock6',
             applyId: 'aiApply6'
         });
 

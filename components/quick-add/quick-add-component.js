@@ -257,6 +257,7 @@
             multiple: false,
             naturalDate: false,
             allowDateOnly: true,
+            autoToday: false,
             defaultTime: DEFAULT_DATETIME_TIME,
             timeFormat: '24h',
             color: null,
@@ -282,6 +283,10 @@
 
         if (typeof normalized.allowDateOnly !== 'boolean') {
             normalized.allowDateOnly = true;
+        }
+
+        if (typeof normalized.autoToday !== 'boolean') {
+            normalized.autoToday = false;
         }
 
         normalized.defaultTime = normalizeTime24(normalized.defaultTime, DEFAULT_DATETIME_TIME);
@@ -1880,6 +1885,30 @@
             });
         });
 
+        const autoFields = new Set();
+        normalizedSchema.fields.forEach((field) => {
+            if (!field.autoToday) {
+                return;
+            }
+            if (fields[field.key] !== undefined) {
+                return;
+            }
+            if (field.type !== 'date' && field.type !== 'datetime') {
+                return;
+            }
+
+            const now = new Date();
+            let val = '';
+            if (field.type === 'date') {
+                val = toYMD(now);
+            } else {
+                val = `${toYMD(now)}T${normalizeTime24(field.defaultTime, DEFAULT_DATETIME_TIME)}`;
+            }
+
+            appendFieldValue(fields, field, field.key, val);
+            autoFields.add(field.key);
+        });
+
         const entry = {
             index: entryIndex,
             raw: rawEntry,
@@ -1888,6 +1917,7 @@
             fields,
             explicitValues,
             inferred,
+            autoFields,
             pending,
             errors,
             tokens,
@@ -3404,6 +3434,20 @@
         };
 
         this.onPreviewClick = (event) => {
+            const removeBtn = event.target.closest('[data-entry-attachment-remove="1"]');
+            if (removeBtn) {
+                event.preventDefault();
+                event.stopPropagation();
+                const entryId = removeBtn.getAttribute('data-entry-id');
+                const entryIndex = Number(removeBtn.getAttribute('data-entry-index'));
+                const attachmentId = removeBtn.getAttribute('data-attachment-id') || '';
+                const key = entryId || entryIndex;
+                if ((entryId || !Number.isNaN(entryIndex)) && attachmentId) {
+                    this.removeEntryAttachment(key, attachmentId);
+                }
+                return;
+            }
+
             if (this.isAiMode()) {
                 const actionEl = event.target.closest('[data-ai-action]');
                 if (!actionEl) {
@@ -3474,17 +3518,7 @@
                 }
                 return;
             }
-            const removeBtn = event.target.closest('[data-entry-attachment-remove="1"]');
-            if (removeBtn) {
-                event.preventDefault();
-                event.stopPropagation();
-                const entryIndex = Number(removeBtn.getAttribute('data-entry-index'));
-                const attachmentId = removeBtn.getAttribute('data-attachment-id') || '';
-                if (!Number.isNaN(entryIndex) && attachmentId) {
-                    this.removeEntryAttachment(entryIndex, attachmentId);
-                }
-                return;
-            }
+
             const blocked = event.target.closest('[data-qa-blocked="1"]');
             if (blocked) {
                 event.preventDefault();
@@ -4517,6 +4551,7 @@
         const field = this.getFieldDefinition(data.fieldKey);
         const color = this.resolvePillColor(field, data.value);
         const inferred = !!data.inferred;
+        const auto = !!data.auto;
         const blocked = !!data.blocked;
         const interactive = !blocked && this.isInteractivePill(field) && !!data.tokenId;
         const styleAttr = (!blocked && color) ? ` style="--qa-pill-accent:${escHtml(color)}"` : '';
@@ -4524,7 +4559,8 @@
             c.pill,
             interactive ? c.pillInteractive : '',
             inferred ? c.pillInferred : '',
-            blocked ? c.pillBlocked : ''
+            blocked ? c.pillBlocked : '',
+            auto ? 'qa-pill-auto' : ''
         ].filter(Boolean).join(' ');
 
         const interactionAttrs = interactive
@@ -4537,6 +4573,9 @@
         const inferredIcon = inferred
             ? `<span class="${c.pillInferredIcon}" aria-hidden="true"><svg viewBox="0 0 16 16" width="12" height="12" focusable="false"><path d="M8 1.5l1.4 2.9 3.1.5-2.2 2.2.5 3.2L8 8.9l-2.8 1.4.5-3.2L3.5 4.9l3.1-.5L8 1.5z" fill="currentColor"/></svg></span>`
             : '';
+        const autoIcon = auto
+            ? `<span class="${c.pillAutoIcon || 'qa-pill-auto-icon'}" aria-hidden="true" title="Auto-filled">⚡</span>`
+            : '';
         const blockedIcon = blocked
             ? `<span class="${c.pillBlockedIcon}" aria-hidden="true">!</span>`
             : '';
@@ -4544,7 +4583,7 @@
             ? `<button type="button" class="${c.pillDismiss}" data-dismiss-key="${escHtml(data.dismissKey)}" aria-label="Dismiss value">x</button>`
             : '';
 
-        return `<span class="${classes}"${attrs}${styleAttr}>${blockedIcon}${inferredIcon}<span class="${c.pillLabel}">${escHtml(data.label)}</span>${dismiss}</span>`;
+        return `<span class="${classes}"${attrs}${styleAttr}>${blockedIcon}${autoIcon}${inferredIcon}<span class="${c.pillLabel}">${escHtml(data.label)}</span>${dismiss}</span>`;
     };
 
     QuickAddComponent.prototype.buildInlineMarkHtml = function buildInlineMarkHtml(token, rawChunk) {
@@ -4736,6 +4775,8 @@
                 } else if (inferredItem) {
                     sourceKind = 'inferred';
                     rawChunk = source.slice(inferredItem.globalStart, inferredItem.globalEnd);
+                } else if (entry.autoFields && entry.autoFields.has(fieldKey)) {
+                    sourceKind = 'auto';
                 }
 
                 const fingerprint = [
@@ -4768,6 +4809,7 @@
                     token: token || null,
                     inferredItem: inferredItem || null,
                     inferred: !!inferredItem && !token,
+                    auto: sourceKind === 'auto',
                     dismissKey
                 });
             });
@@ -4815,16 +4857,16 @@
         if (!this.attachmentsByEntry || this.attachmentsByEntry.size === 0) {
             return;
         }
-        const active = new Set(result.entries.map((entry) => entry.index));
-        Array.from(this.attachmentsByEntry.keys()).forEach((entryIndex) => {
-            if (!active.has(entryIndex)) {
-                this.attachmentsByEntry.delete(entryIndex);
+        const active = new Set(result.entries.map((entry) => (entry._id ? entry._id : entry.index)));
+        Array.from(this.attachmentsByEntry.keys()).forEach((key) => {
+            if (!active.has(key)) {
+                this.attachmentsByEntry.delete(key);
             }
         });
     };
 
-    QuickAddComponent.prototype.getEntryAttachmentMeta = function getEntryAttachmentMeta(entryIndex) {
-        const list = this.attachmentsByEntry.get(entryIndex) || [];
+    QuickAddComponent.prototype.getEntryAttachmentMeta = function getEntryAttachmentMeta(entryKey) {
+        const list = this.attachmentsByEntry.get(entryKey) || [];
         return list.map((item) => ({
             id: item.id,
             name: item.name,
@@ -4840,17 +4882,30 @@
         }
         if (!this.supportsEntryAttachments()) {
             result.entries.forEach((entry) => {
-                delete entry.attachments;
+                if (result.mode === 'ai') {
+                    delete entry.fileAttachments;
+                } else {
+                    delete entry.attachments;
+                }
             });
             return result;
         }
         this.pruneAttachmentsForResult(result);
         result.entries.forEach((entry) => {
-            const attachments = this.getEntryAttachmentMeta(entry.index);
+            const key = entry._id || entry.index;
+            const attachments = this.getEntryAttachmentMeta(key);
             if (attachments.length > 0) {
-                entry.attachments = attachments;
+                if (result.mode === 'ai') {
+                    entry.fileAttachments = attachments;
+                } else {
+                    entry.attachments = attachments;
+                }
             } else {
-                delete entry.attachments;
+                if (result.mode === 'ai') {
+                    delete entry.fileAttachments;
+                } else {
+                    delete entry.attachments;
+                }
             }
         });
         return result;
@@ -4867,7 +4922,7 @@
         return `${(num / (1024 * 1024)).toFixed(1)} MB`;
     };
 
-    QuickAddComponent.prototype.addEntryAttachments = function addEntryAttachments(entryIndex, files) {
+    QuickAddComponent.prototype.addEntryAttachments = function addEntryAttachments(entryKey, files) {
         if (!this.supportsEntryAttachments()) {
             return;
         }
@@ -4881,7 +4936,7 @@
             return;
         }
 
-        const current = this.attachmentsByEntry.get(entryIndex) || [];
+        const current = this.attachmentsByEntry.get(entryKey) || [];
         const canMultiple = this.config.allowMultipleAttachments !== false;
         let next = canMultiple ? current.slice() : [];
 
@@ -4893,7 +4948,7 @@
             }
             const isImage = file.type && file.type.startsWith('image/');
             next.push({
-                id: `att_${entryIndex}_${++this.attachmentCounter}`,
+                id: `att_${String(entryKey).replace(/[^a-zA-Z0-9]/g, '_')}_${++this.attachmentCounter}`,
                 fingerprint,
                 file,
                 name: file.name || 'attachment',
@@ -4908,7 +4963,7 @@
             next = [next[next.length - 1]];
         }
 
-        this.attachmentsByEntry.set(entryIndex, next);
+        this.attachmentsByEntry.set(entryKey, next);
         this.syncEntryAttachmentMeta(this.lastResult);
         this.renderResult(this.lastResult);
         if (typeof this.config.onParse === 'function') {
@@ -4916,8 +4971,8 @@
         }
     };
 
-    QuickAddComponent.prototype.removeEntryAttachment = function removeEntryAttachment(entryIndex, attachmentId) {
-        const current = this.attachmentsByEntry.get(entryIndex) || [];
+    QuickAddComponent.prototype.removeEntryAttachment = function removeEntryAttachment(entryKey, attachmentId) {
+        const current = this.attachmentsByEntry.get(entryKey) || [];
         if (!current.length) {
             return;
         }
@@ -4939,9 +4994,9 @@
         }
 
         if (next.length > 0) {
-            this.attachmentsByEntry.set(entryIndex, next);
+            this.attachmentsByEntry.set(entryKey, next);
         } else {
-            this.attachmentsByEntry.delete(entryIndex);
+            this.attachmentsByEntry.delete(entryKey);
         }
         this.syncEntryAttachmentMeta(this.lastResult);
         this.renderResult(this.lastResult);
@@ -4955,11 +5010,16 @@
             return '';
         }
         const c = this.config.classNames;
-        const attachments = this.attachmentsByEntry.get(entry.index) || [];
+        const entryKey = entry._id || entry.index;
+        const attachments = this.attachmentsByEntry.get(entryKey) || [];
         const accept = this.getAttachmentAcceptValue();
         const acceptAttr = accept ? ` accept="${escHtml(accept)}"` : '';
         const multipleAttr = this.config.allowMultipleAttachments !== false ? ' multiple' : '';
-        const inputId = `qa_att_input_${entry.index}`;
+        const inputId = `qa_att_input_${String(entryKey).replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+        const dataAttrs = entry._id
+            ? `data-entry-id="${escHtml(entry._id)}"`
+            : `data-entry-index="${entry.index}"`;
 
         // Icons
         const iconPdf = `<svg class="qa-attachment-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>`;
@@ -4969,35 +5029,35 @@
             ? `
                 <div class="${c.attachmentList}">
                     ${attachments.map((item) => {
-                        const isImage = !!item.previewUrl;
-                        const isPdf = item.type === 'application/pdf';
-                        let content = '';
-                        let itemClass = c.attachmentItem;
+                const isImage = !!item.previewUrl;
+                const isPdf = item.type === 'application/pdf';
+                let content = '';
+                let itemClass = c.attachmentItem;
 
-                        if (isImage) {
-                            itemClass += ' qa-is-image';
-                            content = `<img src="${escHtml(item.previewUrl)}" class="${c.attachmentPreview || 'qa-attachment-preview-img'}" alt="${escHtml(item.name)}" />`;
-                        } else {
-                            content = `
+                if (isImage) {
+                    itemClass += ' qa-is-image';
+                    content = `<img src="${escHtml(item.previewUrl)}" class="${c.attachmentPreview || 'qa-attachment-preview-img'}" alt="${escHtml(item.name)}" />`;
+                } else {
+                    content = `
                                 ${isPdf ? iconPdf : iconFile}
                                 <span class="${c.attachmentName}" title="${escHtml(item.name)}">${escHtml(item.name)}</span>
                             `;
-                        }
+                }
 
-                        return `
+                return `
                         <div class="${itemClass}">
                             ${content}
                             <button
                                 type="button"
                                 class="${c.attachmentRemove}"
                                 data-entry-attachment-remove="1"
-                                data-entry-index="${entry.index}"
+                                ${dataAttrs}
                                 data-attachment-id="${escHtml(item.id)}"
                                 aria-label="Remove attachment"
                             >✕</button>
                         </div>
                         `;
-                    }).join('')}
+            }).join('')}
                 </div>
             `
             : '';
@@ -5013,7 +5073,8 @@
                         class="${c.attachmentInput}"
                         id="${escHtml(inputId)}"
                         data-entry-attachment-input="1"
-                        data-entry-index="${entry.index}"${acceptAttr}${multipleAttr}
+                        ${dataAttrs}
+                        ${acceptAttr}${multipleAttr}
                     />
                     <span class="${c.attachmentHint}">
                         ${this.config.allowMultipleAttachments !== false ? 'Multiple files allowed' : 'Single file only'}
@@ -5117,6 +5178,8 @@
                 <button type="button" class="${c.aiActionBtn} ${c.aiActionBtnDanger}" data-ai-action="delete-entry" data-ai-entry-id="${escHtml(entry._id)}">Remove</button>
             `;
 
+        const attachmentsHtml = this.renderEntryAttachments(entry);
+
         if (editing) {
             return `
                 <article class="${cardClasses}" data-ai-entry-id="${escHtml(entry._id)}">
@@ -5145,8 +5208,9 @@
                 </div>
                 ${entry.notes ? `<div class="${c.issues}"><div class="${c.issue}">${escHtml(entry.notes)}</div></div>` : ''}
                 ${Array.isArray(entry.attachments) && entry.attachments.length
-                ? `<div class="${c.issues}"><div class="${c.issue}">attachments: ${escHtml(entry.attachments.join(', '))}</div></div>`
+                ? `<div class="${c.issues}"><div class="${c.issue}">extracted refs: ${escHtml(entry.attachments.join(', '))}</div></div>`
                 : ''}
+                ${attachmentsHtml}
                 <div class="${c.aiActions}">
                     ${actionRow}
                 </div>
@@ -5155,6 +5219,7 @@
     };
 
     QuickAddComponent.prototype.renderAIResult = function renderAIResult(result) {
+        this.syncEntryAttachmentMeta(result);
         const c = this.config.classNames;
         const queueCount = Number(result.queueCount || 0);
         const activeCount = (this.aiState.entries || []).filter((entry) => !this.aiState.deletedEntries.has(entry._id)).length;
@@ -5170,12 +5235,18 @@
         }
         this.statusEl.textContent = statusParts.join(' | ');
 
+        const controls = this.config.ai && this.config.ai.controls ? this.config.ai.controls : {};
+        const showParse = controls.parse !== false;
+        const showQueue = controls.queue !== false;
+        const showProcess = controls.process !== false;
+        const showClear = controls.clear !== false;
+
         const actionsHtml = `
             <div class="${c.aiActions}">
-                <button type="button" class="${c.aiActionBtn} ${c.aiActionBtnPrimary}" data-ai-action="parse-now">Parse Now</button>
-                <button type="button" class="${c.aiActionBtn}" data-ai-action="queue-input">Queue Input</button>
-                <button type="button" class="${c.aiActionBtn}" data-ai-action="process-queue">Process Queue</button>
-                <button type="button" class="${c.aiActionBtn} ${c.aiActionBtnGhost}" data-ai-action="clear-entries">Clear Entries</button>
+                ${showParse ? `<button type="button" class="${c.aiActionBtn} ${c.aiActionBtnPrimary}" data-ai-action="parse-now">Parse Now</button>` : ''}
+                ${showQueue ? `<button type="button" class="${c.aiActionBtn}" data-ai-action="queue-input">Queue Input</button>` : ''}
+                ${showProcess ? `<button type="button" class="${c.aiActionBtn}" data-ai-action="process-queue">Process Queue</button>` : ''}
+                ${showClear ? `<button type="button" class="${c.aiActionBtn} ${c.aiActionBtnGhost}" data-ai-action="clear-entries">Clear Entries</button>` : ''}
             </div>
         `;
         const warningRows = []
@@ -5203,7 +5274,15 @@
             this.outputEl.textContent = JSON.stringify({
                 mode: 'ai',
                 input: this.inputText,
-                entries: this.aiState.entries,
+                entries: this.aiState.entries.map((entry) => {
+                    const mapped = Object.assign({}, entry);
+                    // Map file attachments from the result if they match IDs
+                    const match = result.entries.find((r) => r._id === entry._id);
+                    if (match && match.fileAttachments) {
+                        mapped.fileAttachments = match.fileAttachments;
+                    }
+                    return mapped;
+                }),
                 editedEntryIds: Array.from(this.aiState.editedEntries),
                 deletedEntryIds: Array.from(this.aiState.deletedEntries),
                 warnings: result.warnings || [],
