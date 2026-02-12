@@ -81,6 +81,7 @@
 
         .tab-select {
             position: relative;
+            margin-bottom: 18px;
         }
 
         .tab-select-trigger {
@@ -214,7 +215,9 @@
         }
 
         @media (max-width: 719px) {
-            #exampleTabs {
+
+            #exampleTabs,
+            #componentTabs {
                 display: none;
             }
         }
@@ -598,7 +601,7 @@
             border: 1px solid var(--line);
             background: #fff;
             border-radius: 10px;
-            overflow: hidden;
+            overflow: visible;
             max-width: 100%;
         }
 
@@ -706,8 +709,16 @@
             <h1>Components Demo</h1>
         </header>
 
-        <div class="tab-row" id="componentTabs">
-            <button class="tab-btn active" data-page="quickAddPage">Quick Add</button>
+        <div class="example-tabs" id="componentTabsWrap">
+            <div class="tab-select" id="componentTabsSelect">
+                <button class="tab-select-trigger" type="button" id="componentTabsTrigger">Quick Add</button>
+                <div class="tab-select-menu" id="componentTabsMenu">
+                    <button class="tab-select-option active" type="button" data-page="quickAddPage">Quick Add</button>
+                </div>
+            </div>
+            <div class="tab-row tab-row--scroll" id="componentTabs">
+                <button class="tab-btn active" data-page="quickAddPage">Quick Add</button>
+            </div>
         </div>
 
         <section class="page active" id="quickAddPage">
@@ -862,6 +873,43 @@
                         edit,
                         remove/restore, optional separator-aware AI parsing, and offline queue persistence.</p>
                     <div class="meta" id="meta5"></div>
+                    <details class="ai-config-details" id="aiRuntime5" open>
+                        <summary>AI Provider Details</summary>
+                        <div class="ai-runtime">
+                            <label class="ai-runtime-field">Provider
+                                <div class="custom-select" id="aiProviderSelect5">
+                                    <button class="custom-select-trigger" type="button"
+                                        id="aiProviderTrigger5">Demo</button>
+                                    <div class="custom-select-menu">
+                                        <button class="custom-select-option" type="button"
+                                            data-value="demo">Demo</button>
+                                        <button class="custom-select-option" type="button"
+                                            data-value="openai">OpenAI</button>
+                                        <button class="custom-select-option" type="button"
+                                            data-value="anthropic">Anthropic</button>
+                                        <button class="custom-select-option" type="button"
+                                            data-value="google">Google</button>
+                                        <button class="custom-select-option" type="button"
+                                            data-value="custom">Custom</button>
+                                    </div>
+                                    <input type="hidden" id="aiProvider5" value="demo">
+                                </div>
+                            </label>
+                            <label class="ai-runtime-field">API Key
+                                <input class="ai-runtime-input" id="aiApiKey5" type="password" placeholder="sk-..." />
+                            </label>
+                            <label class="ai-runtime-field">Model
+                                <input class="ai-runtime-input" id="aiModel5" type="text" placeholder="gpt-4o-mini" />
+                            </label>
+                            <label class="ai-runtime-field">Custom Endpoint
+                                <input class="ai-runtime-input" id="aiEndpoint5" type="text"
+                                    placeholder="https://.../chat/completions" />
+                            </label>
+                            <div class="ai-runtime-row">
+                                <button class="config-btn" type="button" id="aiApply5">Apply AI Details</button>
+                            </div>
+                        </div>
+                    </details>
                     <details class="config-box">
                         <summary>Config + Options</summary>
                         <div class="config-tools">
@@ -871,45 +919,6 @@
                                 <button class="config-btn" type="button" id="resetConfig5">Reset</button>
                             </div>
                         </div>
-                        <details class="ai-config-details" id="aiRuntime5" open>
-                            <summary>AI Provider Details</summary>
-                            <div class="ai-runtime">
-                                <label class="ai-runtime-field">Provider
-                                    <div class="custom-select" id="aiProviderSelect5">
-                                        <button class="custom-select-trigger" type="button"
-                                            id="aiProviderTrigger5">Demo</button>
-                                        <div class="custom-select-menu">
-                                            <button class="custom-select-option" type="button"
-                                                data-value="demo">Demo</button>
-                                            <button class="custom-select-option" type="button"
-                                                data-value="openai">OpenAI</button>
-                                            <button class="custom-select-option" type="button"
-                                                data-value="anthropic">Anthropic</button>
-                                            <button class="custom-select-option" type="button"
-                                                data-value="google">Google</button>
-                                            <button class="custom-select-option" type="button"
-                                                data-value="custom">Custom</button>
-                                        </div>
-                                        <input type="hidden" id="aiProvider5" value="demo">
-                                    </div>
-                                </label>
-                                <label class="ai-runtime-field">API Key
-                                    <input class="ai-runtime-input" id="aiApiKey5" type="password"
-                                        placeholder="sk-..." />
-                                </label>
-                                <label class="ai-runtime-field">Model
-                                    <input class="ai-runtime-input" id="aiModel5" type="text"
-                                        placeholder="gpt-4o-mini" />
-                                </label>
-                                <label class="ai-runtime-field">Custom Endpoint
-                                    <input class="ai-runtime-input" id="aiEndpoint5" type="text"
-                                        placeholder="https://.../chat/completions" />
-                                </label>
-                                <div class="ai-runtime-row">
-                                    <button class="config-btn" type="button" id="aiApply5">Apply AI Details</button>
-                                </div>
-                            </div>
-                        </details>
                         <textarea id="config5" class="config-editor" spellcheck="false"></textarea>
                         <div class="config-status" id="config5Status" aria-live="polite"></div>
                         <details class="config-errors" id="config5ErrorsBox" hidden>
@@ -929,6 +938,43 @@
                         test
                         real calls.</p>
                     <div class="meta" id="meta6"></div>
+                    <details class="ai-config-details" id="aiRuntime6" open>
+                        <summary>AI Provider Details</summary>
+                        <div class="ai-runtime">
+                            <label class="ai-runtime-field">Provider
+                                <div class="custom-select" id="aiProviderSelect6">
+                                    <button class="custom-select-trigger" type="button"
+                                        id="aiProviderTrigger6">Demo</button>
+                                    <div class="custom-select-menu">
+                                        <button class="custom-select-option" type="button"
+                                            data-value="demo">Demo</button>
+                                        <button class="custom-select-option" type="button"
+                                            data-value="openai">OpenAI</button>
+                                        <button class="custom-select-option" type="button"
+                                            data-value="anthropic">Anthropic</button>
+                                        <button class="custom-select-option" type="button"
+                                            data-value="google">Google</button>
+                                        <button class="custom-select-option" type="button"
+                                            data-value="custom">Custom</button>
+                                    </div>
+                                    <input type="hidden" id="aiProvider6" value="demo">
+                                </div>
+                            </label>
+                            <label class="ai-runtime-field">API Key
+                                <input class="ai-runtime-input" id="aiApiKey6" type="password" placeholder="sk-..." />
+                            </label>
+                            <label class="ai-runtime-field">Model
+                                <input class="ai-runtime-input" id="aiModel6" type="text" placeholder="gpt-4o-mini" />
+                            </label>
+                            <label class="ai-runtime-field">Custom Endpoint
+                                <input class="ai-runtime-input" id="aiEndpoint6" type="text"
+                                    placeholder="https://.../chat/completions" />
+                            </label>
+                            <div class="ai-runtime-row">
+                                <button class="config-btn" type="button" id="aiApply6">Apply AI Details</button>
+                            </div>
+                        </div>
+                    </details>
                     <details class="config-box">
                         <summary>Config + Options</summary>
                         <div class="config-tools">
@@ -938,45 +984,6 @@
                                 <button class="config-btn" type="button" id="resetConfig6">Reset</button>
                             </div>
                         </div>
-                        <details class="ai-config-details" id="aiRuntime6" open>
-                            <summary>AI Provider Details</summary>
-                            <div class="ai-runtime">
-                                <label class="ai-runtime-field">Provider
-                                    <div class="custom-select" id="aiProviderSelect6">
-                                        <button class="custom-select-trigger" type="button"
-                                            id="aiProviderTrigger6">Demo</button>
-                                        <div class="custom-select-menu">
-                                            <button class="custom-select-option" type="button"
-                                                data-value="demo">Demo</button>
-                                            <button class="custom-select-option" type="button"
-                                                data-value="openai">OpenAI</button>
-                                            <button class="custom-select-option" type="button"
-                                                data-value="anthropic">Anthropic</button>
-                                            <button class="custom-select-option" type="button"
-                                                data-value="google">Google</button>
-                                            <button class="custom-select-option" type="button"
-                                                data-value="custom">Custom</button>
-                                        </div>
-                                        <input type="hidden" id="aiProvider6" value="demo">
-                                    </div>
-                                </label>
-                                <label class="ai-runtime-field">API Key
-                                    <input class="ai-runtime-input" id="aiApiKey6" type="password"
-                                        placeholder="sk-..." />
-                                </label>
-                                <label class="ai-runtime-field">Model
-                                    <input class="ai-runtime-input" id="aiModel6" type="text"
-                                        placeholder="gpt-4o-mini" />
-                                </label>
-                                <label class="ai-runtime-field">Custom Endpoint
-                                    <input class="ai-runtime-input" id="aiEndpoint6" type="text"
-                                        placeholder="https://.../chat/completions" />
-                                </label>
-                                <div class="ai-runtime-row">
-                                    <button class="config-btn" type="button" id="aiApply6">Apply AI Details</button>
-                                </div>
-                            </div>
-                        </details>
                         <textarea id="config6" class="config-editor" spellcheck="false"></textarea>
                         <div class="config-status" id="config6Status" aria-live="polite"></div>
                         <details class="config-errors" id="config6ErrorsBox" hidden>
@@ -1016,7 +1023,19 @@
             });
         }
 
-        connectTabs('componentTabs', 'data-page', '.page');
+        connectTabs('componentTabs', 'data-page', '.page', {
+            onChange: (value, btn) => {
+                const selectEl = document.getElementById('componentTabsSelect');
+                if (!selectEl) return;
+                selectEl.querySelectorAll('[data-page]').forEach((option) => {
+                    option.classList.toggle('active', option.getAttribute('data-page') === value);
+                });
+                const trigger = document.getElementById('componentTabsTrigger');
+                if (trigger) {
+                    trigger.textContent = btn.textContent.trim();
+                }
+            }
+        });
         connectTabs('exampleTabs', 'data-example', '[data-example-panel]', {
             onChange: (value, btn) => {
                 const selectEl = document.getElementById('exampleTabsSelect');
@@ -2424,6 +2443,32 @@
                 }
             });
         }
+
+        const componentTabsEl = document.getElementById('componentTabs');
+        const componentTabsSelectEl = document.getElementById('componentTabsSelect');
+        const componentTabsTriggerEl = document.getElementById('componentTabsTrigger');
+
+        if (componentTabsSelectEl && componentTabsTriggerEl) {
+            componentTabsTriggerEl.addEventListener('click', () => {
+                componentTabsSelectEl.classList.toggle('open');
+            });
+            componentTabsSelectEl.addEventListener('click', (event) => {
+                const option = event.target.closest('[data-page]');
+                if (!option) return;
+                const value = option.getAttribute('data-page');
+                const match = componentTabsEl?.querySelector(`[data-page="${value}"]`);
+                if (match) {
+                    match.click();
+                }
+                componentTabsSelectEl.classList.remove('open');
+            });
+            document.addEventListener('click', (event) => {
+                if (!componentTabsSelectEl.contains(event.target)) {
+                    componentTabsSelectEl.classList.remove('open');
+                }
+            });
+        }
+
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Escape' && modalBackdropEl && !modalBackdropEl.hidden) {
                 const hasOpenQuickAddPopup = !!modalBackdropEl.querySelector(

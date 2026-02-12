@@ -93,7 +93,7 @@
     white-space: pre-wrap;
     word-break: break-word;
     font-size: 13px;
-    line-height: 1.65;
+    line-height: 1.85;
     font-family: inherit;
     color: var(--qa-input-fg);
 }
@@ -113,6 +113,8 @@
     color: var(--qa-input-fg);
     white-space: normal;
     vertical-align: baseline;
+    line-height: 1.35;
+    margin-block: 1px;
 }
 
 .qa-inline-mark-label {
@@ -195,7 +197,7 @@
     color: var(--qa-input-fg);
     padding: 10px 12px;
     font-size: 13px;
-    line-height: 1.65;
+    line-height: 1.85;
     font-family: inherit;
     white-space: pre-wrap;
     word-break: break-word;
