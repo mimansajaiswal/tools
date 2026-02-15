@@ -333,6 +333,14 @@
             background: #fffcf7;
         }
 
+        .ai-runtime [hidden] {
+            display: none !important;
+        }
+
+        .ai-runtime.ai-runtime--compact {
+            grid-template-columns: 1fr;
+        }
+
         .ai-runtime-field {
             display: grid;
             gap: 4px;
@@ -732,29 +740,29 @@
             </div>
             <div class="example-tabs" id="exampleTabsWrap">
                 <div class="tab-select" id="exampleTabsSelect">
-                    <button class="tab-select-trigger" type="button" id="exampleTabsTrigger">Example 1: Tasks</button>
+                    <button class="tab-select-trigger" type="button" id="exampleTabsTrigger">1: Task Planner
+                        Variant</button>
                     <div class="tab-select-menu" id="exampleTabsMenu">
-                        <button class="tab-select-option active" type="button" data-example="example1">Example 1:
-                            Tasks</button>
-                        <button class="tab-select-option" type="button" data-example="example2">Example 2: Pet
-                            Log</button>
-                        <button class="tab-select-option" type="button" data-example="example3">Example 3:
-                            Expenses</button>
-                        <button class="tab-select-option" type="button" data-example="example4">Example 4: Modal
-                            Embed</button>
-                        <button class="tab-select-option" type="button" data-example="example5">✦ AI
-                            Extraction</button>
-                        <button class="tab-select-option" type="button" data-example="example6">✦ AI
-                            Inline+Extract</button>
+                        <button class="tab-select-option active" type="button" data-example="example1">1: Task Planner
+                            Variant</button>
+                        <button class="tab-select-option" type="button" data-example="example2">2: Pet Event
+                            Variant</button>
+                        <button class="tab-select-option" type="button" data-example="example3">3: Expense
+                            Variant</button>
+                        <button class="tab-select-option" type="button" data-example="example4">4: Modal Embed
+                            Variant</button>
+                        <button class="tab-select-option" type="button" data-example="example5">5: ✦ AI Parsing</button>
+                        <button class="tab-select-option" type="button" data-example="example6">6: ✦ AI Parsing w/
+                            Inline</button>
                     </div>
                 </div>
                 <div class="tab-row tab-row--scroll" id="exampleTabs">
-                    <button class="tab-btn active" data-example="example1">Example 1: Tasks</button>
-                    <button class="tab-btn" data-example="example2">Example 2: Pet Log</button>
-                    <button class="tab-btn" data-example="example3">Example 3: Expenses</button>
-                    <button class="tab-btn" data-example="example4">Example 4: Modal Embed</button>
-                    <button class="tab-btn" data-example="example5">✦ AI Extraction</button>
-                    <button class="tab-btn" data-example="example6">✦ AI Inline+Extract</button>
+                    <button class="tab-btn active" data-example="example1">1: Task Planner Variant</button>
+                    <button class="tab-btn" data-example="example2">2: Pet Event Variant</button>
+                    <button class="tab-btn" data-example="example3">3: Expense Variant</button>
+                    <button class="tab-btn" data-example="example4">4: Modal Embed Variant</button>
+                    <button class="tab-btn" data-example="example5">5: ✦ AI Parsing</button>
+                    <button class="tab-btn" data-example="example6">6: ✦ AI Parsing w/ Inline</button>
                 </div>
             </div>
 
@@ -867,7 +875,7 @@
 
             <article class="example-wrap" style="display:none" data-example-panel="example5">
                 <div class="example-head">
-                    <h2>✦ AI Extraction Variant</h2>
+                    <h2>✦ AI Parsing</h2>
                     <p>Same <code>QuickAdd</code> component in <code>mode: "ai"</code>. Includes provider-compatible
                         API wiring, mock provider for synthetic testing, Parse/Queue/Process Queue controls, inline
                         edit,
@@ -875,7 +883,7 @@
                     <div class="meta" id="meta5"></div>
                     <details class="ai-config-details" id="aiRuntime5" open>
                         <summary>AI Provider Details</summary>
-                        <div class="ai-runtime">
+                        <div class="ai-runtime" id="aiRuntimeGrid5">
                             <label class="ai-runtime-field">Provider
                                 <div class="custom-select" id="aiProviderSelect5">
                                     <button class="custom-select-trigger" type="button"
@@ -895,18 +903,18 @@
                                     <input type="hidden" id="aiProvider5" value="demo">
                                 </div>
                             </label>
-                            <label class="ai-runtime-field">API Key
-                                <input class="ai-runtime-input" id="aiApiKey5" type="password" placeholder="sk-..." />
-                            </label>
-                            <label class="ai-runtime-field">Model
-                                <input class="ai-runtime-input" id="aiModel5" type="text" placeholder="gpt-4o-mini" />
-                            </label>
-                            <label class="ai-runtime-field">Custom Endpoint
+                            <label class="ai-runtime-field" id="aiEndpointField5" hidden>Custom Endpoint
                                 <input class="ai-runtime-input" id="aiEndpoint5" type="text"
                                     placeholder="https://.../chat/completions" />
                             </label>
+                            <label class="ai-runtime-field" id="aiModelField5">Model
+                                <input class="ai-runtime-input" id="aiModel5" type="text" placeholder="gpt-4o-mini" />
+                            </label>
+                            <label class="ai-runtime-field" id="aiKeyField5">API Key
+                                <input class="ai-runtime-input" id="aiApiKey5" type="password" placeholder="sk-..." />
+                            </label>
                             <div class="ai-runtime-row">
-                                <button class="config-btn" type="button" id="aiApply5">Apply AI Details</button>
+                                <button class="config-btn" type="button" id="aiApply5" disabled>Apply</button>
                             </div>
                         </div>
                     </details>
@@ -932,7 +940,7 @@
 
             <article class="example-wrap" style="display:none" data-example-panel="example6">
                 <div class="example-head">
-                    <h2>✦ AI Tagging Variant</h2>
+                    <h2>✦ AI Parsing w/ Inline</h2>
                     <p>AI mode with optional inline-pill overlays enabled. Uses dummy AI output with span offsets and
                         supports separator-aware parsing by newline, plus full provider/API-key runtime switching to
                         test
@@ -940,7 +948,7 @@
                     <div class="meta" id="meta6"></div>
                     <details class="ai-config-details" id="aiRuntime6" open>
                         <summary>AI Provider Details</summary>
-                        <div class="ai-runtime">
+                        <div class="ai-runtime" id="aiRuntimeGrid6">
                             <label class="ai-runtime-field">Provider
                                 <div class="custom-select" id="aiProviderSelect6">
                                     <button class="custom-select-trigger" type="button"
@@ -960,18 +968,18 @@
                                     <input type="hidden" id="aiProvider6" value="demo">
                                 </div>
                             </label>
-                            <label class="ai-runtime-field">API Key
-                                <input class="ai-runtime-input" id="aiApiKey6" type="password" placeholder="sk-..." />
-                            </label>
-                            <label class="ai-runtime-field">Model
-                                <input class="ai-runtime-input" id="aiModel6" type="text" placeholder="gpt-4o-mini" />
-                            </label>
-                            <label class="ai-runtime-field">Custom Endpoint
+                            <label class="ai-runtime-field" id="aiEndpointField6" hidden>Custom Endpoint
                                 <input class="ai-runtime-input" id="aiEndpoint6" type="text"
                                     placeholder="https://.../chat/completions" />
                             </label>
+                            <label class="ai-runtime-field" id="aiModelField6">Model
+                                <input class="ai-runtime-input" id="aiModel6" type="text" placeholder="gpt-4o-mini" />
+                            </label>
+                            <label class="ai-runtime-field" id="aiKeyField6">API Key
+                                <input class="ai-runtime-input" id="aiApiKey6" type="password" placeholder="sk-..." />
+                            </label>
                             <div class="ai-runtime-row">
-                                <button class="config-btn" type="button" id="aiApply6">Apply AI Details</button>
+                                <button class="config-btn" type="button" id="aiApply6" disabled>Apply</button>
                             </div>
                         </div>
                     </details>
@@ -1084,9 +1092,12 @@
             'showEntryCards',
             'showEntryHeader',
             'showEntryPills',
+            'inputHeightMode',
+            'inputMaxHeight',
             'allowEntryAttachments',
             'allowMultipleAttachments',
             'allowedAttachmentTypes',
+            'attachmentSources',
             'autoDetectOptionsWithoutPrefix',
             'reduceInferredOptions',
             'inferredMatchMode',
@@ -1115,6 +1126,7 @@
             'systemPrompt',
             'mockResponse',
             'mockLatencyMs',
+            'controls',
             'queueStorageKey',
             'experimental'
         ]);
@@ -1136,6 +1148,7 @@
             'color',
             'autoDetectWithoutPrefix',
             'reduceInferredOptions',
+            'autoToday',
             'allowCustom',
             'exhaustive',
             'dependsOn',
@@ -1390,6 +1403,14 @@
                 }
             });
 
+            if (config.attachmentSources !== undefined) {
+                if (!Array.isArray(config.attachmentSources)) {
+                    pushValidationError(errors, 'config.attachmentSources', 'must be an array of strings');
+                } else if (config.attachmentSources.some((item) => typeof item !== 'string')) {
+                    pushValidationError(errors, 'config.attachmentSources', 'must contain only strings');
+                }
+            }
+
             if (config.allowedAttachmentTypes !== undefined) {
                 if (!Array.isArray(config.allowedAttachmentTypes)) {
                     pushValidationError(errors, 'config.allowedAttachmentTypes', 'must be an array of strings');
@@ -1595,6 +1616,10 @@
                 }
                 const parsed = validation.parsed;
 
+                if (component && typeof component.resetAiVerification === 'function') {
+                    component.resetAiVerification('Config updated.');
+                }
+
                 const currentInput = component.getResult()?.input || defaultInput || '';
                 const nextConfig = Object.assign({}, baseConfig, parsed, {
                     ai: Object.assign({}, baseConfig.ai || {}, parsed.ai || {}, {
@@ -1655,7 +1680,10 @@
                 apiKeyId,
                 modelId,
                 endpointId,
-                applyId
+                applyId,
+                endpointFieldId,
+                modelFieldId,
+                keyFieldId
             } = options || {};
             if (!playground) {
                 return;
@@ -1667,9 +1695,36 @@
             const modelEl = document.getElementById(modelId);
             const endpointEl = document.getElementById(endpointId);
             const applyEl = document.getElementById(applyId);
+            const applyRowEl = applyEl ? applyEl.closest('.ai-runtime-row') : null;
+            const endpointFieldEl = document.getElementById(endpointFieldId);
+            const modelFieldEl = document.getElementById(modelFieldId);
+            const keyFieldEl = document.getElementById(keyFieldId);
+            let lastProvider = '';
 
             if (!providerInputEl || !apiKeyEl || !modelEl || !endpointEl || !applyEl) {
                 return;
+            }
+
+            function getDefaultModel(provider) {
+                const normalized = String(provider || '').toLowerCase();
+                if (normalized === 'anthropic') return 'claude-3-haiku-20240307';
+                if (normalized === 'google') return 'gemini-1.5-flash';
+                return 'gpt-4o-mini';
+            }
+
+            function syncModelDefaults(provider) {
+                const normalized = String(provider || '').toLowerCase();
+                const defaultModel = getDefaultModel(normalized);
+                modelEl.placeholder = defaultModel;
+                if (!modelEl.value) {
+                    modelEl.value = defaultModel;
+                } else {
+                    const previousDefault = lastProvider ? getDefaultModel(lastProvider) : '';
+                    if (modelEl.value === previousDefault) {
+                        modelEl.value = defaultModel;
+                    }
+                }
+                lastProvider = normalized;
             }
 
             // Custom Select Logic
@@ -1685,12 +1740,56 @@
                     providerInputEl.value = value;
                     providerTriggerEl.textContent = text;
                     providerSelectEl.classList.remove('open');
+                    syncFieldVisibility(value);
+                    syncModelDefaults(value);
+                    syncApplyState();
                 });
                 document.addEventListener('click', (event) => {
                     if (!providerSelectEl.contains(event.target)) {
                         providerSelectEl.classList.remove('open');
                     }
                 });
+            }
+
+            function syncFieldVisibility(value) {
+                const provider = String(value || providerInputEl.value || '').toLowerCase();
+                const isDemo = provider === 'demo';
+                const isCustom = provider === 'custom';
+
+                if (endpointFieldEl) {
+                    endpointFieldEl.hidden = !isCustom;
+                }
+                if (modelFieldEl) {
+                    modelFieldEl.hidden = isDemo;
+                }
+                if (keyFieldEl) {
+                    keyFieldEl.hidden = isDemo;
+                }
+                if (applyEl) {
+                    applyEl.hidden = isDemo;
+                }
+                if (applyRowEl) {
+                    applyRowEl.hidden = isDemo;
+                }
+
+                const runtimeGrid = providerSelectEl ? providerSelectEl.closest('.ai-runtime') : null;
+                if (runtimeGrid) {
+                    runtimeGrid.classList.toggle('ai-runtime--compact', isDemo);
+                }
+            }
+
+            function syncApplyState() {
+                const provider = String(providerInputEl.value || '').toLowerCase();
+                const isDemo = provider === 'demo';
+                const isCustom = provider === 'custom';
+                if (isDemo) {
+                    applyEl.disabled = true;
+                    return;
+                }
+                const hasApiKey = String(apiKeyEl.value || '').trim().length > 0;
+                const hasModel = String(modelEl.value || '').trim().length > 0;
+                const hasEndpoint = !isCustom || String(endpointEl.value || '').trim().length > 0;
+                applyEl.disabled = !(hasApiKey && hasModel && hasEndpoint);
             }
 
             function readEditorConfig() {
@@ -1721,6 +1820,10 @@
                 apiKeyEl.value = String(ai.apiKey || '');
                 modelEl.value = String(ai.model || '');
                 endpointEl.value = String(ai.endpoint || '');
+
+                syncFieldVisibility(activeProvider);
+                syncModelDefaults(activeProvider);
+                syncApplyState();
             }
 
             function applyRuntimeToEditor() {
@@ -1752,7 +1855,10 @@
                     syncControlsFromEditor();
                 }
             }
-
+            [apiKeyEl, modelEl, endpointEl].forEach((el) => {
+                el.addEventListener('input', syncApplyState);
+            });
+            providerInputEl.addEventListener('change', syncApplyState);
             applyEl.addEventListener('click', applyRuntimeToEditor);
             playground.applyBtn.addEventListener('click', () => {
                 window.requestAnimationFrame(syncControlsFromEditor);
@@ -1772,8 +1878,11 @@
             allowEntryAttachments: true,
             allowMultipleAttachments: true,
             allowedAttachmentTypes: ['.pdf', '.png', '.jpg', 'image/*'],
+            attachmentSources: ['camera', 'gallery', 'files'],
             fallbackField: 'title',
             placeholder: 'Example: ... !p2;; !p1;; and #work;; #health ... (last value wins)',
+            inputHeightMode: 'scroll',
+            inputMaxHeight: 160,
             schema: {
                 fields: [
                     { key: 'title', type: 'string', required: true },
@@ -1845,6 +1954,8 @@
             inferredMatchThreshold: 0.8,
             fallbackField: 'note',
             placeholder: 'Use ; for new entry. Example: pet:Luna~~ event:walk~~ due:2025-02-01~~ at:yesterday~~ (at: defaults to today if omitted)',
+            inputHeightMode: 'scroll',
+            inputMaxHeight: 150,
             classNames: {
                 root: 'qa-root petqa-root',
                 entry: 'qa-entry petqa-entry'
@@ -1947,6 +2058,8 @@
             showEntryPills: false,
             fallbackField: 'memo',
             placeholder: 'Example: Team lunch $23.4:: cat:Food:: pay:Card:: on:2026-02-06:: rb:no::',
+            inputHeightMode: 'scroll',
+            inputMaxHeight: 140,
             schema: {
                 fields: [
                     { key: 'memo', type: 'string', required: true },
@@ -2074,48 +2187,72 @@
         const modalAdd = QuickAdd.create(modalConfig);
         modalAdd.setInput(modalDefaultInput);
 
-        function buildDemoAiEntriesForSegment(text) {
+        function buildDemoTaskAiEntriesForSegment(text) {
             const source = String(text || '').trim();
             const lower = source.toLowerCase();
-            const attachments = Array.from(new Set((source.match(/\b\d+\b/g) || [])));
-            const pets = [];
-            if (lower.includes('luna')) pets.push('Luna');
-            if (lower.includes('max')) pets.push('Max');
-            if (!pets.length) pets.push('Primary Pet');
+            const attachments = Array.from(new Set(
+                (source.match(/\b(?:photo|file)\s*(\d+)\b/gi) || [])
+                    .map((item) => item.replace(/\D+/g, '').trim())
+                    .filter(Boolean)
+                    .map((num) => `attachment-${num}`)
+            ));
+            const priority = lower.includes('urgent') || lower.includes('p1') ? 'p1' : (lower.includes('p3') ? 'p3' : 'p2');
+            const project = lower.includes('health')
+                ? 'health'
+                : (lower.includes('home') ? 'home' : (lower.includes('errand') ? 'errands' : 'work'));
+            const ownerMatch = source.match(/@([\w-]+)/);
+            const owner = ownerMatch ? ownerMatch[1] : 'Mimansa';
+            const due = lower.includes('tomorrow') ? '2026-02-15T09:00' : '2026-02-14T15:30';
 
-            const hasCough = lower.includes('cough');
-            const hasVomit = lower.includes('vomit');
-            const eventType = hasVomit ? 'Symptoms GI' : (hasCough ? 'Symptoms Respiratory' : 'General Note');
-            const title = hasVomit ? 'GI symptom check' : (hasCough ? 'Respiratory symptom check' : 'Health note');
-
-            return pets.map((pet, idx) => ({
-                title,
-                petName: pet,
-                eventType,
-                date: '2026-02-11',
-                time: hasVomit ? '08:20' : '18:30',
-                status: 'Completed',
-                severityLabel: hasVomit ? 'Mild' : 'Moderate',
-                notes: source || 'Synthetic AI parse',
-                tags: hasVomit ? ['gi'] : ['respiratory'],
-                attachments,
-                confidence: Math.max(0.55, Math.min(0.97, 0.82 + (idx * 0.05)))
-            }));
+            return [{
+                title: source || 'Synthetic AI task',
+                priority,
+                project,
+                due,
+                owner,
+                attachments
+            }];
         }
 
-        function buildDemoAiStructuredResponse(input) {
+        function buildDemoTaskAiStructuredResponse(input) {
             const text = String(input || '').trim();
             return {
-                entries: buildDemoAiEntriesForSegment(text),
+                entries: buildDemoTaskAiEntriesForSegment(text),
                 missing: [],
                 warnings: ['Synthetic response enabled in demo (config.ai.mockResponse).']
             };
         }
 
-        function buildDemoAiInlineResponse(input) {
+        function buildDemoPetAiEntriesForSegment(text) {
+            const source = String(text || '').trim();
+            const lower = source.toLowerCase();
+            const pet = lower.includes('luna') ? 'Luna' : (lower.includes('mochi') ? 'Mochi' : (lower.includes('pico') ? 'Pico' : 'Luna'));
+            const event = lower.includes('groom')
+                ? 'groom'
+                : (lower.includes('vet') ? 'vet' : (lower.includes('fetch') ? 'fetch' : 'walk'));
+            const symptom = lower.includes('cough')
+                ? 'cough'
+                : (lower.includes('vomit') ? 'vomit' : (lower.includes('itch') ? 'itching' : 'low energy'));
+            const severityMatch = source.match(/\b(\d+)\b/);
+            const severity = severityMatch ? Number(severityMatch[1]) : 2;
+            const due = lower.includes('next week') ? '2026-02-20' : '2026-02-18';
+            const at = lower.includes('yesterday') ? '2026-02-13' : '2026-02-14';
+
+            return [{
+                note: source || 'Synthetic AI pet note',
+                pet,
+                event,
+                due,
+                symptom,
+                severity,
+                at
+            }];
+        }
+
+        function buildDemoPetAiInlineResponse(input) {
             const text = String(input || '').trim();
             const lower = text.toLowerCase();
-            const entries = buildDemoAiEntriesForSegment(text).map((entry) => {
+            const entries = buildDemoPetAiEntriesForSegment(text).map((entry) => {
                 const spans = [];
                 const addSpan = (field, phrase) => {
                     if (!phrase) return;
@@ -2128,9 +2265,11 @@
                         end: start + String(phrase).length
                     });
                 };
-                addSpan('petName', entry.petName);
-                if (lower.includes('cough')) addSpan('eventType', 'cough');
-                if (lower.includes('vomit')) addSpan('eventType', 'vomit');
+                addSpan('pet', entry.pet);
+                addSpan('event', entry.event);
+                addSpan('symptom', entry.symptom);
+                addSpan('due', entry.due);
+                addSpan('at', entry.at);
                 return Object.assign({}, entry, { spans });
             });
             return {
@@ -2143,25 +2282,46 @@
         const aiConfig5 = {
             mount: '#quickAddExample5',
             mode: 'ai',
-            debounceMs: 260,
-            showInlinePills: false,
-            showEntryPills: false,
+            debounceMs: 280,
+            entrySeparator: '\n\n',
+            fieldTerminator: ';;',
+            fieldTerminatorMode: 'or-next-prefix',
             allowEntryAttachments: true,
             allowMultipleAttachments: true,
             allowedAttachmentTypes: ['.pdf', '.png', '.jpg', 'image/*'],
-            fieldTerminator: ';;',
-            entrySeparator: '\n',
-            placeholder: 'Example (newline-separated): Luna had cough yesterday evening and photo 1\nMax vomited this morning with photo 2',
+            attachmentSources: ['camera', 'gallery', 'files'],
+            fallbackField: 'title',
+            placeholder: 'Example: ... !p2;; !p1;; and #work;; #health ... (last value wins)',
+            inputHeightMode: 'scroll',
+            inputMaxHeight: 160,
             schema: {
                 fields: [
-                    { key: 'title', type: 'string' },
-                    { key: 'petName', type: 'string', color: '#eab308' },
-                    { key: 'eventType', type: 'string', color: '#ef4444' },
-                    { key: 'date', type: 'date', color: '#3b82f6' },
-                    { key: 'time', type: 'string' },
-                    { key: 'status', type: 'string', color: '#22c55e' },
-                    { key: 'notes', type: 'string' },
-                    { key: 'attachments', type: 'string', multiple: true }
+                    { key: 'title', type: 'string', required: true },
+                    {
+                        key: 'priority',
+                        type: 'options',
+                        prefixes: ['!'],
+                        exhaustive: true,
+                        options: [
+                            { value: 'p1', color: '#dc2626' },
+                            { value: 'p2', color: '#d97706' },
+                            { value: 'p3', color: '#0284c7' }
+                        ]
+                    },
+                    {
+                        key: 'project',
+                        type: 'options',
+                        prefixes: ['#'],
+                        exhaustive: true,
+                        options: [
+                            { value: 'health', color: '#0d9488' },
+                            { value: 'work', color: '#7c3aed' },
+                            { value: 'home', color: '#16a34a' },
+                            { value: 'errands', color: '#475569' }
+                        ]
+                    },
+                    { key: 'due', type: 'datetime', naturalDate: true, allowDateOnly: true, defaultTime: '08:00', prefixes: ['due:'] },
+                    { key: 'owner', type: 'string', prefixes: ['@'] }
                 ]
             },
             ai: {
@@ -2175,14 +2335,14 @@
                 apiKey: 'demo-key',
                 model: 'gpt-4o-mini',
                 mockLatencyMs: 420,
-                mockResponse: (input) => buildDemoAiStructuredResponse(input),
+                mockResponse: (input) => buildDemoTaskAiStructuredResponse(input),
                 controls: { parse: true, queue: true, process: true, clear: true }
             },
             tokens: {
-                '--qa-bg': '#f8fbff',
-                '--qa-border': '#c8d7e9',
-                '--qa-accent': '#0f5f8e',
-                '--qa-accent-soft': '#e2eff8'
+                '--qa-bg': '#fff8ef',
+                '--qa-border': '#e5d7c4',
+                '--qa-accent': '#8b4a2f',
+                '--qa-accent-soft': '#f4e7df'
             },
             onParse: (result) => {
                 document.getElementById('meta5').textContent =
@@ -2190,8 +2350,7 @@
             }
         };
         const aiDefaultInput5 =
-            'Luna had cough yesterday evening after walk and photo 1.\n' +
-            'Max vomited this morning and photo 2.';
+            taskDefaultInput;
         const aiAdd5 = QuickAdd.create(aiConfig5);
         aiAdd5.setInput(aiDefaultInput5);
         const aiPlayground5 = setupConfigPlayground({
@@ -2214,31 +2373,97 @@
             apiKeyId: 'aiApiKey5',
             modelId: 'aiModel5',
             endpointId: 'aiEndpoint5',
-            applyId: 'aiApply5'
+            applyId: 'aiApply5',
+            endpointFieldId: 'aiEndpointField5',
+            modelFieldId: 'aiModelField5',
+            keyFieldId: 'aiKeyField5'
         });
 
         const aiConfig6 = {
             mount: '#quickAddExample6',
             mode: 'ai',
-            debounceMs: 260,
+            debounceMs: 320,
+            entrySeparator: ';',
+            fieldTerminator: '~~',
+            fieldTerminatorMode: 'strict',
+            showEntryHeader: false,
+            autoDetectOptionsWithoutPrefix: true,
+            reduceInferredOptions: false,
+            inferredMatchMode: 'fuzzy',
+            inferredMatchThreshold: 0.8,
+            fallbackField: 'note',
+            placeholder: 'Use ; for new entry. Example: pet:Luna~~ event:walk~~ due:2025-02-01~~ at:yesterday~~ (at: defaults to today if omitted)',
+            inputHeightMode: 'scroll',
+            inputMaxHeight: 150,
             showInlinePills: true,
-            showEntryPills: false,
-            allowEntryAttachments: true,
-            allowMultipleAttachments: true,
-            allowedAttachmentTypes: ['.pdf', '.png', '.jpg', 'image/*'],
-            fieldTerminator: ';;',
-            entrySeparator: '\n',
-            placeholder: 'Inline pills demo: Luna had cough yesterday evening and photo 1\nMax vomited this morning and photo 2',
+            classNames: {
+                root: 'qa-root petqa-root',
+                entry: 'qa-entry petqa-entry'
+            },
             schema: {
                 fields: [
-                    { key: 'title', type: 'string' },
-                    { key: 'petName', type: 'string' },
-                    { key: 'eventType', type: 'string' },
-                    { key: 'date', type: 'date' },
-                    { key: 'time', type: 'string' },
-                    { key: 'status', type: 'string' },
-                    { key: 'notes', type: 'string' },
-                    { key: 'attachments', type: 'string', multiple: true }
+                    { key: 'note', type: 'string' },
+                    {
+                        key: 'pet',
+                        type: 'options',
+                        prefixes: ['pet:'],
+                        required: true,
+                        exhaustive: true,
+                        options: [
+                            { value: 'Luna', color: '#22c55e' },
+                            { value: 'Mochi', color: '#f97316' },
+                            { value: 'Pico', color: '#3b82f6' }
+                        ]
+                    },
+                    {
+                        key: 'event',
+                        type: 'options',
+                        prefixes: ['event:', 'ev:'],
+                        required: true,
+                        exhaustive: true,
+                        options: [
+                            { value: 'walk', color: '#22c55e', dependsOn: { field: 'pet', op: 'in', value: ['Luna', 'Mochi'] } },
+                            { value: 'fetch', color: '#16a34a', dependsOn: { field: 'pet', op: 'eq', value: 'Luna' } },
+                            { value: 'litter', color: '#2563eb', dependsOn: { field: 'pet', op: 'eq', value: 'Pico' } },
+                            { value: 'groom', color: '#f97316', dependsOn: { field: 'pet', op: 'eq', value: 'Mochi' } },
+                            { value: 'vet', color: '#7c3aed' }
+                        ]
+                    },
+                    {
+                        key: 'due',
+                        type: 'date',
+                        naturalDate: false,
+                        prefixes: ['due:'],
+                        constraints: [
+                            {
+                                op: 'gte',
+                                value: '2025-02-15',
+                                message: 'Due date must be on or after 2025-02-15'
+                            },
+                            {
+                                when: { field: 'pet', op: 'eq', value: 'Pico' },
+                                op: 'gte',
+                                value: '2026-01-01',
+                                message: 'For pet Pico, due date must be on or after 2026-01-01'
+                            }
+                        ]
+                    },
+                    {
+                        key: 'symptom',
+                        type: 'options',
+                        prefixes: ['symptom:', 'sym:'],
+                        allowCustom: true,
+                        autoDetectWithoutPrefix: true,
+                        reduceInferredOptions: true,
+                        options: [
+                            { value: 'cough', color: '#dc2626' },
+                            { value: 'vomit', color: '#ea580c' },
+                            { value: 'itching', color: '#d97706' },
+                            { value: 'low energy', color: '#7c3aed' }
+                        ]
+                    },
+                    { key: 'severity', type: 'number', prefixes: ['sev:'] },
+                    { key: 'at', type: 'date', naturalDate: true, prefixes: ['at:'], required: true, autoToday: true }
                 ]
             },
             ai: {
@@ -2252,7 +2477,7 @@
                 apiKey: 'demo-key',
                 model: 'gpt-4o-mini',
                 mockLatencyMs: 420,
-                mockResponse: (input) => buildDemoAiInlineResponse(input),
+                mockResponse: (input) => buildDemoPetAiInlineResponse(input),
                 inlinePillHarness: ({ input, entries }) => {
                     const rawInput = String(input || '');
                     const marks = [];
@@ -2270,7 +2495,9 @@
                             start,
                             end,
                             label: String(mark.label || rawInput.slice(start, end)),
-                            inferred: true
+                            inferred: true,
+                            fieldKey: mark.fieldKey || mark.field || '',
+                            value: mark.value
                         });
                     };
                     (entries || []).forEach((entry) => {
@@ -2334,18 +2561,14 @@
                                 start,
                                 end,
                                 label: `${span.field || 'field'}: ${span.value || ''}`,
-                                inferred: true
+                                inferred: true,
+                                fieldKey: span.field || '',
+                                value: span.value
                             });
                         });
                     });
                     return marks;
                 }
-            },
-            tokens: {
-                '--qa-bg': '#f5fbf8',
-                '--qa-border': '#c2dfcf',
-                '--qa-accent': '#1e7d5e',
-                '--qa-accent-soft': '#ddf1e8'
             },
             onParse: (result) => {
                 document.getElementById('meta6').textContent =
@@ -2353,8 +2576,7 @@
             }
         };
         const aiDefaultInput6 =
-            'Luna had cough yesterday evening after walk and photo 1.\n' +
-            'Max vomited this morning and photo 2.';
+            petDefaultInput;
         const aiAdd6 = QuickAdd.create(aiConfig6);
         aiAdd6.setInput(aiDefaultInput6);
         const aiPlayground6 = setupConfigPlayground({
@@ -2377,7 +2599,10 @@
             apiKeyId: 'aiApiKey6',
             modelId: 'aiModel6',
             endpointId: 'aiEndpoint6',
-            applyId: 'aiApply6'
+            applyId: 'aiApply6',
+            endpointFieldId: 'aiEndpointField6',
+            modelFieldId: 'aiModelField6',
+            keyFieldId: 'aiKeyField6'
         });
 
         const modalBackdropEl = document.getElementById('quickAddModalBackdrop');

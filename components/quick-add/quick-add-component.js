@@ -26,6 +26,7 @@
         entry: 'qa-entry',
         entryHeader: 'qa-entry-header',
         entryTitle: 'qa-entry-title',
+        entryEmpty: 'qa-entry-empty',
         badges: 'qa-badges',
         badge: 'qa-badge',
         attachmentSection: 'qa-attachment-section',
@@ -35,6 +36,7 @@
         attachmentHint: 'qa-attachment-hint',
         attachmentList: 'qa-attachment-list',
         attachmentItem: 'qa-attachment-item',
+        attachmentOpen: 'qa-attachment-open',
         attachmentName: 'qa-attachment-name',
         attachmentMeta: 'qa-attachment-meta',
         attachmentRemove: 'qa-attachment-remove',
@@ -150,9 +152,12 @@
         showEntryCards: true,
         showEntryHeader: true,
         showEntryPills: true,
+        inputHeightMode: 'grow',
+        inputMaxHeight: null,
         allowEntryAttachments: false,
         allowMultipleAttachments: true,
         allowedAttachmentTypes: [],
+        attachmentSources: null,
         autoDetectOptionsWithoutPrefix: false,
         reduceInferredOptions: true,
         inferredMatchMode: 'exact', // exact | fuzzy
@@ -214,6 +219,7 @@
         } else if (!Array.isArray(merged.allowedAttachmentTypes)) {
             merged.allowedAttachmentTypes = [];
         }
+        merged.attachmentSources = normalizeAttachmentSources(merged.attachmentSources);
         const mode = String(merged.mode || '').toLowerCase();
         if (mode === 'ai' || merged.ai.enabled === true) {
             merged.mode = 'ai';
@@ -1995,6 +2001,33 @@
         return String(value).toLowerCase().trim();
     }
 
+    function isMobileDevice() {
+        if (typeof navigator === 'undefined') {
+            return false;
+        }
+        const ua = String(navigator.userAgent || '').toLowerCase();
+        const isMobileUa = /android|iphone|ipad|ipod|iemobile|opera mini/.test(ua);
+        const hasTouch = typeof navigator.maxTouchPoints === 'number' && navigator.maxTouchPoints > 0;
+        const smallScreen = typeof window !== 'undefined' && window.innerWidth <= 900;
+        return isMobileUa || (hasTouch && smallScreen);
+    }
+
+    function normalizeAttachmentSources(raw) {
+        if (raw === null || raw === undefined) {
+            return null;
+        }
+        if (typeof raw === 'string') {
+            return raw
+                .split(',')
+                .map((part) => part.trim())
+                .filter(Boolean);
+        }
+        if (Array.isArray(raw)) {
+            return raw.map((item) => String(item || '').trim()).filter(Boolean);
+        }
+        return null;
+    }
+
     function resolveMount(mount) {
         if (!mount) {
             throw new Error('QuickAdd: mount is required');
@@ -2049,18 +2082,27 @@
         this.blockedAnchorEl = null;
         this.anchorSupportChecked = false;
         this.anchorSupported = false;
+        this.aiVerificationState = {
+            status: 'idle',
+            message: '',
+            signature: ''
+        };
 
         ensureQuickAddStyles();
 
         this.renderShell();
         this.applyTokens();
+        this.applyInputSizing();
         this.bindEvents();
         this.parseAndRender();
     }
 
     QuickAddComponent.prototype.defaultHintText = function defaultHintText() {
         if (this.isAiMode()) {
-            return 'AI mode: type natural language and pause to extract structured entries.';
+            const autoParse = this.config.ai.autoParse !== false;
+            return autoParse
+                ? 'AI mode: type natural language and pause to extract structured entries.'
+                : 'AI mode: auto-parse off. Click Parse Now to run extraction.';
         }
         const separator = this.config.entrySeparator === '\n' ? 'newline' : this.config.entrySeparator;
         return `Field terminator: "${this.config.fieldTerminator}" | Entry separator: "${separator}"`;
@@ -2104,6 +2146,68 @@
         return 'Completed';
     };
 
+    QuickAddComponent.prototype.resetAiVerification = function resetAiVerification(reason) {
+        if (!this.isAiMode()) {
+            return;
+        }
+        this.aiVerificationState = {
+            status: 'idle',
+            message: reason ? String(reason) : '',
+            signature: ''
+        };
+    };
+
+    QuickAddComponent.prototype.buildAiRuntimeSignature = function buildAiRuntimeSignature() {
+        if (!this.isAiMode()) {
+            return '';
+        }
+        const ai = this.config.ai || {};
+        return [
+            String(ai.provider || ''),
+            String(ai.apiKey || ''),
+            String(ai.model || ''),
+            String(ai.endpoint || ''),
+            ai.mockResponse === null ? 'live' : 'mock'
+        ].join('|');
+    };
+
+    QuickAddComponent.prototype.verifyAiRuntime = async function verifyAiRuntime() {
+        if (!this.isAiMode()) {
+            return { ok: false, message: 'AI mode is not enabled.' };
+        }
+        const input = String(this.inputText || this.readInputText() || '').trim();
+        if (!input) {
+            this.aiVerificationState = { status: 'error', message: 'Enter text before verifying.', signature: '' };
+            this.parseAndRender({ source: this.inputText, preserveSelection: true });
+            return { ok: false, message: 'Enter text before verifying.' };
+        }
+        const minInputLength = Math.max(0, Number(this.config.ai.minInputLength || 0));
+        if (input.length < minInputLength) {
+            const message = `Add at least ${minInputLength} characters to verify.`;
+            this.aiVerificationState = { status: 'error', message, signature: '' };
+            this.parseAndRender({ source: this.inputText, preserveSelection: true });
+            return { ok: false, message };
+        }
+
+        this.aiVerificationState = { status: 'verifying', message: 'Verifying AI connection…', signature: '' };
+        this.parseAndRender({ source: this.inputText, preserveSelection: true });
+        try {
+            await this.extractAIFromInput(input);
+            this.aiVerificationState = {
+                status: 'verified',
+                message: 'Verified. AI connection is working.',
+                signature: this.buildAiRuntimeSignature()
+            };
+            this.parseAndRender({ source: this.inputText, preserveSelection: true });
+            return { ok: true, message: 'Verified.' };
+        } catch (err) {
+            const message = err && err.message ? err.message : 'Verification failed.';
+            this.aiVerificationState = { status: 'error', message, signature: '' };
+            this.parseAndRender({ source: this.inputText, preserveSelection: true });
+            return { ok: false, message };
+        }
+    };
+
     QuickAddComponent.prototype.normalizeAIAttachmentRefs = function normalizeAIAttachmentRefs(raw) {
         if (raw === undefined || raw === null || raw === '') return [];
         if (Array.isArray(raw)) {
@@ -2119,33 +2223,35 @@
 
     QuickAddComponent.prototype.normalizeAIEntry = function normalizeAIEntry(entry, idx, keepId) {
         const source = entry && typeof entry === 'object' ? entry : {};
-        return Object.assign({}, source, {
-            _id: keepId || source._id || this.makeAIEntryId(idx),
-            title: source.title || source.eventType || 'Event',
-            petName: source.petName || '',
-            eventType: source.eventType || '',
-            date: source.date || '',
-            time: source.time || '',
-            status: this.normalizeAIStatus(source.status),
-            severityLabel: source.severityLabel || null,
-            value: source.value !== undefined ? source.value : null,
-            unit: source.unit !== undefined ? source.unit : null,
-            durationMinutes: source.durationMinutes !== undefined ? source.durationMinutes : null,
-            notes: source.notes || '',
-            tags: Array.isArray(source.tags) ? source.tags : [],
-            attachments: this.normalizeAIAttachmentRefs(source.attachments || source.attachmentRefs),
-            confidence: Number.isFinite(Number(source.confidence)) ? Number(source.confidence) : 0
-        });
+        const normalized = Object.assign({}, source);
+        normalized._id = keepId || source._id || this.makeAIEntryId(idx);
+
+        if (source.status !== undefined) {
+            normalized.status = this.normalizeAIStatus(source.status);
+        }
+        if (source.attachments !== undefined || source.attachmentRefs !== undefined) {
+            normalized.attachments = this.normalizeAIAttachmentRefs(source.attachments || source.attachmentRefs);
+        }
+        if (source.confidence !== undefined) {
+            normalized.confidence = Number.isFinite(Number(source.confidence)) ? Number(source.confidence) : 0;
+        }
+        return normalized;
     };
 
     QuickAddComponent.prototype.aiEntrySignature = function aiEntrySignature(entry) {
-        const parts = [
-            String(entry.petName || '').toLowerCase().trim(),
-            String(entry.eventType || '').toLowerCase().trim(),
-            String(entry.date || '').trim(),
-            String(entry.time || '').trim(),
-            String(entry.title || '').toLowerCase().trim()
-        ];
+        const schemaFields = (this.normalizedSchema && Array.isArray(this.normalizedSchema.fields))
+            ? this.normalizedSchema.fields
+            : [];
+        const keys = schemaFields.length
+            ? schemaFields.map((field) => field.key)
+            : Object.keys(entry || {}).filter((key) => !String(key).startsWith('_'));
+        const parts = keys.map((key) => {
+            const value = entry && entry[key];
+            if (Array.isArray(value)) {
+                return value.map((item) => String(item || '').toLowerCase().trim()).join(',');
+            }
+            return String(value || '').toLowerCase().trim();
+        });
         return parts.join('|');
     };
 
@@ -2254,15 +2360,12 @@
             return this.config.ai.buildPrompt(input, this.config, this);
         }
         const fields = (this.normalizedSchema && Array.isArray(this.normalizedSchema.fields))
-            ? this.normalizedSchema.fields.map((field) => field.key).filter(Boolean)
+            ? this.normalizedSchema.fields
             : [];
-        const fallbackFields = [
-            'title', 'petName', 'eventType', 'date', 'time', 'status',
-            'severityLabel', 'value', 'unit', 'durationMinutes', 'notes',
-            'tags', 'attachments', 'confidence'
-        ];
-        const requiredFields = Array.from(new Set(fallbackFields.concat(fields)));
-        const schemaHint = requiredFields.join(', ');
+        const schemaKeys = fields
+            .map((field) => field && field.key)
+            .filter(Boolean);
+        const schemaHint = schemaKeys.join(', ');
         const system = this.config.ai.systemPrompt
             ? `${this.config.ai.systemPrompt}\n\n`
             : '';
@@ -2271,8 +2374,8 @@
         const separatorHint = this.isAISeparatorAwareEnabled()
             ? `\nInput may be one segment split by entrySeparator from a larger note. Parse only this segment independently.`
             : '';
-        const spanHint = this.isAIInlinePillsEnabled()
-            ? '\nIf possible include `spans` per entry (0-based offsets relative to this input segment): [{"field":"petName","value":"Luna","start":3,"end":7}].'
+        const spanHint = this.isAIInlinePillsEnabled() && schemaKeys.length
+            ? `\nIf possible include \`spans\` per entry (0-based offsets relative to this input segment): [{"field":"${schemaKeys[0]}","value":"example","start":3,"end":7}].`
             : '';
         return `${system}You are an information extraction engine.\n` +
             `Output must be one valid JSON object only. No markdown. No prose. No code fences.\n` +
@@ -2280,14 +2383,9 @@
             `Timezone: ${timezone}\n` +
             `Return exactly this top-level shape:\n` +
             `{"entries":[...],"missing":[],"warnings":[]}\n` +
-            `For each entry use keys: ${schemaHint}\n` +
+            `For each entry use keys: ${schemaHint || '[no fields specified]'}\n` +
             `Rules:\n` +
-            `- date: YYYY-MM-DD if known, else ""\n` +
-            `- time: HH:mm (24h) or ""\n` +
-            `- status: Completed, Planned, or Missed\n` +
-            `- tags: array of strings\n` +
-            `- attachments: array of string refs\n` +
-            `- confidence: number between 0 and 1\n` +
+            `- Use only the keys defined above\n` +
             `- Keep unknown optional fields as null or empty string/array\n` +
             `- If multiple pets/events are present, create separate entries\n` +
             `- Put unresolved entities in "missing"\n` +
@@ -2656,8 +2754,9 @@
         if (!this.isAiMode()) {
             return;
         }
+        const currentInput = String(this.inputText || this.readInputText() || '').trim();
         const opts = options || {};
-        const input = String(this.inputText || this.readInputText() || '').trim();
+        const input = currentInput;
         const minInputLength = Math.max(0, Number(this.config.ai.minInputLength || 0));
         if (!input || (!opts.force && input.length < minInputLength)) {
             return;
@@ -2806,7 +2905,8 @@
             missing: this.aiState.missing.slice(),
             error: this.aiState.error || '',
             isProcessing: !!this.aiState.isProcessing,
-            queueCount: this.getAIPendingQueueCount()
+            queueCount: this.getAIPendingQueueCount(),
+            verification: Object.assign({}, this.aiVerificationState)
         };
     };
 
@@ -2889,6 +2989,32 @@
                 this.rootEl.style.setProperty(name, String(tokens[name]));
             }
         });
+    };
+
+    QuickAddComponent.prototype.applyInputSizing = function applyInputSizing() {
+        if (!this.inputEl || !this.inputSurfaceEl) {
+            return;
+        }
+        const mode = String(this.config.inputHeightMode || 'grow').toLowerCase();
+        const maxValue = this.config.inputMaxHeight;
+        let maxHeight = '';
+        if (maxValue !== undefined && maxValue !== null && maxValue !== '') {
+            if (typeof maxValue === 'number' && Number.isFinite(maxValue)) {
+                maxHeight = `${maxValue}px`;
+            } else {
+                maxHeight = String(maxValue);
+            }
+        }
+
+        if (mode === 'scroll') {
+            this.inputEl.style.maxHeight = maxHeight || '';
+            this.inputSurfaceEl.style.maxHeight = maxHeight || '';
+            this.inputEl.style.overflowY = 'auto';
+        } else {
+            this.inputEl.style.maxHeight = '';
+            this.inputSurfaceEl.style.maxHeight = '';
+            this.inputEl.style.overflowY = '';
+        }
     };
 
     QuickAddComponent.prototype.getDatePickerInitialDate = function getDatePickerInitialDate(token, field) {
@@ -3395,6 +3521,10 @@
             this.replaceTextInInput(offsets.start, offsets.end, '');
         };
 
+        this.onInputBlur = () => {
+            this.inputText = this.readInputText();
+        };
+
         this.onInputClick = (event) => {
             if (this.isAiMode()) {
                 return;
@@ -3448,6 +3578,20 @@
                 return;
             }
 
+            const openBtn = event.target.closest('[data-entry-attachment-open="1"]');
+            if (openBtn) {
+                event.preventDefault();
+                event.stopPropagation();
+                const entryId = openBtn.getAttribute('data-entry-id');
+                const entryIndex = Number(openBtn.getAttribute('data-entry-index'));
+                const attachmentId = openBtn.getAttribute('data-attachment-id') || '';
+                const key = entryId || entryIndex;
+                if ((entryId || !Number.isNaN(entryIndex)) && attachmentId) {
+                    this.openEntryAttachment(key, attachmentId);
+                }
+                return;
+            }
+
             if (this.isAiMode()) {
                 const actionEl = event.target.closest('[data-ai-action]');
                 if (!actionEl) {
@@ -3487,19 +3631,40 @@
                 if (action === 'save-edit') {
                     const targetEntry = this.aiState.entries.find((item) => item._id === entryId);
                     if (targetEntry) {
-                        const readField = (field) => {
-                            const inputId = this.getAIEditInputId(entryId, field);
+                        const fields = (this.normalizedSchema && Array.isArray(this.normalizedSchema.fields))
+                            ? this.normalizedSchema.fields
+                            : [];
+                        fields.forEach((field) => {
+                            if (!field || !field.key) {
+                                return;
+                            }
+                            const inputId = this.getAIEditInputId(entryId, field.key);
                             const node = document.getElementById(inputId);
-                            return node ? String(node.value || '').trim() : '';
-                        };
-                        targetEntry.title = readField('title');
-                        targetEntry.petName = readField('petName');
-                        targetEntry.eventType = readField('eventType');
-                        targetEntry.date = readField('date');
-                        targetEntry.time = readField('time');
-                        targetEntry.status = this.normalizeAIStatus(readField('status'));
-                        targetEntry.notes = readField('notes');
-                        targetEntry.attachments = this.normalizeAIAttachmentRefs(readField('attachments'));
+                            if (!node) {
+                                return;
+                            }
+                            const raw = String(node.value || '').trim();
+                            if (field.key === 'attachments') {
+                                targetEntry[field.key] = this.normalizeAIAttachmentRefs(raw);
+                                return;
+                            }
+                            if (field.key === 'status') {
+                                targetEntry[field.key] = this.normalizeAIStatus(raw);
+                                return;
+                            }
+                            if (field.type === 'number') {
+                                const num = Number(raw);
+                                targetEntry[field.key] = Number.isFinite(num) ? num : null;
+                                return;
+                            }
+                            if (field.multiple) {
+                                targetEntry[field.key] = raw
+                                    ? raw.split(/[,\n]+/).map((item) => item.trim()).filter(Boolean)
+                                    : [];
+                                return;
+                            }
+                            targetEntry[field.key] = raw;
+                        });
                         this.aiState.editedEntries.add(entryId);
                     }
                     this.aiState.editingEntryId = '';
@@ -3786,6 +3951,7 @@
         this.inputEl.addEventListener('paste', this.onInputPaste);
         this.inputEl.addEventListener('copy', this.onInputCopy);
         this.inputEl.addEventListener('cut', this.onInputCut);
+        this.inputEl.addEventListener('blur', this.onInputBlur);
         this.inputEl.addEventListener('click', this.onInputClick);
         this.previewEl.addEventListener('click', this.onPreviewClick);
         this.previewEl.addEventListener('change', this.onPreviewChange);
@@ -3817,6 +3983,9 @@
         }
         if (this.inputEl && this.onInputCut) {
             this.inputEl.removeEventListener('cut', this.onInputCut);
+        }
+        if (this.inputEl && this.onInputBlur) {
+            this.inputEl.removeEventListener('blur', this.onInputBlur);
         }
         if (this.inputEl && this.onInputClick) {
             this.inputEl.removeEventListener('click', this.onInputClick);
@@ -4297,7 +4466,9 @@
                             start,
                             end,
                             label: String(mark.label || raw.slice(start, end)),
-                            inferred: mark.inferred !== false
+                            inferred: mark.inferred !== false,
+                            fieldKey: mark.fieldKey || mark.field || '',
+                            value: mark.value
                         };
                     })
                     .filter(Boolean)
@@ -4307,6 +4478,10 @@
 
         const usedRanges = [];
         const entries = Array.isArray(this.aiState.entries) ? this.aiState.entries : [];
+        const schemaFields = (this.normalizedSchema && Array.isArray(this.normalizedSchema.fields))
+            ? this.normalizedSchema.fields
+            : [];
+        const candidateFields = schemaFields.filter((field) => field && field.key && !String(field.key).startsWith('_'));
 
         entries.forEach((entry, idx) => {
             const sourceStart = Number.isFinite(Number(entry._sourceStart)) ? Number(entry._sourceStart) : 0;
@@ -4331,19 +4506,18 @@
                         start,
                         end,
                         label: `${span.field || 'field'}: ${span.value || raw.slice(start, end)}`,
-                        inferred: true
+                        inferred: true,
+                        fieldKey: span.field || '',
+                        value: span.value
                     });
                 });
                 return;
             }
 
-            const candidates = [
-                { key: 'petName', value: entry.petName },
-                { key: 'eventType', value: entry.eventType },
-                { key: 'severity', value: entry.severityLabel },
-                { key: 'status', value: entry.status },
-                { key: 'title', value: entry.title }
-            ];
+            const candidates = candidateFields.map((field) => ({
+                key: field.key,
+                value: entry[field.key]
+            }));
 
             candidates.forEach((candidate) => {
                 const range = this.findInlineRangeCaseInsensitive(
@@ -4361,14 +4535,17 @@
                     start: range.start,
                     end: range.end,
                     label: `${candidate.key}: ${candidate.value}`,
-                    inferred: true
+                    inferred: true,
+                    fieldKey: candidate.key,
+                    value: candidate.value
                 });
             });
 
             if (this.isAISeparatorAwareEnabled()) {
+                const fallbackValue = entry.title || entry.note || entry[candidateFields[0]?.key] || `entry ${idx + 1}`;
                 const fallbackRange = this.findInlineRangeCaseInsensitive(
                     raw,
-                    entry.petName || entry.title || `entry ${idx + 1}`,
+                    fallbackValue,
                     sourceStart,
                     sourceEnd,
                     usedRanges
@@ -4383,7 +4560,9 @@
                             start: segmentStart,
                             end: segmentEnd,
                             label: `entry ${idx + 1}`,
-                            inferred: true
+                            inferred: true,
+                            fieldKey: '',
+                            value: ''
                         });
                     }
                 }
@@ -4448,7 +4627,11 @@
             const chunk = raw.slice(mark.start, mark.end);
             const classes = [c.inlineMark, c.inlineMarkInferred].filter(Boolean).join(' ');
             const title = escHtml(mark.label || 'AI highlight');
-            parts.push(`<span class="${classes}" title="${title}"><span class="${c.inlineMarkLabel}">${escHtml(chunk)}</span></span>`);
+            const field = mark.fieldKey ? this.getFieldDefinition(mark.fieldKey) : null;
+            const rawValue = Array.isArray(mark.value) ? mark.value[0] : mark.value;
+            const color = this.resolvePillColor(field, rawValue || chunk);
+            const styleAttr = color ? ` style="--qa-inline-accent:${escHtml(color)}"` : '';
+            parts.push(`<span class="${classes}"${styleAttr} title="${title}"><span class="${c.inlineMarkLabel}">${escHtml(chunk)}</span></span>`);
             cursor = mark.end;
         });
         if (cursor < raw.length) {
@@ -4534,6 +4717,15 @@
         }
 
         return field.color || null;
+    };
+
+    QuickAddComponent.prototype.buildAIEntryMetaStyle = function buildAIEntryMetaStyle(fieldKey, value) {
+        const field = this.getFieldDefinition(fieldKey);
+        const color = this.resolvePillColor(field, value);
+        if (!color) {
+            return '';
+        }
+        return `--qa-pill-accent:${escHtml(color)}`;
     };
 
     QuickAddComponent.prototype.isInteractivePill = function isInteractivePill(field) {
@@ -4822,6 +5014,119 @@
         return this.config.showEntryCards !== false && this.config.allowEntryAttachments === true;
     };
 
+    QuickAddComponent.prototype.getAttachmentSources = function getAttachmentSources() {
+        const sources = normalizeAttachmentSources(this.config.attachmentSources);
+        if (sources && sources.length) {
+            return sources;
+        }
+        return ['files'];
+    };
+
+    QuickAddComponent.prototype.getAttachmentCaptureValue = function getAttachmentCaptureValue() {
+        if (!isMobileDevice()) {
+            return '';
+        }
+        const sources = this.getAttachmentSources();
+        if (sources.includes('camera')) {
+            return 'environment';
+        }
+        return '';
+    };
+
+    QuickAddComponent.prototype.shouldUseMobileAttachmentPicker = function shouldUseMobileAttachmentPicker() {
+        if (!isMobileDevice()) {
+            return false;
+        }
+        const sources = this.getAttachmentSources();
+        return sources.length > 0;
+    };
+
+    QuickAddComponent.prototype.buildMobileAttachmentPicker = function buildMobileAttachmentPicker(entryKey, dataAttrs, acceptAttr, multipleAttr) {
+        const sources = this.getAttachmentSources();
+        const allowCamera = sources.includes('camera');
+        const allowGallery = sources.includes('gallery');
+        const allowFiles = sources.includes('files');
+
+        const captureAttr = allowCamera ? ' capture="environment"' : '';
+        const cameraInputId = `qa_att_camera_${String(entryKey).replace(/[^a-zA-Z0-9]/g, '_')}`;
+        const galleryInputId = `qa_att_gallery_${String(entryKey).replace(/[^a-zA-Z0-9]/g, '_')}`;
+        const inputId = `qa_att_input_${String(entryKey).replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+        const buttons = [];
+        if (allowCamera) {
+            buttons.push(`
+                <label class="${this.config.classNames.attachmentPick}" for="${escHtml(cameraInputId)}" data-qa-attachment-source="camera">
+                    Camera
+                </label>
+            `);
+        }
+        if (allowGallery) {
+            buttons.push(`
+                <label class="${this.config.classNames.attachmentPick}" for="${escHtml(galleryInputId)}" data-qa-attachment-source="gallery">
+                    Gallery
+                </label>
+            `);
+        }
+        if (allowFiles) {
+            buttons.push(`
+                <label class="${this.config.classNames.attachmentPick}" for="${escHtml(inputId)}" data-qa-attachment-source="files">
+                    Files
+                </label>
+            `);
+        }
+
+        const inputs = [];
+        if (allowCamera) {
+            inputs.push(`
+                <input
+                    type="file"
+                    class="${this.config.classNames.attachmentInput}"
+                    id="${escHtml(cameraInputId)}"
+                    data-entry-attachment-input="1"
+                    data-attachment-source="camera"
+                    ${dataAttrs}
+                    ${acceptAttr}${multipleAttr}${captureAttr}
+                />
+            `);
+        }
+        if (allowGallery) {
+            inputs.push(`
+                <input
+                    type="file"
+                    class="${this.config.classNames.attachmentInput}"
+                    id="${escHtml(galleryInputId)}"
+                    data-entry-attachment-input="1"
+                    data-attachment-source="gallery"
+                    ${dataAttrs}
+                    ${acceptAttr}${multipleAttr}
+                />
+            `);
+        }
+        if (allowFiles) {
+            inputs.push(`
+                <input
+                    type="file"
+                    class="${this.config.classNames.attachmentInput}"
+                    id="${escHtml(inputId)}"
+                    data-entry-attachment-input="1"
+                    data-attachment-source="files"
+                    ${dataAttrs}
+                    ${acceptAttr}${multipleAttr}
+                />
+            `);
+        }
+
+        return `
+            <div class="${this.config.classNames.attachmentControls}">
+                ${buttons.join('')}
+                ${inputs.join('')}
+                <span class="${this.config.classNames.attachmentHint}">
+                    ${this.config.allowMultipleAttachments !== false ? 'Multiple files allowed' : 'Single file only'}
+                </span>
+            </div>
+        `;
+    };
+
     QuickAddComponent.prototype.getAttachmentAcceptValue = function getAttachmentAcceptValue() {
         const parts = (this.config.allowedAttachmentTypes || [])
             .map((item) => String(item || '').trim())
@@ -4936,6 +5241,15 @@
             return;
         }
 
+        const existingRefs = new Set(
+            (Array.isArray(this.lastResult?.entries)
+                ? this.lastResult.entries
+                    .filter((entry) => (entry._id || entry.index) === entryKey)
+                    .flatMap((entry) => entry.attachments || [])
+                : []
+            ).map((item) => String(item || '').trim()).filter(Boolean)
+        );
+
         const current = this.attachmentsByEntry.get(entryKey) || [];
         const canMultiple = this.config.allowMultipleAttachments !== false;
         let next = canMultiple ? current.slice() : [];
@@ -4957,6 +5271,19 @@
                 lastModified: Number(file.lastModified || 0),
                 previewUrl: isImage ? URL.createObjectURL(file) : null
             });
+
+            if (this.isAiMode()) {
+                const refName = file.name || 'attachment';
+                if (!existingRefs.has(refName)) {
+                    existingRefs.add(refName);
+                    const entry = (this.aiState.entries || []).find((item) => item._id === entryKey);
+                    if (entry) {
+                        const currentRefs = Array.isArray(entry.attachments) ? entry.attachments.slice() : [];
+                        currentRefs.push(refName);
+                        entry.attachments = currentRefs;
+                    }
+                }
+            }
         });
 
         if (!canMultiple && next.length > 1) {
@@ -4976,6 +5303,7 @@
         if (!current.length) {
             return;
         }
+        const removedItem = current.find((item) => item.id === attachmentId) || null;
         const next = [];
         let removed = false;
         current.forEach((item) => {
@@ -4993,6 +5321,15 @@
             return;
         }
 
+        if (removedItem && this.isAiMode()) {
+            const entry = (this.aiState.entries || []).find((item) => item._id === entryKey);
+            if (entry) {
+                const currentRefs = Array.isArray(entry.attachments) ? entry.attachments.slice() : [];
+                const nextRefs = currentRefs.filter((ref) => String(ref || '').trim() !== removedItem.name);
+                entry.attachments = nextRefs;
+            }
+        }
+
         if (next.length > 0) {
             this.attachmentsByEntry.set(entryKey, next);
         } else {
@@ -5005,6 +5342,19 @@
         }
     };
 
+    QuickAddComponent.prototype.openEntryAttachment = function openEntryAttachment(entryKey, attachmentId) {
+        const list = this.attachmentsByEntry.get(entryKey) || [];
+        const item = list.find((entry) => entry.id === attachmentId);
+        if (!item || !item.file) {
+            return;
+        }
+        const url = item.previewUrl || URL.createObjectURL(item.file);
+        if (!item.previewUrl) {
+            item.previewUrl = url;
+        }
+        window.open(url, '_blank', 'noopener');
+    };
+
     QuickAddComponent.prototype.renderEntryAttachments = function renderEntryAttachments(entry) {
         if (!this.supportsEntryAttachments()) {
             return '';
@@ -5015,6 +5365,8 @@
         const accept = this.getAttachmentAcceptValue();
         const acceptAttr = accept ? ` accept="${escHtml(accept)}"` : '';
         const multipleAttr = this.config.allowMultipleAttachments !== false ? ' multiple' : '';
+        const captureValue = this.getAttachmentCaptureValue();
+        const captureAttr = captureValue ? ` capture="${escHtml(captureValue)}"` : '';
         const inputId = `qa_att_input_${String(entryKey).replace(/[^a-zA-Z0-9]/g, '_')}`;
 
         const dataAttrs = entry._id
@@ -5046,7 +5398,16 @@
 
                 return `
                         <div class="${itemClass}">
-                            ${content}
+                            <button
+                                type="button"
+                                class="${c.attachmentOpen}"
+                                data-entry-attachment-open="1"
+                                ${dataAttrs}
+                                data-attachment-id="${escHtml(item.id)}"
+                                aria-label="Open attachment"
+                            >
+                                ${content}
+                            </button>
                             <button
                                 type="button"
                                 class="${c.attachmentRemove}"
@@ -5064,22 +5425,26 @@
 
         return `
             <div class="${c.attachmentSection}">
-                <div class="${c.attachmentControls}">
-                    <label class="${c.attachmentPick}" for="${escHtml(inputId)}">
-                        + Add attachment
-                    </label>
-                    <input
-                        type="file"
-                        class="${c.attachmentInput}"
-                        id="${escHtml(inputId)}"
-                        data-entry-attachment-input="1"
-                        ${dataAttrs}
-                        ${acceptAttr}${multipleAttr}
-                    />
-                    <span class="${c.attachmentHint}">
-                        ${this.config.allowMultipleAttachments !== false ? 'Multiple files allowed' : 'Single file only'}
-                    </span>
-                </div>
+                ${this.shouldUseMobileAttachmentPicker()
+                ? this.buildMobileAttachmentPicker(entryKey, dataAttrs, acceptAttr, multipleAttr)
+                : `
+                    <div class="${c.attachmentControls}">
+                        <label class="${c.attachmentPick}" for="${escHtml(inputId)}">
+                            + Add attachment
+                        </label>
+                        <input
+                            type="file"
+                            class="${c.attachmentInput}"
+                            id="${escHtml(inputId)}"
+                            data-entry-attachment-input="1"
+                            ${dataAttrs}
+                            ${acceptAttr}${multipleAttr}${captureAttr}
+                        />
+                        <span class="${c.attachmentHint}">
+                            ${this.config.allowMultipleAttachments !== false ? 'Multiple files allowed' : 'Single file only'}
+                        </span>
+                    </div>
+                `}
                 ${listHtml}
             </div>
         `;
@@ -5110,40 +5475,35 @@
 
     QuickAddComponent.prototype.renderAIEntryEditor = function renderAIEntryEditor(entry) {
         const c = this.config.classNames;
-        const titleId = escHtml(this.getAIEditInputId(entry._id, 'title'));
-        const petId = escHtml(this.getAIEditInputId(entry._id, 'petName'));
-        const eventTypeId = escHtml(this.getAIEditInputId(entry._id, 'eventType'));
-        const dateId = escHtml(this.getAIEditInputId(entry._id, 'date'));
-        const timeId = escHtml(this.getAIEditInputId(entry._id, 'time'));
-        const statusId = escHtml(this.getAIEditInputId(entry._id, 'status'));
-        const notesId = escHtml(this.getAIEditInputId(entry._id, 'notes'));
-        const attachmentsId = escHtml(this.getAIEditInputId(entry._id, 'attachments'));
+        const fields = (this.normalizedSchema && Array.isArray(this.normalizedSchema.fields))
+            ? this.normalizedSchema.fields
+            : [];
+        const editorFields = fields.filter((field) => field && field.key && !String(field.key).startsWith('_'));
+        const buildInput = (field) => {
+            const key = field.key;
+            const label = field.label || key;
+            const rawValue = entry[key];
+            const value = Array.isArray(rawValue) ? rawValue.join(', ') : (rawValue ?? '');
+            const inputId = escHtml(this.getAIEditInputId(entry._id, key));
+            const type = field.type === 'number' ? 'number' : 'text';
+            const isLong = field.type === 'string' && String(value || '').length > 80;
+            if (isLong) {
+                return `
+                    <label class="${c.aiEditorLabel}">${escHtml(label)}
+                        <textarea class="${c.aiEditorInput}" id="${inputId}" data-ai-edit-field="${escHtml(key)}" rows="2">${escHtml(value)}</textarea>
+                    </label>
+                `;
+            }
+            return `
+                <label class="${c.aiEditorLabel}">${escHtml(label)}
+                    <input class="${c.aiEditorInput}" id="${inputId}" type="${type}" data-ai-edit-field="${escHtml(key)}" value="${escHtml(value)}" />
+                </label>
+            `;
+        };
+        const editorInputs = editorFields.map(buildInput).join('');
         return `
             <div class="${c.aiEditor}">
-                <label class="${c.aiEditorLabel}">Title
-                    <input class="${c.aiEditorInput}" id="${titleId}" type="text" data-ai-edit-field="title" value="${escHtml(entry.title || '')}" />
-                </label>
-                <label class="${c.aiEditorLabel}">Pet
-                    <input class="${c.aiEditorInput}" id="${petId}" type="text" data-ai-edit-field="petName" value="${escHtml(entry.petName || '')}" />
-                </label>
-                <label class="${c.aiEditorLabel}">Event Type
-                    <input class="${c.aiEditorInput}" id="${eventTypeId}" type="text" data-ai-edit-field="eventType" value="${escHtml(entry.eventType || '')}" />
-                </label>
-                <label class="${c.aiEditorLabel}">Date
-                    <input class="${c.aiEditorInput}" id="${dateId}" type="text" data-ai-edit-field="date" value="${escHtml(entry.date || '')}" />
-                </label>
-                <label class="${c.aiEditorLabel}">Time
-                    <input class="${c.aiEditorInput}" id="${timeId}" type="text" data-ai-edit-field="time" value="${escHtml(entry.time || '')}" />
-                </label>
-                <label class="${c.aiEditorLabel}">Status
-                    <input class="${c.aiEditorInput}" id="${statusId}" type="text" data-ai-edit-field="status" value="${escHtml(entry.status || '')}" />
-                </label>
-                <label class="${c.aiEditorLabel}">Notes
-                    <textarea class="${c.aiEditorInput}" id="${notesId}" data-ai-edit-field="notes" rows="2">${escHtml(entry.notes || '')}</textarea>
-                </label>
-                <label class="${c.aiEditorLabel}">Attachments (comma separated refs)
-                    <input class="${c.aiEditorInput}" id="${attachmentsId}" type="text" data-ai-edit-field="attachments" value="${escHtml((entry.attachments || []).join(', '))}" />
-                </label>
+                ${editorInputs}
                 <div class="${c.aiActions}">
                     <button type="button" class="${c.aiActionBtn} ${c.aiActionBtnGhost}" data-ai-action="cancel-edit" data-ai-entry-id="${escHtml(entry._id)}">Cancel</button>
                     <button type="button" class="${c.aiActionBtn} ${c.aiActionBtnPrimary}" data-ai-action="save-edit" data-ai-entry-id="${escHtml(entry._id)}">Save</button>
@@ -5157,6 +5517,13 @@
         const deleted = this.aiState.deletedEntries.has(entry._id);
         const edited = this.aiState.editedEntries.has(entry._id);
         const editing = this.aiState.editingEntryId === entry._id;
+        const schemaFields = (this.normalizedSchema && Array.isArray(this.normalizedSchema.fields))
+            ? this.normalizedSchema.fields
+            : [];
+        const metaFields = schemaFields.filter((field) => field && field.key && !String(field.key).startsWith('_'));
+        const titleKey = schemaFields.find((field) => field && field.key === 'title')
+            ? 'title'
+            : (metaFields[0] ? metaFields[0].key : 'title');
         const cardClasses = [
             c.entry,
             deleted ? c.pillBlocked : ''
@@ -5192,21 +5559,46 @@
             `;
         }
 
+        const titleValue = entry[titleKey];
+        const pills = [];
+        metaFields.forEach((field) => {
+            const key = field.key;
+            const rawValue = entry[key];
+            const values = Array.isArray(rawValue) ? rawValue : [rawValue];
+            values.forEach((value) => {
+                if (value === undefined || value === null || value === '') {
+                    return;
+                }
+                const label = field.label || key;
+                const text = Array.isArray(value) ? value.join(', ') : value;
+                pills.push(this.buildPillHtml({
+                    fieldKey: key,
+                    entryIndex: Number(entry._segmentIndex) || 0,
+                    value,
+                    label: `${label}: ${text}`,
+                    inferred: false,
+                    auto: false,
+                    blocked: false,
+                    dismissKey: null,
+                    tokenId: null
+                }));
+            });
+        });
+        if (Number.isFinite(Number(entry.confidence))) {
+            pills.push(`<span class="${c.pill}">confidence: ${escHtml(confidence)}</span>`);
+        }
+        const pillsHtml = pills.length
+            ? `<div class="${c.pillRow}">${pills.join('')}</div>`
+            : `<div class="${c.pillRow}"><span class="${c.pill}">No extracted fields</span></div>`;
+        const notesValue = entry.notes || entry.note || '';
         return `
             <article class="${cardClasses}" data-ai-entry-id="${escHtml(entry._id)}">
                 <div class="${c.entryHeader}">
-                    <div class="${c.entryTitle}">${escHtml(entry.title || entry.eventType || 'Event')}</div>
+                    <div class="${c.entryTitle}">${escHtml(titleValue || 'Entry')}</div>
                     <div class="${c.badges}">${badges}</div>
                 </div>
-                <div class="${c.aiMetaRow}">
-                    <span class="${c.aiMetaItem}">pet: ${escHtml(entry.petName || 'n/a')}</span>
-                    <span class="${c.aiMetaItem}">event: ${escHtml(entry.eventType || 'n/a')}</span>
-                    <span class="${c.aiMetaItem}">date: ${escHtml(entry.date || 'n/a')}</span>
-                    <span class="${c.aiMetaItem}">time: ${escHtml(entry.time || 'n/a')}</span>
-                    <span class="${c.aiMetaItem}">status: ${escHtml(entry.status || 'Completed')}</span>
-                    <span class="${c.aiMetaItem}">confidence: ${escHtml(confidence)}</span>
-                </div>
-                ${entry.notes ? `<div class="${c.issues}"><div class="${c.issue}">${escHtml(entry.notes)}</div></div>` : ''}
+                ${pillsHtml}
+                ${notesValue ? `<div class="${c.issues}"><div class="${c.issue}">${escHtml(notesValue)}</div></div>` : ''}
                 ${Array.isArray(entry.attachments) && entry.attachments.length
                 ? `<div class="${c.issues}"><div class="${c.issue}">extracted refs: ${escHtml(entry.attachments.join(', '))}</div></div>`
                 : ''}
@@ -5240,7 +5632,6 @@
         const showQueue = controls.queue !== false;
         const showProcess = controls.process !== false;
         const showClear = controls.clear !== false;
-
         const actionsHtml = `
             <div class="${c.aiActions}">
                 ${showParse ? `<button type="button" class="${c.aiActionBtn} ${c.aiActionBtnPrimary}" data-ai-action="parse-now">Parse Now</button>` : ''}
@@ -5257,10 +5648,14 @@
             : '';
 
         if (this.aiState.entries.length === 0) {
+            const autoParseActive = this.config.ai.autoParse !== false;
+            const autoParseHint = autoParseActive
+                ? 'Type text and pause to trigger extraction.'
+                : 'Auto-parse is off. Click Parse Now to run extraction.';
             this.previewEl.innerHTML = `
                 ${actionsHtml}
                 ${warningsHtml}
-                <article class="${c.entry}">No AI entries yet. Type text and pause to trigger extraction.</article>
+                <article class="${c.entry} ${c.entryEmpty}">No AI entries yet. ${autoParseHint} Or click Parse Now.</article>
             `;
         } else {
             this.previewEl.innerHTML = `
@@ -5863,7 +6258,19 @@
 
     QuickAddComponent.prototype.updateConfig = function updateConfig(nextConfig) {
         const wasAiMode = this.isAiMode();
+        const previousVerification = Object.assign({}, this.aiVerificationState);
         this.config = mergeConfig(Object.assign({}, this.config, nextConfig || {}));
+        if (this.isAiMode()) {
+            const nextSignature = this.buildAiRuntimeSignature();
+            const keepVerified = previousVerification.status === 'verified'
+                && previousVerification.signature
+                && previousVerification.signature === nextSignature;
+            if (!keepVerified) {
+                this.resetAiVerification('AI settings updated.');
+            } else {
+                this.aiVerificationState = Object.assign({}, previousVerification);
+            }
+        }
         this.normalizedSchema = normalizeSchema(this.config.schema, this.config.fallbackField);
         const isAiModeNow = this.isAiMode();
 
@@ -5879,6 +6286,7 @@
         this.unbindEvents();
         this.renderShell();
         this.applyTokens();
+        this.applyInputSizing();
         this.bindEvents();
         this.parseAndRender();
     };

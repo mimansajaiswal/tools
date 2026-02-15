@@ -87,6 +87,7 @@
     border-radius: var(--qa-radius-card);
     background: var(--qa-input-bg);
     min-height: 110px;
+    overflow: hidden;
 }
 
 .qa-inline-text {
@@ -242,6 +243,14 @@
     color: var(--qa-card-fg);
     padding: 10px;
     overflow: auto;
+}
+
+.qa-entry.qa-entry-empty {
+    font-size: 11px;
+    color: var(--qa-muted);
+    background: color-mix(in srgb, var(--qa-card-bg) 70%, var(--qa-accent-soft));
+    border-style: dashed;
+    border-color: color-mix(in srgb, var(--qa-border) 70%, var(--qa-accent));
 }
 
 .qa-entry-header {
@@ -413,8 +422,9 @@
     border-radius: var(--qa-radius-pill);
     padding: 2px 7px;
     font-size: 10px;
-    color: var(--qa-muted);
-    background: color-mix(in srgb, var(--qa-card-bg) 88%, var(--qa-accent-soft));
+    color: var(--qa-pill-accent, var(--qa-muted));
+    border-color: var(--qa-pill-accent, var(--qa-border));
+    background: color-mix(in srgb, var(--qa-pill-accent, var(--qa-accent)) 12%, var(--qa-card-bg));
 }
 
 .qa-ai-actions {
@@ -549,6 +559,27 @@
     overflow: hidden;
     padding: 4px;
     text-align: center;
+}
+
+.qa-attachment-open {
+    border: none;
+    background: transparent;
+    color: inherit;
+    padding: 0;
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.qa-attachment-open:focus-visible {
+    outline: 2px solid var(--qa-accent-soft);
+    outline-offset: -2px;
 }
 
 .qa-attachment-item.qa-is-image {
