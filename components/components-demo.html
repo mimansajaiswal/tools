@@ -550,6 +550,13 @@
             font: 700 15px/1.2 "Fraunces", serif;
         }
 
+        .qa-modal-actions {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
         .qa-modal-body {
             min-height: 0;
             overflow: auto;
@@ -557,6 +564,128 @@
             background:
                 linear-gradient(180deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.65)),
                 repeating-linear-gradient(0deg, transparent 0, transparent 24px, rgba(207, 194, 175, 0.17) 24px, rgba(207, 194, 175, 0.17) 25px);
+        }
+
+        .modal-result-wrap {
+            margin-top: 12px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: #fff;
+            overflow: hidden;
+        }
+
+        .modal-result-head {
+            padding: 8px 10px;
+            border-bottom: 1px solid var(--line);
+            background: #f8f3ea;
+            font: 600 12px/1.3 "JetBrains Mono", monospace;
+            color: var(--ink);
+        }
+
+        .modal-result-summary {
+            padding: 7px 10px;
+            border-bottom: 1px solid var(--line);
+            background: #fffdf9;
+            color: var(--ink-soft);
+            font: 500 11px/1.35 "JetBrains Mono", monospace;
+        }
+
+        .modal-result-table-wrap {
+            max-height: 260px;
+            overflow: auto;
+        }
+
+        .modal-result-table {
+            width: 100%;
+            border-collapse: collapse;
+            font: 500 11px/1.3 "JetBrains Mono", monospace;
+            background: #fff;
+        }
+
+        .modal-result-table th,
+        .modal-result-table td {
+            border-bottom: 1px solid #efe7da;
+            padding: 7px 8px;
+            text-align: left;
+            vertical-align: top;
+            white-space: nowrap;
+        }
+
+        .modal-result-table th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            background: #fff8ef;
+            color: var(--ink-soft);
+            font-weight: 700;
+        }
+
+        .modal-result-table td:last-child {
+            white-space: normal;
+            min-width: 180px;
+        }
+
+        .modal-result-table td.modal-attachment-cell {
+            white-space: normal;
+            min-width: 240px;
+        }
+
+        .modal-attachments {
+            display: grid;
+            gap: 6px;
+        }
+
+        .modal-attachment-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid #efe7da;
+            border-radius: 8px;
+            background: #fffcf7;
+            padding: 4px 6px;
+        }
+
+        .modal-attachment-thumb {
+            width: 42px;
+            height: 42px;
+            border-radius: 6px;
+            border: 1px solid #e5d7c4;
+            background: #fff;
+            object-fit: cover;
+            flex: 0 0 auto;
+        }
+
+        .modal-attachment-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 6px;
+            border: 1px solid #e5d7c4;
+            background: #fff;
+            color: var(--ink-soft);
+            display: grid;
+            place-items: center;
+            font: 700 11px/1 "JetBrains Mono", monospace;
+            flex: 0 0 auto;
+        }
+
+        .modal-attachment-meta {
+            min-width: 0;
+            display: grid;
+            gap: 2px;
+        }
+
+        .modal-attachment-name {
+            color: var(--ink);
+            font-weight: 600;
+            white-space: normal;
+            word-break: break-word;
+        }
+
+        .modal-attachment-detail {
+            color: var(--ink-soft);
+            font-size: 10px;
+            white-space: normal;
+            word-break: break-word;
         }
 
         body.qa-modal-open {
@@ -771,7 +900,7 @@
                     <h2>Task Planner Variant</h2>
                     <p>Double-newline bulk entries, terminator <code>;;</code> or next prefix commit, natural dates on
                         <code>due:</code>. Repeated single-value prefixes keep only the last one, parsed pills can be
-                        dismissed with <code>x</code>, and entry cards allow multiple attachments.
+                        dismissed with <code>x</code>, and file fields link to a shared global attachment pool.
                     </p>
                     <div class="meta" id="meta1"></div>
                     <details class="config-box">
@@ -852,7 +981,10 @@
                 <div class="example-head">
                     <h2>Modal Embed Variant</h2>
                     <p>Simulates usage inside a constrained modal container (scrolling body, clipped parent, fixed
-                        overlay). Use this to validate floating menus/pickers in app-like dialogs.</p>
+                        overlay). Each open starts from one random preset quick-add input (editable). Click Save to
+                        append rows (add-only) from <code>getResult()</code> into the table preview. Defaults include
+                        file refs and matching seeded global demo files so previews are visible immediately. Dropdowns
+                        and calendar pickers are positioned within modal/container bounds.</p>
                     <div class="meta" id="meta4"></div>
                 </div>
                 <div class="modal-demo-controls">
@@ -864,12 +996,30 @@
                     <section class="qa-modal" role="dialog" aria-modal="true" aria-labelledby="quickAddModalTitle">
                         <header class="qa-modal-header">
                             <h3 class="qa-modal-title" id="quickAddModalTitle">Quick Add In Modal</h3>
-                            <button class="modal-demo-btn" type="button" id="closeQuickAddModal">Close</button>
+                            <div class="qa-modal-actions">
+                                <button class="modal-demo-btn" type="button" id="saveQuickAddModal">Save</button>
+                                <button class="modal-demo-btn" type="button" id="closeQuickAddModal">Close</button>
+                            </div>
                         </header>
                         <div class="qa-modal-body">
                             <div id="quickAddExample4"></div>
                         </div>
                     </section>
+                </div>
+                <div class="modal-result-wrap">
+                    <div class="modal-result-head">Saved payload preview (from <code>modalAdd.getResult()</code>)</div>
+                    <div class="modal-result-summary" id="modalResultSummary">No saved entries yet. Open modal, adjust
+                        the random input if needed, then click Save to append rows.</div>
+                    <div class="modal-result-table-wrap">
+                        <table class="modal-result-table" id="modalResultTable">
+                            <thead id="modalResultHead"></thead>
+                            <tbody id="modalResultRows">
+                                <tr>
+                                    <td>No saved entries yet.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </article>
 
@@ -877,9 +1027,13 @@
                 <div class="example-head">
                     <h2>✦ AI Parsing</h2>
                     <p>Same <code>QuickAdd</code> component in <code>mode: "ai"</code>. Includes provider-compatible
-                        API wiring, mock provider for synthetic testing, Parse/Queue/Process Queue controls, inline
-                        edit,
-                        remove/restore, optional separator-aware AI parsing, and offline queue persistence.</p>
+                        API wiring, mock provider for synthetic testing, Parse controls, inline edit,
+                        remove/restore, optional separator-aware AI parsing, caller-managed retry metadata, and AI
+                        attachment ref resolution against seeded global files. The default runtime provider is
+                        <strong>Demo</strong>.
+                    </p>
+                    <p><strong>Security note:</strong> Browser API keys are exposed to end users; use Demo mode or a
+                        backend proxy/token exchange for production integrations.</p>
                     <div class="meta" id="meta5"></div>
                     <details class="ai-config-details" id="aiRuntime5" open>
                         <summary>AI Provider Details</summary>
@@ -944,7 +1098,9 @@
                     <p>AI mode with optional inline-pill overlays enabled. Uses dummy AI output with span offsets and
                         supports separator-aware parsing by newline, plus full provider/API-key runtime switching to
                         test
-                        real calls.</p>
+                        real calls. The default runtime provider is <strong>Demo</strong>.</p>
+                    <p><strong>Security note:</strong> Browser API keys are exposed to end users; use Demo mode or a
+                        backend proxy/token exchange for production integrations.</p>
                     <div class="meta" id="meta6"></div>
                     <details class="ai-config-details" id="aiRuntime6" open>
                         <summary>AI Provider Details</summary>
@@ -1085,17 +1241,19 @@
             'entrySeparator',
             'fieldTerminator',
             'fieldTerminatorMode',
+            'multiSelectSeparator',
             'escapeChar',
             'fallbackField',
             'showJsonOutput',
+            'showDropdownOnTyping',
             'showInlinePills',
             'showEntryCards',
             'showEntryHeader',
             'showEntryPills',
             'inputHeightMode',
             'inputMaxHeight',
-            'allowEntryAttachments',
             'allowMultipleAttachments',
+            'allowAttachmentReuse',
             'allowedAttachmentTypes',
             'attachmentSources',
             'autoDetectOptionsWithoutPrefix',
@@ -1118,16 +1276,22 @@
             'separatorAware',
             'inlinePills',
             'forceJson',
+            'timeoutMs',
             'provider',
             'apiKey',
             'model',
             'endpoint',
             'temperature',
             'systemPrompt',
+            'promptMode',
+            'promptTemplate',
+            'outputType',
+            'outputSchema',
+            'webSearch',
+            'tools',
             'mockResponse',
             'mockLatencyMs',
             'controls',
-            'queueStorageKey',
             'experimental'
         ]);
         const ALLOWED_AI_EXPERIMENTAL_KEYS = new Set(['inlinePills']);
@@ -1137,33 +1301,28 @@
             'label',
             'prefixes',
             'type',
-            'enum',
             'options',
             'required',
             'multiple',
             'naturalDate',
             'allowDateOnly',
+            'defaultValue',
             'defaultTime',
             'timeFormat',
             'color',
             'autoDetectWithoutPrefix',
             'reduceInferredOptions',
-            'autoToday',
             'allowCustom',
             'exhaustive',
             'dependsOn',
-            'dependencies',
             'constraints',
-            'constraint'
         ]);
         const ALLOWED_OPTION_KEYS = new Set([
             'value',
             'label',
             'color',
             'dependsOn',
-            'dependencies',
             'constraints',
-            'constraint'
         ]);
         const ALLOWED_CONDITION_KEYS = new Set(['field', 'op', 'value', 'values', 'and', 'or', 'not', 'when', 'message']);
         const VALID_FIELD_TYPES = new Set(['string', 'number', 'options', 'date', 'datetime', 'boolean']);
@@ -1278,8 +1437,8 @@
             if (option.color !== undefined && typeof option.color !== 'string') {
                 pushValidationError(errors, `${path}.color`, 'must be a string');
             }
-            validateConstraintSet(option.dependsOn !== undefined ? option.dependsOn : option.dependencies, `${path}.dependsOn`, errors);
-            validateConstraintSet(option.constraints !== undefined ? option.constraints : option.constraint, `${path}.constraints`, errors);
+            validateConstraintSet(option.dependsOn, `${path}.dependsOn`, errors);
+            validateConstraintSet(option.constraints, `${path}.constraints`, errors);
         }
 
         function validateField(field, path, errors) {
@@ -1307,11 +1466,6 @@
                     pushValidationError(errors, `${path}.prefixes`, 'must contain only strings');
                 }
             }
-            if (field.enum !== undefined) {
-                if (!Array.isArray(field.enum)) {
-                    pushValidationError(errors, `${path}.enum`, 'must be an array');
-                }
-            }
             if (field.options !== undefined) {
                 if (!Array.isArray(field.options)) {
                     pushValidationError(errors, `${path}.options`, 'must be an array');
@@ -1337,8 +1491,8 @@
             if (field.color !== undefined && typeof field.color !== 'string') {
                 pushValidationError(errors, `${path}.color`, 'must be a string');
             }
-            validateConstraintSet(field.dependsOn !== undefined ? field.dependsOn : field.dependencies, `${path}.dependsOn`, errors);
-            validateConstraintSet(field.constraints !== undefined ? field.constraints : field.constraint, `${path}.constraints`, errors);
+            validateConstraintSet(field.dependsOn, `${path}.dependsOn`, errors);
+            validateConstraintSet(field.constraints, `${path}.constraints`, errors);
         }
 
         function validateEditableConfig(config) {
@@ -1358,6 +1512,9 @@
             }
             if (config.fieldTerminator !== undefined && typeof config.fieldTerminator !== 'string') {
                 pushValidationError(errors, 'config.fieldTerminator', 'must be a string');
+            }
+            if (config.multiSelectSeparator !== undefined && typeof config.multiSelectSeparator !== 'string') {
+                pushValidationError(errors, 'config.multiSelectSeparator', 'must be a string');
             }
             if (config.fieldTerminatorMode !== undefined) {
                 if (typeof config.fieldTerminatorMode !== 'string' || !VALID_FIELD_TERMINATOR_MODES.has(config.fieldTerminatorMode)) {
@@ -1380,6 +1537,15 @@
             if (config.hintText !== undefined && typeof config.hintText !== 'string') {
                 pushValidationError(errors, 'config.hintText', 'must be a string');
             }
+            if (
+                typeof config.multiSelectSeparator === 'string'
+                && (
+                    config.multiSelectSeparator === config.fieldTerminator
+                    || config.multiSelectSeparator === config.entrySeparator
+                )
+            ) {
+                pushValidationError(errors, 'config.multiSelectSeparator', 'must not match entrySeparator or fieldTerminator');
+            }
             if (config.mode !== undefined) {
                 if (typeof config.mode !== 'string' || !VALID_QA_MODES.has(config.mode)) {
                     pushValidationError(errors, 'config.mode', `must be one of: ${Array.from(VALID_QA_MODES).join(', ')}`);
@@ -1389,12 +1555,13 @@
             [
                 'allowMultipleEntries',
                 'showJsonOutput',
+                'showDropdownOnTyping',
                 'showInlinePills',
                 'showEntryCards',
                 'showEntryHeader',
                 'showEntryPills',
-                'allowEntryAttachments',
                 'allowMultipleAttachments',
+                'allowAttachmentReuse',
                 'autoDetectOptionsWithoutPrefix',
                 'reduceInferredOptions'
             ].forEach((key) => {
@@ -1449,24 +1616,46 @@
                     pushValidationError(errors, 'config.ai', 'must be an object');
                 } else {
                     validateAllowedKeys(config.ai, ALLOWED_AI_KEYS, 'config.ai', errors);
-                    ['enabled', 'autoParse', 'preserveEditedEntries', 'separatorAware', 'inlinePills', 'forceJson']
+                    ['enabled', 'autoParse', 'preserveEditedEntries', 'separatorAware', 'inlinePills', 'forceJson', 'webSearch']
                         .forEach((key) => {
                             if (config.ai[key] !== undefined && typeof config.ai[key] !== 'boolean') {
                                 pushValidationError(errors, `config.ai.${key}`, 'must be a boolean');
                             }
                         });
-                    ['debounceMs', 'minInputLength', 'temperature', 'mockLatencyMs']
+                    ['debounceMs', 'minInputLength', 'temperature', 'mockLatencyMs', 'timeoutMs']
                         .forEach((key) => {
                             if (config.ai[key] !== undefined && typeof config.ai[key] !== 'number') {
                                 pushValidationError(errors, `config.ai.${key}`, 'must be a number');
                             }
                         });
-                    ['provider', 'apiKey', 'model', 'endpoint', 'systemPrompt', 'queueStorageKey']
+                    ['provider', 'apiKey', 'model', 'endpoint', 'systemPrompt', 'outputType', 'promptMode', 'promptTemplate']
                         .forEach((key) => {
                             if (config.ai[key] !== undefined && typeof config.ai[key] !== 'string') {
                                 pushValidationError(errors, `config.ai.${key}`, 'must be a string');
                             }
                         });
+                    if (config.ai.promptMode !== undefined) {
+                        const mode = String(config.ai.promptMode || '');
+                        if (mode !== 'default' && mode !== 'custom') {
+                            pushValidationError(errors, 'config.ai.promptMode', 'must be "default" or "custom"');
+                        }
+                    }
+                    if (config.ai.outputSchema !== undefined && config.ai.outputSchema !== null && !isPlainObject(config.ai.outputSchema)) {
+                        pushValidationError(errors, 'config.ai.outputSchema', 'must be an object or null');
+                    }
+                    if (config.ai.tools !== undefined && config.ai.tools !== null) {
+                        const isToolsArray = Array.isArray(config.ai.tools);
+                        const isToolsObject = isPlainObject(config.ai.tools);
+                        if (!isToolsArray && !isToolsObject) {
+                            pushValidationError(errors, 'config.ai.tools', 'must be an object, an array of objects, or null');
+                        } else if (isToolsArray) {
+                            config.ai.tools.forEach((tool, toolIndex) => {
+                                if (!isPlainObject(tool)) {
+                                    pushValidationError(errors, `config.ai.tools[${toolIndex}]`, 'must be an object');
+                                }
+                            });
+                        }
+                    }
                     if (config.ai.mockResponse !== undefined) {
                         const value = config.ai.mockResponse;
                         const isString = typeof value === 'string';
@@ -1875,8 +2064,9 @@
             entrySeparator: '\n\n',
             fieldTerminator: ';;',
             fieldTerminatorMode: 'or-next-prefix',
-            allowEntryAttachments: true,
+            multiSelectSeparator: ',',
             allowMultipleAttachments: true,
+            allowAttachmentReuse: true,
             allowedAttachmentTypes: ['.pdf', '.png', '.jpg', 'image/*'],
             attachmentSources: ['camera', 'gallery', 'files'],
             fallbackField: 'title',
@@ -1891,6 +2081,7 @@
                         type: 'options',
                         prefixes: ['!'],
                         exhaustive: true,
+                        defaultValue: 'p2',
                         options: [
                             { value: 'p1', color: '#dc2626' },
                             { value: 'p2', color: '#d97706' },
@@ -1909,8 +2100,24 @@
                             { value: 'errands', color: '#475569' }
                         ]
                     },
-                    { key: 'due', type: 'datetime', naturalDate: true, allowDateOnly: true, defaultTime: '08:00', prefixes: ['due:'] },
-                    { key: 'owner', type: 'string', prefixes: ['@'] }
+                    {
+                        key: 'tags',
+                        type: 'options',
+                        prefixes: ['tag:'],
+                        multiple: true,
+                        defaultValue: ['urgent', 'follow-up'],
+                        options: [
+                            { value: 'urgent', color: '#dc2626' },
+                            { value: 'follow-up', color: '#f59e0b' },
+                            { value: 'client', color: '#0ea5e9' },
+                            { value: 'internal', color: '#64748b' }
+                        ]
+                    },
+                    { key: 'due', type: 'datetime', naturalDate: true, allowDateOnly: true, defaultTime: '08:00', defaultValue: '2026-02-23T15:00', prefixes: ['due:'] },
+                    { key: 'estimate', type: 'number', prefixes: ['est:'], defaultValue: 2 },
+                    { key: 'owner', type: 'string', prefixes: ['@'] },
+                    { key: 'receipt', type: 'file', prefixes: ['file:'] },
+                    { key: 'photos', type: 'file', prefixes: ['files:'], multiple: true }
                 ]
             },
             tokens: {
@@ -1924,10 +2131,11 @@
             }
         };
         const taskDefaultInput =
-            'Book vet appointment then call clinic !p3;; shift to urgent !p1;; prep records #health;; and confirm slot due:23 feb 26 at 3pm;; with @Mimansa;; before breakfast\n\n' +
-            'Pick up supplements !p2;; #errands;; due:next week at 9:15am;; @Mimansa;;';
+            'Book vet appointment then call clinic !p3;; shift to urgent !p1;; prep records #health;; and confirm slot due:23 feb 26 at 3pm;; est:4;; with @Mimansa;; file:attachment-1.png;; files:attachment-2.pdf;; before breakfast\n\n' +
+            'Pick up supplements !p2;; #errands;; tag:client,internal;; due:next week at 9:15am;; est:1;; @Mimansa;; file:attachment-2.pdf;;';
         const taskAdd = QuickAdd.create(taskConfig);
         taskAdd.setInput(taskDefaultInput);
+        seedGlobalAttachments(taskAdd, ['attachment-1.png', 'attachment-2.pdf', 'attachment-3.png']);
         setupConfigPlayground({
             editorId: 'config1',
             applyButtonId: 'applyConfig1',
@@ -1953,7 +2161,7 @@
             inferredMatchMode: 'fuzzy',
             inferredMatchThreshold: 0.8,
             fallbackField: 'note',
-            placeholder: 'Use ; for new entry. Example: pet:Luna~~ event:walk~~ due:2025-02-01~~ at:yesterday~~ (at: defaults to today if omitted)',
+            placeholder: 'Use ; for new entry. Example: pet:Luna~~ event:walk~~ due:2025-02-01~~ at:yesterday~~',
             inputHeightMode: 'scroll',
             inputMaxHeight: 150,
             classNames: {
@@ -2022,8 +2230,8 @@
                             { value: 'low energy', color: '#7c3aed' }
                         ]
                     },
-                    { key: 'severity', type: 'number', prefixes: ['sev:'] },
-                    { key: 'at', type: 'date', naturalDate: true, prefixes: ['at:'], required: true, autoToday: true }
+                    { key: 'severity', type: 'number', prefixes: ['sev:'], defaultValue: 2 },
+                    { key: 'at', type: 'date', naturalDate: true, prefixes: ['at:'], required: true, defaultValue: '2026-02-14' }
                 ]
             },
             onParse: (result) => {
@@ -2063,13 +2271,14 @@
             schema: {
                 fields: [
                     { key: 'memo', type: 'string', required: true },
-                    { key: 'amount', type: 'number', prefixes: ['$'], required: true },
+                    { key: 'amount', type: 'number', prefixes: ['$'], required: true, defaultValue: 18.5 },
                     {
                         key: 'category',
                         type: 'options',
                         prefixes: ['cat:'],
                         required: true,
                         exhaustive: true,
+                        defaultValue: 'Food',
                         options: [
                             { value: 'Food', color: '#f59e0b' },
                             { value: 'Travel', color: '#0ea5e9' },
@@ -2089,7 +2298,20 @@
                             { value: 'Bank', color: '#8b5cf6' }
                         ]
                     },
-                    { key: 'on', type: 'date', naturalDate: false, prefixes: ['on:'], required: true },
+                    {
+                        key: 'tags',
+                        type: 'options',
+                        prefixes: ['tag:'],
+                        multiple: true,
+                        defaultValue: ['ops'],
+                        options: [
+                            { value: 'ops', color: '#334155' },
+                            { value: 'client', color: '#0ea5e9' },
+                            { value: 'travel', color: '#0284c7' },
+                            { value: 'meal', color: '#f59e0b' }
+                        ]
+                    },
+                    { key: 'on', type: 'date', naturalDate: false, prefixes: ['on:'], required: true, defaultValue: '2026-02-06' },
                     { key: 'reimbursable', type: 'boolean', prefixes: ['rb:'] }
                 ]
             },
@@ -2116,7 +2338,7 @@
             }
         };
         const expenseDefaultInput =
-            'Team lunch $23.4:: cat:Food:: pay:Card:: on:2026-02-06:: rb:no::\n' +
+            'Team lunch $23.4:: cat:Food:: pay:Card:: tag:meal,client:: on:2026-02-06:: rb:no::\n' +
             'Airport cab $48 cat:Travel pay:Cash on:2026-02-05 rb:yes';
         const expenseAdd = QuickAdd.create(expenseConfig);
         expenseAdd.setInput(expenseDefaultInput);
@@ -2160,16 +2382,36 @@
                         type: 'options',
                         prefixes: ['st:'],
                         exhaustive: true,
+                        defaultValue: 'todo',
                         options: [
                             { value: 'todo', color: '#475569' },
                             { value: 'doing', color: '#0ea5e9' },
                             { value: 'done', color: '#16a34a' }
                         ]
                     },
-                    { key: 'due', type: 'datetime', naturalDate: true, allowDateOnly: true, defaultTime: '08:00', prefixes: ['due:'] },
-                    { key: 'owner', type: 'string', prefixes: ['@'] }
+                    {
+                        key: 'labels',
+                        type: 'options',
+                        prefixes: ['tag:'],
+                        multiple: true,
+                        exhaustive: true,
+                        defaultValue: ['internal'],
+                        options: [
+                            { value: 'internal', color: '#64748b' },
+                            { value: 'client', color: '#0ea5e9' },
+                            { value: 'follow-up', color: '#f59e0b' }
+                        ]
+                    },
+                    { key: 'due', type: 'datetime', naturalDate: true, allowDateOnly: true, defaultTime: '08:00', defaultValue: '2026-02-18T08:00', prefixes: ['due:'] },
+                    { key: 'owner', type: 'string', prefixes: ['@'] },
+                    { key: 'receipt', type: 'file', prefixes: ['file:'] },
+                    { key: 'photos', type: 'file', prefixes: ['files:'], multiple: true }
                 ]
             },
+            allowMultipleAttachments: true,
+            allowAttachmentReuse: false,
+            allowedAttachmentTypes: ['image/*'],
+            attachmentSources: ['camera', 'gallery', 'files'],
             tokens: {
                 '--qa-bg': '#fff9f1',
                 '--qa-border': '#d9ccb8',
@@ -2181,11 +2423,78 @@
                 document.getElementById('meta4').textContent = `entries=${result.entryCount}, valid=${result.validCount}, invalid=${result.invalidCount}`;
             }
         };
-        const modalDefaultInput =
-            'Finalize investor update !p2;; st:doing;; due:23 feb 26 at 3pm;; @Mimansa;;\n\n' +
-            'Book dentist !p1;; st:todo;; due:next week at 9:15am;; @Mimansa;;';
-        const modalAdd = QuickAdd.create(modalConfig);
-        modalAdd.setInput(modalDefaultInput);
+        const modalDefaultInputs = [
+            'Finalize investor update !p2;; st:doing;; tag:internal,follow-up;; due:23 feb 26 at 3pm;; @Mimansa;; file:entry-1-note.svg;; files:entry-1-pixel.png;;\n\nBook dentist !p1;; st:todo;; tag:client;; due:next week at 9:15am;; @Mimansa;; file:entry-1-pixel.png;;',
+            'Share onboarding plan !p2;; st:todo;; tag:client;; due:tomorrow at 11am;; @Mimansa;; file:entry-1-note.svg;;\n\nCollect KYC docs !p1;; st:doing;; tag:follow-up;; due:friday at 4pm;; @Mimansa;; files:entry-1-pixel.png;;',
+            'Prep sprint review deck !p2;; st:doing;; tag:internal;; due:thu 2pm;; @Mimansa;;\n\nSync blockers with QA !p1;; st:todo;; tag:follow-up;; due:today at 6pm;; @Mimansa;;',
+            'Schedule customer interview !p2;; st:todo;; tag:client;; due:next tuesday at 10am;; @Mimansa;;\n\nDraft interview guide !p3;; st:doing;; tag:internal;; due:monday at 5pm;; @Mimansa;;',
+            'Close invoice gap !p1;; st:doing;; tag:internal;; due:today at 7pm;; @Mimansa;;\n\nSend payment reminder !p2;; st:todo;; tag:client,follow-up;; due:tomorrow at 9am;; @Mimansa;;',
+            'Review production alerts !p1;; st:doing;; tag:internal;; due:today at 8pm;; @Mimansa;;\n\nPatch retry timeout !p2;; st:todo;; tag:follow-up;; due:tomorrow at 1pm;; @Mimansa;;',
+            'Ship release note draft !p2;; st:doing;; tag:internal;; due:friday at 3pm;; @Mimansa;;\n\nCollect screenshots !p3;; st:todo;; tag:client;; due:thursday at 4:30pm;; @Mimansa;;',
+            'Plan partnership call !p2;; st:todo;; tag:client;; due:next monday at 2pm;; @Mimansa;;\n\nPrepare talking points !p3;; st:doing;; tag:internal;; due:sunday at 5pm;; @Mimansa;;',
+            'Triage bug queue !p1;; st:doing;; tag:internal,follow-up;; due:today at 5pm;; @Mimansa;;\n\nNotify affected users !p2;; st:todo;; tag:client;; due:tomorrow at 10:30am;; @Mimansa;;',
+            'Update compliance checklist !p2;; st:todo;; tag:internal;; due:wed 1pm;; @Mimansa;;\n\nArchive signed forms !p3;; st:done;; tag:follow-up;; due:today at 9am;; @Mimansa;;'
+        ].map((text) => String(text || '').includes('file:')
+            ? text
+            : String(text || '').replace(/@Mimansa;;/g, '@Mimansa;; file:entry-1-note.svg;;'));
+        const pickRandomModalDefaultInput = () => {
+            if (!modalDefaultInputs.length) {
+                return '';
+            }
+            const index = Math.floor(Math.random() * modalDefaultInputs.length);
+            return modalDefaultInputs[index];
+        };
+        let modalAdd = null;
+
+        function createDemoGlobalAttachments() {
+            if (typeof File !== 'function') {
+                return [];
+            }
+            const lastModified = Date.now();
+            const svgMarkup = '<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96"><rect width="96" height="96" rx="14" fill="#f59e0b"/><text x="48" y="54" text-anchor="middle" font-size="16" font-family="Arial, sans-serif" fill="#111827">A1</text></svg>';
+            const files = [
+                new File([svgMarkup], 'attachment-1.png', { type: 'image/png', lastModified }),
+                new File(['demo receipt payload'], 'attachment-2.pdf', { type: 'application/pdf', lastModified }),
+                new File([svgMarkup], 'entry-1-note.svg', { type: 'image/svg+xml', lastModified }),
+                new File(['modal png payload'], 'entry-1-pixel.png', { type: 'image/png', lastModified })
+            ];
+            if (typeof window.atob === 'function' && typeof Uint8Array !== 'undefined') {
+                const pngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5x3G4AAAAASUVORK5CYII=';
+                const pngBytes = Uint8Array.from(window.atob(pngBase64), (char) => char.charCodeAt(0));
+                files.push(new File([pngBytes], 'attachment-3.png', { type: 'image/png', lastModified }));
+            }
+            return files;
+        }
+
+        function seedGlobalAttachments(component, names) {
+            if (!component || typeof component.addGlobalAttachments !== 'function') {
+                return;
+            }
+            const include = new Set((Array.isArray(names) ? names : []).map((item) => String(item || '')));
+            const files = createDemoGlobalAttachments().filter((file) => include.has(file.name));
+            if (!files.length) {
+                return;
+            }
+            component.addGlobalAttachments(files);
+        }
+
+        function mountModalQuickAdd() {
+            if (modalAdd) {
+                return modalAdd;
+            }
+            modalAdd = QuickAdd.create(modalConfig);
+            modalAdd.setInput(pickRandomModalDefaultInput());
+            seedGlobalAttachments(modalAdd, ['entry-1-note.svg', 'entry-1-pixel.png']);
+            return modalAdd;
+        }
+
+        function unmountModalQuickAdd() {
+            if (!modalAdd) {
+                return;
+            }
+            modalAdd.destroy();
+            modalAdd = null;
+        }
 
         function buildDemoTaskAiEntriesForSegment(text) {
             const source = String(text || '').trim();
@@ -2194,30 +2503,77 @@
                 (source.match(/\b(?:photo|file)\s*(\d+)\b/gi) || [])
                     .map((item) => item.replace(/\D+/g, '').trim())
                     .filter(Boolean)
-                    .map((num) => `attachment-${num}`)
+                    .map((num) => (num === '2' ? 'attachment-2.pdf' : `attachment-${num}.png`))
             ));
-            const priority = lower.includes('urgent') || lower.includes('p1') ? 'p1' : (lower.includes('p3') ? 'p3' : 'p2');
-            const project = lower.includes('health')
-                ? 'health'
-                : (lower.includes('home') ? 'home' : (lower.includes('errand') ? 'errands' : 'work'));
+            const priorityToken = source.match(/!([pP][123])\b/);
+            const priority = priorityToken
+                ? priorityToken[1].toLowerCase()
+                : (lower.includes('urgent') || lower.includes('p1') ? 'p1' : (lower.includes('p3') ? 'p3' : 'p2'));
+            const projectToken = source.match(/#([a-zA-Z][\w-]*)/);
+            const project = projectToken
+                ? projectToken[1].toLowerCase()
+                : (lower.includes('health')
+                    ? 'health'
+                    : (lower.includes('home') ? 'home' : (lower.includes('errand') ? 'errands' : 'work')));
             const ownerMatch = source.match(/@([\w-]+)/);
             const owner = ownerMatch ? ownerMatch[1] : 'Mimansa';
-            const due = lower.includes('tomorrow') ? '2026-02-15T09:00' : '2026-02-14T15:30';
-
-            return [{
+            const dueToken = source.match(/due:([0-9]{4}-[0-9]{2}-[0-9]{2}(?:[tT][0-9]{2}:[0-9]{2})?)/);
+            const due = dueToken
+                ? dueToken[1].replace('t', 'T')
+                : (lower.includes('tomorrow') ? '2026-02-15T09:00' : '2026-02-14T15:30');
+            const tagsMatch = source.match(/tag:([^\n.;]+)/i);
+            const tags = tagsMatch
+                ? tagsMatch[1].split(',').map((item) => item.trim()).filter(Boolean)
+                : [];
+            const payload = {
                 title: source || 'Synthetic AI task',
                 priority,
                 project,
                 due,
                 owner,
-                attachments
-            }];
+                receipt: attachments[0] || '',
+                photos: attachments
+            };
+            if (tags.length) {
+                payload.tags = tags;
+            }
+
+            return [payload];
         }
 
         function buildDemoTaskAiStructuredResponse(input) {
             const text = String(input || '').trim();
+            const lower = text.toLowerCase();
+            const entries = buildDemoTaskAiEntriesForSegment(text).map((entry) => {
+                const spans = [];
+                const addSpan = (field, phrase, value) => {
+                    if (!phrase) return;
+                    const phraseLower = String(phrase).toLowerCase();
+                    const start = lower.indexOf(phraseLower);
+                    if (start < 0) return;
+                    spans.push({
+                        field,
+                        value: value !== undefined ? value : text.slice(start, start + String(phrase).length),
+                        start,
+                        end: start + String(phrase).length
+                    });
+                };
+                const priorityToken = text.match(/!([pP][123])\b/);
+                const projectToken = text.match(/#([a-zA-Z][\w-]*)/);
+                const dueToken = text.match(/due:([0-9]{4}-[0-9]{2}-[0-9]{2}(?:[tT][0-9]{2}:[0-9]{2})?)/);
+                const ownerToken = text.match(/@([\w-]+)/);
+                const tagToken = text.match(/tag:([^\n.;]+)/i);
+                if (priorityToken) addSpan('priority', priorityToken[0], entry.priority);
+                if (projectToken) addSpan('project', projectToken[0], entry.project);
+                if (dueToken) addSpan('due', dueToken[0], entry.due);
+                if (ownerToken) addSpan('owner', ownerToken[0], entry.owner);
+                if (tagToken && Array.isArray(entry.tags)) {
+                    entry.tags.forEach((tag) => addSpan('tags', tag, tag));
+                }
+                return Object.assign({}, entry, { spans });
+            });
             return {
-                entries: buildDemoTaskAiEntriesForSegment(text),
+                entries,
                 missing: [],
                 warnings: ['Synthetic response enabled in demo (config.ai.mockResponse).']
             };
@@ -2233,7 +2589,7 @@
             const symptom = lower.includes('cough')
                 ? 'cough'
                 : (lower.includes('vomit') ? 'vomit' : (lower.includes('itch') ? 'itching' : 'low energy'));
-            const severityMatch = source.match(/\b(\d+)\b/);
+            const severityMatch = source.match(/\b(?:sev(?:erity)?\s*[:=]?\s*)(\d+)\b/i);
             const severity = severityMatch ? Number(severityMatch[1]) : 2;
             const due = lower.includes('next week') ? '2026-02-20' : '2026-02-18';
             const at = lower.includes('yesterday') ? '2026-02-13' : '2026-02-14';
@@ -2286,8 +2642,8 @@
             entrySeparator: '\n\n',
             fieldTerminator: ';;',
             fieldTerminatorMode: 'or-next-prefix',
-            allowEntryAttachments: true,
             allowMultipleAttachments: true,
+            allowAttachmentReuse: true,
             allowedAttachmentTypes: ['.pdf', '.png', '.jpg', 'image/*'],
             attachmentSources: ['camera', 'gallery', 'files'],
             fallbackField: 'title',
@@ -2313,6 +2669,7 @@
                         type: 'options',
                         prefixes: ['#'],
                         exhaustive: true,
+                        defaultValue: 'work',
                         options: [
                             { value: 'health', color: '#0d9488' },
                             { value: 'work', color: '#7c3aed' },
@@ -2320,8 +2677,23 @@
                             { value: 'errands', color: '#475569' }
                         ]
                     },
-                    { key: 'due', type: 'datetime', naturalDate: true, allowDateOnly: true, defaultTime: '08:00', prefixes: ['due:'] },
-                    { key: 'owner', type: 'string', prefixes: ['@'] }
+                    {
+                        key: 'tags',
+                        type: 'options',
+                        prefixes: ['tag:'],
+                        multiple: true,
+                        defaultValue: ['urgent', 'follow-up'],
+                        options: [
+                            { value: 'urgent', color: '#dc2626' },
+                            { value: 'follow-up', color: '#f59e0b' },
+                            { value: 'client', color: '#0ea5e9' },
+                            { value: 'internal', color: '#64748b' }
+                        ]
+                    },
+                    { key: 'due', type: 'datetime', naturalDate: true, allowDateOnly: true, defaultTime: '08:00', defaultValue: '2026-02-20T09:00', prefixes: ['due:'] },
+                    { key: 'owner', type: 'string', prefixes: ['@'] },
+                    { key: 'receipt', type: 'file', prefixes: ['file:'] },
+                    { key: 'photos', type: 'file', prefixes: ['files:'], multiple: true }
                 ]
             },
             ai: {
@@ -2330,13 +2702,15 @@
                 debounceMs: 900,
                 minInputLength: 8,
                 separatorAware: true,
-                inlinePills: false,
+                inlinePills: true,
                 provider: 'openai',
                 apiKey: 'demo-key',
                 model: 'gpt-4o-mini',
+                promptMode: 'custom',
+                promptTemplate: 'Extract structured task entries as JSON with keys: {{schemaKeys}}. Current date={{currentDate}} timezone={{timezone}}. Input:\n{{input}}',
                 mockLatencyMs: 420,
                 mockResponse: (input) => buildDemoTaskAiStructuredResponse(input),
-                controls: { parse: true, queue: true, process: true, clear: true }
+                controls: { parse: true, clear: true }
             },
             tokens: {
                 '--qa-bg': '#fff8ef',
@@ -2346,13 +2720,15 @@
             },
             onParse: (result) => {
                 document.getElementById('meta5').textContent =
-                    `mode=${result.mode || 'deterministic'}, entries=${result.entryCount}, valid=${result.validCount}, queued=${result.queueCount || 0}`;
+                    `mode=${result.mode || 'deterministic'}, entries=${result.entryCount}, valid=${result.validCount}, parse=${(result.parseState && result.parseState.status) || 'n/a'}`;
             }
         };
         const aiDefaultInput5 =
-            taskDefaultInput;
+            'Prepare health follow-up !p2;; #health;; due:2026-02-20T09:00;; @Mimansa;; with photo 1 and file 2.\n\n' +
+            'Book dentist check !p1;; #work;; tag:client,internal;; due:2026-02-21T15:00;; @Mimansa;;';
         const aiAdd5 = QuickAdd.create(aiConfig5);
         aiAdd5.setInput(aiDefaultInput5);
+        seedGlobalAttachments(aiAdd5, ['attachment-1.png', 'attachment-2.pdf', 'attachment-3.png']);
         const aiPlayground5 = setupConfigPlayground({
             editorId: 'config5',
             applyButtonId: 'applyConfig5',
@@ -2392,7 +2768,7 @@
             inferredMatchMode: 'fuzzy',
             inferredMatchThreshold: 0.8,
             fallbackField: 'note',
-            placeholder: 'Use ; for new entry. Example: pet:Luna~~ event:walk~~ due:2025-02-01~~ at:yesterday~~ (at: defaults to today if omitted)',
+            placeholder: 'Use ; for new entry. Example: pet:Luna~~ event:walk~~ due:2025-02-01~~ at:yesterday~~',
             inputHeightMode: 'scroll',
             inputMaxHeight: 150,
             showInlinePills: true,
@@ -2462,8 +2838,8 @@
                             { value: 'low energy', color: '#7c3aed' }
                         ]
                     },
-                    { key: 'severity', type: 'number', prefixes: ['sev:'] },
-                    { key: 'at', type: 'date', naturalDate: true, prefixes: ['at:'], required: true, autoToday: true }
+                    { key: 'severity', type: 'number', prefixes: ['sev:'], defaultValue: 2 },
+                    { key: 'at', type: 'date', naturalDate: true, prefixes: ['at:'], required: true, defaultValue: '2026-02-14' }
                 ]
             },
             ai: {
@@ -2572,7 +2948,7 @@
             },
             onParse: (result) => {
                 document.getElementById('meta6').textContent =
-                    `mode=${result.mode || 'deterministic'}, entries=${result.entryCount}, valid=${result.validCount}, queued=${result.queueCount || 0}`;
+                    `mode=${result.mode || 'deterministic'}, entries=${result.entryCount}, valid=${result.validCount}, parse=${(result.parseState && result.parseState.status) || 'n/a'}`;
             }
         };
         const aiDefaultInput6 =
@@ -2608,13 +2984,307 @@
         const modalBackdropEl = document.getElementById('quickAddModalBackdrop');
         const openModalBtn = document.getElementById('openQuickAddModal');
         const closeModalBtn = document.getElementById('closeQuickAddModal');
+        const saveModalBtn = document.getElementById('saveQuickAddModal');
+        const modalResultTableEl = document.getElementById('modalResultTable');
+        const modalResultHeadEl = document.getElementById('modalResultHead');
+        const modalResultRowsEl = document.getElementById('modalResultRows');
+        const modalResultSummaryEl = document.getElementById('modalResultSummary');
         const exampleTabsEl = document.getElementById('exampleTabs');
         const exampleTabsSelectEl = document.getElementById('exampleTabsSelect');
         const exampleTabsTriggerEl = document.getElementById('exampleTabsTrigger');
+        const modalSchemaColumns = ((modalConfig && modalConfig.schema && Array.isArray(modalConfig.schema.fields))
+            ? modalConfig.schema.fields
+            : [])
+            .map((field) => ({
+                key: String((field && field.key) || '').trim(),
+                label: String((field && (field.label || field.key)) || '').trim()
+            }))
+            .filter((column) => column.key);
+        const modalTableColumns = [{ key: '__row', label: '#' }]
+            .concat(modalSchemaColumns)
+            .concat([
+                { key: '__attachments', label: 'Attachments' },
+                { key: '__issues', label: 'Issues' }
+            ]);
+        const esc = (value) => String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        const toText = (value) => {
+            if (value === undefined || value === null) return '—';
+            if (Array.isArray(value)) {
+                const flat = value
+                    .map((item) => (item === undefined || item === null ? '' : String(item).trim()))
+                    .filter(Boolean);
+                return flat.length ? flat.join(', ') : '—';
+            }
+            if (typeof value === 'object') {
+                return '[object]';
+            }
+            const text = String(value).trim();
+            return text || '—';
+        };
+        const formatFileSize = (value) => {
+            const bytes = Number(value);
+            if (!Number.isFinite(bytes) || bytes < 0) {
+                return '—';
+            }
+            if (bytes < 1024) {
+                return `${bytes} B`;
+            }
+            if (bytes < (1024 * 1024)) {
+                return `${(bytes / 1024).toFixed(1)} KB`;
+            }
+            return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+        };
+        const getEntryAttachments = (entry) => {
+            if (!entry || typeof entry !== 'object') {
+                return [];
+            }
+            if (Array.isArray(entry.attachments)) {
+                return entry.attachments;
+            }
+            return [];
+        };
+        const cloneAttachmentForSave = (item) => {
+            if (!item || typeof item !== 'object') {
+                return null;
+            }
+            const file = item.file || null;
+            return Object.assign({}, item, {
+                file,
+                name: item.name || (file && file.name) || 'attachment',
+                type: item.type || (file && file.type) || '',
+                size: Number.isFinite(Number(item.size)) ? Number(item.size) : Number(file && file.size ? file.size : 0),
+                lastModified: Number.isFinite(Number(item.lastModified)) ? Number(item.lastModified) : Number(file && file.lastModified ? file.lastModified : 0),
+                previewUrl: item.previewUrl || null
+            });
+        };
+        const cloneEntryForSave = (entry) => {
+            if (!entry || typeof entry !== 'object') {
+                return {};
+            }
+            const cloned = Object.assign({}, entry);
+            if (entry.fields && typeof entry.fields === 'object') {
+                cloned.fields = Object.assign({}, entry.fields);
+            }
+            if (entry.explicitValues && typeof entry.explicitValues === 'object') {
+                const explicitValues = {};
+                Object.keys(entry.explicitValues).forEach((key) => {
+                    const rawValue = entry.explicitValues[key];
+                    explicitValues[key] = Array.isArray(rawValue) ? rawValue.slice() : rawValue;
+                });
+                cloned.explicitValues = explicitValues;
+            }
+            if (Array.isArray(entry.pending)) {
+                cloned.pending = entry.pending.slice();
+            }
+            if (Array.isArray(entry.errors)) {
+                cloned.errors = entry.errors.slice();
+            }
+            if (Array.isArray(entry.inferred)) {
+                cloned.inferred = entry.inferred.slice();
+            }
+            if (Array.isArray(entry.tokens)) {
+                cloned.tokens = entry.tokens.slice();
+            }
+            if (Array.isArray(entry.blocked)) {
+                cloned.blocked = entry.blocked.slice();
+            }
+            if (entry.autoFields instanceof Set) {
+                cloned.autoFields = new Set(Array.from(entry.autoFields));
+            }
+            if (entry.aiMeta && typeof entry.aiMeta === 'object') {
+                cloned.aiMeta = Object.assign({}, entry.aiMeta);
+            }
+            if (Array.isArray(entry.attachments)) {
+                cloned.attachments = entry.attachments.map(cloneAttachmentForSave).filter(Boolean);
+            }
+            return cloned;
+        };
+        const cloneResultForSave = (result) => {
+            if (!result || typeof result !== 'object') {
+                return null;
+            }
+            const cloned = Object.assign({}, result);
+            cloned.entries = Array.isArray(result.entries) ? result.entries.map(cloneEntryForSave) : [];
+            if (Array.isArray(result.warnings)) {
+                cloned.warnings = result.warnings.slice();
+            }
+            if (Array.isArray(result.missing)) {
+                cloned.missing = result.missing.slice();
+            }
+            if (result.verification && typeof result.verification === 'object') {
+                cloned.verification = Object.assign({}, result.verification);
+            }
+            if (result.parseState && typeof result.parseState === 'object') {
+                cloned.parseState = Object.assign({}, result.parseState);
+            }
+            if (result.callerRequest && typeof result.callerRequest === 'object') {
+                cloned.callerRequest = Object.assign({}, result.callerRequest);
+                if (Array.isArray(result.callerRequest.chunks)) {
+                    cloned.callerRequest.chunks = result.callerRequest.chunks.map((chunk) => Object.assign({}, chunk));
+                }
+            }
+            return cloned;
+        };
+        const modalSavedResults = [];
+        const modalSavedPreviewUrls = new Set();
+        const persistModalResult = (result) => {
+            const snapshot = cloneResultForSave(result);
+            if (!snapshot) {
+                return null;
+            }
+            modalSavedResults.push(snapshot);
+            return snapshot;
+        };
+        const rememberModalSavedPreviewUrl = (url) => {
+            if (typeof url !== 'string' || !url) {
+                return;
+            }
+            modalSavedPreviewUrls.add(url);
+        };
+        const releaseModalSavedPreviewUrls = () => {
+            if (typeof URL === 'undefined' || typeof URL.revokeObjectURL !== 'function') {
+                modalSavedPreviewUrls.clear();
+                return;
+            }
+            modalSavedPreviewUrls.forEach((url) => {
+                URL.revokeObjectURL(url);
+            });
+            modalSavedPreviewUrls.clear();
+        };
+        window.addEventListener('beforeunload', releaseModalSavedPreviewUrls);
+        const resolveAttachmentPreviewUrl = (item) => {
+            if (!item || typeof item !== 'object') {
+                return '';
+            }
+            if (item.__modalSavedPreviewUrl) {
+                return item.__modalSavedPreviewUrl;
+            }
+            if (
+                item.file
+                && typeof URL !== 'undefined'
+                && typeof URL.createObjectURL === 'function'
+            ) {
+                item.__modalSavedPreviewUrl = URL.createObjectURL(item.file);
+                rememberModalSavedPreviewUrl(item.__modalSavedPreviewUrl);
+                return item.__modalSavedPreviewUrl;
+            }
+            return item.previewUrl ? String(item.previewUrl) : '';
+        };
+        const isImageAttachment = (item) => {
+            const type = String(item && (item.type || (item.file && item.file.type) || '')).toLowerCase();
+            return type.startsWith('image/');
+        };
+        const formatAttachmentCell = (entry) => {
+            const attachments = getEntryAttachments(entry);
+            if (!attachments.length) {
+                return '—';
+            }
+            const attachmentItems = attachments.map((item) => {
+                const nameRaw = item && item.name ? item.name : (item && item.file && item.file.name ? item.file.name : 'attachment');
+                const typeRaw = item && item.type ? item.type : (item && item.file && item.file.type ? item.file.type : 'unknown');
+                const sizeText = formatFileSize(item && item.size);
+                const lastModified = Number.isFinite(Number(item && item.lastModified)) ? String(Number(item.lastModified)) : '—';
+                const hasFile = !!(item && item.file);
+                const previewUrl = isImageAttachment(item) ? resolveAttachmentPreviewUrl(item) : '';
+                const previewHtml = previewUrl
+                    ? `<img src="${esc(previewUrl)}" class="modal-attachment-thumb" alt="${esc(nameRaw)}" loading="lazy" />`
+                    : `<span class="modal-attachment-icon">${isImageAttachment(item) ? 'IMG' : 'FILE'}</span>`;
+                return `
+                    <div class="modal-attachment-item">
+                        ${previewHtml}
+                        <div class="modal-attachment-meta">
+                            <div class="modal-attachment-name">${esc(nameRaw)}</div>
+                            <div class="modal-attachment-detail">${esc(typeRaw)} · ${esc(sizeText)}</div>
+                            <div class="modal-attachment-detail">file:${hasFile ? 'yes' : 'no'} · lastModified:${esc(lastModified)}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            return `<div class="modal-attachments">${attachmentItems}</div>`;
+        };
+        const getFlattenedSavedRows = () => modalSavedResults.flatMap((savedResult) => {
+            const entries = Array.isArray(savedResult && savedResult.entries) ? savedResult.entries : [];
+            return entries.map((entry) => ({ entry }));
+        });
+        const renderModalResultTable = () => {
+            if (!modalResultRowsEl || !modalResultSummaryEl || !modalResultHeadEl) {
+                return;
+            }
+            modalResultHeadEl.innerHTML = `<tr>${modalTableColumns.map((column) => `<th>${esc(column.label)}</th>`).join('')}</tr>`;
+            const rows = getFlattenedSavedRows();
+            if (!rows.length) {
+                modalResultRowsEl.innerHTML = `<tr><td colspan="${modalTableColumns.length}">No entries in saved result.</td></tr>`;
+                modalResultSummaryEl.textContent = modalSavedResults.length
+                    ? `Saved ${modalSavedResults.length} payload snapshot${modalSavedResults.length === 1 ? '' : 's'} but no rows were parsed.`
+                    : 'Saved result contains 0 entries.';
+                if (modalResultTableEl) {
+                    modalResultTableEl.dataset.providerRawResponse = '';
+                }
+                return;
+            }
+            modalResultRowsEl.innerHTML = rows.map((row, index) => {
+                const entry = row.entry;
+                const fields = entry && typeof entry === 'object' && entry.fields && typeof entry.fields === 'object'
+                    ? entry.fields
+                    : {};
+                const issues = []
+                    .concat(Array.isArray(entry && entry.pending) ? entry.pending : [])
+                    .concat(Array.isArray(entry && entry.errors) ? entry.errors : []);
+                const cells = modalTableColumns.map((column) => {
+                    if (column.key === '__row') {
+                        return `<td>${index + 1}</td>`;
+                    }
+                    if (column.key === '__attachments') {
+                        return `<td class="modal-attachment-cell">${formatAttachmentCell(entry)}</td>`;
+                    }
+                    if (column.key === '__issues') {
+                        return `<td>${esc(issues.length ? issues.join(' | ') : '—')}</td>`;
+                    }
+                    return `<td>${esc(toText(fields[column.key]))}</td>`;
+                });
+                return `
+                    <tr>
+                        ${cells.join('')}
+                    </tr>
+                `;
+            }).join('');
+
+            const allEntries = rows.map((row) => row.entry);
+            const allAttachments = allEntries.flatMap((entry) => getEntryAttachments(entry));
+            const richAttachmentCount = allAttachments
+                .filter((item) => item && typeof item === 'object' && ('file' in item || 'previewUrl' in item || 'fingerprint' in item))
+                .length;
+            const attachmentFileCount = allAttachments.filter((item) => item && item.file).length;
+            const providerAwareSnapshots = modalSavedResults.filter((savedResult) => Object.prototype.hasOwnProperty.call(savedResult, 'providerRawResponse'));
+            const providerRawPresentCount = providerAwareSnapshots
+                .filter((savedResult) => String(savedResult.providerRawResponse || '').trim().length > 0)
+                .length;
+            modalResultSummaryEl.textContent =
+                `Saved ${rows.length} entr${rows.length === 1 ? 'y' : 'ies'} across ${modalSavedResults.length} save actions (add-only). ` +
+                `Attachments with File objects: ${attachmentFileCount}. ` +
+                `Attachments with rich fields: ${richAttachmentCount}. ` +
+                (providerAwareSnapshots.length
+                    ? `providerRawResponse non-empty in ${providerRawPresentCount}/${providerAwareSnapshots.length} saved AI snapshots.`
+                    : 'providerRawResponse is not applicable in deterministic snapshots.');
+            if (modalResultTableEl) {
+                const latestResult = modalSavedResults.length ? modalSavedResults[modalSavedResults.length - 1] : null;
+                const providerRawResponse = latestResult && Object.prototype.hasOwnProperty.call(latestResult, 'providerRawResponse')
+                    ? String(latestResult.providerRawResponse || '')
+                    : '';
+                modalResultTableEl.dataset.providerRawResponse = providerRawResponse;
+            }
+        };
+        renderModalResultTable();
         const openModal = () => {
             if (!modalBackdropEl) return;
             modalBackdropEl.hidden = false;
             document.body.classList.add('qa-modal-open');
+            mountModalQuickAdd();
             window.requestAnimationFrame(() => {
                 const input = modalBackdropEl.querySelector('[data-role="input"]');
                 if (input && typeof input.focus === 'function') {
@@ -2626,12 +3296,21 @@
             if (!modalBackdropEl) return;
             modalBackdropEl.hidden = true;
             document.body.classList.remove('qa-modal-open');
+            unmountModalQuickAdd();
         };
         if (openModalBtn) {
             openModalBtn.addEventListener('click', openModal);
         }
         if (closeModalBtn) {
             closeModalBtn.addEventListener('click', closeModal);
+        }
+        if (saveModalBtn) {
+            saveModalBtn.addEventListener('click', () => {
+                const currentResult = modalAdd ? modalAdd.getResult() : null;
+                persistModalResult(currentResult);
+                closeModal();
+                renderModalResultTable();
+            });
         }
         if (modalBackdropEl) {
             modalBackdropEl.addEventListener('click', (event) => {

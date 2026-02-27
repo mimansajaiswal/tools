@@ -495,6 +495,13 @@
     gap: 6px;
 }
 
+.qa-attachment-global-section {
+    border: var(--qa-border-line);
+    border-radius: var(--qa-radius-card);
+    padding: 8px;
+    background: color-mix(in srgb, var(--qa-card-bg) 88%, transparent);
+}
+
 .qa-attachment-controls {
     display: flex;
     flex-wrap: wrap;
@@ -539,42 +546,118 @@
     color: var(--qa-muted);
 }
 
-.qa-attachment-list {
+.qa-attachment-source-menu {
+    position: fixed;
+    border: var(--qa-border-line);
+    border-radius: var(--qa-radius-card);
+    background: var(--qa-card-bg);
+    color: var(--qa-card-fg);
+    box-shadow: 0 10px 24px color-mix(in srgb, var(--qa-fg) 14%, transparent);
+    padding: 6px;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: 4px;
+    overflow: auto;
+}
+
+.qa-attachment-source-option {
+    border: var(--qa-border-line);
+    border-radius: var(--qa-radius-pill);
+    background: var(--qa-input-bg);
+    color: var(--qa-card-fg);
+    font: inherit;
+    font-size: 12px;
+    line-height: 1.2;
+    text-align: left;
+    padding: 7px 10px;
+    cursor: pointer;
+}
+
+.qa-attachment-source-option:hover {
+    background: color-mix(in srgb, var(--qa-accent-soft) 70%, var(--qa-input-bg));
+}
+
+.qa-attachment-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 2px;
+}
+
+.qa-attachment-pool-scroll {
+    max-height: 222px;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
+.qa-attachment-field-rows {
+    display: grid;
     gap: 8px;
     margin-top: 8px;
 }
 
-.qa-attachment-item {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    aspect-ratio: 1;
+.qa-attachment-field-row {
     border: var(--qa-border-line);
     border-radius: var(--qa-radius-card);
-    background: var(--qa-card-bg);
-    overflow: hidden;
-    padding: 4px;
+    padding: 6px;
+    background: color-mix(in srgb, var(--qa-input-bg) 70%, transparent);
+}
+
+.qa-attachment-field-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--qa-muted);
+}
+
+.qa-attachment-link-btn {
+    border: var(--qa-border-line);
+    border-radius: var(--qa-radius-pill);
+    background: var(--qa-input-bg);
+    color: var(--qa-card-fg);
+    font-size: 11px;
+    padding: 4px 8px;
+    cursor: pointer;
+}
+
+.qa-attachment-field-list {
+    margin-top: 6px;
+    max-height: 136px;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
+.qa-attachment-item {
+    position: relative;
+    width: 84px;
+    min-width: 84px;
+    display: grid;
+    gap: 4px;
+    align-items: center;
+    justify-items: center;
+    overflow: visible;
     text-align: center;
 }
 
 .qa-attachment-open {
+    position: relative;
     border: none;
-    background: transparent;
+    border: var(--qa-border-line);
+    border-radius: var(--qa-radius-card);
+    background: var(--qa-card-bg);
     color: inherit;
     padding: 0;
     margin: 0;
     width: 100%;
-    height: 100%;
+    height: 84px;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-direction: column;
     gap: 4px;
+    overflow: hidden;
 }
 
 .qa-attachment-open:focus-visible {
@@ -583,8 +666,7 @@
 }
 
 .qa-attachment-item.qa-is-image {
-    padding: 0;
-    border: 0;
+    padding: 0 0 4px;
 }
 
 .qa-attachment-preview-img {
@@ -607,8 +689,8 @@
     width: 100%;
     overflow: hidden;
     white-space: nowrap;
-    text-overflow: ellipsis;
-    padding: 0 4px;
+    text-overflow: clip;
+    padding: 0 2px;
     line-height: 1.2;
     color: var(--qa-card-fg);
 }
@@ -617,10 +699,21 @@
     display: none;
 }
 
+.qa-attachment-used-flag {
+    position: absolute;
+    left: 4px;
+    bottom: 26px;
+    background: color-mix(in srgb, var(--qa-fg) 66%, transparent);
+    color: #fff;
+    border-radius: 999px;
+    font-size: 9px;
+    padding: 1px 5px;
+}
+
 .qa-attachment-remove {
     position: absolute;
-    top: 4px;
-    right: 4px;
+    top: 2px;
+    right: 2px;
     background: rgba(0, 0, 0, 0.5);
     color: #fff;
     border-radius: 50%;
@@ -644,7 +737,45 @@
     opacity: 1;
 }
 
-.qa-output {
+.qa-conflict-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.36);
+    display: grid;
+    place-items: center;
+    z-index: 12000;
+    padding: 12px;
+}
+
+.qa-conflict-modal {
+    width: min(420px, 100%);
+    border: var(--qa-border-line);
+    border-radius: var(--qa-radius-card);
+    background: var(--qa-card-bg);
+    color: var(--qa-card-fg);
+    padding: 12px;
+    display: grid;
+    gap: 12px;
+    font-size: 12px;
+}
+
+.qa-conflict-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.qa-conflict-modal-btn {
+    border: var(--qa-border-line);
+    border-radius: var(--qa-radius-pill);
+    background: var(--qa-input-bg);
+    color: var(--qa-card-fg);
+    font-size: 12px;
+    padding: 5px 10px;
+    cursor: pointer;
+}
+
+.qa-output-panel {
     margin: 10px 0 0;
     width: 100%;
     max-width: 100%;
@@ -652,6 +783,21 @@
     border-radius: var(--qa-radius-card);
     background: var(--qa-output-bg);
     color: var(--qa-output-fg);
+    overflow: hidden;
+}
+
+.qa-output-summary {
+    cursor: pointer;
+    padding: 8px 10px;
+    font-size: 11px;
+    color: var(--qa-muted);
+    border-bottom: 1px solid color-mix(in srgb, var(--qa-border) 72%, transparent);
+}
+
+.qa-output {
+    margin: 0;
+    width: 100%;
+    max-width: 100%;
     padding: 10px;
     max-height: 220px;
     overflow: auto;
@@ -687,7 +833,7 @@
 }
 
 .qa-dropdown-list {
-    max-height: min(220px, calc(100vh - 120px));
+    max-height: min(132px, calc(100vh - 120px));
     overflow: auto;
     display: grid;
 }
@@ -702,9 +848,13 @@
     font: inherit;
     font-size: 12px;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
     cursor: pointer;
+}
+
+.qa-dropdown-option-active {
+    background: color-mix(in srgb, var(--qa-accent-soft) 72%, var(--qa-card-bg));
 }
 
 .qa-dropdown-option:last-child {
@@ -732,6 +882,14 @@
     margin-left: auto;
     font-size: 11px;
     color: var(--qa-muted);
+    flex-shrink: 0;
+}
+
+.qa-dropdown-label {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .qa-date-picker {
@@ -1071,34 +1229,6 @@
     color: color-mix(in srgb, #111827 82%, var(--qa-card-fg));
 }
 
-.qa-blocked-info-anchored {
-    position: fixed;
-}
-
-.qa-blocked-info-anchor-below-start {
-    left: anchor(left);
-    top: anchor(bottom);
-    transform: translate(0, 8px);
-}
-
-.qa-blocked-info-anchor-below-end {
-    left: anchor(right);
-    top: anchor(bottom);
-    transform: translate(-100%, 8px);
-}
-
-.qa-blocked-info-anchor-above-start {
-    left: anchor(left);
-    top: anchor(top);
-    transform: translate(0, calc(-100% - 8px));
-}
-
-.qa-blocked-info-anchor-above-end {
-    left: anchor(right);
-    top: anchor(top);
-    transform: translate(-100%, calc(-100% - 8px));
-}
-
 @media (max-width: 640px) {
     .qa-root {
         padding: 10px;
@@ -1116,7 +1246,7 @@
     }
 
     .qa-dropdown-list {
-        max-height: min(200px, calc(100vh - 110px));
+        max-height: min(120px, calc(100vh - 110px));
     }
 
     .qa-date-picker {

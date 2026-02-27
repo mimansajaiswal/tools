@@ -34,9 +34,24 @@
         attachmentPick: 'qa-attachment-pick',
         attachmentInput: 'qa-attachment-input',
         attachmentHint: 'qa-attachment-hint',
+        attachmentSourceMenu: 'qa-attachment-source-menu',
+        attachmentSourceOption: 'qa-attachment-source-option',
+        attachmentGlobalSection: 'qa-attachment-global-section',
+        attachmentPoolScroll: 'qa-attachment-pool-scroll',
+        attachmentFieldRows: 'qa-attachment-field-rows',
+        attachmentFieldRow: 'qa-attachment-field-row',
+        attachmentFieldHeader: 'qa-attachment-field-header',
+        attachmentFieldList: 'qa-attachment-field-list',
+        attachmentLinkBtn: 'qa-attachment-link-btn',
+        attachmentUsedFlag: 'qa-attachment-used-flag',
+        conflictModalOverlay: 'qa-conflict-modal-overlay',
+        conflictModal: 'qa-conflict-modal',
+        conflictModalActions: 'qa-conflict-modal-actions',
+        conflictModalBtn: 'qa-conflict-modal-btn',
         attachmentList: 'qa-attachment-list',
         attachmentItem: 'qa-attachment-item',
         attachmentOpen: 'qa-attachment-open',
+        attachmentPreview: 'qa-attachment-preview-img',
         attachmentName: 'qa-attachment-name',
         attachmentMeta: 'qa-attachment-meta',
         attachmentRemove: 'qa-attachment-remove',
@@ -49,12 +64,15 @@
         pillDismiss: 'qa-pill-dismiss',
         issues: 'qa-issues',
         issue: 'qa-issue',
+        outputPanel: 'qa-output-panel',
+        outputSummary: 'qa-output-summary',
         output: 'qa-output',
         dropdown: 'qa-dropdown',
         dropdownOpen: 'qa-dropdown-open',
         dropdownSearch: 'qa-dropdown-search',
         dropdownList: 'qa-dropdown-list',
         dropdownOption: 'qa-dropdown-option',
+        dropdownOptionActive: 'qa-dropdown-option-active',
         dropdownAdd: 'qa-dropdown-add',
         dropdownColor: 'qa-dropdown-color',
         dropdownMeta: 'qa-dropdown-meta',
@@ -87,11 +105,6 @@
         datePickerTimeHint: 'qa-date-picker-time-hint',
         datePickerWithTime: 'qa-date-picker-with-time',
         blockedInfo: 'qa-blocked-info',
-        blockedInfoAnchored: 'qa-blocked-info-anchored',
-        blockedInfoAnchorBelowStart: 'qa-blocked-info-anchor-below-start',
-        blockedInfoAnchorBelowEnd: 'qa-blocked-info-anchor-below-end',
-        blockedInfoAnchorAboveStart: 'qa-blocked-info-anchor-above-start',
-        blockedInfoAnchorAboveEnd: 'qa-blocked-info-anchor-above-end',
         blockedInfoIcon: 'qa-blocked-info-icon',
         blockedInfoText: 'qa-blocked-info-text',
         pillBlocked: 'qa-pill-blocked',
@@ -112,6 +125,7 @@
         enabled: false,
         autoParse: true,
         debounceMs: 1200,
+        timeoutMs: 20000,
         minInputLength: 10,
         preserveEditedEntries: true,
         separatorAware: false,
@@ -125,12 +139,17 @@
         systemPrompt: '',
         request: null,
         splitInput: null,
-        buildPrompt: null,
+        promptMode: 'default',
+        promptTemplate: '',
         parseResponse: null,
         inlinePillHarness: null,
         mockResponse: null,
         mockLatencyMs: 0,
-        experimental: {}
+        experimental: {},
+        outputType: '',
+        outputSchema: null,
+        webSearch: false,
+        tools: null
     };
 
     const DEFAULT_AI_EXPERIMENTAL_CONFIG = {
@@ -145,17 +164,19 @@
         entrySeparator: '\n',
         fieldTerminator: ';;',
         fieldTerminatorMode: 'strict', // strict | or-next-prefix | or-end
+        multiSelectSeparator: ',',
         escapeChar: '\\',
         fallbackField: 'title',
         showJsonOutput: true,
+        showDropdownOnTyping: true,
         showInlinePills: true,
         showEntryCards: true,
         showEntryHeader: true,
         showEntryPills: true,
         inputHeightMode: 'grow',
         inputMaxHeight: null,
-        allowEntryAttachments: false,
         allowMultipleAttachments: true,
+        allowAttachmentReuse: true,
         allowedAttachmentTypes: [],
         attachmentSources: null,
         autoDetectOptionsWithoutPrefix: false,
@@ -211,6 +232,8 @@
         merged.ai = Object.assign({}, DEFAULT_AI_CONFIG, merged.ai || {});
         merged.ai.experimental = Object.assign({}, DEFAULT_AI_EXPERIMENTAL_CONFIG, merged.ai.experimental || {});
         merged.classNames = Object.assign({}, DEFAULT_CLASSNAMES, merged.classNames || {});
+        merged.ai.webSearch = merged.ai.webSearch === true;
+        merged.ai.tools = normalizeAiToolsConfig(merged.ai.tools);
         if (typeof merged.allowedAttachmentTypes === 'string') {
             merged.allowedAttachmentTypes = merged.allowedAttachmentTypes
                 .split(',')
@@ -220,6 +243,14 @@
             merged.allowedAttachmentTypes = [];
         }
         merged.attachmentSources = normalizeAttachmentSources(merged.attachmentSources);
+        merged.multiSelectSeparator = String(merged.multiSelectSeparator === undefined ? ',' : merged.multiSelectSeparator);
+        merged.showDropdownOnTyping = merged.showDropdownOnTyping !== false;
+        if (merged.multiSelectSeparator === merged.fieldTerminator || merged.multiSelectSeparator === merged.entrySeparator) {
+            throw new Error('QuickAdd: multiSelectSeparator must differ from fieldTerminator and entrySeparator');
+        }
+        const promptMode = String(merged.ai.promptMode || 'default').toLowerCase();
+        merged.ai.promptMode = promptMode === 'custom' ? 'custom' : 'default';
+        merged.ai.promptTemplate = typeof merged.ai.promptTemplate === 'string' ? merged.ai.promptTemplate : '';
         const mode = String(merged.mode || '').toLowerCase();
         if (mode === 'ai' || merged.ai.enabled === true) {
             merged.mode = 'ai';
@@ -238,8 +269,8 @@
                 value: String(value),
                 label: String(option.label !== undefined ? option.label : value),
                 color: typeof option.color === 'string' ? option.color : null,
-                dependsOn: option.dependsOn !== undefined ? option.dependsOn : option.dependencies,
-                constraints: option.constraints !== undefined ? option.constraints : option.constraint
+                dependsOn: option.dependsOn || null,
+                constraints: option.constraints || null
             };
         }
         return {
@@ -256,14 +287,13 @@
             key: '',
             label: '',
             prefixes: [],
-            type: 'string', // string | number | options | date | datetime | boolean
-            enum: [],
+            type: 'string', // string | number | options | date | datetime | boolean | file
             options: [],
             required: false,
             multiple: false,
             naturalDate: false,
             allowDateOnly: true,
-            autoToday: false,
+            defaultValue: undefined,
             defaultTime: DEFAULT_DATETIME_TIME,
             timeFormat: '24h',
             color: null,
@@ -274,10 +304,6 @@
             dependsOn: undefined,
             constraints: undefined
         }, field || {});
-
-        if (normalized.type === 'enum') {
-            normalized.type = 'options';
-        }
 
         if (typeof normalized.exhaustive === 'boolean' && typeof normalized.allowCustom !== 'boolean') {
             normalized.allowCustom = !normalized.exhaustive;
@@ -291,10 +317,6 @@
             normalized.allowDateOnly = true;
         }
 
-        if (typeof normalized.autoToday !== 'boolean') {
-            normalized.autoToday = false;
-        }
-
         normalized.defaultTime = normalizeTime24(normalized.defaultTime, DEFAULT_DATETIME_TIME);
         normalized.timeFormat = String(normalized.timeFormat || '24h').toLowerCase() === 'ampm' ? 'ampm' : '24h';
 
@@ -302,9 +324,7 @@
     }
 
     function getFieldOptions(field) {
-        const source = Array.isArray(field.options) && field.options.length > 0
-            ? field.options
-            : (Array.isArray(field.enum) ? field.enum : []);
+        const source = Array.isArray(field.options) ? field.options : [];
         return source.map(normalizeOption);
     }
 
@@ -442,6 +462,10 @@
 
     function isDateFieldType(type) {
         return type === 'date' || type === 'datetime';
+    }
+
+    function isFileFieldType(type) {
+        return String(type || '').toLowerCase() === 'file';
     }
 
     function normalizeTime24(rawValue, fallbackValue) {
@@ -994,8 +1018,20 @@
         return { ok: false, error: `Invalid option for ${field.key}` };
     }
 
-    function parseByType(field, rawValue) {
+    function splitByMultiSeparator(rawValue, separator) {
+        const text = String(rawValue || '');
+        if (!separator) {
+            return text.split(',').map((item) => item.trim()).filter(Boolean);
+        }
+        return text
+            .split(separator)
+            .map((item) => item.trim())
+            .filter(Boolean);
+    }
+
+    function parseByType(field, rawValue, config) {
         const value = String(rawValue).trim();
+        const multiSelectSeparator = String((config && config.multiSelectSeparator) || ',');
 
         if (field.type === 'string') {
             return { ok: true, value };
@@ -1010,6 +1046,25 @@
         }
 
         if (field.type === 'options') {
+            if (field.multiple) {
+                const segments = Array.isArray(rawValue)
+                    ? rawValue.map((item) => String(item).trim()).filter(Boolean)
+                    : splitByMultiSeparator(value, multiSelectSeparator);
+                if (segments.length === 0) {
+                    return { ok: false, error: `Invalid option for ${field.key}` };
+                }
+                const parsedValues = [];
+                for (let i = 0; i < segments.length; i++) {
+                    const parsedOption = parseOption(field, segments[i]);
+                    if (!parsedOption.ok) {
+                        return parsedOption;
+                    }
+                    if (!parsedValues.some((item) => normValue(item) === normValue(parsedOption.value))) {
+                        parsedValues.push(parsedOption.value);
+                    }
+                }
+                return { ok: true, value: parsedValues };
+            }
             return parseOption(field, value);
         }
 
@@ -1025,7 +1080,34 @@
             return parseBoolean(value);
         }
 
+        if (isFileFieldType(field.type)) {
+            return { ok: true, value };
+        }
+
         return { ok: true, value };
+    }
+
+    function parseDefaultValueByType(field, config) {
+        if (!field || field.defaultValue === undefined || field.defaultValue === null || field.defaultValue === '') {
+            return { ok: false };
+        }
+        if (field.multiple) {
+            const rawValues = Array.isArray(field.defaultValue)
+                ? field.defaultValue
+                : splitByMultiSeparator(field.defaultValue, String((config && config.multiSelectSeparator) || ','));
+            const parsed = [];
+            for (let i = 0; i < rawValues.length; i++) {
+                const next = parseByType(Object.assign({}, field, { multiple: false }), rawValues[i], config);
+                if (!next.ok) {
+                    return { ok: false, error: next.error };
+                }
+                if (!parsed.some((item) => normValue(item) === normValue(next.value))) {
+                    parsed.push(next.value);
+                }
+            }
+            return parsed.length ? { ok: true, value: parsed } : { ok: false };
+        }
+        return parseByType(field, field.defaultValue, config);
     }
 
     function toValueArray(raw) {
@@ -1313,12 +1395,12 @@
             return { ok: true, reason: '' };
         }
         const context = { selfFieldKey: field.key, selfValue: parsedValue };
-        const fieldRule = field.dependsOn !== undefined ? field.dependsOn : field.dependencies;
+        const fieldRule = field.dependsOn;
         const fieldRuleResult = evaluateRuleSet(fieldRule, fields, context);
         if (!fieldRuleResult.ok) {
             return fieldRuleResult;
         }
-        const selfConstraints = field.constraints !== undefined ? field.constraints : field.constraint;
+        const selfConstraints = field.constraints;
         const selfRuleResult = evaluateRuleSet(selfConstraints, fields, context);
         if (!selfRuleResult.ok) {
             return selfRuleResult;
@@ -1331,7 +1413,7 @@
             if (!optionRuleResult.ok) {
                 return optionRuleResult;
             }
-            const optionConstraints = option && option.constraints !== undefined ? option.constraints : (option ? option.constraint : null);
+            const optionConstraints = option ? option.constraints : null;
             const optionConstraintResult = evaluateRuleSet(optionConstraints, fields, context);
             if (!optionConstraintResult.ok) {
                 return optionConstraintResult;
@@ -1365,7 +1447,7 @@
         }
     }
 
-    function applyDependencyConstraints(entry, normalizedSchema) {
+    function applyDependencyConstraints(entry, normalizedSchema, config) {
         entry.blocked = [];
         const blockedInferredIds = new Set();
         let blockedCount = 0;
@@ -1378,24 +1460,27 @@
             if (!field) {
                 return;
             }
-            const parsed = parseByType(field, token.value);
+            const parsed = parseByType(field, token.value, config);
             if (!parsed.ok) {
                 return;
             }
-            const allowed = evaluateFieldDependency(field, parsed.value, entry.fields);
-            if (allowed.ok) {
-                return;
-            }
-            removeFieldValueFromFields(entry.fields, field, token.key, parsed.value);
-            entry.blocked.push({
-                id: `blk_${entry.index}_${blockedCount++}`,
-                fieldKey: token.key,
-                value: parsed.value,
-                source: 'explicit',
-                tokenId: token.id,
-                reason: allowed.reason,
-                globalStart: token.globalStart,
-                globalEnd: token.globalEnd
+            const values = field.multiple && Array.isArray(parsed.value) ? parsed.value : [parsed.value];
+            values.forEach((nextParsedValue) => {
+                const allowed = evaluateFieldDependency(field, nextParsedValue, entry.fields);
+                if (allowed.ok) {
+                    return;
+                }
+                removeFieldValueFromFields(entry.fields, field, token.key, nextParsedValue);
+                entry.blocked.push({
+                    id: `blk_${entry.index}_${blockedCount++}`,
+                    fieldKey: token.key,
+                    value: nextParsedValue,
+                    source: 'explicit',
+                    tokenId: token.id,
+                    reason: allowed.reason,
+                    globalStart: token.globalStart,
+                    globalEnd: token.globalEnd
+                });
             });
         });
 
@@ -1439,16 +1524,17 @@
                 if (token.kind !== 'field' || !token.committed || token.key !== fieldKey || !token.value) {
                     continue;
                 }
-                const parsed = parseByType(field, token.value);
+                const parsed = parseByType(field, token.value, config);
                 if (!parsed.ok) {
                     continue;
                 }
-                const trialFields = Object.assign({}, entry.fields, { [fieldKey]: parsed.value });
-                const allowed = evaluateFieldDependency(field, parsed.value, trialFields);
+                const nextParsedValue = Array.isArray(parsed.value) ? parsed.value[0] : parsed.value;
+                const trialFields = Object.assign({}, entry.fields, { [fieldKey]: nextParsedValue });
+                const allowed = evaluateFieldDependency(field, nextParsedValue, trialFields);
                 if (!allowed.ok) {
                     continue;
                 }
-                entry.fields[fieldKey] = parsed.value;
+                entry.fields[fieldKey] = nextParsedValue;
                 break;
             }
         });
@@ -1772,17 +1858,27 @@
                 continue;
             }
 
-            const parsed = parseByType(field, cleanValue);
+            const parsed = parseByType(field, cleanValue, config);
             if (!parsed.ok) {
                 errors.push(parsed.error);
                 continue;
             }
 
-            appendFieldValue(fields, field, fieldKey, parsed.value);
+            if (field.multiple && Array.isArray(parsed.value)) {
+                parsed.value.forEach((item) => {
+                    appendFieldValue(fields, field, fieldKey, item);
+                });
+            } else {
+                appendFieldValue(fields, field, fieldKey, parsed.value);
+            }
             if (!explicitValues[fieldKey]) {
                 explicitValues[fieldKey] = [];
             }
-            explicitValues[fieldKey].push(parsed.value);
+            if (Array.isArray(parsed.value)) {
+                parsed.value.forEach((item) => explicitValues[fieldKey].push(item));
+            } else {
+                explicitValues[fieldKey].push(parsed.value);
+            }
         }
 
         const fallbackText = fallbackChunks.join(' ').trim();
@@ -1849,15 +1945,16 @@
                     : candidates;
 
                 selected.forEach((candidate) => {
-                    const parsed = parseByType(field, candidate.value);
+                    const parsed = parseByType(field, candidate.value, config);
                     if (!parsed.ok) {
                         return;
                     }
-                    appendFieldValue(fields, field, field.key, parsed.value);
+                    const parsedValue = Array.isArray(parsed.value) ? parsed.value[0] : parsed.value;
+                    appendFieldValue(fields, field, field.key, parsedValue);
                     inferred.push({
-                        id: `inf|${entryIndex}|${field.key}|${normValue(parsed.value)}`,
+                        id: `inf|${entryIndex}|${field.key}|${normValue(parsedValue)}`,
                         fieldKey: field.key,
-                        value: parsed.value,
+                        value: parsedValue,
                         label: candidate.label,
                         localStart: candidate.start,
                         localEnd: candidate.end,
@@ -1872,15 +1969,16 @@
 
             // Single-value fields: reduced => last mention, not reduced => first mention.
             const chosen = reduceInferred ? candidates[candidates.length - 1] : candidates[0];
-            const parsed = parseByType(field, chosen.value);
+            const parsed = parseByType(field, chosen.value, config);
             if (!parsed.ok) {
                 return;
             }
-            appendFieldValue(fields, field, field.key, parsed.value);
+            const parsedValue = Array.isArray(parsed.value) ? parsed.value[0] : parsed.value;
+            appendFieldValue(fields, field, field.key, parsedValue);
             inferred.push({
-                id: `inf|${entryIndex}|${field.key}|${normValue(parsed.value)}`,
+                id: `inf|${entryIndex}|${field.key}|${normValue(parsedValue)}`,
                 fieldKey: field.key,
-                value: parsed.value,
+                value: parsedValue,
                 label: chosen.label,
                 localStart: chosen.start,
                 localEnd: chosen.end,
@@ -1893,25 +1991,18 @@
 
         const autoFields = new Set();
         normalizedSchema.fields.forEach((field) => {
-            if (!field.autoToday) {
-                return;
-            }
             if (fields[field.key] !== undefined) {
                 return;
             }
-            if (field.type !== 'date' && field.type !== 'datetime') {
+            const parsedDefault = parseDefaultValueByType(field, config);
+            if (!parsedDefault.ok) {
                 return;
             }
-
-            const now = new Date();
-            let val = '';
-            if (field.type === 'date') {
-                val = toYMD(now);
+            if (field.multiple && Array.isArray(parsedDefault.value)) {
+                parsedDefault.value.forEach((item) => appendFieldValue(fields, field, field.key, item));
             } else {
-                val = `${toYMD(now)}T${normalizeTime24(field.defaultTime, DEFAULT_DATETIME_TIME)}`;
+                appendFieldValue(fields, field, field.key, parsedDefault.value);
             }
-
-            appendFieldValue(fields, field, field.key, val);
             autoFields.add(field.key);
         });
 
@@ -1931,7 +2022,7 @@
             isValid: true
         };
 
-        applyDependencyConstraints(entry, normalizedSchema);
+        applyDependencyConstraints(entry, normalizedSchema, config);
         return applyRequiredValidation(entry, normalizedSchema);
     }
 
@@ -1972,7 +2063,8 @@
             config: {
                 entrySeparator: config.entrySeparator,
                 fieldTerminator: config.fieldTerminator,
-                fieldTerminatorMode: config.fieldTerminatorMode
+                fieldTerminatorMode: config.fieldTerminatorMode,
+                multiSelectSeparator: config.multiSelectSeparator
             }
         };
     }
@@ -2028,7 +2120,23 @@
         return null;
     }
 
+    function normalizeAiToolsConfig(raw) {
+        if (raw === undefined || raw === null) {
+            return null;
+        }
+        if (Array.isArray(raw)) {
+            return raw.slice();
+        }
+        if (raw && typeof raw === 'object') {
+            return [Object.assign({}, raw)];
+        }
+        return null;
+    }
+
     function resolveMount(mount) {
+        if (typeof document === 'undefined' || typeof HTMLElement === 'undefined') {
+            throw new Error('QuickAdd: create() requires a browser DOM');
+        }
         if (!mount) {
             throw new Error('QuickAdd: mount is required');
         }
@@ -2057,6 +2165,7 @@
             requestSeq: 0,
             activeRequestSeq: 0,
             lastParsedInput: '',
+            lastAttemptedInput: '',
             entries: [],
             editedEntries: new Set(),
             deletedEntries: new Set(),
@@ -2064,24 +2173,26 @@
             warnings: [],
             missing: [],
             error: '',
+            errorKind: '',
+            callerRequest: null,
             providerRawResponse: ''
         };
-        this.aiQueueMemory = [];
+        this.aiInlineMarkIndex = {};
         this.lastResult = this.config.mode === 'ai'
             ? this.buildAIResult()
             : parseInput('', this.config);
         this.tokenMap = {};
         this.dismissedSelections = new Set();
-        this.attachmentsByEntry = new Map();
+        this.attachmentPool = [];
         this.attachmentCounter = 0;
+        this.attachmentSourceMenuState = null;
+        this.conflictModalState = null;
+        this.overlayDismissClickUntil = 0;
         this.dropdownState = null;
         this.datePickerState = null;
         this.datePickerSuppressUntil = 0;
         this.datePickerInternalClickUntil = 0;
         this.blockedInfoState = null;
-        this.blockedAnchorEl = null;
-        this.anchorSupportChecked = false;
-        this.anchorSupported = false;
         this.aiVerificationState = {
             status: 'idle',
             message: '',
@@ -2137,6 +2248,66 @@
         return typeof this.config.entrySeparator === 'string' && this.config.entrySeparator.length > 0;
     };
 
+    QuickAddComponent.prototype.isAIWebSearchEnabled = function isAIWebSearchEnabled() {
+        if (!this.isAiMode()) {
+            return false;
+        }
+        return !!(this.config.ai && this.config.ai.webSearch);
+    };
+
+    QuickAddComponent.prototype.normalizeAIToolsForProvider = function normalizeAIToolsForProvider(rawTools) {
+        return normalizeAiToolsConfig(rawTools);
+    };
+
+    QuickAddComponent.prototype.resolveAIProviderTools = function resolveAIProviderTools(providerRaw) {
+        const provider = String(providerRaw || '').toLowerCase();
+        const ai = this.config.ai || {};
+        const hasExplicitTools = ai.tools !== undefined && ai.tools !== null;
+        const configuredTools = this.normalizeAIToolsForProvider(ai.tools);
+        if (hasExplicitTools) {
+            return configuredTools || [];
+        }
+        if (!this.isAIWebSearchEnabled()) {
+            return null;
+        }
+        if (provider === 'openai') {
+            return [{ type: 'web_search' }];
+        }
+        if (provider === 'google') {
+            return [{ google_search: {} }];
+        }
+        if (provider === 'anthropic') {
+            return [{ type: 'web_search_20250305', name: 'web_search' }];
+        }
+        return null;
+    };
+
+    QuickAddComponent.prototype.hasOpenAIWebSearchTool = function hasOpenAIWebSearchTool(tools) {
+        if (!Array.isArray(tools)) {
+            return false;
+        }
+        return tools.some((tool) => {
+            const type = String(tool && tool.type ? tool.type : '').trim().toLowerCase();
+            return type === 'web_search'
+                || type === 'web_search_preview'
+                || type === 'web_search_2025_08_01';
+        });
+    };
+
+    QuickAddComponent.prototype.serializeAIProviderRawResponse = function serializeAIProviderRawResponse(raw) {
+        if (raw === undefined || raw === null) {
+            return '';
+        }
+        if (typeof raw === 'string') {
+            return raw;
+        }
+        try {
+            return JSON.stringify(raw);
+        } catch (err) {
+            return String(raw || '');
+        }
+    };
+
     QuickAddComponent.prototype.normalizeAIStatus = function normalizeAIStatus(rawStatus) {
         const status = String(rawStatus || '').trim().toLowerCase();
         if (!status) return 'Completed';
@@ -2162,12 +2333,16 @@
             return '';
         }
         const ai = this.config.ai || {};
+        const tools = this.normalizeAIToolsForProvider(ai.tools);
+        const toolsSignature = this.serializeAIProviderRawResponse(tools);
         return [
             String(ai.provider || ''),
             String(ai.apiKey || ''),
             String(ai.model || ''),
             String(ai.endpoint || ''),
-            ai.mockResponse === null ? 'live' : 'mock'
+            ai.mockResponse === null ? 'live' : 'mock',
+            ai.webSearch === true ? 'web-search-on' : 'web-search-off',
+            toolsSignature
         ].join('|');
     };
 
@@ -2225,13 +2400,29 @@
         const source = entry && typeof entry === 'object' ? entry : {};
         const normalized = Object.assign({}, source);
         normalized._id = keepId || source._id || this.makeAIEntryId(idx);
+        const fileFields = this.getFileFields();
 
         if (source.status !== undefined) {
             normalized.status = this.normalizeAIStatus(source.status);
         }
-        if (source.attachments !== undefined || source.attachmentRefs !== undefined) {
-            normalized.attachments = this.normalizeAIAttachmentRefs(source.attachments || source.attachmentRefs);
+        fileFields.forEach((field) => {
+            const raw = source[field.key];
+            if (raw === undefined || raw === null || raw === '') {
+                return;
+            }
+            if (field.multiple) {
+                normalized[field.key] = this.normalizeAIAttachmentRefs(raw);
+            } else {
+                normalized[field.key] = String(raw).trim();
+            }
+        });
+        if ((source.attachments !== undefined || source.attachmentRefs !== undefined) && fileFields.length > 0) {
+            const fallbackField = fileFields[0];
+            const refs = this.normalizeAIAttachmentRefs(source.attachments || source.attachmentRefs);
+            normalized[fallbackField.key] = fallbackField.multiple ? refs : (refs[0] || '');
         }
+        delete normalized.attachments;
+        delete normalized.attachmentRefs;
         if (source.confidence !== undefined) {
             normalized.confidence = Number.isFinite(Number(source.confidence)) ? Number(source.confidence) : 0;
         }
@@ -2346,37 +2537,100 @@
         if (!data || typeof data !== 'object') {
             return String(data || '');
         }
+        const responseMessage = Array.isArray(data.output)
+            ? data.output.find((item) => item && item.type === 'message')
+            : null;
+        const responseOutputText = responseMessage
+            && Array.isArray(responseMessage.content)
+            ? responseMessage.content.find((part) => part && part.type === 'output_text')?.text
+            : '';
         return (
             data.choices?.[0]?.message?.content
             || data.content?.[0]?.text
             || data.candidates?.[0]?.content?.parts?.[0]?.text
             || data.output_text
+            || responseOutputText
             || ''
         );
     };
 
-    QuickAddComponent.prototype.buildAIPrompt = async function buildAIPrompt(input) {
-        if (typeof this.config.ai.buildPrompt === 'function') {
-            return this.config.ai.buildPrompt(input, this.config, this);
+    QuickAddComponent.prototype.packAIProviderResponse = function packAIProviderResponse(rawData) {
+        return {
+            text: this.getAIResponseText(rawData),
+            raw: rawData
+        };
+    };
+
+    QuickAddComponent.prototype.getAIFetchTimeoutMs = function getAIFetchTimeoutMs() {
+        const raw = Number(this.config.ai && this.config.ai.timeoutMs);
+        if (!Number.isFinite(raw) || raw <= 0) {
+            return 20000;
         }
+        return Math.max(250, raw);
+    };
+
+    QuickAddComponent.prototype.fetchAI = async function fetchAI(url, options) {
+        if (typeof fetch !== 'function') {
+            throw new Error('Fetch API unavailable in this runtime');
+        }
+        const timeoutMs = this.getAIFetchTimeoutMs();
+        if (typeof AbortController === 'undefined' || timeoutMs <= 0) {
+            return fetch(url, options);
+        }
+        const controller = new AbortController();
+        const nextOptions = Object.assign({}, options || {}, { signal: controller.signal });
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+            return await fetch(url, nextOptions);
+        } catch (err) {
+            if (err && err.name === 'AbortError') {
+                throw new Error(`AI request timed out after ${timeoutMs}ms`);
+            }
+            throw err;
+        } finally {
+            clearTimeout(timer);
+        }
+    };
+
+    QuickAddComponent.prototype.buildAIPrompt = async function buildAIPrompt(input) {
+        const ai = this.config.ai || {};
         const fields = (this.normalizedSchema && Array.isArray(this.normalizedSchema.fields))
             ? this.normalizedSchema.fields
             : [];
         const schemaKeys = fields
             .map((field) => field && field.key)
             .filter(Boolean);
+        const fileFields = fields.filter((field) => field && isFileFieldType(field.type));
+        const attachmentRefs = (this.attachmentPool || []).map((item) => item.ref).filter(Boolean);
         const schemaHint = schemaKeys.join(', ');
-        const system = this.config.ai.systemPrompt
-            ? `${this.config.ai.systemPrompt}\n\n`
+        const system = ai.systemPrompt
+            ? `${ai.systemPrompt}\n\n`
             : '';
         const now = new Date();
         const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+        if (ai.promptMode === 'custom') {
+            const template = String(ai.promptTemplate || '');
+            if (!template.trim()) {
+                return String(input || '');
+            }
+            return template
+                .replace(/\{\{\s*input\s*\}\}/g, String(input || ''))
+                .replace(/\{\{\s*schemaKeys\s*\}\}/g, schemaHint)
+                .replace(/\{\{\s*currentDate\s*\}\}/g, now.toISOString().slice(0, 10))
+                .replace(/\{\{\s*timezone\s*\}\}/g, timezone);
+        }
         const separatorHint = this.isAISeparatorAwareEnabled()
             ? `\nInput may be one segment split by entrySeparator from a larger note. Parse only this segment independently.`
             : '';
         const spanHint = this.isAIInlinePillsEnabled() && schemaKeys.length
             ? `\nIf possible include \`spans\` per entry (0-based offsets relative to this input segment): [{"field":"${schemaKeys[0]}","value":"example","start":3,"end":7}].`
             : '';
+        const fileHint = fileFields.length
+            ? `\nFile fields:\n${fileFields.map((field) => `- ${field.key}: ${field.multiple ? 'multiple refs allowed' : 'single ref only'}`).join('\n')}`
+            : '';
+        const attachmentHint = attachmentRefs.length
+            ? `\nAvailable attachment refs: ${attachmentRefs.join(', ')}`
+            : '\nAvailable attachment refs: none';
         return `${system}You are an information extraction engine.\n` +
             `Output must be one valid JSON object only. No markdown. No prose. No code fences.\n` +
             `Current date: ${now.toISOString().slice(0, 10)}\n` +
@@ -2389,89 +2643,160 @@
             `- Keep unknown optional fields as null or empty string/array\n` +
             `- If multiple pets/events are present, create separate entries\n` +
             `- Put unresolved entities in "missing"\n` +
-            `- Put ambiguity/assumptions in "warnings"${separatorHint}${spanHint}\n` +
+            `- Put ambiguity/assumptions in "warnings"${separatorHint}${spanHint}${fileHint}${attachmentHint}\n` +
             `Input:\n${String(input || '')}`;
     };
 
     QuickAddComponent.prototype.callOpenAI = async function callOpenAI(apiKey, model, prompt) {
         const forceJson = this.config.ai.forceJson !== false;
-        const payload = {
-            model: model || 'gpt-4o-mini',
-            messages: [
-                { role: 'system', content: 'Return only valid JSON object output.' },
-                { role: 'user', content: prompt }
-            ],
-            temperature: Number(this.config.ai.temperature || 0.3)
-        };
-        if (forceJson) {
-            payload.response_format = { type: 'json_object' };
+        const outputType = String(this.config.ai.outputType || '').trim().toLowerCase();
+        const outputSchema = this.config.ai.outputSchema && typeof this.config.ai.outputSchema === 'object'
+            ? this.config.ai.outputSchema
+            : null;
+        const tools = this.resolveAIProviderTools('openai');
+        const useResponsesApi = this.hasOpenAIWebSearchTool(tools);
+        let res = null;
+
+        if (useResponsesApi) {
+            const payload = {
+                model: model || 'gpt-4o-mini',
+                input: prompt
+            };
+            if (tools && tools.length) {
+                payload.tools = tools;
+            }
+            if (forceJson && outputType === 'json_schema' && outputSchema) {
+                payload.text = {
+                    format: {
+                        type: 'json_schema',
+                        name: 'quickadd_schema',
+                        schema: outputSchema
+                    }
+                };
+            }
+            res = await this.fetchAI('https://api.openai.com/v1/responses', {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+        } else {
+            const payload = {
+                model: model || 'gpt-4o-mini',
+                messages: [
+                    { role: 'system', content: 'Return only valid JSON object output.' },
+                    { role: 'user', content: prompt }
+                ],
+                temperature: Number(this.config.ai.temperature || 0.3)
+            };
+            if (tools && tools.length) {
+                payload.tools = tools;
+            }
+            if (forceJson) {
+                payload.response_format = { type: outputType || 'json_object' };
+                if (outputSchema && payload.response_format.type === 'json_schema') {
+                    payload.response_format.json_schema = outputSchema;
+                }
+            }
+            res = await this.fetchAI('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
         }
-        const res = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${apiKey}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        });
+
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
             throw new Error(err.error?.message || `OpenAI API error: ${res.status}`);
         }
         const data = await res.json();
-        return this.getAIResponseText(data);
+        return this.packAIProviderResponse(data);
     };
 
     QuickAddComponent.prototype.callAnthropic = async function callAnthropic(apiKey, model, prompt) {
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
+        const payload = {
+            model: model || 'claude-3-haiku-20240307',
+            max_tokens: 2048,
+            system: 'Return one valid JSON object only. No markdown.',
+            messages: [{ role: 'user', content: prompt }]
+        };
+        const tools = this.resolveAIProviderTools('anthropic');
+        if (tools && tools.length) {
+            payload.tools = tools;
+        }
+        const headers = {
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'Content-Type': 'application/json'
+        };
+        const hasWebSearchTool = Array.isArray(tools) && tools.some((tool) => {
+            const type = String(tool && tool.type ? tool.type : '').trim().toLowerCase();
+            return type === 'web_search_20250305';
+        });
+        if (hasWebSearchTool) {
+            headers['anthropic-beta'] = 'web-search-2025-03-05';
+        }
+        const res = await this.fetchAI('https://api.anthropic.com/v1/messages', {
             method: 'POST',
-            headers: {
-                'x-api-key': apiKey,
-                'anthropic-version': '2023-06-01',
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                model: model || 'claude-3-haiku-20240307',
-                max_tokens: 2048,
-                system: 'Return one valid JSON object only. No markdown.',
-                messages: [{ role: 'user', content: prompt }]
-            })
+            headers,
+            body: JSON.stringify(payload)
         });
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
             throw new Error(err.error?.message || `Anthropic API error: ${res.status}`);
         }
         const data = await res.json();
-        return this.getAIResponseText(data);
+        return this.packAIProviderResponse(data);
     };
 
     QuickAddComponent.prototype.callGoogle = async function callGoogle(apiKey, model, prompt) {
-        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model || 'gemini-1.5-flash')}:generateContent?key=${encodeURIComponent(apiKey)}`;
+        const defaultModel = this.isAIWebSearchEnabled() ? 'gemini-2.5-flash' : 'gemini-1.5-flash';
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model || defaultModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
         const forceJson = this.config.ai.forceJson !== false;
         const generationConfig = { temperature: Number(this.config.ai.temperature || 0.3) };
+        const outputSchema = this.config.ai.outputSchema && typeof this.config.ai.outputSchema === 'object'
+            ? this.config.ai.outputSchema
+            : null;
         if (forceJson) {
             generationConfig.responseMimeType = 'application/json';
+            if (outputSchema) {
+                generationConfig.responseSchema = outputSchema;
+            }
         }
-        const res = await fetch(endpoint, {
+        const payload = {
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig
+        };
+        const tools = this.resolveAIProviderTools('google');
+        if (tools && tools.length) {
+            payload.tools = tools;
+        }
+        const res = await this.fetchAI(endpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig
-            })
+            body: JSON.stringify(payload)
         });
         if (!res.ok) {
             const err = await res.json().catch(() => ({}));
             throw new Error(err.error?.message || `Google API error: ${res.status}`);
         }
         const data = await res.json();
-        return this.getAIResponseText(data);
+        return this.packAIProviderResponse(data);
     };
 
     QuickAddComponent.prototype.callCustom = async function callCustom(endpoint, apiKey, model, prompt) {
         const forceJson = this.config.ai.forceJson !== false;
+        const outputType = String(this.config.ai.outputType || '').trim().toLowerCase();
+        const outputSchema = this.config.ai.outputSchema && typeof this.config.ai.outputSchema === 'object'
+            ? this.config.ai.outputSchema
+            : null;
         const payload = {
             model: model || 'default',
             messages: [
@@ -2480,10 +2805,17 @@
             ],
             temperature: Number(this.config.ai.temperature || 0.3)
         };
-        if (forceJson) {
-            payload.response_format = { type: 'json_object' };
+        const tools = this.resolveAIProviderTools('custom');
+        if (tools && tools.length) {
+            payload.tools = tools;
         }
-        const res = await fetch(endpoint, {
+        if (forceJson) {
+            payload.response_format = { type: outputType || 'json_object' };
+            if (outputSchema && payload.response_format.type === 'json_schema') {
+                payload.response_format.json_schema = outputSchema;
+            }
+        }
+        const res = await this.fetchAI(endpoint, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${apiKey}`,
@@ -2496,13 +2828,14 @@
             throw new Error(err.error?.message || `Custom API error: ${res.status}`);
         }
         const data = await res.json();
-        return this.getAIResponseText(data);
+        return this.packAIProviderResponse(data);
     };
 
     QuickAddComponent.prototype.callAIProvider = async function callAIProvider(input) {
         const ai = this.config.ai || {};
         const text = String(input || '').trim();
         if (!text) {
+            this.aiState.providerRawResponse = '';
             return this.normalizeAIResponse({ entries: [], missing: [], warnings: [] });
         }
         if (ai.mockResponse !== null && ai.mockResponse !== undefined) {
@@ -2513,6 +2846,7 @@
             const mock = (typeof ai.mockResponse === 'function')
                 ? await ai.mockResponse(text, this.config, this)
                 : ai.mockResponse;
+            this.aiState.providerRawResponse = this.serializeAIProviderRawResponse(mock);
             if (typeof mock === 'string' || (mock && typeof mock === 'object')) {
                 return this.parseAIResponse(mock);
             }
@@ -2526,10 +2860,14 @@
                 config: this.config,
                 component: this
             });
+            this.aiState.providerRawResponse = this.serializeAIProviderRawResponse(customResponse);
             if (typeof customResponse === 'string' || (customResponse && typeof customResponse === 'object')) {
                 return this.parseAIResponse(customResponse);
             }
             return this.normalizeAIResponse(customResponse);
+        }
+        if (this.isAIOffline()) {
+            throw new Error('Offline: AI provider request skipped');
         }
 
         const provider = String(ai.provider || '').toLowerCase();
@@ -2544,82 +2882,101 @@
         }
         const prompt = await this.buildAIPrompt(text);
 
-        let responseText = '';
+        let providerResponse = null;
         if (provider === 'openai') {
-            responseText = await this.callOpenAI(apiKey, model, prompt);
+            providerResponse = await this.callOpenAI(apiKey, model, prompt);
         } else if (provider === 'anthropic') {
-            responseText = await this.callAnthropic(apiKey, model, prompt);
+            providerResponse = await this.callAnthropic(apiKey, model, prompt);
         } else if (provider === 'google') {
-            responseText = await this.callGoogle(apiKey, model, prompt);
+            providerResponse = await this.callGoogle(apiKey, model, prompt);
         } else if (provider === 'custom') {
-            responseText = await this.callCustom(endpoint, apiKey, model, prompt);
+            providerResponse = await this.callCustom(endpoint, apiKey, model, prompt);
         } else {
             throw new Error(`Unknown AI provider: ${provider}`);
         }
 
-        this.aiState.providerRawResponse = String(responseText || '');
+        const responseText = providerResponse && typeof providerResponse === 'object' && Object.prototype.hasOwnProperty.call(providerResponse, 'text')
+            ? providerResponse.text
+            : providerResponse;
+        const responseRaw = providerResponse && typeof providerResponse === 'object' && Object.prototype.hasOwnProperty.call(providerResponse, 'raw')
+            ? providerResponse.raw
+            : providerResponse;
+        this.aiState.providerRawResponse = this.serializeAIProviderRawResponse(responseRaw);
         return this.parseAIResponse(responseText);
     };
 
-    QuickAddComponent.prototype.getAIQueueStorageKey = function getAIQueueStorageKey() {
-        const custom = String((this.config.ai && this.config.ai.queueStorageKey) || '').trim();
-        if (custom) {
-            return custom;
-        }
-        const mountId = this.mountEl && this.mountEl.id ? this.mountEl.id : 'quickadd';
-        return `quickadd_ai_queue_${mountId}`;
+    QuickAddComponent.prototype.buildAICallerRequest = function buildAICallerRequest(input) {
+        const rawInput = String(input || '');
+        const ai = this.config.ai || {};
+        const chunks = this.resolveAIInputChunks(rawInput).map((chunk) => ({
+            index: Number.isFinite(Number(chunk.index)) ? Number(chunk.index) : 0,
+            start: Number.isFinite(Number(chunk.start)) ? Number(chunk.start) : 0,
+            end: Number.isFinite(Number(chunk.end)) ? Number(chunk.end) : 0,
+            input: String(chunk.raw || '')
+        }));
+        return {
+            mode: 'ai',
+            input: rawInput,
+            chunks,
+            provider: String(ai.provider || ''),
+            model: String(ai.model || ''),
+            endpoint: String(ai.endpoint || ''),
+            temperature: Number(ai.temperature || 0.3),
+            forceJson: ai.forceJson !== false,
+            webSearch: ai.webSearch === true,
+            tools: this.normalizeAIToolsForProvider(ai.tools),
+            hasCustomRequest: typeof ai.request === 'function',
+            promptMode: String(ai.promptMode || 'default'),
+            hasCustomResponseParser: typeof ai.parseResponse === 'function'
+        };
     };
 
-    QuickAddComponent.prototype.readAIQueue = function readAIQueue() {
-        const key = this.getAIQueueStorageKey();
-        try {
-            if (typeof window !== 'undefined' && window.localStorage) {
-                const raw = window.localStorage.getItem(key);
-                if (!raw) return [];
-                const parsed = JSON.parse(raw);
-                return Array.isArray(parsed) ? parsed : [];
-            }
-        } catch (err) {
-            // Fallback to in-memory queue.
-        }
-        return Array.isArray(this.aiQueueMemory) ? this.aiQueueMemory.slice() : [];
-    };
+    QuickAddComponent.prototype.buildAIParseState = function buildAIParseState(rawInput) {
+        const input = String(rawInput || '');
+        const trimmed = input.trim();
+        const minInputLength = Math.max(0, Number(this.config.ai.minInputLength || 0));
+        const hasInput = trimmed.length > 0;
+        const offline = this.isAIOffline();
+        const belowMinLength = hasInput && trimmed.length < minInputLength;
+        const snapshotMatch = String(this.aiState.lastParsedInput || '') === input;
+        const attemptedForCurrentInput = String(this.aiState.lastAttemptedInput || '') === input;
+        const hasCurrentError = attemptedForCurrentInput && !!this.aiState.error;
 
-    QuickAddComponent.prototype.writeAIQueue = function writeAIQueue(items) {
-        const normalized = Array.isArray(items) ? items : [];
-        const key = this.getAIQueueStorageKey();
-        this.aiQueueMemory = normalized.slice();
-        try {
-            if (typeof window !== 'undefined' && window.localStorage) {
-                window.localStorage.setItem(key, JSON.stringify(normalized));
-            }
-        } catch (err) {
-            // Keep in-memory value only.
+        let status = 'stale';
+        if (!hasInput) {
+            status = 'idle';
+        } else if (belowMinLength) {
+            status = 'below-min-length';
+        } else if (this.aiState.isProcessing) {
+            status = 'processing';
+        } else if (hasCurrentError) {
+            status = this.aiState.errorKind === 'offline' ? 'offline' : 'error';
+        } else if (offline && !snapshotMatch) {
+            status = 'offline';
+        } else if (snapshotMatch) {
+            status = 'ready';
         }
-    };
 
-    QuickAddComponent.prototype.getAIPendingQueueCount = function getAIPendingQueueCount() {
-        return this.readAIQueue().filter((item) => item && item.status === 'pending').length;
-    };
+        const shouldParse = (
+            status === 'stale'
+            || status === 'error'
+        );
 
-    QuickAddComponent.prototype.enqueueAIInput = function enqueueAIInput(text) {
-        const value = String(text || '').trim();
-        if (!value) {
-            return false;
-        }
-        const queue = this.readAIQueue();
-        const exists = queue.some((item) => item && item.status === 'pending' && String(item.text || '').trim() === value);
-        if (exists) {
-            return false;
-        }
-        queue.push({
-            id: this.makeAIEntryId('queue'),
-            text: value,
-            status: 'pending',
-            createdAt: new Date().toISOString()
-        });
-        this.writeAIQueue(queue);
-        return true;
+        return {
+            status,
+            isReady: status === 'ready',
+            isProcessing: status === 'processing',
+            isStale: status === 'stale',
+            isOffline: status === 'offline',
+            shouldParse,
+            hasInput,
+            belowMinLength,
+            minInputLength,
+            currentInput: input,
+            lastParsedInput: String(this.aiState.lastParsedInput || ''),
+            error: hasCurrentError ? String(this.aiState.error || '') : '',
+            errorKind: hasCurrentError ? String(this.aiState.errorKind || 'error') : ''
+        };
     };
 
     QuickAddComponent.prototype.isLikelyNetworkError = function isLikelyNetworkError(error) {
@@ -2633,7 +2990,11 @@
             return true;
         }
         const msg = String(error.message || error);
-        return /network|offline|failed to fetch|econnrefused/i.test(msg);
+        return /network|offline|failed to fetch|econnrefused|timed out|abort/i.test(msg);
+    };
+
+    QuickAddComponent.prototype.isAIOffline = function isAIOffline() {
+        return typeof navigator !== 'undefined' && navigator && navigator.onLine === false;
     };
 
     QuickAddComponent.prototype.applyAIParseResult = function applyAIParseResult(result) {
@@ -2641,6 +3002,8 @@
         this.aiState.warnings = normalized.warnings;
         this.aiState.missing = normalized.missing;
         this.aiState.error = '';
+        this.aiState.errorKind = '';
+        this.aiState.callerRequest = null;
         this.mergeAIEntries(normalized.entries || []);
     };
 
@@ -2754,18 +3117,25 @@
         if (!this.isAiMode()) {
             return;
         }
-        const currentInput = String(this.inputText || this.readInputText() || '').trim();
+        const currentInput = String(this.inputText || this.readInputText() || '');
         const opts = options || {};
         const input = currentInput;
+        if (!opts.force && this.isAIOffline()) {
+            return;
+        }
         const minInputLength = Math.max(0, Number(this.config.ai.minInputLength || 0));
-        if (!input || (!opts.force && input.length < minInputLength)) {
+        const trimmedInput = input.trim();
+        if (!trimmedInput || (!opts.force && trimmedInput.length < minInputLength)) {
             return;
         }
 
         const requestId = ++this.aiState.requestSeq;
         this.aiState.activeRequestSeq = requestId;
         this.aiState.isProcessing = true;
+        this.aiState.lastAttemptedInput = input;
         this.aiState.error = '';
+        this.aiState.errorKind = '';
+        this.aiState.callerRequest = this.buildAICallerRequest(input);
         this.parseAndRender({ source: this.inputText, preserveSelection: true });
 
         try {
@@ -2780,75 +3150,13 @@
                 return;
             }
             this.aiState.error = err && err.message ? err.message : String(err || 'AI parse failed');
-            if (this.isLikelyNetworkError(err)) {
-                this.enqueueAIInput(input);
-            }
+            this.aiState.errorKind = this.isLikelyNetworkError(err) ? 'offline' : 'error';
         } finally {
             if (requestId === this.aiState.requestSeq) {
                 this.aiState.isProcessing = false;
             }
             this.parseAndRender({ source: this.inputText, preserveSelection: true });
         }
-    };
-
-    QuickAddComponent.prototype.queueCurrentInputForAI = function queueCurrentInputForAI() {
-        if (!this.isAiMode()) {
-            return false;
-        }
-        const queued = this.enqueueAIInput(this.inputText || this.readInputText());
-        this.parseAndRender({ source: this.inputText, preserveSelection: true });
-        return queued;
-    };
-
-    QuickAddComponent.prototype.processAIQueue = async function processAIQueue() {
-        if (!this.isAiMode()) {
-            return { processed: 0, failed: 0 };
-        }
-        const queue = this.readAIQueue();
-        const pending = queue.filter((item) => item && item.status === 'pending');
-        if (!pending.length) {
-            return { processed: 0, failed: 0 };
-        }
-        if (typeof navigator !== 'undefined' && navigator && navigator.onLine === false) {
-            this.aiState.error = 'Cannot process queue while offline.';
-            this.parseAndRender({ source: this.inputText, preserveSelection: true });
-            return { processed: 0, failed: pending.length };
-        }
-
-        this.aiState.isProcessing = true;
-        this.aiState.error = '';
-        this.parseAndRender({ source: this.inputText, preserveSelection: true });
-
-        let processed = 0;
-        let failed = 0;
-        const nextQueue = queue.slice();
-
-        for (let i = 0; i < nextQueue.length; i++) {
-            const item = nextQueue[i];
-            if (!item || item.status !== 'pending') {
-                continue;
-            }
-            try {
-                const result = await this.extractAIFromInput(item.text || '');
-                this.applyAIParseResult(result);
-                processed += 1;
-                nextQueue[i] = Object.assign({}, item, { status: 'completed', processedAt: new Date().toISOString() });
-            } catch (err) {
-                failed += 1;
-                nextQueue[i] = Object.assign({}, item, {
-                    status: 'pending',
-                    error: err && err.message ? err.message : String(err || 'Queue item failed')
-                });
-                if (this.isLikelyNetworkError(err)) {
-                    break;
-                }
-            }
-        }
-
-        this.writeAIQueue(nextQueue.filter((item) => item && item.status === 'pending'));
-        this.aiState.isProcessing = false;
-        this.parseAndRender({ source: this.inputText, preserveSelection: true });
-        return { processed, failed };
     };
 
     QuickAddComponent.prototype.clearAIEntries = function clearAIEntries() {
@@ -2859,6 +3167,9 @@
         this.aiState.warnings = [];
         this.aiState.missing = [];
         this.aiState.error = '';
+        this.aiState.errorKind = '';
+        this.aiState.callerRequest = null;
+        this.aiState.providerRawResponse = '';
     };
 
     QuickAddComponent.prototype.markAIEntryDeleted = function markAIEntryDeleted(entryId, deleted) {
@@ -2873,14 +3184,45 @@
     };
 
     QuickAddComponent.prototype.buildAIResult = function buildAIResult() {
+        const input = String(this.inputText || '');
+        const parseState = this.buildAIParseState(input);
+        const callerRequest = parseState.hasInput
+            ? (this.aiState.callerRequest && this.aiState.callerRequest.input === input
+                ? Object.assign({}, this.aiState.callerRequest)
+                : this.buildAICallerRequest(input))
+            : null;
+        const schemaFields = (this.normalizedSchema && Array.isArray(this.normalizedSchema.fields))
+            ? this.normalizedSchema.fields
+            : [];
         const entries = (this.aiState.entries || []).map((entry, idx) => {
             const deleted = this.aiState.deletedEntries.has(entry._id);
+            const entryFields = Object.assign({}, entry);
+            const autoFields = new Set();
+            schemaFields.forEach((field) => {
+                if (!field || !field.key) {
+                    return;
+                }
+                const current = entryFields[field.key];
+                const isEmpty = Array.isArray(current)
+                    ? current.length === 0
+                    : (current === undefined || current === null || current === '');
+                if (!isEmpty) {
+                    return;
+                }
+                const parsedDefault = parseDefaultValueByType(field, this.config);
+                if (!parsedDefault.ok) {
+                    return;
+                }
+                entryFields[field.key] = parsedDefault.value;
+                autoFields.add(field.key);
+            });
             return {
                 index: idx,
-                raw: this.inputText || '',
-                fields: Object.assign({}, entry),
+                raw: input,
+                fields: entryFields,
                 explicitValues: {},
                 inferred: [],
+                autoFields,
                 pending: [],
                 errors: [],
                 tokens: [],
@@ -2896,16 +3238,19 @@
         const validCount = entries.filter((entry) => entry.isValid).length;
         return {
             mode: 'ai',
-            input: this.inputText || '',
+            input,
             entries,
             entryCount: entries.length,
             validCount,
             invalidCount: Math.max(0, entries.length - validCount),
             warnings: this.aiState.warnings.slice(),
             missing: this.aiState.missing.slice(),
-            error: this.aiState.error || '',
+            error: parseState.error || '',
             isProcessing: !!this.aiState.isProcessing,
-            queueCount: this.getAIPendingQueueCount(),
+            providerRawResponse: String(this.aiState.providerRawResponse || ''),
+            parseState,
+            callerRequest,
+            parseRequest: callerRequest ? Object.assign({}, callerRequest) : null,
             verification: Object.assign({}, this.aiVerificationState)
         };
     };
@@ -2920,7 +3265,12 @@
         const c = this.config.classNames;
         const hint = this.config.hintText || this.defaultHintText();
         const outputBlock = this.config.showJsonOutput
-            ? `<pre class="${c.output}" data-role="output"></pre>`
+            ? `
+                <details class="${c.outputPanel}" data-role="outputPanel">
+                    <summary class="${c.outputSummary}">Parsed JSON</summary>
+                    <pre class="${c.output}" data-role="output"></pre>
+                </details>
+            `
             : '';
 
         this.mountEl.innerHTML = `
@@ -2945,6 +3295,10 @@
                 <div class="${c.dropdown}" data-role="dropdown" hidden>
                     <input class="${c.dropdownSearch}" data-role="dropdownSearch" type="text" placeholder="Filter options..." />
                     <div class="${c.dropdownList}" data-role="dropdownList"></div>
+                </div>
+                <div class="${c.attachmentSourceMenu}" data-role="attachmentSourceMenu" role="menu" aria-label="Attachment source" hidden></div>
+                <div class="${c.conflictModalOverlay}" data-role="conflictModalOverlay" hidden>
+                    <div class="${c.conflictModal}" data-role="conflictModal" role="dialog" aria-modal="true" aria-label="Attachment conflict"></div>
                 </div>
                 <div class="${c.datePicker}" data-role="datePicker" role="dialog" aria-modal="false" aria-label="Choose date" tabindex="-1" hidden>
                     <div class="${c.datePickerHeader}">
@@ -2973,6 +3327,9 @@
         this.dropdownEl = this.mountEl.querySelector('[data-role="dropdown"]');
         this.dropdownSearchEl = this.mountEl.querySelector('[data-role="dropdownSearch"]');
         this.dropdownListEl = this.mountEl.querySelector('[data-role="dropdownList"]');
+        this.attachmentSourceMenuEl = this.mountEl.querySelector('[data-role="attachmentSourceMenu"]');
+        this.conflictModalOverlayEl = this.mountEl.querySelector('[data-role="conflictModalOverlay"]');
+        this.conflictModalEl = this.mountEl.querySelector('[data-role="conflictModal"]');
         this.datePickerEl = this.mountEl.querySelector('[data-role="datePicker"]');
         this.datePickerTitleEl = this.mountEl.querySelector('[data-role="datePickerTitle"]');
         this.datePickerWeekdaysEl = this.mountEl.querySelector('[data-role="datePickerWeekdays"]');
@@ -3018,7 +3375,8 @@
     };
 
     QuickAddComponent.prototype.getDatePickerInitialDate = function getDatePickerInitialDate(token, field) {
-        const parsed = parseFieldDateValue(field, token.value || '');
+        const tokenValue = token && token.value !== undefined ? token.value : '';
+        const parsed = parseFieldDateValue(field, tokenValue || '');
         if (parsed.ok && parsed.dateValue) {
             const parsedDate = fromYMD(parsed.dateValue);
             if (parsedDate) {
@@ -3029,19 +3387,27 @@
     };
 
     QuickAddComponent.prototype.openDatePicker = function openDatePicker(options) {
-        if (!options || !options.token || !options.field) {
+        if (!options || !options.field) {
             return;
         }
         this.closeBlockedInfo();
         this.closeDropdown();
+        this.closeAttachmentSourceMenu();
         const defaultTime = normalizeTime24(options.field.defaultTime, DEFAULT_DATETIME_TIME);
-        const parsed = parseFieldDateValue(options.field, options.token.value || '');
+        const rawValue = options.token
+            ? options.token.value
+            : (options.value !== undefined
+                ? options.value
+                : (options.aiContext && options.aiContext.currentValue !== undefined
+                    ? options.aiContext.currentValue
+                    : ''));
+        const parsed = parseFieldDateValue(options.field, rawValue || '');
         const selectedValue = parsed.ok ? parsed.value : '';
         const selectedDateValue = parsed.ok && parsed.dateValue ? parsed.dateValue : '';
         const selectedTimeValue = parsed.ok && parsed.timeValue ? parsed.timeValue : defaultTime;
         this.datePickerState = {
             fieldKey: options.field.key,
-            tokenId: options.token.id,
+            tokenId: options.token && options.token.id ? options.token.id : '',
             entryIndex: options.entryIndex,
             anchorEl: options.anchorEl || null,
             fieldType: options.field.type,
@@ -3053,6 +3419,8 @@
             selectedValue,
             selectedDateValue,
             selectedTimeValue,
+            aiContext: options.aiContext || null,
+            sourceRegion: options.sourceRegion || 'inline',
             titleMenu: ''
         };
         this.renderDatePicker();
@@ -3265,7 +3633,7 @@
             right: window.innerWidth,
             bottom: window.innerHeight
         };
-        const isValidRect = (rect) => rect && (rect.right - rect.left) > 120 && (rect.bottom - rect.top) > 120;
+        const isValidRect = (rect) => rect && (rect.right - rect.left) > 24 && (rect.bottom - rect.top) > 24;
         const getClipAxes = (style) => {
             const overflowX = String(style.overflowX || style.overflow || '').toLowerCase();
             const overflowY = String(style.overflowY || style.overflow || '').toLowerCase();
@@ -3313,7 +3681,7 @@
             applyAncestors(this.mountEl.parentElement);
         }
 
-        return isValidRect(bounds) ? bounds : viewport;
+        return isValidRect(bounds) ? Object.assign({}, bounds) : viewport;
     };
 
     QuickAddComponent.prototype.positionDatePicker = function positionDatePicker(anchorEl) {
@@ -3377,6 +3745,35 @@
         this.datePickerEl.style.zIndex = '9999';
     };
 
+    QuickAddComponent.prototype.materializeEntryFieldToken = function materializeEntryFieldToken(entryIndex, fieldKey, value) {
+        if (this.isAiMode()) {
+            return null;
+        }
+        const entry = (this.lastResult.entries || []).find((item) => item.index === entryIndex);
+        const field = this.getFieldDefinition(fieldKey);
+        if (!entry || !field) {
+            return null;
+        }
+        const token = (entry.tokens || []).find((item) => item.kind === 'field' && item.key === fieldKey && normValue(item.value) === normValue(value));
+        if (token) {
+            return token;
+        }
+        const source = this.inputText || this.readInputText();
+        const prefix = (field.prefixes && field.prefixes[0]) ? field.prefixes[0] : `${field.key}:`;
+        const separator = String(this.config.fieldTerminator || '');
+        const insertAt = Math.max(0, Number(entry.globalEnd) || 0);
+        const beforeChar = source.charAt(Math.max(0, insertAt - 1));
+        const needsSpace = !!beforeChar && !/\s/.test(beforeChar);
+        const snippet = `${needsSpace ? ' ' : ''}${prefix}${value}${separator}`;
+        const updated = this.replaceRange(source, insertAt, insertAt, snippet);
+        this.parseAndRender({ source: updated, preserveSelection: true, skipTypingSync: true });
+        const nextEntry = (this.lastResult.entries || []).find((item) => item.index === entryIndex);
+        if (!nextEntry) {
+            return null;
+        }
+        return (nextEntry.tokens || []).filter((item) => item.kind === 'field' && item.key === fieldKey && item.committed).slice(-1)[0] || null;
+    };
+
     QuickAddComponent.prototype.applyDateSelection = function applyDateSelection(nextValue) {
         if (!this.datePickerState) {
             return;
@@ -3395,7 +3792,26 @@
         }
         this.datePickerState.selectedValue = commitValue;
 
-        const token = this.tokenMap[this.datePickerState.tokenId];
+        if (this.datePickerState.aiContext) {
+            const context = Object.assign({}, this.datePickerState.aiContext);
+            this.datePickerSuppressUntil = Date.now() + 150;
+            this.closeDatePicker();
+            this.applyAIFieldSelection({
+                entryId: context.entryId,
+                fieldKey: context.fieldKey,
+                currentValue: context.currentValue,
+                occurrence: context.occurrence,
+                mappingKey: context.mappingKey,
+                nextValue: commitValue,
+                sourceRegion: context.sourceRegion || this.datePickerState.sourceRegion
+            });
+            return;
+        }
+
+        let token = this.tokenMap[this.datePickerState.tokenId];
+        if (!token && this.datePickerState.sourceRegion === 'card') {
+            token = this.materializeEntryFieldToken(this.datePickerState.entryIndex, this.datePickerState.fieldKey, this.datePickerState.selectedValue || commitValue);
+        }
         if (!token) {
             this.closeDatePicker();
             return;
@@ -3411,9 +3827,15 @@
                 caret += terminator.length;
             }
         }
+        const sourceRegion = this.datePickerState && this.datePickerState.sourceRegion ? this.datePickerState.sourceRegion : 'inline';
         this.datePickerSuppressUntil = Date.now() + 150;
         this.closeDatePicker();
-        this.parseAndRender({ source: updated, caretOffset: caret, focusInput: true });
+        this.parseAndRender({
+            source: updated,
+            caretOffset: caret,
+            focusInput: sourceRegion !== 'card',
+            skipTypingSync: sourceRegion === 'card'
+        });
     };
 
     QuickAddComponent.prototype.bindEvents = function bindEvents() {
@@ -3422,6 +3844,7 @@
                 return;
             }
             this.closeDropdown();
+            this.closeAttachmentSourceMenu();
             this.closeBlockedInfo();
             this.closeDatePicker();
             if (this.timer) {
@@ -3429,13 +3852,16 @@
             }
             if (this.isAiMode()) {
                 this.inputText = this.readInputText();
-                this.lastResult = this.buildAIResult();
+                this.lastResult = this.syncEntryAttachmentMeta(this.buildAIResult());
                 if (typeof this.config.onParse === 'function') {
                     this.config.onParse(this.lastResult);
                 }
                 const autoParse = this.config.ai.autoParse !== false;
                 const threshold = Math.max(0, Number(this.config.ai.minInputLength || 0));
                 if (!autoParse) {
+                    return;
+                }
+                if (this.isAIOffline()) {
                     return;
                 }
                 const latest = String(this.inputText || this.readInputText() || '').trim();
@@ -3476,7 +3902,21 @@
         };
 
         this.onInputKeyDown = (event) => {
+            const isTypingDropdown = !!(this.dropdownState && this.dropdownState.source === 'typing' && !this.dropdownEl.hidden);
+            if (isTypingDropdown && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+                event.preventDefault();
+                this.moveDropdownActiveOption(event.key === 'ArrowDown' ? 1 : -1);
+                return;
+            }
             if (event.key === 'Enter') {
+                if (isTypingDropdown) {
+                    const active = this.dropdownState.activeOptionValue;
+                    if (active !== undefined && active !== null && active !== '') {
+                        event.preventDefault();
+                        this.applyDropdownSelection(active);
+                        return;
+                    }
+                }
                 event.preventDefault();
                 this.insertTextAtSelection('\n', { preferTokenBoundary: true });
             }
@@ -3527,6 +3967,21 @@
 
         this.onInputClick = (event) => {
             if (this.isAiMode()) {
+                const tailAi = event.target.closest('[data-qa-tail="1"]');
+                if (tailAi) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const sourceAi = this.inputText || this.readInputText();
+                    this.closeDropdown();
+                    this.setCaretOffset(sourceAi.length, true);
+                    return;
+                }
+                const aiPill = event.target.closest('[data-qa-pill="1"]');
+                if (aiPill) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.handlePillClick(aiPill);
+                }
                 return;
             }
             const blocked = event.target.closest('[data-qa-blocked="1"]');
@@ -3564,35 +4019,140 @@
         };
 
         this.onPreviewClick = (event) => {
-            const removeBtn = event.target.closest('[data-entry-attachment-remove="1"]');
+            const removeBtn = event.target.closest('[data-global-attachment-remove="1"]');
             if (removeBtn) {
                 event.preventDefault();
                 event.stopPropagation();
-                const entryId = removeBtn.getAttribute('data-entry-id');
-                const entryIndex = Number(removeBtn.getAttribute('data-entry-index'));
                 const attachmentId = removeBtn.getAttribute('data-attachment-id') || '';
-                const key = entryId || entryIndex;
-                if ((entryId || !Number.isNaN(entryIndex)) && attachmentId) {
-                    this.removeEntryAttachment(key, attachmentId);
+                if (attachmentId) {
+                    this.removeGlobalAttachment(attachmentId, false);
                 }
                 return;
             }
 
-            const openBtn = event.target.closest('[data-entry-attachment-open="1"]');
+            const fieldRemoveBtn = event.target.closest('[data-field-attachment-remove="1"]');
+            if (fieldRemoveBtn) {
+                event.preventDefault();
+                event.stopPropagation();
+                const entryKeyRaw = fieldRemoveBtn.getAttribute('data-entry-key');
+                const entryKeyNum = Number(entryKeyRaw);
+                const entryKey = Number.isNaN(entryKeyNum) ? entryKeyRaw : entryKeyNum;
+                const fieldKey = fieldRemoveBtn.getAttribute('data-file-field-key') || '';
+                const ref = fieldRemoveBtn.getAttribute('data-attachment-ref') || '';
+                if (fieldKey && ref !== '') {
+                    this.removeAttachmentFromEntryField(entryKey, fieldKey, ref);
+                }
+                return;
+            }
+
+            const openBtn = event.target.closest('[data-attachment-open="1"]');
             if (openBtn) {
                 event.preventDefault();
                 event.stopPropagation();
-                const entryId = openBtn.getAttribute('data-entry-id');
-                const entryIndex = Number(openBtn.getAttribute('data-entry-index'));
                 const attachmentId = openBtn.getAttribute('data-attachment-id') || '';
-                const key = entryId || entryIndex;
-                if ((entryId || !Number.isNaN(entryIndex)) && attachmentId) {
-                    this.openEntryAttachment(key, attachmentId);
+                if (attachmentId) {
+                    this.openAttachment(attachmentId);
                 }
+                return;
+            }
+
+            const entryLinkBtn = event.target.closest('[data-entry-file-link="1"]');
+            if (entryLinkBtn) {
+                event.preventDefault();
+                event.stopPropagation();
+                const fieldKey = entryLinkBtn.getAttribute('data-file-field-key') || '';
+                const field = this.getFieldDefinition(fieldKey);
+                if (!field || !isFileFieldType(field.type)) {
+                    return;
+                }
+                const entryId = entryLinkBtn.getAttribute('data-entry-id');
+                const entryIndex = Number(entryLinkBtn.getAttribute('data-entry-index'));
+                const entryKey = entryId || (Number.isNaN(entryIndex) ? '' : entryIndex);
+                if (entryKey === '') {
+                    return;
+                }
+                const options = this.getDropdownOptionsForField(field, entryKey, fieldKey);
+                if (!options.length) {
+                    return;
+                }
+                this.dropdownState = {
+                    fieldKey,
+                    fieldType: field.type,
+                    tokenId: '',
+                    entryIndex: Number.isFinite(Number(entryIndex)) ? Number(entryIndex) : 0,
+                    entryKey,
+                    currentValue: '',
+                    allowCustom: false,
+                    options,
+                    sourceRegion: 'card',
+                    anchorRect: entryLinkBtn.getBoundingClientRect(),
+                    anchorEl: entryLinkBtn,
+                    source: 'click',
+                    activeOptionValue: null,
+                    filteredOptions: [],
+                    activateFirstOnOpen: true,
+                    keepActiveWhenFiltering: false
+                };
+                if (this.timer) {
+                    clearTimeout(this.timer);
+                    this.timer = null;
+                }
+                this.dropdownSearchEl.hidden = false;
+                this.dropdownSearchEl.value = '';
+                this.renderDropdownList();
+                this.positionDropdown(entryLinkBtn);
+                this.dropdownEl.hidden = false;
+                this.dropdownEl.classList.add(this.config.classNames.dropdownOpen);
+                this.scrollDropdownActiveOptionIntoView();
+                this.dropdownSearchEl.focus();
+                return;
+            }
+
+            const pickerToggle = event.target.closest('[data-entry-attachment-picker-toggle="1"]');
+            if (pickerToggle) {
+                event.preventDefault();
+                event.stopPropagation();
+                const sources = normalizeAttachmentSources(pickerToggle.getAttribute('data-attachment-sources')) || [];
+                if (!sources.length) {
+                    return;
+                }
+                const labelBySource = {
+                    camera: 'Camera',
+                    gallery: 'Gallery',
+                    files: 'Files'
+                };
+                const items = sources.map((source) => {
+                    const inputId = pickerToggle.getAttribute(`data-attachment-${source}-input`) || '';
+                    return {
+                        source,
+                        inputId,
+                        label: labelBySource[source] || source
+                    };
+                }).filter((item) => item.inputId);
+                if (!items.length) {
+                    return;
+                }
+                if (
+                    this.attachmentSourceMenuState
+                    && this.attachmentSourceMenuState.anchorEl === pickerToggle
+                    && this.attachmentSourceMenuEl
+                    && !this.attachmentSourceMenuEl.hidden
+                ) {
+                    this.closeAttachmentSourceMenu();
+                    return;
+                }
+                this.openAttachmentSourceMenu(pickerToggle, items);
                 return;
             }
 
             if (this.isAiMode()) {
+                const aiPill = event.target.closest('[data-qa-pill="1"]');
+                if (aiPill) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.handlePillClick(aiPill);
+                    return;
+                }
                 const actionEl = event.target.closest('[data-ai-action]');
                 if (!actionEl) {
                     return;
@@ -3603,14 +4163,6 @@
                 const entryId = actionEl.getAttribute('data-ai-entry-id') || '';
                 if (action === 'parse-now') {
                     this.parseAI({ force: true });
-                    return;
-                }
-                if (action === 'queue-input') {
-                    this.queueCurrentInputForAI();
-                    return;
-                }
-                if (action === 'process-queue') {
-                    this.processAIQueue();
                     return;
                 }
                 if (action === 'clear-entries') {
@@ -3644,12 +4196,16 @@
                                 return;
                             }
                             const raw = String(node.value || '').trim();
-                            if (field.key === 'attachments') {
-                                targetEntry[field.key] = this.normalizeAIAttachmentRefs(raw);
-                                return;
-                            }
                             if (field.key === 'status') {
                                 targetEntry[field.key] = this.normalizeAIStatus(raw);
+                                return;
+                            }
+                            if (isFileFieldType(field.type)) {
+                                if (field.multiple) {
+                                    targetEntry[field.key] = this.normalizeAIAttachmentRefs(raw);
+                                } else {
+                                    targetEntry[field.key] = raw;
+                                }
                                 return;
                             }
                             if (field.type === 'number') {
@@ -3658,9 +4214,10 @@
                                 return;
                             }
                             if (field.multiple) {
-                                targetEntry[field.key] = raw
-                                    ? raw.split(/[,\n]+/).map((item) => item.trim()).filter(Boolean)
+                                const parsedMulti = raw
+                                    ? splitByMultiSeparator(raw, String(this.config.multiSelectSeparator || ','))
                                     : [];
+                                targetEntry[field.key] = parsedMulti;
                                 return;
                             }
                             targetEntry[field.key] = raw;
@@ -3862,21 +4419,73 @@
         };
 
         this.onPreviewChange = (event) => {
-            const input = event.target.closest('[data-entry-attachment-input="1"]');
+            const input = event.target.closest('[data-global-attachment-input="1"]');
             if (!input || !input.files) {
                 return;
             }
-            const entryIndex = Number(input.getAttribute('data-entry-index'));
-            if (Number.isNaN(entryIndex)) {
-                input.value = '';
-                return;
-            }
-            this.addEntryAttachments(entryIndex, Array.from(input.files));
+            this.closeAttachmentSourceMenu();
+            this.addGlobalAttachments(Array.from(input.files));
             input.value = '';
         };
 
+        this.onAttachmentSourceMenuClick = (event) => {
+            const optionBtn = event.target.closest('[data-entry-attachment-source-option="1"]');
+            if (!optionBtn) {
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            const inputId = optionBtn.getAttribute('data-attachment-input-id') || '';
+            const input = inputId ? document.getElementById(inputId) : null;
+            this.closeAttachmentSourceMenu();
+            if (input && typeof input.click === 'function') {
+                input.click();
+            }
+        };
+
+        this.onConflictModalClick = (event) => {
+            const targetEl = eventTargetElement(event);
+            if (!targetEl || !this.conflictModalState) {
+                return;
+            }
+            const actionBtn = targetEl.closest('[data-conflict-action]');
+            if (!actionBtn) {
+                if (this.conflictModalEl && !this.conflictModalEl.contains(targetEl)) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.handleConflictModalAction('cancel');
+                }
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            this.handleConflictModalAction(actionBtn.getAttribute('data-conflict-action') || 'cancel');
+        };
+
         this.onDropdownInput = () => {
+            if (this.dropdownState) {
+                this.dropdownState.activeOptionValue = null;
+                this.dropdownState.keepActiveWhenFiltering = false;
+            }
             this.renderDropdownList();
+        };
+
+        this.onDropdownSearchKeyDown = (event) => {
+            if (!this.dropdownState) {
+                return;
+            }
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                this.moveDropdownActiveOption(event.key === 'ArrowDown' ? 1 : -1);
+                return;
+            }
+            if (event.key === 'Enter') {
+                const active = this.dropdownState.activeOptionValue;
+                if (active !== undefined && active !== null && active !== '') {
+                    event.preventDefault();
+                    this.applyDropdownSelection(active);
+                }
+            }
         };
 
         this.onDropdownListClick = (event) => {
@@ -3893,12 +4502,51 @@
             if (!targetEl) {
                 return;
             }
+            if (this.conflictModalState && this.conflictModalOverlayEl && !this.conflictModalOverlayEl.hidden) {
+                const insideConflict = this.conflictModalEl && this.conflictModalEl.contains(targetEl);
+                if (!insideConflict) {
+                    this.handleConflictModalAction('cancel');
+                    event.stopPropagation();
+                    event.preventDefault();
+                    return;
+                }
+                event.stopPropagation();
+                return;
+            }
+            if (this.attachmentSourceMenuEl && !this.attachmentSourceMenuEl.hidden) {
+                const insideMenu = this.attachmentSourceMenuEl.contains(targetEl);
+                const onToggle = !!targetEl.closest('[data-entry-attachment-picker-toggle="1"]');
+                if (!insideMenu && !onToggle) {
+                    this.closeAttachmentSourceMenu();
+                    event.stopPropagation();
+                    event.preventDefault();
+                    return;
+                }
+            }
             if (this.datePickerEl && !this.datePickerEl.hidden) {
                 if (Date.now() < this.datePickerInternalClickUntil) {
                     return;
                 }
                 if (!this.datePickerEl.contains(targetEl) && !targetEl.closest('[data-qa-date-pill="1"]')) {
                     this.closeDatePicker();
+                    event.stopPropagation();
+                    event.preventDefault();
+                    return;
+                }
+            }
+            if (this.dropdownEl && !this.dropdownEl.hidden) {
+                if (!this.dropdownEl.contains(targetEl) && !targetEl.closest('[data-qa-pill="1"]')) {
+                    this.closeDropdown();
+                    event.stopPropagation();
+                    event.preventDefault();
+                    return;
+                }
+            }
+            if (this.blockedInfoEl && !this.blockedInfoEl.hidden) {
+                if (!this.blockedInfoEl.contains(targetEl) && !targetEl.closest('[data-qa-blocked="1"]')) {
+                    this.closeBlockedInfo();
+                    event.stopPropagation();
+                    event.preventDefault();
                 }
             }
         };
@@ -3907,6 +4555,25 @@
             const targetEl = eventTargetElement(event);
             if (!targetEl) {
                 return;
+            }
+            if (this.conflictModalState && this.conflictModalOverlayEl && !this.conflictModalOverlayEl.hidden) {
+                if (this.conflictModalEl && this.conflictModalEl.contains(targetEl)) {
+                    return;
+                }
+                event.stopPropagation();
+                event.preventDefault();
+                return;
+            }
+            if (this.attachmentSourceMenuEl && !this.attachmentSourceMenuEl.hidden) {
+                if (
+                    !this.attachmentSourceMenuEl.contains(targetEl)
+                    && !targetEl.closest('[data-entry-attachment-picker-toggle="1"]')
+                ) {
+                    this.closeAttachmentSourceMenu();
+                    event.stopPropagation();
+                    event.preventDefault();
+                    return;
+                }
             }
             if (this.blockedInfoEl && !this.blockedInfoEl.hidden) {
                 if (!this.blockedInfoEl.contains(targetEl) && !targetEl.closest('[data-qa-blocked="1"]')) {
@@ -3933,6 +4600,38 @@
         };
 
         this.onDocumentKeyDown = (event) => {
+            if (event.key === 'Escape') {
+                if (this.conflictModalState) {
+                    this.handleConflictModalAction('cancel');
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
+                if (this.attachmentSourceMenuState) {
+                    this.closeAttachmentSourceMenu();
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
+                if (this.dropdownState) {
+                    this.closeDropdown();
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
+                if (this.blockedInfoState) {
+                    this.closeBlockedInfo();
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
+                if (this.datePickerState) {
+                    this.closeDatePicker();
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
+            }
             if (event.key === 'Escape' && this.dropdownState) {
                 this.closeDropdown();
             }
@@ -3942,6 +4641,12 @@
             if (event.key === 'Escape' && this.datePickerState) {
                 event.preventDefault();
                 this.closeDatePicker();
+            }
+            if (
+                event.key === 'Enter'
+                && (this.dropdownState || this.datePickerState || this.attachmentSourceMenuState || this.blockedInfoState)
+            ) {
+                event.stopPropagation();
             }
         };
 
@@ -3956,13 +4661,18 @@
         this.previewEl.addEventListener('click', this.onPreviewClick);
         this.previewEl.addEventListener('change', this.onPreviewChange);
         this.dropdownSearchEl.addEventListener('input', this.onDropdownInput);
+        this.dropdownSearchEl.addEventListener('keydown', this.onDropdownSearchKeyDown);
         this.dropdownListEl.addEventListener('click', this.onDropdownListClick);
+        this.attachmentSourceMenuEl.addEventListener('click', this.onAttachmentSourceMenuClick);
+        if (this.conflictModalOverlayEl) {
+            this.conflictModalOverlayEl.addEventListener('click', this.onConflictModalClick);
+        }
         this.datePickerEl.addEventListener('click', this.onDatePickerClick);
         this.datePickerEl.addEventListener('change', this.onDatePickerChange);
         this.datePickerEl.addEventListener('keydown', this.onDatePickerKeyDown);
         document.addEventListener('pointerdown', this.onDocumentPointerDown, true);
-        document.addEventListener('click', this.onDocumentClick);
-        document.addEventListener('keydown', this.onDocumentKeyDown);
+        document.addEventListener('click', this.onDocumentClick, true);
+        document.addEventListener('keydown', this.onDocumentKeyDown, true);
     };
 
     QuickAddComponent.prototype.unbindEvents = function unbindEvents() {
@@ -3999,8 +4709,17 @@
         if (this.dropdownSearchEl && this.onDropdownInput) {
             this.dropdownSearchEl.removeEventListener('input', this.onDropdownInput);
         }
+        if (this.dropdownSearchEl && this.onDropdownSearchKeyDown) {
+            this.dropdownSearchEl.removeEventListener('keydown', this.onDropdownSearchKeyDown);
+        }
         if (this.dropdownListEl && this.onDropdownListClick) {
             this.dropdownListEl.removeEventListener('click', this.onDropdownListClick);
+        }
+        if (this.attachmentSourceMenuEl && this.onAttachmentSourceMenuClick) {
+            this.attachmentSourceMenuEl.removeEventListener('click', this.onAttachmentSourceMenuClick);
+        }
+        if (this.conflictModalOverlayEl && this.onConflictModalClick) {
+            this.conflictModalOverlayEl.removeEventListener('click', this.onConflictModalClick);
         }
         if (this.datePickerEl && this.onDatePickerClick) {
             this.datePickerEl.removeEventListener('click', this.onDatePickerClick);
@@ -4012,8 +4731,8 @@
             this.datePickerEl.removeEventListener('keydown', this.onDatePickerKeyDown);
         }
         document.removeEventListener('pointerdown', this.onDocumentPointerDown, true);
-        document.removeEventListener('click', this.onDocumentClick);
-        document.removeEventListener('keydown', this.onDocumentKeyDown);
+        document.removeEventListener('click', this.onDocumentClick, true);
+        document.removeEventListener('keydown', this.onDocumentKeyDown, true);
     };
 
     QuickAddComponent.prototype.rebuildTokenMap = function rebuildTokenMap(result) {
@@ -4357,6 +5076,7 @@
             : (preserveCaret ? this.getCaretOffset() : null);
 
         if (!raw) {
+            this.aiInlineMarkIndex = {};
             this.isRenderingInput = true;
             this.inputEl.innerHTML = '';
             this.isRenderingInput = false;
@@ -4435,10 +5155,48 @@
         return null;
     };
 
+    QuickAddComponent.prototype.buildAIInlineMappingBaseKey = function buildAIInlineMappingBaseKey(entryId, fieldKey, value) {
+        const normalized = Array.isArray(value) ? value.join('|') : normValue(value);
+        return `${String(entryId || '')}|${String(fieldKey || '')}|${normalized}`;
+    };
+
+    QuickAddComponent.prototype.buildAIInlineMappingKey = function buildAIInlineMappingKey(entryId, fieldKey, value, occurrence) {
+        const base = this.buildAIInlineMappingBaseKey(entryId, fieldKey, value);
+        const count = Math.max(0, Number.isFinite(Number(occurrence)) ? Number(occurrence) : 0);
+        return `${base}|${count}`;
+    };
+
+    QuickAddComponent.prototype.indexAIInlineMarks = function indexAIInlineMarks(marks) {
+        const index = {};
+        const occurrenceMap = {};
+        (Array.isArray(marks) ? marks : []).forEach((mark) => {
+            if (!mark || !mark.explicit || !mark.entryId || !mark.fieldKey) {
+                return;
+            }
+            const base = this.buildAIInlineMappingBaseKey(mark.entryId, mark.fieldKey, mark.value);
+            const occurrence = occurrenceMap[base] || 0;
+            occurrenceMap[base] = occurrence + 1;
+            const key = `${base}|${occurrence}`;
+            mark.occurrence = occurrence;
+            mark.mappingKey = key;
+            index[key] = {
+                entryId: String(mark.entryId || ''),
+                fieldKey: String(mark.fieldKey || ''),
+                value: mark.value,
+                occurrence,
+                start: Number(mark.start),
+                end: Number(mark.end)
+            };
+        });
+        this.aiInlineMarkIndex = index;
+        return index;
+    };
+
     QuickAddComponent.prototype.buildAIInlineMarks = function buildAIInlineMarks() {
         const marks = [];
         const raw = String(this.inputText || '');
         if (!raw) {
+            this.aiInlineMarkIndex = {};
             return marks;
         }
 
@@ -4451,7 +5209,7 @@
                 component: this
             });
             if (Array.isArray(custom)) {
-                return custom
+                const customMarks = custom
                     .map((item) => {
                         const mark = item && typeof item === 'object' ? item : {};
                         const start = Number(mark.start);
@@ -4462,17 +5220,24 @@
                         if (start < 0 || end > raw.length) {
                             return null;
                         }
+                        const fieldKey = mark.fieldKey || mark.field || '';
+                        const entryId = mark.entryId || mark.entry || '';
+                        const explicit = mark.explicit === true || (!!entryId && !!fieldKey);
                         return {
                             start,
                             end,
                             label: String(mark.label || raw.slice(start, end)),
                             inferred: mark.inferred !== false,
-                            fieldKey: mark.fieldKey || mark.field || '',
+                            explicit,
+                            entryId: entryId ? String(entryId) : '',
+                            fieldKey: String(fieldKey || ''),
                             value: mark.value
                         };
                     })
                     .filter(Boolean)
                     .sort((a, b) => a.start - b.start || a.end - b.end);
+                this.indexAIInlineMarks(customMarks);
+                return customMarks;
             }
         }
 
@@ -4486,29 +5251,38 @@
         entries.forEach((entry, idx) => {
             const sourceStart = Number.isFinite(Number(entry._sourceStart)) ? Number(entry._sourceStart) : 0;
             const sourceEnd = Number.isFinite(Number(entry._sourceEnd)) ? Number(entry._sourceEnd) : raw.length;
+            const entryId = String(entry._id || '');
 
             if (Array.isArray(entry.spans) && entry.spans.length) {
                 entry.spans.forEach((span) => {
-                    const start = Number(span && span.start);
-                    const end = Number(span && span.end);
-                    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+                    const fieldKey = String((span && span.field) || '');
+                    const spanValue = span && span.value !== undefined ? span.value : '';
+                    let start = Number(span && span.start);
+                    let end = Number(span && span.end);
+                    let hasRange = Number.isFinite(start) && Number.isFinite(end) && end > start && start >= 0 && end <= raw.length;
+                    let range = null;
+                    if (hasRange) {
+                        const overlaps = usedRanges.some((item) => start < item.end && end > item.start);
+                        if (!overlaps) {
+                            range = { start, end };
+                        }
+                    }
+                    if (!range && spanValue !== '') {
+                        range = this.findInlineRangeCaseInsensitive(raw, spanValue, sourceStart, sourceEnd, usedRanges);
+                    }
+                    if (!range) {
                         return;
                     }
-                    if (start < 0 || end > raw.length) {
-                        return;
-                    }
-                    const overlaps = usedRanges.some((range) => start < range.end && end > range.start);
-                    if (overlaps) {
-                        return;
-                    }
-                    usedRanges.push({ start, end });
+                    usedRanges.push({ start: range.start, end: range.end });
                     marks.push({
-                        start,
-                        end,
-                        label: `${span.field || 'field'}: ${span.value || raw.slice(start, end)}`,
+                        start: range.start,
+                        end: range.end,
+                        label: `${fieldKey || 'field'}: ${spanValue || raw.slice(range.start, range.end)}`,
                         inferred: true,
-                        fieldKey: span.field || '',
-                        value: span.value
+                        explicit: !!entryId && !!fieldKey,
+                        entryId,
+                        fieldKey,
+                        value: spanValue
                     });
                 });
                 return;
@@ -4536,6 +5310,8 @@
                     end: range.end,
                     label: `${candidate.key}: ${candidate.value}`,
                     inferred: true,
+                    explicit: false,
+                    entryId,
                     fieldKey: candidate.key,
                     value: candidate.value
                 });
@@ -4561,6 +5337,8 @@
                             end: segmentEnd,
                             label: `entry ${idx + 1}`,
                             inferred: true,
+                            explicit: false,
+                            entryId,
                             fieldKey: '',
                             value: ''
                         });
@@ -4570,6 +5348,7 @@
         });
 
         marks.sort((a, b) => a.start - b.start || a.end - b.end);
+        this.indexAIInlineMarks(marks);
         return marks;
     };
 
@@ -4595,6 +5374,7 @@
 
         const isSnapshotMatch = String(this.aiState.lastParsedInput || '') === raw;
         if (!this.isAIInlinePillsEnabled() || !isSnapshotMatch) {
+            this.aiInlineMarkIndex = {};
             this.isRenderingInput = true;
             this.inputEl.innerHTML = `<span class="${c.inlineText}">${escHtml(raw)}</span>`;
             this.isRenderingInput = false;
@@ -4606,6 +5386,7 @@
 
         const marks = this.buildAIInlineMarks();
         if (!marks.length) {
+            this.aiInlineMarkIndex = {};
             this.isRenderingInput = true;
             this.inputEl.innerHTML = `<span class="${c.inlineText}">${escHtml(raw)}</span>`;
             this.isRenderingInput = false;
@@ -4625,13 +5406,22 @@
                 parts.push(escHtml(raw.slice(cursor, mark.start)));
             }
             const chunk = raw.slice(mark.start, mark.end);
-            const classes = [c.inlineMark, c.inlineMarkInferred].filter(Boolean).join(' ');
-            const title = escHtml(mark.label || 'AI highlight');
             const field = mark.fieldKey ? this.getFieldDefinition(mark.fieldKey) : null;
+            const interactive = !!(mark.explicit && mark.entryId && mark.fieldKey && this.isInteractivePill(field));
+            const classes = [
+                c.inlineMark,
+                interactive ? c.inlineMarkInteractive : '',
+                mark.inferred ? c.inlineMarkInferred : ''
+            ].filter(Boolean).join(' ');
+            const title = escHtml(mark.label || 'AI highlight');
             const rawValue = Array.isArray(mark.value) ? mark.value[0] : mark.value;
             const color = this.resolvePillColor(field, rawValue || chunk);
             const styleAttr = color ? ` style="--qa-inline-accent:${escHtml(color)}"` : '';
-            parts.push(`<span class="${classes}"${styleAttr} title="${title}"><span class="${c.inlineMarkLabel}">${escHtml(chunk)}</span></span>`);
+            const aiValue = rawValue !== undefined && rawValue !== null ? rawValue : chunk;
+            const aiAttrs = interactive
+                ? ` data-qa-pill="1" data-pill-ai="1" data-qa-date-pill="${field && isDateFieldType(field.type) ? '1' : '0'}" data-pill-ai-entry-id="${escHtml(String(mark.entryId || ''))}" data-pill-ai-field="${escHtml(String(mark.fieldKey || ''))}" data-pill-ai-value="${escHtml(String(aiValue))}" data-pill-ai-occurrence="${Number.isFinite(Number(mark.occurrence)) ? Number(mark.occurrence) : 0}" data-pill-ai-map="${escHtml(String(mark.mappingKey || ''))}"`
+                : '';
+            parts.push(`<span class="${classes}"${aiAttrs}${styleAttr} title="${title}"><span class="${c.inlineMarkLabel}">${escHtml(chunk)}</span></span>`);
             cursor = mark.end;
         });
         if (cursor < raw.length) {
@@ -4653,17 +5443,19 @@
         } else {
             this.inputText = this.readInputText();
         }
+        this.closeAttachmentSourceMenu();
         this.closeBlockedInfo();
 
         const input = this.inputText || '';
         if (this.isAiMode()) {
-            this.lastResult = this.buildAIResult();
+            this.lastResult = this.syncEntryAttachmentMeta(this.buildAIResult());
             this.rebuildTokenMap({ entries: [] });
             this.renderAIInlineLayer(opts);
             this.renderResult(this.lastResult);
             this.closeDropdown();
             this.closeDatePicker();
         } else {
+            this.aiInlineMarkIndex = {};
             this.lastResult = parseInput(input, this.config);
             this.lastResult = this.applyDismissedSelections(this.lastResult);
             this.lastResult = this.syncEntryAttachmentMeta(this.lastResult);
@@ -4674,7 +5466,9 @@
             const caretOffset = typeof opts.caretOffset === 'number'
                 ? opts.caretOffset
                 : this.getCaretOffset();
-            this.syncTypingDropdown(caretOffset);
+            if (!opts.skipTypingSync) {
+                this.syncTypingDropdown(caretOffset);
+            }
         }
 
         if (typeof this.config.onParse === 'function') {
@@ -4728,6 +5522,32 @@
         return `--qa-pill-accent:${escHtml(color)}`;
     };
 
+    QuickAddComponent.prototype.getDropdownOptionsForField = function getDropdownOptionsForField(field, entryKey, fieldKey) {
+        if (!field) {
+            return [];
+        }
+        if (isFileFieldType(field.type)) {
+            const usage = this.getAttachmentUsage(this.lastResult);
+            return (this.attachmentPool || []).map((item) => ({
+                value: item.ref,
+                label: item.name,
+                attachmentId: item.id,
+                usedCount: (usage.get(item.id) || []).filter((link) => link.entryKey !== entryKey || link.fieldKey !== fieldKey).length
+            }));
+        }
+        return getFieldOptions(field);
+    };
+
+    QuickAddComponent.prototype.fieldSupportsDropdown = function fieldSupportsDropdown(field, entryKey, fieldKey) {
+        if (!field) {
+            return false;
+        }
+        if (field.type === 'options') {
+            return this.getDropdownOptionsForField(field, entryKey, fieldKey).length > 0;
+        }
+        return isFileFieldType(field.type) && this.getDropdownOptionsForField(field, entryKey, fieldKey).length > 0;
+    };
+
     QuickAddComponent.prototype.isInteractivePill = function isInteractivePill(field) {
         if (!field) {
             return false;
@@ -4735,7 +5555,7 @@
         if (isDateFieldType(field.type)) {
             return true;
         }
-        return field.type === 'options' && !field.multiple && getFieldOptions(field).length > 0;
+        return this.fieldSupportsDropdown(field);
     };
 
     QuickAddComponent.prototype.buildPillHtml = function buildPillHtml(data) {
@@ -4745,7 +5565,14 @@
         const inferred = !!data.inferred;
         const auto = !!data.auto;
         const blocked = !!data.blocked;
-        const interactive = !blocked && this.isInteractivePill(field) && !!data.tokenId;
+        const aiMeta = data.aiMeta && typeof data.aiMeta === 'object' ? data.aiMeta : null;
+        const deterministicInteractive = !blocked && this.isInteractivePill(field) && (!!data.tokenId || auto);
+        const aiInteractive = !blocked
+            && !!aiMeta
+            && this.isAiMode()
+            && this.isAIInlinePillsEnabled()
+            && this.isInteractivePill(field);
+        const interactive = deterministicInteractive || aiInteractive;
         const styleAttr = (!blocked && color) ? ` style="--qa-pill-accent:${escHtml(color)}"` : '';
         const classes = [
             c.pill,
@@ -4755,9 +5582,11 @@
             auto ? 'qa-pill-auto' : ''
         ].filter(Boolean).join(' ');
 
-        const interactionAttrs = interactive
-            ? ` data-qa-pill="1" data-qa-date-pill="${field && isDateFieldType(field.type) ? '1' : '0'}" data-pill-field="${escHtml(data.fieldKey)}" data-pill-token="${escHtml(data.tokenId)}" data-pill-entry="${data.entryIndex}"`
-            : '';
+        const interactionAttrs = deterministicInteractive
+            ? ` data-qa-pill="1" data-qa-date-pill="${field && isDateFieldType(field.type) ? '1' : '0'}" data-pill-field="${escHtml(data.fieldKey)}" data-pill-token="${escHtml(data.tokenId || '')}" data-pill-entry="${data.entryIndex}" data-pill-value="${escHtml(String(data.value !== undefined && data.value !== null ? data.value : ''))}"`
+            : (aiInteractive
+                ? ` data-qa-pill="1" data-pill-ai="1" data-qa-date-pill="${field && isDateFieldType(field.type) ? '1' : '0'}" data-pill-entry="${data.entryIndex}" data-pill-ai-entry-id="${escHtml(String(aiMeta.entryId || ''))}" data-pill-ai-field="${escHtml(String(aiMeta.fieldKey || data.fieldKey || ''))}" data-pill-ai-value="${escHtml(String(aiMeta.value !== undefined && aiMeta.value !== null ? aiMeta.value : (data.value !== undefined && data.value !== null ? data.value : '')))}" data-pill-ai-occurrence="${Math.max(0, Number.isFinite(Number(aiMeta.occurrence)) ? Number(aiMeta.occurrence) : 0)}" data-pill-ai-map="${escHtml(String(aiMeta.mappingKey || ''))}"`
+                : '');
         const blockedAttrs = blocked
             ? ` data-qa-blocked="1" data-blocked-reason="${escHtml(data.reason || 'Blocked by constraints')}"`
             : '';
@@ -4866,8 +5695,22 @@
         return output;
     };
 
-    QuickAddComponent.prototype.findTokenIdForFieldValue = function findTokenIdForFieldValue(entry, fieldKey, value, usedTokenIds) {
+    QuickAddComponent.prototype.findTokenIdForFieldValue = function findTokenIdForFieldValue(entry, field, fieldKey, value, usedTokenIds) {
         const target = normValue(value);
+        const isMultiOptions = !!(field && field.type === 'options' && field.multiple);
+        if (isMultiOptions) {
+            for (let i = entry.tokens.length - 1; i >= 0; i--) {
+                const token = entry.tokens[i];
+                if (token.kind !== 'field' || !token.committed || token.key !== fieldKey) {
+                    continue;
+                }
+                const tokenValues = splitByMultiSeparator(token.value || '', String(this.config.multiSelectSeparator || ','));
+                if (tokenValues.some((item) => normValue(item) === target)) {
+                    return token.id;
+                }
+            }
+            return null;
+        }
         const blockedExplicitTokenIds = new Set(
             (entry.blocked || [])
                 .filter((item) => item.source === 'explicit' && item.tokenId)
@@ -4953,9 +5796,10 @@
 
         Object.keys(entry.fields).forEach((fieldKey) => {
             const value = entry.fields[fieldKey];
+            const field = this.getFieldDefinition(fieldKey);
             const values = Array.isArray(value) ? value : [value];
             values.forEach((item) => {
-                const tokenId = this.findTokenIdForFieldValue(entry, fieldKey, item, usedTokens);
+                const tokenId = this.findTokenIdForFieldValue(entry, field, fieldKey, item, usedTokens);
                 const inferredItem = this.findInferredForFieldValue(entry, fieldKey, item, usedInferred);
                 const token = this.findTokenById(entry, tokenId);
 
@@ -5010,8 +5854,15 @@
         return selections;
     };
 
-    QuickAddComponent.prototype.supportsEntryAttachments = function supportsEntryAttachments() {
-        return this.config.showEntryCards !== false && this.config.allowEntryAttachments === true;
+    QuickAddComponent.prototype.getFileFields = function getFileFields() {
+        const fields = (this.normalizedSchema && Array.isArray(this.normalizedSchema.fields))
+            ? this.normalizedSchema.fields
+            : [];
+        return fields.filter((field) => field && field.key && isFileFieldType(field.type));
+    };
+
+    QuickAddComponent.prototype.supportsAttachments = function supportsAttachments() {
+        return this.getFileFields().length > 0;
     };
 
     QuickAddComponent.prototype.getAttachmentSources = function getAttachmentSources() {
@@ -5027,102 +5878,166 @@
             return '';
         }
         const sources = this.getAttachmentSources();
-        if (sources.includes('camera')) {
-            return 'environment';
-        }
-        return '';
+        return sources.includes('camera') ? 'environment' : '';
     };
 
     QuickAddComponent.prototype.shouldUseMobileAttachmentPicker = function shouldUseMobileAttachmentPicker() {
         if (!isMobileDevice()) {
             return false;
         }
-        const sources = this.getAttachmentSources();
-        return sources.length > 0;
+        return this.getAttachmentSources().length > 0;
     };
 
-    QuickAddComponent.prototype.buildMobileAttachmentPicker = function buildMobileAttachmentPicker(entryKey, dataAttrs, acceptAttr, multipleAttr) {
+    QuickAddComponent.prototype.positionAttachmentSourceMenu = function positionAttachmentSourceMenu(anchorEl) {
+        if (!this.attachmentSourceMenuEl) {
+            return;
+        }
+        const anchorRect = (anchorEl && typeof anchorEl.getBoundingClientRect === 'function')
+            ? anchorEl.getBoundingClientRect()
+            : (
+                this.attachmentSourceMenuState && this.attachmentSourceMenuState.anchorRect
+                    ? this.attachmentSourceMenuState.anchorRect
+                    : null
+            );
+        if (!anchorRect) {
+            return;
+        }
+        const bounds = this.getFloatingBounds(anchorEl || this.inputEl);
+        const pad = window.innerWidth <= 480 ? 8 : 10;
+        const viewportWidth = Math.max(0, (bounds.right - bounds.left) - (pad * 2));
+        const preferredWidth = Math.max(180, Math.min(240, viewportWidth));
+        const width = Math.min(preferredWidth, viewportWidth);
+        const minLeft = bounds.left + pad;
+        const maxLeft = bounds.right - width - pad;
+        const left = Math.max(minLeft, Math.min(anchorRect.left || minLeft, maxLeft));
+
+        this.attachmentSourceMenuEl.style.removeProperty('max-height');
+        const measuredHeight = Math.ceil(this.attachmentSourceMenuEl.getBoundingClientRect().height || this.attachmentSourceMenuEl.scrollHeight || 0);
+        const gap = 2;
+        const anchorTop = anchorRect.top || 0;
+        const anchorBottom = anchorRect.bottom || anchorRect.top || 0;
+        const minTop = bounds.top + pad;
+        const maxBottom = bounds.bottom - pad;
+        const availableBelow = Math.max(0, maxBottom - (anchorBottom + gap));
+        const availableAbove = Math.max(0, (anchorTop - gap) - minTop);
+        let placeBelow = availableBelow >= availableAbove;
+        if (availableBelow >= measuredHeight) {
+            placeBelow = true;
+        } else if (availableAbove >= measuredHeight) {
+            placeBelow = false;
+        }
+        const availableHeight = Math.max(0, placeBelow ? availableBelow : availableAbove);
+        let top = placeBelow
+            ? (anchorBottom + gap)
+            : Math.max(minTop, (anchorTop - gap) - Math.min(availableHeight, measuredHeight));
+        if (placeBelow && top + availableHeight > maxBottom) {
+            top = Math.max(minTop, maxBottom - availableHeight);
+        }
+
+        this.attachmentSourceMenuEl.style.position = 'fixed';
+        this.attachmentSourceMenuEl.style.left = `${left}px`;
+        this.attachmentSourceMenuEl.style.top = `${top}px`;
+        this.attachmentSourceMenuEl.style.width = `${width}px`;
+        this.attachmentSourceMenuEl.style.maxWidth = `${Math.max(0, viewportWidth)}px`;
+        this.attachmentSourceMenuEl.style.maxHeight = `${Math.floor(availableHeight)}px`;
+        this.attachmentSourceMenuEl.style.zIndex = '10000';
+    };
+
+    QuickAddComponent.prototype.openAttachmentSourceMenu = function openAttachmentSourceMenu(anchorEl, sourceItems) {
+        if (!this.attachmentSourceMenuEl) {
+            return;
+        }
+        const items = Array.isArray(sourceItems) ? sourceItems.filter((item) => item && item.inputId) : [];
+        if (!items.length) {
+            return;
+        }
+        const c = this.config.classNames;
+        this.attachmentSourceMenuState = {
+            anchorEl: anchorEl || null,
+            anchorRect: anchorEl && typeof anchorEl.getBoundingClientRect === 'function'
+                ? anchorEl.getBoundingClientRect()
+                : null
+        };
+        this.attachmentSourceMenuEl.innerHTML = items.map((item) => `
+            <button
+                type="button"
+                class="${c.attachmentSourceOption}"
+                data-entry-attachment-source-option="1"
+                data-attachment-input-id="${escHtml(item.inputId)}"
+                role="menuitem"
+            >${escHtml(item.label || item.source || 'Select')}</button>
+        `).join('');
+        this.attachmentSourceMenuEl.hidden = false;
+        this.positionAttachmentSourceMenu(this.attachmentSourceMenuState.anchorEl || anchorEl);
+    };
+
+    QuickAddComponent.prototype.closeAttachmentSourceMenu = function closeAttachmentSourceMenu() {
+        this.attachmentSourceMenuState = null;
+        if (!this.attachmentSourceMenuEl) {
+            return;
+        }
+        this.attachmentSourceMenuEl.hidden = true;
+        this.attachmentSourceMenuEl.innerHTML = '';
+        this.attachmentSourceMenuEl.style.removeProperty('position');
+        this.attachmentSourceMenuEl.style.removeProperty('left');
+        this.attachmentSourceMenuEl.style.removeProperty('top');
+        this.attachmentSourceMenuEl.style.removeProperty('width');
+        this.attachmentSourceMenuEl.style.removeProperty('max-width');
+        this.attachmentSourceMenuEl.style.removeProperty('max-height');
+        this.attachmentSourceMenuEl.style.removeProperty('z-index');
+    };
+
+    QuickAddComponent.prototype.buildMobileAttachmentPicker = function buildMobileAttachmentPicker(scopeId, acceptAttr, multipleAttr, markerAttr) {
         const sources = this.getAttachmentSources();
         const allowCamera = sources.includes('camera');
         const allowGallery = sources.includes('gallery');
         const allowFiles = sources.includes('files');
-
+        const marker = markerAttr || 'data-global-attachment-input="1"';
         const captureAttr = allowCamera ? ' capture="environment"' : '';
-        const cameraInputId = `qa_att_camera_${String(entryKey).replace(/[^a-zA-Z0-9]/g, '_')}`;
-        const galleryInputId = `qa_att_gallery_${String(entryKey).replace(/[^a-zA-Z0-9]/g, '_')}`;
-        const inputId = `qa_att_input_${String(entryKey).replace(/[^a-zA-Z0-9]/g, '_')}`;
-
-        const buttons = [];
+        const token = String(scopeId || 'global').replace(/[^a-zA-Z0-9]/g, '_');
+        const cameraInputId = `qa_att_camera_${token}`;
+        const galleryInputId = `qa_att_gallery_${token}`;
+        const inputId = `qa_att_input_${token}`;
+        const sourceOrder = [];
+        const sourceAttrs = [];
         if (allowCamera) {
-            buttons.push(`
-                <label class="${this.config.classNames.attachmentPick}" for="${escHtml(cameraInputId)}" data-qa-attachment-source="camera">
-                    Camera
-                </label>
-            `);
+            sourceOrder.push('camera');
+            sourceAttrs.push(`data-attachment-camera-input="${escHtml(cameraInputId)}"`);
         }
         if (allowGallery) {
-            buttons.push(`
-                <label class="${this.config.classNames.attachmentPick}" for="${escHtml(galleryInputId)}" data-qa-attachment-source="gallery">
-                    Gallery
-                </label>
-            `);
+            sourceOrder.push('gallery');
+            sourceAttrs.push(`data-attachment-gallery-input="${escHtml(galleryInputId)}"`);
         }
         if (allowFiles) {
-            buttons.push(`
-                <label class="${this.config.classNames.attachmentPick}" for="${escHtml(inputId)}" data-qa-attachment-source="files">
-                    Files
-                </label>
-            `);
+            sourceOrder.push('files');
+            sourceAttrs.push(`data-attachment-files-input="${escHtml(inputId)}"`);
         }
+        const sourceAttrText = sourceAttrs.length ? ` ${sourceAttrs.join(' ')}` : '';
+        const c = this.config.classNames;
 
         const inputs = [];
         if (allowCamera) {
             inputs.push(`
-                <input
-                    type="file"
-                    class="${this.config.classNames.attachmentInput}"
-                    id="${escHtml(cameraInputId)}"
-                    data-entry-attachment-input="1"
-                    data-attachment-source="camera"
-                    ${dataAttrs}
-                    ${acceptAttr}${multipleAttr}${captureAttr}
-                />
+                <input type="file" class="${c.attachmentInput}" id="${escHtml(cameraInputId)}" ${marker} data-attachment-source="camera" ${acceptAttr}${multipleAttr}${captureAttr} />
             `);
         }
         if (allowGallery) {
             inputs.push(`
-                <input
-                    type="file"
-                    class="${this.config.classNames.attachmentInput}"
-                    id="${escHtml(galleryInputId)}"
-                    data-entry-attachment-input="1"
-                    data-attachment-source="gallery"
-                    ${dataAttrs}
-                    ${acceptAttr}${multipleAttr}
-                />
+                <input type="file" class="${c.attachmentInput}" id="${escHtml(galleryInputId)}" ${marker} data-attachment-source="gallery" ${acceptAttr}${multipleAttr} />
             `);
         }
         if (allowFiles) {
             inputs.push(`
-                <input
-                    type="file"
-                    class="${this.config.classNames.attachmentInput}"
-                    id="${escHtml(inputId)}"
-                    data-entry-attachment-input="1"
-                    data-attachment-source="files"
-                    ${dataAttrs}
-                    ${acceptAttr}${multipleAttr}
-                />
+                <input type="file" class="${c.attachmentInput}" id="${escHtml(inputId)}" ${marker} data-attachment-source="files" ${acceptAttr}${multipleAttr} />
             `);
         }
-
         return `
-            <div class="${this.config.classNames.attachmentControls}">
-                ${buttons.join('')}
+            <div class="${c.attachmentControls}">
+                <button type="button" class="${c.attachmentPick}" data-entry-attachment-picker-toggle="1" data-attachment-sources="${escHtml(sourceOrder.join(','))}"${sourceAttrText}>
+                    + Add attachment
+                </button>
                 ${inputs.join('')}
-                <span class="${this.config.classNames.attachmentHint}">
-                    ${this.config.allowMultipleAttachments !== false ? 'Multiple files allowed' : 'Single file only'}
-                </span>
+                <span class="${c.attachmentHint}">${this.config.allowMultipleAttachments !== false ? 'Multiple files allowed' : 'Single file only'}</span>
             </div>
         `;
     };
@@ -5139,212 +6054,170 @@
         if (!allowed.length) {
             return true;
         }
-
         const name = String(file.name || '').toLowerCase();
         const type = String(file.type || '').toLowerCase();
         return allowed.some((ruleRaw) => {
             const rule = String(ruleRaw || '').trim().toLowerCase();
-            if (!rule) {
-                return false;
-            }
-            if (rule.startsWith('.')) {
-                return name.endsWith(rule);
-            }
-            if (rule.endsWith('/*')) {
-                const prefix = rule.slice(0, -1);
-                return type.startsWith(prefix);
-            }
+            if (!rule) return false;
+            if (rule.startsWith('.')) return name.endsWith(rule);
+            if (rule.endsWith('/*')) return type.startsWith(rule.slice(0, -1));
             return type === rule;
         });
     };
 
-    QuickAddComponent.prototype.pruneAttachmentsForResult = function pruneAttachmentsForResult(result) {
-        if (!this.attachmentsByEntry || this.attachmentsByEntry.size === 0) {
-            return;
-        }
-        const active = new Set(result.entries.map((entry) => (entry._id ? entry._id : entry.index)));
-        Array.from(this.attachmentsByEntry.keys()).forEach((key) => {
-            if (!active.has(key)) {
-                this.attachmentsByEntry.delete(key);
-            }
-        });
+    QuickAddComponent.prototype.getAttachmentById = function getAttachmentById(attachmentId) {
+        return (this.attachmentPool || []).find((item) => item.id === attachmentId) || null;
     };
 
-    QuickAddComponent.prototype.getEntryAttachmentMeta = function getEntryAttachmentMeta(entryKey) {
-        const list = this.attachmentsByEntry.get(entryKey) || [];
-        return list.map((item) => ({
-            id: item.id,
-            name: item.name,
-            size: item.size,
-            type: item.type,
-            lastModified: item.lastModified
-        }));
+    QuickAddComponent.prototype.findAttachmentByRef = function findAttachmentByRef(ref) {
+        const needle = normValue(ref);
+        if (!needle) {
+            return null;
+        }
+        return (this.attachmentPool || []).find((item) => normValue(item.ref) === needle || normValue(item.name) === needle) || null;
     };
 
-    QuickAddComponent.prototype.syncEntryAttachmentMeta = function syncEntryAttachmentMeta(result) {
-        if (!result || !Array.isArray(result.entries)) {
-            return result;
-        }
-        if (!this.supportsEntryAttachments()) {
-            result.entries.forEach((entry) => {
-                if (result.mode === 'ai') {
-                    delete entry.fileAttachments;
-                } else {
-                    delete entry.attachments;
-                }
-            });
-            return result;
-        }
-        this.pruneAttachmentsForResult(result);
-        result.entries.forEach((entry) => {
-            const key = entry._id || entry.index;
-            const attachments = this.getEntryAttachmentMeta(key);
-            if (attachments.length > 0) {
-                if (result.mode === 'ai') {
-                    entry.fileAttachments = attachments;
-                } else {
-                    entry.attachments = attachments;
-                }
-            } else {
-                if (result.mode === 'ai') {
-                    delete entry.fileAttachments;
-                } else {
-                    delete entry.attachments;
-                }
-            }
-        });
-        return result;
+    QuickAddComponent.prototype.createAttachmentRecord = function createAttachmentRecord(file) {
+        const isImage = !!(file && file.type && file.type.startsWith('image/'));
+        return {
+            id: `att_global_${++this.attachmentCounter}`,
+            fingerprint: `${file.name}|${file.size}|${file.lastModified}|${file.type}`,
+            file,
+            ref: file.name || `attachment-${this.attachmentCounter}`,
+            name: file.name || `attachment-${this.attachmentCounter}`,
+            size: Number(file.size || 0),
+            type: file.type || '',
+            lastModified: Number(file.lastModified || 0),
+            previewUrl: isImage ? URL.createObjectURL(file) : null
+        };
     };
 
-    QuickAddComponent.prototype.formatAttachmentSize = function formatAttachmentSize(bytes) {
-        const num = Number(bytes || 0);
-        if (num < 1024) {
-            return `${num} B`;
-        }
-        if (num < 1024 * 1024) {
-            return `${(num / 1024).toFixed(1)} KB`;
-        }
-        return `${(num / (1024 * 1024)).toFixed(1)} MB`;
-    };
-
-    QuickAddComponent.prototype.addEntryAttachments = function addEntryAttachments(entryKey, files) {
-        if (!this.supportsEntryAttachments()) {
+    QuickAddComponent.prototype.addGlobalAttachments = function addGlobalAttachments(files) {
+        if (!this.supportsAttachments()) {
             return;
         }
         const selected = Array.isArray(files) ? files.filter(Boolean) : [];
         if (!selected.length) {
             return;
         }
-
-        const allowed = selected.filter((file) => this.isAttachmentAllowed(file));
-        if (!allowed.length) {
-            return;
-        }
-
-        const existingRefs = new Set(
-            (Array.isArray(this.lastResult?.entries)
-                ? this.lastResult.entries
-                    .filter((entry) => (entry._id || entry.index) === entryKey)
-                    .flatMap((entry) => entry.attachments || [])
-                : []
-            ).map((item) => String(item || '').trim()).filter(Boolean)
-        );
-
-        const current = this.attachmentsByEntry.get(entryKey) || [];
-        const canMultiple = this.config.allowMultipleAttachments !== false;
-        let next = canMultiple ? current.slice() : [];
-
-        allowed.forEach((file) => {
-            const fingerprint = `${file.name}|${file.size}|${file.lastModified}|${file.type}`;
-            const exists = next.some((item) => item.fingerprint === fingerprint);
-            if (exists) {
+        const existing = new Set((this.attachmentPool || []).map((item) => item.fingerprint));
+        selected.forEach((file) => {
+            if (!this.isAttachmentAllowed(file)) {
                 return;
             }
-            const isImage = file.type && file.type.startsWith('image/');
-            next.push({
-                id: `att_${String(entryKey).replace(/[^a-zA-Z0-9]/g, '_')}_${++this.attachmentCounter}`,
-                fingerprint,
-                file,
-                name: file.name || 'attachment',
-                size: Number(file.size || 0),
-                type: file.type || '',
-                lastModified: Number(file.lastModified || 0),
-                previewUrl: isImage ? URL.createObjectURL(file) : null
-            });
+            const record = this.createAttachmentRecord(file);
+            if (existing.has(record.fingerprint)) {
+                return;
+            }
+            existing.add(record.fingerprint);
+            this.attachmentPool.push(record);
+        });
+        this.parseAndRender({ source: this.inputText, preserveSelection: true });
+    };
 
-            if (this.isAiMode()) {
-                const refName = file.name || 'attachment';
-                if (!existingRefs.has(refName)) {
-                    existingRefs.add(refName);
-                    const entry = (this.aiState.entries || []).find((item) => item._id === entryKey);
-                    if (entry) {
-                        const currentRefs = Array.isArray(entry.attachments) ? entry.attachments.slice() : [];
-                        currentRefs.push(refName);
-                        entry.attachments = currentRefs;
+    QuickAddComponent.prototype.resolveEntryFieldValues = function resolveEntryFieldValues(entry, fieldKey) {
+        if (!entry || !fieldKey) {
+            return [];
+        }
+        const raw = (entry.fields && entry.fields[fieldKey] !== undefined)
+            ? entry.fields[fieldKey]
+            : entry[fieldKey];
+        if (Array.isArray(raw)) {
+            return raw.map((item) => String(item || '').trim()).filter(Boolean);
+        }
+        if (raw === undefined || raw === null || raw === '') {
+            return [];
+        }
+        return [String(raw).trim()].filter(Boolean);
+    };
+
+    QuickAddComponent.prototype.getEntryKey = function getEntryKey(entry) {
+        return entry && entry._id ? entry._id : (entry ? entry.index : '');
+    };
+
+    QuickAddComponent.prototype.getAttachmentUsage = function getAttachmentUsage(result) {
+        const usage = new Map();
+        const entries = result && Array.isArray(result.entries) ? result.entries : [];
+        const fileFields = this.getFileFields();
+        entries.forEach((entry) => {
+            const entryKey = this.getEntryKey(entry);
+            fileFields.forEach((field) => {
+                this.resolveEntryFieldValues(entry, field.key).forEach((ref) => {
+                    const attachment = this.findAttachmentByRef(ref);
+                    if (!attachment) {
+                        return;
                     }
-                }
-            }
+                    if (!usage.has(attachment.id)) {
+                        usage.set(attachment.id, []);
+                    }
+                    usage.get(attachment.id).push({
+                        entryKey,
+                        fieldKey: field.key,
+                        ref
+                    });
+                });
+            });
         });
-
-        if (!canMultiple && next.length > 1) {
-            next = [next[next.length - 1]];
-        }
-
-        this.attachmentsByEntry.set(entryKey, next);
-        this.syncEntryAttachmentMeta(this.lastResult);
-        this.renderResult(this.lastResult);
-        if (typeof this.config.onParse === 'function') {
-            this.config.onParse(this.lastResult);
-        }
+        return usage;
     };
 
-    QuickAddComponent.prototype.removeEntryAttachment = function removeEntryAttachment(entryKey, attachmentId) {
-        const current = this.attachmentsByEntry.get(entryKey) || [];
-        if (!current.length) {
-            return;
+    QuickAddComponent.prototype.syncEntryAttachmentMeta = function syncEntryAttachmentMeta(result) {
+        if (!result || !Array.isArray(result.entries)) {
+            return result;
         }
-        const removedItem = current.find((item) => item.id === attachmentId) || null;
-        const next = [];
-        let removed = false;
-        current.forEach((item) => {
-            if (item.id === attachmentId) {
-                if (item.previewUrl) {
-                    URL.revokeObjectURL(item.previewUrl);
-                }
-                removed = true;
-            } else {
-                next.push(item);
-            }
+        if (!this.supportsAttachments()) {
+            result.entries.forEach((entry) => { delete entry.attachments; });
+            return result;
+        }
+        const fileFields = this.getFileFields();
+        result.entries.forEach((entry) => {
+            const linked = [];
+            fileFields.forEach((field) => {
+                this.resolveEntryFieldValues(entry, field.key).forEach((ref) => {
+                    const attachment = this.findAttachmentByRef(ref);
+                    if (!attachment) {
+                        return;
+                    }
+                    linked.push({
+                        id: attachment.id,
+                        fieldKey: field.key,
+                        ref: attachment.ref,
+                        fingerprint: attachment.fingerprint,
+                        file: attachment.file || null,
+                        name: attachment.name,
+                        size: attachment.size,
+                        type: attachment.type,
+                        lastModified: attachment.lastModified,
+                        previewUrl: attachment.previewUrl || null
+                    });
+                });
+            });
+            entry.attachments = linked;
         });
-
-        if (!removed) {
-            return;
-        }
-
-        if (removedItem && this.isAiMode()) {
-            const entry = (this.aiState.entries || []).find((item) => item._id === entryKey);
-            if (entry) {
-                const currentRefs = Array.isArray(entry.attachments) ? entry.attachments.slice() : [];
-                const nextRefs = currentRefs.filter((ref) => String(ref || '').trim() !== removedItem.name);
-                entry.attachments = nextRefs;
-            }
-        }
-
-        if (next.length > 0) {
-            this.attachmentsByEntry.set(entryKey, next);
-        } else {
-            this.attachmentsByEntry.delete(entryKey);
-        }
-        this.syncEntryAttachmentMeta(this.lastResult);
-        this.renderResult(this.lastResult);
-        if (typeof this.config.onParse === 'function') {
-            this.config.onParse(this.lastResult);
-        }
+        return result;
     };
 
-    QuickAddComponent.prototype.openEntryAttachment = function openEntryAttachment(entryKey, attachmentId) {
-        const list = this.attachmentsByEntry.get(entryKey) || [];
-        const item = list.find((entry) => entry.id === attachmentId);
+    QuickAddComponent.prototype.formatAttachmentSize = function formatAttachmentSize(bytes) {
+        const num = Number(bytes || 0);
+        if (num < 1024) return `${num} B`;
+        if (num < 1024 * 1024) return `${(num / 1024).toFixed(1)} KB`;
+        return `${(num / (1024 * 1024)).toFixed(1)} MB`;
+    };
+
+    QuickAddComponent.prototype.middleEllipsis = function middleEllipsis(text, maxLength) {
+        const value = String(text || '');
+        const max = Math.max(8, Number(maxLength || 24));
+        if (value.length <= max) {
+            return value;
+        }
+        const keep = max - 1;
+        const head = Math.ceil(keep / 2);
+        const tail = Math.floor(keep / 2);
+        return `${value.slice(0, head)}…${value.slice(value.length - tail)}`;
+    };
+
+    QuickAddComponent.prototype.openAttachment = function openAttachment(attachmentId) {
+        const item = this.getAttachmentById(attachmentId);
         if (!item || !item.file) {
             return;
         }
@@ -5355,99 +6228,307 @@
         window.open(url, '_blank', 'noopener');
     };
 
-    QuickAddComponent.prototype.renderEntryAttachments = function renderEntryAttachments(entry) {
-        if (!this.supportsEntryAttachments()) {
+    QuickAddComponent.prototype.removeRefsFromAIEntries = function removeRefsFromAIEntries(ref, entryKey, fieldKey) {
+        const needle = normValue(ref);
+        if (!needle) return;
+        const fileFields = this.getFileFields();
+        (this.aiState.entries || []).forEach((entry) => {
+            if (entryKey !== undefined && entryKey !== null && entry._id !== entryKey) {
+                return;
+            }
+            fileFields.forEach((field) => {
+                if (fieldKey && field.key !== fieldKey) {
+                    return;
+                }
+                const values = this.resolveEntryFieldValues(entry, field.key).filter((item) => normValue(item) !== needle);
+                if (field.multiple) {
+                    entry[field.key] = values;
+                } else if (values.length > 0) {
+                    entry[field.key] = values[0];
+                } else {
+                    delete entry[field.key];
+                }
+            });
+        });
+    };
+
+    QuickAddComponent.prototype.removeRefsFromDeterministicInput = function removeRefsFromDeterministicInput(ref, entryKey, fieldKey) {
+        const needle = normValue(ref);
+        if (!needle || this.isAiMode()) {
+            return;
+        }
+        const ranges = [];
+        (this.lastResult.entries || []).forEach((entry) => {
+            const key = this.getEntryKey(entry);
+            if (entryKey !== undefined && entryKey !== null && key !== entryKey) {
+                return;
+            }
+            (entry.tokens || []).forEach((token) => {
+                if (token.kind !== 'field' || !token.committed) {
+                    return;
+                }
+                if (fieldKey && token.key !== fieldKey) {
+                    return;
+                }
+                const field = this.getFieldDefinition(token.key);
+                if (!field || !isFileFieldType(field.type)) {
+                    return;
+                }
+                if (normValue(token.value) !== needle) {
+                    return;
+                }
+                ranges.push({ start: token.globalStart, end: token.globalEnd });
+            });
+        });
+        if (!ranges.length) {
+            return;
+        }
+        let source = this.inputText || this.readInputText();
+        ranges.sort((a, b) => b.start - a.start).forEach((range) => {
+            source = this.replaceRange(source, range.start, range.end, '');
+        });
+        this.parseAndRender({ source, preserveSelection: true });
+    };
+
+    QuickAddComponent.prototype.openConflictModal = function openConflictModal(state) {
+        this.conflictModalState = state || null;
+        this.renderConflictModal();
+    };
+
+    QuickAddComponent.prototype.closeConflictModal = function closeConflictModal() {
+        this.conflictModalState = null;
+        this.renderConflictModal();
+    };
+
+    QuickAddComponent.prototype.renderConflictModal = function renderConflictModal() {
+        if (!this.conflictModalOverlayEl || !this.conflictModalEl) {
+            return;
+        }
+        const c = this.config.classNames;
+        const state = this.conflictModalState;
+        if (!state) {
+            this.conflictModalOverlayEl.hidden = true;
+            this.conflictModalEl.innerHTML = '';
+            return;
+        }
+        this.conflictModalEl.innerHTML = `
+            <div>${escHtml(state.message || 'Attachment conflict')}</div>
+            <div class="${c.conflictModalActions}">
+                <button type="button" class="${c.conflictModalBtn}" data-conflict-action="confirm">${escHtml(state.confirmLabel || 'Confirm')}</button>
+                <button type="button" class="${c.conflictModalBtn}" data-conflict-action="cancel">Cancel</button>
+            </div>
+        `;
+        this.conflictModalOverlayEl.hidden = false;
+    };
+
+    QuickAddComponent.prototype.handleConflictModalAction = function handleConflictModalAction(action) {
+        const state = this.conflictModalState;
+        if (!state) {
+            return;
+        }
+        if (action === 'confirm' && typeof state.onConfirm === 'function') {
+            state.onConfirm();
+        }
+        this.closeConflictModal();
+    };
+
+    QuickAddComponent.prototype.removeGlobalAttachment = function removeGlobalAttachment(attachmentId, force) {
+        const attachment = this.getAttachmentById(attachmentId);
+        if (!attachment) {
+            return;
+        }
+        const usage = this.getAttachmentUsage(this.lastResult).get(attachmentId) || [];
+        if (usage.length > 0 && !force) {
+            this.openConflictModal({
+                message: `“${attachment.name}” is linked in entries. Unlink and delete it?`,
+                confirmLabel: 'Unlink and delete',
+                onConfirm: () => this.removeGlobalAttachment(attachmentId, true)
+            });
+            return;
+        }
+        if (usage.length > 0) {
+            if (this.isAiMode()) {
+                this.removeRefsFromAIEntries(attachment.ref);
+            } else {
+                this.removeRefsFromDeterministicInput(attachment.ref);
+            }
+        }
+        if (attachment.previewUrl) {
+            URL.revokeObjectURL(attachment.previewUrl);
+        }
+        this.attachmentPool = (this.attachmentPool || []).filter((item) => item.id !== attachmentId);
+        this.parseAndRender({ source: this.inputText, preserveSelection: true });
+    };
+
+    QuickAddComponent.prototype.linkAttachmentToEntryField = function linkAttachmentToEntryField(entryKey, fieldKey, attachmentId, force, tokenId) {
+        const attachment = this.getAttachmentById(attachmentId);
+        const field = this.getFieldDefinition(fieldKey);
+        if (!attachment || !field || !isFileFieldType(field.type)) {
+            return;
+        }
+        const usage = this.getAttachmentUsage(this.lastResult).get(attachmentId) || [];
+        const hasConflict = this.config.allowAttachmentReuse !== true
+            && usage.some((item) => item.entryKey !== entryKey || item.fieldKey !== fieldKey);
+        if (hasConflict && !force) {
+            this.openConflictModal({
+                message: `“${attachment.name}” is already linked elsewhere. Unlink and attach here?`,
+                confirmLabel: 'Unlink and attach here',
+                onConfirm: () => this.linkAttachmentToEntryField(entryKey, fieldKey, attachmentId, true, tokenId)
+            });
+            return;
+        }
+        if (hasConflict) {
+            usage.forEach((item) => {
+                if (this.isAiMode()) {
+                    this.removeRefsFromAIEntries(attachment.ref, item.entryKey, item.fieldKey);
+                } else {
+                    this.removeRefsFromDeterministicInput(attachment.ref, item.entryKey, item.fieldKey);
+                }
+            });
+        }
+        if (this.isAiMode()) {
+            const entry = (this.aiState.entries || []).find((item) => item._id === entryKey);
+            if (!entry) return;
+            const current = this.resolveEntryFieldValues(entry, fieldKey);
+            const hasRef = current.some((item) => normValue(item) === normValue(attachment.ref));
+            if (field.multiple) {
+                if (!hasRef) current.push(attachment.ref);
+                entry[fieldKey] = current;
+            } else {
+                entry[fieldKey] = attachment.ref;
+            }
+            this.parseAndRender({ source: this.inputText, preserveSelection: true });
+            return;
+        }
+        const source = this.inputText || this.readInputText();
+        const entry = (this.lastResult.entries || []).find((item) => this.getEntryKey(item) === entryKey);
+        if (!entry) {
+            return;
+        }
+        if (tokenId && this.tokenMap[tokenId]) {
+            const token = this.tokenMap[tokenId];
+            const updated = this.replaceRange(source, token.globalValueStart, token.globalValueEnd, attachment.ref);
+            const caret = token.globalValueStart + String(attachment.ref).length;
+            this.parseAndRender({ source: updated, caretOffset: caret, focusInput: true });
+            return;
+        }
+        const tokens = (entry.tokens || []).filter((token) => token.kind === 'field' && token.committed && token.key === fieldKey);
+        if (!field.multiple && tokens.length > 0) {
+            const token = tokens[tokens.length - 1];
+            const updated = this.replaceRange(source, token.globalValueStart, token.globalValueEnd, attachment.ref);
+            const caret = token.globalValueStart + String(attachment.ref).length;
+            this.parseAndRender({ source: updated, caretOffset: caret, focusInput: true });
+            return;
+        }
+        const prefix = (field.prefixes && field.prefixes[0]) ? field.prefixes[0] : `${field.key}:`;
+        const separator = String(this.config.fieldTerminator || '');
+        const needsSpace = source.charAt(Math.max(0, entry.globalEnd - 1)) && !/\s/.test(source.charAt(entry.globalEnd - 1));
+        const snippet = `${needsSpace ? ' ' : ''}${prefix}${attachment.ref}${separator}`;
+        const updated = this.replaceRange(source, entry.globalEnd, entry.globalEnd, snippet);
+        const caret = entry.globalEnd + snippet.length;
+        this.parseAndRender({ source: updated, caretOffset: caret, focusInput: true });
+    };
+
+    QuickAddComponent.prototype.removeAttachmentFromEntryField = function removeAttachmentFromEntryField(entryKey, fieldKey, ref) {
+        if (this.isAiMode()) {
+            this.removeRefsFromAIEntries(ref, entryKey, fieldKey);
+            this.parseAndRender({ source: this.inputText, preserveSelection: true });
+            return;
+        }
+        this.removeRefsFromDeterministicInput(ref, entryKey, fieldKey);
+    };
+
+    QuickAddComponent.prototype.renderAttachmentTile = function renderAttachmentTile(item, options) {
+        const opts = options || {};
+        const c = this.config.classNames;
+        const isImage = !!item.previewUrl;
+        const shortName = this.middleEllipsis(item.name, 24);
+        const mediaHtml = isImage
+            ? `<img src="${escHtml(item.previewUrl)}" class="${c.attachmentPreview || 'qa-attachment-preview-img'}" alt="${escHtml(item.name)}" />`
+            : `<svg class="qa-attachment-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>`;
+        const usedText = opts.usedCount > 0 ? `<span class="${c.attachmentUsedFlag}">${opts.usedCount} used</span>` : '';
+        return `
+            <div class="${c.attachmentItem}${isImage ? ' qa-is-image' : ''}">
+                <button type="button" class="${c.attachmentOpen}" data-attachment-open="1" data-attachment-id="${escHtml(item.id)}" aria-label="Open attachment">
+                    ${mediaHtml}
+                </button>
+                ${opts.removeAttr ? `<button type="button" class="${c.attachmentRemove}" ${opts.removeAttr} aria-label="Remove attachment">✕</button>` : ''}
+                ${usedText}
+                <div class="${c.attachmentName}" title="${escHtml(item.name)}">${escHtml(shortName)}</div>
+            </div>
+        `;
+    };
+
+    QuickAddComponent.prototype.renderGlobalAttachmentSection = function renderGlobalAttachmentSection(result) {
+        if (!this.supportsAttachments()) {
             return '';
         }
         const c = this.config.classNames;
-        const entryKey = entry._id || entry.index;
-        const attachments = this.attachmentsByEntry.get(entryKey) || [];
         const accept = this.getAttachmentAcceptValue();
         const acceptAttr = accept ? ` accept="${escHtml(accept)}"` : '';
         const multipleAttr = this.config.allowMultipleAttachments !== false ? ' multiple' : '';
         const captureValue = this.getAttachmentCaptureValue();
         const captureAttr = captureValue ? ` capture="${escHtml(captureValue)}"` : '';
-        const inputId = `qa_att_input_${String(entryKey).replace(/[^a-zA-Z0-9]/g, '_')}`;
-
-        const dataAttrs = entry._id
-            ? `data-entry-id="${escHtml(entry._id)}"`
-            : `data-entry-index="${entry.index}"`;
-
-        // Icons
-        const iconPdf = `<svg class="qa-attachment-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>`;
-        const iconFile = `<svg class="qa-attachment-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>`;
-
-        const listHtml = attachments.length
-            ? `
-                <div class="${c.attachmentList}">
-                    ${attachments.map((item) => {
-                const isImage = !!item.previewUrl;
-                const isPdf = item.type === 'application/pdf';
-                let content = '';
-                let itemClass = c.attachmentItem;
-
-                if (isImage) {
-                    itemClass += ' qa-is-image';
-                    content = `<img src="${escHtml(item.previewUrl)}" class="${c.attachmentPreview || 'qa-attachment-preview-img'}" alt="${escHtml(item.name)}" />`;
-                } else {
-                    content = `
-                                ${isPdf ? iconPdf : iconFile}
-                                <span class="${c.attachmentName}" title="${escHtml(item.name)}">${escHtml(item.name)}</span>
-                            `;
-                }
-
-                return `
-                        <div class="${itemClass}">
-                            <button
-                                type="button"
-                                class="${c.attachmentOpen}"
-                                data-entry-attachment-open="1"
-                                ${dataAttrs}
-                                data-attachment-id="${escHtml(item.id)}"
-                                aria-label="Open attachment"
-                            >
-                                ${content}
-                            </button>
-                            <button
-                                type="button"
-                                class="${c.attachmentRemove}"
-                                data-entry-attachment-remove="1"
-                                ${dataAttrs}
-                                data-attachment-id="${escHtml(item.id)}"
-                                aria-label="Remove attachment"
-                            >✕</button>
-                        </div>
-                        `;
-            }).join('')}
+        const inputId = 'qa_att_global_input';
+        const usage = this.getAttachmentUsage(result || this.lastResult);
+        const listHtml = (this.attachmentPool || []).map((item) => this.renderAttachmentTile(item, {
+            removeAttr: `data-global-attachment-remove="1" data-attachment-id="${escHtml(item.id)}"`,
+            usedCount: (usage.get(item.id) || []).length
+        })).join('');
+        const controlsHtml = this.shouldUseMobileAttachmentPicker()
+            ? this.buildMobileAttachmentPicker('global', acceptAttr, multipleAttr, 'data-global-attachment-input="1"')
+            : `
+                <div class="${c.attachmentControls}">
+                    <label class="${c.attachmentPick}" for="${inputId}">+ Add attachment</label>
+                    <input type="file" class="${c.attachmentInput}" id="${inputId}" data-global-attachment-input="1" ${acceptAttr}${multipleAttr}${captureAttr} />
+                    <span class="${c.attachmentHint}">${this.config.allowMultipleAttachments !== false ? 'Multiple files allowed' : 'Single file only'}</span>
                 </div>
-            `
-            : '';
-
+            `;
         return `
-            <div class="${c.attachmentSection}">
-                ${this.shouldUseMobileAttachmentPicker()
-                ? this.buildMobileAttachmentPicker(entryKey, dataAttrs, acceptAttr, multipleAttr)
-                : `
-                    <div class="${c.attachmentControls}">
-                        <label class="${c.attachmentPick}" for="${escHtml(inputId)}">
-                            + Add attachment
-                        </label>
-                        <input
-                            type="file"
-                            class="${c.attachmentInput}"
-                            id="${escHtml(inputId)}"
-                            data-entry-attachment-input="1"
-                            ${dataAttrs}
-                            ${acceptAttr}${multipleAttr}${captureAttr}
-                        />
-                        <span class="${c.attachmentHint}">
-                            ${this.config.allowMultipleAttachments !== false ? 'Multiple files allowed' : 'Single file only'}
-                        </span>
+            <div class="${c.attachmentSection} ${c.attachmentGlobalSection}">
+                ${controlsHtml}
+                <div class="${c.attachmentPoolScroll}">
+                    <div class="${c.attachmentList}">
+                        ${listHtml || `<div class="${c.attachmentHint}">No global attachments yet.</div>`}
                     </div>
-                `}
-                ${listHtml}
+                </div>
             </div>
         `;
+    };
+
+    QuickAddComponent.prototype.renderEntryAttachments = function renderEntryAttachments(entry) {
+        if (!this.supportsAttachments()) {
+            return '';
+        }
+        const c = this.config.classNames;
+        const entryKey = this.getEntryKey(entry);
+        const fileFields = this.getFileFields();
+        const rows = fileFields.map((field) => {
+            const refs = this.resolveEntryFieldValues(entry, field.key);
+            const linked = refs.map((ref) => {
+                const item = this.findAttachmentByRef(ref);
+                return item ? this.renderAttachmentTile(item, {
+                    removeAttr: `data-field-attachment-remove="1" data-entry-key="${escHtml(String(entryKey))}" data-file-field-key="${escHtml(field.key)}" data-attachment-ref="${escHtml(ref)}"`
+                }) : '';
+            }).filter(Boolean);
+            const entryAttr = entry._id
+                ? `data-entry-id="${escHtml(entry._id)}"`
+                : `data-entry-index="${entry.index}"`;
+            return `
+                <div class="${c.attachmentFieldRow}">
+                    <div class="${c.attachmentFieldHeader}">
+                        <span>${escHtml(field.label || field.key)}</span>
+                        <button type="button" class="${c.attachmentLinkBtn}" data-entry-file-link="1" ${entryAttr} data-file-field-key="${escHtml(field.key)}">Link</button>
+                    </div>
+                    <div class="${c.attachmentFieldList}">
+                        <div class="${c.attachmentList}">
+                            ${linked.join('') || `<div class="${c.attachmentHint}">No linked files</div>`}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        return `<div class="${c.attachmentFieldRows}">${rows}</div>`;
     };
 
     QuickAddComponent.prototype.renderEntryPills = function renderEntryPills(entry) {
@@ -5483,7 +6564,9 @@
             const key = field.key;
             const label = field.label || key;
             const rawValue = entry[key];
-            const value = Array.isArray(rawValue) ? rawValue.join(', ') : (rawValue ?? '');
+            const value = Array.isArray(rawValue)
+                ? rawValue.join(`${String(this.config.multiSelectSeparator || ',')} `)
+                : (rawValue ?? '');
             const inputId = escHtml(this.getAIEditInputId(entry._id, key));
             const type = field.type === 'number' ? 'number' : 'text';
             const isLong = field.type === 'string' && String(value || '').length > 80;
@@ -5561,9 +6644,22 @@
 
         const titleValue = entry[titleKey];
         const pills = [];
+        const entryIndex = (this.aiState.entries || []).findIndex((item) => item && item._id === entry._id);
+        const occurrenceMap = {};
         metaFields.forEach((field) => {
             const key = field.key;
-            const rawValue = entry[key];
+            let rawValue = entry[key];
+            let autoFromDefault = false;
+            const isMissing = Array.isArray(rawValue)
+                ? rawValue.length === 0
+                : (rawValue === undefined || rawValue === null || rawValue === '');
+            if (isMissing) {
+                const parsedDefault = parseDefaultValueByType(field, this.config);
+                if (parsedDefault.ok) {
+                    rawValue = parsedDefault.value;
+                    autoFromDefault = true;
+                }
+            }
             const values = Array.isArray(rawValue) ? rawValue : [rawValue];
             values.forEach((value) => {
                 if (value === undefined || value === null || value === '') {
@@ -5571,16 +6667,28 @@
                 }
                 const label = field.label || key;
                 const text = Array.isArray(value) ? value.join(', ') : value;
+                const base = this.buildAIInlineMappingBaseKey(entry._id, key, value);
+                const occurrence = occurrenceMap[base] || 0;
+                occurrenceMap[base] = occurrence + 1;
+                const mappingKey = this.buildAIInlineMappingKey(entry._id, key, value, occurrence);
+                const aiMeta = {
+                    entryId: entry._id,
+                    fieldKey: key,
+                    value,
+                    occurrence,
+                    mappingKey: this.aiInlineMarkIndex[mappingKey] ? mappingKey : ''
+                };
                 pills.push(this.buildPillHtml({
                     fieldKey: key,
-                    entryIndex: Number(entry._segmentIndex) || 0,
+                    entryIndex: Math.max(0, entryIndex),
                     value,
                     label: `${label}: ${text}`,
                     inferred: false,
-                    auto: false,
+                    auto: autoFromDefault,
                     blocked: false,
                     dismissKey: null,
-                    tokenId: null
+                    tokenId: null,
+                    aiMeta
                 }));
             });
         });
@@ -5599,9 +6707,6 @@
                 </div>
                 ${pillsHtml}
                 ${notesValue ? `<div class="${c.issues}"><div class="${c.issue}">${escHtml(notesValue)}</div></div>` : ''}
-                ${Array.isArray(entry.attachments) && entry.attachments.length
-                ? `<div class="${c.issues}"><div class="${c.issue}">extracted refs: ${escHtml(entry.attachments.join(', '))}</div></div>`
-                : ''}
                 ${attachmentsHtml}
                 <div class="${c.aiActions}">
                     ${actionRow}
@@ -5613,7 +6718,7 @@
     QuickAddComponent.prototype.renderAIResult = function renderAIResult(result) {
         this.syncEntryAttachmentMeta(result);
         const c = this.config.classNames;
-        const queueCount = Number(result.queueCount || 0);
+        const parseState = result.parseState || {};
         const activeCount = (this.aiState.entries || []).filter((entry) => !this.aiState.deletedEntries.has(entry._id)).length;
         const statusParts = [];
         if (result.isProcessing) {
@@ -5621,7 +6726,9 @@
         } else {
             statusParts.push(`${activeCount} active entries`);
         }
-        statusParts.push(`${queueCount} queued`);
+        if (parseState && parseState.status) {
+            statusParts.push(`parse: ${parseState.status}`);
+        }
         if (result.error) {
             statusParts.push(`error: ${result.error}`);
         }
@@ -5629,14 +6736,10 @@
 
         const controls = this.config.ai && this.config.ai.controls ? this.config.ai.controls : {};
         const showParse = controls.parse !== false;
-        const showQueue = controls.queue !== false;
-        const showProcess = controls.process !== false;
         const showClear = controls.clear !== false;
         const actionsHtml = `
             <div class="${c.aiActions}">
                 ${showParse ? `<button type="button" class="${c.aiActionBtn} ${c.aiActionBtnPrimary}" data-ai-action="parse-now">Parse Now</button>` : ''}
-                ${showQueue ? `<button type="button" class="${c.aiActionBtn}" data-ai-action="queue-input">Queue Input</button>` : ''}
-                ${showProcess ? `<button type="button" class="${c.aiActionBtn}" data-ai-action="process-queue">Process Queue</button>` : ''}
                 ${showClear ? `<button type="button" class="${c.aiActionBtn} ${c.aiActionBtnGhost}" data-ai-action="clear-entries">Clear Entries</button>` : ''}
             </div>
         `;
@@ -5646,6 +6749,7 @@
         const warningsHtml = warningRows.length
             ? `<div class="${c.issues}">${warningRows.join('')}</div>`
             : '';
+        const globalAttachmentsHtml = this.renderGlobalAttachmentSection(result);
 
         if (this.aiState.entries.length === 0) {
             const autoParseActive = this.config.ai.autoParse !== false;
@@ -5653,12 +6757,14 @@
                 ? 'Type text and pause to trigger extraction.'
                 : 'Auto-parse is off. Click Parse Now to run extraction.';
             this.previewEl.innerHTML = `
+                ${globalAttachmentsHtml}
                 ${actionsHtml}
                 ${warningsHtml}
                 <article class="${c.entry} ${c.entryEmpty}">No AI entries yet. ${autoParseHint} Or click Parse Now.</article>
             `;
         } else {
             this.previewEl.innerHTML = `
+                ${globalAttachmentsHtml}
                 ${actionsHtml}
                 ${warningsHtml}
                 ${this.aiState.entries.map((entry) => this.renderAIEntryCard(entry)).join('')}
@@ -5671,10 +6777,22 @@
                 input: this.inputText,
                 entries: this.aiState.entries.map((entry) => {
                     const mapped = Object.assign({}, entry);
-                    // Map file attachments from the result if they match IDs
-                    const match = result.entries.find((r) => r._id === entry._id);
-                    if (match && match.fileAttachments) {
-                        mapped.fileAttachments = match.fileAttachments;
+                    const entryId = String(
+                        entry._id
+                        || (entry.aiMeta && entry.aiMeta.id)
+                        || (entry.fields && entry.fields._id)
+                        || ''
+                    );
+                    const match = Array.isArray(result.entries)
+                        ? result.entries.find((item) => String(
+                            item._id
+                            || (item.aiMeta && item.aiMeta.id)
+                            || (item.fields && item.fields._id)
+                            || ''
+                        ) === entryId)
+                        : null;
+                    if (match && Array.isArray(match.attachments)) {
+                        mapped.attachments = match.attachments.slice();
                     }
                     return mapped;
                 }),
@@ -5682,7 +6800,9 @@
                 deletedEntryIds: Array.from(this.aiState.deletedEntries),
                 warnings: result.warnings || [],
                 missing: result.missing || [],
-                queueCount
+                parseState: result.parseState || null,
+                callerRequest: result.callerRequest || null,
+                parseRequest: result.parseRequest || result.callerRequest || null
             }, null, 2);
         }
     };
@@ -5697,9 +6817,10 @@
         const showEntryHeader = this.config.showEntryHeader !== false;
         const showEntryPills = this.config.showEntryPills !== false;
         this.statusEl.textContent = `${result.entryCount} entries | ${result.validCount} valid | ${result.invalidCount} issues`;
+        const globalAttachmentsHtml = this.renderGlobalAttachmentSection(result);
 
         if (!showEntryCards) {
-            this.previewEl.innerHTML = '';
+            this.previewEl.innerHTML = globalAttachmentsHtml;
             if (this.outputEl) {
                 this.outputEl.textContent = JSON.stringify(result, null, 2);
             }
@@ -5707,9 +6828,9 @@
         }
 
         if (result.entries.length === 0) {
-            this.previewEl.innerHTML = `<div class="${c.entry}">No parsed entries yet.</div>`;
+            this.previewEl.innerHTML = `${globalAttachmentsHtml}<div class="${c.entry}">No parsed entries yet.</div>`;
         } else {
-            this.previewEl.innerHTML = result.entries.map((entry) => {
+            this.previewEl.innerHTML = `${globalAttachmentsHtml}${result.entries.map((entry) => {
                 const pendingRows = entry.pending.map((pending) =>
                     `<div class="${c.issue}">Pending: ${escHtml(pending)}</div>`
                 ).join('');
@@ -5743,7 +6864,7 @@
                         ` : ''}
                     </article>
                 `;
-            }).join('');
+            }).join('')}`;
         }
 
         if (this.outputEl) {
@@ -5777,7 +6898,7 @@
                     return;
                 }
                 const field = this.getFieldDefinition(token.key);
-                if (!field || field.type !== 'options') {
+                if (!field || !this.fieldSupportsDropdown(field, token.entryIndex, token.key)) {
                     return;
                 }
 
@@ -5795,6 +6916,13 @@
     };
 
     QuickAddComponent.prototype.syncTypingDropdown = function syncTypingDropdown(caretOffset) {
+        this.closeAttachmentSourceMenu();
+        if (this.config.showDropdownOnTyping === false) {
+            if (this.dropdownState && this.dropdownState.source === 'typing') {
+                this.closeDropdown();
+            }
+            return;
+        }
         if (document.activeElement !== this.inputEl) {
             if (this.dropdownState && this.dropdownState.source === 'typing') {
                 this.closeDropdown();
@@ -5811,14 +6939,14 @@
         }
 
         const field = this.getFieldDefinition(token.key);
-        if (!field || field.type !== 'options') {
+        if (!field || !this.fieldSupportsDropdown(field, token.entryIndex, token.key)) {
             if (this.dropdownState && this.dropdownState.source === 'typing') {
                 this.closeDropdown();
             }
             return;
         }
 
-        const options = getFieldOptions(field);
+        const options = this.getDropdownOptionsForField(field, token.entryIndex, token.key);
         if (options.length === 0) {
             if (this.dropdownState && this.dropdownState.source === 'typing') {
                 this.closeDropdown();
@@ -5828,12 +6956,20 @@
 
         this.dropdownState = {
             fieldKey: token.key,
+            fieldType: field.type,
             tokenId: token.id,
             entryIndex: typeof token.entryIndex === 'number' ? token.entryIndex : 0,
+            entryKey: typeof token.entryIndex === 'number' ? token.entryIndex : 0,
             currentValue: token.value || '',
             allowCustom: !!field.allowCustom,
             options,
-            source: 'typing'
+            sourceRegion: 'inline',
+            anchorRect: null,
+            source: 'typing',
+            activeOptionValue: null,
+            filteredOptions: [],
+            activateFirstOnOpen: false,
+            keepActiveWhenFiltering: false
         };
 
         this.dropdownSearchEl.hidden = true;
@@ -5845,12 +6981,97 @@
     };
 
     QuickAddComponent.prototype.handlePillClick = function handlePillClick(pillEl) {
+        this.closeAttachmentSourceMenu();
         this.closeBlockedInfo();
+        const entryIndex = Number(pillEl.getAttribute('data-pill-entry'));
+        const isAiPill = pillEl.getAttribute('data-pill-ai') === '1';
+
+        if (isAiPill && this.isAiMode()) {
+            const sourceRegion = pillEl.closest('[data-role="preview"]') ? 'card' : 'inline';
+            const fieldKey = pillEl.getAttribute('data-pill-ai-field') || '';
+            const entryId = pillEl.getAttribute('data-pill-ai-entry-id') || '';
+            const currentValue = pillEl.getAttribute('data-pill-ai-value') || '';
+            const mappingKey = pillEl.getAttribute('data-pill-ai-map') || '';
+            const occurrenceRaw = Number(pillEl.getAttribute('data-pill-ai-occurrence'));
+            const occurrence = Number.isFinite(occurrenceRaw) ? Math.max(0, occurrenceRaw) : 0;
+            const field = this.getFieldDefinition(fieldKey);
+            if (!field || !entryId || Number.isNaN(entryIndex)) {
+                return;
+            }
+            if (isDateFieldType(field.type)) {
+                if (Date.now() < this.datePickerSuppressUntil) {
+                    return;
+                }
+                this.openDatePicker({
+                    field,
+                    value: currentValue,
+                    entryIndex,
+                    anchorEl: pillEl,
+                    sourceRegion,
+                    aiContext: {
+                        entryId,
+                        fieldKey,
+                        currentValue,
+                        occurrence,
+                        mappingKey,
+                        sourceRegion
+                    }
+                });
+                return;
+            }
+            if (!this.fieldSupportsDropdown(field, entryId, fieldKey)) {
+                return;
+            }
+            const options = this.getDropdownOptionsForField(field, entryId, fieldKey);
+            if (options.length === 0) {
+                return;
+            }
+            this.dropdownState = {
+                fieldKey,
+                fieldType: field.type,
+                tokenId: '',
+                entryIndex,
+                entryKey: entryId,
+                currentValue,
+                allowCustom: !!field.allowCustom,
+                options,
+                sourceRegion,
+                anchorRect: pillEl.getBoundingClientRect(),
+                anchorEl: pillEl,
+                source: 'click',
+                activeOptionValue: null,
+                filteredOptions: [],
+                activateFirstOnOpen: true,
+                keepActiveWhenFiltering: false,
+                aiContext: {
+                    entryId,
+                    fieldKey,
+                    currentValue,
+                    occurrence,
+                    mappingKey,
+                    sourceRegion
+                }
+            };
+            if (this.timer) {
+                clearTimeout(this.timer);
+                this.timer = null;
+            }
+            this.dropdownSearchEl.hidden = false;
+            this.dropdownSearchEl.value = '';
+            this.renderDropdownList();
+            this.positionDropdown(pillEl);
+            this.dropdownEl.hidden = false;
+            this.dropdownEl.classList.add(this.config.classNames.dropdownOpen);
+            this.scrollDropdownActiveOptionIntoView();
+            this.dropdownSearchEl.focus();
+            this.dropdownSearchEl.select();
+            return;
+        }
+
         const fieldKey = pillEl.getAttribute('data-pill-field');
         const tokenId = pillEl.getAttribute('data-pill-token');
-        const entryIndex = Number(pillEl.getAttribute('data-pill-entry'));
-
-        if (!fieldKey || !tokenId || Number.isNaN(entryIndex)) {
+        const pillValue = pillEl.getAttribute('data-pill-value') || '';
+        if (!fieldKey || Number.isNaN(entryIndex)) {
             return;
         }
 
@@ -5859,16 +7080,16 @@
             return;
         }
 
-        const token = this.tokenMap[tokenId];
-        if (!token) {
-            return;
+        let token = tokenId ? this.tokenMap[tokenId] : null;
+        if (!token && pillValue) {
+            token = this.materializeEntryFieldToken(entryIndex, fieldKey, pillValue);
         }
 
         if (isDateFieldType(field.type)) {
             if (Date.now() < this.datePickerSuppressUntil) {
                 return;
             }
-            if (this.datePickerState && this.datePickerState.tokenId === tokenId) {
+            if (token && this.datePickerState && this.datePickerState.tokenId === token.id) {
                 this.closeDatePicker();
                 return;
             }
@@ -5877,30 +7098,43 @@
                 field,
                 token,
                 entryIndex,
-                anchorEl: pillEl
+                anchorEl: pillEl,
+                sourceRegion: pillEl.closest('[data-role="preview"]') ? 'card' : 'inline'
             });
             return;
         }
 
-        if (field.type !== 'options') {
+        if (!this.fieldSupportsDropdown(field, entryIndex, fieldKey)) {
             return;
         }
 
-        const options = getFieldOptions(field);
+        const options = this.getDropdownOptionsForField(field, entryIndex, fieldKey);
         if (options.length === 0) {
             return;
         }
 
         this.dropdownState = {
             fieldKey,
-            tokenId,
+            fieldType: field.type,
+            tokenId: token ? token.id : '',
             entryIndex,
-            currentValue: token.value,
+            entryKey: entryIndex,
+            currentValue: token ? token.value : pillValue,
             allowCustom: !!field.allowCustom,
             options,
+            sourceRegion: 'card',
+            anchorRect: pillEl.getBoundingClientRect(),
             anchorEl: pillEl,
-            source: 'click'
+            source: 'click',
+            activeOptionValue: null,
+            filteredOptions: [],
+            activateFirstOnOpen: true,
+            keepActiveWhenFiltering: false
         };
+        if (this.timer) {
+            clearTimeout(this.timer);
+            this.timer = null;
+        }
 
         this.dropdownSearchEl.hidden = false;
         this.dropdownSearchEl.value = '';
@@ -5908,6 +7142,7 @@
         this.positionDropdown(pillEl);
         this.dropdownEl.hidden = false;
         this.dropdownEl.classList.add(this.config.classNames.dropdownOpen);
+        this.scrollDropdownActiveOptionIntoView();
         this.dropdownSearchEl.focus();
         this.dropdownSearchEl.select();
     };
@@ -5940,50 +7175,78 @@
         const bounds = this.getFloatingBounds(anchorEl || this.inputEl);
         const pad = window.innerWidth <= 480 ? 8 : 10;
         const viewportWidth = Math.max(0, (bounds.right - bounds.left) - (pad * 2));
-        const preferredWidth = Math.max(200, (rect.width || 0) + 40);
-        const width = Math.min(360, viewportWidth, preferredWidth);
+        const preferredWidth = Math.max(260, Math.min(320, viewportWidth));
+        const width = Math.min(preferredWidth, viewportWidth);
         const minLeft = bounds.left + pad;
         const maxLeft = bounds.right - width - pad;
         const left = Math.max(minLeft, Math.min(rect.left || minLeft, maxLeft));
 
-        const belowTop = (rect.bottom || rect.top || 0) + 8;
-        const approxHeight = 280;
+        const prevHidden = this.dropdownEl.hidden;
+        const prevVisibility = this.dropdownEl.style.visibility;
+        const prevDisplay = this.dropdownEl.style.display;
+        this.dropdownEl.hidden = false;
+        this.dropdownEl.style.visibility = 'hidden';
+        this.dropdownEl.style.removeProperty('display');
+        this.dropdownEl.style.width = `${width}px`;
+        this.dropdownEl.style.removeProperty('maxHeight');
+        const measuredHeight = Math.ceil(this.dropdownEl.getBoundingClientRect().height || this.dropdownEl.scrollHeight || 0);
+        if (prevHidden) {
+            this.dropdownEl.hidden = true;
+        }
+        this.dropdownEl.style.visibility = prevVisibility;
+        if (prevDisplay) {
+            this.dropdownEl.style.display = prevDisplay;
+        } else {
+            this.dropdownEl.style.removeProperty('display');
+        }
+
+        const gap = 0;
+        const anchorTop = rect.top || 0;
+        const anchorBottom = rect.bottom || rect.top || 0;
         const minTop = bounds.top + pad;
         const maxBottom = bounds.bottom - pad;
-        let top = belowTop;
-        if (belowTop + approxHeight > maxBottom) {
-            top = Math.max(minTop, (rect.top || 0) - approxHeight - 8);
+        const availableBelow = Math.max(0, maxBottom - (anchorBottom + gap));
+        const availableAbove = Math.max(0, (anchorTop - gap) - minTop);
+        const maxPanelHeight = window.innerWidth <= 480 ? 120 : 132;
+        const desiredHeight = Math.max(96, Math.min(measuredHeight || maxPanelHeight, maxPanelHeight));
+        let placeBelow = availableBelow >= availableAbove;
+        if (availableBelow >= desiredHeight) {
+            placeBelow = true;
+        } else if (availableAbove >= desiredHeight) {
+            placeBelow = false;
         }
-        if (top + approxHeight > maxBottom) {
-            top = Math.max(minTop, maxBottom - approxHeight);
+        const panelHeight = Math.max(0, Math.min(placeBelow ? availableBelow : availableAbove, maxPanelHeight));
+        let top = placeBelow
+            ? (anchorBottom + gap)
+            : Math.max(minTop, (anchorTop - gap) - panelHeight);
+        if (placeBelow && top + panelHeight > maxBottom) {
+            top = Math.max(minTop, maxBottom - panelHeight);
         }
 
         this.dropdownEl.style.position = 'fixed';
         this.dropdownEl.style.left = `${left}px`;
         this.dropdownEl.style.top = `${top}px`;
         this.dropdownEl.style.width = `${width}px`;
-        this.dropdownEl.style.maxWidth = `${Math.max(0, bounds.right - bounds.left - (pad * 2))}px`;
+        this.dropdownEl.style.maxWidth = `${Math.max(0, viewportWidth)}px`;
+        this.dropdownEl.style.maxHeight = `${Math.floor(panelHeight)}px`;
         this.dropdownEl.style.zIndex = '9999';
+        const searchHeight = (this.dropdownSearchEl && !this.dropdownSearchEl.hidden)
+            ? Math.ceil(this.dropdownSearchEl.getBoundingClientRect().height || 0)
+            : 0;
+        const listMaxHeight = Math.max(0, panelHeight - searchHeight - 1);
+        this.dropdownListEl.style.maxHeight = `${Math.floor(listMaxHeight)}px`;
     };
 
     QuickAddComponent.prototype.positionDropdown = function positionDropdown(anchorEl) {
-        this.positionDropdownAtRect(anchorEl.getBoundingClientRect(), anchorEl);
-    };
-
-    QuickAddComponent.prototype.supportsCssAnchorPositioning = function supportsCssAnchorPositioning() {
-        if (this.anchorSupportChecked) {
-            return this.anchorSupported;
-        }
-        this.anchorSupportChecked = true;
-        this.anchorSupported = false;
-        if (!window.CSS || typeof window.CSS.supports !== 'function') {
-            return this.anchorSupported;
-        }
-        const hasAnchorName = window.CSS.supports('anchor-name: --qa-anchor-test');
-        const hasPositionAnchor = window.CSS.supports('position-anchor: --qa-anchor-test');
-        const hasAnchorFn = window.CSS.supports('top: anchor(bottom)');
-        this.anchorSupported = hasAnchorName && hasPositionAnchor && hasAnchorFn;
-        return this.anchorSupported;
+        const state = this.dropdownState || {};
+        const anchorConnected = !!(anchorEl && anchorEl.isConnected && typeof anchorEl.getBoundingClientRect === 'function');
+        const rect = anchorConnected
+            ? anchorEl.getBoundingClientRect()
+            : (state.anchorRect || this.getCaretClientRect());
+        const fallbackAnchor = state.sourceRegion === 'card'
+            ? (this.previewEl || this.mountEl || this.inputEl)
+            : this.inputEl;
+        this.positionDropdownAtRect(rect, anchorConnected ? anchorEl : fallbackAnchor);
     };
 
     QuickAddComponent.prototype.showBlockedInfoFromElement = function showBlockedInfoFromElement(element) {
@@ -6014,91 +7277,41 @@
             <span class="${c.blockedInfoText}">${safeReason}</span>
         `;
         this.blockedInfoState = { reason: reason || '' };
-        const useAnchor = !!anchorEl && this.supportsCssAnchorPositioning();
-        this.blockedInfoEl.classList.toggle(c.blockedInfoAnchored, useAnchor);
-        this.blockedInfoEl.classList.remove(
-            c.blockedInfoAnchorBelowStart,
-            c.blockedInfoAnchorBelowEnd,
-            c.blockedInfoAnchorAboveStart,
-            c.blockedInfoAnchorAboveEnd
-        );
-
-        if (useAnchor) {
-            this.blockedAnchorEl = anchorEl;
-            this.blockedAnchorEl.style.anchorName = '--qa-blocked-anchor';
-            const rect = anchorEl.getBoundingClientRect();
-            const pad = window.innerWidth <= 480 ? 8 : 10;
-            const minWidth = 170;
-            const maxViewportWidth = Math.max(minWidth, window.innerWidth - (pad * 2));
-            const preferredWidth = Math.max(220, (rect.width || 0) + 90);
-            const spaceRight = Math.max(0, window.innerWidth - (rect.left || 0) - pad);
-            const spaceLeft = Math.max(0, (rect.right || 0) - pad);
-            const useStart = spaceRight >= spaceLeft;
-            const chosenSpace = Math.max(minWidth, useStart ? spaceRight : spaceLeft);
-            const width = Math.min(420, maxViewportWidth, chosenSpace, preferredWidth);
-
-            const spaceBelow = Math.max(0, window.innerHeight - (rect.bottom || 0) - pad);
-            const spaceAbove = Math.max(0, (rect.top || 0) - pad);
-            const useBelow = spaceBelow >= spaceAbove;
-            const maxHeight = Math.max(56, Math.min(220, (useBelow ? spaceBelow : spaceAbove) - 8));
-
-            this.blockedInfoEl.style.position = 'fixed';
-            this.blockedInfoEl.style.width = `${Math.floor(width)}px`;
-            this.blockedInfoEl.style.maxWidth = `${Math.floor(width)}px`;
-            this.blockedInfoEl.style.maxHeight = `${Math.floor(maxHeight)}px`;
-            this.blockedInfoEl.style.zIndex = '10000';
-            this.blockedInfoEl.style.overflow = 'auto';
-            this.blockedInfoEl.style.setProperty('position-anchor', '--qa-blocked-anchor');
-            this.blockedInfoEl.style.removeProperty('left');
-            this.blockedInfoEl.style.removeProperty('top');
-            this.blockedInfoEl.style.removeProperty('marginTop');
-            this.blockedInfoEl.style.removeProperty('position-try-fallbacks');
-            if (useBelow && useStart) {
-                this.blockedInfoEl.classList.add(c.blockedInfoAnchorBelowStart);
-            } else if (useBelow && !useStart) {
-                this.blockedInfoEl.classList.add(c.blockedInfoAnchorBelowEnd);
-            } else if (!useBelow && useStart) {
-                this.blockedInfoEl.classList.add(c.blockedInfoAnchorAboveStart);
-            } else {
-                this.blockedInfoEl.classList.add(c.blockedInfoAnchorAboveEnd);
-            }
-        } else {
-            const rect = anchorEl && anchorEl.getBoundingClientRect
-                ? anchorEl.getBoundingClientRect()
-                : this.inputEl.getBoundingClientRect();
-
-            const pad = window.innerWidth <= 480 ? 8 : 10;
-            const viewportWidth = Math.max(0, window.innerWidth - (pad * 2));
-            const width = Math.min(420, viewportWidth, Math.max(180, (rect.width || 0) + 90));
-            const left = Math.max(pad, Math.min(rect.left || 0, window.innerWidth - width - pad));
-            const belowTop = (rect.bottom || rect.top || 0) + 8;
-            const approxHeight = 56;
-            let top = belowTop;
-            if (belowTop + approxHeight > window.innerHeight) {
-                top = Math.max(pad, (rect.top || 0) - approxHeight - 8);
-            }
-            if (top + approxHeight > window.innerHeight - pad) {
-                top = Math.max(pad, window.innerHeight - approxHeight - pad);
-            }
-            this.blockedInfoEl.style.position = 'fixed';
-            this.blockedInfoEl.style.left = `${left}px`;
-            this.blockedInfoEl.style.top = `${top}px`;
-            this.blockedInfoEl.style.marginTop = '0';
-            this.blockedInfoEl.style.width = `${width}px`;
-            this.blockedInfoEl.style.maxWidth = `${viewportWidth}px`;
-            this.blockedInfoEl.style.zIndex = '10000';
-            this.blockedInfoEl.style.removeProperty('position-anchor');
-            this.blockedInfoEl.style.removeProperty('position-try-fallbacks');
-        }
+        const rect = anchorEl && anchorEl.getBoundingClientRect
+            ? anchorEl.getBoundingClientRect()
+            : this.inputEl.getBoundingClientRect();
+        const bounds = this.getFloatingBounds(anchorEl || this.inputEl);
+        const pad = window.innerWidth <= 480 ? 8 : 10;
+        const viewportWidth = Math.max(0, (bounds.right - bounds.left) - (pad * 2));
+        const width = Math.min(420, viewportWidth, Math.max(180, (rect.width || 0) + 90));
+        const left = Math.max(bounds.left + pad, Math.min(rect.left || bounds.left, bounds.right - width - pad));
+        const minTop = bounds.top + pad;
+        const maxBottom = bounds.bottom - pad;
+        const belowTop = (rect.bottom || rect.top || 0) + 8;
+        const aboveBottom = (rect.top || 0) - 8;
+        const availableBelow = Math.max(0, maxBottom - belowTop);
+        const availableAbove = Math.max(0, aboveBottom - minTop);
+        const placeBelow = availableBelow >= availableAbove;
+        const maxHeight = Math.max(0, Math.min(220, placeBelow ? availableBelow : availableAbove));
+        const top = placeBelow
+            ? belowTop
+            : Math.max(minTop, aboveBottom - maxHeight);
+        this.blockedInfoEl.style.position = 'fixed';
+        this.blockedInfoEl.style.left = `${left}px`;
+        this.blockedInfoEl.style.top = `${top}px`;
+        this.blockedInfoEl.style.marginTop = '0';
+        this.blockedInfoEl.style.width = `${width}px`;
+        this.blockedInfoEl.style.maxWidth = `${viewportWidth}px`;
+        this.blockedInfoEl.style.maxHeight = `${Math.floor(maxHeight)}px`;
+        this.blockedInfoEl.style.overflow = 'auto';
+        this.blockedInfoEl.style.zIndex = '10000';
+        this.blockedInfoEl.style.removeProperty('position-anchor');
+        this.blockedInfoEl.style.removeProperty('position-try-fallbacks');
         this.blockedInfoEl.hidden = false;
     };
 
     QuickAddComponent.prototype.closeBlockedInfo = function closeBlockedInfo() {
         this.blockedInfoState = null;
-        if (this.blockedAnchorEl) {
-            this.blockedAnchorEl.style.anchorName = '';
-            this.blockedAnchorEl = null;
-        }
         if (!this.blockedInfoEl) {
             return;
         }
@@ -6115,8 +7328,30 @@
         }
 
         const c = this.config.classNames;
-        const queryRaw = this.dropdownSearchEl.value || '';
-        const query = queryRaw.trim().toLowerCase();
+        const field = this.getFieldDefinition(this.dropdownState.fieldKey);
+        const isMultiSelectOptions = !!(field && field.type === 'options' && field.multiple);
+        const queryRaw = String(this.dropdownSearchEl.value || '');
+        const separator = String(this.config.multiSelectSeparator || ',');
+        let filterRaw = queryRaw;
+        let selectedTokens = [];
+        if (this.dropdownState.source === 'typing' && isMultiSelectOptions) {
+            const parts = separator
+                ? queryRaw.split(separator)
+                : [queryRaw];
+            if (parts.length > 1) {
+                filterRaw = parts[parts.length - 1];
+                selectedTokens = parts.slice(0, -1).map((item) => item.trim()).filter(Boolean);
+            }
+        }
+        const query = filterRaw.trim().toLowerCase();
+        const selectedNorm = new Set(selectedTokens.map((item) => normValue(item)));
+        const currentRawValues = this.dropdownState.currentValue;
+        const currentValues = Array.isArray(currentRawValues)
+            ? currentRawValues
+            : (currentRawValues === undefined || currentRawValues === null || currentRawValues === ''
+                ? []
+                : splitByMultiSeparator(currentRawValues, separator));
+        currentValues.forEach((item) => selectedNorm.add(normValue(item)));
 
         const dependencyFiltered = this.dropdownState.options.filter((option) =>
             this.isFieldValueDependencyAllowed(this.dropdownState.fieldKey, option.value, this.dropdownState.entryIndex).ok
@@ -6130,12 +7365,20 @@
 
         const items = filtered.map((option) => {
             const colorStyle = option.color ? ` style="background:${escHtml(option.color)}"` : '';
-            const selected = normValue(option.value) === normValue(this.dropdownState.currentValue);
+            const selected = isMultiSelectOptions
+                ? selectedNorm.has(normValue(option.value))
+                : normValue(option.value) === normValue(this.dropdownState.currentValue);
+            const active = this.dropdownState.activeOptionValue !== null
+                && this.dropdownState.activeOptionValue !== undefined
+                && normValue(option.value) === normValue(this.dropdownState.activeOptionValue);
+            const usedMeta = Number(option.usedCount || 0) > 0
+                ? `<span class="${c.dropdownMeta}">${Number(option.usedCount)} used</span>`
+                : '';
             return `
-                <button type="button" class="${c.dropdownOption}" data-option-value="${escHtml(option.value)}">
+                <button type="button" class="${c.dropdownOption}${active ? ` ${c.dropdownOptionActive}` : ''}" data-option-value="${escHtml(option.value)}">
                     <span class="${c.dropdownColor}"${colorStyle}></span>
-                    <span>${escHtml(option.label)}</span>
-                    ${selected ? `<span class="${c.dropdownMeta}">current</span>` : ''}
+                    <span class="qa-dropdown-label">${escHtml(option.label)}</span>
+                    ${selected ? `<span class="${c.dropdownMeta}" aria-hidden="true">✓</span>` : usedMeta}
                 </button>
             `;
         });
@@ -6146,15 +7389,15 @@
 
         const customAllowedByDependency = this.isFieldValueDependencyAllowed(
             this.dropdownState.fieldKey,
-            queryRaw.trim(),
+            filterRaw.trim(),
             this.dropdownState.entryIndex
         ).ok;
 
-        if (this.dropdownState.allowCustom && query && !exactMatch && customAllowedByDependency) {
+        if (this.dropdownState.allowCustom && !isFileFieldType(this.dropdownState.fieldType) && query && !exactMatch && customAllowedByDependency) {
             items.push(`
-                <button type="button" class="${c.dropdownOption} ${c.dropdownAdd}" data-option-value="${escHtml(queryRaw.trim())}">
+                <button type="button" class="${c.dropdownOption} ${c.dropdownAdd}" data-option-value="${escHtml(filterRaw.trim())}">
                     <span class="${c.dropdownColor}"></span>
-                    <span>Add "${escHtml(queryRaw.trim())}"</span>
+                    <span class="qa-dropdown-label">Add "${escHtml(filterRaw.trim())}"</span>
                     <span class="${c.dropdownMeta}">custom</span>
                 </button>
             `);
@@ -6164,10 +7407,64 @@
             const dependencyBlocked = dependencyFiltered.length === 0;
             const msg = dependencyBlocked ? 'No options (constraints active)' : 'No options';
             this.dropdownListEl.innerHTML = `<div class="${c.dropdownMeta}" style="padding:8px 10px;">${escHtml(msg)}</div>`;
+            this.dropdownState.filteredOptions = [];
+            this.dropdownState.activeOptionValue = null;
             return;
         }
 
+        this.dropdownState.filteredOptions = filtered.slice();
+        const hasActive = this.dropdownState.activeOptionValue !== null
+            && this.dropdownState.activeOptionValue !== undefined
+            && filtered.some((option) => normValue(option.value) === normValue(this.dropdownState.activeOptionValue));
+        if (!hasActive && this.dropdownState.activateFirstOnOpen) {
+            const firstSelected = filtered.find((option) => selectedNorm.has(normValue(option.value)));
+            this.dropdownState.activeOptionValue = (firstSelected || filtered[0] || {}).value || null;
+            this.dropdownState.activateFirstOnOpen = false;
+            return this.renderDropdownList();
+        }
+        if (!hasActive && !this.dropdownState.keepActiveWhenFiltering) {
+            this.dropdownState.activeOptionValue = null;
+        }
+        this.dropdownState.keepActiveWhenFiltering = false;
         this.dropdownListEl.innerHTML = items.join('');
+    };
+
+    QuickAddComponent.prototype.scrollDropdownActiveOptionIntoView = function scrollDropdownActiveOptionIntoView() {
+        if (!this.dropdownState || !this.dropdownListEl) {
+            return;
+        }
+        const activeValue = this.dropdownState.activeOptionValue;
+        if (activeValue === undefined || activeValue === null) {
+            return;
+        }
+        const buttons = Array.from(this.dropdownListEl.querySelectorAll('[data-option-value]'));
+        const match = buttons.find((btn) => normValue(btn.getAttribute('data-option-value')) === normValue(activeValue));
+        if (match && typeof match.scrollIntoView === 'function') {
+            match.scrollIntoView({ block: 'nearest' });
+        }
+    };
+
+    QuickAddComponent.prototype.moveDropdownActiveOption = function moveDropdownActiveOption(direction) {
+        if (!this.dropdownState) {
+            return;
+        }
+        const filtered = Array.isArray(this.dropdownState.filteredOptions) ? this.dropdownState.filteredOptions : [];
+        if (!filtered.length) {
+            this.dropdownState.activeOptionValue = null;
+            this.renderDropdownList();
+            return;
+        }
+        const currentValue = this.dropdownState.activeOptionValue;
+        let index = filtered.findIndex((option) => normValue(option.value) === normValue(currentValue));
+        if (index === -1) {
+            index = direction > 0 ? 0 : filtered.length - 1;
+        } else {
+            index = (index + direction + filtered.length) % filtered.length;
+        }
+        this.dropdownState.activeOptionValue = filtered[index].value;
+        this.dropdownState.keepActiveWhenFiltering = true;
+        this.renderDropdownList();
+        this.scrollDropdownActiveOptionIntoView();
     };
 
     QuickAddComponent.prototype.replaceRange = function replaceRange(text, start, end, replacement) {
@@ -6178,26 +7475,100 @@
         if (!this.dropdownState) {
             return;
         }
+        const state = Object.assign({}, this.dropdownState);
+        const field = this.getFieldDefinition(state.fieldKey);
+        const isMultiSelectOptions = !!(field && field.type === 'options' && field.multiple);
+        const selectedOption = (state.options || []).find((option) => normValue(option.value) === normValue(nextValue)) || null;
         const allowed = this.isFieldValueDependencyAllowed(
-            this.dropdownState.fieldKey,
+            state.fieldKey,
             nextValue,
-            this.dropdownState.entryIndex
+            state.entryIndex
         );
         if (!allowed.ok) {
             return;
         }
 
-        const token = this.tokenMap[this.dropdownState.tokenId];
+        if (isFileFieldType(state.fieldType) && selectedOption && selectedOption.attachmentId) {
+            const targetEntryKey = state.aiContext
+                ? state.aiContext.entryId
+                : state.entryKey;
+            this.closeDropdown();
+            this.linkAttachmentToEntryField(
+                targetEntryKey,
+                state.fieldKey,
+                selectedOption.attachmentId,
+                false,
+                state.tokenId || ''
+            );
+            return;
+        }
+
+        if (state.aiContext) {
+            const context = Object.assign({}, state.aiContext);
+            if (!isMultiSelectOptions) {
+                this.closeDropdown();
+            }
+            this.applyAIFieldSelection({
+                entryId: context.entryId,
+                fieldKey: context.fieldKey,
+                currentValue: context.currentValue,
+                occurrence: context.occurrence,
+                mappingKey: context.mappingKey,
+                entryIndex: state.entryIndex,
+                nextValue,
+                toggleSelection: isMultiSelectOptions,
+                keepDropdownOpen: isMultiSelectOptions,
+                sourceRegion: state.sourceRegion,
+                anchorEl: state.anchorEl,
+                anchorRect: state.anchorRect
+            });
+            return;
+        }
+
+        const token = this.tokenMap[state.tokenId];
         if (!token) {
             this.closeDropdown();
             return;
         }
 
         const source = this.inputText || this.readInputText();
-        let updated = this.replaceRange(source, token.globalValueStart, token.globalValueEnd, nextValue);
-        let caret = token.globalValueStart + String(nextValue).length;
+        const separator = String(this.config.multiSelectSeparator || ',');
+        const fromTyping = state.source === 'typing';
+        let replacement = String(nextValue);
+        let updated = source;
+        let caret = token.globalValueStart + replacement.length;
+        let keepOpen = false;
+
+        if (isMultiSelectOptions) {
+            keepOpen = true;
+            let values;
+            if (fromTyping) {
+                const parts = separator ? String(token.value || '').split(separator) : [String(token.value || '')];
+                values = parts.length > 1
+                    ? parts.slice(0, -1).map((item) => item.trim()).filter(Boolean)
+                    : splitByMultiSeparator(token.value || '', separator);
+            } else {
+                values = splitByMultiSeparator(token.value || '', separator);
+            }
+            const selectedNorm = normValue(nextValue);
+            const existingIndex = values.findIndex((item) => normValue(item) === selectedNorm);
+            const didAdd = existingIndex === -1;
+            if (didAdd) {
+                values.push(String(nextValue));
+            } else {
+                values.splice(existingIndex, 1);
+            }
+            replacement = values.join(`${separator} `);
+            if (fromTyping && didAdd && values.length > 0) {
+                replacement = `${replacement}${separator} `;
+            }
+            caret = token.globalValueStart + replacement.length;
+            updated = this.replaceRange(source, token.globalValueStart, token.globalValueEnd, replacement);
+        } else {
+            updated = this.replaceRange(source, token.globalValueStart, token.globalValueEnd, replacement);
+        }
+
         const terminator = String(this.config.fieldTerminator || '');
-        const fromTyping = this.dropdownState && this.dropdownState.source === 'typing';
 
         if (!token.committed && terminator) {
             const tokenTail = updated.slice(caret, caret + terminator.length);
@@ -6218,8 +7589,217 @@
             }
         }
 
-        this.closeDropdown();
-        this.parseAndRender({ source: updated, caretOffset: caret, focusInput: true });
+        if (this.timer) {
+            clearTimeout(this.timer);
+            this.timer = null;
+        }
+
+        const focusInput = state.sourceRegion !== 'card';
+        if (!keepOpen) {
+            this.closeDropdown();
+        }
+        this.parseAndRender({
+            source: updated,
+            caretOffset: caret,
+            focusInput,
+            skipTypingSync: state.sourceRegion === 'card'
+        });
+
+        if (keepOpen && state.sourceRegion === 'card') {
+            const entry = (this.lastResult.entries || []).find((item) => item.index === state.entryIndex);
+            const nextToken = entry
+                ? (entry.tokens || []).filter((item) => item.kind === 'field' && item.key === state.fieldKey && item.committed).slice(-1)[0]
+                : null;
+            this.dropdownState = {
+                fieldKey: state.fieldKey,
+                fieldType: state.fieldType,
+                tokenId: nextToken ? nextToken.id : state.tokenId,
+                entryIndex: state.entryIndex,
+                entryKey: state.entryKey,
+                currentValue: replacement,
+                allowCustom: !!state.allowCustom,
+                options: Array.isArray(state.options) ? state.options.slice() : [],
+                sourceRegion: 'card',
+                anchorRect: state.anchorRect || (state.anchorEl && state.anchorEl.getBoundingClientRect ? state.anchorEl.getBoundingClientRect() : null),
+                anchorEl: state.anchorEl || null,
+                source: state.source,
+                activeOptionValue: nextValue,
+                filteredOptions: [],
+                activateFirstOnOpen: false,
+                keepActiveWhenFiltering: false
+            };
+            this.dropdownSearchEl.hidden = false;
+            this.dropdownSearchEl.value = '';
+            this.renderDropdownList();
+            this.positionDropdown(state.anchorEl);
+            this.dropdownEl.hidden = false;
+            this.dropdownEl.classList.add(this.config.classNames.dropdownOpen);
+            this.scrollDropdownActiveOptionIntoView();
+            this.dropdownSearchEl.focus();
+        }
+    };
+
+    QuickAddComponent.prototype.applyAIFieldSelection = function applyAIFieldSelection(options) {
+        if (!this.isAiMode() || !options) {
+            return;
+        }
+        const entryId = String(options.entryId || '');
+        const fieldKey = String(options.fieldKey || '');
+        if (!entryId || !fieldKey) {
+            return;
+        }
+        const entry = (this.aiState.entries || []).find((item) => item && item._id === entryId);
+        const field = this.getFieldDefinition(fieldKey);
+        if (!entry || !field) {
+            return;
+        }
+
+        const nextRaw = options.nextValue;
+        const normalizedNextValue = field.type === 'number'
+            ? Number(nextRaw)
+            : String(nextRaw === undefined || nextRaw === null ? '' : nextRaw);
+        if (field.type === 'number' && !Number.isFinite(normalizedNextValue)) {
+            return;
+        }
+
+        const occurrence = Math.max(0, Number.isFinite(Number(options.occurrence)) ? Number(options.occurrence) : 0);
+        const currentValue = options.currentValue;
+        const mappingKey = String(
+            options.mappingKey
+            || this.buildAIInlineMappingKey(entryId, fieldKey, currentValue, occurrence)
+        );
+        const mapping = this.aiInlineMarkIndex[mappingKey] || null;
+        const sourceRegion = options.sourceRegion === 'card' ? 'card' : 'inline';
+        const keepDropdownOpen = options.keepDropdownOpen === true;
+        const toggleSelection = options.toggleSelection === true;
+        const separator = String(this.config.multiSelectSeparator || ',');
+
+        if (field.multiple) {
+            const sourceValues = Array.isArray(entry[fieldKey])
+                ? entry[fieldKey].slice()
+                : (entry[fieldKey] === undefined || entry[fieldKey] === null || entry[fieldKey] === ''
+                    ? []
+                    : [entry[fieldKey]]);
+            if (toggleSelection && field.type === 'options') {
+                const idx = sourceValues.findIndex((item) => normValue(item) === normValue(normalizedNextValue));
+                if (idx === -1) {
+                    sourceValues.push(normalizedNextValue);
+                } else {
+                    sourceValues.splice(idx, 1);
+                }
+            } else {
+                if (sourceValues.length <= occurrence) {
+                    while (sourceValues.length < occurrence) {
+                        sourceValues.push('');
+                    }
+                    sourceValues.push(normalizedNextValue);
+                } else {
+                    sourceValues[occurrence] = normalizedNextValue;
+                }
+            }
+            entry[fieldKey] = sourceValues.filter((item) => item !== undefined && item !== null && item !== '');
+        } else {
+            entry[fieldKey] = normalizedNextValue;
+        }
+
+        if (Array.isArray(entry.spans) && mapping) {
+            const oldLength = Math.max(0, Number(mapping.end) - Number(mapping.start));
+            const nextLength = String(normalizedNextValue).length;
+            const delta = nextLength - oldLength;
+            let updatedCurrent = false;
+            entry.spans = entry.spans.map((span) => {
+                const start = Number(span && span.start);
+                const end = Number(span && span.end);
+                if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+                    return span;
+                }
+                if (!updatedCurrent && start === Number(mapping.start) && end === Number(mapping.end) && String(span.field || '') === fieldKey) {
+                    updatedCurrent = true;
+                    return Object.assign({}, span, {
+                        start,
+                        end: start + nextLength,
+                        value: normalizedNextValue
+                    });
+                }
+                if (start >= Number(mapping.end)) {
+                    return Object.assign({}, span, { start: start + delta, end: end + delta });
+                }
+                return span;
+            });
+            if (Number.isFinite(Number(entry._sourceEnd))) {
+                entry._sourceEnd = Number(entry._sourceEnd) + delta;
+            }
+        }
+
+        this.aiState.editedEntries.add(entryId);
+        this.aiState.error = '';
+        this.aiState.errorKind = '';
+
+        const source = this.inputText || this.readInputText();
+        let nextSource = source;
+        let caretOffset = null;
+        if (
+            sourceRegion !== 'card'
+            && mapping
+            && Number.isFinite(Number(mapping.start))
+            && Number.isFinite(Number(mapping.end))
+            && Number(mapping.end) > Number(mapping.start)
+        ) {
+            nextSource = this.replaceRange(source, Number(mapping.start), Number(mapping.end), String(normalizedNextValue));
+            caretOffset = Number(mapping.start) + String(normalizedNextValue).length;
+            this.aiState.lastParsedInput = nextSource;
+            this.aiState.lastAttemptedInput = nextSource;
+        }
+
+        const renderOptions = {
+            source: nextSource,
+            preserveSelection: true,
+            skipTypingSync: sourceRegion === 'card'
+        };
+        if (typeof caretOffset === 'number') {
+            renderOptions.caretOffset = caretOffset;
+            renderOptions.focusInput = sourceRegion !== 'card';
+        }
+        this.parseAndRender(renderOptions);
+
+        if (keepDropdownOpen && sourceRegion === 'card' && field.type === 'options') {
+            this.dropdownState = {
+                fieldKey,
+                fieldType: field.type,
+                tokenId: '',
+                entryIndex: Number.isFinite(Number(options.entryIndex)) ? Number(options.entryIndex) : 0,
+                entryKey: entryId,
+                currentValue: Array.isArray(entry[fieldKey])
+                    ? entry[fieldKey].join(`${separator} `)
+                    : String(entry[fieldKey] || ''),
+                allowCustom: !!field.allowCustom,
+                options: this.getDropdownOptionsForField(field, entryId, fieldKey),
+                sourceRegion: 'card',
+                anchorRect: options.anchorRect || (options.anchorEl && options.anchorEl.getBoundingClientRect ? options.anchorEl.getBoundingClientRect() : null),
+                anchorEl: options.anchorEl || null,
+                source: 'click',
+                aiContext: {
+                    entryId,
+                    fieldKey,
+                    currentValue: options.currentValue,
+                    occurrence,
+                    mappingKey,
+                    sourceRegion: 'card'
+                },
+                activeOptionValue: normalizedNextValue,
+                filteredOptions: [],
+                activateFirstOnOpen: false,
+                keepActiveWhenFiltering: false
+            };
+            this.dropdownSearchEl.hidden = false;
+            this.dropdownSearchEl.value = '';
+            this.renderDropdownList();
+            this.positionDropdown(options.anchorEl);
+            this.dropdownEl.hidden = false;
+            this.dropdownEl.classList.add(this.config.classNames.dropdownOpen);
+            this.scrollDropdownActiveOptionIntoView();
+            this.dropdownSearchEl.focus();
+        }
     };
 
     QuickAddComponent.prototype.closeDropdown = function closeDropdown() {
@@ -6232,6 +7812,8 @@
         this.dropdownListEl.innerHTML = '';
         this.dropdownSearchEl.hidden = false;
         this.dropdownSearchEl.value = '';
+        this.dropdownEl.style.removeProperty('maxHeight');
+        this.dropdownListEl.style.removeProperty('maxHeight');
     };
 
     QuickAddComponent.prototype.dismissSelection = function dismissSelection(dismissKey) {
@@ -6246,13 +7828,25 @@
     QuickAddComponent.prototype.setInput = function setInput(text) {
         this.inputText = text || '';
         this.dismissedSelections.clear();
-        this.attachmentsByEntry.clear();
+        this.closeAttachmentSourceMenu();
+        this.closeConflictModal();
         this.closeDropdown();
         this.closeBlockedInfo();
         this.parseAndRender({ source: this.inputText, caretOffset: this.inputText.length, focusInput: false });
     };
 
     QuickAddComponent.prototype.getResult = function getResult() {
+        if (this.isAiMode()) {
+            this.inputText = this.readInputText();
+            this.lastResult = this.syncEntryAttachmentMeta(this.buildAIResult());
+            const parseState = this.lastResult && this.lastResult.parseState
+                ? this.lastResult.parseState
+                : null;
+            if (parseState && parseState.shouldParse && !parseState.isOffline && !this.aiState.isProcessing) {
+                this.parseAI();
+                this.lastResult = this.syncEntryAttachmentMeta(this.buildAIResult());
+            }
+        }
         return this.lastResult;
     };
 
@@ -6281,6 +7875,8 @@
         }
 
         this.closeDropdown();
+        this.closeAttachmentSourceMenu();
+        this.closeConflictModal();
         this.closeBlockedInfo();
         this.closeDatePicker();
         this.unbindEvents();
@@ -6296,18 +7892,40 @@
             clearTimeout(this.timer);
         }
         this.timer = null;
+        (this.attachmentPool || []).forEach((item) => {
+            if (item && item.previewUrl) {
+                URL.revokeObjectURL(item.previewUrl);
+            }
+        });
+        this.attachmentPool = [];
         this.unbindEvents();
         this.closeBlockedInfo();
         this.closeDatePicker();
         this.closeDropdown();
+        this.closeAttachmentSourceMenu();
+        this.closeConflictModal();
 
         this.mountEl.innerHTML = '';
     };
 
-    global.QuickAdd = {
+    const quickAddApi = {
         create: function create(config) {
             return new QuickAddComponent(config);
         },
         parse: parseInput
     };
-})(window);
+    global.QuickAdd = quickAddApi;
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = quickAddApi;
+        module.exports.default = quickAddApi;
+    }
+    if (typeof define === 'function' && define.amd) {
+        define(function defineQuickAdd() {
+            return quickAddApi;
+        });
+    }
+})(typeof globalThis !== 'undefined'
+    ? globalThis
+    : (typeof self !== 'undefined'
+        ? self
+        : (typeof window !== 'undefined' ? window : this)));
