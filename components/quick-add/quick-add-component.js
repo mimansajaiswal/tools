@@ -70,12 +70,21 @@
         dropdown: 'qa-dropdown',
         dropdownOpen: 'qa-dropdown-open',
         dropdownSearch: 'qa-dropdown-search',
+        dropdownListWrap: 'qa-dropdown-list-wrap',
         dropdownList: 'qa-dropdown-list',
+        dropdownFadeTop: 'qa-dropdown-fade-top',
+        dropdownFadeBottom: 'qa-dropdown-fade-bottom',
         dropdownOption: 'qa-dropdown-option',
         dropdownOptionActive: 'qa-dropdown-option-active',
         dropdownAdd: 'qa-dropdown-add',
         dropdownColor: 'qa-dropdown-color',
         dropdownMeta: 'qa-dropdown-meta',
+        dropdownUsedMeta: 'qa-dropdown-used-meta',
+        dropdownCountMeta: 'qa-dropdown-count-meta',
+        dropdownUsedIcon: 'qa-dropdown-used-icon',
+        dropdownUsedDot: 'qa-dropdown-used-dot',
+        dropdownAttachmentPreview: 'qa-dropdown-attachment-preview',
+        dropdownAttachmentIcon: 'qa-dropdown-attachment-icon',
         datePicker: 'qa-date-picker',
         datePickerHeader: 'qa-date-picker-header',
         datePickerTitle: 'qa-date-picker-title',
@@ -104,6 +113,16 @@
         datePickerTimeInput: 'qa-date-picker-time-input',
         datePickerTimeHint: 'qa-date-picker-time-hint',
         datePickerWithTime: 'qa-date-picker-with-time',
+        numberPicker: 'qa-number-picker',
+        numberPickerControls: 'qa-number-picker-controls',
+        numberPickerBtn: 'qa-number-picker-btn',
+        numberPickerValue: 'qa-number-picker-value',
+        numberPickerStepWrap: 'qa-number-picker-step-wrap',
+        numberPickerStepLabel: 'qa-number-picker-step-label',
+        numberPickerStepInput: 'qa-number-picker-step-input',
+        numberPill: 'qa-number-pill',
+        numberPillStepper: 'qa-number-pill-stepper',
+        numberPillStepBtn: 'qa-number-pill-step-btn',
         blockedInfo: 'qa-blocked-info',
         blockedInfoIcon: 'qa-blocked-info-icon',
         blockedInfoText: 'qa-blocked-info-text',
@@ -145,34 +164,33 @@
         inlinePillHarness: null,
         mockResponse: null,
         mockLatencyMs: 0,
-        experimental: {},
         outputType: '',
         outputSchema: null,
         webSearch: false,
         tools: null
     };
 
-    const DEFAULT_AI_EXPERIMENTAL_CONFIG = {
-        inlinePills: false
-    };
-
     const DEFAULT_CONFIG = {
         mount: null,
-        mode: 'deterministic', // deterministic | ai
+        mode: 'deterministic',
         debounceMs: 300,
         allowMultipleEntries: true,
         entrySeparator: '\n',
         fieldTerminator: ';;',
-        fieldTerminatorMode: 'strict', // strict | or-next-prefix | or-end
+        fieldTerminatorMode: 'strict',
         multiSelectSeparator: ',',
+        multiSelectDisplaySeparator: ', ',
+        allowNumberMath: false,
+        enableNumberPillStepper: false,
+        numberPillStep: 1,
         escapeChar: '\\',
         fallbackField: 'title',
         showJsonOutput: true,
         showDropdownOnTyping: true,
+        showAttachmentDropdownPreview: true,
         showInlinePills: true,
         showEntryCards: true,
         showEntryHeader: true,
-        showEntryPills: true,
         inputHeightMode: 'grow',
         inputMaxHeight: null,
         allowMultipleAttachments: true,
@@ -181,7 +199,7 @@
         attachmentSources: null,
         autoDetectOptionsWithoutPrefix: false,
         reduceInferredOptions: true,
-        inferredMatchMode: 'exact', // exact | fuzzy
+        inferredMatchMode: 'exact',
         inferredMatchThreshold: 0.78,
         placeholder: 'Type entries with prefixes and terminators...',
         hintText: '',
@@ -217,7 +235,7 @@
                     href = url.toString();
                 }
             } catch (err) {
-                // Keep fallback href.
+                href = './quick-add/quick-add-component.css';
             }
         }
 
@@ -230,10 +248,13 @@
         merged.schema = Object.assign({}, DEFAULT_CONFIG.schema, merged.schema || {});
         merged.schema.fields = Array.isArray(merged.schema.fields) ? merged.schema.fields.slice() : [];
         merged.ai = Object.assign({}, DEFAULT_AI_CONFIG, merged.ai || {});
-        merged.ai.experimental = Object.assign({}, DEFAULT_AI_EXPERIMENTAL_CONFIG, merged.ai.experimental || {});
         merged.classNames = Object.assign({}, DEFAULT_CLASSNAMES, merged.classNames || {});
         merged.ai.webSearch = merged.ai.webSearch === true;
         merged.ai.tools = normalizeAiToolsConfig(merged.ai.tools);
+        const aiDebounceMs = Number(merged.ai.debounceMs);
+        merged.ai.debounceMs = Number.isFinite(aiDebounceMs) && aiDebounceMs >= 0
+            ? aiDebounceMs
+            : DEFAULT_AI_CONFIG.debounceMs;
         if (typeof merged.allowedAttachmentTypes === 'string') {
             merged.allowedAttachmentTypes = merged.allowedAttachmentTypes
                 .split(',')
@@ -244,9 +265,27 @@
         }
         merged.attachmentSources = normalizeAttachmentSources(merged.attachmentSources);
         merged.multiSelectSeparator = String(merged.multiSelectSeparator === undefined ? ',' : merged.multiSelectSeparator);
+        merged.multiSelectDisplaySeparator = String(
+            merged.multiSelectDisplaySeparator === undefined || merged.multiSelectDisplaySeparator === null
+                ? `${merged.multiSelectSeparator} `
+                : merged.multiSelectDisplaySeparator
+        );
         merged.showDropdownOnTyping = merged.showDropdownOnTyping !== false;
-        if (merged.multiSelectSeparator === merged.fieldTerminator || merged.multiSelectSeparator === merged.entrySeparator) {
-            throw new Error('QuickAdd: multiSelectSeparator must differ from fieldTerminator and entrySeparator');
+        merged.showAttachmentDropdownPreview = merged.showAttachmentDropdownPreview !== false;
+        merged.allowNumberMath = merged.allowNumberMath === true;
+        merged.enableNumberPillStepper = merged.enableNumberPillStepper === true;
+        const rawNumberStep = Number(merged.numberPillStep);
+        merged.numberPillStep = Number.isFinite(rawNumberStep) && rawNumberStep > 0 ? rawNumberStep : 1;
+        if (!merged.multiSelectSeparator) {
+            throw new Error('QuickAdd: multiSelectSeparator must be a non-empty string');
+        }
+        if (
+            merged.multiSelectSeparator === merged.fieldTerminator
+            || merged.multiSelectSeparator === merged.entrySeparator
+            || merged.multiSelectDisplaySeparator === merged.fieldTerminator
+            || merged.multiSelectDisplaySeparator === merged.entrySeparator
+        ) {
+            throw new Error('QuickAdd: multiSelectSeparator and multiSelectDisplaySeparator must differ from fieldTerminator and entrySeparator');
         }
         const promptMode = String(merged.ai.promptMode || 'default').toLowerCase();
         merged.ai.promptMode = promptMode === 'custom' ? 'custom' : 'default';
@@ -287,7 +326,7 @@
             key: '',
             label: '',
             prefixes: [],
-            type: 'string', // string | number | options | date | datetime | boolean | file
+            type: 'string',
             options: [],
             required: false,
             multiple: false,
@@ -300,14 +339,12 @@
             autoDetectWithoutPrefix: false,
             reduceInferredOptions: undefined,
             allowCustom: undefined,
-            exhaustive: undefined,
             dependsOn: undefined,
-            constraints: undefined
+            constraints: undefined,
+            allowMathExpression: undefined,
+            showNumberStepper: undefined,
+            numberStep: undefined
         }, field || {});
-
-        if (typeof normalized.exhaustive === 'boolean' && typeof normalized.allowCustom !== 'boolean') {
-            normalized.allowCustom = !normalized.exhaustive;
-        }
 
         if (typeof normalized.allowCustom !== 'boolean') {
             normalized.allowCustom = false;
@@ -693,7 +730,6 @@
             }
             let day = first;
             let month = second;
-            // If impossible as day/month, flip to month/day. If both are valid, prefer day/month.
             if (day <= 12 && month > 12) {
                 day = second;
                 month = first;
@@ -719,7 +755,6 @@
             return { ok: false, error: 'Missing date value' };
         }
 
-        // Preserve explicit YYYY-MM-DD values exactly; avoid timezone shifts from natural parsers.
         const strict = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
         if (strict) {
             return { ok: true, value: `${strict[1]}-${strict[2]}-${strict[3]}` };
@@ -1018,15 +1053,192 @@
         return { ok: false, error: `Invalid option for ${field.key}` };
     }
 
-    function splitByMultiSeparator(rawValue, separator) {
+    function dedupeMultiValues(values) {
+        const seen = new Set();
+        const output = [];
+        (Array.isArray(values) ? values : []).forEach((item) => {
+            const text = String(item === undefined || item === null ? '' : item).trim();
+            if (!text) {
+                return;
+            }
+            const key = normValue(text);
+            if (seen.has(key)) {
+                return;
+            }
+            seen.add(key);
+            output.push(text);
+        });
+        return output;
+    }
+
+    function normalizeMultiValues(rawValue, separator) {
+        if (Array.isArray(rawValue)) {
+            return dedupeMultiValues(rawValue);
+        }
         const text = String(rawValue || '');
         if (!separator) {
-            return text.split(',').map((item) => item.trim()).filter(Boolean);
+            return dedupeMultiValues(text.split(','));
         }
-        return text
-            .split(separator)
-            .map((item) => item.trim())
-            .filter(Boolean);
+        return dedupeMultiValues(text.split(String(separator)));
+    }
+
+    function splitByMultiSeparator(rawValue, separator) {
+        return normalizeMultiValues(rawValue, separator);
+    }
+
+    function evaluateMathExpression(rawValue) {
+        const source = String(rawValue || '').trim();
+        if (!source) {
+            return { ok: false, error: 'Empty math expression' };
+        }
+        const tokens = [];
+        let i = 0;
+        while (i < source.length) {
+            const ch = source.charAt(i);
+            if (/\s/.test(ch)) {
+                i += 1;
+                continue;
+            }
+            if (ch === '+' || ch === '-' || ch === '*' || ch === '/' || ch === '(' || ch === ')') {
+                tokens.push(ch);
+                i += 1;
+                continue;
+            }
+            if (/\d|\./.test(ch)) {
+                const start = i;
+                let dotCount = ch === '.' ? 1 : 0;
+                i += 1;
+                while (i < source.length) {
+                    const next = source.charAt(i);
+                    if (next === '.') {
+                        dotCount += 1;
+                        if (dotCount > 1) {
+                            return { ok: false, error: 'Invalid decimal expression' };
+                        }
+                        i += 1;
+                        continue;
+                    }
+                    if (/\d/.test(next)) {
+                        i += 1;
+                        continue;
+                    }
+                    break;
+                }
+                const rawNumber = source.slice(start, i);
+                if (rawNumber === '.' || rawNumber === '+.' || rawNumber === '-.') {
+                    return { ok: false, error: 'Invalid number in expression' };
+                }
+                const parsedNumber = Number(rawNumber);
+                if (!Number.isFinite(parsedNumber)) {
+                    return { ok: false, error: 'Invalid number in expression' };
+                }
+                tokens.push(parsedNumber);
+                continue;
+            }
+            return { ok: false, error: 'Expression contains unsupported characters' };
+        }
+
+        let cursor = 0;
+        const peek = () => tokens[cursor];
+        const consume = () => {
+            const token = tokens[cursor];
+            cursor += 1;
+            return token;
+        };
+
+        const parsePrimary = () => {
+            const token = peek();
+            if (typeof token === 'number') {
+                consume();
+                return { ok: true, value: token };
+            }
+            if (token === '(') {
+                consume();
+                const nested = parseExpression();
+                if (!nested.ok) {
+                    return nested;
+                }
+                if (peek() !== ')') {
+                    return { ok: false, error: 'Mismatched parentheses in expression' };
+                }
+                consume();
+                return nested;
+            }
+            return { ok: false, error: 'Invalid expression' };
+        };
+
+        const parseUnary = () => {
+            const token = peek();
+            if (token === '+') {
+                consume();
+                return parseUnary();
+            }
+            if (token === '-') {
+                consume();
+                const next = parseUnary();
+                if (!next.ok) {
+                    return next;
+                }
+                return { ok: true, value: -next.value };
+            }
+            return parsePrimary();
+        };
+
+        const parseTerm = () => {
+            let left = parseUnary();
+            if (!left.ok) {
+                return left;
+            }
+            while (peek() === '*' || peek() === '/') {
+                const op = consume();
+                const right = parseUnary();
+                if (!right.ok) {
+                    return right;
+                }
+                if (op === '*') {
+                    left = { ok: true, value: left.value * right.value };
+                } else {
+                    if (right.value === 0) {
+                        return { ok: false, error: 'Division by zero is not allowed' };
+                    }
+                    left = { ok: true, value: left.value / right.value };
+                }
+            }
+            return left;
+        };
+
+        function parseExpression() {
+            let left = parseTerm();
+            if (!left.ok) {
+                return left;
+            }
+            while (peek() === '+' || peek() === '-') {
+                const op = consume();
+                const right = parseTerm();
+                if (!right.ok) {
+                    return right;
+                }
+                left = {
+                    ok: true,
+                    value: op === '+'
+                        ? left.value + right.value
+                        : left.value - right.value
+                };
+            }
+            return left;
+        }
+
+        const resolved = parseExpression();
+        if (!resolved.ok) {
+            return resolved;
+        }
+        if (cursor !== tokens.length) {
+            return { ok: false, error: 'Invalid trailing expression' };
+        }
+        if (!Number.isFinite(resolved.value)) {
+            return { ok: false, error: 'Expression did not resolve to a finite number' };
+        }
+        return { ok: true, value: resolved.value };
     }
 
     function parseByType(field, rawValue, config) {
@@ -1038,6 +1250,16 @@
         }
 
         if (field.type === 'number') {
+            const allowMath = !!(
+                (field && field.allowMathExpression === true)
+                || (config && config.allowNumberMath === true)
+            );
+            if (allowMath) {
+                const evaluated = evaluateMathExpression(value);
+                if (evaluated.ok) {
+                    return { ok: true, value: evaluated.value };
+                }
+            }
             const parsed = Number(value);
             if (Number.isNaN(parsed)) {
                 return { ok: false, error: `Invalid number for ${field.key}` };
@@ -1047,9 +1269,7 @@
 
         if (field.type === 'options') {
             if (field.multiple) {
-                const segments = Array.isArray(rawValue)
-                    ? rawValue.map((item) => String(item).trim()).filter(Boolean)
-                    : splitByMultiSeparator(value, multiSelectSeparator);
+                const segments = normalizeMultiValues(rawValue, multiSelectSeparator);
                 if (segments.length === 0) {
                     return { ok: false, error: `Invalid option for ${field.key}` };
                 }
@@ -1081,6 +1301,9 @@
         }
 
         if (isFileFieldType(field.type)) {
+            if (field.multiple) {
+                return { ok: true, value: normalizeMultiValues(rawValue, multiSelectSeparator) };
+            }
             return { ok: true, value };
         }
 
@@ -1508,8 +1731,6 @@
 
         entry.inferred = (entry.inferred || []).filter((inf) => !blockedInferredIds.has(inf.id));
 
-        // For single-value fields, keep the latest valid explicit token.
-        // If the last explicit token was blocked, this restores the previous valid one.
         Object.keys(normalizedSchema.byKey).forEach((fieldKey) => {
             const field = normalizedSchema.byKey[fieldKey];
             if (!field || field.multiple) {
@@ -1551,7 +1772,10 @@
             if (!Array.isArray(fields[key])) {
                 fields[key] = [];
             }
-            fields[key].push(value);
+            const exists = fields[key].some((item) => normValue(item) === normValue(value));
+            if (!exists) {
+                fields[key].push(value);
+            }
             return;
         }
 
@@ -1967,7 +2191,6 @@
                 return;
             }
 
-            // Single-value fields: reduced => last mention, not reduced => first mention.
             const chosen = reduceInferred ? candidates[candidates.length - 1] : candidates[0];
             const parsed = parseByType(field, chosen.value, config);
             if (!parsed.ok) {
@@ -2064,7 +2287,8 @@
                 entrySeparator: config.entrySeparator,
                 fieldTerminator: config.fieldTerminator,
                 fieldTerminatorMode: config.fieldTerminatorMode,
-                multiSelectSeparator: config.multiSelectSeparator
+                multiSelectSeparator: config.multiSelectSeparator,
+                multiSelectDisplaySeparator: config.multiSelectDisplaySeparator
             }
         };
     }
@@ -2190,6 +2414,8 @@
         this.overlayDismissClickUntil = 0;
         this.dropdownState = null;
         this.datePickerState = null;
+        this.numberPickerState = null;
+        this.viewportRepositionFrame = 0;
         this.datePickerSuppressUntil = 0;
         this.datePickerInternalClickUntil = 0;
         this.blockedInfoState = null;
@@ -2205,7 +2431,7 @@
         this.applyTokens();
         this.applyInputSizing();
         this.bindEvents();
-        this.parseAndRender();
+        this.parseAndRender({ skipTypingSync: true });
     }
 
     QuickAddComponent.prototype.defaultHintText = function defaultHintText() {
@@ -2215,8 +2441,12 @@
                 ? 'AI mode: type natural language and pause to extract structured entries.'
                 : 'AI mode: auto-parse off. Click Parse Now to run extraction.';
         }
-        const separator = this.config.entrySeparator === '\n' ? 'newline' : this.config.entrySeparator;
-        return `Field terminator: "${this.config.fieldTerminator}" | Entry separator: "${separator}"`;
+        const escapeForHint = (value) => String(value === undefined || value === null ? '' : value)
+            .replace(/\\/g, '\\\\')
+            .replace(/\n/g, '\\n')
+            .replace(/\r/g, '\\r')
+            .replace(/\t/g, '\\t');
+        return `Field terminator: "${escapeForHint(this.config.fieldTerminator)}" | Entry separator: "${escapeForHint(this.config.entrySeparator)}"`;
     };
 
     QuickAddComponent.prototype.isAiMode = function isAiMode() {
@@ -2228,11 +2458,7 @@
             return false;
         }
         return this.config.showInlinePills !== false
-            && !!(this.config.ai
-                && (
-                    this.config.ai.inlinePills
-                    || (this.config.ai.experimental && this.config.ai.experimental.inlinePills)
-                ));
+            && !!(this.config.ai && this.config.ai.inlinePills);
     };
 
     QuickAddComponent.prototype.isAISeparatorAwareEnabled = function isAISeparatorAwareEnabled() {
@@ -2353,19 +2579,19 @@
         const input = String(this.inputText || this.readInputText() || '').trim();
         if (!input) {
             this.aiVerificationState = { status: 'error', message: 'Enter text before verifying.', signature: '' };
-            this.parseAndRender({ source: this.inputText, preserveSelection: true });
+            this.parseAndRender({ source: this.inputText });
             return { ok: false, message: 'Enter text before verifying.' };
         }
         const minInputLength = Math.max(0, Number(this.config.ai.minInputLength || 0));
         if (input.length < minInputLength) {
             const message = `Add at least ${minInputLength} characters to verify.`;
             this.aiVerificationState = { status: 'error', message, signature: '' };
-            this.parseAndRender({ source: this.inputText, preserveSelection: true });
+            this.parseAndRender({ source: this.inputText });
             return { ok: false, message };
         }
 
         this.aiVerificationState = { status: 'verifying', message: 'Verifying AI connection…', signature: '' };
-        this.parseAndRender({ source: this.inputText, preserveSelection: true });
+        this.parseAndRender({ source: this.inputText, skipTypingSync: true });
         try {
             await this.extractAIFromInput(input);
             this.aiVerificationState = {
@@ -2373,22 +2599,26 @@
                 message: 'Verified. AI connection is working.',
                 signature: this.buildAiRuntimeSignature()
             };
-            this.parseAndRender({ source: this.inputText, preserveSelection: true });
+            this.parseAndRender({ source: this.inputText });
             return { ok: true, message: 'Verified.' };
         } catch (err) {
             const message = err && err.message ? err.message : 'Verification failed.';
             this.aiVerificationState = { status: 'error', message, signature: '' };
-            this.parseAndRender({ source: this.inputText, preserveSelection: true });
+            this.parseAndRender({ source: this.inputText });
             return { ok: false, message };
         }
     };
 
     QuickAddComponent.prototype.normalizeAIAttachmentRefs = function normalizeAIAttachmentRefs(raw) {
-        if (raw === undefined || raw === null || raw === '') return [];
-        if (Array.isArray(raw)) {
-            return raw.map((item) => String(item || '').trim()).filter(Boolean);
+        if (raw === undefined || raw === null || raw === '') {
+            return [];
         }
-        return String(raw).split(/[,\n]+/).map((item) => item.trim()).filter(Boolean);
+        const separator = String(this.config.multiSelectSeparator || ',');
+        const primary = normalizeMultiValues(raw, separator);
+        if (primary.length > 1 || String(raw).includes(separator)) {
+            return primary;
+        }
+        return dedupeMultiValues(String(raw).split(/[,\n]+/));
     };
 
     QuickAddComponent.prototype.makeAIEntryId = function makeAIEntryId(seed) {
@@ -2522,7 +2752,7 @@
                 const parsed = JSON.parse(candidate);
                 return this.normalizeAIResponse(parsed);
             } catch (err) {
-                // Try next candidate.
+                continue;
             }
         }
 
@@ -3136,7 +3366,7 @@
         this.aiState.error = '';
         this.aiState.errorKind = '';
         this.aiState.callerRequest = this.buildAICallerRequest(input);
-        this.parseAndRender({ source: this.inputText, preserveSelection: true });
+        this.parseAndRender({ source: this.inputText, skipTypingSync: true });
 
         try {
             const result = await this.extractAIFromInput(input);
@@ -3155,7 +3385,7 @@
             if (requestId === this.aiState.requestSeq) {
                 this.aiState.isProcessing = false;
             }
-            this.parseAndRender({ source: this.inputText, preserveSelection: true });
+            this.parseAndRender({ source: this.inputText });
         }
     };
 
@@ -3250,7 +3480,6 @@
             providerRawResponse: String(this.aiState.providerRawResponse || ''),
             parseState,
             callerRequest,
-            parseRequest: callerRequest ? Object.assign({}, callerRequest) : null,
             verification: Object.assign({}, this.aiVerificationState)
         };
     };
@@ -3294,7 +3523,11 @@
                 ${outputBlock}
                 <div class="${c.dropdown}" data-role="dropdown" hidden>
                     <input class="${c.dropdownSearch}" data-role="dropdownSearch" type="text" placeholder="Filter options..." />
-                    <div class="${c.dropdownList}" data-role="dropdownList"></div>
+                    <div class="${c.dropdownListWrap}">
+                        <div class="${c.dropdownList}" data-role="dropdownList"></div>
+                        <div class="${c.dropdownFadeTop}" data-role="dropdownFadeTop" aria-hidden="true" hidden></div>
+                        <div class="${c.dropdownFadeBottom}" data-role="dropdownFadeBottom" aria-hidden="true" hidden></div>
+                    </div>
                 </div>
                 <div class="${c.attachmentSourceMenu}" data-role="attachmentSourceMenu" role="menu" aria-label="Attachment source" hidden></div>
                 <div class="${c.conflictModalOverlay}" data-role="conflictModalOverlay" hidden>
@@ -3315,6 +3548,7 @@
                         <div class="${c.datePickerTime}" data-role="datePickerTime" hidden></div>
                     </div>
                 </div>
+                <div class="${c.numberPicker}" data-role="numberPicker" role="dialog" aria-modal="false" aria-label="Adjust number" hidden></div>
             </div>
         `;
 
@@ -3327,6 +3561,8 @@
         this.dropdownEl = this.mountEl.querySelector('[data-role="dropdown"]');
         this.dropdownSearchEl = this.mountEl.querySelector('[data-role="dropdownSearch"]');
         this.dropdownListEl = this.mountEl.querySelector('[data-role="dropdownList"]');
+        this.dropdownFadeTopEl = this.mountEl.querySelector('[data-role="dropdownFadeTop"]');
+        this.dropdownFadeBottomEl = this.mountEl.querySelector('[data-role="dropdownFadeBottom"]');
         this.attachmentSourceMenuEl = this.mountEl.querySelector('[data-role="attachmentSourceMenu"]');
         this.conflictModalOverlayEl = this.mountEl.querySelector('[data-role="conflictModalOverlay"]');
         this.conflictModalEl = this.mountEl.querySelector('[data-role="conflictModal"]');
@@ -3336,6 +3572,7 @@
         this.datePickerGridEl = this.mountEl.querySelector('[data-role="datePickerGrid"]');
         this.datePickerQuickEl = this.mountEl.querySelector('[data-role="datePickerQuick"]');
         this.datePickerTimeEl = this.mountEl.querySelector('[data-role="datePickerTime"]');
+        this.numberPickerEl = this.mountEl.querySelector('[data-role="numberPicker"]');
         this.blockedInfoEl = null;
     };
 
@@ -3392,6 +3629,7 @@
         }
         this.closeBlockedInfo();
         this.closeDropdown();
+        this.closeNumberPicker();
         this.closeAttachmentSourceMenu();
         const defaultTime = normalizeTime24(options.field.defaultTime, DEFAULT_DATETIME_TIME);
         const rawValue = options.token
@@ -3449,6 +3687,338 @@
             this.datePickerTimeEl.innerHTML = '';
             this.datePickerTimeEl.hidden = true;
         }
+    };
+
+    QuickAddComponent.prototype.isNumberStepperEnabledForField = function isNumberStepperEnabledForField(field) {
+        if (!field || field.type !== 'number') {
+            return false;
+        }
+        if (field.showNumberStepper === true) {
+            return true;
+        }
+        if (field.showNumberStepper === false) {
+            return false;
+        }
+        return this.config.enableNumberPillStepper === true;
+    };
+
+    QuickAddComponent.prototype.resolveNumberStep = function resolveNumberStep(field, explicitStep) {
+        const direct = Number(explicitStep);
+        if (Number.isFinite(direct) && direct > 0) {
+            return direct;
+        }
+        const fieldStep = Number(field && field.numberStep);
+        if (Number.isFinite(fieldStep) && fieldStep > 0) {
+            return fieldStep;
+        }
+        const configStep = Number(this.config.numberPillStep);
+        if (Number.isFinite(configStep) && configStep > 0) {
+            return configStep;
+        }
+        return 1;
+    };
+
+    QuickAddComponent.prototype.openNumberPicker = function openNumberPicker(options) {
+        if (!options || !options.field || !this.isNumberStepperEnabledForField(options.field) || !this.numberPickerEl) {
+            return;
+        }
+        this.closeBlockedInfo();
+        this.closeDropdown();
+        this.closeDatePicker();
+        this.closeAttachmentSourceMenu();
+        const rawCurrent = options.token
+            ? options.token.value
+            : (options.value !== undefined && options.value !== null ? options.value : 0);
+        const parsedCurrent = Number(rawCurrent);
+        const currentValue = Number.isFinite(parsedCurrent) ? parsedCurrent : 0;
+        this.numberPickerState = {
+            fieldKey: options.field.key,
+            tokenId: options.token && options.token.id ? options.token.id : '',
+            entryIndex: Number.isFinite(Number(options.entryIndex)) ? Number(options.entryIndex) : 0,
+            entryKey: options.entryKey,
+            currentValue,
+            step: this.resolveNumberStep(options.field, options.step),
+            min: Number.isFinite(Number(options.field.min)) ? Number(options.field.min) : null,
+            max: Number.isFinite(Number(options.field.max)) ? Number(options.field.max) : null,
+            anchorEl: options.anchorEl || null,
+            anchorRect: options.anchorEl && options.anchorEl.getBoundingClientRect
+                ? options.anchorEl.getBoundingClientRect()
+                : (options.anchorRect || null),
+            sourceRegion: options.sourceRegion || 'inline',
+            aiContext: options.aiContext || null
+        };
+        this.renderNumberPicker();
+        this.positionNumberPicker(this.numberPickerState.anchorEl);
+        this.numberPickerEl.hidden = false;
+    };
+
+    QuickAddComponent.prototype.closeNumberPicker = function closeNumberPicker() {
+        this.numberPickerState = null;
+        if (!this.numberPickerEl) {
+            return;
+        }
+        this.numberPickerEl.hidden = true;
+        this.numberPickerEl.innerHTML = '';
+        this.numberPickerEl.style.removeProperty('position');
+        this.numberPickerEl.style.removeProperty('left');
+        this.numberPickerEl.style.removeProperty('top');
+        this.numberPickerEl.style.removeProperty('width');
+        this.numberPickerEl.style.removeProperty('max-width');
+        this.numberPickerEl.style.removeProperty('z-index');
+    };
+
+    QuickAddComponent.prototype.renderNumberPicker = function renderNumberPicker() {
+        if (!this.numberPickerEl || !this.numberPickerState) {
+            return;
+        }
+        const c = this.config.classNames;
+        const state = this.numberPickerState;
+        this.numberPickerEl.innerHTML = `
+            <div class="${c.numberPickerControls}">
+                <button type="button" class="${c.numberPickerBtn}" data-number-action="decrement" aria-label="Decrement value">−</button>
+                <div class="${c.numberPickerValue}" data-role="numberPickerValue">${escHtml(String(state.currentValue))}</div>
+                <button type="button" class="${c.numberPickerBtn}" data-number-action="increment" aria-label="Increment value">+</button>
+            </div>
+            <div class="${c.numberPickerStepWrap}">
+                <label class="${c.numberPickerStepLabel}">
+                    Step
+                    <input type="number" class="${c.numberPickerStepInput}" data-role="numberPickerStepInput" min="0.0000001" step="any" value="${escHtml(String(state.step))}" />
+                </label>
+            </div>
+        `;
+    };
+
+    QuickAddComponent.prototype.positionNumberPicker = function positionNumberPicker(anchorEl) {
+        if (!this.numberPickerEl || !this.numberPickerState) {
+            return;
+        }
+        const rect = anchorEl && anchorEl.getBoundingClientRect
+            ? anchorEl.getBoundingClientRect()
+            : (this.numberPickerState.anchorRect || this.getCaretClientRect());
+        const bounds = this.getFloatingBounds(anchorEl || this.inputEl);
+        const pad = window.innerWidth <= 480 ? 8 : 10;
+        const viewportWidth = Math.max(0, (bounds.right - bounds.left) - (pad * 2));
+        const preferredWidth = Math.max(188, Math.min(224, viewportWidth));
+        const width = Math.min(preferredWidth, viewportWidth);
+        const minLeft = bounds.left + pad;
+        const maxLeft = bounds.right - width - pad;
+        const left = Math.max(minLeft, Math.min(rect.left || minLeft, maxLeft));
+
+        const prevHidden = this.numberPickerEl.hidden;
+        const prevVisibility = this.numberPickerEl.style.visibility;
+        this.numberPickerEl.hidden = false;
+        this.numberPickerEl.style.visibility = 'hidden';
+        this.numberPickerEl.style.width = `${width}px`;
+        const measuredHeight = Math.ceil(this.numberPickerEl.getBoundingClientRect().height || this.numberPickerEl.scrollHeight || 0);
+        if (prevHidden) {
+            this.numberPickerEl.hidden = true;
+        }
+        this.numberPickerEl.style.visibility = prevVisibility;
+
+        const gap = 2;
+        const anchorTop = rect.top || 0;
+        const anchorBottom = rect.bottom || rect.top || 0;
+        const minTop = bounds.top + pad;
+        const maxBottom = bounds.bottom - pad;
+        const availableBelow = Math.max(0, maxBottom - (anchorBottom + gap));
+        const availableAbove = Math.max(0, (anchorTop - gap) - minTop);
+        const panelHeight = Math.max(0, Math.min(measuredHeight || 108, Math.max(availableBelow, availableAbove)));
+        const placeBelow = availableBelow >= availableAbove;
+        const top = placeBelow
+            ? (anchorBottom + gap)
+            : Math.max(minTop, (anchorTop - gap) - panelHeight);
+
+        this.numberPickerEl.style.position = 'fixed';
+        this.numberPickerEl.style.left = `${left}px`;
+        this.numberPickerEl.style.top = `${top}px`;
+        this.numberPickerEl.style.width = `${width}px`;
+        this.numberPickerEl.style.maxWidth = `${Math.max(0, viewportWidth)}px`;
+        this.numberPickerEl.style.zIndex = '9999';
+    };
+
+    QuickAddComponent.prototype.applyNumberStep = function applyNumberStep(direction) {
+        if (!this.numberPickerState) {
+            return;
+        }
+        const dir = direction < 0 ? -1 : 1;
+        const step = this.resolveNumberStep(this.getFieldDefinition(this.numberPickerState.fieldKey), this.numberPickerState.step);
+        const current = Number(this.numberPickerState.currentValue);
+        const base = Number.isFinite(current) ? current : 0;
+        let nextValue = base + (dir * step);
+        if (Number.isFinite(Number(this.numberPickerState.min))) {
+            nextValue = Math.max(Number(this.numberPickerState.min), nextValue);
+        }
+        if (Number.isFinite(Number(this.numberPickerState.max))) {
+            nextValue = Math.min(Number(this.numberPickerState.max), nextValue);
+        }
+        this.applyNumberValue(nextValue);
+    };
+
+    QuickAddComponent.prototype.applyNumberValue = function applyNumberValue(nextValue) {
+        if (!this.numberPickerState) {
+            return;
+        }
+        const state = Object.assign({}, this.numberPickerState);
+        const field = this.getFieldDefinition(state.fieldKey);
+        const numericValue = Number(nextValue);
+        if (!field || field.type !== 'number' || !Number.isFinite(numericValue)) {
+            return;
+        }
+
+        if (state.aiContext) {
+            const context = Object.assign({}, state.aiContext);
+            this.applyAIFieldSelection({
+                entryId: context.entryId,
+                fieldKey: context.fieldKey,
+                currentValue: context.currentValue,
+                occurrence: context.occurrence,
+                mappingKey: context.mappingKey,
+                entryIndex: state.entryIndex,
+                nextValue: numericValue,
+                sourceRegion: state.sourceRegion,
+                anchorEl: state.anchorEl,
+                anchorRect: state.anchorRect
+            });
+            this.numberPickerState = Object.assign({}, state, { currentValue: numericValue });
+            this.renderNumberPicker();
+            this.positionNumberPicker(state.anchorEl);
+            this.numberPickerEl.hidden = false;
+            return;
+        }
+
+        let token = this.tokenMap[state.tokenId];
+        if (!token && state.sourceRegion === 'card') {
+            token = this.materializeEntryFieldToken(state.entryIndex, state.fieldKey, state.currentValue, state.sourceRegion);
+        }
+        if (!token) {
+            this.closeNumberPicker();
+            return;
+        }
+        const source = this.inputText || this.readInputText();
+        const replacement = String(numericValue);
+        const updated = this.replaceRange(source, token.globalValueStart, token.globalValueEnd, replacement);
+        const caretOffset = token.globalValueStart + replacement.length;
+        this.parseAndRender({
+            source: updated,
+            caretOffset,
+            focusInput: state.sourceRegion !== 'card',
+            skipTypingSync: state.sourceRegion === 'card'
+        });
+        const nextEntry = (this.lastResult.entries || []).find((entry) => entry.index === state.entryIndex);
+        const nextToken = nextEntry
+            ? (nextEntry.tokens || []).find((item) => item.kind === 'field' && item.key === state.fieldKey && normValue(item.value) === normValue(replacement))
+            : null;
+        this.numberPickerState = Object.assign({}, state, {
+            tokenId: nextToken ? nextToken.id : state.tokenId,
+            currentValue: numericValue
+        });
+        this.renderNumberPicker();
+        this.positionNumberPicker(state.anchorEl);
+        this.numberPickerEl.hidden = false;
+    };
+
+    QuickAddComponent.prototype.adjustNumberPillValue = function adjustNumberPillValue(pillEl, direction) {
+        if (!pillEl || !direction) {
+            return false;
+        }
+        const fieldKey = pillEl.getAttribute('data-pill-ai') === '1'
+            ? (pillEl.getAttribute('data-pill-ai-field') || '')
+            : (pillEl.getAttribute('data-pill-field') || '');
+        const field = this.getFieldDefinition(fieldKey);
+        if (!field || field.type !== 'number' || !this.isNumberStepperEnabledForField(field)) {
+            return false;
+        }
+        const dir = direction < 0 ? -1 : 1;
+        const step = this.resolveNumberStep(field);
+        const min = Number.isFinite(Number(field.min)) ? Number(field.min) : null;
+        const max = Number.isFinite(Number(field.max)) ? Number(field.max) : null;
+        const sourceRegion = pillEl.closest('[data-role="preview"]') ? 'card' : 'inline';
+
+        this.closeNumberPicker();
+
+        if (pillEl.getAttribute('data-pill-ai') === '1' && this.isAiMode()) {
+            const entryId = pillEl.getAttribute('data-pill-ai-entry-id') || '';
+            if (!entryId) {
+                return false;
+            }
+            const occurrenceRaw = Number(pillEl.getAttribute('data-pill-ai-occurrence'));
+            const occurrence = Number.isFinite(occurrenceRaw) ? Math.max(0, occurrenceRaw) : 0;
+            const mappingKey = pillEl.getAttribute('data-pill-ai-map') || '';
+            const currentRaw = pillEl.getAttribute('data-pill-ai-value') || '';
+            let baseValue = Number(currentRaw);
+            if (!Number.isFinite(baseValue)) {
+                const entry = (this.aiState.entries || []).find((item) => item && item._id === entryId);
+                if (entry) {
+                    const rawEntryValue = entry[fieldKey];
+                    baseValue = Number(Array.isArray(rawEntryValue) ? rawEntryValue[0] : rawEntryValue);
+                }
+            }
+            if (!Number.isFinite(baseValue)) {
+                baseValue = 0;
+            }
+            let nextValue = baseValue + (dir * step);
+            if (Number.isFinite(min)) {
+                nextValue = Math.max(min, nextValue);
+            }
+            if (Number.isFinite(max)) {
+                nextValue = Math.min(max, nextValue);
+            }
+            const entryIndexRaw = Number(pillEl.getAttribute('data-pill-entry'));
+            const entryIndex = Number.isFinite(entryIndexRaw) ? entryIndexRaw : 0;
+            this.applyAIFieldSelection({
+                entryId,
+                fieldKey,
+                currentValue: baseValue,
+                occurrence,
+                mappingKey,
+                entryIndex,
+                nextValue,
+                sourceRegion,
+                anchorEl: pillEl,
+                anchorRect: pillEl.getBoundingClientRect()
+            });
+            return true;
+        }
+
+        const entryIndex = Number(pillEl.getAttribute('data-pill-entry'));
+        if (!Number.isFinite(entryIndex)) {
+            return false;
+        }
+        const tokenId = pillEl.getAttribute('data-pill-token') || '';
+        const rawValue = pillEl.getAttribute('data-pill-value') || '';
+        let token = tokenId ? this.tokenMap[tokenId] : null;
+        if (!token && rawValue !== '') {
+            token = this.materializeEntryFieldToken(entryIndex, fieldKey, rawValue, sourceRegion);
+        }
+        if (!token) {
+            return false;
+        }
+        let baseValue = Number(token.value);
+        if (!Number.isFinite(baseValue)) {
+            baseValue = Number(rawValue);
+        }
+        if (!Number.isFinite(baseValue)) {
+            baseValue = 0;
+        }
+        let nextValue = baseValue + (dir * step);
+        if (Number.isFinite(min)) {
+            nextValue = Math.max(min, nextValue);
+        }
+        if (Number.isFinite(max)) {
+            nextValue = Math.min(max, nextValue);
+        }
+
+        const source = this.inputText || this.readInputText();
+        const replacement = String(nextValue);
+        const updated = this.replaceRange(source, token.globalValueStart, token.globalValueEnd, replacement);
+        const caretOffset = token.globalValueStart + replacement.length;
+        this.parseAndRender({
+            source: updated,
+            caretOffset,
+            focusInput: sourceRegion !== 'card',
+            skipTypingSync: sourceRegion === 'card'
+        });
+        return true;
     };
 
     QuickAddComponent.prototype.renderDatePicker = function renderDatePicker() {
@@ -3745,10 +4315,11 @@
         this.datePickerEl.style.zIndex = '9999';
     };
 
-    QuickAddComponent.prototype.materializeEntryFieldToken = function materializeEntryFieldToken(entryIndex, fieldKey, value) {
+    QuickAddComponent.prototype.materializeEntryFieldToken = function materializeEntryFieldToken(entryIndex, fieldKey, value, sourceRegion) {
         if (this.isAiMode()) {
             return null;
         }
+        const origin = sourceRegion === 'card' ? 'card' : 'inline';
         const entry = (this.lastResult.entries || []).find((item) => item.index === entryIndex);
         const field = this.getFieldDefinition(fieldKey);
         if (!entry || !field) {
@@ -3766,7 +4337,11 @@
         const needsSpace = !!beforeChar && !/\s/.test(beforeChar);
         const snippet = `${needsSpace ? ' ' : ''}${prefix}${value}${separator}`;
         const updated = this.replaceRange(source, insertAt, insertAt, snippet);
-        this.parseAndRender({ source: updated, preserveSelection: true, skipTypingSync: true });
+        this.parseAndRender({
+            source: updated,
+            focusInput: origin !== 'card',
+            skipTypingSync: true
+        });
         const nextEntry = (this.lastResult.entries || []).find((item) => item.index === entryIndex);
         if (!nextEntry) {
             return null;
@@ -3810,7 +4385,12 @@
 
         let token = this.tokenMap[this.datePickerState.tokenId];
         if (!token && this.datePickerState.sourceRegion === 'card') {
-            token = this.materializeEntryFieldToken(this.datePickerState.entryIndex, this.datePickerState.fieldKey, this.datePickerState.selectedValue || commitValue);
+            token = this.materializeEntryFieldToken(
+                this.datePickerState.entryIndex,
+                this.datePickerState.fieldKey,
+                this.datePickerState.selectedValue || commitValue,
+                this.datePickerState.sourceRegion
+            );
         }
         if (!token) {
             this.closeDatePicker();
@@ -3847,6 +4427,7 @@
             this.closeAttachmentSourceMenu();
             this.closeBlockedInfo();
             this.closeDatePicker();
+            this.closeNumberPicker();
             if (this.timer) {
                 clearTimeout(this.timer);
             }
@@ -3868,7 +4449,8 @@
                 if (!latest || latest.length < threshold) {
                     return;
                 }
-                const waitMs = Math.max(50, Number(this.config.ai.debounceMs || 1000));
+                const rawWaitMs = Number(this.config.ai.debounceMs);
+                const waitMs = Number.isFinite(rawWaitMs) && rawWaitMs >= 0 ? Math.max(50, Math.round(rawWaitMs)) : 1000;
                 this.timer = setTimeout(() => {
                     this.parseAI();
                 }, waitMs);
@@ -3966,6 +4548,16 @@
         };
 
         this.onInputClick = (event) => {
+            const numberStepBtn = event.target.closest('[data-number-step]');
+            if (numberStepBtn) {
+                event.preventDefault();
+                event.stopPropagation();
+                const direction = Number(numberStepBtn.getAttribute('data-number-step'));
+                if (direction === -1 || direction === 1) {
+                    this.adjustNumberPillValue(numberStepBtn.closest('[data-qa-pill="1"]'), direction);
+                }
+                return;
+            }
             if (this.isAiMode()) {
                 const tailAi = event.target.closest('[data-qa-tail="1"]');
                 if (tailAi) {
@@ -3980,6 +4572,7 @@
                 if (aiPill) {
                     event.preventDefault();
                     event.stopPropagation();
+                    this.placeCaretNearPill(aiPill, event);
                     this.handlePillClick(aiPill);
                 }
                 return;
@@ -4015,17 +4608,28 @@
                 return;
             }
             event.preventDefault();
+            this.placeCaretNearPill(pill, event);
             this.handlePillClick(pill);
         };
 
         this.onPreviewClick = (event) => {
+            const numberStepBtn = event.target.closest('[data-number-step]');
+            if (numberStepBtn) {
+                event.preventDefault();
+                event.stopPropagation();
+                const direction = Number(numberStepBtn.getAttribute('data-number-step'));
+                if (direction === -1 || direction === 1) {
+                    this.adjustNumberPillValue(numberStepBtn.closest('[data-qa-pill="1"]'), direction);
+                }
+                return;
+            }
             const removeBtn = event.target.closest('[data-global-attachment-remove="1"]');
             if (removeBtn) {
                 event.preventDefault();
                 event.stopPropagation();
                 const attachmentId = removeBtn.getAttribute('data-attachment-id') || '';
                 if (attachmentId) {
-                    this.removeGlobalAttachment(attachmentId, false);
+                    this.removeGlobalAttachment(attachmentId, false, 'card');
                 }
                 return;
             }
@@ -4040,7 +4644,7 @@
                 const fieldKey = fieldRemoveBtn.getAttribute('data-file-field-key') || '';
                 const ref = fieldRemoveBtn.getAttribute('data-attachment-ref') || '';
                 if (fieldKey && ref !== '') {
-                    this.removeAttachmentFromEntryField(entryKey, fieldKey, ref);
+                    this.removeAttachmentFromEntryField(entryKey, fieldKey, ref, 'card');
                 }
                 return;
             }
@@ -4075,13 +4679,17 @@
                 if (!options.length) {
                     return;
                 }
+                const currentEntry = this.isAiMode()
+                    ? (this.aiState.entries || []).find((item) => item && item._id === entryKey)
+                    : (this.lastResult.entries || []).find((item) => this.getEntryKey(item) === entryKey);
+                const currentRefs = currentEntry ? this.resolveEntryFieldValues(currentEntry, fieldKey) : [];
                 this.dropdownState = {
                     fieldKey,
                     fieldType: field.type,
                     tokenId: '',
                     entryIndex: Number.isFinite(Number(entryIndex)) ? Number(entryIndex) : 0,
                     entryKey,
-                    currentValue: '',
+                    currentValue: field.multiple ? currentRefs : (currentRefs[0] || ''),
                     allowCustom: false,
                     options,
                     sourceRegion: 'card',
@@ -4167,17 +4775,17 @@
                 }
                 if (action === 'clear-entries') {
                     this.clearAIEntries();
-                    this.parseAndRender({ source: this.inputText, preserveSelection: true });
+                    this.parseAndRender({ source: this.inputText });
                     return;
                 }
                 if (action === 'edit-entry') {
                     this.aiState.editingEntryId = entryId;
-                    this.parseAndRender({ source: this.inputText, preserveSelection: true });
+                    this.parseAndRender({ source: this.inputText });
                     return;
                 }
                 if (action === 'cancel-edit') {
                     this.aiState.editingEntryId = '';
-                    this.parseAndRender({ source: this.inputText, preserveSelection: true });
+                    this.parseAndRender({ source: this.inputText });
                     return;
                 }
                 if (action === 'save-edit') {
@@ -4225,18 +4833,32 @@
                         this.aiState.editedEntries.add(entryId);
                     }
                     this.aiState.editingEntryId = '';
-                    this.parseAndRender({ source: this.inputText, preserveSelection: true });
+                    this.parseAndRender({ source: this.inputText });
                     return;
                 }
                 if (action === 'delete-entry') {
                     this.markAIEntryDeleted(entryId, true);
                     this.aiState.editingEntryId = '';
-                    this.parseAndRender({ source: this.inputText, preserveSelection: true });
+                    this.parseAndRender({ source: this.inputText });
                     return;
                 }
                 if (action === 'restore-entry') {
                     this.markAIEntryDeleted(entryId, false);
-                    this.parseAndRender({ source: this.inputText, preserveSelection: true });
+                    this.parseAndRender({ source: this.inputText });
+                }
+                return;
+            }
+
+            const deterministicAction = event.target.closest('[data-det-action]');
+            if (deterministicAction) {
+                event.preventDefault();
+                event.stopPropagation();
+                const action = deterministicAction.getAttribute('data-det-action') || '';
+                if (action === 'remove-entry') {
+                    const entryIndex = Number(deterministicAction.getAttribute('data-entry-index'));
+                    if (Number.isFinite(entryIndex)) {
+                        this.removeDeterministicEntry(entryIndex, 'card');
+                    }
                 }
                 return;
             }
@@ -4418,6 +5040,58 @@
             }
         };
 
+        this.onNumberPickerClick = (event) => {
+            const targetEl = eventTargetElement(event);
+            if (!targetEl || !this.numberPickerState) {
+                return;
+            }
+            const actionBtn = targetEl.closest('[data-number-action]');
+            if (!actionBtn) {
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            const action = actionBtn.getAttribute('data-number-action');
+            this.applyNumberStep(action === 'decrement' ? -1 : 1);
+        };
+
+        this.onNumberPickerInput = (event) => {
+            const targetEl = eventTargetElement(event);
+            if (!targetEl || !this.numberPickerState || targetEl.getAttribute('data-role') !== 'numberPickerStepInput') {
+                return;
+            }
+            const next = Number(targetEl.value);
+            if (Number.isFinite(next) && next > 0) {
+                this.numberPickerState = Object.assign({}, this.numberPickerState, { step: next });
+            }
+        };
+
+        this.onNumberPickerChange = (event) => {
+            const targetEl = eventTargetElement(event);
+            if (!targetEl || !this.numberPickerState || targetEl.getAttribute('data-role') !== 'numberPickerStepInput') {
+                return;
+            }
+            const field = this.getFieldDefinition(this.numberPickerState.fieldKey);
+            const nextStep = this.resolveNumberStep(field, targetEl.value);
+            this.numberPickerState = Object.assign({}, this.numberPickerState, { step: nextStep });
+            targetEl.value = String(nextStep);
+        };
+
+        this.onNumberPickerKeyDown = (event) => {
+            if (!this.numberPickerState) {
+                return;
+            }
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                this.closeNumberPicker();
+                return;
+            }
+            if (event.key === 'Enter') {
+                event.stopPropagation();
+            }
+        };
+
         this.onPreviewChange = (event) => {
             const input = event.target.closest('[data-global-attachment-input="1"]');
             if (!input || !input.files) {
@@ -4468,6 +5142,10 @@
                 this.dropdownState.keepActiveWhenFiltering = false;
             }
             this.renderDropdownList();
+        };
+
+        this.onDropdownListScroll = () => {
+            this.updateDropdownScrollIndicators();
         };
 
         this.onDropdownSearchKeyDown = (event) => {
@@ -4534,6 +5212,14 @@
                     return;
                 }
             }
+            if (this.numberPickerEl && !this.numberPickerEl.hidden) {
+                if (!this.numberPickerEl.contains(targetEl) && !targetEl.closest('[data-qa-number-pill="1"]')) {
+                    this.closeNumberPicker();
+                    event.stopPropagation();
+                    event.preventDefault();
+                    return;
+                }
+            }
             if (this.dropdownEl && !this.dropdownEl.hidden) {
                 if (!this.dropdownEl.contains(targetEl) && !targetEl.closest('[data-qa-pill="1"]')) {
                     this.closeDropdown();
@@ -4588,6 +5274,11 @@
                     this.closeDatePicker();
                 }
             }
+            if (this.numberPickerEl && !this.numberPickerEl.hidden) {
+                if (!this.numberPickerEl.contains(targetEl) && !targetEl.closest('[data-qa-number-pill="1"]')) {
+                    this.closeNumberPicker();
+                }
+            }
             if (this.dropdownEl && !this.dropdownEl.hidden) {
                 if (this.dropdownEl.contains(targetEl)) {
                     return;
@@ -4619,6 +5310,12 @@
                     event.stopPropagation();
                     return;
                 }
+                if (this.numberPickerState) {
+                    this.closeNumberPicker();
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
                 if (this.blockedInfoState) {
                     this.closeBlockedInfo();
                     event.preventDefault();
@@ -4635,6 +5332,10 @@
             if (event.key === 'Escape' && this.dropdownState) {
                 this.closeDropdown();
             }
+            if (event.key === 'Escape' && this.numberPickerState) {
+                event.preventDefault();
+                this.closeNumberPicker();
+            }
             if (event.key === 'Escape' && this.blockedInfoState) {
                 this.closeBlockedInfo();
             }
@@ -4644,10 +5345,38 @@
             }
             if (
                 event.key === 'Enter'
-                && (this.dropdownState || this.datePickerState || this.attachmentSourceMenuState || this.blockedInfoState)
+                && (
+                    this.dropdownState
+                    || this.numberPickerState
+                    || this.datePickerState
+                    || this.attachmentSourceMenuState
+                    || this.blockedInfoState
+                )
             ) {
                 event.stopPropagation();
             }
+        };
+
+        this.onViewportChange = (event) => {
+            const targetEl = eventTargetElement(event);
+            if (targetEl && this.dropdownEl && this.dropdownEl.contains(targetEl)) {
+                return;
+            }
+            if (this.viewportRepositionFrame) {
+                return;
+            }
+            this.viewportRepositionFrame = window.requestAnimationFrame(() => {
+                this.viewportRepositionFrame = 0;
+                if (this.dropdownState && this.dropdownEl && !this.dropdownEl.hidden) {
+                    this.positionDropdown(this.dropdownState.anchorEl || null);
+                }
+                if (this.datePickerState && this.datePickerEl && !this.datePickerEl.hidden) {
+                    this.positionDatePicker(this.datePickerState.anchorEl || null);
+                }
+                if (this.numberPickerState && this.numberPickerEl && !this.numberPickerEl.hidden) {
+                    this.positionNumberPicker(this.numberPickerState.anchorEl || null);
+                }
+            });
         };
 
         this.inputEl.addEventListener('input', this.onInput);
@@ -4663,6 +5392,7 @@
         this.dropdownSearchEl.addEventListener('input', this.onDropdownInput);
         this.dropdownSearchEl.addEventListener('keydown', this.onDropdownSearchKeyDown);
         this.dropdownListEl.addEventListener('click', this.onDropdownListClick);
+        this.dropdownListEl.addEventListener('scroll', this.onDropdownListScroll, { passive: true });
         this.attachmentSourceMenuEl.addEventListener('click', this.onAttachmentSourceMenuClick);
         if (this.conflictModalOverlayEl) {
             this.conflictModalOverlayEl.addEventListener('click', this.onConflictModalClick);
@@ -4670,9 +5400,15 @@
         this.datePickerEl.addEventListener('click', this.onDatePickerClick);
         this.datePickerEl.addEventListener('change', this.onDatePickerChange);
         this.datePickerEl.addEventListener('keydown', this.onDatePickerKeyDown);
+        this.numberPickerEl.addEventListener('click', this.onNumberPickerClick);
+        this.numberPickerEl.addEventListener('input', this.onNumberPickerInput);
+        this.numberPickerEl.addEventListener('change', this.onNumberPickerChange);
+        this.numberPickerEl.addEventListener('keydown', this.onNumberPickerKeyDown);
         document.addEventListener('pointerdown', this.onDocumentPointerDown, true);
         document.addEventListener('click', this.onDocumentClick, true);
         document.addEventListener('keydown', this.onDocumentKeyDown, true);
+        window.addEventListener('scroll', this.onViewportChange, true);
+        window.addEventListener('resize', this.onViewportChange, true);
     };
 
     QuickAddComponent.prototype.unbindEvents = function unbindEvents() {
@@ -4715,6 +5451,9 @@
         if (this.dropdownListEl && this.onDropdownListClick) {
             this.dropdownListEl.removeEventListener('click', this.onDropdownListClick);
         }
+        if (this.dropdownListEl && this.onDropdownListScroll) {
+            this.dropdownListEl.removeEventListener('scroll', this.onDropdownListScroll);
+        }
         if (this.attachmentSourceMenuEl && this.onAttachmentSourceMenuClick) {
             this.attachmentSourceMenuEl.removeEventListener('click', this.onAttachmentSourceMenuClick);
         }
@@ -4730,9 +5469,27 @@
         if (this.datePickerEl && this.onDatePickerKeyDown) {
             this.datePickerEl.removeEventListener('keydown', this.onDatePickerKeyDown);
         }
+        if (this.numberPickerEl && this.onNumberPickerClick) {
+            this.numberPickerEl.removeEventListener('click', this.onNumberPickerClick);
+        }
+        if (this.numberPickerEl && this.onNumberPickerInput) {
+            this.numberPickerEl.removeEventListener('input', this.onNumberPickerInput);
+        }
+        if (this.numberPickerEl && this.onNumberPickerChange) {
+            this.numberPickerEl.removeEventListener('change', this.onNumberPickerChange);
+        }
+        if (this.numberPickerEl && this.onNumberPickerKeyDown) {
+            this.numberPickerEl.removeEventListener('keydown', this.onNumberPickerKeyDown);
+        }
         document.removeEventListener('pointerdown', this.onDocumentPointerDown, true);
         document.removeEventListener('click', this.onDocumentClick, true);
         document.removeEventListener('keydown', this.onDocumentKeyDown, true);
+        window.removeEventListener('scroll', this.onViewportChange, true);
+        window.removeEventListener('resize', this.onViewportChange, true);
+        if (this.viewportRepositionFrame) {
+            window.cancelAnimationFrame(this.viewportRepositionFrame);
+            this.viewportRepositionFrame = 0;
+        }
     };
 
     QuickAddComponent.prototype.rebuildTokenMap = function rebuildTokenMap(result) {
@@ -4776,6 +5533,16 @@
             return false;
         }
 
+        if (Array.isArray(value)) {
+            let changed = false;
+            value.forEach((item) => {
+                if (this.removeFieldValue(entry, fieldKey, item)) {
+                    changed = true;
+                }
+            });
+            return changed;
+        }
+
         if (Array.isArray(current)) {
             const idx = current.findIndex((v) => normValue(v) === normValue(value));
             if (idx < 0) {
@@ -4813,7 +5580,8 @@
         const activeKeys = new Set();
 
         result.entries.forEach((entry) => {
-            const selections = this.collectEntrySelections(entry);
+            const rawSelections = this.collectEntrySelections(entry);
+            const selections = this.collapseSelectionsForCards(entry, rawSelections);
             selections.forEach((selection) => {
                 if (selection.dismissKey) {
                     activeKeys.add(selection.dismissKey);
@@ -4824,7 +5592,8 @@
                 if (!this.dismissedSelections.has(selection.dismissKey)) {
                     return;
                 }
-                this.removeFieldValue(entry, selection.fieldKey, selection.value);
+                const targetValue = Array.isArray(selection.values) ? selection.values : selection.value;
+                this.removeFieldValue(entry, selection.fieldKey, targetValue);
             });
             applyRequiredValidation(entry, this.normalizedSchema);
         });
@@ -5022,6 +5791,9 @@
         if (focusInput) {
             this.inputEl.focus();
         }
+        if (!focusInput && document.activeElement !== this.inputEl) {
+            return;
+        }
         const selection = window.getSelection();
         if (!selection) {
             return;
@@ -5069,8 +5841,10 @@
         const c = this.config.classNames;
         const opts = options || {};
         const raw = this.inputText || '';
+        const suppressCaretSelection = opts.suppressCaretSelection === true
+            || (opts.focusInput === false && opts.skipTypingSync === true);
 
-        const preserveCaret = !opts.skipCaretPreserve && document.activeElement === this.inputEl;
+        const preserveCaret = !suppressCaretSelection && !opts.skipCaretPreserve && document.activeElement === this.inputEl;
         const caretOffset = typeof opts.caretOffset === 'number'
             ? opts.caretOffset
             : (preserveCaret ? this.getCaretOffset() : null);
@@ -5080,7 +5854,7 @@
             this.isRenderingInput = true;
             this.inputEl.innerHTML = '';
             this.isRenderingInput = false;
-            if (typeof caretOffset === 'number') {
+            if (!suppressCaretSelection && typeof caretOffset === 'number') {
                 this.setCaretOffset(0, !!opts.focusInput);
             }
             return;
@@ -5122,7 +5896,7 @@
         this.inputEl.innerHTML = html;
         this.isRenderingInput = false;
 
-        if (typeof caretOffset === 'number') {
+        if (!suppressCaretSelection && typeof caretOffset === 'number') {
             this.setCaretOffset(Math.min(caretOffset, raw.length), !!opts.focusInput);
         }
     };
@@ -5222,6 +5996,13 @@
                         }
                         const fieldKey = mark.fieldKey || mark.field || '';
                         const entryId = mark.entryId || mark.entry || '';
+                        let entryIndex = Number(mark.entryIndex);
+                        if (!Number.isFinite(entryIndex) && entryId) {
+                            const lookupIndex = (this.aiState.entries || []).findIndex((item) => item && item._id === entryId);
+                            if (lookupIndex >= 0) {
+                                entryIndex = lookupIndex;
+                            }
+                        }
                         const explicit = mark.explicit === true || (!!entryId && !!fieldKey);
                         return {
                             start,
@@ -5230,6 +6011,7 @@
                             inferred: mark.inferred !== false,
                             explicit,
                             entryId: entryId ? String(entryId) : '',
+                            entryIndex: Number.isFinite(entryIndex) ? entryIndex : 0,
                             fieldKey: String(fieldKey || ''),
                             value: mark.value
                         };
@@ -5281,6 +6063,7 @@
                         inferred: true,
                         explicit: !!entryId && !!fieldKey,
                         entryId,
+                        entryIndex: idx,
                         fieldKey,
                         value: spanValue
                     });
@@ -5312,6 +6095,7 @@
                     inferred: true,
                     explicit: false,
                     entryId,
+                    entryIndex: idx,
                     fieldKey: candidate.key,
                     value: candidate.value
                 });
@@ -5339,6 +6123,7 @@
                             inferred: true,
                             explicit: false,
                             entryId,
+                            entryIndex: idx,
                             fieldKey: '',
                             value: ''
                         });
@@ -5356,8 +6141,10 @@
         const c = this.config.classNames;
         const opts = options || {};
         const raw = String(this.inputText || '');
+        const suppressCaretSelection = opts.suppressCaretSelection === true
+            || (opts.focusInput === false && opts.skipTypingSync === true);
 
-        const preserveCaret = !opts.skipCaretPreserve && document.activeElement === this.inputEl;
+        const preserveCaret = !suppressCaretSelection && !opts.skipCaretPreserve && document.activeElement === this.inputEl;
         const caretOffset = typeof opts.caretOffset === 'number'
             ? opts.caretOffset
             : (preserveCaret ? this.getCaretOffset() : null);
@@ -5366,7 +6153,7 @@
             this.isRenderingInput = true;
             this.inputEl.innerHTML = '';
             this.isRenderingInput = false;
-            if (typeof caretOffset === 'number') {
+            if (!suppressCaretSelection && typeof caretOffset === 'number') {
                 this.setCaretOffset(0, !!opts.focusInput);
             }
             return;
@@ -5378,7 +6165,7 @@
             this.isRenderingInput = true;
             this.inputEl.innerHTML = `<span class="${c.inlineText}">${escHtml(raw)}</span>`;
             this.isRenderingInput = false;
-            if (typeof caretOffset === 'number') {
+            if (!suppressCaretSelection && typeof caretOffset === 'number') {
                 this.setCaretOffset(Math.min(caretOffset, raw.length), !!opts.focusInput);
             }
             return;
@@ -5390,7 +6177,7 @@
             this.isRenderingInput = true;
             this.inputEl.innerHTML = `<span class="${c.inlineText}">${escHtml(raw)}</span>`;
             this.isRenderingInput = false;
-            if (typeof caretOffset === 'number') {
+            if (!suppressCaretSelection && typeof caretOffset === 'number') {
                 this.setCaretOffset(Math.min(caretOffset, raw.length), !!opts.focusInput);
             }
             return;
@@ -5418,8 +6205,12 @@
             const color = this.resolvePillColor(field, rawValue || chunk);
             const styleAttr = color ? ` style="--qa-inline-accent:${escHtml(color)}"` : '';
             const aiValue = rawValue !== undefined && rawValue !== null ? rawValue : chunk;
+            const aiEntryIndex = Number.isFinite(Number(mark.entryIndex))
+                ? Number(mark.entryIndex)
+                : 0;
+            const isNumberField = !!(field && field.type === 'number' && this.isNumberStepperEnabledForField(field));
             const aiAttrs = interactive
-                ? ` data-qa-pill="1" data-pill-ai="1" data-qa-date-pill="${field && isDateFieldType(field.type) ? '1' : '0'}" data-pill-ai-entry-id="${escHtml(String(mark.entryId || ''))}" data-pill-ai-field="${escHtml(String(mark.fieldKey || ''))}" data-pill-ai-value="${escHtml(String(aiValue))}" data-pill-ai-occurrence="${Number.isFinite(Number(mark.occurrence)) ? Number(mark.occurrence) : 0}" data-pill-ai-map="${escHtml(String(mark.mappingKey || ''))}"`
+                ? ` data-qa-pill="1" data-pill-ai="1" data-pill-entry="${aiEntryIndex}" data-qa-date-pill="${field && isDateFieldType(field.type) ? '1' : '0'}" data-qa-number-pill="${isNumberField ? '1' : '0'}" data-pill-ai-entry-id="${escHtml(String(mark.entryId || ''))}" data-pill-ai-field="${escHtml(String(mark.fieldKey || ''))}" data-pill-ai-value="${escHtml(String(aiValue))}" data-pill-ai-occurrence="${Number.isFinite(Number(mark.occurrence)) ? Number(mark.occurrence) : 0}" data-pill-ai-map="${escHtml(String(mark.mappingKey || ''))}"`
                 : '';
             parts.push(`<span class="${classes}"${aiAttrs}${styleAttr} title="${title}"><span class="${c.inlineMarkLabel}">${escHtml(chunk)}</span></span>`);
             cursor = mark.end;
@@ -5431,7 +6222,7 @@
         this.isRenderingInput = true;
         this.inputEl.innerHTML = `<span class="${c.inlineText}">${parts.join('')}<span class="${c.inputTail}" data-qa-tail="1" data-qa-ignore="1" contenteditable="false" aria-hidden="true"></span></span>`;
         this.isRenderingInput = false;
-        if (typeof caretOffset === 'number') {
+        if (!suppressCaretSelection && typeof caretOffset === 'number') {
             this.setCaretOffset(Math.min(caretOffset, raw.length), !!opts.focusInput);
         }
     };
@@ -5454,6 +6245,7 @@
             this.renderResult(this.lastResult);
             this.closeDropdown();
             this.closeDatePicker();
+            this.closeNumberPicker();
         } else {
             this.aiInlineMarkIndex = {};
             this.lastResult = parseInput(input, this.config);
@@ -5532,6 +6324,7 @@
                 value: item.ref,
                 label: item.name,
                 attachmentId: item.id,
+                previewUrl: item.previewUrl || null,
                 usedCount: (usage.get(item.id) || []).filter((link) => link.entryKey !== entryKey || link.fieldKey !== fieldKey).length
             }));
         }
@@ -5555,6 +6348,9 @@
         if (isDateFieldType(field.type)) {
             return true;
         }
+        if (field.type === 'number' && this.isNumberStepperEnabledForField(field)) {
+            return true;
+        }
         return this.fieldSupportsDropdown(field);
     };
 
@@ -5566,6 +6362,7 @@
         const auto = !!data.auto;
         const blocked = !!data.blocked;
         const aiMeta = data.aiMeta && typeof data.aiMeta === 'object' ? data.aiMeta : null;
+        const numberInteractive = !!(field && field.type === 'number' && this.isNumberStepperEnabledForField(field));
         const deterministicInteractive = !blocked && this.isInteractivePill(field) && (!!data.tokenId || auto);
         const aiInteractive = !blocked
             && !!aiMeta
@@ -5577,15 +6374,16 @@
         const classes = [
             c.pill,
             interactive ? c.pillInteractive : '',
+            numberInteractive ? c.numberPill : '',
             inferred ? c.pillInferred : '',
             blocked ? c.pillBlocked : '',
             auto ? 'qa-pill-auto' : ''
         ].filter(Boolean).join(' ');
 
         const interactionAttrs = deterministicInteractive
-            ? ` data-qa-pill="1" data-qa-date-pill="${field && isDateFieldType(field.type) ? '1' : '0'}" data-pill-field="${escHtml(data.fieldKey)}" data-pill-token="${escHtml(data.tokenId || '')}" data-pill-entry="${data.entryIndex}" data-pill-value="${escHtml(String(data.value !== undefined && data.value !== null ? data.value : ''))}"`
+            ? ` data-qa-pill="1" data-qa-date-pill="${field && isDateFieldType(field.type) ? '1' : '0'}" data-qa-number-pill="${numberInteractive ? '1' : '0'}" data-pill-field="${escHtml(data.fieldKey)}" data-pill-token="${escHtml(data.tokenId || '')}" data-pill-entry="${data.entryIndex}" data-pill-value="${escHtml(String(data.value !== undefined && data.value !== null ? data.value : ''))}"`
             : (aiInteractive
-                ? ` data-qa-pill="1" data-pill-ai="1" data-qa-date-pill="${field && isDateFieldType(field.type) ? '1' : '0'}" data-pill-entry="${data.entryIndex}" data-pill-ai-entry-id="${escHtml(String(aiMeta.entryId || ''))}" data-pill-ai-field="${escHtml(String(aiMeta.fieldKey || data.fieldKey || ''))}" data-pill-ai-value="${escHtml(String(aiMeta.value !== undefined && aiMeta.value !== null ? aiMeta.value : (data.value !== undefined && data.value !== null ? data.value : '')))}" data-pill-ai-occurrence="${Math.max(0, Number.isFinite(Number(aiMeta.occurrence)) ? Number(aiMeta.occurrence) : 0)}" data-pill-ai-map="${escHtml(String(aiMeta.mappingKey || ''))}"`
+                ? ` data-qa-pill="1" data-pill-ai="1" data-qa-date-pill="${field && isDateFieldType(field.type) ? '1' : '0'}" data-qa-number-pill="${numberInteractive ? '1' : '0'}" data-pill-entry="${data.entryIndex}" data-pill-ai-entry-id="${escHtml(String(aiMeta.entryId || ''))}" data-pill-ai-field="${escHtml(String(aiMeta.fieldKey || data.fieldKey || ''))}" data-pill-ai-value="${escHtml(String(aiMeta.value !== undefined && aiMeta.value !== null ? aiMeta.value : (data.value !== undefined && data.value !== null ? data.value : '')))}" data-pill-ai-occurrence="${Math.max(0, Number.isFinite(Number(aiMeta.occurrence)) ? Number(aiMeta.occurrence) : 0)}" data-pill-ai-map="${escHtml(String(aiMeta.mappingKey || ''))}"`
                 : '');
         const blockedAttrs = blocked
             ? ` data-qa-blocked="1" data-blocked-reason="${escHtml(data.reason || 'Blocked by constraints')}"`
@@ -5603,8 +6401,17 @@
         const dismiss = (!blocked && data.dismissKey)
             ? `<button type="button" class="${c.pillDismiss}" data-dismiss-key="${escHtml(data.dismissKey)}" aria-label="Dismiss value">x</button>`
             : '';
+        const numberControls = (!blocked && numberInteractive)
+            ? `
+                <span class="${c.numberPillStepper}">
+                    <button type="button" class="${c.numberPillStepBtn}" data-number-step="-1" aria-label="Decrease value">−</button>
+                    <span class="${c.pillLabel}">${escHtml(data.label)}</span>
+                    <button type="button" class="${c.numberPillStepBtn}" data-number-step="1" aria-label="Increase value">+</button>
+                </span>
+            `
+            : `<span class="${c.pillLabel}">${escHtml(data.label)}</span>`;
 
-        return `<span class="${classes}"${attrs}${styleAttr}>${blockedIcon}${autoIcon}${inferredIcon}<span class="${c.pillLabel}">${escHtml(data.label)}</span>${dismiss}</span>`;
+        return `<span class="${classes}"${attrs}${styleAttr}>${blockedIcon}${autoIcon}${inferredIcon}${numberControls}${dismiss}</span>`;
     };
 
     QuickAddComponent.prototype.buildInlineMarkHtml = function buildInlineMarkHtml(token, rawChunk) {
@@ -5612,6 +6419,7 @@
         const field = this.getFieldDefinition(token.key);
         const color = this.resolvePillColor(field, token.value);
         const interactive = this.isInteractivePill(field);
+        const numberInteractive = !!(field && field.type === 'number' && this.isNumberStepperEnabledForField(field));
         const styleAttr = (!token.blocked && color) ? ` style="--qa-inline-accent:${escHtml(color)}"` : '';
         const classes = [
             c.inlineMark,
@@ -5620,7 +6428,7 @@
             token.blocked ? c.inlineMarkBlocked : ''
         ].filter(Boolean).join(' ');
         const attrs = (interactive && !token.blocked)
-            ? ` data-qa-pill="1" data-qa-date-pill="${field && isDateFieldType(field.type) ? '1' : '0'}" data-pill-field="${escHtml(token.key)}" data-pill-token="${escHtml(token.id)}" data-pill-entry="${token.entryIndex}"`
+            ? ` data-qa-pill="1" data-qa-date-pill="${field && isDateFieldType(field.type) ? '1' : '0'}" data-qa-number-pill="${numberInteractive ? '1' : '0'}" data-pill-field="${escHtml(token.key)}" data-pill-token="${escHtml(token.id)}" data-pill-entry="${token.entryIndex}"`
             : '';
         const blockedAttrs = token.blocked
             ? ` data-qa-blocked="1" data-blocked-reason="${escHtml(token.reason || 'Blocked by constraints')}"`
@@ -5635,7 +6443,16 @@
             ? `<button type="button" class="${c.inlineMarkDismiss}" data-qa-ignore="1" contenteditable="false" data-dismiss-key="${escHtml(token.dismissKey)}" aria-label="Dismiss value">x</button>`
             : '';
         const titleAttr = token.blocked && token.reason ? ` title="${escHtml(`Blocked by constraints: ${token.reason}`)}"` : '';
-        return `<span class="${classes}"${attrs}${blockedAttrs}${styleAttr}${titleAttr}>${blockedIcon}${inferredIcon}<span class="${c.inlineMarkLabel}">${escHtml(rawChunk)}</span>${dismiss}</span>`;
+        const numberControls = (numberInteractive && !token.blocked)
+            ? `
+                <span class="${c.numberPillStepper}" data-qa-ignore="1" contenteditable="false">
+                    <button type="button" class="${c.numberPillStepBtn}" data-qa-ignore="1" contenteditable="false" data-number-step="-1" aria-label="Decrease value">−</button>
+                    <span class="${c.inlineMarkLabel}" data-qa-ignore="1" contenteditable="false">${escHtml(rawChunk)}</span>
+                    <button type="button" class="${c.numberPillStepBtn}" data-qa-ignore="1" contenteditable="false" data-number-step="1" aria-label="Increase value">+</button>
+                </span>
+            `
+            : `<span class="${c.inlineMarkLabel}">${escHtml(rawChunk)}</span>`;
+        return `<span class="${classes}"${attrs}${blockedAttrs}${styleAttr}${titleAttr}>${blockedIcon}${inferredIcon}${numberControls}${dismiss}</span>`;
     };
 
     QuickAddComponent.prototype.getRenderableFieldTokens = function getRenderableFieldTokens(entry) {
@@ -5697,8 +6514,8 @@
 
     QuickAddComponent.prototype.findTokenIdForFieldValue = function findTokenIdForFieldValue(entry, field, fieldKey, value, usedTokenIds) {
         const target = normValue(value);
-        const isMultiOptions = !!(field && field.type === 'options' && field.multiple);
-        if (isMultiOptions) {
+        const isMultiField = !!(field && field.multiple);
+        if (isMultiField) {
             for (let i = entry.tokens.length - 1; i >= 0; i--) {
                 const token = entry.tokens[i];
                 if (token.kind !== 'field' || !token.committed || token.key !== fieldKey) {
@@ -5755,6 +6572,110 @@
         }
 
         return null;
+    };
+
+    QuickAddComponent.prototype.findAIInlineFallbackRange = function findAIInlineFallbackRange(entry, fieldKey, occurrence, currentValue, source) {
+        const text = String(source || '');
+        if (!entry || !fieldKey || !text) {
+            return null;
+        }
+
+        const spans = Array.isArray(entry.spans)
+            ? entry.spans
+                .filter((span) => span && String(span.field || '') === fieldKey)
+                .map((span) => {
+                    const start = Number(span.start);
+                    const end = Number(span.end);
+                    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+                        return null;
+                    }
+                    if (start < 0 || end > text.length) {
+                        return null;
+                    }
+                    return {
+                        start,
+                        end,
+                        value: span.value,
+                        fromSpan: true
+                    };
+                })
+                .filter(Boolean)
+                .sort((a, b) => a.start - b.start)
+            : [];
+
+        if (spans.length) {
+            const idx = Math.max(0, Math.min(spans.length - 1, Number.isFinite(Number(occurrence)) ? Number(occurrence) : 0));
+            const spanRange = spans[idx];
+            const chunk = text.slice(spanRange.start, spanRange.end);
+            const currentText = String(currentValue === undefined || currentValue === null ? '' : currentValue);
+            const spanValue = String(spanRange.value === undefined || spanRange.value === null ? '' : spanRange.value);
+            if (!currentText || normValue(chunk) === normValue(currentText) || (spanValue && normValue(chunk) === normValue(spanValue))) {
+                return spanRange;
+            }
+        }
+
+        const needle = String(currentValue === undefined || currentValue === null ? '' : currentValue).trim();
+        if (!needle) {
+            return null;
+        }
+        const startBound = Number.isFinite(Number(entry._sourceStart)) ? Math.max(0, Number(entry._sourceStart)) : 0;
+        const endBound = Number.isFinite(Number(entry._sourceEnd)) ? Math.min(text.length, Number(entry._sourceEnd)) : text.length;
+        if (endBound <= startBound) {
+            return null;
+        }
+        const segment = text.slice(startBound, endBound);
+        const lowerSegment = segment.toLowerCase();
+        const lowerNeedle = needle.toLowerCase();
+        const field = this.getFieldDefinition(fieldKey);
+        const rawPrefixes = field && Array.isArray(field.prefixes) && field.prefixes.length
+            ? field.prefixes
+            : [`${fieldKey}:`];
+        const prefixes = rawPrefixes
+            .map((prefix) => String(prefix || '').toLowerCase().trim())
+            .filter(Boolean);
+        const contextualMatches = [];
+        if (prefixes.length) {
+            let idx = lowerSegment.indexOf(lowerNeedle);
+            while (idx !== -1) {
+                const hasPrefix = prefixes.some((prefix) => {
+                    const prefixIdx = lowerSegment.lastIndexOf(prefix, idx);
+                    if (prefixIdx === -1) {
+                        return false;
+                    }
+                    const between = lowerSegment.slice(prefixIdx + prefix.length, idx);
+                    return between.trim() === '';
+                });
+                if (hasPrefix) {
+                    contextualMatches.push(idx);
+                }
+                idx = lowerSegment.indexOf(lowerNeedle, idx + lowerNeedle.length);
+            }
+        }
+        if (contextualMatches.length) {
+            const idx = Math.max(0, Math.min(contextualMatches.length - 1, Number.isFinite(Number(occurrence)) ? Number(occurrence) : 0));
+            const matchedStart = contextualMatches[idx];
+            return {
+                start: startBound + matchedStart,
+                end: startBound + matchedStart + needle.length,
+                value: needle,
+                fromSpan: false
+            };
+        }
+
+        const first = lowerSegment.indexOf(lowerNeedle);
+        if (first === -1) {
+            return null;
+        }
+        const second = lowerSegment.indexOf(lowerNeedle, first + lowerNeedle.length);
+        if (second !== -1) {
+            return null;
+        }
+        return {
+            start: startBound + first,
+            end: startBound + first + needle.length,
+            value: needle,
+            fromSpan: false
+        };
     };
 
     QuickAddComponent.prototype.findInferredForFieldValue = function findInferredForFieldValue(entry, fieldKey, value, usedInferredIds) {
@@ -5852,6 +6773,98 @@
         });
 
         return selections;
+    };
+
+    QuickAddComponent.prototype.getMultiSelectDisplaySeparator = function getMultiSelectDisplaySeparator() {
+        const raw = this.config.multiSelectDisplaySeparator;
+        if (raw === undefined || raw === null) {
+            return `${String(this.config.multiSelectSeparator || ',')} `;
+        }
+        return String(raw);
+    };
+
+    QuickAddComponent.prototype.buildGroupedCardSelection = function buildGroupedCardSelection(entry, field, fieldKey, values, sourceSelections) {
+        const deduped = dedupeMultiValues(values);
+        const labelPrefix = field && field.label ? field.label : fieldKey;
+        const source = this.inputText || '';
+        const explicitTokens = (entry.tokens || []).filter((token) => token.kind === 'field' && token.committed && token.key === fieldKey);
+        const inferredTokens = (entry.inferred || []).filter((item) => item.fieldKey === fieldKey);
+        const explicitRaw = explicitTokens.map((token) => source.slice(token.globalStart, token.globalEnd)).join('|');
+        const inferredRaw = inferredTokens.map((item) => source.slice(item.globalStart, item.globalEnd)).join('|');
+        const tokenId = explicitTokens.length
+            ? explicitTokens[explicitTokens.length - 1].id
+            : (inferredTokens.length ? inferredTokens[inferredTokens.length - 1].id : '');
+        const sourceKind = explicitRaw
+            ? 'explicit'
+            : (inferredRaw ? 'inferred' : (entry.autoFields && entry.autoFields.has(fieldKey) ? 'auto' : 'fallback'));
+        const rawChunk = explicitRaw || inferredRaw;
+        const rawValue = deduped.join(`${String(this.config.multiSelectSeparator || ',')} `);
+        const dismissKey = (sourceKind === 'explicit' || sourceKind === 'inferred')
+            ? this.buildDismissKey({
+                entryIndex: entry.index,
+                fieldKey,
+                value: rawValue,
+                sourceKind,
+                rawChunk,
+                occurrence: 0
+            })
+            : null;
+        const displayValue = deduped.join(this.getMultiSelectDisplaySeparator());
+        return {
+            fieldKey,
+            value: rawValue,
+            values: deduped,
+            label: `${labelPrefix}: ${displayValue}`,
+            entryIndex: entry.index,
+            tokenId,
+            token: tokenId ? (this.tokenMap[tokenId] || null) : null,
+            inferredItem: null,
+            inferred: sourceKind === 'inferred',
+            auto: sourceKind === 'auto',
+            dismissKey,
+            grouped: true,
+            sourceSelections: Array.isArray(sourceSelections) ? sourceSelections.slice() : []
+        };
+    };
+
+    QuickAddComponent.prototype.collapseSelectionsForCards = function collapseSelectionsForCards(entry, selections) {
+        const sourceSelections = Array.isArray(selections) ? selections : [];
+        const groupedByField = new Map();
+        sourceSelections.forEach((selection) => {
+            if (!selection || !selection.fieldKey) {
+                return;
+            }
+            if (!groupedByField.has(selection.fieldKey)) {
+                groupedByField.set(selection.fieldKey, []);
+            }
+            groupedByField.get(selection.fieldKey).push(selection);
+        });
+
+        const output = [];
+        const seenFieldKeys = new Set();
+        Object.keys(entry.fields || {}).forEach((fieldKey) => {
+            seenFieldKeys.add(fieldKey);
+            const field = this.getFieldDefinition(fieldKey);
+            const fieldSelections = groupedByField.get(fieldKey) || [];
+            if (field && field.multiple) {
+                const rawValues = this.resolveEntryFieldValues(entry, fieldKey);
+                if (!rawValues.length) {
+                    return;
+                }
+                output.push(this.buildGroupedCardSelection(entry, field, fieldKey, rawValues, fieldSelections));
+                return;
+            }
+            fieldSelections.forEach((selection) => output.push(selection));
+        });
+
+        groupedByField.forEach((fieldSelections, fieldKey) => {
+            if (seenFieldKeys.has(fieldKey)) {
+                return;
+            }
+            fieldSelections.forEach((selection) => output.push(selection));
+        });
+
+        return output;
     };
 
     QuickAddComponent.prototype.getFileFields = function getFileFields() {
@@ -6112,7 +7125,7 @@
             existing.add(record.fingerprint);
             this.attachmentPool.push(record);
         });
-        this.parseAndRender({ source: this.inputText, preserveSelection: true });
+        this.parseAndRender({ source: this.inputText, skipTypingSync: true });
     };
 
     QuickAddComponent.prototype.resolveEntryFieldValues = function resolveEntryFieldValues(entry, fieldKey) {
@@ -6122,13 +7135,17 @@
         const raw = (entry.fields && entry.fields[fieldKey] !== undefined)
             ? entry.fields[fieldKey]
             : entry[fieldKey];
+        const field = this.getFieldDefinition(fieldKey);
         if (Array.isArray(raw)) {
-            return raw.map((item) => String(item || '').trim()).filter(Boolean);
+            return dedupeMultiValues(raw);
         }
         if (raw === undefined || raw === null || raw === '') {
             return [];
         }
-        return [String(raw).trim()].filter(Boolean);
+        if (field && field.multiple) {
+            return normalizeMultiValues(raw, String(this.config.multiSelectSeparator || ','));
+        }
+        return dedupeMultiValues([raw]);
     };
 
     QuickAddComponent.prototype.getEntryKey = function getEntryKey(entry) {
@@ -6172,12 +7189,18 @@
         const fileFields = this.getFileFields();
         result.entries.forEach((entry) => {
             const linked = [];
+            const seen = new Set();
             fileFields.forEach((field) => {
                 this.resolveEntryFieldValues(entry, field.key).forEach((ref) => {
                     const attachment = this.findAttachmentByRef(ref);
                     if (!attachment) {
                         return;
                     }
+                    const linkKey = `${field.key}|${attachment.id}`;
+                    if (seen.has(linkKey)) {
+                        return;
+                    }
+                    seen.add(linkKey);
                     linked.push({
                         id: attachment.id,
                         fieldKey: field.key,
@@ -6252,12 +7275,14 @@
         });
     };
 
-    QuickAddComponent.prototype.removeRefsFromDeterministicInput = function removeRefsFromDeterministicInput(ref, entryKey, fieldKey) {
+    QuickAddComponent.prototype.removeRefsFromDeterministicInput = function removeRefsFromDeterministicInput(ref, entryKey, fieldKey, options) {
         const needle = normValue(ref);
         if (!needle || this.isAiMode()) {
             return;
         }
+        const sourceRegion = options && options.sourceRegion === 'card' ? 'card' : 'inline';
         const ranges = [];
+        const multiSeparator = String(this.config.multiSelectSeparator || ',');
         (this.lastResult.entries || []).forEach((entry) => {
             const key = this.getEntryKey(entry);
             if (entryKey !== undefined && entryKey !== null && key !== entryKey) {
@@ -6274,10 +7299,27 @@
                 if (!field || !isFileFieldType(field.type)) {
                     return;
                 }
-                if (normValue(token.value) !== needle) {
+                if (!field.multiple && normValue(token.value) !== needle) {
                     return;
                 }
-                ranges.push({ start: token.globalStart, end: token.globalEnd });
+                if (!field.multiple) {
+                    ranges.push({ start: token.globalStart, end: token.globalEnd, replacement: '' });
+                    return;
+                }
+                const values = normalizeMultiValues(token.value || '', multiSeparator);
+                const nextValues = values.filter((item) => normValue(item) !== needle);
+                if (nextValues.length === values.length) {
+                    return;
+                }
+                if (nextValues.length === 0) {
+                    ranges.push({ start: token.globalStart, end: token.globalEnd, replacement: '' });
+                    return;
+                }
+                ranges.push({
+                    start: token.globalValueStart,
+                    end: token.globalValueEnd,
+                    replacement: nextValues.join(`${multiSeparator} `)
+                });
             });
         });
         if (!ranges.length) {
@@ -6285,9 +7327,13 @@
         }
         let source = this.inputText || this.readInputText();
         ranges.sort((a, b) => b.start - a.start).forEach((range) => {
-            source = this.replaceRange(source, range.start, range.end, '');
+            source = this.replaceRange(source, range.start, range.end, range.replacement || '');
         });
-        this.parseAndRender({ source, preserveSelection: true });
+        this.parseAndRender({
+            source,
+            focusInput: sourceRegion !== 'card',
+            skipTypingSync: sourceRegion === 'card'
+        });
     };
 
     QuickAddComponent.prototype.openConflictModal = function openConflictModal(state) {
@@ -6332,17 +7378,18 @@
         this.closeConflictModal();
     };
 
-    QuickAddComponent.prototype.removeGlobalAttachment = function removeGlobalAttachment(attachmentId, force) {
+    QuickAddComponent.prototype.removeGlobalAttachment = function removeGlobalAttachment(attachmentId, force, sourceRegion) {
         const attachment = this.getAttachmentById(attachmentId);
         if (!attachment) {
             return;
         }
+        const origin = sourceRegion === 'card' ? 'card' : 'inline';
         const usage = this.getAttachmentUsage(this.lastResult).get(attachmentId) || [];
         if (usage.length > 0 && !force) {
             this.openConflictModal({
                 message: `“${attachment.name}” is linked in entries. Unlink and delete it?`,
                 confirmLabel: 'Unlink and delete',
-                onConfirm: () => this.removeGlobalAttachment(attachmentId, true)
+                onConfirm: () => this.removeGlobalAttachment(attachmentId, true, origin)
             });
             return;
         }
@@ -6350,22 +7397,29 @@
             if (this.isAiMode()) {
                 this.removeRefsFromAIEntries(attachment.ref);
             } else {
-                this.removeRefsFromDeterministicInput(attachment.ref);
+                this.removeRefsFromDeterministicInput(attachment.ref, undefined, undefined, { sourceRegion: origin });
             }
         }
         if (attachment.previewUrl) {
             URL.revokeObjectURL(attachment.previewUrl);
         }
         this.attachmentPool = (this.attachmentPool || []).filter((item) => item.id !== attachmentId);
-        this.parseAndRender({ source: this.inputText, preserveSelection: true });
+        this.parseAndRender({
+            source: this.inputText,
+            focusInput: origin !== 'card',
+            skipTypingSync: origin === 'card'
+        });
     };
 
-    QuickAddComponent.prototype.linkAttachmentToEntryField = function linkAttachmentToEntryField(entryKey, fieldKey, attachmentId, force, tokenId) {
+    QuickAddComponent.prototype.linkAttachmentToEntryField = function linkAttachmentToEntryField(entryKey, fieldKey, attachmentId, force, tokenId, sourceRegion) {
         const attachment = this.getAttachmentById(attachmentId);
         const field = this.getFieldDefinition(fieldKey);
         if (!attachment || !field || !isFileFieldType(field.type)) {
             return;
         }
+        const focusInput = sourceRegion !== 'card';
+        const skipTypingSync = sourceRegion === 'card';
+        const multiSeparator = String(this.config.multiSelectSeparator || ',');
         const usage = this.getAttachmentUsage(this.lastResult).get(attachmentId) || [];
         const hasConflict = this.config.allowAttachmentReuse !== true
             && usage.some((item) => item.entryKey !== entryKey || item.fieldKey !== fieldKey);
@@ -6373,7 +7427,7 @@
             this.openConflictModal({
                 message: `“${attachment.name}” is already linked elsewhere. Unlink and attach here?`,
                 confirmLabel: 'Unlink and attach here',
-                onConfirm: () => this.linkAttachmentToEntryField(entryKey, fieldKey, attachmentId, true, tokenId)
+                onConfirm: () => this.linkAttachmentToEntryField(entryKey, fieldKey, attachmentId, true, tokenId, sourceRegion)
             });
             return;
         }
@@ -6382,7 +7436,12 @@
                 if (this.isAiMode()) {
                     this.removeRefsFromAIEntries(attachment.ref, item.entryKey, item.fieldKey);
                 } else {
-                    this.removeRefsFromDeterministicInput(attachment.ref, item.entryKey, item.fieldKey);
+                    this.removeRefsFromDeterministicInput(
+                        attachment.ref,
+                        item.entryKey,
+                        item.fieldKey,
+                        { sourceRegion: sourceRegion || 'inline' }
+                    );
                 }
             });
         }
@@ -6393,11 +7452,15 @@
             const hasRef = current.some((item) => normValue(item) === normValue(attachment.ref));
             if (field.multiple) {
                 if (!hasRef) current.push(attachment.ref);
-                entry[fieldKey] = current;
+                entry[fieldKey] = dedupeMultiValues(current);
             } else {
                 entry[fieldKey] = attachment.ref;
             }
-            this.parseAndRender({ source: this.inputText, preserveSelection: true });
+            this.parseAndRender({
+                source: this.inputText,
+                focusInput,
+                skipTypingSync
+            });
             return;
         }
         const source = this.inputText || this.readInputText();
@@ -6405,19 +7468,45 @@
         if (!entry) {
             return;
         }
+        const entryExistingRefs = this.resolveEntryFieldValues(entry, fieldKey);
+        if (field.multiple && entryExistingRefs.some((item) => normValue(item) === normValue(attachment.ref))) {
+            return;
+        }
         if (tokenId && this.tokenMap[tokenId]) {
             const token = this.tokenMap[tokenId];
+            if (field.multiple) {
+                const existing = normalizeMultiValues(token.value || '', multiSeparator);
+                existing.push(attachment.ref);
+                const replacement = existing.join(`${multiSeparator} `);
+                const updated = this.replaceRange(source, token.globalValueStart, token.globalValueEnd, replacement);
+                const caret = token.globalValueStart + replacement.length;
+                this.parseAndRender({ source: updated, caretOffset: caret, focusInput, skipTypingSync });
+                return;
+            }
             const updated = this.replaceRange(source, token.globalValueStart, token.globalValueEnd, attachment.ref);
             const caret = token.globalValueStart + String(attachment.ref).length;
-            this.parseAndRender({ source: updated, caretOffset: caret, focusInput: true });
+            this.parseAndRender({ source: updated, caretOffset: caret, focusInput, skipTypingSync });
             return;
         }
         const tokens = (entry.tokens || []).filter((token) => token.kind === 'field' && token.committed && token.key === fieldKey);
+        if (field.multiple && tokens.length > 0) {
+            const token = tokens[tokens.length - 1];
+            const existing = normalizeMultiValues(token.value || '', multiSeparator);
+            if (existing.some((item) => normValue(item) === normValue(attachment.ref))) {
+                return;
+            }
+            existing.push(attachment.ref);
+            const replacement = existing.join(`${multiSeparator} `);
+            const updated = this.replaceRange(source, token.globalValueStart, token.globalValueEnd, replacement);
+            const caret = token.globalValueStart + replacement.length;
+            this.parseAndRender({ source: updated, caretOffset: caret, focusInput, skipTypingSync });
+            return;
+        }
         if (!field.multiple && tokens.length > 0) {
             const token = tokens[tokens.length - 1];
             const updated = this.replaceRange(source, token.globalValueStart, token.globalValueEnd, attachment.ref);
             const caret = token.globalValueStart + String(attachment.ref).length;
-            this.parseAndRender({ source: updated, caretOffset: caret, focusInput: true });
+            this.parseAndRender({ source: updated, caretOffset: caret, focusInput, skipTypingSync });
             return;
         }
         const prefix = (field.prefixes && field.prefixes[0]) ? field.prefixes[0] : `${field.key}:`;
@@ -6426,16 +7515,56 @@
         const snippet = `${needsSpace ? ' ' : ''}${prefix}${attachment.ref}${separator}`;
         const updated = this.replaceRange(source, entry.globalEnd, entry.globalEnd, snippet);
         const caret = entry.globalEnd + snippet.length;
-        this.parseAndRender({ source: updated, caretOffset: caret, focusInput: true });
+        this.parseAndRender({ source: updated, caretOffset: caret, focusInput, skipTypingSync });
     };
 
-    QuickAddComponent.prototype.removeAttachmentFromEntryField = function removeAttachmentFromEntryField(entryKey, fieldKey, ref) {
+    QuickAddComponent.prototype.removeAttachmentFromEntryField = function removeAttachmentFromEntryField(entryKey, fieldKey, ref, sourceRegion) {
+        const origin = sourceRegion === 'card' ? 'card' : 'inline';
         if (this.isAiMode()) {
             this.removeRefsFromAIEntries(ref, entryKey, fieldKey);
-            this.parseAndRender({ source: this.inputText, preserveSelection: true });
+            this.parseAndRender({
+                source: this.inputText,
+                focusInput: origin !== 'card',
+                skipTypingSync: origin === 'card'
+            });
             return;
         }
-        this.removeRefsFromDeterministicInput(ref, entryKey, fieldKey);
+        this.removeRefsFromDeterministicInput(ref, entryKey, fieldKey, { sourceRegion: origin });
+    };
+
+    QuickAddComponent.prototype.removeDeterministicEntry = function removeDeterministicEntry(entryIndex, sourceRegion) {
+        if (this.isAiMode()) {
+            return;
+        }
+        const targetIndex = Number(entryIndex);
+        if (!Number.isFinite(targetIndex)) {
+            return;
+        }
+        const entry = (this.lastResult.entries || []).find((item) => item && item.index === targetIndex);
+        if (!entry) {
+            return;
+        }
+        const start = Number(entry.globalStart);
+        const end = Number(entry.globalEnd);
+        if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+            return;
+        }
+        const origin = sourceRegion === 'card' ? 'card' : 'inline';
+        const separator = String(this.config.entrySeparator || '\n');
+        let source = this.inputText || this.readInputText();
+        let removeStart = start;
+        let removeEnd = end;
+        if (separator && source.slice(removeEnd, removeEnd + separator.length) === separator) {
+            removeEnd += separator.length;
+        } else if (separator && removeStart >= separator.length && source.slice(removeStart - separator.length, removeStart) === separator) {
+            removeStart -= separator.length;
+        }
+        source = this.replaceRange(source, removeStart, removeEnd, '');
+        this.parseAndRender({
+            source,
+            focusInput: origin !== 'card',
+            skipTypingSync: origin === 'card'
+        });
     };
 
     QuickAddComponent.prototype.renderAttachmentTile = function renderAttachmentTile(item, options) {
@@ -6446,7 +7575,10 @@
         const mediaHtml = isImage
             ? `<img src="${escHtml(item.previewUrl)}" class="${c.attachmentPreview || 'qa-attachment-preview-img'}" alt="${escHtml(item.name)}" />`
             : `<svg class="qa-attachment-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>`;
-        const usedText = opts.usedCount > 0 ? `<span class="${c.attachmentUsedFlag}">${opts.usedCount} used</span>` : '';
+        const usedCount = Number(opts.usedCount || 0);
+        const usedText = usedCount > 0
+            ? `<span class="${c.attachmentUsedFlag}" title="Linked ${usedCount} time${usedCount === 1 ? '' : 's'}">(${usedCount})</span>`
+            : '';
         return `
             <div class="${c.attachmentItem}${isImage ? ' qa-is-image' : ''}">
                 <button type="button" class="${c.attachmentOpen}" data-attachment-open="1" data-attachment-id="${escHtml(item.id)}" aria-label="Open attachment">
@@ -6533,7 +7665,7 @@
 
     QuickAddComponent.prototype.renderEntryPills = function renderEntryPills(entry) {
         const c = this.config.classNames;
-        const selections = this.collectEntrySelections(entry);
+        const selections = this.collapseSelectionsForCards(entry, this.collectEntrySelections(entry));
         const pills = selections.map((selection) => this.buildPillHtml(selection));
         (entry.blocked || []).forEach((item) => {
             pills.push(this.buildPillHtml({
@@ -6646,6 +7778,7 @@
         const pills = [];
         const entryIndex = (this.aiState.entries || []).findIndex((item) => item && item._id === entry._id);
         const occurrenceMap = {};
+        const multiDisplaySeparator = this.getMultiSelectDisplaySeparator();
         metaFields.forEach((field) => {
             const key = field.key;
             let rawValue = entry[key];
@@ -6660,7 +7793,35 @@
                     autoFromDefault = true;
                 }
             }
-            const values = Array.isArray(rawValue) ? rawValue : [rawValue];
+            const values = Array.isArray(rawValue) ? dedupeMultiValues(rawValue) : [rawValue];
+            if (field.multiple) {
+                const groupedValues = dedupeMultiValues(values);
+                if (!groupedValues.length) {
+                    return;
+                }
+                const label = field.label || key;
+                const groupedText = groupedValues.join(multiDisplaySeparator);
+                const groupedRaw = groupedValues.join(`${String(this.config.multiSelectSeparator || ',')} `);
+                pills.push(this.buildPillHtml({
+                    fieldKey: key,
+                    entryIndex: Math.max(0, entryIndex),
+                    value: groupedText,
+                    label: `${label}: ${groupedText}`,
+                    inferred: false,
+                    auto: autoFromDefault,
+                    blocked: false,
+                    dismissKey: null,
+                    tokenId: null,
+                    aiMeta: {
+                        entryId: entry._id,
+                        fieldKey: key,
+                        value: groupedRaw,
+                        occurrence: 0,
+                        mappingKey: ''
+                    }
+                }));
+                return;
+            }
             values.forEach((value) => {
                 if (value === undefined || value === null || value === '') {
                     return;
@@ -6801,8 +7962,7 @@
                 warnings: result.warnings || [],
                 missing: result.missing || [],
                 parseState: result.parseState || null,
-                callerRequest: result.callerRequest || null,
-                parseRequest: result.parseRequest || result.callerRequest || null
+                callerRequest: result.callerRequest || null
             }, null, 2);
         }
     };
@@ -6815,7 +7975,6 @@
         const c = this.config.classNames;
         const showEntryCards = this.config.showEntryCards !== false;
         const showEntryHeader = this.config.showEntryHeader !== false;
-        const showEntryPills = this.config.showEntryPills !== false;
         this.statusEl.textContent = `${result.entryCount} entries | ${result.validCount} valid | ${result.invalidCount} issues`;
         const globalAttachmentsHtml = this.renderGlobalAttachmentSection(result);
 
@@ -6848,14 +8007,22 @@
                         </div>
                     `
                     : '';
-                const pillsHtml = showEntryPills ? this.renderEntryPills(entry) : '';
+                const pillsHtml = this.renderEntryPills(entry);
                 const attachmentsHtml = this.renderEntryAttachments(entry);
+                const actionRow = Number.isFinite(Number(entry.globalStart)) && Number.isFinite(Number(entry.globalEnd))
+                    ? `
+                        <div class="${c.aiActions}">
+                            <button type="button" class="${c.aiActionBtn} ${c.aiActionBtnDanger}" data-det-action="remove-entry" data-entry-index="${entry.index}">Remove</button>
+                        </div>
+                    `
+                    : '';
 
                 return `
                     <article class="${c.entry}">
                         ${headerHtml}
                         ${pillsHtml}
                         ${attachmentsHtml}
+                        ${actionRow}
                         ${(entry.pending.length || entry.errors.length) ? `
                             <div class="${c.issues}">
                                 ${pendingRows}
@@ -6983,19 +8150,29 @@
     QuickAddComponent.prototype.handlePillClick = function handlePillClick(pillEl) {
         this.closeAttachmentSourceMenu();
         this.closeBlockedInfo();
+        const sourceRegion = pillEl.closest('[data-role="preview"]') ? 'card' : 'inline';
         const entryIndex = Number(pillEl.getAttribute('data-pill-entry'));
         const isAiPill = pillEl.getAttribute('data-pill-ai') === '1';
 
         if (isAiPill && this.isAiMode()) {
-            const sourceRegion = pillEl.closest('[data-role="preview"]') ? 'card' : 'inline';
             const fieldKey = pillEl.getAttribute('data-pill-ai-field') || '';
             const entryId = pillEl.getAttribute('data-pill-ai-entry-id') || '';
             const currentValue = pillEl.getAttribute('data-pill-ai-value') || '';
             const mappingKey = pillEl.getAttribute('data-pill-ai-map') || '';
             const occurrenceRaw = Number(pillEl.getAttribute('data-pill-ai-occurrence'));
             const occurrence = Number.isFinite(occurrenceRaw) ? Math.max(0, occurrenceRaw) : 0;
+            let resolvedEntryIndex = Number.isFinite(entryIndex) ? entryIndex : NaN;
+            if (!Number.isFinite(resolvedEntryIndex) && entryId) {
+                const mappedIndex = (this.aiState.entries || []).findIndex((item) => item && item._id === entryId);
+                if (mappedIndex >= 0) {
+                    resolvedEntryIndex = mappedIndex;
+                }
+            }
+            if (!Number.isFinite(resolvedEntryIndex)) {
+                resolvedEntryIndex = 0;
+            }
             const field = this.getFieldDefinition(fieldKey);
-            if (!field || !entryId || Number.isNaN(entryIndex)) {
+            if (!field || !entryId) {
                 return;
             }
             if (isDateFieldType(field.type)) {
@@ -7005,7 +8182,7 @@
                 this.openDatePicker({
                     field,
                     value: currentValue,
-                    entryIndex,
+                    entryIndex: resolvedEntryIndex,
                     anchorEl: pillEl,
                     sourceRegion,
                     aiContext: {
@@ -7019,6 +8196,9 @@
                 });
                 return;
             }
+            if (field.type === 'number' && this.isNumberStepperEnabledForField(field)) {
+                return;
+            }
             if (!this.fieldSupportsDropdown(field, entryId, fieldKey)) {
                 return;
             }
@@ -7030,7 +8210,7 @@
                 fieldKey,
                 fieldType: field.type,
                 tokenId: '',
-                entryIndex,
+                entryIndex: resolvedEntryIndex,
                 entryKey: entryId,
                 currentValue,
                 allowCustom: !!field.allowCustom,
@@ -7082,7 +8262,7 @@
 
         let token = tokenId ? this.tokenMap[tokenId] : null;
         if (!token && pillValue) {
-            token = this.materializeEntryFieldToken(entryIndex, fieldKey, pillValue);
+            token = this.materializeEntryFieldToken(entryIndex, fieldKey, pillValue, sourceRegion);
         }
 
         if (isDateFieldType(field.type)) {
@@ -7099,8 +8279,11 @@
                 token,
                 entryIndex,
                 anchorEl: pillEl,
-                sourceRegion: pillEl.closest('[data-role="preview"]') ? 'card' : 'inline'
+                sourceRegion
             });
+            return;
+        }
+        if (field.type === 'number' && this.isNumberStepperEnabledForField(field)) {
             return;
         }
 
@@ -7119,10 +8302,12 @@
             tokenId: token ? token.id : '',
             entryIndex,
             entryKey: entryIndex,
-            currentValue: token ? token.value : pillValue,
+            currentValue: (field.multiple && field.type === 'options')
+                ? pillValue
+                : (token ? token.value : pillValue),
             allowCustom: !!field.allowCustom,
             options,
-            sourceRegion: 'card',
+            sourceRegion,
             anchorRect: pillEl.getBoundingClientRect(),
             anchorEl: pillEl,
             source: 'click',
@@ -7152,42 +8337,106 @@
             return;
         }
         const tokenId = pillEl.getAttribute('data-pill-token');
-        if (!tokenId) {
-            return;
-        }
-        const token = this.tokenMap[tokenId];
-        if (!token) {
-            return;
-        }
-
         const rect = pillEl.getBoundingClientRect();
         const clickX = clickEvent && typeof clickEvent.clientX === 'number'
             ? clickEvent.clientX
             : rect.right;
         const midpoint = rect.left + (rect.width / 2);
-        const caretOffset = clickX >= midpoint ? token.globalEnd : token.globalStart;
+        let caretOffset = null;
+        if (tokenId) {
+            const token = this.tokenMap[tokenId];
+            if (token) {
+                caretOffset = clickX >= midpoint ? token.globalEnd : token.globalStart;
+            }
+        } else if (this.isAiMode()) {
+            const mappingKey = pillEl.getAttribute('data-pill-ai-map') || '';
+            const mapping = mappingKey ? this.aiInlineMarkIndex[mappingKey] : null;
+            if (
+                mapping
+                && Number.isFinite(Number(mapping.start))
+                && Number.isFinite(Number(mapping.end))
+            ) {
+                caretOffset = clickX >= midpoint ? Number(mapping.end) : Number(mapping.start);
+            }
+        }
 
+        if (!Number.isFinite(Number(caretOffset))) {
+            const source = this.inputText || this.readInputText();
+            caretOffset = source.length;
+        }
         this.closeDropdown();
-        this.setCaretOffset(caretOffset, true);
+        this.setCaretOffset(Number(caretOffset), true);
     };
 
     QuickAddComponent.prototype.positionDropdownAtRect = function positionDropdownAtRect(rect, anchorEl) {
-        const bounds = this.getFloatingBounds(anchorEl || this.inputEl);
+        const viewportBounds = {
+            left: 0,
+            top: 0,
+            right: window.innerWidth,
+            bottom: window.innerHeight
+        };
+        const dropdownState = this.dropdownState || {};
+        const preferViewportBounds = dropdownState.sourceRegion === 'card' && dropdownState.source === 'click';
         const pad = window.innerWidth <= 480 ? 8 : 10;
-        const viewportWidth = Math.max(0, (bounds.right - bounds.left) - (pad * 2));
-        const preferredWidth = Math.max(260, Math.min(320, viewportWidth));
-        const width = Math.min(preferredWidth, viewportWidth);
-        const minLeft = bounds.left + pad;
-        const maxLeft = bounds.right - width - pad;
-        const left = Math.max(minLeft, Math.min(rect.left || minLeft, maxLeft));
+        const maxPanelHeight = window.innerWidth <= 480 ? 288 : 348;
+        const minPreferredPanelHeight = window.innerWidth <= 480 ? 180 : 250;
+        const gap = 0;
+        const anchorTop = rect.top || 0;
+        const anchorBottom = rect.bottom || rect.top || 0;
+        const evaluateLayout = (candidateBounds) => {
+            const viewportWidth = Math.max(0, (candidateBounds.right - candidateBounds.left) - (pad * 2));
+            const preferredWidth = Math.max(260, Math.min(320, viewportWidth));
+            const width = Math.min(preferredWidth, viewportWidth);
+            const minLeft = candidateBounds.left + pad;
+            const maxLeft = candidateBounds.right - width - pad;
+            const left = Math.max(minLeft, Math.min(rect.left || minLeft, maxLeft));
+            const minTop = candidateBounds.top + pad;
+            const maxBottom = candidateBounds.bottom - pad;
+            const availableBelow = Math.max(0, maxBottom - (anchorBottom + gap));
+            const availableAbove = Math.max(0, (anchorTop - gap) - minTop);
+            const desiredHeight = Math.min(Math.max(1, measuredHeight || 1), maxPanelHeight);
+            let placeBelow = availableBelow >= availableAbove;
+            if (availableBelow >= desiredHeight) {
+                placeBelow = true;
+            } else if (availableAbove >= desiredHeight) {
+                placeBelow = false;
+            }
+            const panelHeight = Math.max(0, Math.min(placeBelow ? availableBelow : availableAbove, maxPanelHeight));
+            let top = placeBelow
+                ? (anchorBottom + gap)
+                : Math.max(minTop, (anchorTop - gap) - panelHeight);
+            if (placeBelow && top + panelHeight > maxBottom) {
+                top = Math.max(minTop, maxBottom - panelHeight);
+            }
+            return {
+                bounds: candidateBounds,
+                viewportWidth,
+                width,
+                left,
+                top,
+                panelHeight,
+                availableBelow,
+                availableAbove
+            };
+        };
 
         const prevHidden = this.dropdownEl.hidden;
         const prevVisibility = this.dropdownEl.style.visibility;
         const prevDisplay = this.dropdownEl.style.display;
+        let measureBounds = preferViewportBounds
+            ? viewportBounds
+            : this.getFloatingBounds(anchorEl || this.inputEl);
+        const measureBoundedHeight = Math.max(0, (measureBounds.bottom - measureBounds.top) - (pad * 2));
+        if (measureBoundedHeight < 120) {
+            measureBounds = viewportBounds;
+        }
+        const measureViewportWidth = Math.max(0, (measureBounds.right - measureBounds.left) - (pad * 2));
+        const measurePreferredWidth = Math.max(260, Math.min(320, measureViewportWidth));
+        const measureWidth = Math.min(measurePreferredWidth, measureViewportWidth);
         this.dropdownEl.hidden = false;
         this.dropdownEl.style.visibility = 'hidden';
         this.dropdownEl.style.removeProperty('display');
-        this.dropdownEl.style.width = `${width}px`;
+        this.dropdownEl.style.width = `${measureWidth}px`;
         this.dropdownEl.style.removeProperty('maxHeight');
         const measuredHeight = Math.ceil(this.dropdownEl.getBoundingClientRect().height || this.dropdownEl.scrollHeight || 0);
         if (prevHidden) {
@@ -7200,41 +8449,37 @@
             this.dropdownEl.style.removeProperty('display');
         }
 
-        const gap = 0;
-        const anchorTop = rect.top || 0;
-        const anchorBottom = rect.bottom || rect.top || 0;
-        const minTop = bounds.top + pad;
-        const maxBottom = bounds.bottom - pad;
-        const availableBelow = Math.max(0, maxBottom - (anchorBottom + gap));
-        const availableAbove = Math.max(0, (anchorTop - gap) - minTop);
-        const maxPanelHeight = window.innerWidth <= 480 ? 120 : 132;
-        const desiredHeight = Math.max(96, Math.min(measuredHeight || maxPanelHeight, maxPanelHeight));
-        let placeBelow = availableBelow >= availableAbove;
-        if (availableBelow >= desiredHeight) {
-            placeBelow = true;
-        } else if (availableAbove >= desiredHeight) {
-            placeBelow = false;
+        let bounds = preferViewportBounds
+            ? viewportBounds
+            : this.getFloatingBounds(anchorEl || this.inputEl);
+        const boundedHeight = Math.max(0, (bounds.bottom - bounds.top) - (pad * 2));
+        if (boundedHeight < 120) {
+            bounds = viewportBounds;
         }
-        const panelHeight = Math.max(0, Math.min(placeBelow ? availableBelow : availableAbove, maxPanelHeight));
-        let top = placeBelow
-            ? (anchorBottom + gap)
-            : Math.max(minTop, (anchorTop - gap) - panelHeight);
-        if (placeBelow && top + panelHeight > maxBottom) {
-            top = Math.max(minTop, maxBottom - panelHeight);
+
+        let layout = evaluateLayout(bounds);
+        const boundedMaxAvailable = Math.max(layout.availableBelow, layout.availableAbove);
+        if (boundedMaxAvailable < minPreferredPanelHeight) {
+            const viewportLayout = evaluateLayout(viewportBounds);
+            const viewportMaxAvailable = Math.max(viewportLayout.availableBelow, viewportLayout.availableAbove);
+            if (viewportMaxAvailable > boundedMaxAvailable) {
+                layout = viewportLayout;
+            }
         }
 
         this.dropdownEl.style.position = 'fixed';
-        this.dropdownEl.style.left = `${left}px`;
-        this.dropdownEl.style.top = `${top}px`;
-        this.dropdownEl.style.width = `${width}px`;
-        this.dropdownEl.style.maxWidth = `${Math.max(0, viewportWidth)}px`;
-        this.dropdownEl.style.maxHeight = `${Math.floor(panelHeight)}px`;
+        this.dropdownEl.style.left = `${layout.left}px`;
+        this.dropdownEl.style.top = `${layout.top}px`;
+        this.dropdownEl.style.width = `${layout.width}px`;
+        this.dropdownEl.style.maxWidth = `${Math.max(0, layout.viewportWidth)}px`;
+        this.dropdownEl.style.maxHeight = `${Math.floor(layout.panelHeight)}px`;
         this.dropdownEl.style.zIndex = '9999';
         const searchHeight = (this.dropdownSearchEl && !this.dropdownSearchEl.hidden)
             ? Math.ceil(this.dropdownSearchEl.getBoundingClientRect().height || 0)
             : 0;
-        const listMaxHeight = Math.max(0, panelHeight - searchHeight - 1);
+        const listMaxHeight = Math.max(0, layout.panelHeight - searchHeight - 1);
         this.dropdownListEl.style.maxHeight = `${Math.floor(listMaxHeight)}px`;
+        this.updateDropdownScrollIndicators();
     };
 
     QuickAddComponent.prototype.positionDropdown = function positionDropdown(anchorEl) {
@@ -7270,6 +8515,7 @@
             this.blockedInfoEl = el;
         }
         this.closeDropdown();
+        this.closeNumberPicker();
         const c = this.config.classNames;
         const safeReason = escHtml(reason || 'Blocked by constraints');
         this.blockedInfoEl.innerHTML = `
@@ -7324,23 +8570,25 @@
     QuickAddComponent.prototype.renderDropdownList = function renderDropdownList() {
         if (!this.dropdownState) {
             this.dropdownListEl.innerHTML = '';
+            this.updateDropdownScrollIndicators();
             return;
         }
 
         const c = this.config.classNames;
         const field = this.getFieldDefinition(this.dropdownState.fieldKey);
         const isMultiSelectOptions = !!(field && field.type === 'options' && field.multiple);
+        const isMultiValueDropdown = !!(field && field.multiple && (field.type === 'options' || isFileFieldType(field.type)));
         const queryRaw = String(this.dropdownSearchEl.value || '');
         const separator = String(this.config.multiSelectSeparator || ',');
         let filterRaw = queryRaw;
         let selectedTokens = [];
-        if (this.dropdownState.source === 'typing' && isMultiSelectOptions) {
+        if (isMultiSelectOptions) {
             const parts = separator
                 ? queryRaw.split(separator)
                 : [queryRaw];
             if (parts.length > 1) {
                 filterRaw = parts[parts.length - 1];
-                selectedTokens = parts.slice(0, -1).map((item) => item.trim()).filter(Boolean);
+                selectedTokens = dedupeMultiValues(parts.slice(0, -1));
             }
         }
         const query = filterRaw.trim().toLowerCase();
@@ -7351,7 +8599,9 @@
             : (currentRawValues === undefined || currentRawValues === null || currentRawValues === ''
                 ? []
                 : splitByMultiSeparator(currentRawValues, separator));
-        currentValues.forEach((item) => selectedNorm.add(normValue(item)));
+        if (isMultiValueDropdown) {
+            currentValues.forEach((item) => selectedNorm.add(normValue(item)));
+        }
 
         const dependencyFiltered = this.dropdownState.options.filter((option) =>
             this.isFieldValueDependencyAllowed(this.dropdownState.fieldKey, option.value, this.dropdownState.entryIndex).ok
@@ -7365,20 +8615,40 @@
 
         const items = filtered.map((option) => {
             const colorStyle = option.color ? ` style="background:${escHtml(option.color)}"` : '';
-            const selected = isMultiSelectOptions
+            const selected = isMultiValueDropdown
                 ? selectedNorm.has(normValue(option.value))
                 : normValue(option.value) === normValue(this.dropdownState.currentValue);
             const active = this.dropdownState.activeOptionValue !== null
                 && this.dropdownState.activeOptionValue !== undefined
                 && normValue(option.value) === normValue(this.dropdownState.activeOptionValue);
-            const usedMeta = Number(option.usedCount || 0) > 0
-                ? `<span class="${c.dropdownMeta}">${Number(option.usedCount)} used</span>`
-                : '';
+            const usedCount = Number(option.usedCount || 0);
+            const selectedCheckIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" focusable="false"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m7 17l-5-5m5 0l5 5L22 7m-10 5l5-5"/></svg>';
+            let usedMeta = '';
+            if (usedCount > 0) {
+                const usedTitle = `Linked ${usedCount} time${usedCount === 1 ? '' : 's'}`;
+                if (isFileFieldType(this.dropdownState.fieldType)) {
+                    usedMeta = `
+                        <span class="${c.dropdownMeta} ${c.dropdownUsedMeta}" title="${escHtml(usedTitle)}">
+                            <span class="${c.dropdownUsedDot}" aria-hidden="true"></span>
+                        </span>
+                    `;
+                } else {
+                    usedMeta = `<span class="${c.dropdownMeta} ${c.dropdownCountMeta}" title="${escHtml(usedTitle)}">(${usedCount})</span>`;
+                }
+            }
+            const showAttachmentPreview = this.config.showAttachmentDropdownPreview !== false;
+            const leadingVisual = isFileFieldType(this.dropdownState.fieldType) && showAttachmentPreview
+                ? (option.previewUrl
+                    ? `<img class="${c.dropdownAttachmentPreview}" src="${escHtml(option.previewUrl)}" alt="" loading="lazy" aria-hidden="true" />`
+                    : `<span class="${c.dropdownAttachmentIcon}" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="13 2 13 9 20 9"/></svg></span>`)
+                : `<span class="${c.dropdownColor}"${colorStyle}></span>`;
             return `
                 <button type="button" class="${c.dropdownOption}${active ? ` ${c.dropdownOptionActive}` : ''}" data-option-value="${escHtml(option.value)}">
-                    <span class="${c.dropdownColor}"${colorStyle}></span>
+                    ${leadingVisual}
                     <span class="qa-dropdown-label">${escHtml(option.label)}</span>
-                    ${selected ? `<span class="${c.dropdownMeta}" aria-hidden="true">✓</span>` : usedMeta}
+                    ${selected
+                        ? `<span class="${c.dropdownMeta} qa-dropdown-selected-meta" aria-hidden="true">${selectedCheckIcon}</span>`
+                        : usedMeta}
                 </button>
             `;
         });
@@ -7409,6 +8679,7 @@
             this.dropdownListEl.innerHTML = `<div class="${c.dropdownMeta}" style="padding:8px 10px;">${escHtml(msg)}</div>`;
             this.dropdownState.filteredOptions = [];
             this.dropdownState.activeOptionValue = null;
+            this.updateDropdownScrollIndicators();
             return;
         }
 
@@ -7427,6 +8698,23 @@
         }
         this.dropdownState.keepActiveWhenFiltering = false;
         this.dropdownListEl.innerHTML = items.join('');
+        this.updateDropdownScrollIndicators();
+    };
+
+    QuickAddComponent.prototype.updateDropdownScrollIndicators = function updateDropdownScrollIndicators() {
+        if (!this.dropdownListEl) {
+            return;
+        }
+        const listEl = this.dropdownListEl;
+        const canScroll = listEl.scrollHeight > listEl.clientHeight + 1;
+        const canScrollUp = canScroll && listEl.scrollTop > 1;
+        const canScrollDown = canScroll && (listEl.scrollTop + listEl.clientHeight) < (listEl.scrollHeight - 1);
+        if (this.dropdownFadeTopEl) {
+            this.dropdownFadeTopEl.hidden = !canScrollUp;
+        }
+        if (this.dropdownFadeBottomEl) {
+            this.dropdownFadeBottomEl.hidden = !canScrollDown;
+        }
     };
 
     QuickAddComponent.prototype.scrollDropdownActiveOptionIntoView = function scrollDropdownActiveOptionIntoView() {
@@ -7498,7 +8786,8 @@
                 state.fieldKey,
                 selectedOption.attachmentId,
                 false,
-                state.tokenId || ''
+                state.tokenId || '',
+                state.sourceRegion || 'inline'
             );
             return;
         }
@@ -7525,7 +8814,15 @@
             return;
         }
 
-        const token = this.tokenMap[state.tokenId];
+        let token = this.tokenMap[state.tokenId];
+        if (!token && state.sourceRegion === 'card') {
+            const seedValue = String(
+                state.currentValue !== undefined && state.currentValue !== null && state.currentValue !== ''
+                    ? state.currentValue
+                    : nextValue
+            );
+            token = this.materializeEntryFieldToken(state.entryIndex, state.fieldKey, seedValue, state.sourceRegion);
+        }
         if (!token) {
             this.closeDropdown();
             return;
@@ -7548,7 +8845,7 @@
                     ? parts.slice(0, -1).map((item) => item.trim()).filter(Boolean)
                     : splitByMultiSeparator(token.value || '', separator);
             } else {
-                values = splitByMultiSeparator(token.value || '', separator);
+                values = splitByMultiSeparator(state.currentValue || token.value || '', separator);
             }
             const selectedNorm = normValue(nextValue);
             const existingIndex = values.findIndex((item) => normValue(item) === selectedNorm);
@@ -7702,60 +8999,100 @@
             entry[fieldKey] = normalizedNextValue;
         }
 
-        if (Array.isArray(entry.spans) && mapping) {
-            const oldLength = Math.max(0, Number(mapping.end) - Number(mapping.start));
-            const nextLength = String(normalizedNextValue).length;
-            const delta = nextLength - oldLength;
-            let updatedCurrent = false;
-            entry.spans = entry.spans.map((span) => {
-                const start = Number(span && span.start);
-                const end = Number(span && span.end);
-                if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
-                    return span;
-                }
-                if (!updatedCurrent && start === Number(mapping.start) && end === Number(mapping.end) && String(span.field || '') === fieldKey) {
-                    updatedCurrent = true;
-                    return Object.assign({}, span, {
-                        start,
-                        end: start + nextLength,
-                        value: normalizedNextValue
-                    });
-                }
-                if (start >= Number(mapping.end)) {
-                    return Object.assign({}, span, { start: start + delta, end: end + delta });
-                }
-                return span;
-            });
-            if (Number.isFinite(Number(entry._sourceEnd))) {
-                entry._sourceEnd = Number(entry._sourceEnd) + delta;
-            }
-        }
-
         this.aiState.editedEntries.add(entryId);
         this.aiState.error = '';
         this.aiState.errorKind = '';
 
         const source = this.inputText || this.readInputText();
+        const fallbackRange = (!mapping && sourceRegion === 'card')
+            ? this.findAIInlineFallbackRange(entry, fieldKey, occurrence, currentValue, source)
+            : null;
         let nextSource = source;
         let caretOffset = null;
-        if (
-            sourceRegion !== 'card'
-            && mapping
-            && Number.isFinite(Number(mapping.start))
-            && Number.isFinite(Number(mapping.end))
-            && Number(mapping.end) > Number(mapping.start)
-        ) {
-            nextSource = this.replaceRange(source, Number(mapping.start), Number(mapping.end), String(normalizedNextValue));
-            caretOffset = Number(mapping.start) + String(normalizedNextValue).length;
+        const mappingStart = mapping ? Number(mapping.start) : NaN;
+        const mappingEnd = mapping ? Number(mapping.end) : NaN;
+        const fallbackStart = fallbackRange ? Number(fallbackRange.start) : NaN;
+        const fallbackEnd = fallbackRange ? Number(fallbackRange.end) : NaN;
+        const hasMappingRange = Number.isFinite(mappingStart)
+            && Number.isFinite(mappingEnd)
+            && mappingEnd > mappingStart;
+        const hasFallbackRange = Number.isFinite(fallbackStart)
+            && Number.isFinite(fallbackEnd)
+            && fallbackEnd > fallbackStart;
+        const syncStart = hasMappingRange ? mappingStart : fallbackStart;
+        const syncEnd = hasMappingRange ? mappingEnd : fallbackEnd;
+        const hasSyncRange = Number.isFinite(syncStart)
+            && Number.isFinite(syncEnd)
+            && syncEnd > syncStart;
+        const currentChunk = hasSyncRange ? source.slice(syncStart, syncEnd) : '';
+        const currentValueText = currentValue === undefined || currentValue === null ? '' : String(currentValue);
+        const mappingValueText = mapping && mapping.value !== undefined && mapping.value !== null
+            ? (Array.isArray(mapping.value) ? mapping.value.join(`${separator} `) : String(mapping.value))
+            : (
+                fallbackRange && fallbackRange.value !== undefined && fallbackRange.value !== null
+                    ? String(fallbackRange.value)
+                    : ''
+            );
+        const canSyncCardDirectMatch = sourceRegion === 'card'
+            && hasSyncRange
+            && (
+                normValue(currentChunk) === normValue(currentValueText)
+                || normValue(currentChunk) === normValue(mappingValueText)
+            );
+        const shouldSyncInlineSource = hasSyncRange
+            && (sourceRegion !== 'card' || canSyncCardDirectMatch);
+        if (shouldSyncInlineSource) {
+            const replacementText = String(normalizedNextValue);
+            nextSource = this.replaceRange(source, syncStart, syncEnd, replacementText);
+            if (sourceRegion !== 'card') {
+                caretOffset = syncStart + replacementText.length;
+            }
+            if (Array.isArray(entry.spans) && (hasMappingRange || (hasFallbackRange && fallbackRange && fallbackRange.fromSpan === true))) {
+                const delta = replacementText.length - (syncEnd - syncStart);
+                const expectedOccurrence = Math.max(0, Number.isFinite(Number(occurrence)) ? Number(occurrence) : 0);
+                let fieldOccurrence = 0;
+                let updatedCurrent = false;
+                entry.spans = entry.spans.map((span) => {
+                    const start = Number(span && span.start);
+                    const end = Number(span && span.end);
+                    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+                        return span;
+                    }
+                    const spanField = String(span.field || '');
+                    const isTargetField = spanField === fieldKey;
+                    let nextSpan = span;
+                    const isDirectMatch = isTargetField && start === syncStart && end === syncEnd;
+                    const isOccurrenceMatch = isTargetField && !updatedCurrent && fieldOccurrence === expectedOccurrence && (start <= syncStart && end >= syncEnd);
+                    if (!updatedCurrent && (isDirectMatch || isOccurrenceMatch)) {
+                        updatedCurrent = true;
+                        nextSpan = Object.assign({}, span, {
+                            start,
+                            end: start + replacementText.length,
+                            value: normalizedNextValue
+                        });
+                    } else if (start >= syncEnd && delta !== 0) {
+                        nextSpan = Object.assign({}, span, { start: start + delta, end: end + delta });
+                    }
+                    if (isTargetField) {
+                        fieldOccurrence += 1;
+                    }
+                    return nextSpan;
+                });
+                if (Number.isFinite(Number(entry._sourceEnd))) {
+                    entry._sourceEnd = Number(entry._sourceEnd) + delta;
+                }
+            }
             this.aiState.lastParsedInput = nextSource;
             this.aiState.lastAttemptedInput = nextSource;
         }
 
         const renderOptions = {
             source: nextSource,
-            preserveSelection: true,
             skipTypingSync: sourceRegion === 'card'
         };
+        if (sourceRegion === 'card') {
+            renderOptions.focusInput = false;
+        }
         if (typeof caretOffset === 'number') {
             renderOptions.caretOffset = caretOffset;
             renderOptions.focusInput = sourceRegion !== 'card';
@@ -7814,6 +9151,14 @@
         this.dropdownSearchEl.value = '';
         this.dropdownEl.style.removeProperty('maxHeight');
         this.dropdownListEl.style.removeProperty('maxHeight');
+        this.dropdownListEl.style.removeProperty('minHeight');
+        if (this.dropdownFadeTopEl) {
+            this.dropdownFadeTopEl.hidden = true;
+        }
+        if (this.dropdownFadeBottomEl) {
+            this.dropdownFadeBottomEl.hidden = true;
+        }
+        this.dropdownListEl.scrollTop = 0;
     };
 
     QuickAddComponent.prototype.dismissSelection = function dismissSelection(dismissKey) {
@@ -7831,8 +9176,14 @@
         this.closeAttachmentSourceMenu();
         this.closeConflictModal();
         this.closeDropdown();
+        this.closeNumberPicker();
         this.closeBlockedInfo();
-        this.parseAndRender({ source: this.inputText, caretOffset: this.inputText.length, focusInput: false });
+        this.parseAndRender({
+            source: this.inputText,
+            caretOffset: this.inputText.length,
+            focusInput: false,
+            skipTypingSync: true
+        });
     };
 
     QuickAddComponent.prototype.getResult = function getResult() {
@@ -7879,6 +9230,7 @@
         this.closeConflictModal();
         this.closeBlockedInfo();
         this.closeDatePicker();
+        this.closeNumberPicker();
         this.unbindEvents();
         this.renderShell();
         this.applyTokens();
@@ -7901,6 +9253,7 @@
         this.unbindEvents();
         this.closeBlockedInfo();
         this.closeDatePicker();
+        this.closeNumberPicker();
         this.closeDropdown();
         this.closeAttachmentSourceMenu();
         this.closeConflictModal();

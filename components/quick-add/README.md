@@ -16,6 +16,7 @@ const qa = QuickAdd.create({
   entrySeparator: '\n\n',
   fieldTerminator: ';;',
   multiSelectSeparator: ',',
+  multiSelectDisplaySeparator: ', ',
   showDropdownOnTyping: true,
   schema: {
     fields: [
@@ -53,11 +54,16 @@ Instance methods:
 - `entrySeparator`: entry delimiter (default: `'\n'`)
 - `fieldTerminator`: token commit delimiter (default: `';;'`)
 - `fieldTerminatorMode`: `'strict' | 'or-next-prefix' | 'or-end'`
-- `multiSelectSeparator`: multi-option separator; must differ from `entrySeparator` and `fieldTerminator`
+- `multiSelectSeparator`: multi-option parse separator; must differ from `entrySeparator` and `fieldTerminator`
+- `multiSelectDisplaySeparator`: card display separator for grouped multi-select values
+- `allowNumberMath`: allow math expressions in number parsing (default: `false`)
+- `enableNumberPillStepper`: enable number pill stepper popover with `+/-` controls (default: `false`)
+- `numberPillStep`: default increment/decrement step when number stepper is enabled (default: `1`)
 - `fallbackField`: target for non-prefixed text
 - `showJsonOutput`: renders `<details>` JSON output panel (collapsed by default)
 - `showDropdownOnTyping`: enables typing-triggered dropdown workflow
-- `showInlinePills`, `showEntryCards`, `showEntryHeader`, `showEntryPills`
+- `showAttachmentDropdownPreview`: show tiny attachment visuals in file-field dropdown options (default: `true`)
+- `showInlinePills`, `showEntryCards`, `showEntryHeader`
 - `inputHeightMode`: `'grow' | 'scroll'`, with optional `inputMaxHeight`
 - `allowMultipleAttachments`: global attachment picker single vs multi-file selection
 - `allowAttachmentReuse`: when false, linking a file already used elsewhere prompts conflict handling
@@ -87,13 +93,17 @@ Useful per-field keys:
 - `dependsOn`, `constraints`
 - `options` (for `type: 'options'`)
 - `naturalDate`, `allowDateOnly`, `defaultTime`, `timeFormat` (date/datetime)
+- `allowMathExpression` (number): overrides `allowNumberMath` for this field
+- `showNumberStepper` (number): overrides `enableNumberPillStepper` for this field
+- `numberStep` (number): per-field override for step size in number stepper
+- `min`, `max` (number): optional bounds enforced by number stepper
 
 Use canonical keys only:
 
-- `options` (not `enum`)
-- `dependsOn` (not `dependencies`)
-- `constraints` (not `constraint`)
-- `defaultValue` (no `autoToday` alias path)
+- `options`
+- `dependsOn`
+- `constraints`
+- `defaultValue`
 
 ## AI config (key fields)
 
@@ -136,7 +146,7 @@ type DeterministicResult = {
     tokens: Array<unknown>;
     blocked: Array<unknown>;
     isValid: boolean;
-    attachments?: Attachment[]; // linked from file fields
+    attachments?: Attachment[];
   }>;
   entryCount: number;
   validCount: number;
@@ -146,6 +156,7 @@ type DeterministicResult = {
     fieldTerminator: string;
     fieldTerminatorMode: string;
     multiSelectSeparator: string;
+    multiSelectDisplaySeparator: string;
   };
 };
 ```
@@ -169,7 +180,7 @@ type AIResult = {
     blocked: [];
     isValid: boolean;
     aiMeta: { id: string; deleted: boolean; edited: boolean };
-    attachments?: Attachment[]; // linked from file fields
+    attachments?: Attachment[];
   }>;
   entryCount: number;
   validCount: number;
@@ -209,7 +220,6 @@ type AIResult = {
     promptMode: string;
     hasCustomResponseParser: boolean;
   };
-  parseRequest: AIResult['callerRequest']; // alias for caller-managed workflows
   verification: { status: string; message: string; signature: string };
 };
 ```
@@ -237,6 +247,8 @@ Behavior:
 - `Enter` with no active option inserts newline.
 - Multi-select typing is separator-aware (`value,` and `value, ` supported).
 - Multi-select insertion appends `multiSelectSeparator + space`.
+- Entry cards render multi-select values as grouped text using `multiSelectDisplaySeparator`.
+- When number stepper is enabled, number pills render inline `+/-` controls using configured step values.
 
 ## Notes
 

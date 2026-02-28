@@ -27,6 +27,7 @@
     --qa-pill-fg: var(--qa-fg);
     --qa-pill-border: var(--qa-border);
     --qa-max-width: 100%;
+    --qa-color-scheme: light;
 
     --qa-date-picker-control-bg: var(--qa-input-bg);
     --qa-date-picker-control-fg: var(--qa-muted);
@@ -47,6 +48,7 @@
     --qa-date-picker-time-bg: color-mix(in srgb, var(--qa-input-bg) 92%, var(--qa-card-bg));
     --qa-date-picker-time-border: var(--qa-date-picker-control-border);
     --qa-date-picker-max-height: min(78vh, 520px);
+    --qa-date-picker-day-muted-fg: color-mix(in srgb, var(--qa-muted) 70%, transparent);
 }
 
 .qa-root {
@@ -61,6 +63,7 @@
     border-radius: var(--qa-radius-root);
     font-family: var(--qa-font);
     padding: 14px;
+    color-scheme: var(--qa-color-scheme);
 }
 
 .qa-root,
@@ -314,6 +317,52 @@
     white-space: normal;
     overflow-wrap: anywhere;
     word-break: break-word;
+}
+
+.qa-number-pill {
+    padding-inline: 4px;
+    cursor: default;
+}
+
+.qa-number-pill.qa-pill-interactive:hover {
+    transform: none;
+    filter: none;
+}
+
+.qa-number-pill-stepper {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.qa-number-pill-step-btn {
+    border: var(--qa-border-line);
+    border-radius: var(--qa-radius-pill);
+    background: color-mix(in srgb, var(--qa-input-bg) 88%, var(--qa-card-bg));
+    color: inherit;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    min-width: 18px;
+    min-height: 18px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.qa-number-pill-step-btn:hover {
+    background: color-mix(in srgb, var(--qa-accent-soft) 72%, var(--qa-input-bg));
+}
+
+.qa-number-pill-step-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--qa-date-picker-focus-ring);
 }
 
 .qa-pill-interactive {
@@ -706,7 +755,9 @@
     background: color-mix(in srgb, var(--qa-fg) 66%, transparent);
     color: #fff;
     border-radius: 999px;
-    font-size: 9px;
+    font-size: 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-variant-numeric: tabular-nums;
     padding: 1px 5px;
 }
 
@@ -832,10 +883,44 @@
     outline-offset: -2px;
 }
 
+.qa-dropdown-list-wrap {
+    position: relative;
+}
+
 .qa-dropdown-list {
-    max-height: min(132px, calc(100vh - 120px));
+    max-height: min(348px, calc(100vh - 120px));
     overflow: auto;
     display: grid;
+}
+
+.qa-dropdown-fade-top,
+.qa-dropdown-fade-bottom {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 18px;
+    pointer-events: none;
+    z-index: 2;
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+}
+
+.qa-dropdown-fade-top {
+    top: 0;
+    background: linear-gradient(
+        to bottom,
+        color-mix(in srgb, var(--qa-card-bg) 94%, transparent),
+        color-mix(in srgb, var(--qa-card-bg) 18%, transparent)
+    );
+}
+
+.qa-dropdown-fade-bottom {
+    bottom: 0;
+    background: linear-gradient(
+        to top,
+        color-mix(in srgb, var(--qa-card-bg) 94%, transparent),
+        color-mix(in srgb, var(--qa-card-bg) 18%, transparent)
+    );
 }
 
 .qa-dropdown-option {
@@ -874,6 +959,35 @@
     flex-shrink: 0;
 }
 
+.qa-dropdown-attachment-preview {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    border: 1px solid var(--qa-border);
+    object-fit: cover;
+    display: block;
+    flex-shrink: 0;
+    background: var(--qa-input-bg);
+}
+
+.qa-dropdown-attachment-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    border: 1px solid var(--qa-border);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--qa-muted);
+    background: color-mix(in srgb, var(--qa-input-bg) 86%, var(--qa-card-bg));
+    flex-shrink: 0;
+}
+
+.qa-dropdown-attachment-icon svg {
+    width: 12px;
+    height: 12px;
+}
+
 .qa-dropdown-add {
     color: var(--qa-accent);
 }
@@ -883,6 +997,52 @@
     font-size: 11px;
     color: var(--qa-muted);
     flex-shrink: 0;
+}
+
+.qa-dropdown-used-meta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+}
+
+.qa-dropdown-used-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #2563eb;
+    opacity: 1;
+}
+
+.qa-dropdown-used-icon svg {
+    width: 12px;
+    height: 12px;
+}
+
+.qa-dropdown-used-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: #2563eb;
+    display: inline-block;
+}
+
+.qa-dropdown-selected-meta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    color: #16a34a;
+}
+
+.qa-dropdown-selected-meta svg {
+    width: 13px;
+    height: 13px;
+}
+
+.qa-dropdown-count-meta {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-variant-numeric: tabular-nums;
 }
 
 .qa-dropdown-label {
@@ -905,6 +1065,7 @@
     max-height: var(--qa-date-picker-max-height);
     overflow-y: auto;
     overscroll-behavior: contain;
+    color-scheme: var(--qa-color-scheme);
 }
 
 .qa-date-picker-header {
@@ -1080,7 +1241,7 @@
 }
 
 .qa-date-picker-day-muted {
-    color: color-mix(in srgb, var(--qa-muted) 70%, transparent);
+    color: var(--qa-date-picker-day-muted-fg);
 }
 
 .qa-date-picker-day-selected {
@@ -1179,6 +1340,7 @@
     font: inherit;
     font-size: 12px;
     padding: 3px 7px;
+    color-scheme: var(--qa-color-scheme);
 }
 
 .qa-date-picker-time-input:focus-visible {
@@ -1191,6 +1353,91 @@
     font-size: 10px;
     line-height: 1.3;
     color: var(--qa-muted);
+}
+
+.qa-number-picker {
+    border: var(--qa-border-line);
+    border-radius: var(--qa-radius-card);
+    background: var(--qa-card-bg);
+    color: var(--qa-card-fg);
+    box-shadow: 0 10px 24px color-mix(in srgb, var(--qa-fg) 14%, transparent);
+    padding: 8px;
+    display: grid;
+    gap: 8px;
+    max-width: calc(100vw - 16px);
+}
+
+.qa-number-picker-controls {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr) 32px;
+    gap: 6px;
+    align-items: center;
+}
+
+.qa-number-picker-btn {
+    border: var(--qa-border-line);
+    border-radius: var(--qa-radius-pill);
+    background: var(--qa-input-bg);
+    color: var(--qa-card-fg);
+    font: inherit;
+    font-size: 16px;
+    line-height: 1;
+    height: 30px;
+    padding: 0;
+    cursor: pointer;
+}
+
+.qa-number-picker-btn:hover {
+    background: color-mix(in srgb, var(--qa-accent-soft) 72%, var(--qa-input-bg));
+}
+
+.qa-number-picker-btn:focus-visible {
+    outline: 2px solid var(--qa-accent-soft);
+    outline-offset: -2px;
+}
+
+.qa-number-picker-value {
+    min-height: 30px;
+    border: var(--qa-border-line);
+    border-radius: var(--qa-radius-control);
+    background: color-mix(in srgb, var(--qa-input-bg) 92%, var(--qa-card-bg));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 8px;
+    font-size: 12px;
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+
+.qa-number-picker-step-wrap {
+    display: grid;
+}
+
+.qa-number-picker-step-label {
+    display: grid;
+    gap: 4px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--qa-muted);
+}
+
+.qa-number-picker-step-input {
+    width: 100%;
+    min-height: 28px;
+    border: var(--qa-border-line);
+    border-radius: var(--qa-radius-control);
+    background: var(--qa-input-bg);
+    color: var(--qa-input-fg);
+    font: inherit;
+    font-size: 12px;
+    padding: 4px 7px;
+}
+
+.qa-number-picker-step-input:focus-visible {
+    outline: 2px solid var(--qa-accent-soft);
+    outline-offset: -2px;
 }
 
 .qa-blocked-info {
@@ -1246,7 +1493,7 @@
     }
 
     .qa-dropdown-list {
-        max-height: min(120px, calc(100vh - 110px));
+        max-height: min(288px, calc(100vh - 110px));
     }
 
     .qa-date-picker {
