@@ -162,7 +162,6 @@ const ALLOWED_TOP_LEVEL_KEYS = new Set([
     'tokens'
 ]);
 const ALLOWED_AI_KEYS = new Set([
-    'enabled',
     'autoParse',
     'debounceMs',
     'minInputLength',
@@ -548,7 +547,7 @@ function validateEditableConfig(config) {
             pushValidationError(errors, 'config.ai', 'must be an object');
         } else {
             validateAllowedKeys(config.ai, ALLOWED_AI_KEYS, 'config.ai', errors);
-            ['enabled', 'autoParse', 'preserveEditedEntries', 'separatorAware', 'inlinePills', 'forceJson', 'webSearch']
+            ['autoParse', 'preserveEditedEntries', 'separatorAware', 'inlinePills', 'forceJson', 'webSearch']
                 .forEach((key) => {
                     if (config.ai[key] !== undefined && typeof config.ai[key] !== 'boolean') {
                         pushValidationError(errors, `config.ai.${key}`, 'must be a boolean');
@@ -576,11 +575,9 @@ function validateEditableConfig(config) {
                 pushValidationError(errors, 'config.ai.outputSchema', 'must be an object or null');
             }
             if (config.ai.tools !== undefined && config.ai.tools !== null) {
-                const isToolsArray = Array.isArray(config.ai.tools);
-                const isToolsObject = isPlainObject(config.ai.tools);
-                if (!isToolsArray && !isToolsObject) {
-                    pushValidationError(errors, 'config.ai.tools', 'must be an object, an array of objects, or null');
-                } else if (isToolsArray) {
+                if (!Array.isArray(config.ai.tools)) {
+                    pushValidationError(errors, 'config.ai.tools', 'must be an array of objects or null');
+                } else {
                     config.ai.tools.forEach((tool, toolIndex) => {
                         if (!isPlainObject(tool)) {
                             pushValidationError(errors, `config.ai.tools[${toolIndex}]`, 'must be an object');
@@ -971,7 +968,7 @@ function setupAiRuntimeControls(options) {
 }
 
 const taskConfig = {
-    mount: '#quickAddExample1',
+    mount: document.getElementById('quickAddExample1'),
     debounceMs: 280,
     entrySeparator: '\n\n',
     fieldTerminator: ';;',
@@ -1062,7 +1059,7 @@ setupConfigPlayground({
 });
 
 const petConfig = {
-    mount: '#quickAddExample2',
+    mount: document.getElementById('quickAddExample2'),
     debounceMs: 320,
     entrySeparator: ';',
     fieldTerminator: '~~',
@@ -1170,7 +1167,7 @@ setupConfigPlayground({
 });
 
 const expenseConfig = {
-    mount: '#quickAddExample3',
+    mount: document.getElementById('quickAddExample3'),
     debounceMs: 250,
     entrySeparator: '\n',
     fieldTerminator: '::',
@@ -1280,7 +1277,7 @@ setupConfigPlayground({
 });
 
 const modalConfig = {
-    mount: '#quickAddExample4',
+    mount: document.getElementById('quickAddExample4'),
     debounceMs: 260,
     entrySeparator: '\n\n',
     fieldTerminator: ';;',
@@ -1730,7 +1727,7 @@ function createDemoAIDispatch(builder, latencyMs) {
 }
 
 const aiConfig5 = {
-    mount: '#quickAddExample5',
+    mount: document.getElementById('quickAddExample5'),
     mode: 'ai',
     debounceMs: 280,
     entrySeparator: '\n\n',
@@ -1791,7 +1788,6 @@ const aiConfig5 = {
         ]
     },
     ai: {
-        enabled: true,
         autoParse: true,
         debounceMs: 900,
         minInputLength: 8,
@@ -1849,7 +1845,7 @@ setupAiRuntimeControls({
 });
 
 const aiConfig6 = {
-    mount: '#quickAddExample6',
+    mount: document.getElementById('quickAddExample6'),
     mode: 'ai',
     debounceMs: 320,
     entrySeparator: ';',
@@ -1936,7 +1932,6 @@ const aiConfig6 = {
         ]
     },
     ai: {
-        enabled: true,
         autoParse: true,
         debounceMs: 900,
         minInputLength: 8,

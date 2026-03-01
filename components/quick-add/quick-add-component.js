@@ -68,8 +68,6 @@
         dropdownSearch: 'qa-dropdown-search',
         dropdownListWrap: 'qa-dropdown-list-wrap',
         dropdownList: 'qa-dropdown-list',
-        dropdownFadeTop: 'qa-dropdown-fade-top',
-        dropdownFadeBottom: 'qa-dropdown-fade-bottom',
         dropdownOption: 'qa-dropdown-option',
         dropdownOptionActive: 'qa-dropdown-option-active',
         dropdownAdd: 'qa-dropdown-add',
@@ -130,7 +128,6 @@
     };
 
     const DEFAULT_AI_CONFIG = {
-        enabled: false,
         autoParse: true,
         debounceMs: 1200,
         minInputLength: 10,
@@ -275,14 +272,12 @@
         merged.ai.debounceMs = Number.isFinite(aiDebounceMs) && aiDebounceMs >= 0
             ? aiDebounceMs
             : DEFAULT_AI_CONFIG.debounceMs;
-        if (typeof merged.allowedAttachmentTypes === 'string') {
-            merged.allowedAttachmentTypes = merged.allowedAttachmentTypes
-                .split(',')
-                .map((part) => part.trim())
-                .filter(Boolean);
-        } else if (!Array.isArray(merged.allowedAttachmentTypes)) {
-            merged.allowedAttachmentTypes = [];
+        if (!Array.isArray(merged.allowedAttachmentTypes)) {
+            throw new Error('QuickAdd: allowedAttachmentTypes must be an array');
         }
+        merged.allowedAttachmentTypes = merged.allowedAttachmentTypes
+            .map((item) => String(item || '').trim())
+            .filter(Boolean);
         merged.attachmentSources = normalizeAttachmentSources(merged.attachmentSources);
         merged.multiSelectSeparator = String(merged.multiSelectSeparator === undefined ? ',' : merged.multiSelectSeparator);
         merged.multiSelectDisplaySeparator = String(
@@ -332,13 +327,10 @@
             ? Math.round(maxDepth)
             : DEFAULT_HISTORY_CONFIG.maxDepth;
         const mode = String(merged.mode || '').toLowerCase();
-        if (mode === 'ai' || merged.ai.enabled === true) {
-            merged.mode = 'ai';
-            merged.ai.enabled = true;
-        } else {
-            merged.mode = 'deterministic';
-            merged.ai.enabled = false;
+        if (mode !== 'ai' && mode !== 'deterministic') {
+            throw new Error('QuickAdd: mode must be "deterministic" or "ai"');
         }
+        merged.mode = mode;
         return merged;
     }
 
@@ -2767,16 +2759,10 @@
         if (raw === null || raw === undefined) {
             return null;
         }
-        if (typeof raw === 'string') {
-            return raw
-                .split(',')
-                .map((part) => part.trim())
-                .filter(Boolean);
-        }
         if (Array.isArray(raw)) {
             return raw.map((item) => String(item || '').trim()).filter(Boolean);
         }
-        return null;
+        throw new Error('QuickAdd: attachmentSources must be an array of strings');
     }
 
     function normalizeAiToolsConfig(raw) {
@@ -2786,10 +2772,7 @@
         if (Array.isArray(raw)) {
             return raw.slice();
         }
-        if (raw && typeof raw === 'object') {
-            return [Object.assign({}, raw)];
-        }
-        return null;
+        throw new Error('QuickAdd: ai.tools must be an array');
     }
 
     function resolveMount(mount) {
@@ -2799,17 +2782,10 @@
         if (!mount) {
             throw new Error('QuickAdd: mount is required');
         }
-        if (typeof mount === 'string') {
-            const el = document.querySelector(mount);
-            if (!el) {
-                throw new Error(`QuickAdd: mount target not found: ${mount}`);
-            }
-            return el;
-        }
         if (mount instanceof HTMLElement) {
             return mount;
         }
-        throw new Error('QuickAdd: mount must be a selector or HTMLElement');
+        throw new Error('QuickAdd: mount must be an HTMLElement');
     }
 
     function QuickAddComponent(userConfig) {
@@ -2850,6 +2826,7 @@
         this.overlayDismissClickUntil = 0;
         this.dropdownState = null;
         this.datePickerState = null;
+        this.deterministicDeletedEntries = new Set();
         this.focusOrigins = {
             dropdown: null,
             datePicker: null,
@@ -2859,6 +2836,7 @@
         this.dropdownListId = `qa_listbox_${Math.random().toString(36).slice(2, 10)}`;
         this.dropdownOptionIdPrefix = `qa_opt_${Math.random().toString(36).slice(2, 10)}_`;
         this.suppressNextInsertParagraph = false;
+        this.suppressNextTypingDropdownSync = false;
         this.historyPast = [];
         this.historyFuture = [];
         this.historySuspend = false;
@@ -2898,7 +2876,7 @@
     };
 
     QuickAddComponent.prototype.isAiMode = function isAiMode() {
-        return this.config.mode === 'ai' && !!(this.config.ai && this.config.ai.enabled);
+        return this.config.mode === 'ai';
     };
 
     QuickAddComponent.prototype.isAIInlinePillsEnabled = function isAIInlinePillsEnabled() {
@@ -4052,6 +4030,71 @@
         }
     };
 
+    QuickAddComponent.prototype.buildDeterministicEntryDeleteKey = function buildDeterministicEntryDeleteKey(entry, sourceText) {
+        if (!entry || !Number.isFinite(Number(entry.globalStart)) || !Number.isFinite(Number(entry.globalEnd))) {
+            return '';
+        }
+        const start = Number(entry.globalStart);
+        const end = Number(entry.globalEnd);
+        if (end <= start) {
+            return '';
+        }
+        const source = String(sourceText === undefined ? (this.inputText || this.readInputText() || '') : sourceText);
+        const chunk = source.slice(start, end).trim().toLowerCase();
+        return `${start}:${end}:${chunk}`;
+    };
+
+    QuickAddComponent.prototype.isDeterministicEntryDeleted = function isDeterministicEntryDeleted(entry, sourceText) {
+        const key = this.buildDeterministicEntryDeleteKey(entry, sourceText);
+        if (!key) {
+            return false;
+        }
+        return this.deterministicDeletedEntries.has(key);
+    };
+
+    QuickAddComponent.prototype.markDeterministicEntryDeleted = function markDeterministicEntryDeleted(entry, deleted, sourceText) {
+        const key = this.buildDeterministicEntryDeleteKey(entry, sourceText);
+        if (!key) {
+            return false;
+        }
+        if (deleted) {
+            this.deterministicDeletedEntries.add(key);
+        } else {
+            this.deterministicDeletedEntries.delete(key);
+        }
+        return true;
+    };
+
+    QuickAddComponent.prototype.applyDeterministicDeletedEntries = function applyDeterministicDeletedEntries(result) {
+        if (!result || this.isAiMode()) {
+            return result;
+        }
+        const entries = Array.isArray(result.entries) ? result.entries : [];
+        const source = String(result.input === undefined ? (this.inputText || this.readInputText() || '') : result.input);
+        const activeKeys = new Set();
+        entries.forEach((entry) => {
+            const key = this.buildDeterministicEntryDeleteKey(entry, source);
+            if (!key) {
+                return;
+            }
+            activeKeys.add(key);
+            const deleted = this.deterministicDeletedEntries.has(key);
+            entry.detMeta = Object.assign({}, entry.detMeta || {}, { deleted });
+            if (deleted) {
+                entry.isValid = false;
+            }
+        });
+        this.deterministicDeletedEntries.forEach((key) => {
+            if (!activeKeys.has(key)) {
+                this.deterministicDeletedEntries.delete(key);
+            }
+        });
+        const validCount = entries.filter((entry) => entry && entry.isValid).length;
+        result.validCount = validCount;
+        result.invalidCount = Math.max(0, entries.length - validCount);
+        return result;
+    };
+
     QuickAddComponent.prototype.buildAIResult = function buildAIResult() {
         const input = String(this.inputText || '');
         const parseState = this.buildAIParseState(input);
@@ -4165,8 +4208,6 @@
                     <input class="${c.dropdownSearch}" data-role="dropdownSearch" type="text" placeholder="Filter options..." />
                     <div class="${c.dropdownListWrap}">
                         <div class="${c.dropdownList}" data-role="dropdownList" role="listbox" id="${this.dropdownListId}"></div>
-                        <div class="${c.dropdownFadeTop}" data-role="dropdownFadeTop" aria-hidden="true" hidden></div>
-                        <div class="${c.dropdownFadeBottom}" data-role="dropdownFadeBottom" aria-hidden="true" hidden></div>
                     </div>
                 </div>
                 <div class="${c.attachmentSourceMenu}" data-role="attachmentSourceMenu" role="menu" aria-label="Attachment source" hidden></div>
@@ -4200,8 +4241,6 @@
         this.dropdownEl = this.mountEl.querySelector('[data-role="dropdown"]');
         this.dropdownSearchEl = this.mountEl.querySelector('[data-role="dropdownSearch"]');
         this.dropdownListEl = this.mountEl.querySelector('[data-role="dropdownList"]');
-        this.dropdownFadeTopEl = this.mountEl.querySelector('[data-role="dropdownFadeTop"]');
-        this.dropdownFadeBottomEl = this.mountEl.querySelector('[data-role="dropdownFadeBottom"]');
         this.attachmentSourceMenuEl = this.mountEl.querySelector('[data-role="attachmentSourceMenu"]');
         this.conflictModalOverlayEl = this.mountEl.querySelector('[data-role="conflictModalOverlay"]');
         this.conflictModalEl = this.mountEl.querySelector('[data-role="conflictModal"]');
@@ -5238,6 +5277,14 @@
             }
             if (event.key === 'Enter') {
                 if (isTypingDropdown) {
+                    const dropdownField = this.dropdownState
+                        ? this.getFieldDefinition(this.dropdownState.fieldKey)
+                        : null;
+                    const isMultiSelectTypingDropdown = !!(
+                        dropdownField
+                        && dropdownField.type === 'options'
+                        && dropdownField.multiple
+                    );
                     let active = this.dropdownState.activeOptionValue;
                     if (active === undefined || active === null || active === '') {
                         const firstFiltered = Array.isArray(this.dropdownState.filteredOptions)
@@ -5255,6 +5302,13 @@
                     }
                     if (active !== undefined && active !== null && active !== '') {
                         event.preventDefault();
+                        if (this.timer) {
+                            clearTimeout(this.timer);
+                            this.timer = null;
+                        }
+                        if (!isMultiSelectTypingDropdown) {
+                            this.suppressNextTypingDropdownSync = true;
+                        }
                         this.suppressNextInsertParagraph = true;
                         setTimeout(() => {
                             this.suppressNextInsertParagraph = false;
@@ -5624,6 +5678,11 @@
                     const entryIndex = Number(deterministicAction.getAttribute('data-entry-index'));
                     if (Number.isFinite(entryIndex)) {
                         this.removeDeterministicEntry(entryIndex, 'card');
+                    }
+                } else if (action === 'restore-entry') {
+                    const entryIndex = Number(deterministicAction.getAttribute('data-entry-index'));
+                    if (Number.isFinite(entryIndex)) {
+                        this.restoreDeterministicEntry(entryIndex, 'card');
                     }
                 }
                 return;
@@ -6908,6 +6967,7 @@
             this.lastResult = parseInput(input, this.config);
             this.lastResult = this.applyDismissedSelections(this.lastResult);
             this.lastResult = this.syncEntryAttachmentMeta(this.lastResult);
+            this.lastResult = this.applyDeterministicDeletedEntries(this.lastResult);
             this.rebuildTokenMap(this.lastResult);
             this.renderInlineLayer(this.lastResult, opts);
             this.renderResult(this.lastResult);
@@ -6936,9 +6996,11 @@
             deletedEntries: Array.from(this.aiState.deletedEntries || []),
             editingEntryId: String(this.aiState.editingEntryId || '')
         };
+        const deterministicDeletedEntries = Array.from(this.deterministicDeletedEntries || []);
         const signature = JSON.stringify({
             input: this.inputText || '',
             dismissed: Array.from(this.dismissedSelections || []),
+            deterministicDeleted: deterministicDeletedEntries,
             attachments: attachmentPool.map((item) => `${item.id}|${item.ref}|${item.fingerprint}`),
             aiEntries: aiState.entries.length,
             reason: String(reason || '')
@@ -6949,7 +7011,8 @@
             dismissedSelections: Array.from(this.dismissedSelections || []),
             attachmentCounter: Number(this.attachmentCounter || 0),
             attachmentPool,
-            aiState
+            aiState,
+            deterministicDeletedEntries
         };
     };
 
@@ -6978,6 +7041,9 @@
         try {
             this.inputText = String(snapshot.inputText || '');
             this.dismissedSelections = new Set(Array.isArray(snapshot.dismissedSelections) ? snapshot.dismissedSelections : []);
+            this.deterministicDeletedEntries = new Set(
+                Array.isArray(snapshot.deterministicDeletedEntries) ? snapshot.deterministicDeletedEntries : []
+            );
             this.attachmentCounter = Number(snapshot.attachmentCounter || 0);
             this.attachmentPool = Array.isArray(snapshot.attachmentPool)
                 ? snapshot.attachmentPool.map((item) => Object.assign({}, item))
@@ -8625,22 +8691,37 @@
         if (!entry) {
             return;
         }
-        const start = Number(entry.globalStart);
-        const end = Number(entry.globalEnd);
-        if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+        const source = this.inputText || this.readInputText();
+        const marked = this.markDeterministicEntryDeleted(entry, true, source);
+        if (!marked) {
             return;
         }
         const origin = sourceRegion === 'card' ? 'card' : 'inline';
-        const separator = String(this.config.entrySeparator || '\n');
-        let source = this.inputText || this.readInputText();
-        let removeStart = start;
-        let removeEnd = end;
-        if (separator && source.slice(removeEnd, removeEnd + separator.length) === separator) {
-            removeEnd += separator.length;
-        } else if (separator && removeStart >= separator.length && source.slice(removeStart - separator.length, removeStart) === separator) {
-            removeStart -= separator.length;
+        this.parseAndRender({
+            source,
+            focusInput: origin !== 'card',
+            skipTypingSync: origin === 'card'
+        });
+    };
+
+    QuickAddComponent.prototype.restoreDeterministicEntry = function restoreDeterministicEntry(entryIndex, sourceRegion) {
+        if (this.isAiMode()) {
+            return;
         }
-        source = this.replaceRange(source, removeStart, removeEnd, '');
+        const targetIndex = Number(entryIndex);
+        if (!Number.isFinite(targetIndex)) {
+            return;
+        }
+        const entry = (this.lastResult.entries || []).find((item) => item && item.index === targetIndex);
+        if (!entry) {
+            return;
+        }
+        const source = this.inputText || this.readInputText();
+        const marked = this.markDeterministicEntryDeleted(entry, false, source);
+        if (!marked) {
+            return;
+        }
+        const origin = sourceRegion === 'card' ? 'card' : 'inline';
         this.parseAndRender({
             source,
             focusInput: origin !== 'card',
@@ -9090,7 +9171,10 @@
                 const errorRows = entry.errors.map((error) =>
                     `<div class="${c.issue}">${escHtml(error)}</div>`
                 ).join('');
-                const badgeText = entry.isValid ? 'valid' : 'needs attention';
+                const removed = !!(entry.detMeta && entry.detMeta.deleted);
+                const badgeText = removed
+                    ? 'removed'
+                    : (entry.isValid ? 'valid' : 'needs attention');
                 const headerHtml = showEntryHeader
                     ? `
                         <div class="${c.entryHeader}">
@@ -9106,13 +9190,15 @@
                 const actionRow = Number.isFinite(Number(entry.globalStart)) && Number.isFinite(Number(entry.globalEnd))
                     ? `
                         <div class="${c.aiActions}">
-                            <button type="button" class="${c.aiActionBtn} ${c.aiActionBtnDanger}" data-det-action="remove-entry" data-entry-index="${entry.index}">Remove</button>
+                            ${removed
+                        ? `<button type="button" class="${c.aiActionBtn} ${c.aiActionBtnGhost}" data-det-action="restore-entry" data-entry-index="${entry.index}">Restore</button>`
+                        : `<button type="button" class="${c.aiActionBtn} ${c.aiActionBtnDanger}" data-det-action="remove-entry" data-entry-index="${entry.index}">Remove</button>`}
                         </div>
                     `
                     : '';
 
                 return `
-                    <article class="${c.entry}">
+                    <article class="${c.entry}${removed ? ` ${c.pillBlocked}` : ''}">
                         ${headerHtml}
                         ${pillsHtml}
                         ${attachmentsHtml}
@@ -9163,7 +9249,13 @@
                     return;
                 }
 
-                const inRange = caretOffset >= token.globalStart && caretOffset <= token.globalEnd;
+                const valueStart = Number.isFinite(Number(token.globalValueStart))
+                    ? Number(token.globalValueStart)
+                    : Number(token.globalStart);
+                const valueEnd = Number.isFinite(Number(token.globalValueEnd))
+                    ? Number(token.globalValueEnd)
+                    : Number(token.globalEnd);
+                const inRange = caretOffset >= valueStart && caretOffset <= valueEnd;
                 if (!inRange) {
                     return;
                 }
@@ -9178,6 +9270,13 @@
 
     QuickAddComponent.prototype.syncTypingDropdown = function syncTypingDropdown(caretOffset) {
         this.closeAttachmentSourceMenu();
+        if (this.suppressNextTypingDropdownSync) {
+            this.suppressNextTypingDropdownSync = false;
+            if (this.dropdownState && this.dropdownState.source === 'typing') {
+                this.closeDropdown();
+            }
+            return;
+        }
         if (this.config.showDropdownOnTyping === false) {
             if (this.dropdownState && this.dropdownState.source === 'typing') {
                 this.closeDropdown();
@@ -9469,7 +9568,7 @@
     };
 
     QuickAddComponent.prototype.positionDropdownAtRect = function positionDropdownAtRect(rect, anchorEl) {
-        const maxPanelHeight = window.innerWidth <= 480 ? 288 : 348;
+        const maxPanelHeight = 250;
         const layout = this.computeFloatingLayout({
             panelEl: this.dropdownEl,
             anchorRect: rect,
@@ -9732,19 +9831,7 @@
     };
 
     QuickAddComponent.prototype.updateDropdownScrollIndicators = function updateDropdownScrollIndicators() {
-        if (!this.dropdownListEl) {
-            return;
-        }
-        const listEl = this.dropdownListEl;
-        const canScroll = listEl.scrollHeight > listEl.clientHeight + 1;
-        const canScrollUp = canScroll && listEl.scrollTop > 1;
-        const canScrollDown = canScroll && (listEl.scrollTop + listEl.clientHeight) < (listEl.scrollHeight - 1);
-        if (this.dropdownFadeTopEl) {
-            this.dropdownFadeTopEl.hidden = !canScrollUp;
-        }
-        if (this.dropdownFadeBottomEl) {
-            this.dropdownFadeBottomEl.hidden = !canScrollDown;
-        }
+        return;
     };
 
     QuickAddComponent.prototype.scrollDropdownActiveOptionIntoView = function scrollDropdownActiveOptionIntoView() {
@@ -9988,7 +10075,7 @@
         let keepOpen = false;
 
         if (isMultiSelectOptions) {
-            keepOpen = true;
+            keepOpen = fromTyping;
             let values;
             if (fromTyping) {
                 const rawTokenValue = String(token.value || '');
@@ -10047,11 +10134,12 @@
         if (!keepOpen) {
             this.closeDropdown();
         }
+        const shouldRunTypingSync = keepOpen && fromTyping && state.sourceRegion !== 'card';
         this.parseAndRender({
             source: updated,
             caretOffset: caret,
             focusInput,
-            skipTypingSync: state.sourceRegion === 'card'
+            skipTypingSync: !shouldRunTypingSync
         });
 
         if (keepOpen && state.sourceRegion === 'card') {
@@ -10309,12 +10397,6 @@
         this.dropdownEl.style.removeProperty('maxHeight');
         this.dropdownListEl.style.removeProperty('maxHeight');
         this.dropdownListEl.style.removeProperty('minHeight');
-        if (this.dropdownFadeTopEl) {
-            this.dropdownFadeTopEl.hidden = true;
-        }
-        if (this.dropdownFadeBottomEl) {
-            this.dropdownFadeBottomEl.hidden = true;
-        }
         this.dropdownListEl.scrollTop = 0;
         this.syncDropdownA11y();
         if (opts.restoreFocus !== false) {

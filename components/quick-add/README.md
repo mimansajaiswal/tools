@@ -207,11 +207,10 @@ Evaluation is parser-based (no `eval`) with safety limits on length, token count
 
 ```js
 const qa = QuickAdd.create({
-  mount: '#qa',
+  mount: document.getElementById('qa'),
   mode: 'ai',
   schema: { fields: [/* ... */] },
   ai: {
-    enabled: true,
     provider: 'openai', // openai | anthropic | google | custom
     apiKey: '...',
     model: 'gpt-4o-mini',

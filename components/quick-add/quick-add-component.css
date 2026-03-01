@@ -871,7 +871,7 @@
     border: var(--qa-border-line);
     border-radius: var(--qa-radius-card);
     background: var(--qa-card-bg);
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+    box-shadow: none;
     overflow: hidden;
     max-width: calc(100vw - 16px);
 }
@@ -897,35 +897,9 @@
 }
 
 .qa-dropdown-list {
-    max-height: min(348px, calc(100vh - 120px));
+    max-height: min(250px, calc(100vh - 120px));
     overflow: auto;
     display: grid;
-}
-
-.qa-dropdown-fade-top,
-.qa-dropdown-fade-bottom {
-    position: absolute;
-    left: 0;
-    right: 0;
-    height: 18px;
-    pointer-events: none;
-    z-index: 2;
-    backdrop-filter: blur(2px);
-    -webkit-backdrop-filter: blur(2px);
-}
-
-.qa-dropdown-fade-top {
-    top: 0;
-    background: linear-gradient(to bottom,
-            color-mix(in srgb, var(--qa-card-bg) 94%, transparent),
-            color-mix(in srgb, var(--qa-card-bg) 18%, transparent));
-}
-
-.qa-dropdown-fade-bottom {
-    bottom: 0;
-    background: linear-gradient(to top,
-            color-mix(in srgb, var(--qa-card-bg) 94%, transparent),
-            color-mix(in srgb, var(--qa-card-bg) 18%, transparent));
 }
 
 .qa-dropdown-option {
@@ -1437,7 +1411,7 @@
     }
 
     .qa-dropdown-list {
-        max-height: min(288px, calc(100vh - 110px));
+        max-height: min(250px, calc(100vh - 110px));
     }
 
     .qa-date-picker {
