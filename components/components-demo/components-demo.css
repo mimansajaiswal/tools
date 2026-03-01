@@ -23,7 +23,7 @@ body {
 body {
   min-height: 100vh;
   color: var(--demo-ink);
-  font-family: 'Space Grotesk', sans-serif;
+  font-family: 'Figtree', 'Avenir Next', 'Segoe UI', sans-serif;
   background:
     radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--demo-bg) 85%, #fff) 0%, transparent 36%),
     radial-gradient(circle at 90% 100%, color-mix(in srgb, var(--demo-bg-2) 75%, #fff) 0%, transparent 34%),
@@ -76,45 +76,16 @@ body {
   font: 600 0.8rem/1.1 'JetBrains Mono', monospace;
 }
 
+.demo-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
 .demo-home:hover,
 .demo-home:focus-visible {
   border-color: color-mix(in srgb, var(--demo-accent) 60%, var(--demo-line));
   outline: none;
-}
-
-.demo-nav {
-  margin-top: 0.8rem;
-  display: grid;
-  gap: 0.65rem;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-}
-
-.demo-nav-link {
-  border: 1px solid var(--demo-line);
-  border-radius: 12px;
-  padding: 0.7rem 0.75rem;
-  text-decoration: none;
-  color: inherit;
-  background: color-mix(in srgb, var(--demo-surface) 82%, #fff);
-  display: grid;
-  gap: 0.32rem;
-}
-
-.demo-nav-link:hover,
-.demo-nav-link:focus-visible,
-.demo-nav-link.is-active {
-  border-color: var(--demo-accent);
-  outline: none;
-  background: var(--demo-accent-soft);
-}
-
-.demo-nav-label {
-  font: 700 0.82rem/1.1 'JetBrains Mono', monospace;
-}
-
-.demo-nav-desc {
-  color: var(--demo-muted);
-  font-size: 0.84rem;
 }
 
 .demo-main {
@@ -437,10 +408,21 @@ body {
   .demo-head {
     padding: 0.75rem;
     border-radius: 12px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
   }
 
-  .demo-nav {
-    grid-template-columns: 1fr;
+  .demo-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .demo-home {
+    padding: 0.34rem 0.62rem;
+    font-size: 0.74rem;
   }
 
   .qa-demo-panel {

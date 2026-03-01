@@ -74,21 +74,6 @@ function connectTabs(tabContainerId, attrName, panelSelector, opts = {}) {
     };
 }
 
-const componentTabsApi = connectTabs('componentTabs', 'data-page', '.page', {
-    onChange: (value, btn) => {
-        const selectEl = document.getElementById('componentTabsSelect');
-        if (!selectEl) return;
-        selectEl.querySelectorAll('[data-page]').forEach((option) => {
-            const active = option.getAttribute('data-page') === value;
-            option.classList.toggle('active', active);
-            option.setAttribute('aria-selected', active ? 'true' : 'false');
-        });
-        const trigger = document.getElementById('componentTabsTrigger');
-        if (trigger) {
-            trigger.textContent = btn ? btn.textContent.trim() : value;
-        }
-    }
-});
 const exampleTabsApi = connectTabs('exampleTabs', 'data-example', '[data-example-panel]', {
     onChange: (value, btn) => {
         const selectEl = document.getElementById('exampleTabsSelect');
@@ -785,7 +770,9 @@ function setupAiRuntimeControls(options) {
         applyId,
         endpointFieldId,
         modelFieldId,
-        keyFieldId
+        keyFieldId,
+        defaultProvider = 'openai',
+        allowDemoProvider = true
     } = options || {};
     if (!playground) {
         return;
@@ -844,6 +831,9 @@ function setupAiRuntimeControls(options) {
             syncFieldVisibility(value);
             syncModelDefaults(value);
             syncApplyState();
+            if (allowDemoProvider && String(value || '').toLowerCase() === 'demo') {
+                applyRuntimeToEditor();
+            }
         });
         document.addEventListener('click', (event) => {
             if (!providerSelectEl.contains(event.target)) {
@@ -854,7 +844,7 @@ function setupAiRuntimeControls(options) {
 
     function syncFieldVisibility(value) {
         const provider = String(value || providerInputEl.value || '').toLowerCase();
-        const isDemo = provider === 'demo';
+        const isDemo = allowDemoProvider && provider === 'demo';
         const isCustom = provider === 'custom';
 
         if (endpointFieldEl) {
@@ -881,7 +871,7 @@ function setupAiRuntimeControls(options) {
 
     function syncApplyState() {
         const provider = String(providerInputEl.value || '').toLowerCase();
-        const isDemo = provider === 'demo';
+        const isDemo = allowDemoProvider && provider === 'demo';
         const isCustom = provider === 'custom';
         if (isDemo) {
             applyEl.disabled = true;
@@ -904,10 +894,19 @@ function setupAiRuntimeControls(options) {
     function syncControlsFromEditor() {
         const parsed = readEditorConfig();
         const ai = (parsed && parsed.ai && typeof parsed.ai === 'object') ? parsed.ai : {};
-        let activeProvider = String(ai.provider || 'openai');
+        const hasMockResponse = Object.prototype.hasOwnProperty.call(ai, 'mockResponse');
+        const hasDispatchOverride = Object.prototype.hasOwnProperty.call(ai, 'dispatch');
+        let activeProvider = String(ai.provider || defaultProvider || 'openai');
 
-        if (ai.mockResponse !== null) {
+        const hasDemoMarker = allowDemoProvider
+            && ((hasMockResponse && ai.mockResponse !== null) || (hasDispatchOverride && ai.dispatch !== null));
+        const hasRealProviderMarker = (hasMockResponse && ai.mockResponse === null) || (hasDispatchOverride && ai.dispatch === null);
+
+        if (hasDemoMarker || (allowDemoProvider && defaultProvider === 'demo' && !hasRealProviderMarker)) {
             activeProvider = 'demo';
+        }
+        if (!allowDemoProvider && activeProvider === 'demo') {
+            activeProvider = String(defaultProvider || 'openai');
         }
 
         providerInputEl.value = activeProvider;
@@ -933,12 +932,15 @@ function setupAiRuntimeControls(options) {
         }
         parsed.ai = (parsed.ai && typeof parsed.ai === 'object') ? parsed.ai : {};
         const chosenProvider = providerInputEl.value;
+        const isDemo = allowDemoProvider && chosenProvider === 'demo';
 
-        if (chosenProvider === 'demo') {
+        if (isDemo) {
             delete parsed.ai.mockResponse;
+            delete parsed.ai.dispatch;
         } else {
             parsed.ai.provider = chosenProvider;
             parsed.ai.mockResponse = null;
+            parsed.ai.dispatch = null;
         }
 
         parsed.ai.apiKey = String(apiKeyEl.value || '');
@@ -1841,7 +1843,9 @@ setupAiRuntimeControls({
     applyId: 'aiApply5',
     endpointFieldId: 'aiEndpointField5',
     modelFieldId: 'aiModelField5',
-    keyFieldId: 'aiKeyField5'
+    keyFieldId: 'aiKeyField5',
+    defaultProvider: 'demo',
+    allowDemoProvider: true
 });
 
 const aiConfig6 = {
@@ -2065,7 +2069,9 @@ setupAiRuntimeControls({
     applyId: 'aiApply6',
     endpointFieldId: 'aiEndpointField6',
     modelFieldId: 'aiModelField6',
-    keyFieldId: 'aiKeyField6'
+    keyFieldId: 'aiKeyField6',
+    defaultProvider: 'demo',
+    allowDemoProvider: true
 });
 
 const modalBackdropEl = document.getElementById('quickAddModalBackdrop');
@@ -2643,15 +2649,6 @@ const setupTabSelect = (config) => {
         }
     });
 };
-
-const componentTabsSelectEl = document.getElementById('componentTabsSelect');
-const componentTabsTriggerEl = document.getElementById('componentTabsTrigger');
-setupTabSelect({
-    selectEl: componentTabsSelectEl,
-    triggerEl: componentTabsTriggerEl,
-    attrName: 'data-page',
-    tabApi: componentTabsApi
-});
 
 setupTabSelect({
     selectEl: exampleTabsSelectEl,

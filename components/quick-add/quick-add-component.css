@@ -91,6 +91,7 @@
     background: var(--qa-input-bg);
     min-height: 110px;
     overflow: hidden;
+    position: relative;
 }
 
 .qa-inline-text {
@@ -217,6 +218,33 @@
     caret-color: var(--qa-input-fg);
     outline: 2px solid var(--qa-accent-soft);
     outline-offset: -2px;
+}
+
+.qa-input-clear-btn {
+    border: 1px solid color-mix(in srgb, var(--qa-border) 85%, transparent);
+    background: color-mix(in srgb, var(--qa-input-bg) 88%, var(--qa-card-bg));
+    color: var(--qa-muted);
+    width: 26px;
+    height: 22px;
+    border-radius: var(--qa-radius-control);
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 3;
+    display: none;
+}
+
+.qa-input-clear-btn svg {
+    width: 12px;
+    height: 12px;
+}
+
+.qa-input-clear-btn:hover {
+    color: var(--qa-card-fg);
 }
 
 .qa-hint {
@@ -1388,7 +1416,8 @@
 .qa-attachment-source-option:focus-visible,
 .qa-conflict-modal-btn:focus-visible,
 .qa-dropdown-option:focus-visible,
-.qa-inline-mark-interactive:focus-visible {
+.qa-inline-mark-interactive:focus-visible,
+.qa-input-clear-btn:focus-visible {
     outline: none;
     border-color: color-mix(in srgb, var(--qa-accent) 70%, var(--qa-border));
     box-shadow: 0 0 0 2px var(--qa-date-picker-focus-ring);
@@ -1403,6 +1432,14 @@
     .qa-input,
     .qa-inline-text {
         font-size: 12px;
+    }
+
+    .qa-input {
+        padding-right: 36px;
+    }
+
+    .qa-input-clear-btn {
+        display: inline-flex;
     }
 
     .qa-pill {

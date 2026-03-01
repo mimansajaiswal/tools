@@ -16,6 +16,7 @@
         inlineMarkLabel: 'qa-inline-mark-label',
         inputTail: 'qa-input-tail',
         input: 'qa-input',
+        inputClearBtn: 'qa-input-clear-btn',
         hint: 'qa-hint',
         status: 'qa-status',
         preview: 'qa-preview',
@@ -2836,7 +2837,6 @@
         this.dropdownListId = `qa_listbox_${Math.random().toString(36).slice(2, 10)}`;
         this.dropdownOptionIdPrefix = `qa_opt_${Math.random().toString(36).slice(2, 10)}_`;
         this.suppressNextInsertParagraph = false;
-        this.suppressNextTypingDropdownSync = false;
         this.historyPast = [];
         this.historyFuture = [];
         this.historySuspend = false;
@@ -3155,10 +3155,26 @@
 
     QuickAddComponent.prototype.normalizeAIResponse = function normalizeAIResponse(response) {
         const data = (response && typeof response === 'object') ? response : {};
+        const toListText = (item) => {
+            if (item === undefined || item === null) {
+                return '';
+            }
+            if (typeof item === 'string') {
+                return item;
+            }
+            if (typeof item === 'number' || typeof item === 'boolean') {
+                return String(item);
+            }
+            try {
+                return JSON.stringify(item);
+            } catch (err) {
+                return String(item);
+            }
+        };
         return {
             entries: Array.isArray(data.entries) ? data.entries : [],
-            missing: Array.isArray(data.missing) ? data.missing.map((item) => String(item)) : [],
-            warnings: Array.isArray(data.warnings) ? data.warnings.map((item) => String(item)) : []
+            missing: Array.isArray(data.missing) ? data.missing.map(toListText).filter(Boolean) : [],
+            warnings: Array.isArray(data.warnings) ? data.warnings.map(toListText).filter(Boolean) : []
         };
     };
 
@@ -3279,10 +3295,14 @@
         }
     };
 
+    QuickAddComponent.prototype.canUseBuiltInAIDispatch = function canUseBuiltInAIDispatch() {
+        return typeof fetch === 'function';
+    };
+
     QuickAddComponent.prototype.assertAIDispatchConfig = function assertAIDispatchConfig() {
         const ai = this.config.ai || {};
-        if (typeof ai.dispatch !== 'function') {
-            throw new Error('Missing ai.dispatch(batch, context) in AI mode');
+        if (typeof ai.dispatch !== 'function' && !this.canUseBuiltInAIDispatch()) {
+            throw new Error('Missing ai.dispatch(batch, context) in AI mode and fetch() is unavailable');
         }
         const provider = String(ai.provider || '').trim().toLowerCase();
         if (!provider) {
@@ -3298,6 +3318,282 @@
             throw new Error('Missing ai.apiKey');
         }
         return provider;
+    };
+
+    QuickAddComponent.prototype.tryParseJson = function tryParseJson(text) {
+        const raw = String(text || '').trim();
+        if (!raw) {
+            return null;
+        }
+        try {
+            return JSON.parse(raw);
+        } catch (err) {
+            return null;
+        }
+    };
+
+    QuickAddComponent.prototype.extractProviderErrorMessage = function extractProviderErrorMessage(payload, fallback) {
+        const data = payload && typeof payload === 'object' ? payload : null;
+        if (!data) {
+            return String(fallback || 'Provider request failed');
+        }
+        if (typeof data.error === 'string' && data.error.trim()) {
+            return data.error.trim();
+        }
+        if (data.error && typeof data.error === 'object') {
+            const nested = data.error;
+            const nestedMsg = nested.message || nested.error || nested.detail;
+            if (typeof nestedMsg === 'string' && nestedMsg.trim()) {
+                return nestedMsg.trim();
+            }
+        }
+        if (typeof data.message === 'string' && data.message.trim()) {
+            return data.message.trim();
+        }
+        return String(fallback || 'Provider request failed');
+    };
+
+    QuickAddComponent.prototype.extractOpenAIResponseText = function extractOpenAIResponseText(payload) {
+        const data = payload && typeof payload === 'object' ? payload : null;
+        if (!data) {
+            return '';
+        }
+        if (typeof data.output_text === 'string' && data.output_text.trim()) {
+            return data.output_text;
+        }
+        if (Array.isArray(data.output)) {
+            const outputText = [];
+            data.output.forEach((item) => {
+                if (!item || typeof item !== 'object') {
+                    return;
+                }
+                if (Array.isArray(item.content)) {
+                    item.content.forEach((part) => {
+                        if (!part || typeof part !== 'object') {
+                            return;
+                        }
+                        if (typeof part.text === 'string' && part.text.trim()) {
+                            outputText.push(part.text);
+                            return;
+                        }
+                        if (part.text && typeof part.text === 'object' && typeof part.text.value === 'string') {
+                            outputText.push(part.text.value);
+                        }
+                    });
+                }
+            });
+            if (outputText.length) {
+                return outputText.join('\n');
+            }
+        }
+        if (Array.isArray(data.choices) && data.choices.length) {
+            const message = data.choices[0] && data.choices[0].message;
+            if (message) {
+                if (typeof message.content === 'string') {
+                    return message.content;
+                }
+                if (Array.isArray(message.content)) {
+                    return message.content.map((item) => {
+                        if (!item) return '';
+                        if (typeof item === 'string') return item;
+                        if (typeof item.text === 'string') return item.text;
+                        return '';
+                    }).filter(Boolean).join('\n');
+                }
+            }
+        }
+        return '';
+    };
+
+    QuickAddComponent.prototype.extractAnthropicResponseText = function extractAnthropicResponseText(payload) {
+        const data = payload && typeof payload === 'object' ? payload : null;
+        if (!data || !Array.isArray(data.content)) {
+            return '';
+        }
+        const parts = [];
+        data.content.forEach((item) => {
+            if (!item || typeof item !== 'object') {
+                return;
+            }
+            if (typeof item.text === 'string' && item.text.trim()) {
+                parts.push(item.text);
+            }
+        });
+        return parts.join('\n');
+    };
+
+    QuickAddComponent.prototype.extractGoogleResponseText = function extractGoogleResponseText(payload) {
+        const data = payload && typeof payload === 'object' ? payload : null;
+        if (!data || !Array.isArray(data.candidates) || !data.candidates.length) {
+            return '';
+        }
+        const candidate = data.candidates[0] || {};
+        const content = candidate.content || {};
+        if (!Array.isArray(content.parts)) {
+            return '';
+        }
+        const parts = content.parts
+            .map((part) => (part && typeof part.text === 'string') ? part.text : '')
+            .filter(Boolean);
+        return parts.join('\n');
+    };
+
+    QuickAddComponent.prototype.extractCustomResponsePayload = function extractCustomResponsePayload(payload, rawText) {
+        const data = payload && typeof payload === 'object' ? payload : null;
+        if (!data) {
+            return rawText || '';
+        }
+        if (Array.isArray(data.entries) || Array.isArray(data.warnings) || Array.isArray(data.missing)) {
+            return data;
+        }
+        if (typeof data.responseText === 'string') {
+            return data.responseText;
+        }
+        if (typeof data.text === 'string') {
+            return data.text;
+        }
+        if (typeof data.content === 'string') {
+            return data.content;
+        }
+        const openaiText = this.extractOpenAIResponseText(data);
+        if (openaiText) {
+            return openaiText;
+        }
+        return rawText || data;
+    };
+
+    QuickAddComponent.prototype.extractProviderResponsePayload = function extractProviderResponsePayload(providerRaw, payload, rawText) {
+        const provider = String(providerRaw || '').trim().toLowerCase();
+        if (provider === 'openai') {
+            const text = this.extractOpenAIResponseText(payload);
+            return text || payload || rawText || '';
+        }
+        if (provider === 'anthropic') {
+            const text = this.extractAnthropicResponseText(payload);
+            return text || payload || rawText || '';
+        }
+        if (provider === 'google') {
+            const text = this.extractGoogleResponseText(payload);
+            return text || payload || rawText || '';
+        }
+        if (provider === 'custom') {
+            return this.extractCustomResponsePayload(payload, rawText);
+        }
+        return payload || rawText || '';
+    };
+
+    QuickAddComponent.prototype.dispatchAIBatchViaProviderApi = async function dispatchAIBatchViaProviderApi(batch, context) {
+        const requestBatch = Array.isArray(batch) ? batch : [];
+        if (!requestBatch.length) {
+            return {
+                status: 'completed',
+                responses: [],
+                providerRawResponse: {
+                    requestId: Number(context && context.requestId),
+                    provider: String(this.config.ai && this.config.ai.provider || ''),
+                    mode: 'built-in',
+                    requests: []
+                }
+            };
+        }
+        if (!this.canUseBuiltInAIDispatch()) {
+            throw new Error('fetch() is not available for built-in provider dispatch');
+        }
+
+        const responses = [];
+        const rawRequests = [];
+        for (let i = 0; i < requestBatch.length; i++) {
+            const item = requestBatch[i] || {};
+            const request = item.request || {};
+            const url = String(request.url || '');
+            const method = String(request.method || 'POST').toUpperCase();
+            const headers = Object.assign({}, request.headers || {});
+            const payload = request.payload !== undefined ? request.payload : null;
+            const startedAt = new Date().toISOString();
+            let httpResponse;
+            let parsedBody = null;
+            let rawBody = '';
+
+            try {
+                httpResponse = await fetch(url, {
+                    method,
+                    headers,
+                    body: payload === null ? undefined : JSON.stringify(payload)
+                });
+            } catch (error) {
+                throw this.normalizeAIDispatchError({
+                    kind: 'offline',
+                    message: String(error && error.message ? error.message : 'Network request failed'),
+                    detail: {
+                        chunkId: item.chunkId,
+                        provider: request.provider || item.provider || '',
+                        url
+                    }
+                });
+            }
+
+            try {
+                rawBody = await httpResponse.text();
+            } catch (err) {
+                rawBody = '';
+            }
+            parsedBody = this.tryParseJson(rawBody);
+
+            rawRequests.push({
+                chunkId: item.chunkId,
+                chunkIndex: item.chunkIndex,
+                provider: request.provider || item.provider || '',
+                request: {
+                    method,
+                    url
+                },
+                response: {
+                    status: Number(httpResponse.status),
+                    ok: httpResponse.ok,
+                    startedAt,
+                    endedAt: new Date().toISOString()
+                }
+            });
+
+            if (!httpResponse.ok) {
+                const message = this.extractProviderErrorMessage(parsedBody, `AI provider request failed (${httpResponse.status})`);
+                throw this.normalizeAIDispatchError({
+                    kind: httpResponse.status === 401 || httpResponse.status === 403 ? 'auth' : (httpResponse.status === 429 ? 'rate-limited' : 'error'),
+                    message,
+                    detail: {
+                        status: Number(httpResponse.status),
+                        chunkId: item.chunkId,
+                        provider: request.provider || item.provider || '',
+                        url
+                    }
+                });
+            }
+
+            const providerPayload = this.extractProviderResponsePayload(
+                request.provider || item.provider || '',
+                parsedBody,
+                rawBody
+            );
+
+            responses.push({
+                chunkId: item.chunkId,
+                chunkIndex: item.chunkIndex,
+                result: providerPayload,
+                raw: parsedBody || rawBody || null
+            });
+        }
+
+        return {
+            status: 'completed',
+            responses,
+            providerRawResponse: {
+                requestId: Number(context && context.requestId),
+                provider: String(this.config.ai && this.config.ai.provider || ''),
+                model: String(this.config.ai && this.config.ai.model || ''),
+                mode: 'built-in',
+                requests: rawRequests
+            }
+        };
     };
 
     QuickAddComponent.prototype.buildAIProviderDispatchRequest = function buildAIProviderDispatchRequest(providerRaw, promptRaw) {
@@ -3599,7 +3895,10 @@
 
     QuickAddComponent.prototype.dispatchAIBatch = async function dispatchAIBatch(batch, context) {
         const ai = this.config.ai || {};
-        return ai.dispatch(batch, context);
+        if (typeof ai.dispatch === 'function') {
+            return ai.dispatch(batch, context);
+        }
+        return this.dispatchAIBatchViaProviderApi(batch, context);
     };
 
     QuickAddComponent.prototype.clearAIQueuedRequest = function clearAIQueuedRequest() {
@@ -4198,6 +4497,11 @@
                             spellcheck="false"
                             data-placeholder="${escHtml(this.config.placeholder)}"
                         ></div>
+                        <button type="button" class="${c.inputClearBtn}" data-role="inputClear" aria-label="Clear input" title="Clear input" hidden>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path fill="currentColor" d="M19 15.59L17.59 17L14 13.41L10.41 17L9 15.59L12.59 12L9 8.41L10.41 7L14 10.59L17.59 7L19 8.41L15.41 12zM22 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7c-.69 0-1.23-.36-1.59-.89L0 12l5.41-8.12C5.77 3.35 6.31 3 7 3zm0 2H7l-4.72 7L7 19h15z"/>
+                            </svg>
+                        </button>
                     </div>
                     <div class="${c.hint}">${escHtml(hint)}</div>
                 </div>
@@ -4235,6 +4539,7 @@
         this.rootEl = this.mountEl.querySelector('[data-role="root"]');
         this.inputSurfaceEl = this.mountEl.querySelector('[data-role="inputSurface"]');
         this.inputEl = this.mountEl.querySelector('[data-role="input"]');
+        this.inputClearBtnEl = this.mountEl.querySelector('[data-role="inputClear"]');
         this.statusEl = this.mountEl.querySelector('[data-role="status"]');
         this.previewEl = this.mountEl.querySelector('[data-role="preview"]');
         this.outputEl = this.mountEl.querySelector('[data-role="output"]');
@@ -4252,6 +4557,31 @@
         this.datePickerTimeEl = this.mountEl.querySelector('[data-role="datePickerTime"]');
         this.blockedInfoEl = null;
         this.syncDropdownA11y();
+    };
+
+    QuickAddComponent.prototype.syncInputClearButton = function syncInputClearButton() {
+        if (!this.inputClearBtnEl) {
+            return;
+        }
+        const isMobileViewport = typeof window !== 'undefined'
+            && typeof window.matchMedia === 'function'
+            && window.matchMedia('(max-width: 640px)').matches;
+        const hasValue = String(this.inputText || this.readInputText() || '').length > 0;
+        const shouldShow = isMobileViewport && hasValue;
+        this.inputClearBtnEl.hidden = !shouldShow;
+        this.inputClearBtnEl.disabled = !shouldShow;
+    };
+
+    QuickAddComponent.prototype.clearInputFromControl = function clearInputFromControl() {
+        if (this.timer) {
+            clearTimeout(this.timer);
+            this.timer = null;
+        }
+        this.setInput('');
+        this.syncInputClearButton();
+        if (this.inputEl) {
+            this.setCaretOffset(0, true);
+        }
     };
 
     QuickAddComponent.prototype.applyTokens = function applyTokens() {
@@ -5270,6 +5600,30 @@
 
         this.onInputKeyDown = (event) => {
             const isTypingDropdown = !!(this.dropdownState && this.dropdownState.source === 'typing' && !this.dropdownEl.hidden);
+            if ((event.key === 'Backspace' || event.key === 'Delete') && !event.metaKey && !event.ctrlKey && !event.altKey) {
+                const offsets = this.getSelectionOffsets();
+                if (offsets) {
+                    const source = String(this.inputText || this.readInputText() || '');
+                    let deleteStart = offsets.start;
+                    let deleteEnd = offsets.end;
+                    if (offsets.isCollapsed) {
+                        if (event.key === 'Backspace') {
+                            if (deleteStart <= 0) {
+                                return;
+                            }
+                            deleteStart = deleteStart - 1;
+                        } else {
+                            if (deleteEnd >= source.length) {
+                                return;
+                            }
+                            deleteEnd = deleteEnd + 1;
+                        }
+                    }
+                    event.preventDefault();
+                    this.replaceTextInInput(deleteStart, deleteEnd, '');
+                    return;
+                }
+            }
             if (isTypingDropdown && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
                 event.preventDefault();
                 this.moveDropdownActiveOption(event.key === 'ArrowDown' ? 1 : -1);
@@ -5305,9 +5659,6 @@
                         if (this.timer) {
                             clearTimeout(this.timer);
                             this.timer = null;
-                        }
-                        if (!isMultiSelectTypingDropdown) {
-                            this.suppressNextTypingDropdownSync = true;
                         }
                         this.suppressNextInsertParagraph = true;
                         setTimeout(() => {
@@ -5610,7 +5961,10 @@
                 }
                 if (action === 'save-edit') {
                     const targetEntry = this.aiState.entries.find((item) => item._id === entryId);
+                    let didInlineSync = false;
                     if (targetEntry) {
+                        const previousEntry = deepCloneValue(targetEntry);
+                        const inlineSyncChanges = [];
                         const fields = (this.normalizedSchema && Array.isArray(this.normalizedSchema.fields))
                             ? this.normalizedSchema.fields
                             : [];
@@ -5618,42 +5972,94 @@
                             if (!field || !field.key) {
                                 return;
                             }
+                            const previousValue = previousEntry[field.key];
                             const inputId = this.getAIEditInputId(entryId, field.key);
                             const node = document.getElementById(inputId);
                             if (!node) {
                                 return;
                             }
                             const raw = String(node.value || '').trim();
+                            let nextValue;
                             if (field.key === 'status') {
-                                targetEntry[field.key] = this.normalizeAIStatus(raw);
+                                nextValue = this.normalizeAIStatus(raw);
+                                targetEntry[field.key] = nextValue;
                                 return;
                             }
                             if (isFileFieldType(field.type)) {
                                 if (field.multiple) {
-                                    targetEntry[field.key] = this.normalizeAIAttachmentRefs(raw);
+                                    nextValue = this.normalizeAIAttachmentRefs(raw);
+                                    targetEntry[field.key] = nextValue;
                                 } else {
-                                    targetEntry[field.key] = raw;
+                                    nextValue = raw;
+                                    targetEntry[field.key] = nextValue;
                                 }
                                 return;
                             }
                             if (field.type === 'number') {
                                 const num = Number(raw);
-                                targetEntry[field.key] = Number.isFinite(num) ? num : null;
+                                nextValue = Number.isFinite(num) ? num : null;
+                                targetEntry[field.key] = nextValue;
+                                if (
+                                    this.isInteractivePill(field)
+                                    && Number.isFinite(num)
+                                    && Number(previousValue) !== Number(nextValue)
+                                ) {
+                                    inlineSyncChanges.push({
+                                        fieldKey: field.key,
+                                        currentValue: previousValue,
+                                        nextValue
+                                    });
+                                }
                                 return;
                             }
                             if (field.multiple) {
                                 const parsedMulti = raw
                                     ? splitByMultiSeparator(raw, String(this.config.multiSelectSeparator || ','))
                                     : [];
-                                targetEntry[field.key] = parsedMulti;
+                                nextValue = parsedMulti;
+                                targetEntry[field.key] = nextValue;
                                 return;
                             }
-                            targetEntry[field.key] = raw;
+                            nextValue = raw;
+                            targetEntry[field.key] = nextValue;
+                            if (
+                                this.isInteractivePill(field)
+                                && !field.multiple
+                                && !isFileFieldType(field.type)
+                                && normValue(previousValue) !== normValue(nextValue)
+                            ) {
+                                inlineSyncChanges.push({
+                                    fieldKey: field.key,
+                                    currentValue: previousValue,
+                                    nextValue
+                                });
+                            }
                         });
                         this.aiState.editedEntries.add(entryId);
+                        this.aiState.editingEntryId = '';
+                        if (inlineSyncChanges.length && this.isAIInlinePillsEnabled()) {
+                            const entryIndex = this.aiState.entries.findIndex((item) => item && item._id === entryId);
+                            inlineSyncChanges.forEach((change) => {
+                                this.applyAIFieldSelection({
+                                    entryId,
+                                    fieldKey: change.fieldKey,
+                                    currentValue: change.currentValue,
+                                    occurrence: 0,
+                                    mappingKey: this.buildAIInlineMappingKey(entryId, change.fieldKey, change.currentValue, 0),
+                                    entryIndex: entryIndex >= 0 ? entryIndex : 0,
+                                    nextValue: change.nextValue,
+                                    sourceRegion: 'card'
+                                });
+                            });
+                            didInlineSync = true;
+                        }
                     }
-                    this.aiState.editingEntryId = '';
-                    this.parseAndRender({ source: this.inputText });
+                    if (!targetEntry) {
+                        this.aiState.editingEntryId = '';
+                    }
+                    if (!didInlineSync) {
+                        this.parseAndRender({ source: this.inputText });
+                    }
                     return;
                 }
                 if (action === 'delete-entry') {
@@ -6092,6 +6498,7 @@
                 if (this.attachmentSourceMenuState && this.attachmentSourceMenuEl && !this.attachmentSourceMenuEl.hidden) {
                     this.positionAttachmentSourceMenu(this.attachmentSourceMenuState.anchorEl || null);
                 }
+                this.syncInputClearButton();
             });
         };
 
@@ -6103,6 +6510,14 @@
         this.inputEl.addEventListener('cut', this.onInputCut);
         this.inputEl.addEventListener('blur', this.onInputBlur);
         this.inputEl.addEventListener('click', this.onInputClick);
+        this.onInputClearClick = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            this.clearInputFromControl();
+        };
+        if (this.inputClearBtnEl) {
+            this.inputClearBtnEl.addEventListener('click', this.onInputClearClick);
+        }
         this.previewEl.addEventListener('click', this.onPreviewClick);
         this.previewEl.addEventListener('change', this.onPreviewChange);
         this.dropdownSearchEl.addEventListener('input', this.onDropdownInput);
@@ -6147,6 +6562,9 @@
         }
         if (this.inputEl && this.onInputClick) {
             this.inputEl.removeEventListener('click', this.onInputClick);
+        }
+        if (this.inputClearBtnEl && this.onInputClearClick) {
+            this.inputClearBtnEl.removeEventListener('click', this.onInputClearClick);
         }
         if (this.previewEl && this.onPreviewClick) {
             this.previewEl.removeEventListener('click', this.onPreviewClick);
@@ -6684,9 +7102,10 @@
 
         const ai = this.config.ai || {};
         if (typeof ai.inlinePillHarness === 'function') {
+            const aiEntries = Array.isArray(this.aiState.entries) ? this.aiState.entries : [];
             const custom = ai.inlinePillHarness({
                 input: raw,
-                entries: (this.aiState.entries || []).slice(),
+                entries: aiEntries.slice(),
                 config: this.config,
                 component: this
             });
@@ -6705,21 +7124,38 @@
                         const fieldKey = mark.fieldKey || mark.field || '';
                         const entryId = mark.entryId || mark.entry || '';
                         let entryIndex = Number(mark.entryIndex);
+                        if (!entryId && fieldKey) {
+                            const matchedEntryIndex = aiEntries.findIndex((item) => {
+                                const segStart = Number(item && item._sourceStart);
+                                const segEnd = Number(item && item._sourceEnd);
+                                return Number.isFinite(segStart)
+                                    && Number.isFinite(segEnd)
+                                    && start >= segStart
+                                    && end <= segEnd;
+                            });
+                            if (matchedEntryIndex >= 0) {
+                                entryIndex = matchedEntryIndex;
+                            }
+                        }
                         if (!Number.isFinite(entryIndex) && entryId) {
-                            const lookupIndex = (this.aiState.entries || []).findIndex((item) => item && item._id === entryId);
+                            const lookupIndex = aiEntries.findIndex((item) => item && item._id === entryId);
                             if (lookupIndex >= 0) {
                                 entryIndex = lookupIndex;
                             }
                         }
-                        const explicit = mark.explicit === true || (!!entryId && !!fieldKey);
+                        const normalizedEntryIndex = Number.isFinite(entryIndex) ? entryIndex : 0;
+                        const resolvedEntry = aiEntries[normalizedEntryIndex] || null;
+                        const resolvedEntryId = entryId
+                            ? String(entryId)
+                            : String((resolvedEntry && resolvedEntry._id) || '');
                         return {
                             start,
                             end,
                             label: String(mark.label || raw.slice(start, end)),
                             inferred: mark.inferred !== false,
-                            explicit,
-                            entryId: entryId ? String(entryId) : '',
-                            entryIndex: Number.isFinite(entryIndex) ? entryIndex : 0,
+                            explicit: mark.explicit === true || (!!resolvedEntryId && !!fieldKey),
+                            entryId: resolvedEntryId,
+                            entryIndex: normalizedEntryIndex,
                             fieldKey: String(fieldKey || ''),
                             value: mark.value
                         };
@@ -6801,7 +7237,7 @@
                     end: range.end,
                     label: `${candidate.key}: ${candidate.value}`,
                     inferred: true,
-                    explicit: false,
+                    explicit: !!entryId && !!candidate.key,
                     entryId,
                     entryIndex: idx,
                     fieldKey: candidate.key,
@@ -6983,6 +7419,7 @@
         if (typeof this.config.onParse === 'function') {
             this.config.onParse(this.lastResult);
         }
+        this.syncInputClearButton();
         if (!opts.skipHistory) {
             this.captureHistorySnapshot('parse');
         }
@@ -7446,6 +7883,11 @@
             }
         }
 
+        const prefixRange = this.findAIFieldPrefixValueRange(entry, fieldKey, occurrence, text);
+        if (prefixRange) {
+            return prefixRange;
+        }
+
         const needle = String(currentValue === undefined || currentValue === null ? '' : currentValue).trim();
         if (!needle) {
             return null;
@@ -7506,6 +7948,135 @@
             start: startBound + first,
             end: startBound + first + needle.length,
             value: needle,
+            fromSpan: false
+        };
+    };
+
+    QuickAddComponent.prototype.findAIFieldPrefixValueRange = function findAIFieldPrefixValueRange(entry, fieldKey, occurrence, source) {
+        const text = String(source || '');
+        if (!entry || !fieldKey || !text) {
+            return null;
+        }
+        const startBound = Number.isFinite(Number(entry._sourceStart)) ? Math.max(0, Number(entry._sourceStart)) : 0;
+        const endBound = Number.isFinite(Number(entry._sourceEnd)) ? Math.min(text.length, Number(entry._sourceEnd)) : text.length;
+        if (endBound <= startBound) {
+            return null;
+        }
+
+        const field = this.getFieldDefinition(fieldKey);
+        const rawPrefixes = field && Array.isArray(field.prefixes) && field.prefixes.length
+            ? field.prefixes
+            : [`${fieldKey}:`];
+        const prefixes = rawPrefixes
+            .map((prefix) => String(prefix || '').trim())
+            .filter(Boolean);
+        if (!prefixes.length) {
+            return null;
+        }
+
+        const segment = text.slice(startBound, endBound);
+        const lowerSegment = segment.toLowerCase();
+        const allPrefixes = ((this.normalizedSchema && Array.isArray(this.normalizedSchema.fields))
+            ? this.normalizedSchema.fields
+                .reduce((acc, fieldDef) => {
+                    const list = Array.isArray(fieldDef && fieldDef.prefixes) && fieldDef.prefixes.length
+                        ? fieldDef.prefixes
+                        : [`${fieldDef && fieldDef.key ? fieldDef.key : ''}:`];
+                    list.forEach((item) => {
+                        const value = String(item || '').trim();
+                        if (value) {
+                            acc.push(value.toLowerCase());
+                        }
+                    });
+                    return acc;
+                }, [])
+            : [])
+            .filter(Boolean);
+
+        const isPrefixBoundary = function isPrefixBoundary(segmentText, idx) {
+            if (idx <= 0) {
+                return true;
+            }
+            return /[\s;,\n\r\t(]/.test(segmentText.charAt(idx - 1));
+        };
+        const matches = [];
+        prefixes.forEach((prefix) => {
+            const lowerPrefix = prefix.toLowerCase();
+            let idx = lowerSegment.indexOf(lowerPrefix);
+            while (idx !== -1) {
+                if (isPrefixBoundary(lowerSegment, idx)) {
+                    matches.push({ idx, prefix });
+                }
+                idx = lowerSegment.indexOf(lowerPrefix, idx + lowerPrefix.length);
+            }
+        });
+        if (!matches.length) {
+            return null;
+        }
+
+        matches.sort((a, b) => a.idx - b.idx);
+        const matchIndex = Math.max(0, Math.min(matches.length - 1, Number.isFinite(Number(occurrence)) ? Number(occurrence) : 0));
+        const selected = matches[matchIndex];
+        let valueStart = selected.idx + selected.prefix.length;
+        while (valueStart < lowerSegment.length && /\s/.test(lowerSegment.charAt(valueStart))) {
+            valueStart += 1;
+        }
+
+        if (valueStart >= lowerSegment.length) {
+            return null;
+        }
+
+        let valueEnd = lowerSegment.length;
+        const addCandidate = function addCandidate(nextIdx) {
+            if (Number.isFinite(nextIdx) && nextIdx >= valueStart && nextIdx < valueEnd) {
+                valueEnd = nextIdx;
+            }
+        };
+
+        const fieldTerminator = String(this.config.fieldTerminator || '');
+        if (fieldTerminator) {
+            const idx = lowerSegment.indexOf(fieldTerminator.toLowerCase(), valueStart);
+            if (idx !== -1) {
+                addCandidate(idx);
+            }
+        }
+        const entrySeparator = String(this.config.entrySeparator || '');
+        if (entrySeparator) {
+            const idx = lowerSegment.indexOf(entrySeparator.toLowerCase(), valueStart);
+            if (idx !== -1) {
+                addCandidate(idx);
+            }
+        }
+
+        allPrefixes.forEach((prefix) => {
+            let idx = lowerSegment.indexOf(prefix, valueStart);
+            while (idx !== -1) {
+                if (isPrefixBoundary(lowerSegment, idx)) {
+                    addCandidate(idx);
+                    break;
+                }
+                idx = lowerSegment.indexOf(prefix, idx + prefix.length);
+            }
+        });
+
+        const punctuationStops = ['\n', '\r'];
+        punctuationStops.forEach((token) => {
+            const idx = lowerSegment.indexOf(token, valueStart);
+            if (idx !== -1) {
+                addCandidate(idx);
+            }
+        });
+
+        while (valueEnd > valueStart && /\s/.test(lowerSegment.charAt(valueEnd - 1))) {
+            valueEnd -= 1;
+        }
+        if (valueEnd <= valueStart) {
+            return null;
+        }
+        return {
+            start: startBound + valueStart,
+            end: startBound + valueEnd,
+            value: segment.slice(valueStart, valueEnd),
             fromSpan: false
         };
     };
@@ -9270,13 +9841,6 @@
 
     QuickAddComponent.prototype.syncTypingDropdown = function syncTypingDropdown(caretOffset) {
         this.closeAttachmentSourceMenu();
-        if (this.suppressNextTypingDropdownSync) {
-            this.suppressNextTypingDropdownSync = false;
-            if (this.dropdownState && this.dropdownState.source === 'typing') {
-                this.closeDropdown();
-            }
-            return;
-        }
         if (this.config.showDropdownOnTyping === false) {
             if (this.dropdownState && this.dropdownState.source === 'typing') {
                 this.closeDropdown();
@@ -9328,7 +9892,7 @@
             source: 'typing',
             activeOptionValue: null,
             filteredOptions: [],
-            activateFirstOnOpen: false,
+            activateFirstOnOpen: true,
             keepActiveWhenFiltering: false
         };
 
@@ -10068,7 +10632,10 @@
 
         const source = this.inputText || this.readInputText();
         const separator = String(this.config.multiSelectSeparator || ',');
+        const terminator = String(this.config.fieldTerminator || '');
         const fromTyping = state.source === 'typing';
+        const escapedSeparator = String(separator || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const escapedTerminator = String(terminator || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         let replacement = String(nextValue);
         let updated = source;
         let caret = token.globalValueStart + replacement.length;
@@ -10079,10 +10646,20 @@
             let values;
             if (fromTyping) {
                 const rawTokenValue = String(token.value || '');
+                const hasSeparator = !!(separator && rawTokenValue.includes(separator));
                 const parts = separator ? rawTokenValue.split(separator) : [rawTokenValue];
-                values = parts.length > 1
-                    ? parts.slice(0, -1).map((item) => item.trim()).filter(Boolean)
-                    : [];
+                const trailingPart = parts.length ? String(parts[parts.length - 1] || '') : '';
+                const leadingValues = dedupeMultiValues(parts.slice(0, -1));
+                const fullValues = dedupeMultiValues(parts);
+                const hasTrailingQuery = hasSeparator && trailingPart.trim().length > 0;
+                const hasTrailingSeparator = hasSeparator && trailingPart.trim().length === 0;
+                if (!token.committed && !hasSeparator) {
+                    values = [];
+                } else if (hasTrailingQuery || hasTrailingSeparator) {
+                    values = leadingValues;
+                } else {
+                    values = fullValues;
+                }
             } else {
                 values = splitByMultiSeparator(state.currentValue || token.value || '', separator);
             }
@@ -10095,7 +10672,7 @@
                 values.splice(existingIndex, 1);
             }
             replacement = values.join(`${separator} `);
-            if (fromTyping && didAdd && values.length > 0) {
+            if (fromTyping && didAdd && values.length > 0 && !token.committed && !terminator) {
                 replacement = `${replacement}${separator} `;
             }
             caret = token.globalValueStart + replacement.length;
@@ -10104,7 +10681,20 @@
             updated = this.replaceRange(source, token.globalValueStart, token.globalValueEnd, replacement);
         }
 
-        const terminator = String(this.config.fieldTerminator || '');
+        if (isMultiSelectOptions && fromTyping && escapedSeparator && escapedTerminator) {
+            const beforeCaret = updated.slice(0, caret);
+            const afterCaret = updated.slice(caret);
+            if (new RegExp(`${escapedSeparator}\\s*$`).test(beforeCaret) && new RegExp(`^\\s*${escapedTerminator}`).test(afterCaret)) {
+                const trimmedBefore = beforeCaret.replace(new RegExp(`${escapedSeparator}\\s*$`), '');
+                updated = trimmedBefore + afterCaret;
+                caret = trimmedBefore.length;
+            }
+            const refreshedAfter = updated.slice(caret);
+            const trimmedAfter = refreshedAfter.replace(new RegExp(`^\\s*${escapedSeparator}\\s*(?=${escapedTerminator})`), '');
+            if (trimmedAfter.length !== refreshedAfter.length) {
+                updated = updated.slice(0, caret) + trimmedAfter;
+            }
+        }
 
         if (!token.committed && terminator) {
             const tokenTail = updated.slice(caret, caret + terminator.length);
@@ -10113,6 +10703,21 @@
                 && (fromTyping || this.config.fieldTerminatorMode === 'strict')
             );
             if (shouldAppendTerminator) {
+                if (isMultiSelectOptions && fromTyping) {
+                    if (escapedSeparator) {
+                        const beforeCaret = updated.slice(0, caret);
+                        const trimmedBefore = beforeCaret.replace(new RegExp(`${escapedSeparator}\\s*$`), '');
+                        if (trimmedBefore.length !== beforeCaret.length) {
+                            updated = trimmedBefore + updated.slice(caret);
+                            caret = trimmedBefore.length;
+                        }
+                        const afterCaret = updated.slice(caret);
+                        const trimmedAfter = afterCaret.replace(new RegExp(`^\\s*${escapedSeparator}\\s*`), '');
+                        if (trimmedAfter.length !== afterCaret.length) {
+                            updated = updated.slice(0, caret) + trimmedAfter;
+                        }
+                    }
+                }
                 updated = this.replaceRange(updated, caret, caret, terminator);
                 caret += terminator.length;
             }
@@ -10122,6 +10727,33 @@
                     updated = this.replaceRange(updated, caret, caret, ' ');
                     caret += 1;
                 }
+            }
+        }
+
+        if (isMultiSelectOptions && fromTyping && escapedSeparator && terminator) {
+            const valueStart = Math.max(0, Number(token.globalValueStart) || 0);
+            const terminatorIndex = updated.indexOf(terminator, valueStart);
+            if (terminatorIndex > valueStart) {
+                const rawValueSegment = updated.slice(valueStart, terminatorIndex);
+                const cleanedValueSegment = rawValueSegment.replace(new RegExp(`${escapedSeparator}\\s*$`), '');
+                if (cleanedValueSegment.length !== rawValueSegment.length) {
+                    const delta = rawValueSegment.length - cleanedValueSegment.length;
+                    updated = `${updated.slice(0, valueStart)}${cleanedValueSegment}${updated.slice(terminatorIndex)}`;
+                    const removedStart = valueStart + cleanedValueSegment.length;
+                    const removedEnd = valueStart + rawValueSegment.length;
+                    if (caret > removedEnd) {
+                        caret -= delta;
+                    } else if (caret > removedStart) {
+                        caret = removedStart;
+                    }
+                }
+            }
+        }
+        if (isMultiSelectOptions && fromTyping && escapedSeparator && escapedTerminator) {
+            const beforeCleanup = updated;
+            updated = updated.replace(new RegExp(`${escapedSeparator}\\s*(?=${escapedTerminator})`, 'g'), '');
+            if (updated.length !== beforeCleanup.length) {
+                caret = Math.max(0, Math.min(caret, updated.length));
             }
         }
 
@@ -10246,7 +10878,7 @@
         this.aiState.errorKind = '';
 
         const source = this.inputText || this.readInputText();
-        const fallbackRange = (!mapping && sourceRegion === 'card')
+        const fallbackRange = sourceRegion === 'card'
             ? this.findAIInlineFallbackRange(entry, fieldKey, occurrence, currentValue, source)
             : null;
         let nextSource = source;
@@ -10281,16 +10913,26 @@
                 normValue(currentChunk) === normValue(currentValueText)
                 || normValue(currentChunk) === normValue(mappingValueText)
             );
-        const shouldSyncInlineSource = hasSyncRange
-            && (sourceRegion !== 'card' || canSyncCardDirectMatch);
+        const canUseFallbackRange = sourceRegion === 'card'
+            && hasFallbackRange
+            && !canSyncCardDirectMatch;
+        const effectiveSyncStart = canUseFallbackRange ? fallbackStart : syncStart;
+        const effectiveSyncEnd = canUseFallbackRange ? fallbackEnd : syncEnd;
+        const hasEffectiveSyncRange = Number.isFinite(effectiveSyncStart)
+            && Number.isFinite(effectiveSyncEnd)
+            && effectiveSyncEnd > effectiveSyncStart;
+        const shouldSyncInlineSource = hasEffectiveSyncRange;
         if (shouldSyncInlineSource) {
             const replacementText = String(normalizedNextValue);
-            nextSource = this.replaceRange(source, syncStart, syncEnd, replacementText);
+            nextSource = this.replaceRange(source, effectiveSyncStart, effectiveSyncEnd, replacementText);
             if (sourceRegion !== 'card') {
-                caretOffset = syncStart + replacementText.length;
+                caretOffset = effectiveSyncStart + replacementText.length;
             }
-            if (Array.isArray(entry.spans) && (hasMappingRange || (hasFallbackRange && fallbackRange && fallbackRange.fromSpan === true))) {
-                const delta = replacementText.length - (syncEnd - syncStart);
+            if (!Array.isArray(entry.spans)) {
+                entry.spans = [];
+            }
+            if (Array.isArray(entry.spans)) {
+                const delta = replacementText.length - (effectiveSyncEnd - effectiveSyncStart);
                 const expectedOccurrence = Math.max(0, Number.isFinite(Number(occurrence)) ? Number(occurrence) : 0);
                 let fieldOccurrence = 0;
                 let updatedCurrent = false;
@@ -10303,8 +10945,11 @@
                     const spanField = String(span.field || '');
                     const isTargetField = spanField === fieldKey;
                     let nextSpan = span;
-                    const isDirectMatch = isTargetField && start === syncStart && end === syncEnd;
-                    const isOccurrenceMatch = isTargetField && !updatedCurrent && fieldOccurrence === expectedOccurrence && (start <= syncStart && end >= syncEnd);
+                    const isDirectMatch = isTargetField && start === effectiveSyncStart && end === effectiveSyncEnd;
+                    const isOccurrenceMatch = isTargetField
+                        && !updatedCurrent
+                        && fieldOccurrence === expectedOccurrence
+                        && (start <= effectiveSyncStart && end >= effectiveSyncEnd);
                     if (!updatedCurrent && (isDirectMatch || isOccurrenceMatch)) {
                         updatedCurrent = true;
                         nextSpan = Object.assign({}, span, {
@@ -10312,7 +10957,7 @@
                             end: start + replacementText.length,
                             value: normalizedNextValue
                         });
-                    } else if (start >= syncEnd && delta !== 0) {
+                    } else if (start >= effectiveSyncEnd && delta !== 0) {
                         nextSpan = Object.assign({}, span, { start: start + delta, end: end + delta });
                     }
                     if (isTargetField) {
@@ -10320,6 +10965,15 @@
                     }
                     return nextSpan;
                 });
+                if (!updatedCurrent && fieldKey) {
+                    entry.spans.push({
+                        field: fieldKey,
+                        value: normalizedNextValue,
+                        start: effectiveSyncStart,
+                        end: effectiveSyncStart + replacementText.length
+                    });
+                    entry.spans.sort((a, b) => Number(a.start) - Number(b.start) || Number(a.end) - Number(b.end));
+                }
                 if (Number.isFinite(Number(entry._sourceEnd))) {
                     entry._sourceEnd = Number(entry._sourceEnd) + delta;
                 }

@@ -8,10 +8,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Figtree:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="./components-demo.css">
-    <link rel="stylesheet" data-qa-style="1" href="../quick-add/quick-add-component.css?v=20260301">
+    <link rel="stylesheet" href="./components-demo.css?v=20260301">
+    <link rel="stylesheet" data-qa-style="1" href="../quick-add/quick-add-component.css?v=20260301g">
     <style>
         :root {
             --bg: #f5f0e8;
@@ -34,7 +34,7 @@
                 radial-gradient(circle at 85% 95%, #e0efe9 0%, transparent 30%),
                 var(--bg);
             color: var(--ink);
-            font-family: "Space Grotesk", sans-serif;
+            font-family: "Figtree", "Avenir Next", "Segoe UI", sans-serif;
             line-height: 1.45;
         }
 
@@ -218,8 +218,7 @@
 
         @media (max-width: 719px) {
 
-            #exampleTabs,
-            #componentTabs {
+            #exampleTabs {
                 display: none;
             }
         }
@@ -850,42 +849,22 @@
                 <p class="demo-subtitle">Six variant demos: 4 deterministic and 2 AI, with the original interaction lab
                     layout.</p>
             </div>
-            <a class="demo-home" href="/index.html">Main Site</a>
+            <div class="demo-actions">
+                <a class="demo-home" href="/components/components-demo/index.html">Components Demo</a>
+                <a class="demo-home" href="/index.html">Main Site</a>
+            </div>
         </header>
 
-        <nav class="demo-nav" aria-label="Component demo navigation">
-            <a class="demo-nav-link" href="/components/components-demo/index.html">
-                <span class="demo-nav-label">Components Home</span>
-                <span class="demo-nav-desc">Demo catalog</span>
-            </a>
-            <a class="demo-nav-link is-active" href="/components/components-demo/quick-add-demo.html"
-                aria-current="page">
-                <span class="demo-nav-label">Quick Add</span>
-                <span class="demo-nav-desc">Parser variants + AI demos</span>
-            </a>
-        </nav>
     </div>
 
     <main class="shell">
-        <div class="example-tabs" id="componentTabsWrap">
-            <div class="tab-select" id="componentTabsSelect">
-                <button class="tab-select-trigger" type="button" id="componentTabsTrigger">Quick Add</button>
-                <div class="tab-select-menu" id="componentTabsMenu">
-                    <button class="tab-select-option active" type="button" data-page="quickAddPage">Quick Add</button>
-                </div>
-            </div>
-            <div class="tab-row tab-row--scroll" id="componentTabs">
-                <button class="tab-btn active" data-page="quickAddPage">Quick Add</button>
-            </div>
-        </div>
-
         <section class="page active" id="quickAddPage">
             <div class="quickadd-intro">
                 <p>Gallery scaffold for reusable UI components. Quick Add Parser is wired with live schema-driven
                     parsing
                     and six variant demos.</p>
                 <div class="import-note">Single-file import:
-                    <code>&lt;script src=\"../quick-add/quick-add-component.js\"&gt;&lt;/script&gt;</code>
+                    <code>&lt;script src=\"../quick-add/quick-add-component.js?v=20260301e\"&gt;&lt;/script&gt;</code>
                 </div>
             </div>
             <div class="example-tabs" id="exampleTabsWrap">
@@ -1117,12 +1096,12 @@
             <article class="example-wrap" style="display:none" data-example-panel="example6">
                 <div class="example-head">
                     <h2>✦ AI Parsing w/ Inline</h2>
-                    <p>AI mode with optional inline-pill overlays enabled. Uses dummy AI output with span offsets and
-                        supports separator-aware parsing by newline, plus full provider/API-key runtime switching to
-                        test
-                        real calls. The default runtime provider is <strong>Demo</strong>.</p>
-                    <p><strong>Security note:</strong> Browser API keys are exposed to end users; use Demo mode or a
-                        backend proxy/token exchange for production integrations.</p>
+                    <p>AI mode with optional inline-pill overlays enabled. Supports both demo/mock dispatch and real
+                        provider API calls with runtime provider/API-key switching. The default runtime provider is
+                        <strong>Demo</strong>.
+                    </p>
+                    <p><strong>Security note:</strong> Browser API keys are exposed to end users; use a backend
+                        proxy/token exchange for production integrations.</p>
                     <div class="meta" id="meta6"></div>
                     <details class="ai-config-details" id="aiRuntime6" open>
                         <summary>AI Provider Details</summary>
@@ -1132,7 +1111,7 @@
                                     <button class="custom-select-trigger" type="button"
                                         id="aiProviderTrigger6">Demo</button>
                                     <div class="custom-select-menu">
-                                        <button class="custom-select-option" type="button"
+                                        <button class="custom-select-option active" type="button"
                                             data-value="demo">Demo</button>
                                         <button class="custom-select-option" type="button"
                                             data-value="openai">OpenAI</button>
@@ -1185,8 +1164,8 @@
     </main>
 
     <script src="https://unpkg.com/chrono-node@2.7.7/dist/chrono.min.js"></script>
-    <script src="../quick-add/quick-add-component.js"></script>
-    <script defer src="./quick-add-demo.js"></script>
+    <script src="../quick-add/quick-add-component.js?v=20260301e"></script>
+    <script defer src="./quick-add-demo.js?v=20260301e"></script>
 </body>
 
 </html>
