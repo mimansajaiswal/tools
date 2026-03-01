@@ -1,0 +1,1192 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Components Demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="./components-demo.css">
+    <link rel="stylesheet" data-qa-style="1" href="../quick-add/quick-add-component.css?v=20260301">
+    <style>
+        :root {
+            --bg: #f5f0e8;
+            --ink: #201b16;
+            --ink-soft: #6d6258;
+            --line: #cfc2af;
+            --surface: #fffaf3;
+            --accent: #1f5d69;
+            --accent-soft: #d9eef2;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background:
+                radial-gradient(circle at 15% 10%, #efe5d8 0%, transparent 35%),
+                radial-gradient(circle at 85% 95%, #e0efe9 0%, transparent 30%),
+                var(--bg);
+            color: var(--ink);
+            font-family: "Space Grotesk", sans-serif;
+            line-height: 1.45;
+        }
+
+        .shell {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 24px 18px 42px;
+        }
+
+        .hero {
+            margin-bottom: 18px;
+        }
+
+        .hero h1 {
+            margin: 0 0 6px;
+            font: 700 36px/1.05 "Fraunces", serif;
+        }
+
+        .import-note {
+            margin-top: 10px;
+            font: 500 12px/1.4 "JetBrains Mono", monospace;
+            color: var(--ink-soft);
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 8px 10px;
+            display: inline-block;
+        }
+
+        .tab-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 16px 0 18px;
+        }
+
+        .tab-row--scroll {
+            flex-wrap: wrap;
+        }
+
+        .example-tabs {
+            display: grid;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .tab-select {
+            position: relative;
+            margin-bottom: 18px;
+        }
+
+        .tab-select-trigger {
+            width: 100%;
+            border: 1px solid var(--line);
+            background: var(--surface);
+            color: var(--ink);
+            border-radius: 12px;
+            padding: 10px 12px;
+            cursor: pointer;
+            font: 500 13px/1 "JetBrains Mono", monospace;
+            letter-spacing: 0.01em;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .tab-select-trigger::after {
+            content: "▾";
+            color: var(--ink-soft);
+            font-size: 12px;
+        }
+
+        .tab-select-menu {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            right: 0;
+            border: 1px solid var(--line);
+            background: #fff;
+            border-radius: 12px;
+            padding: 6px;
+            display: none;
+            box-shadow: 0 16px 40px rgba(32, 27, 22, 0.12);
+            z-index: 20;
+            max-height: 280px;
+            overflow-y: auto;
+        }
+
+        .tab-select.open .tab-select-menu {
+            display: grid;
+            gap: 4px;
+        }
+
+        .tab-select-option {
+            border: 1px solid transparent;
+            background: #fff;
+            color: var(--ink);
+            border-radius: 10px;
+            padding: 8px 10px;
+            cursor: pointer;
+            text-align: left;
+            font: 500 13px/1 "JetBrains Mono", monospace;
+        }
+
+        .tab-select-option.active {
+            border-color: var(--accent);
+            background: var(--accent-soft);
+            color: var(--accent);
+        }
+
+        .tab-btn {
+            border: 1px solid var(--line);
+            background: var(--surface);
+            color: var(--ink);
+            border-radius: 999px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font: 500 13px/1 "JetBrains Mono", monospace;
+            letter-spacing: 0.01em;
+        }
+
+        .tab-btn.active {
+            border-color: var(--accent);
+            background: var(--accent-soft);
+            color: var(--accent);
+        }
+
+        .page {
+            display: none;
+            border: 1px solid var(--line);
+            background: var(--surface);
+            border-radius: 16px;
+            padding: 14px;
+            min-width: 0;
+        }
+
+        .page.active {
+            display: block;
+            animation: reveal .22s ease-out;
+        }
+
+        @keyframes reveal {
+            from {
+                opacity: 0;
+                transform: translateY(5px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (min-width: 720px) {
+            .tab-row--scroll {
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                padding-bottom: 4px;
+                scroll-snap-type: x proximity;
+            }
+
+            .tab-row--scroll .tab-btn {
+                flex: 0 0 auto;
+                scroll-snap-align: start;
+            }
+
+            .tab-row--scroll::-webkit-scrollbar {
+                height: 6px;
+            }
+
+            .tab-row--scroll::-webkit-scrollbar-thumb {
+                background: #d7caba;
+                border-radius: 999px;
+            }
+
+            .example-tabs .tab-select {
+                display: none;
+            }
+        }
+
+        @media (max-width: 719px) {
+
+            #exampleTabs,
+            #componentTabs {
+                display: none;
+            }
+        }
+
+        .example-wrap {
+            margin-top: 10px;
+            display: grid;
+            gap: 12px;
+        }
+
+        .example-wrap>* {
+            min-width: 0;
+        }
+
+        .example-head {
+            display: grid;
+            gap: 4px;
+        }
+
+        .example-head h2 {
+            margin: 0;
+            font: 700 22px/1.1 "Fraunces", serif;
+        }
+
+        .example-head p {
+            margin: 0;
+            color: var(--ink-soft);
+        }
+
+        .quickadd-intro p {
+            margin: 0;
+            color: var(--ink-soft);
+            max-width: 75ch;
+        }
+
+        .meta {
+            margin-top: 4px;
+            color: var(--ink-soft);
+            font: 500 12px/1.4 "JetBrains Mono", monospace;
+        }
+
+        .config-box {
+            margin-top: 8px;
+            border: 1px solid var(--line);
+            background: #fff;
+            border-radius: 10px;
+            overflow: hidden;
+            max-width: 100%;
+        }
+
+        .config-box>summary {
+            cursor: pointer;
+            list-style: none;
+            padding: 8px 10px;
+            font: 500 12px/1 "JetBrains Mono", monospace;
+            color: var(--ink);
+            background: #f8f3ea;
+            border-bottom: 1px solid var(--line);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .config-box>summary::after {
+            content: "▸";
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--ink-soft);
+            transform: rotate(0deg);
+            transition: transform 140ms ease;
+        }
+
+        .config-box[open]>summary::after {
+            transform: rotate(90deg);
+        }
+
+        .config-box>summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .config-tools {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin: 0;
+            padding: 8px 10px;
+            border-bottom: 1px solid var(--line);
+            background: #fffdf9;
+        }
+
+        .config-hint {
+            color: var(--ink-soft);
+            font: 500 11px/1.2 "JetBrains Mono", monospace;
+        }
+
+        .config-actions {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .ai-runtime {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 8px;
+            margin: 0;
+            padding: 8px 10px 10px;
+            border-bottom: 1px solid var(--line);
+            background: #fffcf7;
+        }
+
+        .ai-runtime [hidden] {
+            display: none !important;
+        }
+
+        .ai-runtime.ai-runtime--compact {
+            grid-template-columns: 1fr;
+        }
+
+        .ai-runtime-field {
+            display: grid;
+            gap: 4px;
+            font: 500 11px/1.2 "JetBrains Mono", monospace;
+            color: var(--ink-soft);
+            min-width: 0;
+        }
+
+        .ai-runtime-input {
+            width: 100%;
+            min-width: 0;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 6px 8px;
+            background: #fff;
+            color: var(--ink);
+            font: 500 12px/1.2 "JetBrains Mono", monospace;
+        }
+
+        .ai-runtime-row {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .ai-runtime-check {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font: 500 11px/1.2 "JetBrains Mono", monospace;
+            color: var(--ink-soft);
+        }
+
+        .config-btn {
+            border: 1px solid var(--line);
+            background: #fff;
+            color: var(--ink);
+            border-radius: 999px;
+            padding: 4px 10px;
+            font: 600 11px/1 "JetBrains Mono", monospace;
+            cursor: pointer;
+        }
+
+        .config-btn:hover {
+            border-color: var(--ink-soft);
+        }
+
+        .config-btn:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+
+        .config-editor {
+            margin: 0;
+            padding: 10px;
+            background: #fff;
+            color: var(--ink);
+            width: 100%;
+            min-height: 240px;
+            max-height: min(56vh, 620px);
+            resize: vertical;
+            border: 0;
+            border-radius: 0;
+            font: 500 11px/1.5 "JetBrains Mono", monospace;
+            box-sizing: border-box;
+            display: block;
+            white-space: pre;
+            overflow: auto;
+        }
+
+        .config-editor:focus {
+            outline: 2px solid #c0b8ac;
+            outline-offset: -2px;
+        }
+
+        .config-status {
+            margin: 0;
+            padding: 7px 10px;
+            border-top: 1px solid var(--line);
+            background: #fff;
+            color: var(--ink-soft);
+            min-height: 1.2em;
+            font: 600 11px/1.2 "JetBrains Mono", monospace;
+        }
+
+        .config-status.ok {
+            color: #0f766e;
+        }
+
+        .config-status.error {
+            color: #b91c1c;
+        }
+
+        .config-errors {
+            margin: 0;
+            border-top: 1px solid var(--line);
+            background: #fff8f8;
+        }
+
+        .config-errors[hidden] {
+            display: none;
+        }
+
+        .config-errors summary {
+            cursor: pointer;
+            list-style: none;
+            padding: 7px 10px;
+            color: #8f1d1d;
+            font: 700 11px/1.2 "JetBrains Mono", monospace;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .config-errors summary::after {
+            content: "▾";
+            color: #8f1d1d;
+            transform: rotate(-90deg);
+            transition: transform 120ms ease;
+        }
+
+        .config-errors[open] summary::after {
+            transform: rotate(0deg);
+        }
+
+        .config-errors summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .config-errors-list {
+            margin: 0;
+            padding: 0 10px 10px 28px;
+            color: #7f1d1d;
+            font: 600 11px/1.35 "JetBrains Mono", monospace;
+            max-height: min(34vh, 260px);
+            overflow: auto;
+        }
+
+        .modal-demo-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .modal-demo-btn {
+            border: 1px solid var(--line);
+            background: #fff;
+            color: var(--ink);
+            border-radius: 8px;
+            padding: 7px 12px;
+            cursor: pointer;
+            font: 600 12px/1 "JetBrains Mono", monospace;
+        }
+
+        .modal-demo-btn:hover {
+            border-color: var(--ink-soft);
+        }
+
+        .modal-demo-note {
+            color: var(--ink-soft);
+            font: 500 11px/1.4 "JetBrains Mono", monospace;
+        }
+
+        .qa-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 12000;
+            background: rgba(20, 18, 16, 0.46);
+            display: grid;
+            place-items: center;
+            padding: 14px;
+        }
+
+        .qa-modal-backdrop[hidden] {
+            display: none !important;
+        }
+
+        .qa-modal {
+            width: min(760px, 100%);
+            max-height: min(82vh, 700px);
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: #fffaf3;
+            color: var(--ink);
+            box-shadow: 0 28px 80px rgba(0, 0, 0, 0.28);
+            display: grid;
+            grid-template-rows: auto minmax(0, 1fr);
+            overflow: hidden;
+        }
+
+        .qa-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--line);
+            background: #f8f3ea;
+        }
+
+        .qa-modal-title {
+            margin: 0;
+            font: 700 15px/1.2 "Fraunces", serif;
+        }
+
+        .qa-modal-actions {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .qa-modal-body {
+            min-height: 0;
+            overflow: auto;
+            padding: 12px;
+            background:
+                linear-gradient(180deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.65)),
+                repeating-linear-gradient(0deg, transparent 0, transparent 24px, rgba(207, 194, 175, 0.17) 24px, rgba(207, 194, 175, 0.17) 25px);
+        }
+
+        .modal-result-wrap {
+            margin-top: 12px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: #fff;
+            overflow: hidden;
+        }
+
+        .modal-result-head {
+            padding: 8px 10px;
+            border-bottom: 1px solid var(--line);
+            background: #f8f3ea;
+            font: 600 12px/1.3 "JetBrains Mono", monospace;
+            color: var(--ink);
+        }
+
+        .modal-result-summary {
+            padding: 7px 10px;
+            border-bottom: 1px solid var(--line);
+            background: #fffdf9;
+            color: var(--ink-soft);
+            font: 500 11px/1.35 "JetBrains Mono", monospace;
+        }
+
+        .modal-result-table-wrap {
+            max-height: 260px;
+            overflow: auto;
+        }
+
+        .modal-result-table {
+            width: 100%;
+            border-collapse: collapse;
+            font: 500 11px/1.3 "JetBrains Mono", monospace;
+            background: #fff;
+        }
+
+        .modal-result-table th,
+        .modal-result-table td {
+            border-bottom: 1px solid #efe7da;
+            padding: 7px 8px;
+            text-align: left;
+            vertical-align: top;
+            white-space: nowrap;
+        }
+
+        .modal-result-table th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            background: #fff8ef;
+            color: var(--ink-soft);
+            font-weight: 700;
+        }
+
+        .modal-result-table td:last-child {
+            white-space: normal;
+            min-width: 180px;
+        }
+
+        .modal-result-table td.modal-attachment-cell {
+            white-space: normal;
+            min-width: 240px;
+        }
+
+        .modal-attachments {
+            display: grid;
+            gap: 6px;
+        }
+
+        .modal-attachment-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid #efe7da;
+            border-radius: 8px;
+            background: #fffcf7;
+            padding: 4px 6px;
+        }
+
+        .modal-attachment-thumb {
+            width: 42px;
+            height: 42px;
+            border-radius: 6px;
+            border: 1px solid #e5d7c4;
+            background: #fff;
+            object-fit: cover;
+            flex: 0 0 auto;
+        }
+
+        .modal-attachment-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 6px;
+            border: 1px solid #e5d7c4;
+            background: #fff;
+            color: var(--ink-soft);
+            display: grid;
+            place-items: center;
+            font: 700 11px/1 "JetBrains Mono", monospace;
+            flex: 0 0 auto;
+        }
+
+        .modal-attachment-meta {
+            min-width: 0;
+            display: grid;
+            gap: 2px;
+        }
+
+        .modal-attachment-name {
+            color: var(--ink);
+            font-weight: 600;
+            white-space: normal;
+            word-break: break-word;
+        }
+
+        .modal-attachment-detail {
+            color: var(--ink-soft);
+            font-size: 10px;
+            white-space: normal;
+            word-break: break-word;
+        }
+
+        body.qa-modal-open {
+            overflow: hidden;
+        }
+
+        @media (max-width: 640px) {
+            .qa-modal-backdrop {
+                padding: 8px;
+            }
+
+            .qa-modal {
+                max-height: calc(100vh - 16px);
+                border-radius: 8px;
+            }
+
+            .qa-modal-header {
+                padding: 8px 9px;
+            }
+
+            .qa-modal-title {
+                font-size: 14px;
+            }
+
+            .qa-modal-body {
+                padding: 8px;
+            }
+        }
+
+        .petqa-root {
+            --qa-bg: #eef8f3;
+            --qa-fg: #1d2b25;
+            --qa-muted: #5a6d63;
+            --qa-border: #b8d5c7;
+            --qa-accent: #1d7d5e;
+            --qa-accent-soft: #d8efe5;
+            --qa-danger: #8e3737;
+            --qa-radius: 8px;
+            --qa-font: "JetBrains Mono", monospace;
+            box-shadow: 0 10px 30px rgba(29, 125, 94, 0.08);
+        }
+
+        .petqa-entry {
+            background: linear-gradient(180deg, #ffffff 0%, #f7fcf9 100%);
+        }
+
+        .ai-config-details {
+            margin-top: 8px;
+            border: 1px solid var(--line);
+            background: #fff;
+            border-radius: 10px;
+            overflow: visible;
+            max-width: 100%;
+        }
+
+        .ai-config-details>summary {
+            cursor: pointer;
+            list-style: none;
+            padding: 8px 10px;
+            font: 500 12px/1 "JetBrains Mono", monospace;
+            color: var(--ink);
+            background: #f8f3ea;
+            border-bottom: 1px solid var(--line);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .ai-config-details>summary::after {
+            content: "▸";
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--ink-soft);
+            transform: rotate(0deg);
+            transition: transform 140ms ease;
+        }
+
+        .ai-config-details[open]>summary::after {
+            transform: rotate(90deg);
+        }
+
+        .ai-config-details>summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .custom-select {
+            position: relative;
+            min-width: 140px;
+        }
+
+        .custom-select-trigger {
+            width: 100%;
+            border: 1px solid var(--line);
+            background: #fff;
+            color: var(--ink);
+            border-radius: 8px;
+            padding: 6px 10px;
+            cursor: pointer;
+            font: 500 12px/1.2 "JetBrains Mono", monospace;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .custom-select-trigger::after {
+            content: "▾";
+            color: var(--ink-soft);
+            font-size: 10px;
+        }
+
+        .custom-select-menu {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            border: 1px solid var(--line);
+            background: #fff;
+            border-radius: 8px;
+            padding: 4px;
+            display: none;
+            box-shadow: 0 10px 24px rgba(32, 27, 22, 0.12);
+            z-index: 20;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .custom-select.open .custom-select-menu {
+            display: grid;
+            gap: 2px;
+        }
+
+        .custom-select-option {
+            border: 0;
+            background: #fff;
+            color: var(--ink);
+            border-radius: 6px;
+            padding: 6px 8px;
+            cursor: pointer;
+            text-align: left;
+            font: 500 12px/1 "JetBrains Mono", monospace;
+        }
+
+        .custom-select-option:hover,
+        .custom-select-option.selected {
+            background: var(--accent-soft);
+            color: var(--accent);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="demo-app">
+        <header class="demo-head">
+            <div>
+                <p class="demo-kicker">Components Demo</p>
+                <h1 class="demo-title">Quick Add Component</h1>
+                <p class="demo-subtitle">Six variant demos: 4 deterministic and 2 AI, with the original interaction lab
+                    layout.</p>
+            </div>
+            <a class="demo-home" href="/index.html">Main Site</a>
+        </header>
+
+        <nav class="demo-nav" aria-label="Component demo navigation">
+            <a class="demo-nav-link" href="/components/components-demo/index.html">
+                <span class="demo-nav-label">Components Home</span>
+                <span class="demo-nav-desc">Demo catalog</span>
+            </a>
+            <a class="demo-nav-link is-active" href="/components/components-demo/quick-add-demo.html"
+                aria-current="page">
+                <span class="demo-nav-label">Quick Add</span>
+                <span class="demo-nav-desc">Parser variants + AI demos</span>
+            </a>
+        </nav>
+    </div>
+
+    <main class="shell">
+        <div class="example-tabs" id="componentTabsWrap">
+            <div class="tab-select" id="componentTabsSelect">
+                <button class="tab-select-trigger" type="button" id="componentTabsTrigger">Quick Add</button>
+                <div class="tab-select-menu" id="componentTabsMenu">
+                    <button class="tab-select-option active" type="button" data-page="quickAddPage">Quick Add</button>
+                </div>
+            </div>
+            <div class="tab-row tab-row--scroll" id="componentTabs">
+                <button class="tab-btn active" data-page="quickAddPage">Quick Add</button>
+            </div>
+        </div>
+
+        <section class="page active" id="quickAddPage">
+            <div class="quickadd-intro">
+                <p>Gallery scaffold for reusable UI components. Quick Add Parser is wired with live schema-driven
+                    parsing
+                    and six variant demos.</p>
+                <div class="import-note">Single-file import:
+                    <code>&lt;script src=\"../quick-add/quick-add-component.js\"&gt;&lt;/script&gt;</code>
+                </div>
+            </div>
+            <div class="example-tabs" id="exampleTabsWrap">
+                <div class="tab-select" id="exampleTabsSelect">
+                    <button class="tab-select-trigger" type="button" id="exampleTabsTrigger">1: Task Planner
+                        Variant</button>
+                    <div class="tab-select-menu" id="exampleTabsMenu">
+                        <button class="tab-select-option active" type="button" data-example="example1">1: Task Planner
+                            Variant</button>
+                        <button class="tab-select-option" type="button" data-example="example2">2: Pet Event
+                            Variant</button>
+                        <button class="tab-select-option" type="button" data-example="example3">3: Expense
+                            Variant</button>
+                        <button class="tab-select-option" type="button" data-example="example4">4: Modal Embed
+                            Variant</button>
+                        <button class="tab-select-option" type="button" data-example="example5">5: ✦ AI Parsing</button>
+                        <button class="tab-select-option" type="button" data-example="example6">6: ✦ AI Parsing w/
+                            Inline</button>
+                    </div>
+                </div>
+                <div class="tab-row tab-row--scroll" id="exampleTabs">
+                    <button class="tab-btn active" data-example="example1">1: Task Planner Variant</button>
+                    <button class="tab-btn" data-example="example2">2: Pet Event Variant</button>
+                    <button class="tab-btn" data-example="example3">3: Expense Variant</button>
+                    <button class="tab-btn" data-example="example4">4: Modal Embed Variant</button>
+                    <button class="tab-btn" data-example="example5">5: ✦ AI Parsing</button>
+                    <button class="tab-btn" data-example="example6">6: ✦ AI Parsing w/ Inline</button>
+                </div>
+            </div>
+
+            <article class="example-wrap active" data-example-panel="example1">
+                <div class="example-head">
+                    <h2>Task Planner Variant</h2>
+                    <p>Double-newline bulk entries, terminator <code>;;</code> or next prefix commit, natural dates on
+                        <code>due:</code>. Repeated single-value prefixes keep only the last one, parsed pills can be
+                        dismissed with <code>x</code>, and file fields link to a shared global attachment pool.
+                    </p>
+                    <div class="meta" id="meta1"></div>
+                    <details class="config-box">
+                        <summary>Config + Options</summary>
+                        <div class="config-tools">
+                            <span class="config-hint">Playground JSON (editable)</span>
+                            <div class="config-actions">
+                                <button class="config-btn" type="button" id="applyConfig1">Apply</button>
+                                <button class="config-btn" type="button" id="resetConfig1">Reset</button>
+                            </div>
+                        </div>
+                        <textarea id="config1" class="config-editor" spellcheck="false"></textarea>
+                        <div class="config-status" id="config1Status" aria-live="polite"></div>
+                        <details class="config-errors" id="config1ErrorsBox" hidden>
+                            <summary id="config1ErrorsSummary">Show all errors</summary>
+                            <ul class="config-errors-list" id="config1Errors"></ul>
+                        </details>
+                    </details>
+                </div>
+                <div id="quickAddExample1"></div>
+            </article>
+
+            <article class="example-wrap" style="display:none" data-example-panel="example2">
+                <div class="example-head">
+                    <h2>Pet Event Variant</h2>
+                    <p>Semicolon bulk separator, strict terminator <code>~~</code>, option auto-detect from free text,
+                        dependency-aware event options by pet, inferred reduction, and <strong>auto-today</strong> date
+                        defaulting. Includes self + conditional date constraints; blocked tokens are striped and
+                        clickable for details.</p>
+                    <div class="meta" id="meta2"></div>
+                    <details class="config-box">
+                        <summary>Config + Options</summary>
+                        <div class="config-tools">
+                            <span class="config-hint">Playground JSON (editable)</span>
+                            <div class="config-actions">
+                                <button class="config-btn" type="button" id="applyConfig2">Apply</button>
+                                <button class="config-btn" type="button" id="resetConfig2">Reset</button>
+                            </div>
+                        </div>
+                        <textarea id="config2" class="config-editor" spellcheck="false"></textarea>
+                        <div class="config-status" id="config2Status" aria-live="polite"></div>
+                        <details class="config-errors" id="config2ErrorsBox" hidden>
+                            <summary id="config2ErrorsSummary">Show all errors</summary>
+                            <ul class="config-errors-list" id="config2Errors"></ul>
+                        </details>
+                    </details>
+                </div>
+                <div id="quickAddExample2"></div>
+            </article>
+
+            <article class="example-wrap" style="display:none" data-example-panel="example3">
+                <div class="example-head">
+                    <h2>Expense Variant</h2>
+                    <p>Commit mode <code>or-next-prefix</code> with terminator <code>::</code>, typed validation for
+                        numbers/booleans/dates, field-level safe arithmetic for number fields, dark theme token
+                        overrides.</p>
+                    <div class="meta" id="meta3"></div>
+                    <details class="config-box">
+                        <summary>Config + Options</summary>
+                        <div class="config-tools">
+                            <span class="config-hint">Playground JSON (editable)</span>
+                            <div class="config-actions">
+                                <button class="config-btn" type="button" id="applyConfig3">Apply</button>
+                                <button class="config-btn" type="button" id="resetConfig3">Reset</button>
+                            </div>
+                        </div>
+                        <textarea id="config3" class="config-editor" spellcheck="false"></textarea>
+                        <div class="config-status" id="config3Status" aria-live="polite"></div>
+                        <details class="config-errors" id="config3ErrorsBox" hidden>
+                            <summary id="config3ErrorsSummary">Show all errors</summary>
+                            <ul class="config-errors-list" id="config3Errors"></ul>
+                        </details>
+                    </details>
+                </div>
+                <div id="quickAddExample3"></div>
+            </article>
+
+            <article class="example-wrap" style="display:none" data-example-panel="example4">
+                <div class="example-head">
+                    <h2>Modal Embed Variant</h2>
+                    <p>Simulates usage inside a constrained modal container (scrolling body, clipped parent, fixed
+                        overlay). Each open starts from one random preset quick-add input (editable). Click Save to
+                        append rows (add-only) from <code>getResult()</code> into the table preview. Defaults include
+                        file refs and matching seeded global demo files so previews are visible immediately. Dropdowns
+                        and calendar pickers are positioned within modal/container bounds.</p>
+                    <div class="meta" id="meta4"></div>
+                </div>
+                <div class="modal-demo-controls">
+                    <button class="modal-demo-btn" type="button" id="openQuickAddModal">Open Quick Add Modal</button>
+                    <span class="modal-demo-note">The modal body is intentionally constrained to mimic embedded app
+                        layouts.</span>
+                </div>
+                <div class="qa-modal-backdrop" id="quickAddModalBackdrop" hidden>
+                    <section class="qa-modal" role="dialog" aria-modal="true" aria-labelledby="quickAddModalTitle">
+                        <header class="qa-modal-header">
+                            <h3 class="qa-modal-title" id="quickAddModalTitle">Quick Add In Modal</h3>
+                            <div class="qa-modal-actions">
+                                <button class="modal-demo-btn" type="button" id="saveQuickAddModal">Save</button>
+                                <button class="modal-demo-btn" type="button" id="closeQuickAddModal">Close</button>
+                            </div>
+                        </header>
+                        <div class="qa-modal-body">
+                            <div id="quickAddExample4"></div>
+                        </div>
+                    </section>
+                </div>
+                <div class="modal-result-wrap">
+                    <div class="modal-result-head">Saved payload preview (from <code>modalAdd.getResult()</code>)</div>
+                    <div class="modal-result-summary" id="modalResultSummary">No saved entries yet. Open modal, adjust
+                        the random input if needed, then click Save to append rows.</div>
+                    <div class="modal-result-table-wrap">
+                        <table class="modal-result-table" id="modalResultTable">
+                            <thead id="modalResultHead"></thead>
+                            <tbody id="modalResultRows">
+                                <tr>
+                                    <td>No saved entries yet.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </article>
+
+            <article class="example-wrap" style="display:none" data-example-panel="example5">
+                <div class="example-head">
+                    <h2>✦ AI Parsing</h2>
+                    <p>Same <code>QuickAdd</code> component in <code>mode: "ai"</code>. Includes provider-compatible
+                        API wiring, mock provider for synthetic testing, Parse controls, inline edit,
+                        remove/restore, optional separator-aware AI parsing, caller-managed retry metadata, and AI
+                        attachment ref resolution against seeded global files. The default runtime provider is
+                        <strong>Demo</strong>.
+                    </p>
+                    <p><strong>Security note:</strong> Browser API keys are exposed to end users; use Demo mode or a
+                        backend proxy/token exchange for production integrations.</p>
+                    <div class="meta" id="meta5"></div>
+                    <details class="ai-config-details" id="aiRuntime5" open>
+                        <summary>AI Provider Details</summary>
+                        <div class="ai-runtime" id="aiRuntimeGrid5">
+                            <label class="ai-runtime-field">Provider
+                                <div class="custom-select" id="aiProviderSelect5">
+                                    <button class="custom-select-trigger" type="button"
+                                        id="aiProviderTrigger5">Demo</button>
+                                    <div class="custom-select-menu">
+                                        <button class="custom-select-option" type="button"
+                                            data-value="demo">Demo</button>
+                                        <button class="custom-select-option" type="button"
+                                            data-value="openai">OpenAI</button>
+                                        <button class="custom-select-option" type="button"
+                                            data-value="anthropic">Anthropic</button>
+                                        <button class="custom-select-option" type="button"
+                                            data-value="google">Google</button>
+                                        <button class="custom-select-option" type="button"
+                                            data-value="custom">Custom</button>
+                                    </div>
+                                    <input type="hidden" id="aiProvider5" value="demo">
+                                </div>
+                            </label>
+                            <label class="ai-runtime-field" id="aiEndpointField5" hidden>Custom Endpoint
+                                <input class="ai-runtime-input" id="aiEndpoint5" type="text"
+                                    placeholder="https://.../chat/completions" />
+                            </label>
+                            <label class="ai-runtime-field" id="aiModelField5">Model
+                                <input class="ai-runtime-input" id="aiModel5" type="text" placeholder="gpt-4o-mini" />
+                            </label>
+                            <label class="ai-runtime-field" id="aiKeyField5">API Key
+                                <input class="ai-runtime-input" id="aiApiKey5" type="password" placeholder="sk-..." />
+                            </label>
+                            <div class="ai-runtime-row">
+                                <button class="config-btn" type="button" id="aiApply5" disabled>Apply</button>
+                            </div>
+                        </div>
+                    </details>
+                    <details class="config-box">
+                        <summary>Config + Options</summary>
+                        <div class="config-tools">
+                            <span class="config-hint">Playground JSON (editable)</span>
+                            <div class="config-actions">
+                                <button class="config-btn" type="button" id="applyConfig5">Apply</button>
+                                <button class="config-btn" type="button" id="resetConfig5">Reset</button>
+                            </div>
+                        </div>
+                        <textarea id="config5" class="config-editor" spellcheck="false"></textarea>
+                        <div class="config-status" id="config5Status" aria-live="polite"></div>
+                        <details class="config-errors" id="config5ErrorsBox" hidden>
+                            <summary id="config5ErrorsSummary">Show all errors</summary>
+                            <ul class="config-errors-list" id="config5Errors"></ul>
+                        </details>
+                    </details>
+                </div>
+                <div id="quickAddExample5"></div>
+            </article>
+
+            <article class="example-wrap" style="display:none" data-example-panel="example6">
+                <div class="example-head">
+                    <h2>✦ AI Parsing w/ Inline</h2>
+                    <p>AI mode with optional inline-pill overlays enabled. Uses dummy AI output with span offsets and
+                        supports separator-aware parsing by newline, plus full provider/API-key runtime switching to
+                        test
+                        real calls. The default runtime provider is <strong>Demo</strong>.</p>
+                    <p><strong>Security note:</strong> Browser API keys are exposed to end users; use Demo mode or a
+                        backend proxy/token exchange for production integrations.</p>
+                    <div class="meta" id="meta6"></div>
+                    <details class="ai-config-details" id="aiRuntime6" open>
+                        <summary>AI Provider Details</summary>
+                        <div class="ai-runtime" id="aiRuntimeGrid6">
+                            <label class="ai-runtime-field">Provider
+                                <div class="custom-select" id="aiProviderSelect6">
+                                    <button class="custom-select-trigger" type="button"
+                                        id="aiProviderTrigger6">Demo</button>
+                                    <div class="custom-select-menu">
+                                        <button class="custom-select-option" type="button"
+                                            data-value="demo">Demo</button>
+                                        <button class="custom-select-option" type="button"
+                                            data-value="openai">OpenAI</button>
+                                        <button class="custom-select-option" type="button"
+                                            data-value="anthropic">Anthropic</button>
+                                        <button class="custom-select-option" type="button"
+                                            data-value="google">Google</button>
+                                        <button class="custom-select-option" type="button"
+                                            data-value="custom">Custom</button>
+                                    </div>
+                                    <input type="hidden" id="aiProvider6" value="demo">
+                                </div>
+                            </label>
+                            <label class="ai-runtime-field" id="aiEndpointField6" hidden>Custom Endpoint
+                                <input class="ai-runtime-input" id="aiEndpoint6" type="text"
+                                    placeholder="https://.../chat/completions" />
+                            </label>
+                            <label class="ai-runtime-field" id="aiModelField6">Model
+                                <input class="ai-runtime-input" id="aiModel6" type="text" placeholder="gpt-4o-mini" />
+                            </label>
+                            <label class="ai-runtime-field" id="aiKeyField6">API Key
+                                <input class="ai-runtime-input" id="aiApiKey6" type="password" placeholder="sk-..." />
+                            </label>
+                            <div class="ai-runtime-row">
+                                <button class="config-btn" type="button" id="aiApply6" disabled>Apply</button>
+                            </div>
+                        </div>
+                    </details>
+                    <details class="config-box">
+                        <summary>Config + Options</summary>
+                        <div class="config-tools">
+                            <span class="config-hint">Playground JSON (editable)</span>
+                            <div class="config-actions">
+                                <button class="config-btn" type="button" id="applyConfig6">Apply</button>
+                                <button class="config-btn" type="button" id="resetConfig6">Reset</button>
+                            </div>
+                        </div>
+                        <textarea id="config6" class="config-editor" spellcheck="false"></textarea>
+                        <div class="config-status" id="config6Status" aria-live="polite"></div>
+                        <details class="config-errors" id="config6ErrorsBox" hidden>
+                            <summary id="config6ErrorsSummary">Show all errors</summary>
+                            <ul class="config-errors-list" id="config6Errors"></ul>
+                        </details>
+                    </details>
+                </div>
+                <div id="quickAddExample6"></div>
+            </article>
+        </section>
+
+    </main>
+
+    <script src="https://unpkg.com/chrono-node@2.7.7/dist/chrono.min.js"></script>
+    <script src="../quick-add/quick-add-component.js"></script>
+    <script defer src="./quick-add-demo.js"></script>
+</body>
+
+</html>

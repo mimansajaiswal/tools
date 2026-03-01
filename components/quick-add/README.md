@@ -1,199 +1,296 @@
 # Quick Add Component
 
-`QuickAdd` parses semi-structured text into structured entries (deterministic mode) and supports AI extraction (AI mode).
+`QuickAdd` parses semi-structured text into structured entries.
 
-## Quick start
+- Deterministic mode: prefix/terminator parsing only.
+- AI mode: deterministic helpers + in-component AI orchestration.
 
-```html
-<div id="qa"></div>
-<script src="./quick-add/quick-add-component.js"></script>
-```
+## Demo routes
 
-```js
-const qa = QuickAdd.create({
-  mount: '#qa',
-  mode: 'deterministic',
-  entrySeparator: '\n\n',
-  fieldTerminator: ';;',
-  multiSelectSeparator: ',',
-  multiSelectDisplaySeparator: ', ',
-  showDropdownOnTyping: true,
-  schema: {
-    fields: [
-      { key: 'title', type: 'string', required: true },
-      { key: 'priority', type: 'options', prefixes: ['!'], options: ['p1', 'p2', 'p3'], defaultValue: 'p2' },
-      { key: 'tags', type: 'options', prefixes: ['tag:'], multiple: true, options: ['urgent', 'client'] },
-      { key: 'due', type: 'datetime', prefixes: ['due:'], naturalDate: true, defaultValue: 'today' },
-      { key: 'files', type: 'file', prefixes: ['file:'], multiple: true }
-    ]
-  },
-  onParse: (result) => console.log(result)
-});
-```
+The components demo is now a directory app (not one giant HTML file):
+
+- `/components/components-demo/index.html`
+- `/components/components-demo/quick-add-demo.html`
+
+## Breaking AI contract (current)
+
+AI mode now requires `ai.dispatch(batch, context)`.
+
+`QuickAdd` owns:
+
+- debounce and min-length thresholds
+- separator-aware chunking
+- prompt generation
+- provider-ready request shaping
+- parse-state transitions (`processing`, `queued`, `ready`, etc.)
+- response normalization/merge
+- stale-request protection
+
+Caller owns only:
+
+- dispatch now, or queue externally
+- queue persistence + replay timing
+- replay callbacks into component
+
+`QuickAdd` does **not** persist queue data.
 
 ## Public API
 
 - `QuickAdd.create(config)` -> instance
-- `QuickAdd.parse(input, config)` -> deterministic parse result only (no UI mount required)
+- `QuickAdd.parse(input, config)` -> deterministic parse result (no mount required)
 
 Instance methods:
 
-- `setInput(text)` -> updates input and re-parses
-- `getResult()` -> latest result snapshot (AI mode also triggers non-blocking parse attempt when stale)
-- `updateConfig(nextConfig)` -> merges/re-initializes config and re-renders
-- `destroy()` -> unbinds events and clears mount
-- `parseAI({ force?: boolean })` -> runs AI extraction (AI mode)
-- `verifyAiRuntime()` -> runtime/provider verification (AI mode)
-- `clearAIEntries()` -> clears AI entries/warnings/missing/error
+- `setInput(text)`
+- `getResult()` -> live runtime snapshot (non-serialized, may include `File` references)
+- `exportResult(options?)` -> async save payload with stable serialization contract
+- `importResult(payload, options?)` -> async hydration from exported payload
+- `getUnlinkedAttachments(options?)` -> async list of uploaded attachments not linked to entries
+- `checkWarnings(options?)` -> async warning gate helper for `save`/`close`
+- `updateConfig(nextConfig)`
+- `destroy()`
+- `undo()`, `redo()`, `canUndo()`, `canRedo()`, `clearHistory()`
+- `parseAI({ force?: boolean })`
+- `clearAIEntries()`
+- `verifyAiRuntime()`
+- `applyQueuedAIResult({ requestId, responses, providerRawResponse? })`
+- `applyQueuedAIError({ requestId, error: { kind, message, detail? } })`
 
-## Top-level config (key fields)
+## V2 Save Contract (breaking)
 
-- `mode`: `'deterministic' | 'ai'` (default: `'deterministic'`)
-- `debounceMs`: deterministic input debounce (default: `300`)
-- `allowMultipleEntries`: split by `entrySeparator` or treat whole input as one entry
-- `entrySeparator`: entry delimiter (default: `'\n'`)
-- `fieldTerminator`: token commit delimiter (default: `';;'`)
-- `fieldTerminatorMode`: `'strict' | 'or-next-prefix' | 'or-end'`
-- `multiSelectSeparator`: multi-option parse separator; must differ from `entrySeparator` and `fieldTerminator`
-- `multiSelectDisplaySeparator`: card display separator for grouped multi-select values
-- `allowNumberMath`: allow math expressions in number parsing (default: `false`)
-- `enableNumberPillStepper`: enable number pill stepper popover with `+/-` controls (default: `false`)
-- `numberPillStep`: default increment/decrement step when number stepper is enabled (default: `1`)
-- `fallbackField`: target for non-prefixed text
-- `showJsonOutput`: renders `<details>` JSON output panel (collapsed by default)
-- `showDropdownOnTyping`: enables typing-triggered dropdown workflow
-- `showAttachmentDropdownPreview`: show tiny attachment visuals in file-field dropdown options (default: `true`)
-- `showInlinePills`, `showEntryCards`, `showEntryHeader`
-- `inputHeightMode`: `'grow' | 'scroll'`, with optional `inputMaxHeight`
-- `allowMultipleAttachments`: global attachment picker single vs multi-file selection
-- `allowAttachmentReuse`: when false, linking a file already used elsewhere prompts conflict handling
-- `allowedAttachmentTypes`: MIME/extensions allow list (`[]` means unrestricted)
-- `attachmentSources`: `['files']` by default; can include `camera`, `gallery`, `files`
-- `schema`: `{ fields: FieldConfig[] }`
-- `ai`: AI runtime config
-- `tokens`: CSS variable overrides (`--qa-*`)
-- `onParse(result)`: called after parse/render and attachment link/remove changes
+Use `exportResult()` before closing/destroying the component when attachments matter.
 
-## Schema field types
+`getResult()` is intentionally fast and runtime-oriented; `exportResult()` is the persistence boundary.
 
-Supported `schema.fields[].type`:
-
-- `string`
-- `number`
-- `options`
-- `date`
-- `datetime`
-- `boolean`
-- `file`
-
-Useful per-field keys:
-
-- `key`, `label`, `prefixes`, `required`, `multiple`
-- `defaultValue`
-- `dependsOn`, `constraints`
-- `options` (for `type: 'options'`)
-- `naturalDate`, `allowDateOnly`, `defaultTime`, `timeFormat` (date/datetime)
-- `allowMathExpression` (number): overrides `allowNumberMath` for this field
-- `showNumberStepper` (number): overrides `enableNumberPillStepper` for this field
-- `numberStep` (number): per-field override for step size in number stepper
-- `min`, `max` (number): optional bounds enforced by number stepper
-
-Use canonical keys only:
-
-- `options`
-- `dependsOn`
-- `constraints`
-- `defaultValue`
-
-## AI config (key fields)
-
-`ai` defaults include:
-
-- `enabled`, `autoParse`, `debounceMs`, `minInputLength`
-- `timeoutMs` (default `20000`)
-- `provider`: `openai | anthropic | google | custom`
-- `apiKey`, `model`, `endpoint`, `temperature`
-- `forceJson`, `outputType`, `outputSchema`
-- `promptMode`: `'default' | 'custom'`
-- `promptTemplate` (used when `promptMode: 'custom'`)
-- `request` (custom request function), `parseResponse`, `splitInput`
-- `mockResponse`, `mockLatencyMs`
-- `webSearch`, `tools`
-- `preserveEditedEntries`, `separatorAware`, `inlinePills`
-
-Provider resolution order:
-
-1. `ai.mockResponse`
-2. `ai.request`
-3. built-in provider call (`openai` / `anthropic` / `google` / `custom`)
-
-## Output contracts
-
-### Deterministic `getResult()`
+### `exportResult(options)`
 
 ```ts
-type DeterministicResult = {
-  input: string;
-  entries: Array<{
-    index: number;
-    raw: string;
-    fields: Record<string, unknown>;
-    explicitValues: Record<string, unknown>;
-    inferred: Array<unknown>;
-    autoFields: Array<string>;
-    pending: Array<string>;
-    errors: Array<string>;
-    tokens: Array<unknown>;
-    blocked: Array<unknown>;
-    isValid: boolean;
-    attachments?: Attachment[];
-  }>;
-  entryCount: number;
-  validCount: number;
-  invalidCount: number;
-  config: {
-    entrySeparator: string;
-    fieldTerminator: string;
-    fieldTerminatorMode: string;
-    multiSelectSeparator: string;
-    multiSelectDisplaySeparator: string;
-  };
+type ExportOptions = {
+  attachmentMode?: 'base64' | 'metadata-only'; // default: 'base64'
+  includeUnlinked?: boolean;                    // default: false
+  runValidation?: boolean;                      // default: true
+  runWarnings?: boolean;                        // default: true
 };
 ```
 
-### AI `getResult()`
+```ts
+type ExportAttachment = {
+  id: string;
+  ref: string;
+  entryKey: string | null;
+  fieldKey: string | null;
+  name: string;
+  mimeType: string;
+  size: number;
+  lastModified: number;
+  fingerprint: string;
+  previewUrl: string | null;
+  contentBase64?: string;
+  encoding?: 'base64';
+  byteLength?: number;
+  linked: boolean;
+};
+
+type QuickAddExportPayload = {
+  version: 2;
+  mode: 'deterministic' | 'ai';
+  input: string;
+  entries: Array<unknown>;
+  attachments: ExportAttachment[];
+  warnings: string[];
+  missing?: string[];
+  metadata: { exportedAt: string };
+};
+```
+
+### `importResult(payload, options)`
+
+```ts
+type ImportOptions = {
+  mergeStrategy?: 'replace' | 'append';                 // default: 'replace'
+  attachmentConflict?: 'dedupe-by-fingerprint' | 'keep-both'; // default: 'dedupe-by-fingerprint'
+};
+```
+
+## New Integrator Hooks
+
+### Accessibility
+
+```ts
+a11y: {
+  inputAriaLabel?: string; // default: "Quick add input"
+}
+```
+
+### Warnings (default-on)
+
+```ts
+warnings: {
+  unlinkedAttachments: {
+    enabled?: boolean; // default: true
+    onCheck?: (payload: {
+      action: 'save' | 'close';
+      unlinkedAttachments: ExportAttachment[];
+      linkedAttachmentCount: number;
+      result: unknown;
+    }) => boolean | Promise<boolean>;
+  };
+}
+```
+
+### Validation
+
+```ts
+validation: {
+  beforeCommitField?: (context: {
+    entryIndex: number;
+    entryKey: string | number;
+    fieldKey: string;
+    nextValue: unknown;
+    source: 'typing' | 'click';
+    sourceRegion: 'inline' | 'card';
+    fieldType: string;
+  }) => Promise<{ allow: boolean; value?: unknown; reason?: string; warning?: string } | void> | { allow: boolean; value?: unknown; reason?: string; warning?: string } | void;
+
+  beforeSaveEntry?: (context: {
+    entryDraft: unknown;
+    allEntriesDraft: unknown[];
+    source: 'save';
+  }) => Promise<{ allow: boolean; reason?: string; code?: string } | void> | { allow: boolean; reason?: string; code?: string } | void;
+}
+```
+
+### Custom Option Persistence
+
+```ts
+options: {
+  onCreateOption?: (payload: {
+    fieldKey: string;
+    value: string;
+    label: string;
+    entryIndex: number;
+    source: 'typing' | 'click';
+  }) => Promise<{ value: string; label?: string; color?: string } | null | false | void> | { value: string; label?: string; color?: string } | null | false | void;
+
+  onOptionsCatalogChange?: (payload: {
+    fieldKey: string;
+    options: Array<{ value: string; label: string; color?: string | null }>;
+  }) => void;
+}
+```
+
+### History
+
+```ts
+history: {
+  enabled?: boolean;  // default: true
+  maxDepth?: number;  // default: 100
+}
+```
+
+### Number Math (safe arithmetic)
+
+```ts
+schema: {
+  fields: Array<{
+    key: string;
+    type: 'number';
+    allowMathExpression?: boolean; // field-level, default false
+  }>
+}
+```
+
+Supported operators: `+`, `-`, `*`, `/`, `%`, `^`, and grouping with `()`, `[]`, `{}`.
+Evaluation is parser-based (no `eval`) with safety limits on length, token count, nesting depth, and numeric magnitude.
+
+## AI config essentials
+
+```js
+const qa = QuickAdd.create({
+  mount: '#qa',
+  mode: 'ai',
+  schema: { fields: [/* ... */] },
+  ai: {
+    enabled: true,
+    provider: 'openai', // openai | anthropic | google | custom
+    apiKey: '...',
+    model: 'gpt-4o-mini',
+    endpoint: '', // required for provider=custom
+    autoParse: true,
+    debounceMs: 420,
+    minInputLength: 8,
+    separatorAware: true,
+    inlinePills: true,
+    dispatch: async (batch, context) => {
+      // caller transport boundary only
+      // return { status: 'completed', responses: [...] }
+      // or { status: 'queued', queueItems: [...], reason: 'offline' | 'deferred' | 'rate-limited' | 'custom', message?: string }
+    }
+  }
+});
+```
+
+`batch` already contains exact request payloads shaped by the component (URL/method/headers/body + prompt/chunk metadata).
+
+## Dispatch return contract
+
+Completed:
+
+```ts
+{
+  status: 'completed';
+  responses: unknown[];
+  providerRawResponse?: unknown;
+}
+```
+
+Queued:
+
+```ts
+{
+  status: 'queued';
+  queueItems: unknown[];
+  reason: 'offline' | 'deferred' | 'rate-limited' | 'custom';
+  message?: string;
+  providerRawResponse?: unknown;
+}
+```
+
+## AI `getResult()` shape (key fields)
 
 ```ts
 type AIResult = {
   mode: 'ai';
   input: string;
-  entries: Array<{
-    index: number;
-    raw: string;
-    fields: Record<string, unknown>;
-    explicitValues: Record<string, never>;
-    inferred: [];
-    autoFields: Set<string>;
-    pending: [];
-    errors: [];
-    tokens: [];
-    blocked: [];
-    isValid: boolean;
-    aiMeta: { id: string; deleted: boolean; edited: boolean };
-    attachments?: Attachment[];
-  }>;
+  entries: Array<unknown>;
   entryCount: number;
-  validCount: number;
-  invalidCount: number;
   warnings: string[];
   missing: string[];
   error: string;
   isProcessing: boolean;
   providerRawResponse: string;
+  callerRequest: null | {
+    mode: 'ai';
+    requestId: number;
+    input: string;
+    chunks: Array<{ index: number; start: number; end: number; input: string }>;
+    batch: Array<unknown>; // exact request payloads generated by component
+    provider: string;
+    model: string;
+    endpoint: string;
+    temperature: number;
+    forceJson: boolean;
+    webSearch: boolean;
+    tools: unknown;
+    dispatchConfigured: boolean;
+    promptMode: string;
+    hasCustomResponseParser: boolean;
+  };
   parseState: {
-    status: 'idle' | 'below-min-length' | 'processing' | 'ready' | 'stale' | 'offline' | 'error';
+    status: 'idle' | 'below-min-length' | 'processing' | 'queued' | 'ready' | 'stale' | 'offline' | 'error';
     isReady: boolean;
     isProcessing: boolean;
+    isQueued: boolean;
     isStale: boolean;
     isOffline: boolean;
     shouldParse: boolean;
@@ -204,53 +301,51 @@ type AIResult = {
     lastParsedInput: string;
     error: string;
     errorKind: string;
+    queueReason: string;
+    queueMessage: string;
+    queueItems: unknown[];
   };
-  callerRequest: null | {
-    mode: 'ai';
-    input: string;
-    chunks: Array<{ index: number; start: number; end: number; input: string }>;
-    provider: string;
-    model: string;
-    endpoint: string;
-    temperature: number;
-    forceJson: boolean;
-    webSearch: boolean;
-    tools: unknown;
-    hasCustomRequest: boolean;
-    promptMode: string;
-    hasCustomResponseParser: boolean;
-  };
-  verification: { status: string; message: string; signature: string };
 };
 ```
 
-## Attachments and file fields
+## Deterministic parser notes
 
-Attachments are enabled by adding one or more `type: 'file'` schema fields.
+Strict date and datetime validation now reject calendar rollovers.
+
+Examples rejected:
+
+- `2026-02-29`
+- `2026-04-31`
+- `2026-11-31T10:15`
+
+Example accepted:
+
+- `2028-02-29`
+
+For `date`/`datetime` fields with `naturalDate: true`, missing-year inputs are inferred by default:
+
+- `inferMissingYear` (default `true`)
+- `missingYearPastWindowDays` (default `14`)
 
 Behavior:
 
-- Files are chosen from a global attachment pool.
-- Entries link attachment references through file fields.
-- Result entries expose resolved attachment metadata under `entry.attachments`.
-- `allowAttachmentReuse: false` enables conflict prompts:
-  - link conflict: **Unlink and attach here**
-  - delete conflict: **Unlink and delete**
-- `allowedAttachmentTypes` filters picks by MIME/extension.
-- Mobile uses a single `+ Add attachment` trigger with source menu (`camera` / `gallery` / `files`).
+- Parse month/day with current year first (`24 Feb` -> `2026-02-24` if current year is 2026).
+- If that inferred date is in the past by more than `missingYearPastWindowDays`, roll to next valid year.
+- If the month/day is invalid for current year (for example `29 Feb` in a non-leap year), use the next valid year.
+- Supports numeric and spoken day tokens like `15 Jan`, `15th Jan`, and `fifteenth january`.
 
-## Dropdown and keyboard behavior
+Example field config:
 
-- Typing dropdown starts with no active option.
-- `ArrowDown` / `ArrowUp` moves active option.
-- `Enter` with active option selects it.
-- `Enter` with no active option inserts newline.
-- Multi-select typing is separator-aware (`value,` and `value, ` supported).
-- Multi-select insertion appends `multiSelectSeparator + space`.
-- Entry cards render multi-select values as grouped text using `multiSelectDisplaySeparator`.
-- When number stepper is enabled, number pills render inline `+/-` controls using configured step values.
+```js
+{
+  key: 'due',
+  type: 'date',
+  naturalDate: true,
+  inferMissingYear: true,
+  missingYearPastWindowDays: 14
+}
+```
 
-## Notes
+## Browser target
 
-- This component is browser-first; API keys in browser config are user-visible.
-- For production AI calls, prefer a backend proxy/token flow instead of exposing provider keys directly.
+Modern browsers only. No backward-compatibility adapter is provided.

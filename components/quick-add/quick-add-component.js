@@ -1,7 +1,3 @@
-/* QuickAdd Component
- * Deterministic quick-add parser with configurable prefixes, field terminator,
- * bulk entry separation, validation, inline pill rendering, and style hooks.
- */
 (function initQuickAdd(global) {
     'use strict';
     const DEFAULT_CLASSNAMES = {
@@ -113,13 +109,6 @@
         datePickerTimeInput: 'qa-date-picker-time-input',
         datePickerTimeHint: 'qa-date-picker-time-hint',
         datePickerWithTime: 'qa-date-picker-with-time',
-        numberPicker: 'qa-number-picker',
-        numberPickerControls: 'qa-number-picker-controls',
-        numberPickerBtn: 'qa-number-picker-btn',
-        numberPickerValue: 'qa-number-picker-value',
-        numberPickerStepWrap: 'qa-number-picker-step-wrap',
-        numberPickerStepLabel: 'qa-number-picker-step-label',
-        numberPickerStepInput: 'qa-number-picker-step-input',
         numberPill: 'qa-number-pill',
         numberPillStepper: 'qa-number-pill-stepper',
         numberPillStepBtn: 'qa-number-pill-step-btn',
@@ -144,7 +133,6 @@
         enabled: false,
         autoParse: true,
         debounceMs: 1200,
-        timeoutMs: 20000,
         minInputLength: 10,
         preserveEditedEntries: true,
         separatorAware: false,
@@ -156,18 +144,36 @@
         endpoint: '',
         temperature: 0.3,
         systemPrompt: '',
-        request: null,
         splitInput: null,
         promptMode: 'default',
         promptTemplate: '',
         parseResponse: null,
         inlinePillHarness: null,
-        mockResponse: null,
-        mockLatencyMs: 0,
         outputType: '',
         outputSchema: null,
         webSearch: false,
         tools: null
+    };
+    const DEFAULT_A11Y_CONFIG = {
+        inputAriaLabel: 'Quick add input'
+    };
+    const DEFAULT_WARNINGS_CONFIG = {
+        unlinkedAttachments: {
+            enabled: true,
+            onCheck: null
+        }
+    };
+    const DEFAULT_VALIDATION_CONFIG = {
+        beforeCommitField: null,
+        beforeSaveEntry: null
+    };
+    const DEFAULT_OPTIONS_CONFIG = {
+        onCreateOption: null,
+        onOptionsCatalogChange: null
+    };
+    const DEFAULT_HISTORY_CONFIG = {
+        enabled: true,
+        maxDepth: 100
     };
 
     const DEFAULT_CONFIG = {
@@ -180,7 +186,6 @@
         fieldTerminatorMode: 'strict',
         multiSelectSeparator: ',',
         multiSelectDisplaySeparator: ', ',
-        allowNumberMath: false,
         enableNumberPillStepper: false,
         numberPillStep: 1,
         escapeChar: '\\',
@@ -207,6 +212,11 @@
             fields: []
         },
         ai: {},
+        a11y: {},
+        warnings: {},
+        validation: {},
+        options: {},
+        history: {},
         classNames: {},
         tokens: {},
         onParse: null
@@ -248,6 +258,16 @@
         merged.schema = Object.assign({}, DEFAULT_CONFIG.schema, merged.schema || {});
         merged.schema.fields = Array.isArray(merged.schema.fields) ? merged.schema.fields.slice() : [];
         merged.ai = Object.assign({}, DEFAULT_AI_CONFIG, merged.ai || {});
+        merged.a11y = Object.assign({}, DEFAULT_A11Y_CONFIG, merged.a11y || {});
+        merged.validation = Object.assign({}, DEFAULT_VALIDATION_CONFIG, merged.validation || {});
+        merged.options = Object.assign({}, DEFAULT_OPTIONS_CONFIG, merged.options || {});
+        merged.history = Object.assign({}, DEFAULT_HISTORY_CONFIG, merged.history || {});
+        merged.warnings = Object.assign({}, DEFAULT_WARNINGS_CONFIG, merged.warnings || {});
+        merged.warnings.unlinkedAttachments = Object.assign(
+            {},
+            DEFAULT_WARNINGS_CONFIG.unlinkedAttachments,
+            merged.warnings.unlinkedAttachments || {}
+        );
         merged.classNames = Object.assign({}, DEFAULT_CLASSNAMES, merged.classNames || {});
         merged.ai.webSearch = merged.ai.webSearch === true;
         merged.ai.tools = normalizeAiToolsConfig(merged.ai.tools);
@@ -272,7 +292,6 @@
         );
         merged.showDropdownOnTyping = merged.showDropdownOnTyping !== false;
         merged.showAttachmentDropdownPreview = merged.showAttachmentDropdownPreview !== false;
-        merged.allowNumberMath = merged.allowNumberMath === true;
         merged.enableNumberPillStepper = merged.enableNumberPillStepper === true;
         const rawNumberStep = Number(merged.numberPillStep);
         merged.numberPillStep = Number.isFinite(rawNumberStep) && rawNumberStep > 0 ? rawNumberStep : 1;
@@ -290,6 +309,28 @@
         const promptMode = String(merged.ai.promptMode || 'default').toLowerCase();
         merged.ai.promptMode = promptMode === 'custom' ? 'custom' : 'default';
         merged.ai.promptTemplate = typeof merged.ai.promptTemplate === 'string' ? merged.ai.promptTemplate : '';
+        merged.a11y.inputAriaLabel = String(merged.a11y.inputAriaLabel || DEFAULT_A11Y_CONFIG.inputAriaLabel);
+        merged.warnings.unlinkedAttachments.enabled = merged.warnings.unlinkedAttachments.enabled !== false;
+        if (typeof merged.warnings.unlinkedAttachments.onCheck !== 'function') {
+            merged.warnings.unlinkedAttachments.onCheck = null;
+        }
+        if (typeof merged.validation.beforeCommitField !== 'function') {
+            merged.validation.beforeCommitField = null;
+        }
+        if (typeof merged.validation.beforeSaveEntry !== 'function') {
+            merged.validation.beforeSaveEntry = null;
+        }
+        if (typeof merged.options.onCreateOption !== 'function') {
+            merged.options.onCreateOption = null;
+        }
+        if (typeof merged.options.onOptionsCatalogChange !== 'function') {
+            merged.options.onOptionsCatalogChange = null;
+        }
+        merged.history.enabled = merged.history.enabled !== false;
+        const maxDepth = Number(merged.history.maxDepth);
+        merged.history.maxDepth = Number.isFinite(maxDepth) && maxDepth > 0
+            ? Math.round(maxDepth)
+            : DEFAULT_HISTORY_CONFIG.maxDepth;
         const mode = String(merged.mode || '').toLowerCase();
         if (mode === 'ai' || merged.ai.enabled === true) {
             merged.mode = 'ai';
@@ -331,6 +372,8 @@
             required: false,
             multiple: false,
             naturalDate: false,
+            inferMissingYear: true,
+            missingYearPastWindowDays: 14,
             allowDateOnly: true,
             defaultValue: undefined,
             defaultTime: DEFAULT_DATETIME_TIME,
@@ -353,6 +396,16 @@
         if (typeof normalized.allowDateOnly !== 'boolean') {
             normalized.allowDateOnly = true;
         }
+
+        normalized.allowMathExpression = normalized.allowMathExpression === true;
+
+        if (typeof normalized.inferMissingYear !== 'boolean') {
+            normalized.inferMissingYear = true;
+        }
+
+        normalized.missingYearPastWindowDays = normalizeMissingYearPastWindowDays(
+            normalized.missingYearPastWindowDays
+        );
 
         normalized.defaultTime = normalizeTime24(normalized.defaultTime, DEFAULT_DATETIME_TIME);
         normalized.timeFormat = String(normalized.timeFormat || '24h').toLowerCase() === 'ampm' ? 'ampm' : '24h';
@@ -614,6 +667,145 @@
         return 1900 + year;
     }
 
+    function normalizeMissingYearPastWindowDays(rawValue) {
+        const parsed = Number(rawValue);
+        if (!Number.isFinite(parsed) || parsed < 0) {
+            return 14;
+        }
+        return Math.floor(parsed);
+    }
+
+    function isValidCalendarDate(year, month, day) {
+        const date = new Date(year, month - 1, day);
+        return !(
+            Number.isNaN(date.getTime())
+            || date.getFullYear() !== year
+            || date.getMonth() !== month - 1
+            || date.getDate() !== day
+        );
+    }
+
+    function findFirstValidYear(startYear, month, day, maxYearsAhead) {
+        const limit = startYear + Math.max(0, Number(maxYearsAhead) || 0);
+        for (let year = startYear; year <= limit; year += 1) {
+            if (isValidCalendarDate(year, month, day)) {
+                return year;
+            }
+        }
+        return null;
+    }
+
+    function inferYearForMonthDay(month, day, options) {
+        const opts = options || {};
+        const monthNum = Number(month);
+        const dayNum = Number(day);
+        if (
+            Number.isNaN(monthNum)
+            || Number.isNaN(dayNum)
+            || monthNum < 1
+            || monthNum > 12
+            || dayNum < 1
+            || dayNum > 31
+        ) {
+            return null;
+        }
+        if (opts.inferMissingYear === false) {
+            return null;
+        }
+        const referenceDate = opts.referenceDate instanceof Date && !Number.isNaN(opts.referenceDate.getTime())
+            ? opts.referenceDate
+            : new Date();
+        const currentYear = referenceDate.getFullYear();
+        const windowDays = normalizeMissingYearPastWindowDays(opts.missingYearPastWindowDays);
+
+        const baseYear = findFirstValidYear(currentYear, monthNum, dayNum, 8);
+        if (!baseYear) {
+            return null;
+        }
+        if (baseYear !== currentYear) {
+            return baseYear;
+        }
+
+        const today = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
+        const candidate = new Date(baseYear, monthNum - 1, dayNum);
+        const diffDays = Math.floor((candidate.getTime() - today.getTime()) / 86400000);
+        if (diffDays < -windowDays) {
+            return findFirstValidYear(currentYear + 1, monthNum, dayNum, 8) || baseYear;
+        }
+        return baseYear;
+    }
+
+    function parseDayNumber(rawDay) {
+        const normalized = String(rawDay || '')
+            .trim()
+            .toLowerCase()
+            .replace(/,$/, '');
+        const numericToken = normalized.replace(/(st|nd|rd|th)$/i, '');
+        const day = Number(numericToken);
+        if (!Number.isNaN(day) && day >= 1 && day <= 31) {
+            return day;
+        }
+
+        const simpleWordMap = {
+            one: 1, first: 1,
+            two: 2, second: 2,
+            three: 3, third: 3,
+            four: 4, fourth: 4,
+            five: 5, fifth: 5,
+            six: 6, sixth: 6,
+            seven: 7, seventh: 7,
+            eight: 8, eighth: 8,
+            nine: 9, ninth: 9,
+            ten: 10, tenth: 10,
+            eleven: 11, eleventh: 11,
+            twelve: 12, twelfth: 12,
+            thirteen: 13, thirteenth: 13,
+            fourteen: 14, fourteenth: 14,
+            fifteen: 15, fifteenth: 15,
+            sixteen: 16, sixteenth: 16,
+            seventeen: 17, seventeenth: 17,
+            eighteen: 18, eighteenth: 18,
+            nineteen: 19, nineteenth: 19,
+            twenty: 20, twentieth: 20,
+            thirty: 30, thirtieth: 30
+        };
+        const unitWordMap = {
+            one: 1, first: 1,
+            two: 2, second: 2,
+            three: 3, third: 3,
+            four: 4, fourth: 4,
+            five: 5, fifth: 5,
+            six: 6, sixth: 6,
+            seven: 7, seventh: 7,
+            eight: 8, eighth: 8,
+            nine: 9, ninth: 9
+        };
+        const tensWordMap = {
+            twenty: 20,
+            thirty: 30
+        };
+
+        const wordToken = normalized.replace(/-/g, ' ').replace(/\s+/g, ' ').trim();
+        if (!wordToken) {
+            return null;
+        }
+        if (Object.prototype.hasOwnProperty.call(simpleWordMap, wordToken)) {
+            return simpleWordMap[wordToken];
+        }
+        const parts = wordToken.split(' ');
+        if (parts.length === 2 && Object.prototype.hasOwnProperty.call(tensWordMap, parts[0])) {
+            const tens = tensWordMap[parts[0]];
+            const unit = unitWordMap[parts[1]];
+            if (Number.isFinite(unit)) {
+                const combined = tens + unit;
+                if (combined >= 1 && combined <= 31) {
+                    return combined;
+                }
+            }
+        }
+        return null;
+    }
+
     function parseTimeToken(rawValue) {
         const raw = String(rawValue || '').trim().toLowerCase();
         if (!raw) {
@@ -651,7 +843,7 @@
         return toYMD(date);
     }
 
-    function parseExplicitDateTimeLiteral(rawValue) {
+    function parseExplicitDateTimeLiteral(rawValue, options) {
         const raw = String(rawValue || '').trim();
         if (!raw) {
             return null;
@@ -672,14 +864,15 @@
             dec: 12
         };
 
-        const dayMonthYear = raw.match(/^(\d{1,2})\s+([a-z]{3,9})\.?,?\s+(\d{2,4})(?:\s+(?:at\s+)?(.+))?$/i);
+        const dayMonthYear = raw.match(/^([a-z-]+|\d{1,2}(?:st|nd|rd|th)?)\s+([a-z]{3,9})\.?,?\s+(\d{2,4})(?:\s+(?:at\s+)?(.+))?$/i);
         if (dayMonthYear) {
             const monthToken = dayMonthYear[2].slice(0, 4).toLowerCase();
             const month = monthMap[monthToken] || monthMap[monthToken.slice(0, 3)];
+            const day = parseDayNumber(dayMonthYear[1]);
             if (!month) {
                 return null;
             }
-            const dateValue = buildExplicitDate(dayMonthYear[3], month, dayMonthYear[1]);
+            const dateValue = buildExplicitDate(dayMonthYear[3], month, day);
             if (!dateValue) {
                 return null;
             }
@@ -690,14 +883,15 @@
             return { dateValue, timeValue: parsedTime.value, hasTime: !!parsedTime.value };
         }
 
-        const monthDayYear = raw.match(/^([a-z]{3,9})\.?,?\s+(\d{1,2}),?\s+(\d{2,4})(?:\s+(?:at\s+)?(.+))?$/i);
+        const monthDayYear = raw.match(/^([a-z]{3,9})\.?,?\s+([a-z-]+|\d{1,2}(?:st|nd|rd|th)?),?\s+(\d{2,4})(?:\s+(?:at\s+)?(.+))?$/i);
         if (monthDayYear) {
             const monthToken = monthDayYear[1].slice(0, 4).toLowerCase();
             const month = monthMap[monthToken] || monthMap[monthToken.slice(0, 3)];
+            const day = parseDayNumber(monthDayYear[2]);
             if (!month) {
                 return null;
             }
-            const dateValue = buildExplicitDate(monthDayYear[3], month, monthDayYear[2]);
+            const dateValue = buildExplicitDate(monthDayYear[3], month, day);
             if (!dateValue) {
                 return null;
             }
@@ -745,22 +939,101 @@
             return { dateValue, timeValue: parsedTime.value, hasTime: !!parsedTime.value };
         }
 
+        const dayMonthNoYear = raw.match(/^([a-z-]+|\d{1,2}(?:st|nd|rd|th)?)\s+([a-z]{3,9})\.?,?(?:\s+(?:at\s+)?(.+))?$/i);
+        if (dayMonthNoYear) {
+            const monthToken = dayMonthNoYear[2].slice(0, 4).toLowerCase();
+            const month = monthMap[monthToken] || monthMap[monthToken.slice(0, 3)];
+            const day = parseDayNumber(dayMonthNoYear[1]);
+            if (!month || !day) {
+                return null;
+            }
+            const year = inferYearForMonthDay(month, day, options);
+            if (!year) {
+                return null;
+            }
+            const dateValue = buildExplicitDate(year, month, day);
+            if (!dateValue) {
+                return null;
+            }
+            const parsedTime = parseTimeToken(dayMonthNoYear[3] || '');
+            if (!parsedTime.ok) {
+                return null;
+            }
+            return { dateValue, timeValue: parsedTime.value, hasTime: !!parsedTime.value };
+        }
+
+        const monthDayNoYear = raw.match(/^([a-z]{3,9})\.?,?\s+([a-z-]+|\d{1,2}(?:st|nd|rd|th)?)(?:\s+(?:at\s+)?(.+))?$/i);
+        if (monthDayNoYear) {
+            const monthToken = monthDayNoYear[1].slice(0, 4).toLowerCase();
+            const month = monthMap[monthToken] || monthMap[monthToken.slice(0, 3)];
+            const day = parseDayNumber(monthDayNoYear[2]);
+            if (!month || !day) {
+                return null;
+            }
+            const year = inferYearForMonthDay(month, day, options);
+            if (!year) {
+                return null;
+            }
+            const dateValue = buildExplicitDate(year, month, day);
+            if (!dateValue) {
+                return null;
+            }
+            const parsedTime = parseTimeToken(monthDayNoYear[3] || '');
+            if (!parsedTime.ok) {
+                return null;
+            }
+            return { dateValue, timeValue: parsedTime.value, hasTime: !!parsedTime.value };
+        }
+
+        const dayOrMonthNoYear = raw.match(/^(\d{1,2})[\/.-](\d{1,2})(?:\s+(?:at\s+)?(.+))?$/i);
+        if (dayOrMonthNoYear) {
+            const first = Number(dayOrMonthNoYear[1]);
+            const second = Number(dayOrMonthNoYear[2]);
+            if (Number.isNaN(first) || Number.isNaN(second)) {
+                return null;
+            }
+            let day = first;
+            let month = second;
+            if (day <= 12 && month > 12) {
+                day = second;
+                month = first;
+            }
+            const year = inferYearForMonthDay(month, day, options);
+            if (!year) {
+                return null;
+            }
+            const dateValue = buildExplicitDate(year, month, day);
+            if (!dateValue) {
+                return null;
+            }
+            const parsedTime = parseTimeToken(dayOrMonthNoYear[3] || '');
+            if (!parsedTime.ok) {
+                return null;
+            }
+            return { dateValue, timeValue: parsedTime.value, hasTime: !!parsedTime.value };
+        }
+
         return null;
     }
 
-    function parseDate(rawValue, naturalDate) {
+    function parseDate(rawValue, naturalDate, options) {
         const raw = String(rawValue).trim();
         const value = raw.toLowerCase();
+        const opts = options || {};
         if (!value) {
             return { ok: false, error: 'Missing date value' };
         }
 
         const strict = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
         if (strict) {
-            return { ok: true, value: `${strict[1]}-${strict[2]}-${strict[3]}` };
+            const strictValue = `${strict[1]}-${strict[2]}-${strict[3]}`;
+            if (!fromYMD(strictValue)) {
+                return { ok: false, error: 'Invalid date value' };
+            }
+            return { ok: true, value: strictValue };
         }
 
-        const explicitDate = parseExplicitDateTimeLiteral(raw);
+        const explicitDate = parseExplicitDateTimeLiteral(raw, opts);
         if (explicitDate && explicitDate.dateValue) {
             return { ok: true, value: explicitDate.dateValue };
         }
@@ -897,7 +1170,7 @@
             };
         }
 
-        const explicitDateTime = parseExplicitDateTimeLiteral(raw);
+        const explicitDateTime = parseExplicitDateTimeLiteral(raw, opts);
         if (explicitDateTime && explicitDateTime.dateValue) {
             if (!allowDateOnly && !explicitDateTime.hasTime) {
                 return { ok: false, error: 'Datetime must include time' };
@@ -915,7 +1188,7 @@
         if (naturalDate) {
             const withTimeSuffix = raw.match(/^(.+?)\s+(?:at\s+)?(\d{1,2}(?::\d{1,2})?\s*(?:am|pm))$/i);
             if (withTimeSuffix) {
-                const parsedDate = parseDate(withTimeSuffix[1], true);
+                const parsedDate = parseDate(withTimeSuffix[1], true, opts);
                 const parsedTime = parseTimeToken(withTimeSuffix[2]);
                 if (parsedDate.ok && parsedTime.ok && parsedTime.value) {
                     return {
@@ -985,7 +1258,7 @@
                 };
             }
 
-            const parsedDate = parseDate(raw, naturalDate || looksLikeExplicitDateInput(raw));
+            const parsedDate = parseDate(raw, naturalDate || looksLikeExplicitDateInput(raw), opts);
             if (parsedDate.ok && allowDateOnly) {
                 return {
                     ok: true,
@@ -1007,7 +1280,7 @@
         if (field.type === 'datetime') {
             return parseDateTime(rawValue, !!field.naturalDate, field);
         }
-        const parsed = parseDate(rawValue, !!field.naturalDate);
+        const parsed = parseDate(rawValue, !!field.naturalDate, field);
         if (!parsed.ok) {
             return parsed;
         }
@@ -1023,8 +1296,27 @@
         if (!match) {
             return null;
         }
-        const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-        if (Number.isNaN(date.getTime())) {
+        const year = Number(match[1]);
+        const month = Number(match[2]);
+        const day = Number(match[3]);
+        if (
+            Number.isNaN(year)
+            || Number.isNaN(month)
+            || Number.isNaN(day)
+            || month < 1
+            || month > 12
+            || day < 1
+            || day > 31
+        ) {
+            return null;
+        }
+        const date = new Date(year, month - 1, day);
+        if (
+            Number.isNaN(date.getTime())
+            || date.getFullYear() !== year
+            || date.getMonth() !== month - 1
+            || date.getDate() !== day
+        ) {
             return null;
         }
         return date;
@@ -1091,15 +1383,48 @@
         if (!source) {
             return { ok: false, error: 'Empty math expression' };
         }
+
+        const MAX_CHARS = 160;
+        const MAX_TOKENS = 120;
+        const MAX_NESTING = 24;
+        const MAX_ABS = 1000000000000;
+        if (source.length > MAX_CHARS) {
+            return { ok: false, error: `Expression is too long (max ${MAX_CHARS} chars)` };
+        }
+
+        const normalized = source
+            .replace(/\[/g, '(')
+            .replace(/\]/g, ')')
+            .replace(/\{/g, '(')
+            .replace(/\}/g, ')');
         const tokens = [];
         let i = 0;
-        while (i < source.length) {
-            const ch = source.charAt(i);
+        let depth = 0;
+        while (i < normalized.length) {
+            const ch = normalized.charAt(i);
             if (/\s/.test(ch)) {
                 i += 1;
                 continue;
             }
-            if (ch === '+' || ch === '-' || ch === '*' || ch === '/' || ch === '(' || ch === ')') {
+            if (ch === '(') {
+                depth += 1;
+                if (depth > MAX_NESTING) {
+                    return { ok: false, error: `Expression nesting exceeds ${MAX_NESTING}` };
+                }
+                tokens.push(ch);
+                i += 1;
+                continue;
+            }
+            if (ch === ')') {
+                depth -= 1;
+                if (depth < 0) {
+                    return { ok: false, error: 'Mismatched parentheses in expression' };
+                }
+                tokens.push(ch);
+                i += 1;
+                continue;
+            }
+            if (ch === '+' || ch === '-' || ch === '*' || ch === '/' || ch === '^' || ch === '%') {
                 tokens.push(ch);
                 i += 1;
                 continue;
@@ -1108,8 +1433,8 @@
                 const start = i;
                 let dotCount = ch === '.' ? 1 : 0;
                 i += 1;
-                while (i < source.length) {
-                    const next = source.charAt(i);
+                while (i < normalized.length) {
+                    const next = normalized.charAt(i);
                     if (next === '.') {
                         dotCount += 1;
                         if (dotCount > 1) {
@@ -1124,18 +1449,24 @@
                     }
                     break;
                 }
-                const rawNumber = source.slice(start, i);
-                if (rawNumber === '.' || rawNumber === '+.' || rawNumber === '-.') {
+                const rawNumber = normalized.slice(start, i);
+                if (rawNumber === '.') {
                     return { ok: false, error: 'Invalid number in expression' };
                 }
                 const parsedNumber = Number(rawNumber);
-                if (!Number.isFinite(parsedNumber)) {
+                if (!Number.isFinite(parsedNumber) || Math.abs(parsedNumber) > MAX_ABS) {
                     return { ok: false, error: 'Invalid number in expression' };
                 }
                 tokens.push(parsedNumber);
                 continue;
             }
             return { ok: false, error: 'Expression contains unsupported characters' };
+        }
+        if (depth !== 0) {
+            return { ok: false, error: 'Mismatched parentheses in expression' };
+        }
+        if (tokens.length > MAX_TOKENS) {
+            return { ok: false, error: `Expression is too complex (max ${MAX_TOKENS} tokens)` };
         }
 
         let cursor = 0;
@@ -1144,6 +1475,15 @@
             const token = tokens[cursor];
             cursor += 1;
             return token;
+        };
+        const safeValue = (value) => {
+            if (!Number.isFinite(value)) {
+                return { ok: false, error: 'Expression did not resolve to a finite number' };
+            }
+            if (Math.abs(value) > MAX_ABS) {
+                return { ok: false, error: `Expression result exceeds limit (${MAX_ABS})` };
+            }
+            return { ok: true, value };
         };
 
         const parsePrimary = () => {
@@ -1167,6 +1507,22 @@
             return { ok: false, error: 'Invalid expression' };
         };
 
+        const parsePower = () => {
+            const left = parsePrimary();
+            if (!left.ok) {
+                return left;
+            }
+            if (peek() !== '^') {
+                return left;
+            }
+            consume();
+            const right = parseUnary();
+            if (!right.ok) {
+                return right;
+            }
+            return safeValue(Math.pow(left.value, right.value));
+        };
+
         const parseUnary = () => {
             const token = peek();
             if (token === '+') {
@@ -1179,9 +1535,9 @@
                 if (!next.ok) {
                     return next;
                 }
-                return { ok: true, value: -next.value };
+                return safeValue(-next.value);
             }
-            return parsePrimary();
+            return parsePower();
         };
 
         const parseTerm = () => {
@@ -1189,19 +1545,23 @@
             if (!left.ok) {
                 return left;
             }
-            while (peek() === '*' || peek() === '/') {
+            while (peek() === '*' || peek() === '/' || peek() === '%') {
                 const op = consume();
                 const right = parseUnary();
                 if (!right.ok) {
                     return right;
                 }
-                if (op === '*') {
-                    left = { ok: true, value: left.value * right.value };
-                } else {
-                    if (right.value === 0) {
-                        return { ok: false, error: 'Division by zero is not allowed' };
-                    }
-                    left = { ok: true, value: left.value / right.value };
+                if ((op === '/' || op === '%') && right.value === 0) {
+                    return { ok: false, error: 'Division by zero is not allowed' };
+                }
+                const nextValue = op === '*'
+                    ? left.value * right.value
+                    : (op === '/'
+                        ? left.value / right.value
+                        : left.value % right.value);
+                left = safeValue(nextValue);
+                if (!left.ok) {
+                    return left;
                 }
             }
             return left;
@@ -1218,12 +1578,10 @@
                 if (!right.ok) {
                     return right;
                 }
-                left = {
-                    ok: true,
-                    value: op === '+'
-                        ? left.value + right.value
-                        : left.value - right.value
-                };
+                left = safeValue(op === '+' ? left.value + right.value : left.value - right.value);
+                if (!left.ok) {
+                    return left;
+                }
             }
             return left;
         }
@@ -1235,10 +1593,7 @@
         if (cursor !== tokens.length) {
             return { ok: false, error: 'Invalid trailing expression' };
         }
-        if (!Number.isFinite(resolved.value)) {
-            return { ok: false, error: 'Expression did not resolve to a finite number' };
-        }
-        return { ok: true, value: resolved.value };
+        return resolved;
     }
 
     function parseByType(field, rawValue, config) {
@@ -1250,14 +1605,15 @@
         }
 
         if (field.type === 'number') {
-            const allowMath = !!(
-                (field && field.allowMathExpression === true)
-                || (config && config.allowNumberMath === true)
-            );
+            const allowMath = !!(field && field.allowMathExpression === true);
             if (allowMath) {
+                const looksLikeExpression = /[+\-*/%^()[\]{}]/.test(value);
                 const evaluated = evaluateMathExpression(value);
                 if (evaluated.ok) {
                     return { ok: true, value: evaluated.value };
+                }
+                if (looksLikeExpression) {
+                    return { ok: false, error: `Invalid math expression for ${field.key}: ${evaluated.error}` };
                 }
             }
             const parsed = Number(value);
@@ -1289,7 +1645,7 @@
         }
 
         if (field.type === 'date') {
-            return parseDate(value, !!field.naturalDate);
+            return parseDate(value, !!field.naturalDate, field);
         }
 
         if (field.type === 'datetime') {
@@ -2048,6 +2404,10 @@
             }
 
             const cleanValue = value.trim();
+            const rawValueSlice = rawEntry.slice(valueStartLocal, valueEndLocal);
+            const trailingWhitespaceMatch = rawValueSlice.match(/\s+$/);
+            const trailingWhitespaceCount = trailingWhitespaceMatch ? trailingWhitespaceMatch[0].length : 0;
+            const normalizedValueEndLocal = Math.max(valueStartLocal, valueEndLocal - trailingWhitespaceCount);
             const token = {
                 id: `e${entryIndex}_t${tokenCount++}`,
                 kind: 'field',
@@ -2059,11 +2419,11 @@
                 localStart: tokenStartLocal,
                 localEnd: tokenEndLocal,
                 localValueStart: valueStartLocal,
-                localValueEnd: valueEndLocal,
+                localValueEnd: normalizedValueEndLocal,
                 globalStart: globalStart + tokenStartLocal,
                 globalEnd: globalStart + tokenEndLocal,
                 globalValueStart: globalStart + valueStartLocal,
-                globalValueEnd: globalStart + valueEndLocal
+                globalValueEnd: globalStart + normalizedValueEndLocal
             };
             tokens.push(token);
             explicitMentions.add(fieldKey);
@@ -2317,6 +2677,81 @@
         return String(value).toLowerCase().trim();
     }
 
+    function deepCloneValue(value) {
+        if (value === undefined || value === null) {
+            return value;
+        }
+        if (typeof value !== 'object') {
+            return value;
+        }
+        try {
+            return JSON.parse(JSON.stringify(value));
+        } catch (err) {
+            if (Array.isArray(value)) {
+                return value.slice();
+            }
+            return Object.assign({}, value);
+        }
+    }
+
+    function focusElementIfPossible(el) {
+        if (!el || typeof el.focus !== 'function') {
+            return false;
+        }
+        if (el.isConnected === false) {
+            return false;
+        }
+        try {
+            el.focus();
+            return true;
+        } catch (err) {
+            return false;
+        }
+    }
+
+    function findFocusableElement(el) {
+        if (!el || el.isConnected === false) {
+            return null;
+        }
+        const isFocusableSelf = !!(
+            el.matches
+            && el.matches('a[href],button,input,select,textarea,[tabindex]:not([tabindex="-1"]),[contenteditable="true"]')
+        );
+        if (isFocusableSelf) {
+            return el;
+        }
+        if (typeof el.querySelector !== 'function') {
+            return null;
+        }
+        return el.querySelector('a[href],button,input,select,textarea,[tabindex]:not([tabindex="-1"]),[contenteditable="true"]');
+    }
+
+    function normalizeAttachmentMode(rawMode) {
+        return String(rawMode || 'base64').toLowerCase() === 'metadata-only'
+            ? 'metadata-only'
+            : 'base64';
+    }
+
+    function arrayBufferToBase64(buffer) {
+        const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer || 0);
+        const chunkSize = 0x8000;
+        let binary = '';
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+            const chunk = bytes.subarray(i, i + chunkSize);
+            binary += String.fromCharCode.apply(null, chunk);
+        }
+        return btoa(binary);
+    }
+
+    function base64ToUint8Array(base64) {
+        const raw = atob(String(base64 || ''));
+        const out = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i += 1) {
+            out[i] = raw.charCodeAt(i);
+        }
+        return out;
+    }
+
     function isMobileDevice() {
         if (typeof navigator === 'undefined') {
             return false;
@@ -2399,6 +2834,7 @@
             error: '',
             errorKind: '',
             callerRequest: null,
+            queuedRequest: null,
             providerRawResponse: ''
         };
         this.aiInlineMarkIndex = {};
@@ -2414,7 +2850,18 @@
         this.overlayDismissClickUntil = 0;
         this.dropdownState = null;
         this.datePickerState = null;
-        this.numberPickerState = null;
+        this.focusOrigins = {
+            dropdown: null,
+            datePicker: null,
+            blockedInfo: null,
+            attachmentSourceMenu: null
+        };
+        this.dropdownListId = `qa_listbox_${Math.random().toString(36).slice(2, 10)}`;
+        this.dropdownOptionIdPrefix = `qa_opt_${Math.random().toString(36).slice(2, 10)}_`;
+        this.suppressNextInsertParagraph = false;
+        this.historyPast = [];
+        this.historyFuture = [];
+        this.historySuspend = false;
         this.viewportRepositionFrame = 0;
         this.datePickerSuppressUntil = 0;
         this.datePickerInternalClickUntil = 0;
@@ -2432,6 +2879,7 @@
         this.applyInputSizing();
         this.bindEvents();
         this.parseAndRender({ skipTypingSync: true });
+        this.captureHistorySnapshot('init');
     }
 
     QuickAddComponent.prototype.defaultHintText = function defaultHintText() {
@@ -2566,7 +3014,6 @@
             String(ai.apiKey || ''),
             String(ai.model || ''),
             String(ai.endpoint || ''),
-            ai.mockResponse === null ? 'live' : 'mock',
             ai.webSearch === true ? 'web-search-on' : 'web-search-off',
             toolsSignature
         ].join('|');
@@ -2593,7 +3040,23 @@
         this.aiVerificationState = { status: 'verifying', message: 'Verifying AI connection…', signature: '' };
         this.parseAndRender({ source: this.inputText, skipTypingSync: true });
         try {
-            await this.extractAIFromInput(input);
+            const probeRequestId = Number(this.aiState.requestSeq || 0) + 1;
+            const batch = await this.buildAIDispatchBatch(input, probeRequestId);
+            const dispatchOutcome = await this.extractAIFromInput(input, {
+                requestId: probeRequestId,
+                batch,
+                source: 'verify',
+                context: { verifyOnly: true }
+            });
+            if (dispatchOutcome.status === 'queued') {
+                const reason = this.normalizeAIDispatchReason(dispatchOutcome.reason);
+                const queuedMessage = dispatchOutcome.message
+                    ? `Verification queued: ${dispatchOutcome.message}`
+                    : `Verification queued (${reason}).`;
+                this.aiVerificationState = { status: 'error', message: queuedMessage, signature: '' };
+                this.parseAndRender({ source: this.inputText });
+                return { ok: false, message: queuedMessage };
+            }
             this.aiVerificationState = {
                 status: 'verified',
                 message: 'Verified. AI connection is working.',
@@ -2763,65 +3226,6 @@
         });
     };
 
-    QuickAddComponent.prototype.getAIResponseText = function getAIResponseText(data) {
-        if (!data || typeof data !== 'object') {
-            return String(data || '');
-        }
-        const responseMessage = Array.isArray(data.output)
-            ? data.output.find((item) => item && item.type === 'message')
-            : null;
-        const responseOutputText = responseMessage
-            && Array.isArray(responseMessage.content)
-            ? responseMessage.content.find((part) => part && part.type === 'output_text')?.text
-            : '';
-        return (
-            data.choices?.[0]?.message?.content
-            || data.content?.[0]?.text
-            || data.candidates?.[0]?.content?.parts?.[0]?.text
-            || data.output_text
-            || responseOutputText
-            || ''
-        );
-    };
-
-    QuickAddComponent.prototype.packAIProviderResponse = function packAIProviderResponse(rawData) {
-        return {
-            text: this.getAIResponseText(rawData),
-            raw: rawData
-        };
-    };
-
-    QuickAddComponent.prototype.getAIFetchTimeoutMs = function getAIFetchTimeoutMs() {
-        const raw = Number(this.config.ai && this.config.ai.timeoutMs);
-        if (!Number.isFinite(raw) || raw <= 0) {
-            return 20000;
-        }
-        return Math.max(250, raw);
-    };
-
-    QuickAddComponent.prototype.fetchAI = async function fetchAI(url, options) {
-        if (typeof fetch !== 'function') {
-            throw new Error('Fetch API unavailable in this runtime');
-        }
-        const timeoutMs = this.getAIFetchTimeoutMs();
-        if (typeof AbortController === 'undefined' || timeoutMs <= 0) {
-            return fetch(url, options);
-        }
-        const controller = new AbortController();
-        const nextOptions = Object.assign({}, options || {}, { signal: controller.signal });
-        const timer = setTimeout(() => controller.abort(), timeoutMs);
-        try {
-            return await fetch(url, nextOptions);
-        } catch (err) {
-            if (err && err.name === 'AbortError') {
-                throw new Error(`AI request timed out after ${timeoutMs}ms`);
-            }
-            throw err;
-        } finally {
-            clearTimeout(timer);
-        }
-    };
-
     QuickAddComponent.prototype.buildAIPrompt = async function buildAIPrompt(input) {
         const ai = this.config.ai || {};
         const fields = (this.normalizedSchema && Array.isArray(this.normalizedSchema.fields))
@@ -2877,49 +3281,99 @@
             `Input:\n${String(input || '')}`;
     };
 
-    QuickAddComponent.prototype.callOpenAI = async function callOpenAI(apiKey, model, prompt) {
-        const forceJson = this.config.ai.forceJson !== false;
-        const outputType = String(this.config.ai.outputType || '').trim().toLowerCase();
-        const outputSchema = this.config.ai.outputSchema && typeof this.config.ai.outputSchema === 'object'
-            ? this.config.ai.outputSchema
-            : null;
-        const tools = this.resolveAIProviderTools('openai');
-        const useResponsesApi = this.hasOpenAIWebSearchTool(tools);
-        let res = null;
-
-        if (useResponsesApi) {
-            const payload = {
-                model: model || 'gpt-4o-mini',
-                input: prompt
-            };
-            if (tools && tools.length) {
-                payload.tools = tools;
+    QuickAddComponent.prototype.cloneAIData = function cloneAIData(value) {
+        if (value === undefined) {
+            return undefined;
+        }
+        if (value === null) {
+            return null;
+        }
+        if (typeof value !== 'object') {
+            return value;
+        }
+        try {
+            return JSON.parse(JSON.stringify(value));
+        } catch (err) {
+            if (Array.isArray(value)) {
+                return value.slice();
             }
-            if (forceJson && outputType === 'json_schema' && outputSchema) {
-                payload.text = {
-                    format: {
-                        type: 'json_schema',
-                        name: 'quickadd_schema',
-                        schema: outputSchema
-                    }
+            return Object.assign({}, value);
+        }
+    };
+
+    QuickAddComponent.prototype.assertAIDispatchConfig = function assertAIDispatchConfig() {
+        const ai = this.config.ai || {};
+        if (typeof ai.dispatch !== 'function') {
+            throw new Error('Missing ai.dispatch(batch, context) in AI mode');
+        }
+        const provider = String(ai.provider || '').trim().toLowerCase();
+        if (!provider) {
+            throw new Error('Missing ai.provider');
+        }
+        if (!['openai', 'anthropic', 'google', 'custom'].includes(provider)) {
+            throw new Error(`Unknown AI provider: ${provider}`);
+        }
+        if (provider === 'custom' && !String(ai.endpoint || '').trim()) {
+            throw new Error('Missing ai.endpoint for custom provider');
+        }
+        if (provider !== 'custom' && !String(ai.apiKey || '').trim()) {
+            throw new Error('Missing ai.apiKey');
+        }
+        return provider;
+    };
+
+    QuickAddComponent.prototype.buildAIProviderDispatchRequest = function buildAIProviderDispatchRequest(providerRaw, promptRaw) {
+        const provider = String(providerRaw || '').trim().toLowerCase();
+        const prompt = String(promptRaw || '');
+        const ai = this.config.ai || {};
+        const apiKey = String(ai.apiKey || '');
+        const model = String(ai.model || '');
+        const endpoint = String(ai.endpoint || '');
+        const forceJson = ai.forceJson !== false;
+        const outputType = String(ai.outputType || '').trim().toLowerCase();
+        const outputSchema = ai.outputSchema && typeof ai.outputSchema === 'object'
+            ? ai.outputSchema
+            : null;
+        const tools = this.resolveAIProviderTools(provider);
+        const temperature = Number(ai.temperature || 0.3);
+
+        if (provider === 'openai') {
+            const useResponsesApi = this.hasOpenAIWebSearchTool(tools);
+            if (useResponsesApi) {
+                const payload = {
+                    model: model || 'gpt-4o-mini',
+                    input: prompt
+                };
+                if (tools && tools.length) {
+                    payload.tools = tools;
+                }
+                if (forceJson && outputType === 'json_schema' && outputSchema) {
+                    payload.text = {
+                        format: {
+                            type: 'json_schema',
+                            name: 'quickadd_schema',
+                            schema: outputSchema
+                        }
+                    };
+                }
+                return {
+                    provider: 'openai',
+                    url: 'https://api.openai.com/v1/responses',
+                    method: 'POST',
+                    headers: {
+                        Authorization: `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    payload
                 };
             }
-            res = await this.fetchAI('https://api.openai.com/v1/responses', {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${apiKey}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(payload)
-            });
-        } else {
             const payload = {
                 model: model || 'gpt-4o-mini',
                 messages: [
                     { role: 'system', content: 'Return only valid JSON object output.' },
                     { role: 'user', content: prompt }
                 ],
-                temperature: Number(this.config.ai.temperature || 0.3)
+                temperature
             };
             if (tools && tools.length) {
                 payload.tools = tools;
@@ -2930,224 +3384,289 @@
                     payload.response_format.json_schema = outputSchema;
                 }
             }
-            res = await this.fetchAI('https://api.openai.com/v1/chat/completions', {
+            return {
+                provider: 'openai',
+                url: 'https://api.openai.com/v1/chat/completions',
                 method: 'POST',
                 headers: {
                     Authorization: `Bearer ${apiKey}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(payload)
+                payload
+            };
+        }
+
+        if (provider === 'anthropic') {
+            const payload = {
+                model: model || 'claude-3-haiku-20240307',
+                max_tokens: 2048,
+                system: 'Return one valid JSON object only. No markdown.',
+                messages: [{ role: 'user', content: prompt }]
+            };
+            if (tools && tools.length) {
+                payload.tools = tools;
+            }
+            const headers = {
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01',
+                'Content-Type': 'application/json'
+            };
+            const hasWebSearchTool = Array.isArray(tools) && tools.some((tool) => {
+                const type = String(tool && tool.type ? tool.type : '').trim().toLowerCase();
+                return type === 'web_search_20250305';
             });
-        }
-
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            throw new Error(err.error?.message || `OpenAI API error: ${res.status}`);
-        }
-        const data = await res.json();
-        return this.packAIProviderResponse(data);
-    };
-
-    QuickAddComponent.prototype.callAnthropic = async function callAnthropic(apiKey, model, prompt) {
-        const payload = {
-            model: model || 'claude-3-haiku-20240307',
-            max_tokens: 2048,
-            system: 'Return one valid JSON object only. No markdown.',
-            messages: [{ role: 'user', content: prompt }]
-        };
-        const tools = this.resolveAIProviderTools('anthropic');
-        if (tools && tools.length) {
-            payload.tools = tools;
-        }
-        const headers = {
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-            'Content-Type': 'application/json'
-        };
-        const hasWebSearchTool = Array.isArray(tools) && tools.some((tool) => {
-            const type = String(tool && tool.type ? tool.type : '').trim().toLowerCase();
-            return type === 'web_search_20250305';
-        });
-        if (hasWebSearchTool) {
-            headers['anthropic-beta'] = 'web-search-2025-03-05';
-        }
-        const res = await this.fetchAI('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(payload)
-        });
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            throw new Error(err.error?.message || `Anthropic API error: ${res.status}`);
-        }
-        const data = await res.json();
-        return this.packAIProviderResponse(data);
-    };
-
-    QuickAddComponent.prototype.callGoogle = async function callGoogle(apiKey, model, prompt) {
-        const defaultModel = this.isAIWebSearchEnabled() ? 'gemini-2.5-flash' : 'gemini-1.5-flash';
-        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model || defaultModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-        const forceJson = this.config.ai.forceJson !== false;
-        const generationConfig = { temperature: Number(this.config.ai.temperature || 0.3) };
-        const outputSchema = this.config.ai.outputSchema && typeof this.config.ai.outputSchema === 'object'
-            ? this.config.ai.outputSchema
-            : null;
-        if (forceJson) {
-            generationConfig.responseMimeType = 'application/json';
-            if (outputSchema) {
-                generationConfig.responseSchema = outputSchema;
+            if (hasWebSearchTool) {
+                headers['anthropic-beta'] = 'web-search-2025-03-05';
             }
+            return {
+                provider: 'anthropic',
+                url: 'https://api.anthropic.com/v1/messages',
+                method: 'POST',
+                headers,
+                payload
+            };
         }
-        const payload = {
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig
-        };
-        const tools = this.resolveAIProviderTools('google');
-        if (tools && tools.length) {
-            payload.tools = tools;
-        }
-        const res = await this.fetchAI(endpoint, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        });
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            throw new Error(err.error?.message || `Google API error: ${res.status}`);
-        }
-        const data = await res.json();
-        return this.packAIProviderResponse(data);
-    };
 
-    QuickAddComponent.prototype.callCustom = async function callCustom(endpoint, apiKey, model, prompt) {
-        const forceJson = this.config.ai.forceJson !== false;
-        const outputType = String(this.config.ai.outputType || '').trim().toLowerCase();
-        const outputSchema = this.config.ai.outputSchema && typeof this.config.ai.outputSchema === 'object'
-            ? this.config.ai.outputSchema
-            : null;
-        const payload = {
-            model: model || 'default',
-            messages: [
-                { role: 'system', content: 'Return only valid JSON object output.' },
-                { role: 'user', content: prompt }
-            ],
-            temperature: Number(this.config.ai.temperature || 0.3)
-        };
-        const tools = this.resolveAIProviderTools('custom');
-        if (tools && tools.length) {
-            payload.tools = tools;
-        }
-        if (forceJson) {
-            payload.response_format = { type: outputType || 'json_object' };
-            if (outputSchema && payload.response_format.type === 'json_schema') {
-                payload.response_format.json_schema = outputSchema;
+        if (provider === 'google') {
+            const defaultModel = this.isAIWebSearchEnabled() ? 'gemini-2.5-flash' : 'gemini-1.5-flash';
+            const generationConfig = { temperature };
+            if (forceJson) {
+                generationConfig.responseMimeType = 'application/json';
+                if (outputSchema) {
+                    generationConfig.responseSchema = outputSchema;
+                }
             }
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig
+            };
+            if (tools && tools.length) {
+                payload.tools = tools;
+            }
+            return {
+                provider: 'google',
+                url: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model || defaultModel)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                payload
+            };
         }
-        const res = await this.fetchAI(endpoint, {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${apiKey}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        });
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            throw new Error(err.error?.message || `Custom API error: ${res.status}`);
+
+        if (provider === 'custom') {
+            const payload = {
+                model: model || 'default',
+                messages: [
+                    { role: 'system', content: 'Return only valid JSON object output.' },
+                    { role: 'user', content: prompt }
+                ],
+                temperature
+            };
+            if (tools && tools.length) {
+                payload.tools = tools;
+            }
+            if (forceJson) {
+                payload.response_format = { type: outputType || 'json_object' };
+                if (outputSchema && payload.response_format.type === 'json_schema') {
+                    payload.response_format.json_schema = outputSchema;
+                }
+            }
+            return {
+                provider: 'custom',
+                url: endpoint,
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                payload
+            };
         }
-        const data = await res.json();
-        return this.packAIProviderResponse(data);
+
+        throw new Error(`Unknown AI provider: ${provider}`);
     };
 
-    QuickAddComponent.prototype.callAIProvider = async function callAIProvider(input) {
+    QuickAddComponent.prototype.buildAIDispatchBatch = async function buildAIDispatchBatch(input, requestId) {
+        const rawInput = String(input || '');
+        const chunks = this.resolveAIInputChunks(rawInput);
+        const provider = this.assertAIDispatchConfig();
         const ai = this.config.ai || {};
-        const text = String(input || '').trim();
-        if (!text) {
-            this.aiState.providerRawResponse = '';
-            return this.normalizeAIResponse({ entries: [], missing: [], warnings: [] });
-        }
-        if (ai.mockResponse !== null && ai.mockResponse !== undefined) {
-            const latency = Math.max(0, Number(ai.mockLatencyMs || 0));
-            if (latency > 0) {
-                await new Promise((resolve) => setTimeout(resolve, latency));
-            }
-            const mock = (typeof ai.mockResponse === 'function')
-                ? await ai.mockResponse(text, this.config, this)
-                : ai.mockResponse;
-            this.aiState.providerRawResponse = this.serializeAIProviderRawResponse(mock);
-            if (typeof mock === 'string' || (mock && typeof mock === 'object')) {
-                return this.parseAIResponse(mock);
-            }
-            return this.normalizeAIResponse(mock);
-        }
 
-        if (typeof ai.request === 'function') {
-            const customResponse = await ai.request({
-                input: text,
-                prompt: await this.buildAIPrompt(text),
-                config: this.config,
-                component: this
+        const batch = [];
+        for (let i = 0; i < chunks.length; i++) {
+            const chunk = chunks[i];
+            const prompt = await this.buildAIPrompt(chunk.raw);
+            const request = this.buildAIProviderDispatchRequest(provider, prompt);
+            batch.push({
+                requestId,
+                chunkId: `${requestId}:${Number.isFinite(Number(chunk.index)) ? Number(chunk.index) : i}`,
+                chunkIndex: Number.isFinite(Number(chunk.index)) ? Number(chunk.index) : i,
+                start: Number.isFinite(Number(chunk.start)) ? Number(chunk.start) : 0,
+                end: Number.isFinite(Number(chunk.end)) ? Number(chunk.end) : 0,
+                input: String(chunk.raw || ''),
+                prompt,
+                provider,
+                model: String(ai.model || ''),
+                endpoint: String(ai.endpoint || ''),
+                request
             });
-            this.aiState.providerRawResponse = this.serializeAIProviderRawResponse(customResponse);
-            if (typeof customResponse === 'string' || (customResponse && typeof customResponse === 'object')) {
-                return this.parseAIResponse(customResponse);
-            }
-            return this.normalizeAIResponse(customResponse);
         }
-        if (this.isAIOffline()) {
-            throw new Error('Offline: AI provider request skipped');
-        }
-
-        const provider = String(ai.provider || '').toLowerCase();
-        const apiKey = ai.apiKey || '';
-        const model = ai.model || '';
-        const endpoint = ai.endpoint || '';
-        if (!apiKey && provider !== 'custom') {
-            throw new Error('Missing ai.apiKey');
-        }
-        if (provider === 'custom' && !endpoint) {
-            throw new Error('Missing ai.endpoint for custom provider');
-        }
-        const prompt = await this.buildAIPrompt(text);
-
-        let providerResponse = null;
-        if (provider === 'openai') {
-            providerResponse = await this.callOpenAI(apiKey, model, prompt);
-        } else if (provider === 'anthropic') {
-            providerResponse = await this.callAnthropic(apiKey, model, prompt);
-        } else if (provider === 'google') {
-            providerResponse = await this.callGoogle(apiKey, model, prompt);
-        } else if (provider === 'custom') {
-            providerResponse = await this.callCustom(endpoint, apiKey, model, prompt);
-        } else {
-            throw new Error(`Unknown AI provider: ${provider}`);
-        }
-
-        const responseText = providerResponse && typeof providerResponse === 'object' && Object.prototype.hasOwnProperty.call(providerResponse, 'text')
-            ? providerResponse.text
-            : providerResponse;
-        const responseRaw = providerResponse && typeof providerResponse === 'object' && Object.prototype.hasOwnProperty.call(providerResponse, 'raw')
-            ? providerResponse.raw
-            : providerResponse;
-        this.aiState.providerRawResponse = this.serializeAIProviderRawResponse(responseRaw);
-        return this.parseAIResponse(responseText);
+        return batch;
     };
 
-    QuickAddComponent.prototype.buildAICallerRequest = function buildAICallerRequest(input) {
+    QuickAddComponent.prototype.normalizeAIDispatchReason = function normalizeAIDispatchReason(rawReason) {
+        const reason = String(rawReason || '').trim().toLowerCase();
+        if (reason === 'offline' || reason === 'deferred' || reason === 'rate-limited') {
+            return reason;
+        }
+        return 'custom';
+    };
+
+    QuickAddComponent.prototype.normalizeAIDispatchError = function normalizeAIDispatchError(rawError) {
+        if (rawError && typeof rawError === 'object') {
+            const kind = String(rawError.kind || rawError.code || '').trim().toLowerCase();
+            const message = String(rawError.message || '').trim();
+            return {
+                kind: kind || (this.isLikelyNetworkError(rawError) ? 'offline' : 'error'),
+                message: message || 'AI dispatch failed',
+                detail: rawError.detail !== undefined ? rawError.detail : undefined
+            };
+        }
+        const message = String(rawError || 'AI dispatch failed');
+        return {
+            kind: this.isLikelyNetworkError(rawError) ? 'offline' : 'error',
+            message
+        };
+    };
+
+    QuickAddComponent.prototype.extractAIDispatchResponsePayload = function extractAIDispatchResponsePayload(item) {
+        if (item === undefined || item === null) {
+            return null;
+        }
+        if (item && typeof item === 'object') {
+            if (Object.prototype.hasOwnProperty.call(item, 'result')) {
+                return item.result;
+            }
+            if (Object.prototype.hasOwnProperty.call(item, 'parsed')) {
+                return item.parsed;
+            }
+            if (Object.prototype.hasOwnProperty.call(item, 'responseText')) {
+                return item.responseText;
+            }
+            if (Object.prototype.hasOwnProperty.call(item, 'text')) {
+                return item.text;
+            }
+            if (Object.prototype.hasOwnProperty.call(item, 'content')) {
+                return item.content;
+            }
+            if (Object.prototype.hasOwnProperty.call(item, 'raw')) {
+                return item.raw;
+            }
+        }
+        return item;
+    };
+
+    QuickAddComponent.prototype.resolveAIDispatchResponseForChunk = function resolveAIDispatchResponseForChunk(responses, requestItem, index) {
+        const list = Array.isArray(responses) ? responses : [];
+        if (!list.length) {
+            return null;
+        }
+        const chunkId = String(requestItem && requestItem.chunkId ? requestItem.chunkId : '');
+        const chunkIndex = Number(requestItem && requestItem.chunkIndex);
+        const byId = chunkId
+            ? list.find((item) => item && typeof item === 'object' && String(item.chunkId || '') === chunkId)
+            : null;
+        if (byId) {
+            return byId;
+        }
+        const byIndex = Number.isFinite(chunkIndex)
+            ? list.find((item) => item && typeof item === 'object' && Number(item.chunkIndex) === chunkIndex)
+            : null;
+        if (byIndex) {
+            return byIndex;
+        }
+        return list[index] !== undefined ? list[index] : null;
+    };
+
+    QuickAddComponent.prototype.normalizeCompletedAIDispatchResponses = function normalizeCompletedAIDispatchResponses(responses, batch) {
+        const requestBatch = Array.isArray(batch) ? batch : [];
+        const merged = { entries: [], missing: [], warnings: [] };
+
+        for (let i = 0; i < requestBatch.length; i++) {
+            const requestItem = requestBatch[i];
+            const responseItem = this.resolveAIDispatchResponseForChunk(responses, requestItem, i);
+            const payload = this.extractAIDispatchResponsePayload(responseItem);
+            const normalizedItem = this.normalizeAIResponse(this.parseAIResponse(payload));
+
+            merged.entries = merged.entries.concat(
+                this.annotateAIEntriesWithSource(
+                    normalizedItem.entries,
+                    Number.isFinite(Number(requestItem.start)) ? Number(requestItem.start) : 0,
+                    Number.isFinite(Number(requestItem.end)) ? Number(requestItem.end) : 0,
+                    Number.isFinite(Number(requestItem.chunkIndex)) ? Number(requestItem.chunkIndex) : i
+                )
+            );
+            if (normalizedItem.missing && normalizedItem.missing.length) {
+                const missingPrefix = requestBatch.length > 1 ? `entry ${i + 1}: ` : '';
+                merged.missing = merged.missing.concat(normalizedItem.missing.map((missing) => `${missingPrefix}${missing}`));
+            }
+            if (normalizedItem.warnings && normalizedItem.warnings.length) {
+                const warningPrefix = requestBatch.length > 1 ? `entry ${i + 1}: ` : '';
+                merged.warnings = merged.warnings.concat(normalizedItem.warnings.map((warning) => `${warningPrefix}${warning}`));
+            }
+        }
+        return merged;
+    };
+
+    QuickAddComponent.prototype.dispatchAIBatch = async function dispatchAIBatch(batch, context) {
+        const ai = this.config.ai || {};
+        return ai.dispatch(batch, context);
+    };
+
+    QuickAddComponent.prototype.clearAIQueuedRequest = function clearAIQueuedRequest() {
+        this.aiState.queuedRequest = null;
+    };
+
+    QuickAddComponent.prototype.setAIQueuedRequest = function setAIQueuedRequest(details) {
+        const payload = details && typeof details === 'object' ? details : {};
+        this.aiState.queuedRequest = {
+            requestId: Number(payload.requestId),
+            input: String(payload.input || ''),
+            reason: this.normalizeAIDispatchReason(payload.reason),
+            message: payload.message ? String(payload.message) : '',
+            queueItems: Array.isArray(payload.queueItems) ? this.cloneAIData(payload.queueItems) : [],
+            batch: Array.isArray(payload.batch) ? this.cloneAIData(payload.batch) : []
+        };
+        this.aiState.error = '';
+        this.aiState.errorKind = '';
+    };
+
+    QuickAddComponent.prototype.buildAICallerRequest = function buildAICallerRequest(input, batch, requestId) {
         const rawInput = String(input || '');
         const ai = this.config.ai || {};
-        const chunks = this.resolveAIInputChunks(rawInput).map((chunk) => ({
-            index: Number.isFinite(Number(chunk.index)) ? Number(chunk.index) : 0,
-            start: Number.isFinite(Number(chunk.start)) ? Number(chunk.start) : 0,
-            end: Number.isFinite(Number(chunk.end)) ? Number(chunk.end) : 0,
-            input: String(chunk.raw || '')
-        }));
+        const requestBatch = Array.isArray(batch)
+            ? batch.map((item) => this.cloneAIData(item))
+            : [];
+        const chunks = requestBatch.length
+            ? requestBatch.map((item, idx) => ({
+                index: Number.isFinite(Number(item.chunkIndex)) ? Number(item.chunkIndex) : idx,
+                start: Number.isFinite(Number(item.start)) ? Number(item.start) : 0,
+                end: Number.isFinite(Number(item.end)) ? Number(item.end) : 0,
+                input: String(item.input || '')
+            }))
+            : this.resolveAIInputChunks(rawInput).map((chunk) => ({
+                index: Number.isFinite(Number(chunk.index)) ? Number(chunk.index) : 0,
+                start: Number.isFinite(Number(chunk.start)) ? Number(chunk.start) : 0,
+                end: Number.isFinite(Number(chunk.end)) ? Number(chunk.end) : 0,
+                input: String(chunk.raw || '')
+            }));
         return {
             mode: 'ai',
+            requestId: Number.isFinite(Number(requestId)) ? Number(requestId) : Number(this.aiState.requestSeq || 0),
             input: rawInput,
             chunks,
+            batch: requestBatch,
             provider: String(ai.provider || ''),
             model: String(ai.model || ''),
             endpoint: String(ai.endpoint || ''),
@@ -3155,7 +3674,7 @@
             forceJson: ai.forceJson !== false,
             webSearch: ai.webSearch === true,
             tools: this.normalizeAIToolsForProvider(ai.tools),
-            hasCustomRequest: typeof ai.request === 'function',
+            dispatchConfigured: typeof ai.dispatch === 'function',
             promptMode: String(ai.promptMode || 'default'),
             hasCustomResponseParser: typeof ai.parseResponse === 'function'
         };
@@ -3166,11 +3685,18 @@
         const trimmed = input.trim();
         const minInputLength = Math.max(0, Number(this.config.ai.minInputLength || 0));
         const hasInput = trimmed.length > 0;
-        const offline = this.isAIOffline();
         const belowMinLength = hasInput && trimmed.length < minInputLength;
         const snapshotMatch = String(this.aiState.lastParsedInput || '') === input;
         const attemptedForCurrentInput = String(this.aiState.lastAttemptedInput || '') === input;
         const hasCurrentError = attemptedForCurrentInput && !!this.aiState.error;
+        const queued = this.aiState.queuedRequest && typeof this.aiState.queuedRequest === 'object'
+            ? this.aiState.queuedRequest
+            : null;
+        const hasQueuedForCurrentInput = !!(
+            queued
+            && Number(queued.requestId) === Number(this.aiState.requestSeq)
+            && String(queued.input || '') === input
+        );
 
         let status = 'stale';
         if (!hasInput) {
@@ -3179,10 +3705,10 @@
             status = 'below-min-length';
         } else if (this.aiState.isProcessing) {
             status = 'processing';
+        } else if (hasQueuedForCurrentInput) {
+            status = 'queued';
         } else if (hasCurrentError) {
             status = this.aiState.errorKind === 'offline' ? 'offline' : 'error';
-        } else if (offline && !snapshotMatch) {
-            status = 'offline';
         } else if (snapshotMatch) {
             status = 'ready';
         }
@@ -3190,14 +3716,21 @@
         const shouldParse = (
             status === 'stale'
             || status === 'error'
+            || status === 'offline'
         );
+        const queueReason = hasQueuedForCurrentInput ? this.normalizeAIDispatchReason(queued.reason) : '';
+        const queueMessage = hasQueuedForCurrentInput ? String(queued.message || '') : '';
+        const queueItems = hasQueuedForCurrentInput && Array.isArray(queued.queueItems)
+            ? this.cloneAIData(queued.queueItems)
+            : [];
 
         return {
             status,
             isReady: status === 'ready',
             isProcessing: status === 'processing',
+            isQueued: status === 'queued',
             isStale: status === 'stale',
-            isOffline: status === 'offline',
+            isOffline: status === 'offline' || queueReason === 'offline',
             shouldParse,
             hasInput,
             belowMinLength,
@@ -3205,7 +3738,10 @@
             currentInput: input,
             lastParsedInput: String(this.aiState.lastParsedInput || ''),
             error: hasCurrentError ? String(this.aiState.error || '') : '',
-            errorKind: hasCurrentError ? String(this.aiState.errorKind || 'error') : ''
+            errorKind: hasCurrentError ? String(this.aiState.errorKind || 'error') : '',
+            queueReason,
+            queueMessage,
+            queueItems
         };
     };
 
@@ -3223,17 +3759,13 @@
         return /network|offline|failed to fetch|econnrefused|timed out|abort/i.test(msg);
     };
 
-    QuickAddComponent.prototype.isAIOffline = function isAIOffline() {
-        return typeof navigator !== 'undefined' && navigator && navigator.onLine === false;
-    };
-
     QuickAddComponent.prototype.applyAIParseResult = function applyAIParseResult(result) {
         const normalized = this.normalizeAIResponse(result);
         this.aiState.warnings = normalized.warnings;
         this.aiState.missing = normalized.missing;
         this.aiState.error = '';
         this.aiState.errorKind = '';
-        this.aiState.callerRequest = null;
+        this.clearAIQueuedRequest();
         this.mergeAIEntries(normalized.entries || []);
     };
 
@@ -3301,46 +3833,58 @@
             }));
     };
 
-    QuickAddComponent.prototype.extractAIFromInput = async function extractAIFromInput(input) {
-        const text = String(input || '');
-        const chunks = this.resolveAIInputChunks(text);
-        if (!chunks.length) {
-            return { entries: [], missing: [], warnings: [] };
+    QuickAddComponent.prototype.extractAIFromInput = async function extractAIFromInput(input, options) {
+        const rawInput = String(input || '');
+        const opts = options || {};
+        const requestId = Number.isFinite(Number(opts.requestId))
+            ? Number(opts.requestId)
+            : Number(this.aiState.requestSeq || 0);
+        const batch = Array.isArray(opts.batch)
+            ? opts.batch
+            : await this.buildAIDispatchBatch(rawInput, requestId);
+        if (!batch.length) {
+            return {
+                status: 'completed',
+                normalized: { entries: [], missing: [], warnings: [] },
+                responses: [],
+                providerRawResponse: '',
+                batch
+            };
         }
 
-        if (chunks.length === 1) {
-            const single = await this.callAIProvider(chunks[0].raw);
-            const normalizedSingle = this.normalizeAIResponse(single);
-            normalizedSingle.entries = this.annotateAIEntriesWithSource(
-                normalizedSingle.entries,
-                chunks[0].start,
-                chunks[0].end,
-                chunks[0].index
-            );
-            return normalizedSingle;
+        const context = Object.assign({
+            mode: 'ai',
+            requestId,
+            input: rawInput,
+            source: opts.source || 'extract',
+            timestamp: Date.now()
+        }, opts.context || {});
+        const dispatchResult = await this.dispatchAIBatch(batch, context);
+        const status = String(dispatchResult && dispatchResult.status ? dispatchResult.status : '').trim().toLowerCase();
+        if (status === 'queued') {
+            return {
+                status: 'queued',
+                reason: this.normalizeAIDispatchReason(dispatchResult.reason),
+                message: dispatchResult.message ? String(dispatchResult.message) : '',
+                queueItems: Array.isArray(dispatchResult.queueItems) ? dispatchResult.queueItems : [],
+                responses: [],
+                providerRawResponse: dispatchResult.providerRawResponse,
+                batch
+            };
+        }
+        if (status !== 'completed') {
+            throw new Error('Invalid ai.dispatch result: expected status "completed" or "queued"');
         }
 
-        const merged = { entries: [], missing: [], warnings: [] };
-        for (let i = 0; i < chunks.length; i++) {
-            const chunk = chunks[i];
-            const item = await this.callAIProvider(chunk.raw);
-            const normalizedItem = this.normalizeAIResponse(item);
-            merged.entries = merged.entries.concat(
-                this.annotateAIEntriesWithSource(
-                    normalizedItem.entries,
-                    chunk.start,
-                    chunk.end,
-                    chunk.index
-                )
-            );
-            if (normalizedItem.missing && normalizedItem.missing.length) {
-                merged.missing = merged.missing.concat(normalizedItem.missing.map((missing) => `entry ${i + 1}: ${missing}`));
-            }
-            if (normalizedItem.warnings && normalizedItem.warnings.length) {
-                merged.warnings = merged.warnings.concat(normalizedItem.warnings.map((warning) => `entry ${i + 1}: ${warning}`));
-            }
-        }
-        return merged;
+        const responses = Array.isArray(dispatchResult.responses) ? dispatchResult.responses : [];
+        const normalized = this.normalizeCompletedAIDispatchResponses(responses, batch);
+        return {
+            status: 'completed',
+            normalized,
+            responses,
+            providerRawResponse: dispatchResult.providerRawResponse,
+            batch
+        };
     };
 
     QuickAddComponent.prototype.parseAI = async function parseAI(options) {
@@ -3350,9 +3894,6 @@
         const currentInput = String(this.inputText || this.readInputText() || '');
         const opts = options || {};
         const input = currentInput;
-        if (!opts.force && this.isAIOffline()) {
-            return;
-        }
         const minInputLength = Math.max(0, Number(this.config.ai.minInputLength || 0));
         const trimmedInput = input.trim();
         if (!trimmedInput || (!opts.force && trimmedInput.length < minInputLength)) {
@@ -3365,28 +3906,125 @@
         this.aiState.lastAttemptedInput = input;
         this.aiState.error = '';
         this.aiState.errorKind = '';
-        this.aiState.callerRequest = this.buildAICallerRequest(input);
+        this.clearAIQueuedRequest();
+        this.aiState.providerRawResponse = '';
         this.parseAndRender({ source: this.inputText, skipTypingSync: true });
 
         try {
-            const result = await this.extractAIFromInput(input);
+            const batch = await this.buildAIDispatchBatch(input, requestId);
             if (requestId !== this.aiState.requestSeq) {
                 return;
             }
-            this.applyAIParseResult(result);
-            this.aiState.lastParsedInput = input;
+            this.aiState.callerRequest = this.buildAICallerRequest(input, batch, requestId);
+            this.parseAndRender({ source: this.inputText, skipTypingSync: true });
+
+            const dispatchOutcome = await this.extractAIFromInput(input, {
+                requestId,
+                batch,
+                source: opts.force ? 'manual-parse' : 'auto-parse'
+            });
+            if (requestId !== this.aiState.requestSeq) {
+                return;
+            }
+
+            if (dispatchOutcome.status === 'queued') {
+                this.setAIQueuedRequest({
+                    requestId,
+                    input,
+                    reason: dispatchOutcome.reason,
+                    message: dispatchOutcome.message,
+                    queueItems: dispatchOutcome.queueItems,
+                    batch
+                });
+                this.aiState.providerRawResponse = this.serializeAIProviderRawResponse(
+                    dispatchOutcome.providerRawResponse !== undefined
+                        ? dispatchOutcome.providerRawResponse
+                        : dispatchOutcome.queueItems
+                );
+            } else {
+                this.aiState.providerRawResponse = this.serializeAIProviderRawResponse(
+                    dispatchOutcome.providerRawResponse !== undefined
+                        ? dispatchOutcome.providerRawResponse
+                        : dispatchOutcome.responses
+                );
+                this.applyAIParseResult(dispatchOutcome.normalized);
+                this.aiState.lastParsedInput = input;
+            }
         } catch (err) {
             if (requestId !== this.aiState.requestSeq) {
                 return;
             }
-            this.aiState.error = err && err.message ? err.message : String(err || 'AI parse failed');
-            this.aiState.errorKind = this.isLikelyNetworkError(err) ? 'offline' : 'error';
+            const normalizedError = this.normalizeAIDispatchError(err);
+            this.aiState.error = normalizedError.message;
+            this.aiState.errorKind = normalizedError.kind === 'offline' ? 'offline' : 'error';
         } finally {
             if (requestId === this.aiState.requestSeq) {
                 this.aiState.isProcessing = false;
             }
             this.parseAndRender({ source: this.inputText });
         }
+    };
+
+    QuickAddComponent.prototype.applyQueuedAIResult = function applyQueuedAIResult(payload) {
+        if (!this.isAiMode()) {
+            return false;
+        }
+        const data = payload && typeof payload === 'object' ? payload : {};
+        const requestId = Number(data.requestId);
+        const queued = this.aiState.queuedRequest;
+        if (
+            !Number.isFinite(requestId)
+            || !queued
+            || Number(queued.requestId) !== requestId
+            || Number(this.aiState.requestSeq) !== requestId
+        ) {
+            return false;
+        }
+        const currentInput = String(this.inputText || this.readInputText() || '');
+        if (currentInput !== String(queued.input || '')) {
+            return false;
+        }
+        const batch = Array.isArray(queued.batch) ? queued.batch : [];
+        const responses = Array.isArray(data.responses) ? data.responses : [];
+        const normalized = this.normalizeCompletedAIDispatchResponses(responses, batch);
+        this.aiState.providerRawResponse = this.serializeAIProviderRawResponse(
+            data.providerRawResponse !== undefined
+                ? data.providerRawResponse
+                : responses
+        );
+        this.applyAIParseResult(normalized);
+        this.aiState.lastParsedInput = String(queued.input || '');
+        this.aiState.isProcessing = false;
+        this.parseAndRender({ source: this.inputText });
+        return true;
+    };
+
+    QuickAddComponent.prototype.applyQueuedAIError = function applyQueuedAIError(payload) {
+        if (!this.isAiMode()) {
+            return false;
+        }
+        const data = payload && typeof payload === 'object' ? payload : {};
+        const requestId = Number(data.requestId);
+        const queued = this.aiState.queuedRequest;
+        if (
+            !Number.isFinite(requestId)
+            || !queued
+            || Number(queued.requestId) !== requestId
+            || Number(this.aiState.requestSeq) !== requestId
+        ) {
+            return false;
+        }
+        const currentInput = String(this.inputText || this.readInputText() || '');
+        if (currentInput !== String(queued.input || '')) {
+            return false;
+        }
+        const normalizedError = this.normalizeAIDispatchError(data.error || data);
+        this.clearAIQueuedRequest();
+        this.aiState.isProcessing = false;
+        this.aiState.error = normalizedError.message;
+        this.aiState.errorKind = normalizedError.kind === 'offline' ? 'offline' : 'error';
+        this.parseAndRender({ source: this.inputText });
+        return true;
     };
 
     QuickAddComponent.prototype.clearAIEntries = function clearAIEntries() {
@@ -3399,6 +4037,7 @@
         this.aiState.error = '';
         this.aiState.errorKind = '';
         this.aiState.callerRequest = null;
+        this.clearAIQueuedRequest();
         this.aiState.providerRawResponse = '';
     };
 
@@ -3418,8 +4057,8 @@
         const parseState = this.buildAIParseState(input);
         const callerRequest = parseState.hasInput
             ? (this.aiState.callerRequest && this.aiState.callerRequest.input === input
-                ? Object.assign({}, this.aiState.callerRequest)
-                : this.buildAICallerRequest(input))
+                ? this.cloneAIData(this.aiState.callerRequest)
+                : null)
             : null;
         const schemaFields = (this.normalizedSchema && Array.isArray(this.normalizedSchema.fields))
             ? this.normalizedSchema.fields
@@ -3512,19 +4151,20 @@
                             contenteditable="true"
                             role="textbox"
                             aria-multiline="true"
+                            aria-label="${escHtml(this.config.a11y.inputAriaLabel)}"
                             spellcheck="false"
                             data-placeholder="${escHtml(this.config.placeholder)}"
                         ></div>
                     </div>
                     <div class="${c.hint}">${escHtml(hint)}</div>
                 </div>
-                <div class="${c.status}" data-role="status"></div>
+                <div class="${c.status}" data-role="status" role="status" aria-live="polite"></div>
                 <div class="${c.preview}" data-role="preview"></div>
                 ${outputBlock}
                 <div class="${c.dropdown}" data-role="dropdown" hidden>
                     <input class="${c.dropdownSearch}" data-role="dropdownSearch" type="text" placeholder="Filter options..." />
                     <div class="${c.dropdownListWrap}">
-                        <div class="${c.dropdownList}" data-role="dropdownList"></div>
+                        <div class="${c.dropdownList}" data-role="dropdownList" role="listbox" id="${this.dropdownListId}"></div>
                         <div class="${c.dropdownFadeTop}" data-role="dropdownFadeTop" aria-hidden="true" hidden></div>
                         <div class="${c.dropdownFadeBottom}" data-role="dropdownFadeBottom" aria-hidden="true" hidden></div>
                     </div>
@@ -3548,7 +4188,6 @@
                         <div class="${c.datePickerTime}" data-role="datePickerTime" hidden></div>
                     </div>
                 </div>
-                <div class="${c.numberPicker}" data-role="numberPicker" role="dialog" aria-modal="false" aria-label="Adjust number" hidden></div>
             </div>
         `;
 
@@ -3572,8 +4211,8 @@
         this.datePickerGridEl = this.mountEl.querySelector('[data-role="datePickerGrid"]');
         this.datePickerQuickEl = this.mountEl.querySelector('[data-role="datePickerQuick"]');
         this.datePickerTimeEl = this.mountEl.querySelector('[data-role="datePickerTime"]');
-        this.numberPickerEl = this.mountEl.querySelector('[data-role="numberPicker"]');
         this.blockedInfoEl = null;
+        this.syncDropdownA11y();
     };
 
     QuickAddComponent.prototype.applyTokens = function applyTokens() {
@@ -3611,6 +4250,64 @@
         }
     };
 
+    QuickAddComponent.prototype.captureFocusOrigin = function captureFocusOrigin(kind, openerEl, fallbackEl) {
+        const key = String(kind || '');
+        if (!key) {
+            return;
+        }
+        const active = document.activeElement;
+        const openerFocusTarget = findFocusableElement(openerEl) || openerEl || null;
+        this.focusOrigins[key] = {
+            openerEl: openerFocusTarget,
+            activeEl: active && active !== document.body ? active : null,
+            fallbackEl: fallbackEl || this.inputEl || null
+        };
+    };
+
+    QuickAddComponent.prototype.restoreFocusOrigin = function restoreFocusOrigin(kind) {
+        const key = String(kind || '');
+        if (!key) {
+            return false;
+        }
+        const origin = this.focusOrigins[key] || null;
+        this.focusOrigins[key] = null;
+        if (!origin) {
+            return false;
+        }
+        if (focusElementIfPossible(origin.openerEl)) {
+            return true;
+        }
+        if (focusElementIfPossible(origin.activeEl)) {
+            return true;
+        }
+        return focusElementIfPossible(origin.fallbackEl || this.inputEl);
+    };
+
+    QuickAddComponent.prototype.syncDropdownA11y = function syncDropdownA11y() {
+        const isOpen = !!(this.dropdownEl && !this.dropdownEl.hidden && this.dropdownState);
+        const activeValue = isOpen && this.dropdownState ? this.dropdownState.activeOptionValue : null;
+        let activeId = '';
+        if (isOpen && activeValue !== undefined && activeValue !== null) {
+            const options = Array.from(this.dropdownListEl.querySelectorAll('[data-option-value]'));
+            const activeNode = options.find((node) => normValue(node.getAttribute('data-option-value')) === normValue(activeValue));
+            activeId = activeNode ? String(activeNode.id || '') : '';
+        }
+        const inputEl = this.inputEl || null;
+        const searchEl = this.dropdownSearchEl || null;
+        [inputEl, searchEl].forEach((el) => {
+            if (!el) {
+                return;
+            }
+            el.setAttribute('aria-controls', this.dropdownListId);
+            el.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            if (activeId) {
+                el.setAttribute('aria-activedescendant', activeId);
+            } else {
+                el.removeAttribute('aria-activedescendant');
+            }
+        });
+    };
+
     QuickAddComponent.prototype.getDatePickerInitialDate = function getDatePickerInitialDate(token, field) {
         const tokenValue = token && token.value !== undefined ? token.value : '';
         const parsed = parseFieldDateValue(field, tokenValue || '');
@@ -3627,10 +4324,11 @@
         if (!options || !options.field) {
             return;
         }
-        this.closeBlockedInfo();
-        this.closeDropdown();
+        this.captureFocusOrigin('datePicker', options.anchorEl || null, this.inputEl);
+        this.closeBlockedInfo({ restoreFocus: false });
+        this.closeDropdown({ restoreFocus: false });
         this.closeNumberPicker();
-        this.closeAttachmentSourceMenu();
+        this.closeAttachmentSourceMenu({ restoreFocus: false });
         const defaultTime = normalizeTime24(options.field.defaultTime, DEFAULT_DATETIME_TIME);
         const rawValue = options.token
             ? options.token.value
@@ -3673,7 +4371,8 @@
         });
     };
 
-    QuickAddComponent.prototype.closeDatePicker = function closeDatePicker() {
+    QuickAddComponent.prototype.closeDatePicker = function closeDatePicker(options) {
+        const opts = options || {};
         this.datePickerState = null;
         if (!this.datePickerEl) {
             return;
@@ -3686,6 +4385,9 @@
         if (this.datePickerTimeEl) {
             this.datePickerTimeEl.innerHTML = '';
             this.datePickerTimeEl.hidden = true;
+        }
+        if (opts.restoreFocus !== false) {
+            this.restoreFocusOrigin('datePicker');
         }
     };
 
@@ -3718,206 +4420,149 @@
         return 1;
     };
 
-    QuickAddComponent.prototype.openNumberPicker = function openNumberPicker(options) {
-        if (!options || !options.field || !this.isNumberStepperEnabledForField(options.field) || !this.numberPickerEl) {
-            return;
-        }
-        this.closeBlockedInfo();
-        this.closeDropdown();
-        this.closeDatePicker();
-        this.closeAttachmentSourceMenu();
-        const rawCurrent = options.token
-            ? options.token.value
-            : (options.value !== undefined && options.value !== null ? options.value : 0);
-        const parsedCurrent = Number(rawCurrent);
-        const currentValue = Number.isFinite(parsedCurrent) ? parsedCurrent : 0;
-        this.numberPickerState = {
-            fieldKey: options.field.key,
-            tokenId: options.token && options.token.id ? options.token.id : '',
-            entryIndex: Number.isFinite(Number(options.entryIndex)) ? Number(options.entryIndex) : 0,
-            entryKey: options.entryKey,
-            currentValue,
-            step: this.resolveNumberStep(options.field, options.step),
-            min: Number.isFinite(Number(options.field.min)) ? Number(options.field.min) : null,
-            max: Number.isFinite(Number(options.field.max)) ? Number(options.field.max) : null,
-            anchorEl: options.anchorEl || null,
-            anchorRect: options.anchorEl && options.anchorEl.getBoundingClientRect
-                ? options.anchorEl.getBoundingClientRect()
-                : (options.anchorRect || null),
-            sourceRegion: options.sourceRegion || 'inline',
-            aiContext: options.aiContext || null
-        };
-        this.renderNumberPicker();
-        this.positionNumberPicker(this.numberPickerState.anchorEl);
-        this.numberPickerEl.hidden = false;
-    };
-
     QuickAddComponent.prototype.closeNumberPicker = function closeNumberPicker() {
-        this.numberPickerState = null;
-        if (!this.numberPickerEl) {
-            return;
-        }
-        this.numberPickerEl.hidden = true;
-        this.numberPickerEl.innerHTML = '';
-        this.numberPickerEl.style.removeProperty('position');
-        this.numberPickerEl.style.removeProperty('left');
-        this.numberPickerEl.style.removeProperty('top');
-        this.numberPickerEl.style.removeProperty('width');
-        this.numberPickerEl.style.removeProperty('max-width');
-        this.numberPickerEl.style.removeProperty('z-index');
     };
 
-    QuickAddComponent.prototype.renderNumberPicker = function renderNumberPicker() {
-        if (!this.numberPickerEl || !this.numberPickerState) {
-            return;
+    QuickAddComponent.prototype.measureFloatingPanelHeight = function measureFloatingPanelHeight(panelEl, width) {
+        if (!panelEl) {
+            return 0;
         }
-        const c = this.config.classNames;
-        const state = this.numberPickerState;
-        this.numberPickerEl.innerHTML = `
-            <div class="${c.numberPickerControls}">
-                <button type="button" class="${c.numberPickerBtn}" data-number-action="decrement" aria-label="Decrement value">−</button>
-                <div class="${c.numberPickerValue}" data-role="numberPickerValue">${escHtml(String(state.currentValue))}</div>
-                <button type="button" class="${c.numberPickerBtn}" data-number-action="increment" aria-label="Increment value">+</button>
-            </div>
-            <div class="${c.numberPickerStepWrap}">
-                <label class="${c.numberPickerStepLabel}">
-                    Step
-                    <input type="number" class="${c.numberPickerStepInput}" data-role="numberPickerStepInput" min="0.0000001" step="any" value="${escHtml(String(state.step))}" />
-                </label>
-            </div>
-        `;
+        const prevHidden = panelEl.hidden;
+        const prevVisibility = panelEl.style.visibility;
+        const prevDisplay = panelEl.style.display;
+        const prevWidth = panelEl.style.width;
+        const prevMaxHeight = panelEl.style.maxHeight;
+
+        panelEl.hidden = false;
+        panelEl.style.visibility = 'hidden';
+        panelEl.style.removeProperty('display');
+        panelEl.style.width = `${Math.max(0, Number(width) || 0)}px`;
+        panelEl.style.removeProperty('maxHeight');
+
+        const measuredHeight = Math.ceil(panelEl.getBoundingClientRect().height || panelEl.scrollHeight || 0);
+
+        if (prevHidden) {
+            panelEl.hidden = true;
+        }
+        panelEl.style.visibility = prevVisibility;
+        if (prevDisplay) {
+            panelEl.style.display = prevDisplay;
+        } else {
+            panelEl.style.removeProperty('display');
+        }
+        if (prevWidth) {
+            panelEl.style.width = prevWidth;
+        } else {
+            panelEl.style.removeProperty('width');
+        }
+        if (prevMaxHeight) {
+            panelEl.style.maxHeight = prevMaxHeight;
+        } else {
+            panelEl.style.removeProperty('maxHeight');
+        }
+
+        return measuredHeight;
     };
 
-    QuickAddComponent.prototype.positionNumberPicker = function positionNumberPicker(anchorEl) {
-        if (!this.numberPickerEl || !this.numberPickerState) {
-            return;
-        }
-        const rect = anchorEl && anchorEl.getBoundingClientRect
-            ? anchorEl.getBoundingClientRect()
-            : (this.numberPickerState.anchorRect || this.getCaretClientRect());
-        const bounds = this.getFloatingBounds(anchorEl || this.inputEl);
-        const pad = window.innerWidth <= 480 ? 8 : 10;
+    QuickAddComponent.prototype.computeFloatingLayout = function computeFloatingLayout(options) {
+        const opts = options || {};
+        const anchorRect = opts.anchorRect || this.getCaretClientRect();
+        const anchorEl = opts.anchorEl || this.inputEl;
+        const pad = Number.isFinite(Number(opts.pad))
+            ? Number(opts.pad)
+            : (window.innerWidth <= 480 ? 8 : 10);
+        const gap = Number.isFinite(Number(opts.gap)) ? Number(opts.gap) : 0;
+        const bounds = this.getFloatingBounds(opts.ignoreAnchorClip ? null : anchorEl);
         const viewportWidth = Math.max(0, (bounds.right - bounds.left) - (pad * 2));
-        const preferredWidth = Math.max(188, Math.min(224, viewportWidth));
-        const width = Math.min(preferredWidth, viewportWidth);
+
+        const minWidthRaw = Number(opts.minWidth);
+        const maxWidthRaw = Number(opts.maxWidth);
+        const preferredWidthRaw = Number(opts.preferredWidth);
+        const minWidth = Number.isFinite(minWidthRaw) && minWidthRaw > 0 ? minWidthRaw : 0;
+        const maxWidth = Number.isFinite(maxWidthRaw) && maxWidthRaw > 0
+            ? maxWidthRaw
+            : Math.max(0, viewportWidth);
+        const preferredWidth = Number.isFinite(preferredWidthRaw) && preferredWidthRaw > 0
+            ? preferredWidthRaw
+            : Math.max(minWidth, Math.min(maxWidth, viewportWidth));
+
+        let width = Math.max(minWidth, Math.min(preferredWidth, maxWidth, viewportWidth));
+        if (!Number.isFinite(width)) {
+            width = Math.max(0, Math.min(maxWidth, viewportWidth));
+        }
+
         const minLeft = bounds.left + pad;
         const maxLeft = bounds.right - width - pad;
-        const left = Math.max(minLeft, Math.min(rect.left || minLeft, maxLeft));
-
-        const prevHidden = this.numberPickerEl.hidden;
-        const prevVisibility = this.numberPickerEl.style.visibility;
-        this.numberPickerEl.hidden = false;
-        this.numberPickerEl.style.visibility = 'hidden';
-        this.numberPickerEl.style.width = `${width}px`;
-        const measuredHeight = Math.ceil(this.numberPickerEl.getBoundingClientRect().height || this.numberPickerEl.scrollHeight || 0);
-        if (prevHidden) {
-            this.numberPickerEl.hidden = true;
+        const align = opts.align === 'end' ? 'end' : (opts.align === 'center' ? 'center' : 'start');
+        const anchorLeft = Number.isFinite(Number(anchorRect.left)) ? Number(anchorRect.left) : minLeft;
+        const anchorRight = Number.isFinite(Number(anchorRect.right)) ? Number(anchorRect.right) : anchorLeft;
+        let preferredLeft = anchorLeft;
+        if (align === 'center') {
+            preferredLeft = anchorLeft + ((anchorRight - anchorLeft) - width) / 2;
+        } else if (align === 'end') {
+            preferredLeft = anchorRight - width;
         }
-        this.numberPickerEl.style.visibility = prevVisibility;
+        const left = maxLeft >= minLeft
+            ? Math.max(minLeft, Math.min(preferredLeft, maxLeft))
+            : minLeft;
 
-        const gap = 2;
-        const anchorTop = rect.top || 0;
-        const anchorBottom = rect.bottom || rect.top || 0;
+        const measuredHeight = this.measureFloatingPanelHeight(opts.panelEl, width);
+        const fallbackHeightRaw = Number(opts.fallbackHeight);
+        const fallbackHeight = Number.isFinite(fallbackHeightRaw) && fallbackHeightRaw > 0 ? fallbackHeightRaw : 0;
+        const maxPanelHeightRaw = Number(opts.maxPanelHeight);
+        const maxPanelHeight = Number.isFinite(maxPanelHeightRaw) && maxPanelHeightRaw > 0
+            ? maxPanelHeightRaw
+            : Number.POSITIVE_INFINITY;
+        const desiredHeight = Math.min(maxPanelHeight, Math.max(1, measuredHeight || fallbackHeight || 1));
+
         const minTop = bounds.top + pad;
         const maxBottom = bounds.bottom - pad;
-        const availableBelow = Math.max(0, maxBottom - (anchorBottom + gap));
-        const availableAbove = Math.max(0, (anchorTop - gap) - minTop);
-        const panelHeight = Math.max(0, Math.min(measuredHeight || 108, Math.max(availableBelow, availableAbove)));
-        const placeBelow = availableBelow >= availableAbove;
-        const top = placeBelow
-            ? (anchorBottom + gap)
-            : Math.max(minTop, (anchorTop - gap) - panelHeight);
+        const anchorTop = Number.isFinite(Number(anchorRect.top)) ? Number(anchorRect.top) : minTop;
+        const anchorBottom = Number.isFinite(Number(anchorRect.bottom)) ? Number(anchorRect.bottom) : anchorTop;
+        const belowTop = anchorBottom + gap;
+        const aboveBottom = anchorTop - gap;
+        const availableBelow = Math.max(0, maxBottom - belowTop);
+        const availableAbove = Math.max(0, aboveBottom - minTop);
 
-        this.numberPickerEl.style.position = 'fixed';
-        this.numberPickerEl.style.left = `${left}px`;
-        this.numberPickerEl.style.top = `${top}px`;
-        this.numberPickerEl.style.width = `${width}px`;
-        this.numberPickerEl.style.maxWidth = `${Math.max(0, viewportWidth)}px`;
-        this.numberPickerEl.style.zIndex = '9999';
+        const preferredPlacement = opts.preferredPlacement === 'top' ? 'top' : 'bottom';
+        const allowFlip = opts.flip !== false;
+        let placeBelow = preferredPlacement !== 'top';
+        if (allowFlip) {
+            if (placeBelow && availableBelow < desiredHeight && availableAbove > availableBelow) {
+                placeBelow = false;
+            } else if (!placeBelow && availableAbove < desiredHeight && availableBelow > availableAbove) {
+                placeBelow = true;
+            }
+        }
+
+        const availableHeight = Math.max(0, placeBelow ? availableBelow : availableAbove);
+        const allowExpand = opts.allowExpand === true;
+        const panelHeight = Math.max(
+            0,
+            Math.min(
+                maxPanelHeight,
+                allowExpand ? availableHeight : Math.min(availableHeight, desiredHeight)
+            )
+        );
+
+        const rawTop = placeBelow ? belowTop : (aboveBottom - panelHeight);
+        const maxTop = Math.max(minTop, maxBottom - panelHeight);
+        const top = Math.max(minTop, Math.min(rawTop, maxTop));
+
+        return {
+            bounds,
+            viewportWidth,
+            width,
+            left,
+            top,
+            panelHeight,
+            placement: placeBelow ? 'bottom' : 'top',
+            availableBelow,
+            availableAbove
+        };
     };
 
-    QuickAddComponent.prototype.applyNumberStep = function applyNumberStep(direction) {
-        if (!this.numberPickerState) {
-            return;
-        }
-        const dir = direction < 0 ? -1 : 1;
-        const step = this.resolveNumberStep(this.getFieldDefinition(this.numberPickerState.fieldKey), this.numberPickerState.step);
-        const current = Number(this.numberPickerState.currentValue);
-        const base = Number.isFinite(current) ? current : 0;
-        let nextValue = base + (dir * step);
-        if (Number.isFinite(Number(this.numberPickerState.min))) {
-            nextValue = Math.max(Number(this.numberPickerState.min), nextValue);
-        }
-        if (Number.isFinite(Number(this.numberPickerState.max))) {
-            nextValue = Math.min(Number(this.numberPickerState.max), nextValue);
-        }
-        this.applyNumberValue(nextValue);
-    };
-
-    QuickAddComponent.prototype.applyNumberValue = function applyNumberValue(nextValue) {
-        if (!this.numberPickerState) {
-            return;
-        }
-        const state = Object.assign({}, this.numberPickerState);
-        const field = this.getFieldDefinition(state.fieldKey);
-        const numericValue = Number(nextValue);
-        if (!field || field.type !== 'number' || !Number.isFinite(numericValue)) {
-            return;
-        }
-
-        if (state.aiContext) {
-            const context = Object.assign({}, state.aiContext);
-            this.applyAIFieldSelection({
-                entryId: context.entryId,
-                fieldKey: context.fieldKey,
-                currentValue: context.currentValue,
-                occurrence: context.occurrence,
-                mappingKey: context.mappingKey,
-                entryIndex: state.entryIndex,
-                nextValue: numericValue,
-                sourceRegion: state.sourceRegion,
-                anchorEl: state.anchorEl,
-                anchorRect: state.anchorRect
-            });
-            this.numberPickerState = Object.assign({}, state, { currentValue: numericValue });
-            this.renderNumberPicker();
-            this.positionNumberPicker(state.anchorEl);
-            this.numberPickerEl.hidden = false;
-            return;
-        }
-
-        let token = this.tokenMap[state.tokenId];
-        if (!token && state.sourceRegion === 'card') {
-            token = this.materializeEntryFieldToken(state.entryIndex, state.fieldKey, state.currentValue, state.sourceRegion);
-        }
-        if (!token) {
-            this.closeNumberPicker();
-            return;
-        }
-        const source = this.inputText || this.readInputText();
-        const replacement = String(numericValue);
-        const updated = this.replaceRange(source, token.globalValueStart, token.globalValueEnd, replacement);
-        const caretOffset = token.globalValueStart + replacement.length;
-        this.parseAndRender({
-            source: updated,
-            caretOffset,
-            focusInput: state.sourceRegion !== 'card',
-            skipTypingSync: state.sourceRegion === 'card'
-        });
-        const nextEntry = (this.lastResult.entries || []).find((entry) => entry.index === state.entryIndex);
-        const nextToken = nextEntry
-            ? (nextEntry.tokens || []).find((item) => item.kind === 'field' && item.key === state.fieldKey && normValue(item.value) === normValue(replacement))
-            : null;
-        this.numberPickerState = Object.assign({}, state, {
-            tokenId: nextToken ? nextToken.id : state.tokenId,
-            currentValue: numericValue
-        });
-        this.renderNumberPicker();
-        this.positionNumberPicker(state.anchorEl);
-        this.numberPickerEl.hidden = false;
-    };
-
-    QuickAddComponent.prototype.adjustNumberPillValue = function adjustNumberPillValue(pillEl, direction) {
+    QuickAddComponent.prototype.adjustNumberPillValue = async function adjustNumberPillValue(pillEl, direction) {
         if (!pillEl || !direction) {
             return false;
         }
@@ -3965,6 +4610,27 @@
             }
             const entryIndexRaw = Number(pillEl.getAttribute('data-pill-entry'));
             const entryIndex = Number.isFinite(entryIndexRaw) ? entryIndexRaw : 0;
+            const commitValidation = await this.runBeforeCommitField({
+                entryIndex,
+                entryKey: entryId,
+                fieldKey,
+                nextValue,
+                source: 'stepper',
+                sourceRegion,
+                fieldType: 'number'
+            });
+            if (!commitValidation.allow) {
+                this.statusEl.textContent = commitValidation.reason || 'Value blocked';
+                return false;
+            }
+            nextValue = Number(commitValidation.value);
+            if (!Number.isFinite(nextValue)) {
+                this.statusEl.textContent = 'Invalid value from beforeCommitField';
+                return false;
+            }
+            if (commitValidation.warning) {
+                this.statusEl.textContent = commitValidation.warning;
+            }
             this.applyAIFieldSelection({
                 entryId,
                 fieldKey,
@@ -3995,6 +4661,17 @@
         }
         let baseValue = Number(token.value);
         if (!Number.isFinite(baseValue)) {
+            const entry = (this.lastResult.entries || []).find((item) => item.index === entryIndex);
+            if (entry && entry.fields) {
+                const entryValue = entry.fields[fieldKey];
+                if (Array.isArray(entryValue)) {
+                    baseValue = Number(entryValue[0]);
+                } else {
+                    baseValue = Number(entryValue);
+                }
+            }
+        }
+        if (!Number.isFinite(baseValue)) {
             baseValue = Number(rawValue);
         }
         if (!Number.isFinite(baseValue)) {
@@ -4006,6 +4683,27 @@
         }
         if (Number.isFinite(max)) {
             nextValue = Math.min(max, nextValue);
+        }
+        const commitValidation = await this.runBeforeCommitField({
+            entryIndex,
+            entryKey: entryIndex,
+            fieldKey,
+            nextValue,
+            source: 'stepper',
+            sourceRegion,
+            fieldType: 'number'
+        });
+        if (!commitValidation.allow) {
+            this.statusEl.textContent = commitValidation.reason || 'Value blocked';
+            return false;
+        }
+        nextValue = Number(commitValidation.value);
+        if (!Number.isFinite(nextValue)) {
+            this.statusEl.textContent = 'Invalid value from beforeCommitField';
+            return false;
+        }
+        if (commitValidation.warning) {
+            this.statusEl.textContent = commitValidation.warning;
         }
 
         const source = this.inputText || this.readInputText();
@@ -4204,6 +4902,19 @@
             bottom: window.innerHeight
         };
         const isValidRect = (rect) => rect && (rect.right - rect.left) > 24 && (rect.bottom - rect.top) > 24;
+        const intersectRect = (rect, axes) => {
+            if (!rect) {
+                return;
+            }
+            if (axes.x) {
+                bounds.left = Math.max(bounds.left, rect.left);
+                bounds.right = Math.min(bounds.right, rect.right);
+            }
+            if (axes.y) {
+                bounds.top = Math.max(bounds.top, rect.top);
+                bounds.bottom = Math.min(bounds.bottom, rect.bottom);
+            }
+        };
         const getClipAxes = (style) => {
             const overflowX = String(style.overflowX || style.overflow || '').toLowerCase();
             const overflowY = String(style.overflowY || style.overflow || '').toLowerCase();
@@ -4212,6 +4923,23 @@
                 x: clips(overflowX),
                 y: clips(overflowY)
             };
+        };
+        const isDialogBoundary = (el) => {
+            if (!el || !el.getAttribute) {
+                return false;
+            }
+            if (el.hasAttribute('data-qa-floating-boundary')) {
+                return true;
+            }
+            const role = String(el.getAttribute('role') || '').toLowerCase();
+            if (role === 'dialog' || role === 'alertdialog') {
+                return true;
+            }
+            const ariaModal = String(el.getAttribute('aria-modal') || '').toLowerCase();
+            if (ariaModal === 'true') {
+                return true;
+            }
+            return String(el.tagName || '').toLowerCase() === 'dialog';
         };
 
         let bounds = viewport;
@@ -4226,29 +4954,29 @@
                 visited.add(el);
                 const style = window.getComputedStyle(el);
                 const clipAxes = getClipAxes(style);
+                const fixedPos = style.position === 'fixed';
+                const forceBoundary = fixedPos || isDialogBoundary(el);
+                let rect = null;
                 if (clipAxes.x || clipAxes.y) {
-                    const rect = el.getBoundingClientRect();
-                    if (clipAxes.x) {
-                        bounds.left = Math.max(bounds.left, rect.left);
-                        bounds.right = Math.min(bounds.right, rect.right);
-                    }
-                    if (clipAxes.y) {
-                        bounds.top = Math.max(bounds.top, rect.top);
-                        bounds.bottom = Math.min(bounds.bottom, rect.bottom);
-                    }
+                    rect = el.getBoundingClientRect();
+                    intersectRect(rect, clipAxes);
                 }
-                if (style.position === 'fixed') {
+                if (forceBoundary) {
+                    rect = rect || el.getBoundingClientRect();
+                    intersectRect(rect, { x: true, y: true });
+                }
+                if (fixedPos) {
                     break;
                 }
                 el = el.parentElement;
             }
         };
 
-        if (anchorEl && anchorEl.parentElement) {
-            applyAncestors(anchorEl.parentElement);
+        if (anchorEl) {
+            applyAncestors(anchorEl);
         }
-        if (this.mountEl && this.mountEl.parentElement) {
-            applyAncestors(this.mountEl.parentElement);
+        if (this.mountEl) {
+            applyAncestors(this.mountEl);
         }
 
         return isValidRect(bounds) ? Object.assign({}, bounds) : viewport;
@@ -4261,10 +4989,7 @@
         const rect = anchorEl && anchorEl.getBoundingClientRect
             ? anchorEl.getBoundingClientRect()
             : this.inputEl.getBoundingClientRect();
-        const bounds = this.getFloatingBounds(anchorEl || this.inputEl);
         const hasTime = !!(this.datePickerState && this.datePickerState.fieldType === 'datetime');
-        const pad = window.innerWidth <= 480 ? 8 : 10;
-        const viewportWidth = Math.max(0, (bounds.right - bounds.left) - (pad * 2));
         const compactMax = window.innerWidth <= 480
             ? (hasTime ? 328 : 304)
             : (hasTime ? 356 : 324);
@@ -4272,46 +4997,29 @@
             ? (hasTime ? 278 : 252)
             : (hasTime ? 308 : 286);
         const preferredWidth = Math.max(compactMin, (rect.width || 0) + 28);
-        const width = Math.min(compactMax, viewportWidth, preferredWidth);
-        const minLeft = bounds.left + pad;
-        const maxLeft = bounds.right - width - pad;
-        const left = Math.max(minLeft, Math.min(rect.left || minLeft, maxLeft));
-        const prevHidden = this.datePickerEl.hidden;
-        const prevVisibility = this.datePickerEl.style.visibility;
-        const prevDisplay = this.datePickerEl.style.display;
-        this.datePickerEl.hidden = false;
-        this.datePickerEl.style.visibility = 'hidden';
-        this.datePickerEl.style.removeProperty('display');
-        this.datePickerEl.style.width = `${width}px`;
-        const measuredHeight = Math.ceil(this.datePickerEl.getBoundingClientRect().height || this.datePickerEl.scrollHeight || 0);
-        if (prevHidden) {
-            this.datePickerEl.hidden = true;
-        }
-        this.datePickerEl.style.visibility = prevVisibility;
-        if (prevDisplay) {
-            this.datePickerEl.style.display = prevDisplay;
-        } else {
-            this.datePickerEl.style.removeProperty('display');
-        }
         const fallbackHeight = window.innerWidth <= 480
             ? (hasTime ? 410 : 290)
             : (hasTime ? 360 : 280);
-        const approxHeight = measuredHeight || fallbackHeight;
-        const belowTop = (rect.bottom || rect.top || 0) + 8;
-        const minTop = bounds.top + pad;
-        const maxBottom = bounds.bottom - pad;
-        let top = belowTop;
-        if (belowTop + approxHeight > maxBottom) {
-            top = Math.max(minTop, (rect.top || 0) - approxHeight - 8);
-        }
-        if (top + approxHeight > maxBottom) {
-            top = Math.max(minTop, maxBottom - approxHeight);
-        }
+        const layout = this.computeFloatingLayout({
+            panelEl: this.datePickerEl,
+            anchorRect: rect,
+            anchorEl: anchorEl || this.inputEl,
+            ignoreAnchorClip: true,
+            minWidth: compactMin,
+            maxWidth: compactMax,
+            preferredWidth,
+            gap: 8,
+            fallbackHeight,
+            preferredPlacement: 'bottom',
+            flip: true,
+            allowExpand: false
+        });
         this.datePickerEl.style.position = 'fixed';
-        this.datePickerEl.style.left = `${left}px`;
-        this.datePickerEl.style.top = `${top}px`;
-        this.datePickerEl.style.width = `${width}px`;
-        this.datePickerEl.style.maxWidth = `${Math.max(0, bounds.right - bounds.left - (pad * 2))}px`;
+        this.datePickerEl.style.left = `${layout.left}px`;
+        this.datePickerEl.style.top = `${layout.top}px`;
+        this.datePickerEl.style.width = `${layout.width}px`;
+        this.datePickerEl.style.maxWidth = `${Math.max(0, layout.viewportWidth)}px`;
+        this.datePickerEl.style.maxHeight = `${Math.floor(layout.panelHeight)}px`;
         this.datePickerEl.style.zIndex = '9999';
     };
 
@@ -4349,7 +5057,7 @@
         return (nextEntry.tokens || []).filter((item) => item.kind === 'field' && item.key === fieldKey && item.committed).slice(-1)[0] || null;
     };
 
-    QuickAddComponent.prototype.applyDateSelection = function applyDateSelection(nextValue) {
+    QuickAddComponent.prototype.applyDateSelection = async function applyDateSelection(nextValue) {
         if (!this.datePickerState) {
             return;
         }
@@ -4365,10 +5073,30 @@
             this.datePickerState.selectedTimeValue = timeValue;
             commitValue = `${nextDateValue}T${timeValue}`;
         }
+        const commitValidation = await this.runBeforeCommitField({
+            entryIndex: this.datePickerState.entryIndex,
+            entryKey: this.datePickerState.aiContext
+                ? this.datePickerState.aiContext.entryId
+                : this.datePickerState.entryIndex,
+            fieldKey: this.datePickerState.fieldKey,
+            nextValue: commitValue,
+            source: 'click',
+            sourceRegion: this.datePickerState.sourceRegion || 'inline',
+            fieldType: this.datePickerState.fieldType
+        });
+        if (!commitValidation.allow) {
+            this.statusEl.textContent = commitValidation.reason || 'Date value blocked';
+            return;
+        }
+        commitValue = String(commitValidation.value);
+        if (commitValidation.warning) {
+            this.statusEl.textContent = commitValidation.warning;
+        }
         this.datePickerState.selectedValue = commitValue;
 
         if (this.datePickerState.aiContext) {
             const context = Object.assign({}, this.datePickerState.aiContext);
+            const sourceRegion = this.datePickerState.sourceRegion || 'inline';
             this.datePickerSuppressUntil = Date.now() + 150;
             this.closeDatePicker();
             this.applyAIFieldSelection({
@@ -4378,7 +5106,7 @@
                 occurrence: context.occurrence,
                 mappingKey: context.mappingKey,
                 nextValue: commitValue,
-                sourceRegion: context.sourceRegion || this.datePickerState.sourceRegion
+                sourceRegion: context.sourceRegion || sourceRegion
             });
             return;
         }
@@ -4418,6 +5146,22 @@
         });
     };
 
+    QuickAddComponent.prototype.commitDateSelection = function commitDateSelection(nextValue) {
+        this.applyDateSelection(nextValue).catch(() => {
+            if (this.statusEl) {
+                this.statusEl.textContent = 'Could not apply date selection';
+            }
+        });
+    };
+
+    QuickAddComponent.prototype.commitDropdownSelection = function commitDropdownSelection(nextValue) {
+        this.applyDropdownSelection(nextValue).catch(() => {
+            if (this.statusEl) {
+                this.statusEl.textContent = 'Could not apply option selection';
+            }
+        });
+    };
+
     QuickAddComponent.prototype.bindEvents = function bindEvents() {
         this.onInput = () => {
             if (this.isRenderingInput) {
@@ -4442,9 +5186,6 @@
                 if (!autoParse) {
                     return;
                 }
-                if (this.isAIOffline()) {
-                    return;
-                }
                 const latest = String(this.inputText || this.readInputText() || '').trim();
                 if (!latest || latest.length < threshold) {
                     return;
@@ -4467,6 +5208,11 @@
             }
             const inputType = String(event.inputType || '');
             if (inputType === 'insertParagraph' || inputType === 'insertLineBreak') {
+                if (this.suppressNextInsertParagraph) {
+                    this.suppressNextInsertParagraph = false;
+                    event.preventDefault();
+                    return;
+                }
                 event.preventDefault();
                 this.insertTextAtSelection('\n', { preferTokenBoundary: true });
                 return;
@@ -4492,10 +5238,28 @@
             }
             if (event.key === 'Enter') {
                 if (isTypingDropdown) {
-                    const active = this.dropdownState.activeOptionValue;
+                    let active = this.dropdownState.activeOptionValue;
+                    if (active === undefined || active === null || active === '') {
+                        const firstFiltered = Array.isArray(this.dropdownState.filteredOptions)
+                            ? this.dropdownState.filteredOptions[0]
+                            : null;
+                        if (firstFiltered && firstFiltered.value !== undefined && firstFiltered.value !== null) {
+                            active = firstFiltered.value;
+                        }
+                    }
+                    if ((active === undefined || active === null || active === '') && this.dropdownListEl) {
+                        const firstOption = this.dropdownListEl.querySelector('[data-option-value]');
+                        if (firstOption) {
+                            active = firstOption.getAttribute('data-option-value') || '';
+                        }
+                    }
                     if (active !== undefined && active !== null && active !== '') {
                         event.preventDefault();
-                        this.applyDropdownSelection(active);
+                        this.suppressNextInsertParagraph = true;
+                        setTimeout(() => {
+                            this.suppressNextInsertParagraph = false;
+                        }, 0);
+                        this.commitDropdownSelection(active);
                         return;
                     }
                 }
@@ -4554,7 +5318,7 @@
                 event.stopPropagation();
                 const direction = Number(numberStepBtn.getAttribute('data-number-step'));
                 if (direction === -1 || direction === 1) {
-                    this.adjustNumberPillValue(numberStepBtn.closest('[data-qa-pill="1"]'), direction);
+                    void this.adjustNumberPillValue(numberStepBtn.closest('[data-qa-pill="1"]'), direction);
                 }
                 return;
             }
@@ -4619,7 +5383,7 @@
                 event.stopPropagation();
                 const direction = Number(numberStepBtn.getAttribute('data-number-step'));
                 if (direction === -1 || direction === 1) {
-                    this.adjustNumberPillValue(numberStepBtn.closest('[data-qa-pill="1"]'), direction);
+                    void this.adjustNumberPillValue(numberStepBtn.closest('[data-qa-pill="1"]'), direction);
                 }
                 return;
             }
@@ -4709,9 +5473,11 @@
                 this.dropdownSearchEl.value = '';
                 this.renderDropdownList();
                 this.positionDropdown(entryLinkBtn);
+                this.captureFocusOrigin('dropdown', entryLinkBtn, this.inputEl);
                 this.dropdownEl.hidden = false;
                 this.dropdownEl.classList.add(this.config.classNames.dropdownOpen);
                 this.scrollDropdownActiveOptionIntoView();
+                this.syncDropdownA11y();
                 this.dropdownSearchEl.focus();
                 return;
             }
@@ -4949,7 +5715,7 @@
                     if (this.datePickerState) {
                         this.datePickerState.titleMenu = '';
                     }
-                    this.applyDateSelection(value);
+                    this.commitDateSelection(value);
                 }
             }
         };
@@ -4991,7 +5757,7 @@
                     const nextTime = normalizeTime24(targetEl.value, this.datePickerState.defaultTime);
                     this.datePickerState.selectedTimeValue = nextTime;
                     targetEl.value = nextTime;
-                    this.applyDateSelection(this.datePickerState.selectedDateValue || toYMD(this.datePickerState.activeDate || new Date()));
+                    this.commitDateSelection(this.datePickerState.selectedDateValue || toYMD(this.datePickerState.activeDate || new Date()));
                 }
                 return;
             }
@@ -5006,7 +5772,7 @@
             }
             if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
-                this.applyDateSelection(currentValue);
+                this.commitDateSelection(currentValue);
                 return;
             }
             let nextDate = null;
@@ -5037,58 +5803,6 @@
             this.renderDatePicker();
             if (!this.focusDatePickerDate(toYMD(nextDate)) && this.datePickerEl) {
                 this.datePickerEl.focus();
-            }
-        };
-
-        this.onNumberPickerClick = (event) => {
-            const targetEl = eventTargetElement(event);
-            if (!targetEl || !this.numberPickerState) {
-                return;
-            }
-            const actionBtn = targetEl.closest('[data-number-action]');
-            if (!actionBtn) {
-                return;
-            }
-            event.preventDefault();
-            event.stopPropagation();
-            const action = actionBtn.getAttribute('data-number-action');
-            this.applyNumberStep(action === 'decrement' ? -1 : 1);
-        };
-
-        this.onNumberPickerInput = (event) => {
-            const targetEl = eventTargetElement(event);
-            if (!targetEl || !this.numberPickerState || targetEl.getAttribute('data-role') !== 'numberPickerStepInput') {
-                return;
-            }
-            const next = Number(targetEl.value);
-            if (Number.isFinite(next) && next > 0) {
-                this.numberPickerState = Object.assign({}, this.numberPickerState, { step: next });
-            }
-        };
-
-        this.onNumberPickerChange = (event) => {
-            const targetEl = eventTargetElement(event);
-            if (!targetEl || !this.numberPickerState || targetEl.getAttribute('data-role') !== 'numberPickerStepInput') {
-                return;
-            }
-            const field = this.getFieldDefinition(this.numberPickerState.fieldKey);
-            const nextStep = this.resolveNumberStep(field, targetEl.value);
-            this.numberPickerState = Object.assign({}, this.numberPickerState, { step: nextStep });
-            targetEl.value = String(nextStep);
-        };
-
-        this.onNumberPickerKeyDown = (event) => {
-            if (!this.numberPickerState) {
-                return;
-            }
-            if (event.key === 'Escape') {
-                event.preventDefault();
-                event.stopPropagation();
-                this.closeNumberPicker();
-                return;
-            }
-            if (event.key === 'Enter') {
-                event.stopPropagation();
             }
         };
 
@@ -5161,7 +5875,7 @@
                 const active = this.dropdownState.activeOptionValue;
                 if (active !== undefined && active !== null && active !== '') {
                     event.preventDefault();
-                    this.applyDropdownSelection(active);
+                    this.commitDropdownSelection(active);
                 }
             }
         };
@@ -5172,7 +5886,7 @@
                 return;
             }
             const value = optionBtn.getAttribute('data-option-value') || '';
-            this.applyDropdownSelection(value);
+            this.commitDropdownSelection(value);
         };
 
         this.onDocumentPointerDown = (event) => {
@@ -5188,16 +5902,13 @@
                     event.preventDefault();
                     return;
                 }
-                event.stopPropagation();
                 return;
             }
             if (this.attachmentSourceMenuEl && !this.attachmentSourceMenuEl.hidden) {
                 const insideMenu = this.attachmentSourceMenuEl.contains(targetEl);
                 const onToggle = !!targetEl.closest('[data-entry-attachment-picker-toggle="1"]');
                 if (!insideMenu && !onToggle) {
-                    this.closeAttachmentSourceMenu();
-                    event.stopPropagation();
-                    event.preventDefault();
+                    this.closeAttachmentSourceMenu({ restoreFocus: false });
                     return;
                 }
             }
@@ -5206,33 +5917,19 @@
                     return;
                 }
                 if (!this.datePickerEl.contains(targetEl) && !targetEl.closest('[data-qa-date-pill="1"]')) {
-                    this.closeDatePicker();
-                    event.stopPropagation();
-                    event.preventDefault();
-                    return;
-                }
-            }
-            if (this.numberPickerEl && !this.numberPickerEl.hidden) {
-                if (!this.numberPickerEl.contains(targetEl) && !targetEl.closest('[data-qa-number-pill="1"]')) {
-                    this.closeNumberPicker();
-                    event.stopPropagation();
-                    event.preventDefault();
+                    this.closeDatePicker({ restoreFocus: false });
                     return;
                 }
             }
             if (this.dropdownEl && !this.dropdownEl.hidden) {
                 if (!this.dropdownEl.contains(targetEl) && !targetEl.closest('[data-qa-pill="1"]')) {
-                    this.closeDropdown();
-                    event.stopPropagation();
-                    event.preventDefault();
+                    this.closeDropdown({ restoreFocus: false });
                     return;
                 }
             }
             if (this.blockedInfoEl && !this.blockedInfoEl.hidden) {
                 if (!this.blockedInfoEl.contains(targetEl) && !targetEl.closest('[data-qa-blocked="1"]')) {
-                    this.closeBlockedInfo();
-                    event.stopPropagation();
-                    event.preventDefault();
+                    this.closeBlockedInfo({ restoreFocus: false });
                 }
             }
         };
@@ -5250,47 +5947,39 @@
                 event.preventDefault();
                 return;
             }
-            if (this.attachmentSourceMenuEl && !this.attachmentSourceMenuEl.hidden) {
-                if (
-                    !this.attachmentSourceMenuEl.contains(targetEl)
-                    && !targetEl.closest('[data-entry-attachment-picker-toggle="1"]')
-                ) {
-                    this.closeAttachmentSourceMenu();
-                    event.stopPropagation();
-                    event.preventDefault();
-                    return;
-                }
-            }
-            if (this.blockedInfoEl && !this.blockedInfoEl.hidden) {
-                if (!this.blockedInfoEl.contains(targetEl) && !targetEl.closest('[data-qa-blocked="1"]')) {
-                    this.closeBlockedInfo();
-                }
-            }
-            if (this.datePickerEl && !this.datePickerEl.hidden) {
-                if (Date.now() < this.datePickerInternalClickUntil) {
-                    return;
-                }
-                if (!this.datePickerEl.contains(targetEl) && !targetEl.closest('[data-qa-date-pill="1"]')) {
-                    this.closeDatePicker();
-                }
-            }
-            if (this.numberPickerEl && !this.numberPickerEl.hidden) {
-                if (!this.numberPickerEl.contains(targetEl) && !targetEl.closest('[data-qa-number-pill="1"]')) {
-                    this.closeNumberPicker();
-                }
-            }
-            if (this.dropdownEl && !this.dropdownEl.hidden) {
-                if (this.dropdownEl.contains(targetEl)) {
-                    return;
-                }
-                if (targetEl.closest('[data-qa-pill="1"]')) {
-                    return;
-                }
-                this.closeDropdown();
-            }
         };
 
         this.onDocumentKeyDown = (event) => {
+            const targetEl = eventTargetElement(event);
+            const containsInQuickAdd = (node) => {
+                if (!node || !(node instanceof Element)) {
+                    return false;
+                }
+                return !!(
+                    (this.rootEl && this.rootEl.contains(node))
+                    || (this.dropdownEl && this.dropdownEl.contains(node))
+                    || (this.datePickerEl && this.datePickerEl.contains(node))
+                    || (this.attachmentSourceMenuEl && this.attachmentSourceMenuEl.contains(node))
+                    || (this.blockedInfoEl && this.blockedInfoEl.contains(node))
+                    || (this.conflictModalOverlayEl && this.conflictModalOverlayEl.contains(node))
+                );
+            };
+            const targetInside = containsInQuickAdd(targetEl);
+            const activeInside = containsInQuickAdd(document.activeElement);
+            if (!targetInside && !activeInside && !this.conflictModalState) {
+                return;
+            }
+            const isUndoRedoModifier = !!(event.metaKey || event.ctrlKey);
+            const isPlainZ = event.key === 'z' || event.key === 'Z';
+            if (isUndoRedoModifier && isPlainZ && !event.altKey) {
+                event.preventDefault();
+                if (event.shiftKey) {
+                    this.redo();
+                } else {
+                    this.undo();
+                }
+                return;
+            }
             if (event.key === 'Escape') {
                 if (this.conflictModalState) {
                     this.handleConflictModalAction('cancel');
@@ -5310,12 +5999,6 @@
                     event.stopPropagation();
                     return;
                 }
-                if (this.numberPickerState) {
-                    this.closeNumberPicker();
-                    event.preventDefault();
-                    event.stopPropagation();
-                    return;
-                }
                 if (this.blockedInfoState) {
                     this.closeBlockedInfo();
                     event.preventDefault();
@@ -5328,32 +6011,6 @@
                     event.stopPropagation();
                     return;
                 }
-            }
-            if (event.key === 'Escape' && this.dropdownState) {
-                this.closeDropdown();
-            }
-            if (event.key === 'Escape' && this.numberPickerState) {
-                event.preventDefault();
-                this.closeNumberPicker();
-            }
-            if (event.key === 'Escape' && this.blockedInfoState) {
-                this.closeBlockedInfo();
-            }
-            if (event.key === 'Escape' && this.datePickerState) {
-                event.preventDefault();
-                this.closeDatePicker();
-            }
-            if (
-                event.key === 'Enter'
-                && (
-                    this.dropdownState
-                    || this.numberPickerState
-                    || this.datePickerState
-                    || this.attachmentSourceMenuState
-                    || this.blockedInfoState
-                )
-            ) {
-                event.stopPropagation();
             }
         };
 
@@ -5373,8 +6030,8 @@
                 if (this.datePickerState && this.datePickerEl && !this.datePickerEl.hidden) {
                     this.positionDatePicker(this.datePickerState.anchorEl || null);
                 }
-                if (this.numberPickerState && this.numberPickerEl && !this.numberPickerEl.hidden) {
-                    this.positionNumberPicker(this.numberPickerState.anchorEl || null);
+                if (this.attachmentSourceMenuState && this.attachmentSourceMenuEl && !this.attachmentSourceMenuEl.hidden) {
+                    this.positionAttachmentSourceMenu(this.attachmentSourceMenuState.anchorEl || null);
                 }
             });
         };
@@ -5400,10 +6057,6 @@
         this.datePickerEl.addEventListener('click', this.onDatePickerClick);
         this.datePickerEl.addEventListener('change', this.onDatePickerChange);
         this.datePickerEl.addEventListener('keydown', this.onDatePickerKeyDown);
-        this.numberPickerEl.addEventListener('click', this.onNumberPickerClick);
-        this.numberPickerEl.addEventListener('input', this.onNumberPickerInput);
-        this.numberPickerEl.addEventListener('change', this.onNumberPickerChange);
-        this.numberPickerEl.addEventListener('keydown', this.onNumberPickerKeyDown);
         document.addEventListener('pointerdown', this.onDocumentPointerDown, true);
         document.addEventListener('click', this.onDocumentClick, true);
         document.addEventListener('keydown', this.onDocumentKeyDown, true);
@@ -5468,18 +6121,6 @@
         }
         if (this.datePickerEl && this.onDatePickerKeyDown) {
             this.datePickerEl.removeEventListener('keydown', this.onDatePickerKeyDown);
-        }
-        if (this.numberPickerEl && this.onNumberPickerClick) {
-            this.numberPickerEl.removeEventListener('click', this.onNumberPickerClick);
-        }
-        if (this.numberPickerEl && this.onNumberPickerInput) {
-            this.numberPickerEl.removeEventListener('input', this.onNumberPickerInput);
-        }
-        if (this.numberPickerEl && this.onNumberPickerChange) {
-            this.numberPickerEl.removeEventListener('change', this.onNumberPickerChange);
-        }
-        if (this.numberPickerEl && this.onNumberPickerKeyDown) {
-            this.numberPickerEl.removeEventListener('keydown', this.onNumberPickerKeyDown);
         }
         document.removeEventListener('pointerdown', this.onDocumentPointerDown, true);
         document.removeEventListener('click', this.onDocumentClick, true);
@@ -5883,7 +6524,15 @@
                 }
 
                 const rawTokenChunk = raw.slice(token.globalStart, token.globalEnd);
-                parts.push(this.buildInlineMarkHtml(token, rawTokenChunk));
+                const trailingWhitespaceMatch = rawTokenChunk.match(/\s+$/);
+                const trailingWhitespace = trailingWhitespaceMatch ? trailingWhitespaceMatch[0] : '';
+                const displayChunk = trailingWhitespace
+                    ? rawTokenChunk.slice(0, rawTokenChunk.length - trailingWhitespace.length)
+                    : rawTokenChunk;
+                parts.push(this.buildInlineMarkHtml(token, displayChunk || rawTokenChunk));
+                if (trailingWhitespace) {
+                    parts.push(escHtml(trailingWhitespace));
+                }
                 cursor = token.globalEnd;
             });
             if (cursor < raw.length) {
@@ -6193,6 +6842,11 @@
                 parts.push(escHtml(raw.slice(cursor, mark.start)));
             }
             const chunk = raw.slice(mark.start, mark.end);
+            const trailingWhitespaceMatch = chunk.match(/\s+$/);
+            const trailingWhitespace = trailingWhitespaceMatch ? trailingWhitespaceMatch[0] : '';
+            const displayChunk = trailingWhitespace
+                ? chunk.slice(0, chunk.length - trailingWhitespace.length)
+                : chunk;
             const field = mark.fieldKey ? this.getFieldDefinition(mark.fieldKey) : null;
             const interactive = !!(mark.explicit && mark.entryId && mark.fieldKey && this.isInteractivePill(field));
             const classes = [
@@ -6212,7 +6866,10 @@
             const aiAttrs = interactive
                 ? ` data-qa-pill="1" data-pill-ai="1" data-pill-entry="${aiEntryIndex}" data-qa-date-pill="${field && isDateFieldType(field.type) ? '1' : '0'}" data-qa-number-pill="${isNumberField ? '1' : '0'}" data-pill-ai-entry-id="${escHtml(String(mark.entryId || ''))}" data-pill-ai-field="${escHtml(String(mark.fieldKey || ''))}" data-pill-ai-value="${escHtml(String(aiValue))}" data-pill-ai-occurrence="${Number.isFinite(Number(mark.occurrence)) ? Number(mark.occurrence) : 0}" data-pill-ai-map="${escHtml(String(mark.mappingKey || ''))}"`
                 : '';
-            parts.push(`<span class="${classes}"${aiAttrs}${styleAttr} title="${title}"><span class="${c.inlineMarkLabel}">${escHtml(chunk)}</span></span>`);
+            parts.push(`<span class="${classes}"${aiAttrs}${styleAttr} title="${title}"><span class="${c.inlineMarkLabel}">${escHtml(displayChunk || chunk)}</span></span>`);
+            if (trailingWhitespace) {
+                parts.push(escHtml(trailingWhitespace));
+            }
             cursor = mark.end;
         });
         if (cursor < raw.length) {
@@ -6234,8 +6891,8 @@
         } else {
             this.inputText = this.readInputText();
         }
-        this.closeAttachmentSourceMenu();
-        this.closeBlockedInfo();
+        this.closeAttachmentSourceMenu({ restoreFocus: false });
+        this.closeBlockedInfo({ restoreFocus: false });
 
         const input = this.inputText || '';
         if (this.isAiMode()) {
@@ -6243,8 +6900,8 @@
             this.rebuildTokenMap({ entries: [] });
             this.renderAIInlineLayer(opts);
             this.renderResult(this.lastResult);
-            this.closeDropdown();
-            this.closeDatePicker();
+            this.closeDropdown({ restoreFocus: false });
+            this.closeDatePicker({ restoreFocus: false });
             this.closeNumberPicker();
         } else {
             this.aiInlineMarkIndex = {};
@@ -6266,6 +6923,125 @@
         if (typeof this.config.onParse === 'function') {
             this.config.onParse(this.lastResult);
         }
+        if (!opts.skipHistory) {
+            this.captureHistorySnapshot('parse');
+        }
+    };
+
+    QuickAddComponent.prototype.createHistorySnapshot = function createHistorySnapshot(reason) {
+        const attachmentPool = (this.attachmentPool || []).map((item) => Object.assign({}, item));
+        const aiState = {
+            entries: deepCloneValue(this.aiState.entries || []),
+            editedEntries: Array.from(this.aiState.editedEntries || []),
+            deletedEntries: Array.from(this.aiState.deletedEntries || []),
+            editingEntryId: String(this.aiState.editingEntryId || '')
+        };
+        const signature = JSON.stringify({
+            input: this.inputText || '',
+            dismissed: Array.from(this.dismissedSelections || []),
+            attachments: attachmentPool.map((item) => `${item.id}|${item.ref}|${item.fingerprint}`),
+            aiEntries: aiState.entries.length,
+            reason: String(reason || '')
+        });
+        return {
+            signature,
+            inputText: String(this.inputText || ''),
+            dismissedSelections: Array.from(this.dismissedSelections || []),
+            attachmentCounter: Number(this.attachmentCounter || 0),
+            attachmentPool,
+            aiState
+        };
+    };
+
+    QuickAddComponent.prototype.captureHistorySnapshot = function captureHistorySnapshot(reason) {
+        if (!this.config.history.enabled || this.historySuspend) {
+            return;
+        }
+        const snapshot = this.createHistorySnapshot(reason);
+        const previous = this.historyPast.length ? this.historyPast[this.historyPast.length - 1] : null;
+        if (previous && previous.signature === snapshot.signature) {
+            return;
+        }
+        this.historyPast.push(snapshot);
+        this.historyFuture = [];
+        const maxDepth = Number(this.config.history.maxDepth || 100);
+        if (this.historyPast.length > maxDepth) {
+            this.historyPast = this.historyPast.slice(this.historyPast.length - maxDepth);
+        }
+    };
+
+    QuickAddComponent.prototype.applyHistorySnapshot = function applyHistorySnapshot(snapshot) {
+        if (!snapshot) {
+            return false;
+        }
+        this.historySuspend = true;
+        try {
+            this.inputText = String(snapshot.inputText || '');
+            this.dismissedSelections = new Set(Array.isArray(snapshot.dismissedSelections) ? snapshot.dismissedSelections : []);
+            this.attachmentCounter = Number(snapshot.attachmentCounter || 0);
+            this.attachmentPool = Array.isArray(snapshot.attachmentPool)
+                ? snapshot.attachmentPool.map((item) => Object.assign({}, item))
+                : [];
+            if (snapshot.aiState && typeof snapshot.aiState === 'object') {
+                this.aiState.entries = Array.isArray(snapshot.aiState.entries) ? deepCloneValue(snapshot.aiState.entries) : [];
+                this.aiState.editedEntries = new Set(Array.isArray(snapshot.aiState.editedEntries) ? snapshot.aiState.editedEntries : []);
+                this.aiState.deletedEntries = new Set(Array.isArray(snapshot.aiState.deletedEntries) ? snapshot.aiState.deletedEntries : []);
+                this.aiState.editingEntryId = String(snapshot.aiState.editingEntryId || '');
+            }
+            this.parseAndRender({
+                source: this.inputText,
+                skipTypingSync: true,
+                focusInput: false,
+                skipHistory: true
+            });
+            return true;
+        } finally {
+            this.historySuspend = false;
+        }
+    };
+
+    QuickAddComponent.prototype.canUndo = function canUndo() {
+        return this.config.history.enabled && this.historyPast.length > 1;
+    };
+
+    QuickAddComponent.prototype.canRedo = function canRedo() {
+        return this.config.history.enabled && this.historyFuture.length > 0;
+    };
+
+    QuickAddComponent.prototype.undo = function undo() {
+        if (!this.canUndo()) {
+            return false;
+        }
+        const current = this.historyPast.pop();
+        const previous = this.historyPast[this.historyPast.length - 1];
+        if (!previous) {
+            if (current) {
+                this.historyPast.push(current);
+            }
+            return false;
+        }
+        if (current) {
+            this.historyFuture.push(current);
+        }
+        return this.applyHistorySnapshot(previous);
+    };
+
+    QuickAddComponent.prototype.redo = function redo() {
+        if (!this.canRedo()) {
+            return false;
+        }
+        const next = this.historyFuture.pop();
+        if (!next) {
+            return false;
+        }
+        this.historyPast.push(next);
+        return this.applyHistorySnapshot(next);
+    };
+
+    QuickAddComponent.prototype.clearHistory = function clearHistory() {
+        this.historyPast = [];
+        this.historyFuture = [];
+        this.captureHistorySnapshot('clear');
     };
 
     QuickAddComponent.prototype.getFieldDefinition = function getFieldDefinition(fieldKey) {
@@ -6398,17 +7174,12 @@
         const blockedIcon = blocked
             ? `<span class="${c.pillBlockedIcon}" aria-hidden="true">!</span>`
             : '';
+        const fieldLabelText = field ? String(field.label || field.key || 'value') : 'value';
         const dismiss = (!blocked && data.dismissKey)
-            ? `<button type="button" class="${c.pillDismiss}" data-dismiss-key="${escHtml(data.dismissKey)}" aria-label="Dismiss value">x</button>`
+            ? `<button type="button" class="${c.pillDismiss}" data-dismiss-key="${escHtml(data.dismissKey)}" aria-label="Dismiss ${escHtml(fieldLabelText)}">x</button>`
             : '';
         const numberControls = (!blocked && numberInteractive)
-            ? `
-                <span class="${c.numberPillStepper}">
-                    <button type="button" class="${c.numberPillStepBtn}" data-number-step="-1" aria-label="Decrease value">−</button>
-                    <span class="${c.pillLabel}">${escHtml(data.label)}</span>
-                    <button type="button" class="${c.numberPillStepBtn}" data-number-step="1" aria-label="Increase value">+</button>
-                </span>
-            `
+            ? `<span class="${c.numberPillStepper}"><button type="button" class="${c.numberPillStepBtn}" data-number-step="-1" aria-label="Decrease ${escHtml(fieldLabelText)}">−</button><span class="${c.pillLabel}">${escHtml(data.label)}</span><button type="button" class="${c.numberPillStepBtn}" data-number-step="1" aria-label="Increase ${escHtml(fieldLabelText)}">+</button></span>`
             : `<span class="${c.pillLabel}">${escHtml(data.label)}</span>`;
 
         return `<span class="${classes}"${attrs}${styleAttr}>${blockedIcon}${autoIcon}${inferredIcon}${numberControls}${dismiss}</span>`;
@@ -6439,18 +7210,13 @@
         const blockedIcon = token.blocked
             ? `<span class="${c.inlineMarkBlockedIcon}" data-qa-ignore="1" contenteditable="false" aria-hidden="true">!</span>`
             : '';
+        const fieldLabelText = field ? String(field.label || field.key || 'value') : 'value';
         const dismiss = token.dismissKey
-            ? `<button type="button" class="${c.inlineMarkDismiss}" data-qa-ignore="1" contenteditable="false" data-dismiss-key="${escHtml(token.dismissKey)}" aria-label="Dismiss value">x</button>`
+            ? `<button type="button" class="${c.inlineMarkDismiss}" data-qa-ignore="1" contenteditable="false" data-dismiss-key="${escHtml(token.dismissKey)}" aria-label="Dismiss ${escHtml(fieldLabelText)}">x</button>`
             : '';
         const titleAttr = token.blocked && token.reason ? ` title="${escHtml(`Blocked by constraints: ${token.reason}`)}"` : '';
         const numberControls = (numberInteractive && !token.blocked)
-            ? `
-                <span class="${c.numberPillStepper}" data-qa-ignore="1" contenteditable="false">
-                    <button type="button" class="${c.numberPillStepBtn}" data-qa-ignore="1" contenteditable="false" data-number-step="-1" aria-label="Decrease value">−</button>
-                    <span class="${c.inlineMarkLabel}" data-qa-ignore="1" contenteditable="false">${escHtml(rawChunk)}</span>
-                    <button type="button" class="${c.numberPillStepBtn}" data-qa-ignore="1" contenteditable="false" data-number-step="1" aria-label="Increase value">+</button>
-                </span>
-            `
+            ? `<span class="${c.numberPillStepper}"><button type="button" class="${c.numberPillStepBtn}" data-qa-ignore="1" contenteditable="false" data-number-step="-1" aria-label="Decrease ${escHtml(fieldLabelText)}">−</button><span class="${c.inlineMarkLabel}">${escHtml(rawChunk)}</span><button type="button" class="${c.numberPillStepBtn}" data-qa-ignore="1" contenteditable="false" data-number-step="1" aria-label="Increase ${escHtml(fieldLabelText)}">+</button></span>`
             : `<span class="${c.inlineMarkLabel}">${escHtml(rawChunk)}</span>`;
         return `<span class="${classes}"${attrs}${blockedAttrs}${styleAttr}${titleAttr}>${blockedIcon}${inferredIcon}${numberControls}${dismiss}</span>`;
     };
@@ -6915,44 +7681,27 @@
         if (!anchorRect) {
             return;
         }
-        const bounds = this.getFloatingBounds(anchorEl || this.inputEl);
-        const pad = window.innerWidth <= 480 ? 8 : 10;
-        const viewportWidth = Math.max(0, (bounds.right - bounds.left) - (pad * 2));
-        const preferredWidth = Math.max(180, Math.min(240, viewportWidth));
-        const width = Math.min(preferredWidth, viewportWidth);
-        const minLeft = bounds.left + pad;
-        const maxLeft = bounds.right - width - pad;
-        const left = Math.max(minLeft, Math.min(anchorRect.left || minLeft, maxLeft));
-
-        this.attachmentSourceMenuEl.style.removeProperty('max-height');
-        const measuredHeight = Math.ceil(this.attachmentSourceMenuEl.getBoundingClientRect().height || this.attachmentSourceMenuEl.scrollHeight || 0);
-        const gap = 2;
-        const anchorTop = anchorRect.top || 0;
-        const anchorBottom = anchorRect.bottom || anchorRect.top || 0;
-        const minTop = bounds.top + pad;
-        const maxBottom = bounds.bottom - pad;
-        const availableBelow = Math.max(0, maxBottom - (anchorBottom + gap));
-        const availableAbove = Math.max(0, (anchorTop - gap) - minTop);
-        let placeBelow = availableBelow >= availableAbove;
-        if (availableBelow >= measuredHeight) {
-            placeBelow = true;
-        } else if (availableAbove >= measuredHeight) {
-            placeBelow = false;
-        }
-        const availableHeight = Math.max(0, placeBelow ? availableBelow : availableAbove);
-        let top = placeBelow
-            ? (anchorBottom + gap)
-            : Math.max(minTop, (anchorTop - gap) - Math.min(availableHeight, measuredHeight));
-        if (placeBelow && top + availableHeight > maxBottom) {
-            top = Math.max(minTop, maxBottom - availableHeight);
-        }
+        const layout = this.computeFloatingLayout({
+            panelEl: this.attachmentSourceMenuEl,
+            anchorRect,
+            anchorEl: anchorEl || this.inputEl,
+            ignoreAnchorClip: true,
+            minWidth: 180,
+            maxWidth: 240,
+            preferredWidth: 240,
+            gap: 2,
+            fallbackHeight: 120,
+            preferredPlacement: 'bottom',
+            flip: true,
+            allowExpand: false
+        });
 
         this.attachmentSourceMenuEl.style.position = 'fixed';
-        this.attachmentSourceMenuEl.style.left = `${left}px`;
-        this.attachmentSourceMenuEl.style.top = `${top}px`;
-        this.attachmentSourceMenuEl.style.width = `${width}px`;
-        this.attachmentSourceMenuEl.style.maxWidth = `${Math.max(0, viewportWidth)}px`;
-        this.attachmentSourceMenuEl.style.maxHeight = `${Math.floor(availableHeight)}px`;
+        this.attachmentSourceMenuEl.style.left = `${layout.left}px`;
+        this.attachmentSourceMenuEl.style.top = `${layout.top}px`;
+        this.attachmentSourceMenuEl.style.width = `${layout.width}px`;
+        this.attachmentSourceMenuEl.style.maxWidth = `${Math.max(0, layout.viewportWidth)}px`;
+        this.attachmentSourceMenuEl.style.maxHeight = `${Math.floor(layout.panelHeight)}px`;
         this.attachmentSourceMenuEl.style.zIndex = '10000';
     };
 
@@ -6964,6 +7713,7 @@
         if (!items.length) {
             return;
         }
+        this.captureFocusOrigin('attachmentSourceMenu', anchorEl || null, this.inputEl);
         const c = this.config.classNames;
         this.attachmentSourceMenuState = {
             anchorEl: anchorEl || null,
@@ -6984,7 +7734,8 @@
         this.positionAttachmentSourceMenu(this.attachmentSourceMenuState.anchorEl || anchorEl);
     };
 
-    QuickAddComponent.prototype.closeAttachmentSourceMenu = function closeAttachmentSourceMenu() {
+    QuickAddComponent.prototype.closeAttachmentSourceMenu = function closeAttachmentSourceMenu(options) {
+        const opts = options || {};
         this.attachmentSourceMenuState = null;
         if (!this.attachmentSourceMenuEl) {
             return;
@@ -6998,6 +7749,9 @@
         this.attachmentSourceMenuEl.style.removeProperty('max-width');
         this.attachmentSourceMenuEl.style.removeProperty('max-height');
         this.attachmentSourceMenuEl.style.removeProperty('z-index');
+        if (opts.restoreFocus !== false) {
+            this.restoreFocusOrigin('attachmentSourceMenu');
+        }
     };
 
     QuickAddComponent.prototype.buildMobileAttachmentPicker = function buildMobileAttachmentPicker(scopeId, acceptAttr, multipleAttr, markerAttr) {
@@ -7220,6 +7974,312 @@
         return result;
     };
 
+    QuickAddComponent.prototype.readAttachmentContentBase64 = async function readAttachmentContentBase64(item) {
+        if (!item) {
+            return null;
+        }
+        if (item.contentBase64) {
+            return {
+                contentBase64: String(item.contentBase64),
+                encoding: 'base64',
+                byteLength: Number(item.byteLength || item.size || 0)
+            };
+        }
+        if (!item.file || typeof item.file.arrayBuffer !== 'function') {
+            return null;
+        }
+        const arrayBuffer = await item.file.arrayBuffer();
+        const contentBase64 = arrayBufferToBase64(arrayBuffer);
+        return {
+            contentBase64,
+            encoding: 'base64',
+            byteLength: Number(item.file.size || 0)
+        };
+    };
+
+    QuickAddComponent.prototype.toExportAttachment = async function toExportAttachment(item, details) {
+        if (!item) {
+            return null;
+        }
+        const opts = details || {};
+        const mode = normalizeAttachmentMode(opts.attachmentMode);
+        const base = {
+            id: String(item.id || ''),
+            ref: String(item.ref || ''),
+            entryKey: opts.entryKey !== undefined && opts.entryKey !== null ? String(opts.entryKey) : null,
+            fieldKey: opts.fieldKey !== undefined && opts.fieldKey !== null ? String(opts.fieldKey) : null,
+            name: String(item.name || (item.file && item.file.name) || 'attachment'),
+            mimeType: String(item.type || (item.file && item.file.type) || ''),
+            size: Number(item.size || (item.file && item.file.size) || 0),
+            lastModified: Number(item.lastModified || (item.file && item.file.lastModified) || 0),
+            fingerprint: String(item.fingerprint || ''),
+            previewUrl: item.previewUrl || null,
+            linked: opts.linked !== false
+        };
+        if (mode === 'metadata-only') {
+            return base;
+        }
+        const encoded = await this.readAttachmentContentBase64(item);
+        if (!encoded) {
+            return base;
+        }
+        return Object.assign(base, encoded);
+    };
+
+    QuickAddComponent.prototype.getLinkedAttachmentRecords = function getLinkedAttachmentRecords(result) {
+        const entries = result && Array.isArray(result.entries) ? result.entries : [];
+        const records = [];
+        const seen = new Set();
+        entries.forEach((entry) => {
+            const entryKey = this.getEntryKey(entry);
+            const attachments = Array.isArray(entry && entry.attachments) ? entry.attachments : [];
+            attachments.forEach((attachment) => {
+                if (!attachment || !attachment.id) {
+                    return;
+                }
+                const key = `${entryKey}|${attachment.fieldKey || ''}|${attachment.id}`;
+                if (seen.has(key)) {
+                    return;
+                }
+                seen.add(key);
+                const poolItem = this.getAttachmentById(attachment.id) || attachment;
+                records.push({
+                    item: poolItem,
+                    fieldKey: attachment.fieldKey || null,
+                    entryKey
+                });
+            });
+        });
+        return records;
+    };
+
+    QuickAddComponent.prototype.getUnlinkedAttachments = async function getUnlinkedAttachments(options) {
+        const opts = options || {};
+        const mode = normalizeAttachmentMode(opts.attachmentMode);
+        const result = this.getResult() || { entries: [] };
+        const usage = this.getAttachmentUsage(result);
+        const unlinked = [];
+        for (const item of (this.attachmentPool || [])) {
+            if (!item || usage.has(item.id)) {
+                continue;
+            }
+            const exportItem = await this.toExportAttachment(item, {
+                linked: false,
+                fieldKey: null,
+                attachmentMode: mode
+            });
+            if (exportItem) {
+                unlinked.push(exportItem);
+            }
+        }
+        return unlinked;
+    };
+
+    QuickAddComponent.prototype.checkWarnings = async function checkWarnings(options) {
+        const opts = options || {};
+        const action = opts.action === 'close' ? 'close' : 'save';
+        const warningCfg = this.config.warnings && this.config.warnings.unlinkedAttachments
+            ? this.config.warnings.unlinkedAttachments
+            : DEFAULT_WARNINGS_CONFIG.unlinkedAttachments;
+        if (!warningCfg.enabled) {
+            return { ok: true };
+        }
+        const unlinkedAttachments = await this.getUnlinkedAttachments({
+            attachmentMode: normalizeAttachmentMode(opts.attachmentMode || 'metadata-only')
+        });
+        if (!unlinkedAttachments.length) {
+            return { ok: true };
+        }
+        const result = this.getResult() || null;
+        const linkedCount = this.getLinkedAttachmentRecords(result).length;
+        const payload = {
+            action,
+            unlinkedAttachments,
+            linkedAttachmentCount: linkedCount,
+            result
+        };
+        if (typeof warningCfg.onCheck === 'function') {
+            const accepted = await warningCfg.onCheck(payload);
+            return accepted === false
+                ? { ok: false, reason: 'warning-rejected', payload }
+                : { ok: true, payload };
+        }
+        const label = action === 'close' ? 'close' : 'save';
+        const accepted = await this.requestConflictConfirmation({
+            message: `You uploaded ${unlinkedAttachments.length} file(s) that are not linked to any entry. Continue and ${label}?`,
+            confirmLabel: `Continue and ${label}`,
+            cancelLabel: 'Go back',
+            ariaLabel: 'Unlinked attachments warning'
+        });
+        return accepted
+            ? { ok: true, payload }
+            : { ok: false, reason: 'warning-rejected', payload };
+    };
+
+    QuickAddComponent.prototype.runBeforeSaveValidation = async function runBeforeSaveValidation(result) {
+        const handler = this.config.validation && this.config.validation.beforeSaveEntry;
+        if (typeof handler !== 'function') {
+            return { ok: true };
+        }
+        const entries = Array.isArray(result && result.entries) ? result.entries : [];
+        const failures = [];
+        for (let i = 0; i < entries.length; i += 1) {
+            const entry = entries[i];
+            const decision = await handler({
+                entryDraft: deepCloneValue(entry),
+                allEntriesDraft: deepCloneValue(entries),
+                source: 'save'
+            });
+            if (!decision || typeof decision !== 'object' || decision.allow !== false) {
+                continue;
+            }
+            failures.push({
+                index: i,
+                reason: String(decision.reason || 'Blocked by beforeSaveEntry'),
+                code: decision.code ? String(decision.code) : ''
+            });
+        }
+        if (!failures.length) {
+            return { ok: true };
+        }
+        return { ok: false, failures };
+    };
+
+    QuickAddComponent.prototype.exportResult = async function exportResult(options) {
+        const opts = options || {};
+        const attachmentMode = normalizeAttachmentMode(opts.attachmentMode);
+        const includeUnlinked = opts.includeUnlinked === true;
+        const runWarnings = opts.runWarnings !== false;
+        const runValidation = opts.runValidation !== false;
+        const result = deepCloneValue(this.getResult() || {});
+        if (runWarnings) {
+            const warningResult = await this.checkWarnings({
+                action: 'save',
+                attachmentMode: 'metadata-only'
+            });
+            if (!warningResult.ok) {
+                throw new Error('QuickAdd export cancelled by warnings check');
+            }
+        }
+        if (runValidation) {
+            const validation = await this.runBeforeSaveValidation(result);
+            if (!validation.ok) {
+                const err = new Error('QuickAdd export blocked by beforeSaveEntry');
+                err.code = 'QA_BEFORE_SAVE_BLOCKED';
+                err.details = validation.failures;
+                throw err;
+            }
+        }
+        const linkedRecords = this.getLinkedAttachmentRecords(result);
+        const attachments = [];
+        for (const record of linkedRecords) {
+            const exported = await this.toExportAttachment(record.item, {
+                linked: true,
+                entryKey: record.entryKey,
+                fieldKey: record.fieldKey || null,
+                attachmentMode
+            });
+            if (exported) {
+                attachments.push(exported);
+            }
+        }
+        if (includeUnlinked) {
+            const unlinked = await this.getUnlinkedAttachments({ attachmentMode });
+            attachments.push.apply(attachments, unlinked);
+        }
+        return {
+            version: 2,
+            mode: this.isAiMode() ? 'ai' : 'deterministic',
+            input: String(result.input || this.inputText || ''),
+            entries: Array.isArray(result.entries) ? result.entries : [],
+            attachments,
+            warnings: Array.isArray(result.warnings) ? result.warnings.slice() : [],
+            missing: Array.isArray(result.missing) ? result.missing.slice() : [],
+            metadata: {
+                exportedAt: new Date().toISOString()
+            }
+        };
+    };
+
+    QuickAddComponent.prototype.importResult = async function importResult(payload, options) {
+        const data = payload && typeof payload === 'object' ? payload : null;
+        if (!data) {
+            return false;
+        }
+        const opts = options || {};
+        const mergeStrategy = opts.mergeStrategy === 'append' ? 'append' : 'replace';
+        const attachmentConflict = opts.attachmentConflict === 'keep-both' ? 'keep-both' : 'dedupe-by-fingerprint';
+        const importedInput = String(data.input || '');
+        const existingInput = String(this.inputText || this.readInputText() || '');
+        let nextInput = importedInput;
+        if (mergeStrategy === 'append' && existingInput && importedInput) {
+            nextInput = `${existingInput}${this.config.entrySeparator || '\n'}${importedInput}`;
+        } else if (mergeStrategy === 'append' && existingInput) {
+            nextInput = existingInput;
+        }
+        const attachments = Array.isArray(data.attachments) ? data.attachments : [];
+        if (mergeStrategy === 'replace') {
+            (this.attachmentPool || []).forEach((item) => {
+                if (item && item.previewUrl) {
+                    URL.revokeObjectURL(item.previewUrl);
+                }
+            });
+            this.attachmentPool = [];
+            this.attachmentCounter = 0;
+        }
+        const existingFingerprints = new Set((this.attachmentPool || []).map((item) => String(item.fingerprint || '')));
+        for (const imported of attachments) {
+            if (!imported || typeof imported !== 'object') {
+                continue;
+            }
+            const fingerprint = String(imported.fingerprint || `${imported.name}|${imported.size}|${imported.lastModified}|${imported.mimeType}`);
+            if (attachmentConflict === 'dedupe-by-fingerprint' && existingFingerprints.has(fingerprint)) {
+                continue;
+            }
+            let file = null;
+            if (imported.contentBase64 && typeof File === 'function') {
+                try {
+                    const bytes = base64ToUint8Array(imported.contentBase64);
+                    file = new File([bytes], String(imported.name || 'attachment'), {
+                        type: String(imported.mimeType || ''),
+                        lastModified: Number(imported.lastModified || Date.now())
+                    });
+                } catch (err) {
+                    file = null;
+                }
+            }
+            const item = {
+                id: imported.id || `att_global_${++this.attachmentCounter}`,
+                fingerprint,
+                file,
+                ref: String(imported.ref || imported.name || `attachment-${this.attachmentCounter}`),
+                name: String(imported.name || imported.ref || `attachment-${this.attachmentCounter}`),
+                size: Number(imported.size || (file && file.size) || 0),
+                type: String(imported.mimeType || imported.type || (file && file.type) || ''),
+                lastModified: Number(imported.lastModified || (file && file.lastModified) || 0),
+                previewUrl: null,
+                contentBase64: (typeof imported.contentBase64 === 'string' && imported.contentBase64)
+                    ? imported.contentBase64
+                    : '',
+                byteLength: Number(imported.byteLength || imported.size || 0)
+            };
+            this.attachmentPool.push(item);
+            existingFingerprints.add(fingerprint);
+            if (typeof item.id === 'string' && item.id.startsWith('att_global_')) {
+                const numericId = Number(item.id.slice('att_global_'.length));
+                if (Number.isFinite(numericId)) {
+                    this.attachmentCounter = Math.max(this.attachmentCounter, numericId);
+                }
+            }
+        }
+        this.parseAndRender({
+            source: nextInput,
+            caretOffset: nextInput.length,
+            focusInput: false
+        });
+        return true;
+    };
+
     QuickAddComponent.prototype.formatAttachmentSize = function formatAttachmentSize(bytes) {
         const num = Number(bytes || 0);
         if (num < 1024) return `${num} B`;
@@ -7341,6 +8401,23 @@
         this.renderConflictModal();
     };
 
+    QuickAddComponent.prototype.requestConflictConfirmation = function requestConflictConfirmation(options) {
+        const opts = options || {};
+        if (this.conflictModalState) {
+            return Promise.resolve(false);
+        }
+        return new Promise((resolve) => {
+            this.openConflictModal({
+                message: String(opts.message || 'Are you sure?'),
+                confirmLabel: String(opts.confirmLabel || 'Confirm'),
+                cancelLabel: String(opts.cancelLabel || 'Cancel'),
+                ariaLabel: String(opts.ariaLabel || 'Confirmation'),
+                onConfirm: () => resolve(true),
+                onCancel: () => resolve(false)
+            });
+        });
+    };
+
     QuickAddComponent.prototype.closeConflictModal = function closeConflictModal() {
         this.conflictModalState = null;
         this.renderConflictModal();
@@ -7355,13 +8432,15 @@
         if (!state) {
             this.conflictModalOverlayEl.hidden = true;
             this.conflictModalEl.innerHTML = '';
+            this.conflictModalEl.removeAttribute('aria-label');
             return;
         }
+        this.conflictModalEl.setAttribute('aria-label', String(state.ariaLabel || 'Attachment conflict'));
         this.conflictModalEl.innerHTML = `
             <div>${escHtml(state.message || 'Attachment conflict')}</div>
             <div class="${c.conflictModalActions}">
                 <button type="button" class="${c.conflictModalBtn}" data-conflict-action="confirm">${escHtml(state.confirmLabel || 'Confirm')}</button>
-                <button type="button" class="${c.conflictModalBtn}" data-conflict-action="cancel">Cancel</button>
+                <button type="button" class="${c.conflictModalBtn}" data-conflict-action="cancel">${escHtml(state.cancelLabel || 'Cancel')}</button>
             </div>
         `;
         this.conflictModalOverlayEl.hidden = false;
@@ -7374,6 +8453,8 @@
         }
         if (action === 'confirm' && typeof state.onConfirm === 'function') {
             state.onConfirm();
+        } else if (action !== 'confirm' && typeof state.onCancel === 'function') {
+            state.onCancel();
         }
         this.closeConflictModal();
     };
@@ -7581,10 +8662,10 @@
             : '';
         return `
             <div class="${c.attachmentItem}${isImage ? ' qa-is-image' : ''}">
-                <button type="button" class="${c.attachmentOpen}" data-attachment-open="1" data-attachment-id="${escHtml(item.id)}" aria-label="Open attachment">
+                <button type="button" class="${c.attachmentOpen}" data-attachment-open="1" data-attachment-id="${escHtml(item.id)}" aria-label="Open attachment ${escHtml(item.name)}">
                     ${mediaHtml}
                 </button>
-                ${opts.removeAttr ? `<button type="button" class="${c.attachmentRemove}" ${opts.removeAttr} aria-label="Remove attachment">✕</button>` : ''}
+                ${opts.removeAttr ? `<button type="button" class="${c.attachmentRemove}" ${opts.removeAttr} aria-label="Remove attachment ${escHtml(item.name)}">✕</button>` : ''}
                 ${usedText}
                 <div class="${c.attachmentName}" title="${escHtml(item.name)}">${escHtml(shortName)}</div>
             </div>
@@ -7890,6 +8971,10 @@
         if (parseState && parseState.status) {
             statusParts.push(`parse: ${parseState.status}`);
         }
+        if (parseState && parseState.isQueued) {
+            const queueReason = parseState.queueReason ? ` (${parseState.queueReason})` : '';
+            statusParts.push(`queued${queueReason}`);
+        }
         if (result.error) {
             statusParts.push(`error: ${result.error}`);
         }
@@ -7907,6 +8992,15 @@
         const warningRows = []
             .concat((result.warnings || []).map((item) => `<div class="${c.issue}">Warning: ${escHtml(item)}</div>`))
             .concat((result.missing || []).map((item) => `<div class="${c.issue}">Unknown: ${escHtml(item)}</div>`));
+        if (parseState && parseState.isQueued) {
+            const queueLabel = parseState.queueReason
+                ? `Dispatch queued (${parseState.queueReason})`
+                : 'Dispatch queued';
+            warningRows.push(`<div class="${c.issue}">${escHtml(queueLabel)}</div>`);
+            if (parseState.queueMessage) {
+                warningRows.push(`<div class="${c.issue}">${escHtml(parseState.queueMessage)}</div>`);
+            }
+        }
         const warningsHtml = warningRows.length
             ? `<div class="${c.issues}">${warningRows.join('')}</div>`
             : '';
@@ -8143,8 +9237,10 @@
         this.dropdownSearchEl.value = token.value || '';
         this.renderDropdownList();
         this.positionDropdownAtRect(this.getCaretClientRect());
+        this.captureFocusOrigin('dropdown', this.inputEl, this.inputEl);
         this.dropdownEl.hidden = false;
         this.dropdownEl.classList.add(this.config.classNames.dropdownOpen);
+        this.syncDropdownA11y();
     };
 
     QuickAddComponent.prototype.handlePillClick = function handlePillClick(pillEl) {
@@ -8240,9 +9336,11 @@
             this.dropdownSearchEl.value = '';
             this.renderDropdownList();
             this.positionDropdown(pillEl);
+            this.captureFocusOrigin('dropdown', pillEl, this.inputEl);
             this.dropdownEl.hidden = false;
             this.dropdownEl.classList.add(this.config.classNames.dropdownOpen);
             this.scrollDropdownActiveOptionIntoView();
+            this.syncDropdownA11y();
             this.dropdownSearchEl.focus();
             this.dropdownSearchEl.select();
             return;
@@ -8325,9 +9423,11 @@
         this.dropdownSearchEl.value = '';
         this.renderDropdownList();
         this.positionDropdown(pillEl);
+        this.captureFocusOrigin('dropdown', pillEl, this.inputEl);
         this.dropdownEl.hidden = false;
         this.dropdownEl.classList.add(this.config.classNames.dropdownOpen);
         this.scrollDropdownActiveOptionIntoView();
+        this.syncDropdownA11y();
         this.dropdownSearchEl.focus();
         this.dropdownSearchEl.select();
     };
@@ -8369,103 +9469,22 @@
     };
 
     QuickAddComponent.prototype.positionDropdownAtRect = function positionDropdownAtRect(rect, anchorEl) {
-        const viewportBounds = {
-            left: 0,
-            top: 0,
-            right: window.innerWidth,
-            bottom: window.innerHeight
-        };
-        const dropdownState = this.dropdownState || {};
-        const preferViewportBounds = dropdownState.sourceRegion === 'card' && dropdownState.source === 'click';
-        const pad = window.innerWidth <= 480 ? 8 : 10;
         const maxPanelHeight = window.innerWidth <= 480 ? 288 : 348;
-        const minPreferredPanelHeight = window.innerWidth <= 480 ? 180 : 250;
-        const gap = 0;
-        const anchorTop = rect.top || 0;
-        const anchorBottom = rect.bottom || rect.top || 0;
-        const evaluateLayout = (candidateBounds) => {
-            const viewportWidth = Math.max(0, (candidateBounds.right - candidateBounds.left) - (pad * 2));
-            const preferredWidth = Math.max(260, Math.min(320, viewportWidth));
-            const width = Math.min(preferredWidth, viewportWidth);
-            const minLeft = candidateBounds.left + pad;
-            const maxLeft = candidateBounds.right - width - pad;
-            const left = Math.max(minLeft, Math.min(rect.left || minLeft, maxLeft));
-            const minTop = candidateBounds.top + pad;
-            const maxBottom = candidateBounds.bottom - pad;
-            const availableBelow = Math.max(0, maxBottom - (anchorBottom + gap));
-            const availableAbove = Math.max(0, (anchorTop - gap) - minTop);
-            const desiredHeight = Math.min(Math.max(1, measuredHeight || 1), maxPanelHeight);
-            let placeBelow = availableBelow >= availableAbove;
-            if (availableBelow >= desiredHeight) {
-                placeBelow = true;
-            } else if (availableAbove >= desiredHeight) {
-                placeBelow = false;
-            }
-            const panelHeight = Math.max(0, Math.min(placeBelow ? availableBelow : availableAbove, maxPanelHeight));
-            let top = placeBelow
-                ? (anchorBottom + gap)
-                : Math.max(minTop, (anchorTop - gap) - panelHeight);
-            if (placeBelow && top + panelHeight > maxBottom) {
-                top = Math.max(minTop, maxBottom - panelHeight);
-            }
-            return {
-                bounds: candidateBounds,
-                viewportWidth,
-                width,
-                left,
-                top,
-                panelHeight,
-                availableBelow,
-                availableAbove
-            };
-        };
-
-        const prevHidden = this.dropdownEl.hidden;
-        const prevVisibility = this.dropdownEl.style.visibility;
-        const prevDisplay = this.dropdownEl.style.display;
-        let measureBounds = preferViewportBounds
-            ? viewportBounds
-            : this.getFloatingBounds(anchorEl || this.inputEl);
-        const measureBoundedHeight = Math.max(0, (measureBounds.bottom - measureBounds.top) - (pad * 2));
-        if (measureBoundedHeight < 120) {
-            measureBounds = viewportBounds;
-        }
-        const measureViewportWidth = Math.max(0, (measureBounds.right - measureBounds.left) - (pad * 2));
-        const measurePreferredWidth = Math.max(260, Math.min(320, measureViewportWidth));
-        const measureWidth = Math.min(measurePreferredWidth, measureViewportWidth);
-        this.dropdownEl.hidden = false;
-        this.dropdownEl.style.visibility = 'hidden';
-        this.dropdownEl.style.removeProperty('display');
-        this.dropdownEl.style.width = `${measureWidth}px`;
-        this.dropdownEl.style.removeProperty('maxHeight');
-        const measuredHeight = Math.ceil(this.dropdownEl.getBoundingClientRect().height || this.dropdownEl.scrollHeight || 0);
-        if (prevHidden) {
-            this.dropdownEl.hidden = true;
-        }
-        this.dropdownEl.style.visibility = prevVisibility;
-        if (prevDisplay) {
-            this.dropdownEl.style.display = prevDisplay;
-        } else {
-            this.dropdownEl.style.removeProperty('display');
-        }
-
-        let bounds = preferViewportBounds
-            ? viewportBounds
-            : this.getFloatingBounds(anchorEl || this.inputEl);
-        const boundedHeight = Math.max(0, (bounds.bottom - bounds.top) - (pad * 2));
-        if (boundedHeight < 120) {
-            bounds = viewportBounds;
-        }
-
-        let layout = evaluateLayout(bounds);
-        const boundedMaxAvailable = Math.max(layout.availableBelow, layout.availableAbove);
-        if (boundedMaxAvailable < minPreferredPanelHeight) {
-            const viewportLayout = evaluateLayout(viewportBounds);
-            const viewportMaxAvailable = Math.max(viewportLayout.availableBelow, viewportLayout.availableAbove);
-            if (viewportMaxAvailable > boundedMaxAvailable) {
-                layout = viewportLayout;
-            }
-        }
+        const layout = this.computeFloatingLayout({
+            panelEl: this.dropdownEl,
+            anchorRect: rect,
+            anchorEl: anchorEl || this.inputEl,
+            ignoreAnchorClip: true,
+            minWidth: 260,
+            maxWidth: 320,
+            preferredWidth: 320,
+            maxPanelHeight,
+            gap: 0,
+            fallbackHeight: maxPanelHeight,
+            preferredPlacement: 'bottom',
+            flip: true,
+            allowExpand: false
+        });
 
         this.dropdownEl.style.position = 'fixed';
         this.dropdownEl.style.left = `${layout.left}px`;
@@ -8514,7 +9533,8 @@
             this.rootEl.appendChild(el);
             this.blockedInfoEl = el;
         }
-        this.closeDropdown();
+        this.captureFocusOrigin('blockedInfo', anchorEl || null, this.inputEl);
+        this.closeDropdown({ restoreFocus: false });
         this.closeNumberPicker();
         const c = this.config.classNames;
         const safeReason = escHtml(reason || 'Blocked by constraints');
@@ -8526,29 +9546,28 @@
         const rect = anchorEl && anchorEl.getBoundingClientRect
             ? anchorEl.getBoundingClientRect()
             : this.inputEl.getBoundingClientRect();
-        const bounds = this.getFloatingBounds(anchorEl || this.inputEl);
-        const pad = window.innerWidth <= 480 ? 8 : 10;
-        const viewportWidth = Math.max(0, (bounds.right - bounds.left) - (pad * 2));
-        const width = Math.min(420, viewportWidth, Math.max(180, (rect.width || 0) + 90));
-        const left = Math.max(bounds.left + pad, Math.min(rect.left || bounds.left, bounds.right - width - pad));
-        const minTop = bounds.top + pad;
-        const maxBottom = bounds.bottom - pad;
-        const belowTop = (rect.bottom || rect.top || 0) + 8;
-        const aboveBottom = (rect.top || 0) - 8;
-        const availableBelow = Math.max(0, maxBottom - belowTop);
-        const availableAbove = Math.max(0, aboveBottom - minTop);
-        const placeBelow = availableBelow >= availableAbove;
-        const maxHeight = Math.max(0, Math.min(220, placeBelow ? availableBelow : availableAbove));
-        const top = placeBelow
-            ? belowTop
-            : Math.max(minTop, aboveBottom - maxHeight);
+        const layout = this.computeFloatingLayout({
+            panelEl: this.blockedInfoEl,
+            anchorRect: rect,
+            anchorEl: anchorEl || this.inputEl,
+            ignoreAnchorClip: true,
+            minWidth: 180,
+            maxWidth: 420,
+            preferredWidth: Math.max(180, (rect.width || 0) + 90),
+            maxPanelHeight: 220,
+            gap: 8,
+            fallbackHeight: 88,
+            preferredPlacement: 'bottom',
+            flip: true,
+            allowExpand: false
+        });
         this.blockedInfoEl.style.position = 'fixed';
-        this.blockedInfoEl.style.left = `${left}px`;
-        this.blockedInfoEl.style.top = `${top}px`;
+        this.blockedInfoEl.style.left = `${layout.left}px`;
+        this.blockedInfoEl.style.top = `${layout.top}px`;
         this.blockedInfoEl.style.marginTop = '0';
-        this.blockedInfoEl.style.width = `${width}px`;
-        this.blockedInfoEl.style.maxWidth = `${viewportWidth}px`;
-        this.blockedInfoEl.style.maxHeight = `${Math.floor(maxHeight)}px`;
+        this.blockedInfoEl.style.width = `${layout.width}px`;
+        this.blockedInfoEl.style.maxWidth = `${layout.viewportWidth}px`;
+        this.blockedInfoEl.style.maxHeight = `${Math.floor(layout.panelHeight)}px`;
         this.blockedInfoEl.style.overflow = 'auto';
         this.blockedInfoEl.style.zIndex = '10000';
         this.blockedInfoEl.style.removeProperty('position-anchor');
@@ -8556,7 +9575,8 @@
         this.blockedInfoEl.hidden = false;
     };
 
-    QuickAddComponent.prototype.closeBlockedInfo = function closeBlockedInfo() {
+    QuickAddComponent.prototype.closeBlockedInfo = function closeBlockedInfo(options) {
+        const opts = options || {};
         this.blockedInfoState = null;
         if (!this.blockedInfoEl) {
             return;
@@ -8565,17 +9585,23 @@
             this.blockedInfoEl.parentNode.removeChild(this.blockedInfoEl);
         }
         this.blockedInfoEl = null;
+        if (opts.restoreFocus !== false) {
+            this.restoreFocusOrigin('blockedInfo');
+        }
     };
 
     QuickAddComponent.prototype.renderDropdownList = function renderDropdownList() {
         if (!this.dropdownState) {
             this.dropdownListEl.innerHTML = '';
             this.updateDropdownScrollIndicators();
+            this.syncDropdownA11y();
             return;
         }
 
         const c = this.config.classNames;
         const field = this.getFieldDefinition(this.dropdownState.fieldKey);
+        const fieldLabel = field && field.label ? field.label : (this.dropdownState.fieldKey || 'options');
+        this.dropdownListEl.setAttribute('aria-label', `${fieldLabel} options`);
         const isMultiSelectOptions = !!(field && field.type === 'options' && field.multiple);
         const isMultiValueDropdown = !!(field && field.multiple && (field.type === 'options' || isFileFieldType(field.type)));
         const queryRaw = String(this.dropdownSearchEl.value || '');
@@ -8613,7 +9639,7 @@
             );
         }
 
-        const items = filtered.map((option) => {
+        const items = filtered.map((option, idx) => {
             const colorStyle = option.color ? ` style="background:${escHtml(option.color)}"` : '';
             const selected = isMultiValueDropdown
                 ? selectedNorm.has(normValue(option.value))
@@ -8621,6 +9647,7 @@
             const active = this.dropdownState.activeOptionValue !== null
                 && this.dropdownState.activeOptionValue !== undefined
                 && normValue(option.value) === normValue(this.dropdownState.activeOptionValue);
+            const optionId = `${this.dropdownOptionIdPrefix}${idx}`;
             const usedCount = Number(option.usedCount || 0);
             const selectedCheckIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" focusable="false"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m7 17l-5-5m5 0l5 5L22 7m-10 5l5-5"/></svg>';
             let usedMeta = '';
@@ -8643,12 +9670,12 @@
                     : `<span class="${c.dropdownAttachmentIcon}" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="13 2 13 9 20 9"/></svg></span>`)
                 : `<span class="${c.dropdownColor}"${colorStyle}></span>`;
             return `
-                <button type="button" class="${c.dropdownOption}${active ? ` ${c.dropdownOptionActive}` : ''}" data-option-value="${escHtml(option.value)}">
+                <button type="button" id="${optionId}" role="option" aria-selected="${selected ? 'true' : 'false'}" class="${c.dropdownOption}${active ? ` ${c.dropdownOptionActive}` : ''}" data-option-value="${escHtml(option.value)}">
                     ${leadingVisual}
                     <span class="qa-dropdown-label">${escHtml(option.label)}</span>
                     ${selected
-                        ? `<span class="${c.dropdownMeta} qa-dropdown-selected-meta" aria-hidden="true">${selectedCheckIcon}</span>`
-                        : usedMeta}
+                    ? `<span class="${c.dropdownMeta} qa-dropdown-selected-meta" aria-hidden="true">${selectedCheckIcon}</span>`
+                    : usedMeta}
                 </button>
             `;
         });
@@ -8664,8 +9691,9 @@
         ).ok;
 
         if (this.dropdownState.allowCustom && !isFileFieldType(this.dropdownState.fieldType) && query && !exactMatch && customAllowedByDependency) {
+            const customId = `${this.dropdownOptionIdPrefix}${filtered.length}`;
             items.push(`
-                <button type="button" class="${c.dropdownOption} ${c.dropdownAdd}" data-option-value="${escHtml(filterRaw.trim())}">
+                <button type="button" id="${customId}" role="option" aria-selected="false" class="${c.dropdownOption} ${c.dropdownAdd}" data-option-value="${escHtml(filterRaw.trim())}">
                     <span class="${c.dropdownColor}"></span>
                     <span class="qa-dropdown-label">Add "${escHtml(filterRaw.trim())}"</span>
                     <span class="${c.dropdownMeta}">custom</span>
@@ -8680,6 +9708,7 @@
             this.dropdownState.filteredOptions = [];
             this.dropdownState.activeOptionValue = null;
             this.updateDropdownScrollIndicators();
+            this.syncDropdownA11y();
             return;
         }
 
@@ -8699,6 +9728,7 @@
         this.dropdownState.keepActiveWhenFiltering = false;
         this.dropdownListEl.innerHTML = items.join('');
         this.updateDropdownScrollIndicators();
+        this.syncDropdownA11y();
     };
 
     QuickAddComponent.prototype.updateDropdownScrollIndicators = function updateDropdownScrollIndicators() {
@@ -8759,14 +9789,118 @@
         return text.slice(0, start) + replacement + text.slice(end);
     };
 
-    QuickAddComponent.prototype.applyDropdownSelection = function applyDropdownSelection(nextValue) {
+    QuickAddComponent.prototype.runBeforeCommitField = async function runBeforeCommitField(context) {
+        const handler = this.config.validation && this.config.validation.beforeCommitField;
+        if (typeof handler !== 'function') {
+            return { allow: true, value: context.nextValue };
+        }
+        const decision = await handler(context);
+        if (!decision || typeof decision !== 'object') {
+            return { allow: true, value: context.nextValue };
+        }
+        if (decision.allow === false) {
+            return {
+                allow: false,
+                reason: String(decision.reason || 'Blocked by beforeCommitField')
+            };
+        }
+        return {
+            allow: true,
+            value: Object.prototype.hasOwnProperty.call(decision, 'value') ? decision.value : context.nextValue,
+            warning: decision.warning ? String(decision.warning) : ''
+        };
+    };
+
+    QuickAddComponent.prototype.addOrUpdateFieldOption = function addOrUpdateFieldOption(fieldKey, option) {
+        const field = this.getFieldDefinition(fieldKey);
+        if (!field || field.type !== 'options') {
+            return null;
+        }
+        const normalized = normalizeOption(option);
+        const existing = Array.isArray(field.options) ? field.options.slice() : [];
+        const idx = existing.findIndex((item) => normValue(item && item.value) === normValue(normalized.value));
+        if (idx >= 0) {
+            existing[idx] = normalized;
+        } else {
+            existing.push(normalized);
+        }
+        field.options = existing;
+        return normalized;
+    };
+
+    QuickAddComponent.prototype.resolveCustomOptionSelection = async function resolveCustomOptionSelection(state, value, selectedOption) {
+        if (selectedOption || !state.allowCustom || state.fieldType !== 'options') {
+            return {
+                accepted: true,
+                option: selectedOption,
+                value
+            };
+        }
+        const trimmed = String(value || '').trim();
+        if (!trimmed) {
+            return { accepted: false, reason: 'Custom value is empty' };
+        }
+        const createHandler = this.config.options && this.config.options.onCreateOption;
+        let normalized = normalizeOption({ value: trimmed, label: trimmed });
+        if (typeof createHandler === 'function') {
+            const response = await createHandler({
+                fieldKey: state.fieldKey,
+                value: trimmed,
+                label: trimmed,
+                entryIndex: state.entryIndex,
+                source: state.source === 'typing' ? 'typing' : 'click'
+            });
+            if (response === null || response === false) {
+                return { accepted: false, reason: 'Custom value rejected' };
+            }
+            if (response && typeof response === 'object') {
+                normalized = normalizeOption({
+                    value: response.value !== undefined ? response.value : trimmed,
+                    label: response.label !== undefined ? response.label : (response.value !== undefined ? response.value : trimmed),
+                    color: response.color
+                });
+            }
+        }
+        const persisted = this.addOrUpdateFieldOption(state.fieldKey, normalized) || normalized;
+        const optionsChange = this.config.options && this.config.options.onOptionsCatalogChange;
+        if (typeof optionsChange === 'function') {
+            const field = this.getFieldDefinition(state.fieldKey);
+            const nextOptions = Array.isArray(field && field.options) ? field.options.map(normalizeOption) : [];
+            optionsChange({
+                fieldKey: state.fieldKey,
+                options: nextOptions
+            });
+        }
+        return {
+            accepted: true,
+            option: persisted,
+            value: String(persisted.value)
+        };
+    };
+
+    QuickAddComponent.prototype.applyDropdownSelection = async function applyDropdownSelection(nextValue) {
         if (!this.dropdownState) {
             return;
         }
         const state = Object.assign({}, this.dropdownState);
         const field = this.getFieldDefinition(state.fieldKey);
         const isMultiSelectOptions = !!(field && field.type === 'options' && field.multiple);
-        const selectedOption = (state.options || []).find((option) => normValue(option.value) === normValue(nextValue)) || null;
+        let selectedOption = (state.options || []).find((option) => normValue(option.value) === normValue(nextValue)) || null;
+        const customResult = await this.resolveCustomOptionSelection(state, nextValue, selectedOption);
+        if (!customResult.accepted) {
+            this.statusEl.textContent = customResult.reason || 'Custom option not accepted';
+            return;
+        }
+        nextValue = customResult.value;
+        if (customResult.option) {
+            selectedOption = customResult.option;
+            if (!Array.isArray(state.options)) {
+                state.options = [];
+            }
+            if (!state.options.some((item) => normValue(item && item.value) === normValue(selectedOption.value))) {
+                state.options.push(normalizeOption(selectedOption));
+            }
+        }
         const allowed = this.isFieldValueDependencyAllowed(
             state.fieldKey,
             nextValue,
@@ -8774,6 +9908,23 @@
         );
         if (!allowed.ok) {
             return;
+        }
+        const commitValidation = await this.runBeforeCommitField({
+            entryIndex: state.entryIndex,
+            entryKey: state.entryKey,
+            fieldKey: state.fieldKey,
+            nextValue,
+            source: state.source,
+            sourceRegion: state.sourceRegion,
+            fieldType: state.fieldType
+        });
+        if (!commitValidation.allow) {
+            this.statusEl.textContent = commitValidation.reason || 'Value blocked';
+            return;
+        }
+        nextValue = commitValidation.value;
+        if (commitValidation.warning) {
+            this.statusEl.textContent = commitValidation.warning;
         }
 
         if (isFileFieldType(state.fieldType) && selectedOption && selectedOption.attachmentId) {
@@ -8840,10 +9991,11 @@
             keepOpen = true;
             let values;
             if (fromTyping) {
-                const parts = separator ? String(token.value || '').split(separator) : [String(token.value || '')];
+                const rawTokenValue = String(token.value || '');
+                const parts = separator ? rawTokenValue.split(separator) : [rawTokenValue];
                 values = parts.length > 1
                     ? parts.slice(0, -1).map((item) => item.trim()).filter(Boolean)
-                    : splitByMultiSeparator(token.value || '', separator);
+                    : [];
             } else {
                 values = splitByMultiSeparator(state.currentValue || token.value || '', separator);
             }
@@ -8929,9 +10081,11 @@
             this.dropdownSearchEl.value = '';
             this.renderDropdownList();
             this.positionDropdown(state.anchorEl);
+            this.captureFocusOrigin('dropdown', state.anchorEl || null, this.inputEl);
             this.dropdownEl.hidden = false;
             this.dropdownEl.classList.add(this.config.classNames.dropdownOpen);
             this.scrollDropdownActiveOptionIntoView();
+            this.syncDropdownA11y();
             this.dropdownSearchEl.focus();
         }
     };
@@ -9132,14 +10286,17 @@
             this.dropdownSearchEl.value = '';
             this.renderDropdownList();
             this.positionDropdown(options.anchorEl);
+            this.captureFocusOrigin('dropdown', options.anchorEl || null, this.inputEl);
             this.dropdownEl.hidden = false;
             this.dropdownEl.classList.add(this.config.classNames.dropdownOpen);
             this.scrollDropdownActiveOptionIntoView();
+            this.syncDropdownA11y();
             this.dropdownSearchEl.focus();
         }
     };
 
-    QuickAddComponent.prototype.closeDropdown = function closeDropdown() {
+    QuickAddComponent.prototype.closeDropdown = function closeDropdown(options) {
+        const opts = options || {};
         this.dropdownState = null;
         if (!this.dropdownEl) {
             return;
@@ -9159,6 +10316,10 @@
             this.dropdownFadeBottomEl.hidden = true;
         }
         this.dropdownListEl.scrollTop = 0;
+        this.syncDropdownA11y();
+        if (opts.restoreFocus !== false) {
+            this.restoreFocusOrigin('dropdown');
+        }
     };
 
     QuickAddComponent.prototype.dismissSelection = function dismissSelection(dismissKey) {
@@ -9173,11 +10334,11 @@
     QuickAddComponent.prototype.setInput = function setInput(text) {
         this.inputText = text || '';
         this.dismissedSelections.clear();
-        this.closeAttachmentSourceMenu();
+        this.closeAttachmentSourceMenu({ restoreFocus: false });
         this.closeConflictModal();
-        this.closeDropdown();
+        this.closeDropdown({ restoreFocus: false });
         this.closeNumberPicker();
-        this.closeBlockedInfo();
+        this.closeBlockedInfo({ restoreFocus: false });
         this.parseAndRender({
             source: this.inputText,
             caretOffset: this.inputText.length,
@@ -9190,13 +10351,6 @@
         if (this.isAiMode()) {
             this.inputText = this.readInputText();
             this.lastResult = this.syncEntryAttachmentMeta(this.buildAIResult());
-            const parseState = this.lastResult && this.lastResult.parseState
-                ? this.lastResult.parseState
-                : null;
-            if (parseState && parseState.shouldParse && !parseState.isOffline && !this.aiState.isProcessing) {
-                this.parseAI();
-                this.lastResult = this.syncEntryAttachmentMeta(this.buildAIResult());
-            }
         }
         return this.lastResult;
     };
@@ -9225,11 +10379,11 @@
             this.clearAIEntries();
         }
 
-        this.closeDropdown();
-        this.closeAttachmentSourceMenu();
+        this.closeDropdown({ restoreFocus: false });
+        this.closeAttachmentSourceMenu({ restoreFocus: false });
         this.closeConflictModal();
-        this.closeBlockedInfo();
-        this.closeDatePicker();
+        this.closeBlockedInfo({ restoreFocus: false });
+        this.closeDatePicker({ restoreFocus: false });
         this.closeNumberPicker();
         this.unbindEvents();
         this.renderShell();
@@ -9251,11 +10405,11 @@
         });
         this.attachmentPool = [];
         this.unbindEvents();
-        this.closeBlockedInfo();
-        this.closeDatePicker();
+        this.closeBlockedInfo({ restoreFocus: false });
+        this.closeDatePicker({ restoreFocus: false });
         this.closeNumberPicker();
-        this.closeDropdown();
-        this.closeAttachmentSourceMenu();
+        this.closeDropdown({ restoreFocus: false });
+        this.closeAttachmentSourceMenu({ restoreFocus: false });
         this.closeConflictModal();
 
         this.mountEl.innerHTML = '';
@@ -9268,17 +10422,4 @@
         parse: parseInput
     };
     global.QuickAdd = quickAddApi;
-    if (typeof module !== 'undefined' && module.exports) {
-        module.exports = quickAddApi;
-        module.exports.default = quickAddApi;
-    }
-    if (typeof define === 'function' && define.amd) {
-        define(function defineQuickAdd() {
-            return quickAddApi;
-        });
-    }
-})(typeof globalThis !== 'undefined'
-    ? globalThis
-    : (typeof self !== 'undefined'
-        ? self
-        : (typeof window !== 'undefined' ? window : this)));
+})(globalThis);
