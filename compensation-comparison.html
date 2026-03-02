@@ -6,6 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Compensation Comparison</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Martian+Mono:wght@400;500;600;700&display=swap');
+
     * {
       box-sizing: border-box;
       margin: 0;
@@ -34,7 +36,7 @@
     }
 
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: "Martian Mono", "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
       background: var(--bg-oatmeal);
       color: var(--text-main);
       min-height: 100vh;
@@ -140,11 +142,40 @@
       grid-template-columns: 1fr 1fr 1fr 1fr
     }
 
+    #scenario-grid {
+      grid-template-columns: 1fr 1fr 1fr 1fr
+    }
+
+    #paradigm_ctrl {
+      grid-column: 3 / span 2
+    }
+
+    #stock_growth_ctrl {
+      grid-column: 1 / span 2
+    }
+
+    #reserve_cash_ctrl {
+      grid-column: 3
+    }
+
+    #prior_401k_ctrl {
+      grid-column: 4
+    }
+
     .setup-row {
       display: grid;
       grid-template-columns: 3fr 2fr;
       gap: 16px;
       margin-bottom: 16px
+    }
+
+    #top-tools-row {
+      grid-template-columns: 1fr
+    }
+
+    #preset-grid {
+      grid-template-columns: 1.4fr 1fr auto;
+      align-items: end
     }
 
     .setup-row .panel {
@@ -193,17 +224,24 @@
     }
 
     .ctrl-group label {
-      font-size: 0.7em;
+      display: block;
+      width: 100%;
+      font-size: 0.68em;
       font-weight: 600;
       color: var(--text-muted);
       text-transform: uppercase;
-      letter-spacing: 0.04em
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+      overflow: visible;
+      text-overflow: clip;
+      line-height: 1.2
     }
 
     .ctrl-group select,
     .ctrl-group input[type=number],
     .ctrl-group input[type=date],
-    .ctrl-group input[type=text] {
+    .ctrl-group input[type=text],
+    .ctrl-group textarea {
       padding: 8px 12px;
       border: 1px solid var(--border);
       border-radius: 6px;
@@ -215,18 +253,128 @@
       height: 38px
     }
 
+    .ctrl-group select {
+      appearance: none;
+      -webkit-appearance: none;
+      background-image:
+        linear-gradient(45deg, transparent 50%, var(--text-faint) 50%),
+        linear-gradient(135deg, var(--text-faint) 50%, transparent 50%);
+      background-position:
+        calc(100% - 15px) calc(50% - 2px),
+        calc(100% - 10px) calc(50% - 2px);
+      background-size: 5px 5px, 5px 5px;
+      background-repeat: no-repeat;
+      padding-right: 30px
+    }
+
+    @supports (appearance: base-select) {
+
+      .ctrl-group select,
+      .ctrl-group select::picker(select) {
+        appearance: base-select;
+        -webkit-appearance: base-select
+      }
+
+      .ctrl-group select {
+        background-image: none;
+        padding-right: 12px
+      }
+
+      .ctrl-group select::picker-icon {
+        color: var(--text-faint);
+        transition: transform 0.2s ease
+      }
+
+      .ctrl-group select:open::picker-icon {
+        transform: rotate(180deg)
+      }
+
+      .ctrl-group select:open {
+        border-color: var(--accent-purple);
+        background: var(--surface)
+      }
+
+      .ctrl-group select::picker(select) {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        margin-top: 4px;
+        background: var(--surface)
+      }
+
+      .ctrl-group select option {
+        background: var(--surface);
+        color: var(--text-main);
+        padding: 8px 10px
+      }
+
+      .ctrl-group select option:hover,
+      .ctrl-group select option:focus-visible {
+        background: var(--surface-soft)
+      }
+
+      .ctrl-group select option:checked {
+        background: var(--surface-alt)
+      }
+    }
+
     .ctrl-group select:hover,
-    .ctrl-group input:hover {
+    .ctrl-group input:hover,
+    .ctrl-group textarea:hover {
       border-color: var(--accent-pink);
       background: var(--surface)
     }
 
     .ctrl-group select:focus,
-    .ctrl-group input:focus {
+    .ctrl-group input:focus,
+    .ctrl-group textarea:focus {
       outline: 2px solid var(--focus-ring);
       border-color: var(--accent-purple);
       background: var(--surface);
       box-shadow: none
+    }
+
+    .ctrl-group textarea {
+      height: auto;
+      min-height: 108px;
+      resize: vertical;
+      line-height: 1.35
+    }
+
+    .ctrl-group button {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface-soft);
+      color: var(--text-main);
+      padding: 8px 10px;
+      font-size: 0.78em;
+      font-weight: 600;
+      cursor: pointer
+    }
+
+    .ctrl-group button:hover {
+      background: var(--surface-alt)
+    }
+
+    .preset-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 38px
+    }
+
+    .preset-actions .icon-btn {
+      width: 38px;
+      height: 38px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center
+    }
+
+    .preset-actions .icon-btn svg {
+      width: 16px;
+      height: 16px;
+      pointer-events: none
     }
 
     .ctrl-group input[type=number] {
@@ -264,7 +412,7 @@
       grid-column: 1 / -1;
       justify-content: flex-start;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
       border: none;
       background: transparent;
       padding: 4px 0
@@ -276,56 +424,48 @@
       letter-spacing: 0;
       font-size: 0.82em;
       color: var(--text-main);
-      line-height: 1.35
+      line-height: 1.35;
+      white-space: nowrap;
+      cursor: pointer
     }
 
     .ctrl-group.check-group.toggle-group input[type=checkbox] {
       order: 1;
       appearance: none;
       -webkit-appearance: none;
-      width: 44px;
-      height: 24px;
+      width: 18px;
+      height: 18px;
       margin: 0;
-      padding: 0;
-      display: inline-block;
-      min-width: 44px;
-      flex-shrink: 0;
-      border-radius: 999px;
-      border: 1px solid #b7aa9a;
-      background: #d7ccbe;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--bg-linen);
+      cursor: pointer;
       position: relative;
-      box-sizing: border-box;
-      transition: background 0.2s ease, border-color 0.2s ease
+      transition: border-color 0.2s ease, background 0.2s ease
     }
 
     .ctrl-group.check-group.toggle-group input[type=checkbox]::after {
       content: '';
       position: absolute;
-      top: 50%;
-      left: 2px;
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      background: var(--bg-linen);
-      border: 1px solid #b7aa9a;
-      box-sizing: border-box;
-      transform: translate3d(0, -50%, 0);
-      transition: transform 0.2s ease
+      inset: 3px;
+      border-radius: 2px;
+      background: var(--accent-purple);
+      opacity: 0;
+      transition: opacity 0.15s ease
     }
 
     .ctrl-group.check-group.toggle-group input[type=checkbox]:checked {
-      background: var(--accent-purple);
       border-color: var(--accent-purple-deep)
     }
 
     .ctrl-group.check-group.toggle-group input[type=checkbox]:checked::after {
-      transform: translate3d(22px, -50%, 0);
-      border-color: var(--accent-purple-deep)
+      opacity: 1
     }
 
     .ctrl-group.check-group.toggle-group input[type=checkbox]:focus-visible {
       outline: 2px solid var(--focus-ring);
-      outline-offset: 2px
+      outline-offset: 2px;
+      border-radius: 4px
     }
 
     .ctrl-group.check-group.toggle-group.is-disabled {
@@ -333,6 +473,60 @@
     }
 
     .ctrl-group.check-group.toggle-group.is-disabled label {
+      cursor: not-allowed
+    }
+
+    .ctrl-group.check-group.pm-control {
+      grid-column: 1 / -1;
+      justify-content: flex-start;
+      align-items: center;
+      gap: 0;
+      border: none;
+      background: transparent;
+      padding: 2px 0;
+      position: relative
+    }
+
+    .ctrl-group.check-group.pm-control input[type=checkbox] {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none
+    }
+
+    .ctrl-group.check-group.pm-control label {
+      order: 1;
+      text-transform: none;
+      letter-spacing: 0;
+      font-size: 0.82em;
+      color: var(--text-main);
+      line-height: 1.35;
+      white-space: nowrap;
+      cursor: pointer
+    }
+
+    .ctrl-group.check-group.pm-control label::before {
+      content: '[+] ';
+      color: var(--text-faint);
+      font-size: 0.9em
+    }
+
+    .ctrl-group.check-group.pm-control input[type=checkbox]:checked+label::before {
+      content: '[-] '
+    }
+
+    .ctrl-group.check-group.pm-control input[type=checkbox]:focus-visible+label {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 2px;
+      border-radius: 4px
+    }
+
+    .ctrl-group.check-group.pm-control.is-disabled {
+      opacity: 0.55
+    }
+
+    .ctrl-group.check-group.pm-control.is-disabled label {
       cursor: not-allowed
     }
 
@@ -412,6 +606,23 @@
       color: var(--text-main)
     }
 
+    .plan-hint {
+      grid-column: 1 / -1;
+      margin: -2px 0 4px;
+      font-size: 0.68em;
+      color: var(--text-faint)
+    }
+
+    .plan-bucket {
+      grid-column: 1 / -1;
+      margin: 6px 0 2px;
+      font-size: 0.62em;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-faint)
+    }
+
     /* ===== RESULTS SECTION ===== */
     .results-section {
       margin-top: 8px
@@ -480,6 +691,10 @@
       color: var(--text-main);
       padding-bottom: 12px;
       border-bottom: 2px solid var(--border-soft)
+    }
+
+    .card.is-collapsed .card-body {
+      display: none
     }
 
     /* ===== TABLES ===== */
@@ -557,6 +772,34 @@
       background: var(--surface-alt)
     }
 
+    .breakdown-subrow td {
+      font-size: 0.74em;
+      color: var(--text-faint);
+      padding-top: 3px;
+      padding-bottom: 7px;
+      border-bottom: 1px dashed var(--border-soft)
+    }
+
+    .breakdown-subrow td:first-child {
+      text-align: left;
+      font-weight: 500;
+      padding-left: 20px
+    }
+
+    .breakdown-subrow:hover td {
+      background: var(--surface)
+    }
+
+    .breakdown-group-row td {
+      background: var(--surface-soft);
+      color: var(--text-muted);
+      font-size: 0.73em;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      text-align: left
+    }
+
     .note {
       font-size: 0.75em;
       color: var(--text-muted);
@@ -589,6 +832,90 @@
       color: var(--text-faint)
     }
 
+    #timeline-chart {
+      display: grid;
+      gap: 10px
+    }
+
+    .timeline-row {
+      display: grid;
+      grid-template-columns: 98px 1fr 70px;
+      gap: 10px;
+      align-items: center
+    }
+
+    .timeline-label {
+      font-size: 0.72em;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em
+    }
+
+    .timeline-bar {
+      height: 14px;
+      display: flex;
+      border: 1px solid var(--border-soft);
+      border-radius: 4px;
+      overflow: hidden;
+      background: var(--surface)
+    }
+
+    .timeline-val {
+      font-size: 0.72em;
+      color: var(--text-muted);
+      text-align: right;
+      font-variant-numeric: tabular-nums
+    }
+
+    .timeline-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      margin: 0 0 12px
+    }
+
+    .timeline-legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.68em;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em
+    }
+
+    .timeline-legend-swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      border: 1px solid var(--border-soft)
+    }
+
+    .sub-label.collapse-toggle,
+    .section-title.collapse-toggle,
+    .results-section .card h2.collapse-toggle {
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 6px;
+      user-select: none
+    }
+
+    .sub-label.collapse-toggle::before,
+    .section-title.collapse-toggle::before,
+    .results-section .card h2.collapse-toggle::before {
+      content: '[-]';
+      font-size: 0.9em;
+      color: var(--text-faint)
+    }
+
+    .sub-label.collapse-toggle.is-collapsed::before,
+    .section-title.collapse-toggle.is-collapsed::before,
+    .results-section .card h2.collapse-toggle.is-collapsed::before {
+      content: '[+]'
+    }
+
     .spacer-row td {
       height: 6px;
       border: none;
@@ -605,12 +932,33 @@
         padding: 16px 20px 32px
       }
 
+      .allocation-year-row td {
+        background: var(--surface-soft);
+        color: var(--text-muted);
+        font-size: 0.73em;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        text-align: left
+      }
+
       .ctrl-grid {
         grid-template-columns: repeat(auto-fill, minmax(140px, 1fr))
       }
 
       .ctrl-grid.cols-4 {
         grid-template-columns: 1fr 1fr
+      }
+
+      #scenario-grid {
+        grid-template-columns: 1fr 1fr
+      }
+
+      #paradigm_ctrl,
+      #stock_growth_ctrl,
+      #reserve_cash_ctrl,
+      #prior_401k_ctrl {
+        grid-column: auto
       }
     }
 
@@ -629,6 +977,10 @@
 
       .ctrl-grid {
         grid-template-columns: repeat(auto-fill, minmax(140px, 1fr))
+      }
+
+      #preset-grid {
+        grid-template-columns: 1fr
       }
 
       .ctrl-grid.cols-3 {
@@ -770,10 +1122,60 @@
 
 <body>
   <div class="header">
-    <h1>Compensation Comparison Model</h1>
+    <h1>All-Cash vs Equity-Based Compensation Comparison Model</h1>
     <p>Company A (Cash) vs Company B (Equity) &mdash; Interactive Explorer</p>
   </div>
   <div class="container">
+    <div class="setup-row" id="top-tools-row">
+      <div class="panel">
+        <div class="section-title">Presets &amp; Share</div>
+        <div class="ctrl-grid" id="preset-grid">
+          <div class="ctrl-group"><label>Preset Name</label>
+            <input type="text" id="preset_name" placeholder="e.g. Bay Area Offer Set">
+          </div>
+          <div class="ctrl-group"><label>Saved Presets</label>
+            <select id="preset_select"></select>
+          </div>
+          <div class="ctrl-group"><label>Actions</label>
+            <div class="preset-actions">
+              <button id="preset_save_btn" type="button" class="icon-btn" title="Save Preset" aria-label="Save Preset">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M11 2H9v3h2z" />
+                  <path
+                    d="M1.5 0h11.586a1.5 1.5 0 0 1 1.06.44l1.415 1.414A1.5 1.5 0 0 1 16 2.914V14.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 0 14.5v-13A1.5 1.5 0 0 1 1.5 0M1 1.5v13a.5.5 0 0 0 .5.5H2v-4.5A1.5 1.5 0 0 1 3.5 9h9a1.5 1.5 0 0 1 1.5 1.5V15h.5a.5.5 0 0 0 .5-.5V2.914a.5.5 0 0 0-.146-.353l-1.415-1.415A.5.5 0 0 0 13.086 1H13v4.5A1.5 1.5 0 0 1 11.5 7h-7A1.5 1.5 0 0 1 3 5.5V1H1.5a.5.5 0 0 0-.5.5m3 4a.5.5 0 0 0 .5.5h7a.5.5 0 0 0 .5-.5V1H4zM3 15h10v-4.5a.5.5 0 0 0-.5-.5h-9a.5.5 0 0 0-.5.5z" />
+                </svg>
+              </button>
+              <button id="preset_load_btn" type="button" class="icon-btn" title="Load Preset" aria-label="Load Preset">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                  <path fill-rule="evenodd"
+                    d="M3.5 6a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h9a.5.5 0 0 0 .5-.5v-8a.5.5 0 0 0-.5-.5h-2a.5.5 0 0 1 0-1h2A1.5 1.5 0 0 1 14 6.5v8a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 14.5v-8A1.5 1.5 0 0 1 3.5 5h2a.5.5 0 0 1 0 1z" />
+                  <path fill-rule="evenodd"
+                    d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z" />
+                </svg>
+              </button>
+              <button id="preset_delete_btn" type="button" class="icon-btn" title="Delete Preset"
+                aria-label="Delete Preset">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                  <path
+                    d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5m3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0z" />
+                  <path
+                    d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4zM2.5 3h11V2h-11z" />
+                </svg>
+              </button>
+              <button id="share_link_btn" type="button" class="icon-btn" title="Copy Share Link"
+                aria-label="Copy Share Link">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                  <path
+                    d="M13.5 1a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3M11 2.5a2.5 2.5 0 1 1 .603 1.628l-6.718 3.12a2.5 2.5 0 0 1 0 1.504l6.718 3.12a2.5 2.5 0 1 1-.488.876l-6.718-3.12a2.5 2.5 0 1 1 0-3.256l6.718-3.12A2.5 2.5 0 0 1 11 2.5m-8.5 4a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3m11 5.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div id="share_status" class="note full" style="display:none"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Household & Tax -->
     <div class="panel">
       <div class="section-title">Household &amp; Tax</div>
@@ -830,15 +1232,9 @@
     <!-- IRS Limits & Assumptions -->
     <div class="panel">
       <div class="section-title">IRS Limits &amp; Assumptions</div>
-      <div class="ctrl-grid">
-        <div class="ctrl-group check-group toggle-group full">
-          <input type="checkbox" id="irs_toggle">
-          <label for="irs_toggle">Show IRS + personal overrides</label>
-        </div>
-      </div>
-      <div class="ctrl-grid" id="irs_fields" style="display:none">
+      <div class="ctrl-grid" id="irs_fields">
         <div class="sub-label" style="margin-top:0;padding-top:0;border-top:none">Personal Assumptions</div>
-        <div class="ctrl-group input-prefix"><label>Partner 401k Pre-tax</label>
+        <div class="ctrl-group input-prefix"><label>Partner 401k Base/Max</label>
           <input type="number" id="partner_401k" value="24500" step="500">
         </div>
         <div class="ctrl-group input-prefix"><label>Join Year W2 Floor</label>
@@ -851,93 +1247,129 @@
         <div class="ctrl-group"><label>IRS Base Year</label>
           <input type="number" id="irs_base_year" value="2026" step="1" min="2020" max="2040">
         </div>
-        <div class="ctrl-group"><label>Bracket Inflation %/Year</label>
+        <div class="ctrl-group"><label>Bracket Inflation %/YR</label>
           <input type="number" id="irs_bracket_inflation" value="0" step="0.5" min="0" max="10">
         </div>
         <div class="sub-label">IRS Limits (Base Year)</div>
-        <div class="ctrl-group input-prefix"><label>401k Employee Max</label>
+        <div class="sub-label" style="margin-top:0">401k Limits</div>
+        <div class="ctrl-group input-prefix"><label>Employee Max</label>
           <input type="number" id="k401_limit_base" value="24500" step="500">
         </div>
-        <div class="ctrl-group input-prefix"><label>401k Max Increase/Year</label>
+        <div class="ctrl-group input-prefix"><label>Max ↑/YR</label>
           <input type="number" id="k401_limit_inc" value="0" step="500">
         </div>
+        <div class="ctrl-group input-prefix"><label>Catch-up 50+ Base</label>
+          <input type="number" id="k401_catchup_base" value="7500" step="250">
+        </div>
+        <div class="ctrl-group input-prefix"><label>Catch-up ↑/YR</label>
+          <input type="number" id="k401_catchup_inc" value="0" step="100">
+        </div>
+        <div class="ctrl-group input-prefix"><label>Super C/U 60-63 Base</label>
+          <input type="number" id="k401_supercatchup_base" value="11250" step="250">
+        </div>
+        <div class="ctrl-group input-prefix"><label>Super C/U ↑/YR</label>
+          <input type="number" id="k401_supercatchup_inc" value="0" step="100">
+        </div>
+        <div class="sub-label">415(c) + ESPP Limits</div>
         <div class="ctrl-group input-prefix"><label>415(c) Total Limit</label>
           <input type="number" id="k415c_limit_base" value="72000" step="1000">
         </div>
-        <div class="ctrl-group input-prefix"><label>415(c) Increase/Year</label>
-          <input type="number" id="k415c_limit_inc" value="0" step="500">
+        <div class="ctrl-group input-prefix"><label>415(c) ↑/YR</label>
+          <input type="number" id="k415c_limit_inc" value="1000" step="500">
         </div>
         <div class="ctrl-group input-prefix"><label>ESPP FMV Limit</label>
           <input type="number" id="espp_fmv_limit_base" value="25000" step="500">
         </div>
-        <div class="ctrl-group input-prefix"><label>ESPP Increase/Year</label>
+        <div class="ctrl-group input-prefix"><label>ESPP ↑/YR</label>
           <input type="number" id="espp_fmv_limit_inc" value="0" step="250">
         </div>
-        <div class="ctrl-group input-prefix"><label>Social Security Wage Base</label>
+        <div class="sub-label">Payroll Tax + Comp Limits</div>
+        <div class="ctrl-group input-prefix"><label>SS Wage Base</label>
           <input type="number" id="ss_base" value="184500" step="1000">
         </div>
-        <div class="ctrl-group input-prefix"><label>Social Security Base Increase/Year</label>
+        <div class="ctrl-group input-prefix"><label>SS Base ↑/YR</label>
           <input type="number" id="ss_base_inc" value="0" step="500">
         </div>
         <div class="ctrl-group input-prefix"><label>401k Compensation Limit</label>
           <input type="number" id="comp_limit_base" value="360000" step="5000">
         </div>
-        <div class="ctrl-group input-prefix"><label>Comp Limit Increase/Year</label>
+        <div class="ctrl-group input-prefix"><label>Comp ↑/YR</label>
           <input type="number" id="comp_limit_inc" value="5000" step="1000">
         </div>
-        <div class="ctrl-group input-prefix"><label>IRA Limit</label>
+        <div class="sub-label">IRA Limits</div>
+        <div class="ctrl-group input-prefix"><label>Limit</label>
           <input type="number" id="ira_limit_base" value="7500" step="100">
         </div>
-        <div class="ctrl-group input-prefix"><label>IRA Increase/Year</label>
+        <div class="ctrl-group input-prefix"><label>Limit ↑/YR</label>
           <input type="number" id="ira_limit_inc" value="200" step="50">
         </div>
-        <div class="ctrl-group input-prefix"><label>IRA Catch-up Limit</label>
+        <div class="ctrl-group input-prefix"><label>Catch-up Limit</label>
           <input type="number" id="ira_catchup_base" value="1000" step="100">
         </div>
-        <div class="ctrl-group input-prefix"><label>IRA Catch-up Increase/Year</label>
+        <div class="ctrl-group input-prefix"><label>Catch-up ↑/YR</label>
           <input type="number" id="ira_catchup_inc" value="100" step="50">
+        </div>
+        <div class="sub-label">401k Catch-up + Backdoor Advanced</div>
+        <div class="ctrl-group" id="start_age_ctrl"><label>Contributor Start Age (Optional)</label>
+          <input type="number" id="start_age" value="" min="18" max="90" step="1" placeholder="Optional">
+        </div>
+        <div class="ctrl-group check-group toggle-group full" id="apply_age_catchup_ctrl">
+          <input type="checkbox" id="apply_age_catchup" checked>
+          <label for="apply_age_catchup">IRA Catch-up (Age 50+)</label>
+        </div>
+        <div class="ctrl-group check-group toggle-group full" id="apply_401k_catchup_ctrl">
+          <input type="checkbox" id="apply_401k_catchup" checked>
+          <label for="apply_401k_catchup">401k Catch-up (Age 50+)</label>
+        </div>
+        <div class="ctrl-group check-group toggle-group full" id="apply_401k_supercatchup_ctrl">
+          <input type="checkbox" id="apply_401k_supercatchup" checked>
+          <label for="apply_401k_supercatchup">401k Super Catch-up (60-63)</label>
+        </div>
+        <div class="ctrl-group check-group toggle-group full" id="ira_advanced_mode_ctrl">
+          <input type="checkbox" id="ira_advanced_mode">
+          <label for="ira_advanced_mode">Backdoor IRA Advanced (Pro-Rata)</label>
+        </div>
+        <div class="ctrl-group input-prefix" id="ira_pretax_balance_ctrl"><label>Pre-tax IRA Balance</label>
+          <input type="number" id="ira_pretax_balance" value="0" step="1000">
+        </div>
+        <div class="ctrl-group" id="ira_pro_rata_tax_rate_ctrl"><label>Pro-rata Tax Rate %</label>
+          <input type="number" id="ira_pro_rata_tax_rate" value="35" step="0.5" min="0" max="60">
+        </div>
+        <div class="ctrl-group full note">
+          <span>Form 8606 reminder: file nondeductible basis and conversion each year.</span>
+        </div>
+        <div class="ctrl-group full">
+          <label>Contribution Priority (Drag)</label>
+          <ul id="priority_order_list" class="priority-list"></ul>
         </div>
         <div class="sub-label">Standard Deduction (Base)</div>
         <div class="ctrl-group input-prefix"><label>MFJ Std Deduction</label>
           <input type="number" id="std_mfj" value="32200" step="500">
         </div>
-        <div class="ctrl-group input-prefix"><label>MFJ Std Increase/Year</label>
+        <div class="ctrl-group input-prefix"><label>MFJ Std ↑/YR</label>
           <input type="number" id="std_mfj_inc" value="500" step="250">
         </div>
         <div class="ctrl-group input-prefix"><label>MFS Std Deduction</label>
           <input type="number" id="std_mfs" value="16100" step="500">
         </div>
-        <div class="ctrl-group input-prefix"><label>MFS Std Increase/Year</label>
+        <div class="ctrl-group input-prefix"><label>MFS Std ↑/YR</label>
           <input type="number" id="std_mfs_inc" value="250" step="250">
         </div>
         <div class="ctrl-group input-prefix"><label>Single Std Deduction</label>
           <input type="number" id="std_single" value="16100" step="500">
         </div>
-        <div class="ctrl-group input-prefix"><label>Single Std Increase/Year</label>
+        <div class="ctrl-group input-prefix"><label>Single Std ↑/YR</label>
           <input type="number" id="std_single_inc" value="250" step="250">
         </div>
-        <div class="sub-label">Backdoor IRA</div>
-        <div class="ctrl-group check-group toggle-group full" id="enable_backdoor_ira_ctrl">
-          <input type="checkbox" id="enable_backdoor_ira" checked>
-          <label for="enable_backdoor_ira">Include Backdoor IRA</label>
+        <div class="sub-label">Year Table Overrides</div>
+        <div class="ctrl-group check-group toggle-group full" id="use_year_overrides_ctrl">
+          <input type="checkbox" id="use_year_overrides">
+          <label for="use_year_overrides">Use Per-Year Overrides</label>
         </div>
-        <div class="ctrl-group" id="backdoor_timing_ctrl">
-          <label>Backdoor Timing</label>
-          <select id="backdoor_timing">
-            <option value="front-load" selected>Front-load</option>
-            <option value="spread-paychecks">Spread across paychecks</option>
-          </select>
-        </div>
-        <div class="ctrl-group" id="start_age_ctrl"><label>Start Age (Optional)</label>
-          <input type="number" id="start_age" value="" min="18" max="90" step="1" placeholder="Optional">
-        </div>
-        <div class="ctrl-group check-group toggle-group full" id="apply_age_catchup_ctrl">
-          <input type="checkbox" id="apply_age_catchup" checked>
-          <label for="apply_age_catchup">Apply age-based catch-up (50+)</label>
-        </div>
-        <div class="ctrl-group full">
-          <label>Contribution Priority (Drag to reorder)</label>
-          <ul id="priority_order_list" class="priority-list"></ul>
+        <div class="ctrl-group full" id="year_overrides_ctrl">
+          <label>Overrides (one year per line)</label>
+          <textarea id="year_overrides" rows="6"
+            placeholder="2026:k401=24500,k401_catchup=7500,k401_super=11250,k415c=72000,espp=25000,ira=7500,ira_catchup=1000,ss=184500,comp=360000,std_mfj=32200,std_mfs=16100,std_single=16100"></textarea>
         </div>
       </div>
     </div>
@@ -947,7 +1379,6 @@
       <div class="panel">
         <div class="section-title">Company A</div>
         <div class="ctrl-grid">
-          <div class="sub-label">Compensation</div>
           <div class="ctrl-group input-prefix"><label>Base Salary</label>
             <input type="number" id="a_base" value="550000" step="5000">
           </div>
@@ -970,9 +1401,15 @@
           <div class="ctrl-group"><label>Bonus Date</label>
             <input type="text" id="a_bonus_date" value="Oct 1" placeholder="Oct 1">
           </div>
-          <div class="sub-label">Benefits</div>
+          <div class="sub-label" id="a_contribution_plan_header">Contribution Plan</div>
+          <div class="plan-hint">Fields shown depend on Enable + Mode.</div>
+          <div class="plan-bucket">401k Settings</div>
+          <div class="ctrl-group check-group toggle-group full" id="enable_401k_contrib_ctrl">
+            <input type="checkbox" id="enable_401k_contrib" checked>
+            <label for="enable_401k_contrib">Enable 401k</label>
+          </div>
           <div class="ctrl-group"><label>Max Deferral %</label>
-            <input type="number" id="a_max_def" value="75" step="5" min="0" max="100">
+            <input type="number" id="a_max_def" value="75" step="5" min="0">
           </div>
           <div class="ctrl-group"><label>Match Basis</label>
             <select id="a_match_type">
@@ -981,7 +1418,7 @@
               <option value="contrib_max">Dollar Cap</option>
             </select>
           </div>
-          <div class="ctrl-group"><label>Match Cap</label>
+          <div class="ctrl-group"><label>401k Match Cap</label>
             <input type="number" id="a_match_value" value="4" step="0.5" min="0">
           </div>
           <div class="ctrl-group" id="a_match_vest_ctrl"><label>Match %</label>
@@ -990,11 +1427,132 @@
           <div class="ctrl-group"><label>Cliff (Years)</label>
             <input type="number" id="a_match_cliff" value="0" step="1" min="0" max="20">
           </div>
+          <div class="ctrl-group check-group toggle-group full">
+            <input type="checkbox" id="a_match_trueup" checked>
+            <label for="a_match_trueup">401k Match True-up</label>
+          </div>
+          <div class="ctrl-group"><label>Mode</label>
+            <select id="a_k401_mode">
+              <option value="max" selected>Max Allowed</option>
+              <option value="fixed">Fixed $ / Year</option>
+              <option value="pct_salary">% of Salary</option>
+            </select>
+          </div>
+          <div class="ctrl-group" id="a_k401_pct_ctrl"><label>% Salary</label>
+            <input type="number" id="a_k401_pct" value="10" step="0.5" min="0" max="100">
+          </div>
+          <div class="ctrl-group input-prefix" id="k401_target_base_ctrl"><label>Target/Yr</label>
+            <input type="number" id="k401_target_base" value="" step="500" placeholder="Blank = IRS max">
+          </div>
+          <div class="ctrl-group input-prefix" id="k401_target_inc_ctrl"><label>↑/YR</label>
+            <input type="number" id="k401_target_inc" value="0" step="100">
+          </div>
+          <div class="ctrl-group" id="k401_timing_ctrl"><label>Timing</label>
+            <select id="k401_timing">
+              <option value="front-load" selected>Front-load</option>
+              <option value="spread-paychecks">Per paycheck</option>
+            </select>
+          </div>
+          <div class="plan-bucket">IRA Settings</div>
+          <div class="ctrl-group check-group toggle-group full" id="enable_backdoor_ira_ctrl">
+            <input type="checkbox" id="enable_backdoor_ira" checked>
+            <label for="enable_backdoor_ira">Enable IRA</label>
+          </div>
+          <div class="ctrl-group"><label>Mode</label>
+            <select id="a_ira_mode">
+              <option value="max" selected>Max Allowed</option>
+              <option value="fixed">Fixed $ / Year</option>
+              <option value="pct_salary">% of Salary</option>
+            </select>
+          </div>
+          <div class="ctrl-group" id="a_ira_pct_ctrl"><label>% Salary</label>
+            <input type="number" id="a_ira_pct" value="3" step="0.5" min="0" max="100">
+          </div>
+          <div class="ctrl-group input-prefix" id="ira_target_base_ctrl"><label>Target/Yr</label>
+            <input type="number" id="ira_target_base" value="" step="100" placeholder="Blank = IRS IRA limit">
+          </div>
+          <div class="ctrl-group input-prefix" id="ira_target_inc_ctrl"><label>↑/YR</label>
+            <input type="number" id="ira_target_inc" value="0" step="50">
+          </div>
+          <div class="ctrl-group" id="backdoor_timing_ctrl">
+            <label>Timing</label>
+            <select id="backdoor_timing">
+              <option value="front-load" selected>Front-load</option>
+              <option value="spread-paychecks">Per paycheck</option>
+            </select>
+          </div>
+          <div class="plan-bucket">Mega Settings</div>
+          <div class="ctrl-group check-group toggle-group full" id="enable_mega_roth_ctrl">
+            <input type="checkbox" id="enable_mega_roth" checked>
+            <label for="enable_mega_roth">Enable Mega</label>
+          </div>
+          <div class="ctrl-group"><label>Mode</label>
+            <select id="a_mega_mode">
+              <option value="max" selected>Max Allowed</option>
+              <option value="fixed">Fixed $ / Year</option>
+              <option value="pct_salary">% of Salary</option>
+            </select>
+          </div>
+          <div class="ctrl-group" id="a_mega_pct_ctrl"><label>% Salary</label>
+            <input type="number" id="a_mega_pct" value="8" step="0.5" min="0" max="100">
+          </div>
+          <div class="ctrl-group input-prefix" id="mega_target_base_ctrl"><label>Target/Yr</label>
+            <input type="number" id="mega_target_base" value="" step="1000" placeholder="Blank = 415(c) capacity">
+          </div>
+          <div class="ctrl-group input-prefix" id="mega_target_inc_ctrl"><label>↑/YR</label>
+            <input type="number" id="mega_target_inc" value="0" step="250">
+          </div>
+          <div class="ctrl-group" id="mega_timing_ctrl"><label>Timing</label>
+            <select id="mega_timing">
+              <option value="front-load" selected>Front-load</option>
+              <option value="spread-paychecks">Per paycheck</option>
+            </select>
+          </div>
+          <div class="plan-bucket">ESPP Settings</div>
+          <div class="ctrl-group check-group toggle-group full" id="enable_espp_ctrl">
+            <input type="checkbox" id="enable_espp">
+            <label for="enable_espp">Enable ESPP</label>
+          </div>
           <div class="ctrl-group"><label>ESPP Contribution %</label>
             <input type="number" id="a_espp_pct" value="0" step="1" min="0" max="15">
           </div>
           <div class="ctrl-group"><label>ESPP Discount %</label>
             <input type="number" id="a_espp_disc" value="0" step="1" min="0" max="25">
+          </div>
+          <div class="ctrl-group"><label>Mode</label>
+            <select id="a_espp_mode">
+              <option value="max" selected>Max Allowed</option>
+              <option value="fixed">Fixed $ / Year</option>
+              <option value="pct_salary">% of Salary</option>
+            </select>
+          </div>
+          <div class="ctrl-group" id="espp_timing_ctrl"><label>Timing</label>
+            <select id="espp_timing">
+              <option value="front-load" selected>Front-load</option>
+              <option value="spread-paychecks">Per paycheck</option>
+            </select>
+          </div>
+          <div class="ctrl-group"><label>ESPP P1 Start</label>
+            <input type="text" id="a_espp_p1_start" value="Feb 1" placeholder="Feb 1">
+          </div>
+          <div class="ctrl-group"><label>ESPP P1 End</label>
+            <input type="text" id="a_espp_p1_end" value="Jul 31" placeholder="Jul 31">
+          </div>
+          <div class="ctrl-group"><label>ESPP P2 Start</label>
+            <input type="text" id="a_espp_p2_start" value="Aug 1" placeholder="Aug 1">
+          </div>
+          <div class="ctrl-group"><label>ESPP P2 End</label>
+            <input type="text" id="a_espp_p2_end" value="Jan 31" placeholder="Jan 31">
+          </div>
+          <div class="ctrl-group" id="a_espp_pct_ctrl"><label>% Salary</label>
+            <input type="number" id="a_espp_pct_plan" value="5" step="0.5" min="0" max="100">
+          </div>
+          <div class="ctrl-group input-prefix" id="espp_target_base_ctrl"><label>Target/Yr</label>
+            <input type="number" id="espp_target_base" value="" step="500"
+              placeholder="Blank = payroll + IRS plan limit">
+          </div>
+          <div class="ctrl-group input-prefix" id="espp_target_inc_ctrl"><label>↑/YR</label>
+            <input type="number" id="espp_target_inc" value="0" step="100">
           </div>
           <div class="sub-label" id="a_lv2_header">2nd Level (Promo)</div>
           <div class="ctrl-group input-prefix" id="a_lv2_base_ctrl"><label>Base Salary</label>
@@ -1004,7 +1562,7 @@
             <input type="number" id="a_lv2_raise_pct" value="0" step="0.5" min="0" max="50">
           </div>
           <div class="ctrl-group" id="a_lv2_bonus_ctrl"><label>Bonus %</label>
-            <input type="number" id="a_lv2_bonus_pct" value="5" step="1" min="0" max="100">
+            <input type="number" id="a_lv2_bonus_pct" value="0" step="1" min="0" max="100">
           </div>
           <div class="ctrl-group input-prefix" id="a_lv2_sign1_ctrl"><label>Sign-on 1</label>
             <input type="number" id="a_lv2_sign1" value="0" step="5000">
@@ -1017,7 +1575,6 @@
       <div class="panel">
         <div class="section-title">Company B</div>
         <div class="ctrl-grid">
-          <div class="sub-label">Compensation</div>
           <div class="ctrl-group input-prefix"><label>Base Salary</label>
             <input type="number" id="b_lv1_base" value="225000" step="5000">
           </div>
@@ -1038,7 +1595,7 @@
           </div>
           <div class="sub-label">Raises &amp; Dates</div>
           <div class="ctrl-group"><label>Raise %</label>
-            <input type="number" id="b_raise_pct" value="2" step="0.5" min="0" max="50">
+            <input type="number" id="b_raise_pct" value="3" step="0.5" min="0" max="50">
           </div>
           <div class="ctrl-group"><label>Raise Date</label>
             <input type="text" id="b_raise_date" value="Oct 15" placeholder="Oct 15">
@@ -1048,32 +1605,6 @@
           </div>
           <div class="ctrl-group"><label>Bonus / Grant Date</label>
             <input type="text" id="bonus_grant_date" value="Oct 16" placeholder="Oct 16">
-          </div>
-          <div class="sub-label">Benefits</div>
-          <div class="ctrl-group"><label>Max Deferral %</label>
-            <input type="number" id="b_max_def" value="75" step="5" min="0" max="100">
-          </div>
-          <div class="ctrl-group"><label>Match Basis</label>
-            <select id="b_match_type">
-              <option value="comp_pct" selected>% of Salary</option>
-              <option value="contrib_pct">% of Contribution</option>
-              <option value="contrib_max">Dollar Cap</option>
-            </select>
-          </div>
-          <div class="ctrl-group"><label>Match Cap</label>
-            <input type="number" id="b_match_value" value="6" step="0.5" min="0">
-          </div>
-          <div class="ctrl-group" id="b_match_vest_ctrl"><label>Match %</label>
-            <input type="text" id="b_match_vest" value="50/3, 75/5, 100" placeholder="50/3, 75/5, 100">
-          </div>
-          <div class="ctrl-group"><label>Cliff (Years)</label>
-            <input type="number" id="b_match_cliff" value="0" step="1" min="0" max="20">
-          </div>
-          <div class="ctrl-group"><label>ESPP Contribution %</label>
-            <input type="number" id="b_espp_pct" value="10" step="1" min="0" max="15">
-          </div>
-          <div class="ctrl-group"><label>ESPP Discount %</label>
-            <input type="number" id="b_espp_disc" value="15" step="1" min="0" max="25">
           </div>
           <div class="sub-label">Equity Config</div>
           <div class="ctrl-group input-prefix"><label>Stock Price</label>
@@ -1094,6 +1625,158 @@
           <div class="ctrl-group check-group">
             <input type="checkbox" id="cliff_on" checked>
             <label for="cliff_on">1-Year Cliff</label>
+          </div>
+          <div class="sub-label" id="b_contribution_plan_header">Contribution Plan</div>
+          <div class="plan-hint">Fields shown depend on Enable + Mode.</div>
+          <div class="plan-bucket">401k Settings</div>
+          <div class="ctrl-group check-group toggle-group full" id="b_enable_401k_contrib_ctrl">
+            <input type="checkbox" id="b_enable_401k_contrib" checked>
+            <label for="b_enable_401k_contrib">Enable 401k</label>
+          </div>
+          <div class="ctrl-group"><label>Max Deferral %</label>
+            <input type="number" id="b_max_def" value="75" step="5" min="0">
+          </div>
+          <div class="ctrl-group"><label>Match Basis</label>
+            <select id="b_match_type">
+              <option value="comp_pct" selected>% of Salary</option>
+              <option value="contrib_pct">% of Contribution</option>
+              <option value="contrib_max">Dollar Cap</option>
+            </select>
+          </div>
+          <div class="ctrl-group"><label>401k Match Cap</label>
+            <input type="number" id="b_match_value" value="6" step="0.5" min="0">
+          </div>
+          <div class="ctrl-group" id="b_match_vest_ctrl"><label>Match %</label>
+            <input type="text" id="b_match_vest" value="50/3, 75/5, 100" placeholder="50/3, 75/5, 100">
+          </div>
+          <div class="ctrl-group"><label>Cliff (Years)</label>
+            <input type="number" id="b_match_cliff" value="0" step="1" min="0" max="20">
+          </div>
+          <div class="ctrl-group check-group toggle-group full">
+            <input type="checkbox" id="b_match_trueup" checked>
+            <label for="b_match_trueup">401k Match True-up</label>
+          </div>
+          <div class="ctrl-group"><label>Mode</label>
+            <select id="b_k401_mode">
+              <option value="max" selected>Max Allowed</option>
+              <option value="fixed">Fixed $ / Year</option>
+              <option value="pct_salary">% of Salary</option>
+            </select>
+          </div>
+          <div class="ctrl-group"><label>% Salary</label>
+            <input type="number" id="b_k401_pct" value="10" step="0.5" min="0" max="100">
+          </div>
+          <div class="ctrl-group input-prefix" id="b_k401_target_base_ctrl"><label>Target/Yr</label>
+            <input type="number" id="b_k401_target_base" value="" step="500" placeholder="Blank = IRS max">
+          </div>
+          <div class="ctrl-group input-prefix" id="b_k401_target_inc_ctrl"><label>↑/YR</label>
+            <input type="number" id="b_k401_target_inc" value="0" step="100">
+          </div>
+          <div class="ctrl-group" id="b_k401_timing_ctrl"><label>Timing</label>
+            <select id="b_k401_timing">
+              <option value="front-load" selected>Front-load</option>
+              <option value="spread-paychecks">Per paycheck</option>
+            </select>
+          </div>
+          <div class="plan-bucket">IRA Settings</div>
+          <div class="ctrl-group check-group toggle-group full" id="b_enable_backdoor_ira_ctrl">
+            <input type="checkbox" id="b_enable_backdoor_ira" checked>
+            <label for="b_enable_backdoor_ira">Enable IRA</label>
+          </div>
+          <div class="ctrl-group"><label>Mode</label>
+            <select id="b_ira_mode">
+              <option value="max" selected>Max Allowed</option>
+              <option value="fixed">Fixed $ / Year</option>
+              <option value="pct_salary">% of Salary</option>
+            </select>
+          </div>
+          <div class="ctrl-group"><label>% Salary</label>
+            <input type="number" id="b_ira_pct" value="3" step="0.5" min="0" max="100">
+          </div>
+          <div class="ctrl-group input-prefix" id="b_ira_target_base_ctrl"><label>Target/Yr</label>
+            <input type="number" id="b_ira_target_base" value="" step="100" placeholder="Blank = IRS IRA limit">
+          </div>
+          <div class="ctrl-group input-prefix" id="b_ira_target_inc_ctrl"><label>↑/YR</label>
+            <input type="number" id="b_ira_target_inc" value="0" step="50">
+          </div>
+          <div class="ctrl-group" id="b_backdoor_timing_ctrl"><label>Timing</label>
+            <select id="b_backdoor_timing">
+              <option value="front-load" selected>Front-load</option>
+              <option value="spread-paychecks">Per paycheck</option>
+            </select>
+          </div>
+          <div class="plan-bucket">Mega Settings</div>
+          <div class="ctrl-group check-group toggle-group full" id="b_enable_mega_roth_ctrl">
+            <input type="checkbox" id="b_enable_mega_roth" checked>
+            <label for="b_enable_mega_roth">Enable Mega</label>
+          </div>
+          <div class="ctrl-group"><label>Mode</label>
+            <select id="b_mega_mode">
+              <option value="max" selected>Max Allowed</option>
+              <option value="fixed">Fixed $ / Year</option>
+              <option value="pct_salary">% of Salary</option>
+            </select>
+          </div>
+          <div class="ctrl-group"><label>% Salary</label>
+            <input type="number" id="b_mega_pct" value="8" step="0.5" min="0" max="100">
+          </div>
+          <div class="ctrl-group input-prefix" id="b_mega_target_base_ctrl"><label>Target/Yr</label>
+            <input type="number" id="b_mega_target_base" value="" step="1000" placeholder="Blank = 415(c) capacity">
+          </div>
+          <div class="ctrl-group input-prefix" id="b_mega_target_inc_ctrl"><label>↑/YR</label>
+            <input type="number" id="b_mega_target_inc" value="0" step="250">
+          </div>
+          <div class="ctrl-group" id="b_mega_timing_ctrl"><label>Timing</label>
+            <select id="b_mega_timing">
+              <option value="front-load" selected>Front-load</option>
+              <option value="spread-paychecks">Per paycheck</option>
+            </select>
+          </div>
+          <div class="plan-bucket">ESPP Settings</div>
+          <div class="ctrl-group check-group toggle-group full" id="b_enable_espp_ctrl">
+            <input type="checkbox" id="b_enable_espp" checked>
+            <label for="b_enable_espp">Enable ESPP</label>
+          </div>
+          <div class="ctrl-group"><label>ESPP Contribution %</label>
+            <input type="number" id="b_espp_pct" value="10" step="1" min="0" max="15">
+          </div>
+          <div class="ctrl-group"><label>ESPP Discount %</label>
+            <input type="number" id="b_espp_disc" value="15" step="1" min="0" max="25">
+          </div>
+          <div class="ctrl-group"><label>Mode</label>
+            <select id="b_espp_mode">
+              <option value="max" selected>Max Allowed</option>
+              <option value="fixed">Fixed $ / Year</option>
+              <option value="pct_salary">% of Salary</option>
+            </select>
+          </div>
+          <div class="ctrl-group" id="b_espp_timing_ctrl"><label>Timing</label>
+            <select id="b_espp_timing">
+              <option value="front-load" selected>Front-load</option>
+              <option value="spread-paychecks">Per paycheck</option>
+            </select>
+          </div>
+          <div class="ctrl-group"><label>ESPP P1 Start</label>
+            <input type="text" id="b_espp_p1_start" value="Feb 1" placeholder="Feb 1">
+          </div>
+          <div class="ctrl-group"><label>ESPP P1 End</label>
+            <input type="text" id="b_espp_p1_end" value="Jul 31" placeholder="Jul 31">
+          </div>
+          <div class="ctrl-group"><label>ESPP P2 Start</label>
+            <input type="text" id="b_espp_p2_start" value="Aug 1" placeholder="Aug 1">
+          </div>
+          <div class="ctrl-group"><label>ESPP P2 End</label>
+            <input type="text" id="b_espp_p2_end" value="Jan 31" placeholder="Jan 31">
+          </div>
+          <div class="ctrl-group"><label>% Salary</label>
+            <input type="number" id="b_espp_pct_plan" value="5" step="0.5" min="0" max="100">
+          </div>
+          <div class="ctrl-group input-prefix" id="b_espp_target_base_ctrl"><label>Target/Yr</label>
+            <input type="number" id="b_espp_target_base" value="" step="500"
+              placeholder="Blank = payroll + IRS plan limit">
+          </div>
+          <div class="ctrl-group input-prefix" id="b_espp_target_inc_ctrl"><label>↑/YR</label>
+            <input type="number" id="b_espp_target_inc" value="0" step="100">
           </div>
           <div class="sub-label" id="b_lv2_header">2nd Level (Promo)</div>
           <div class="ctrl-group input-prefix" id="b_lv2_base_ctrl"><label>Base Salary</label>
@@ -1122,7 +1805,7 @@
     <div class="setup-row">
       <div class="panel">
         <div class="section-title">Scenario</div>
-        <div class="ctrl-grid cols-4">
+        <div class="ctrl-grid cols-4" id="scenario-grid">
           <div class="ctrl-group"><label>Mode</label>
             <select id="mode">
               <option value="direct">Direct</option>
@@ -1136,19 +1819,19 @@
               <option value="Single">Single</option>
             </select>
           </div>
-          <div class="ctrl-group"><label>Paradigm</label>
+          <div class="ctrl-group" id="paradigm_ctrl"><label>Paradigm</label>
             <select id="paradigm">
               <option value="baseline">Baseline</option>
               <option value="B_invest" selected>Invest Sign-on + Bonus</option>
             </select>
           </div>
-          <div class="ctrl-group"><label>Stock Growth %</label>
+          <div class="ctrl-group" id="stock_growth_ctrl"><label>Stock Growth %</label>
             <input type="text" id="stock_growth" value="15" placeholder="e.g. 15 or 10,-8,15">
           </div>
-          <div class="ctrl-group input-prefix"><label>Reserve Cash per Year</label>
+          <div class="ctrl-group input-prefix" id="reserve_cash_ctrl"><label>Reserve Cash per Year</label>
             <input type="number" id="reserve_cash" value="0" step="10000" min="0">
           </div>
-          <div class="ctrl-group input-prefix"><label>Prior 401k Pre-tax</label>
+          <div class="ctrl-group input-prefix" id="prior_401k_ctrl"><label>Prior 401k Pre-tax</label>
             <input type="number" id="prior_401k" value="15000" step="500">
           </div>
         </div>
@@ -1197,22 +1880,71 @@
           <p class="note-title">How to read this breakdown</p>
           <ul class="note-list">
             <li><b>All values are cumulative</b> through each column date.</li>
+            <li><b>+This Yr</b> rows show the incremental value added in that column period.</li>
             <li><b>Salary Cash:</b> after-tax base pay after 401k, Backdoor IRA, ESPP, and Mega Backdoor Roth payroll
               contributions.</li>
             <li><b>Investment Delta:</b> after-tax salary premium invested in Company B stock.</li>
             <li><b>RSU:</b> value of vested shares kept after sell-to-cover taxes.</li>
             <li><b>ESPP:</b> market value of purchased shares at exit; purchase cost is already deducted from Salary
-              Cash.</li>
-            <li><b>Backdoor IRA:</b> post-tax contribution converted to Roth IRA and compounded at 5% until exit.</li>
-            <li><b>401k Match:</b> employer match future value at 5% growth.</li>
+              Cash. This can show $0 before the first purchase date even if payroll ESPP contributions have started.
+            </li>
+            <li><b>Backdoor IRA:</b> post-tax contribution converted to Roth IRA; no extra growth is applied.</li>
+            <li><b>401k Match:</b> employer match future value at 5% growth (the only growth modeled here, since match
+              can differ by company while other contribution buckets are user-controlled).</li>
             <li><b>Mega Backdoor Roth:</b> after-tax 401k contribution value under the 415(c) limit; no extra growth
               assumed.</li>
             <li><b>Cash (Sign-on + Bonus):</b> after-tax sign-on and bonus paid as cash. <b>Invested Sign-on +
                 Bonus:</b> that same after-tax cash invested in Company B stock.</li>
           </ul>
           <p class="note-foot">Assumptions: partner pre-tax 401k input reduces household federal taxable income; 401k
-            match uses the IRS compensation limit ($360k in 2026, +$5k/year).</p>
+            match uses the IRS compensation limit ($360k in 2026, +$5k/year); Mega Backdoor room is 415(c) minus
+            employee
+            401k and employer match, so it can decrease if match grows faster than your 415(c) increase setting.</p>
         </div>
+      </div>
+      <div class="card" id="allocation-card">
+        <h2 id="allocation_card_label">Allocation Transparency</h2>
+        <div class="card-body">
+          <div class="table-wrap">
+            <table id="allocation-table">
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="card" id="sensitivity-card">
+        <h2>Sensitivity (Best / Base / Worst)</h2>
+        <div class="ctrl-grid cols-3" style="margin-bottom:10px">
+          <div class="ctrl-group"><label>Worst Growth %</label>
+            <input type="text" id="sens_growth_worst" value="8" placeholder="e.g. 8 or 5,8,10">
+          </div>
+          <div class="ctrl-group"><label>Base Growth %</label>
+            <input type="text" id="sens_growth_base" value="15" placeholder="e.g. 15 or 10,-8,15">
+          </div>
+          <div class="ctrl-group"><label>Best Growth %</label>
+            <input type="text" id="sens_growth_best" value="25" placeholder="e.g. 25 or 20,25,30">
+          </div>
+          <div class="ctrl-group"><label>Worst Tenure (Years)</label>
+            <input type="number" id="sens_tenure_worst" value="2" step="1" min="1">
+          </div>
+          <div class="ctrl-group"><label>Base Tenure (Years)</label>
+            <input type="number" id="sens_tenure_base" value="4" step="1" min="1">
+          </div>
+          <div class="ctrl-group"><label>Best Tenure (Years)</label>
+            <input type="number" id="sens_tenure_best" value="6" step="1" min="1">
+          </div>
+        </div>
+        <p class="note">Includes current Scenario inputs (including Reserve Cash per Year).</p>
+        <div class="table-wrap">
+          <table id="sensitivity-table">
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Timeline Mix</h2>
+        <div id="timeline-legend" class="timeline-legend"></div>
+        <div id="timeline-chart"></div>
       </div>
     </div>
   </div>
@@ -1246,6 +1978,25 @@
       result.sort((a, b) => a.m - b.m || a.d - b.d);
       return result;
     }
+
+    const DEFAULT_ESPP_OFFER_PERIODS = [
+      { start: { m: 2, d: 1 }, end: { m: 7, d: 31 } },
+      { start: { m: 8, d: 1 }, end: { m: 1, d: 31 } }
+    ];
+    const IRS_BASE_SHIFT_FIELDS = [
+      ['k401_limit_base', 'k401_limit_inc'],
+      ['k401_catchup_base', 'k401_catchup_inc'],
+      ['k401_supercatchup_base', 'k401_supercatchup_inc'],
+      ['k415c_limit_base', 'k415c_limit_inc'],
+      ['espp_fmv_limit_base', 'espp_fmv_limit_inc'],
+      ['ss_base', 'ss_base_inc'],
+      ['comp_limit_base', 'comp_limit_inc'],
+      ['ira_limit_base', 'ira_limit_inc'],
+      ['ira_catchup_base', 'ira_catchup_inc'],
+      ['std_mfj', 'std_mfj_inc'],
+      ['std_mfs', 'std_mfs_inc'],
+      ['std_single', 'std_single_inc']
+    ];
 
     // ===== CONSTANTS =====
     const MFJ_BRACKETS_BASE = [[.10, 24800], [.12, 100800], [.22, 211400], [.24, 403550], [.32, 512450], [.35, 768700], [.37, 1e18]];
@@ -1282,10 +2033,42 @@
       const n = parseInt(raw, 10);
       return Number.isFinite(n) ? n : fallback;
     }
-    function parseGrowth(str) {
+    function alignIrsBaseYearWithStartYear(force = false) {
+      const startEl = $('start_date');
+      const baseYearEl = $('irs_base_year');
+      if (!startEl || !baseYearEl) return;
+      if (!force && baseYearEl.dataset.manual === '1') return;
+      const startRaw = startEl.value || '';
+      if (!startRaw) return;
+      const startYear = getYear(parseISODate(startRaw));
+      const oldBaseYear = intOrDefault(baseYearEl.value, startYear);
+      if (!Number.isFinite(startYear) || oldBaseYear === startYear) {
+        baseYearEl.value = String(startYear);
+        return;
+      }
+      const deltaYears = startYear - oldBaseYear;
+      for (const [baseId, incId] of IRS_BASE_SHIFT_FIELDS) {
+        const baseEl = $(baseId);
+        const incEl = $(incId);
+        if (!baseEl || !incEl) continue;
+        const baseVal = numberOrDefault(baseEl.value, 0);
+        const incVal = numberOrDefault(incEl.value, 0);
+        const shifted = Math.max(0, Math.round((baseVal + incVal * deltaYears) * 100) / 100);
+        baseEl.value = Number.isInteger(shifted) ? String(Math.trunc(shifted)) : String(shifted);
+      }
+      baseYearEl.value = String(startYear);
+    }
+    function parseGrowth(str, fallbackPct = 15) {
       const parts = str.split(',').map(s => s.trim()).filter(Boolean);
       const rates = parts.map(p => parseFloat(p) / 100).filter(r => !isNaN(r));
-      return rates.length ? rates : [0.15];
+      return rates.length ? rates : [fallbackPct / 100];
+    }
+    function formatGrowthPattern(gArr) {
+      const arr = Array.isArray(gArr) && gArr.length ? gArr : [0.15];
+      return arr.map(r => {
+        const pct = Math.round(r * 10000) / 100;
+        return Number.isInteger(pct) ? String(Math.trunc(pct)) : String(pct);
+      }).join(',');
     }
     function stockPrice(d, gArr, s, p0) {
       const td = daysBetween(s, d); if (td <= 0) return p0;
@@ -1331,6 +2114,57 @@
       }
       const sum = parts.reduce((a, b) => a + b, 0);
       return parts.map(p => p / sum);
+    }
+
+    function makeAnnualTargetFn(base, inc, baseYear) {
+      if (!Number.isFinite(base)) return null;
+      const safeBase = Math.max(0, base);
+      const safeInc = Number.isFinite(inc) ? inc : 0;
+      return yr => Math.max(0, irsValue(safeBase, safeInc, yr, baseYear));
+    }
+
+    function parseYearOverrides(text) {
+      const map = {};
+      const lines = (text || '').split('\n').map(s => s.trim()).filter(Boolean);
+      for (const line of lines) {
+        const parts = line.split(':');
+        if (parts.length < 2) continue;
+        const yr = parseInt(parts[0].trim(), 10);
+        if (!Number.isFinite(yr)) continue;
+        const rest = parts.slice(1).join(':');
+        const obj = {};
+        for (const kv of rest.split(',').map(s => s.trim()).filter(Boolean)) {
+          const eq = kv.indexOf('=');
+          if (eq <= 0) continue;
+          const k = kv.slice(0, eq).trim().toLowerCase();
+          const v = parseFloat(kv.slice(eq + 1).trim());
+          if (!Number.isFinite(v)) continue;
+          obj[k] = v;
+        }
+        map[yr] = obj;
+      }
+      return map;
+    }
+
+    function taxValue(taxObj, yr, baseField, incField, overrideKey, baseYear) {
+      if (taxObj && taxObj.useYearOverrides && taxObj.yearOverrides && taxObj.yearOverrides[yr] && Number.isFinite(taxObj.yearOverrides[yr][overrideKey])) {
+        return taxObj.yearOverrides[yr][overrideKey];
+      }
+      return irsValue(taxObj[baseField], taxObj[incField], yr, baseYear);
+    }
+
+    function k401LimitWithCatchup(taxObj, yr, baseYear, catchupOpts) {
+      let lim = taxValue(taxObj, yr, 'k401LimitBase', 'k401LimitInc', 'k401', baseYear);
+      if (!catchupOpts || !Number.isFinite(catchupOpts.startAge)) return Math.max(0, lim);
+      const age = catchupOpts.startAge + Math.max(0, yr - catchupOpts.startYear);
+      if (age >= 60 && age <= 63 && catchupOpts.applySuperCatchup) {
+        const superAmt = taxValue(taxObj, yr, 'k401SuperCatchupBase', 'k401SuperCatchupInc', 'k401_super', baseYear);
+        lim += Math.max(0, superAmt);
+      } else if (age >= 50 && catchupOpts.applyCatchup) {
+        const catchAmt = taxValue(taxObj, yr, 'k401CatchupBase', 'k401CatchupInc', 'k401_catchup', baseYear);
+        lim += Math.max(0, catchAmt);
+      }
+      return Math.max(0, lim);
     }
 
     function payDates(startDate, endDate) {
@@ -1380,13 +2214,16 @@
       const sp = tax.partnerW2;
       const hasSplit = taxB && typeof w2A === 'number' && typeof w2B === 'number';
       const baseYear = tax.irsBaseYear || joinYr;
-      const k401Limit = irsValue(tax.k401LimitBase, tax.k401LimitInc, yr, baseYear);
-      const stdMFJ = irsValue(tax.stdMfj, tax.stdMfjInc, yr, baseYear);
-      const stdMFS = irsValue(tax.stdMfs, tax.stdMfsInc, yr, baseYear);
-      const stdSingle = irsValue(tax.stdSingle, tax.stdSingleInc, yr, baseYear);
-      const ssBase = irsValue(tax.ssBase, tax.ssBaseInc, yr, baseYear);
+      const k401Limit = taxValue(tax, yr, 'k401LimitBase', 'k401LimitInc', 'k401', baseYear);
+      const stdMFJ = taxValue(tax, yr, 'stdMfj', 'stdMfjInc', 'std_mfj', baseYear);
+      const stdMFS = taxValue(tax, yr, 'stdMfs', 'stdMfsInc', 'std_mfs', baseYear);
+      const stdSingle = taxValue(tax, yr, 'stdSingle', 'stdSingleInc', 'std_single', baseYear);
+      const ssBase = taxValue(tax, yr, 'ssBase', 'ssBaseInc', 'ss', baseYear);
       const infl = tax.bracketInfl || 0;
-      const partner401k = Number.isFinite(tax.partner401k) ? tax.partner401k : k401Limit;
+      const partner401kBase = Number.isFinite(tax.partner401k) ? Math.max(0, tax.partner401k) : k401Limit;
+      const k401BaseLimit = Number.isFinite(tax.k401LimitBase) ? tax.k401LimitBase : k401Limit;
+      const partnerUsesMax = partner401kBase >= (k401BaseLimit - 1);
+      const partner401k = partnerUsesMax ? k401Limit : Math.min(partner401kBase, k401Limit);
       const mfjBrackets = adjustBrackets(MFJ_BRACKETS_BASE, infl, yr, baseYear);
       const mfsBrackets = adjustBrackets(MFS_BRACKETS_BASE, infl, yr, baseYear);
       const singleBrackets = adjustBrackets(SINGLE_BRACKETS_BASE, infl, yr, baseYear);
@@ -1523,13 +2360,32 @@
     }
 
     // ===== ESPP =====
-    function offerPeriod(pd) {
-      const y = getYear(pd), m = getMonth(pd);
-      if (m >= 2 && m <= 7) return [makeDate(y, 2, 1), makeDate(y, 7, 31)];
-      if (m >= 8) return [makeDate(y, 8, 1), makeDate(y + 1, 1, 31)];
-      return [makeDate(y - 1, 8, 1), makeDate(y, 1, 31)];
+    function offerPeriod(pd, esppOfferPeriods) {
+      const rawPeriods = Array.isArray(esppOfferPeriods) && esppOfferPeriods.length ? esppOfferPeriods : DEFAULT_ESPP_OFFER_PERIODS;
+      const periods = rawPeriods.map(p => {
+        const sm = Math.min(12, Math.max(1, intOrDefault((p && p.start && p.start.m), 2)));
+        const em = Math.min(12, Math.max(1, intOrDefault((p && p.end && p.end.m), 7)));
+        const sd = Math.min(daysInMonth(2024, sm), Math.max(1, intOrDefault((p && p.start && p.start.d), 1)));
+        const ed = Math.min(daysInMonth(2024, em), Math.max(1, intOrDefault((p && p.end && p.end.d), 31)));
+        return { start: { m: sm, d: sd }, end: { m: em, d: ed } };
+      });
+      const y = getYear(pd);
+      const candidates = [];
+      for (const p of periods) {
+        for (const sy of [y - 1, y, y + 1]) {
+          const os = makeDate(sy, p.start.m, p.start.d);
+          const crossYear = p.end.m < p.start.m || (p.end.m === p.start.m && p.end.d < p.start.d);
+          const pe = makeDate(crossYear ? sy + 1 : sy, p.end.m, p.end.d);
+          candidates.push([os, pe]);
+          if (pd >= os && pd <= pe) return [os, pe];
+        }
+      }
+      const past = candidates.filter(([os]) => os <= pd).sort((a, b) => b[0] - a[0]);
+      if (past.length) return past[0];
+      candidates.sort((a, b) => a[0] - b[0]);
+      return candidates[0] || [makeDate(y, 2, 1), makeDate(y, 7, 31)];
     }
-    function computeEspp(pds, bStart, endD, g, salFn, esppR, esppDisc, startD, p0, esppLimitFn, availMap) {
+    function computeEspp(pds, bStart, endD, g, salFn, esppR, esppDisc, startD, p0, esppLimitFn, esppOfferPeriods, availMap) {
       const periods = {}, annC = {}, contribs = new Map();
       for (const pd of pds) {
         if (pd < bStart || pd > endD) continue;
@@ -1540,7 +2396,7 @@
         const maxPay = Math.min(ppg * esppR, avail);
         let c = Math.min(maxPay, Math.max(0, cap * (1 - esppDisc) - annC[yr]));
         if (c <= 0) continue; annC[yr] += c; contribs.set(pd.getTime(), c);
-        const [os, pe] = offerPeriod(pd); const k = os.toISOString() + '_' + pe.toISOString();
+        const [os, pe] = offerPeriod(pd, esppOfferPeriods); const k = os.toISOString() + '_' + pe.toISOString();
         if (!(k in periods)) periods[k] = { os, pe, tot: 0 }; periods[k].tot += c;
       }
       let totSh = 0, totCost = 0; const w2 = {};
@@ -1556,24 +2412,80 @@
     }
 
     // ===== 401K =====
-    function compute401kContribs(pds, salFn, isFirst, kCap, startYr, priorPreTax, k401LimitBase, k401LimitInc, irsBaseYear) {
-      const contribs = [], ann = {}; const rem = {};
+    function compute401kContribs(pds, salFn, isFirst, kCap, startYr, priorPreTax, k401LimitBase, k401LimitInc, irsBaseYear, opts) {
+      const cfg = opts || {};
+      const enabled = cfg.enabled !== false;
+      const timing = cfg.timing === 'spread-paychecks' ? 'spread-paychecks' : 'front-load';
+      const mode = cfg.mode || 'max';
+      const pctRate = Number.isFinite(cfg.pctSalaryRate) ? Math.max(0, cfg.pctSalaryRate) : 0;
+      const contribs = [], ann = {}; const rem = {}, targets = {};
+      const payLeft = {};
+      for (const pd of pds) {
+        const yr = getYear(pd);
+        payLeft[yr] = (payLeft[yr] || 0) + 1;
+      }
       for (const pd of pds) {
         const yr = getYear(pd);
         if (!(yr in rem)) {
-          const limit = irsValue(k401LimitBase, k401LimitInc, yr, irsBaseYear);
+          const limit = cfg.limitFn ? cfg.limitFn(yr) : irsValue(k401LimitBase, k401LimitInc, yr, irsBaseYear);
           const prior = (yr === startYr && isFirst) ? (priorPreTax || 0) : 0;
-          rem[yr] = Math.max(0, limit - prior);
+          let yrCap = Math.max(0, limit - prior);
+          if (enabled && cfg.annualTargetFn) yrCap = Math.min(yrCap, Math.max(0, cfg.annualTargetFn(yr)));
+          rem[yr] = enabled ? yrCap : 0;
+          targets[yr] = rem[yr];
           ann[yr] = 0;
         }
         const [pg] = salFn(pd);
-        let c = Math.min(pg * kCap, rem[yr]); c = Math.max(0, c);
+        const desired = mode === 'pct_salary' ? pg * pctRate : pg * kCap;
+        const left = Math.max(1, payLeft[yr] || 1);
+        const target = timing === 'spread-paychecks' ? rem[yr] / left : rem[yr];
+        let c = Math.min(desired, rem[yr], target); c = Math.max(0, c);
         contribs.push([pd, c]); rem[yr] -= c; ann[yr] += c;
+        payLeft[yr] = Math.max(0, left - 1);
       }
-      return { contribs, ann };
+      return { contribs, ann, targets };
+    }
+
+    function compute401kContribsWithUsed(pds, salFn, kCap, usedByYear, k401LimitBase, k401LimitInc, irsBaseYear, opts) {
+      const cfg = opts || {};
+      const enabled = cfg.enabled !== false;
+      const timing = cfg.timing === 'spread-paychecks' ? 'spread-paychecks' : 'front-load';
+      const mode = cfg.mode || 'max';
+      const pctRate = Number.isFinite(cfg.pctSalaryRate) ? Math.max(0, cfg.pctSalaryRate) : 0;
+      const contribs = [], ann = {}, rem = {}, payLeft = {}, targets = {};
+      for (const pd of pds) {
+        const yr = getYear(pd);
+        payLeft[yr] = (payLeft[yr] || 0) + 1;
+      }
+      for (const pd of pds) {
+        const yr = getYear(pd);
+        if (!(yr in rem)) {
+          const used = usedByYear[yr] || 0;
+          const limit = cfg.limitFn ? cfg.limitFn(yr) : irsValue(k401LimitBase, k401LimitInc, yr, irsBaseYear);
+          let yrCap = Math.max(0, limit - used);
+          if (enabled && cfg.annualTargetFn) {
+            const targetRem = Math.max(0, cfg.annualTargetFn(yr) - used);
+            yrCap = Math.min(yrCap, targetRem);
+          }
+          rem[yr] = enabled ? yrCap : 0;
+          targets[yr] = rem[yr];
+          ann[yr] = 0;
+        }
+        const [pg] = salFn(pd);
+        const desired = mode === 'pct_salary' ? pg * pctRate : pg * kCap;
+        const left = Math.max(1, payLeft[yr] || 1);
+        const target = timing === 'spread-paychecks' ? rem[yr] / left : rem[yr];
+        let c = Math.min(desired, rem[yr], target);
+        c = Math.max(0, c);
+        contribs.push([pd, c]);
+        rem[yr] -= c;
+        ann[yr] += c;
+        payLeft[yr] = Math.max(0, left - 1);
+      }
+      return { contribs, ann, targets };
     }
     function getVestMultiplier(pd, bStart, vestSched) { const ey = Math.floor(daysBetween(bStart, pd) / 365) + 1; for (const { pct, thruYear } of vestSched) { if (ey <= thruYear) return pct } return 1 }
-    function computeMatchFV(k4c, salFn, employerStart, exitD, matchType, matchValue, vestSched, matchOnRate, compLimitFn) {
+    function computeMatchFV(k4c, salFn, employerStart, exitD, matchType, matchValue, vestSched, matchOnRate, compLimitFn, trueUp) {
       const yrAnn = {}; for (const [pd] of k4c) { const [, a] = salFn(pd); yrAnn[getYear(pd)] = a }
       const used = {}; let fv = 0;
       const mRate = matchValue / 100;
@@ -1584,20 +2496,30 @@
         if (matchType === 'contrib_pct') {
           m = ec * mRate * mult;
         } else {
-          let cap;
-          if (matchType === 'comp_pct') {
-            cap = Math.min(yrAnn[yr], compLimitFn(yr)) * mRate * mult;
+          if (!trueUp) {
+            if (matchType === 'comp_pct') {
+              const capPerPay = (Math.min(yrAnn[yr], compLimitFn(yr)) / 24) * mRate * mult;
+              m = Math.min(ec * matchOnRate, Math.max(0, capPerPay));
+            } else {
+              const capPerPay = (matchValue / 24) * mult;
+              m = Math.min(ec * matchOnRate, Math.max(0, capPerPay));
+            }
           } else {
-            cap = matchValue * mult;
+            let cap;
+            if (matchType === 'comp_pct') {
+              cap = Math.min(yrAnn[yr], compLimitFn(yr)) * mRate * mult;
+            } else {
+              cap = matchValue * mult;
+            }
+            if (!(yr in used)) used[yr] = 0;
+            m = Math.min(ec * matchOnRate, Math.max(0, cap - used[yr])); used[yr] += m;
           }
-          if (!(yr in used)) used[yr] = 0;
-          m = Math.min(ec * matchOnRate, Math.max(0, cap - used[yr])); used[yr] += m;
         }
         fv += m * Math.pow(1 + MATCH_GROWTH_RATE, daysBetween(pd, exitD) / 365.25);
       }
       return fv;
     }
-    function computeRawMatch(k4c, salFn, employerStart, matchType, matchValue, vestSched, matchOnRate, compLimitFn) {
+    function computeRawMatch(k4c, salFn, employerStart, matchType, matchValue, vestSched, matchOnRate, compLimitFn, trueUp) {
       const yrAnn = {}, used = {}, rm = {};
       for (const [pd] of k4c) { const [, a] = salFn(pd); yrAnn[getYear(pd)] = a }
       const mRate = matchValue / 100;
@@ -1608,21 +2530,36 @@
         if (matchType === 'contrib_pct') {
           m = ec * mRate * mult;
         } else {
-          let cap;
-          if (matchType === 'comp_pct') {
-            cap = Math.min(yrAnn[yr], compLimitFn(yr)) * mRate * mult;
+          if (!trueUp) {
+            if (matchType === 'comp_pct') {
+              const capPerPay = (Math.min(yrAnn[yr], compLimitFn(yr)) / 24) * mRate * mult;
+              m = Math.min(ec * matchOnRate, Math.max(0, capPerPay));
+            } else {
+              const capPerPay = (matchValue / 24) * mult;
+              m = Math.min(ec * matchOnRate, Math.max(0, capPerPay));
+            }
           } else {
-            cap = matchValue * mult;
+            let cap;
+            if (matchType === 'comp_pct') {
+              cap = Math.min(yrAnn[yr], compLimitFn(yr)) * mRate * mult;
+            } else {
+              cap = matchValue * mult;
+            }
+            if (!(yr in used)) used[yr] = 0;
+            m = Math.min(ec * matchOnRate, Math.max(0, cap - used[yr])); used[yr] += m;
           }
-          if (!(yr in used)) used[yr] = 0;
-          m = Math.min(ec * matchOnRate, Math.max(0, cap - used[yr])); used[yr] += m;
         }
         rm[yr] = (rm[yr] || 0) + m;
       }
       return rm;
     }
-    function computeRawMatchFromAnn(k4ann, salFn, pds, matchType, matchValue, employerStart, vestSched, matchOnRate, compLimitFn) {
+    function computeRawMatchFromAnn(k4ann, salFn, pds, matchType, matchValue, employerStart, vestSched, matchOnRate, compLimitFn, trueUp) {
       const yrAnn = {}; for (const pd of pds) { const [, a] = salFn(pd); yrAnn[getYear(pd)] = a }
+      const yrPds = {};
+      for (const pd of pds) {
+        const yr = getYear(pd);
+        yrPds[yr] = (yrPds[yr] || 0) + 1;
+      }
       const mRate = matchValue / 100;
       const r = {}; for (const yr in k4ann) {
         let mult = 1;
@@ -1630,10 +2567,21 @@
         let m;
         if (matchType === 'contrib_pct') {
           m = k4ann[yr] * mRate * mult;
-        } else if (matchType === 'comp_pct') {
-          m = Math.min(k4ann[yr] * matchOnRate, Math.min(yrAnn[yr] || 0, compLimitFn(yr)) * mRate * mult);
         } else {
-          m = Math.min(k4ann[yr] * matchOnRate, matchValue * mult);
+          if (!trueUp) {
+            const pCount = yrPds[yr] || 24;
+            if (matchType === 'comp_pct') {
+              const cap = (Math.min(yrAnn[yr] || 0, compLimitFn(yr)) / 24) * mRate * mult * pCount;
+              m = Math.min(k4ann[yr] * matchOnRate, cap);
+            } else {
+              const cap = (matchValue / 24) * mult * pCount;
+              m = Math.min(k4ann[yr] * matchOnRate, cap);
+            }
+          } else if (matchType === 'comp_pct') {
+            m = Math.min(k4ann[yr] * matchOnRate, Math.min(yrAnn[yr] || 0, compLimitFn(yr)) * mRate * mult);
+          } else {
+            m = Math.min(k4ann[yr] * matchOnRate, matchValue * mult);
+          }
         }
         r[yr] = m;
       }
@@ -1658,23 +2606,58 @@
     function allocatePostTaxBuckets(pds, salFn, kContribs, kCap, rates, megaCap, opts) {
       const availMap = new Map();
       const kMap = new Map(kContribs.map(x => [x[0].getTime(), x[1]]));
-      const megaRem = {}, iraRem = {}, esppAnn = {};
+      const megaRem = {}, iraRem = {}, esppAnn = {}, esppRem = {};
       const paycheckLeft = {};
       const esppPeriods = {};
       const esppContribs = new Map();
       const iraContribs = new Map();
-      let megaTot = 0, iraCost = 0, iraFv = 0;
+      const yearlySalary = {};
+      let megaTot = 0, iraCost = 0, iraFv = 0, iraTaxLeak = 0, iraBasis = 0;
+      const megaCfg = (opts && opts.mega) || {};
+      const iraCfg = (opts && opts.backdoor) || {};
+      const esppCfg = (opts && opts.espp) || {};
+      const megaMode = megaCfg.mode || 'max';
+      const iraMode = iraCfg.mode || 'max';
+      const esppMode = esppCfg.mode || 'max';
+      const megaPct = Number.isFinite(megaCfg.pctSalaryRate) ? Math.max(0, megaCfg.pctSalaryRate) : 0;
+      const iraPct = Number.isFinite(iraCfg.pctSalaryRate) ? Math.max(0, iraCfg.pctSalaryRate) : 0;
+      const esppPct = Number.isFinite(esppCfg.pctSalaryRate) ? Math.max(0, esppCfg.pctSalaryRate) : 0;
+      const funded = { ira: {}, mega: {}, espp: {} };
+      const targets = { ira: {}, mega: {}, espp: {} };
       const order = (opts && Array.isArray(opts.priorityOrder) ? opts.priorityOrder : PRIORITY_BUCKETS)
         .filter(k => k !== 'k401');
       for (const pd of pds) {
         const yr = getYear(pd);
         paycheckLeft[yr] = (paycheckLeft[yr] || 0) + 1;
+        const [per] = salFn(pd);
+        yearlySalary[yr] = (yearlySalary[yr] || 0) + per;
       }
       for (const pd of pds) {
         const yr = getYear(pd);
-        if (!(yr in megaRem)) megaRem[yr] = megaCap[yr] || 0;
-        if (!(yr in iraRem)) iraRem[yr] = getIraYearLimit(yr, opts && opts.backdoor);
+        if (!(yr in megaRem)) {
+          let yrMega = megaCfg.enabled === false ? 0 : (megaCap[yr] || 0);
+          if (megaMode === 'fixed' && megaCfg.targetFn) yrMega = Math.min(yrMega, Math.max(0, megaCfg.targetFn(yr)));
+          if (megaMode === 'pct_salary') yrMega = Math.min(yrMega, Math.max(0, (yearlySalary[yr] || 0) * megaPct));
+          megaRem[yr] = yrMega;
+          targets.mega[yr] = yrMega;
+        }
+        if (!(yr in iraRem)) {
+          let yrIra = getIraYearLimit(yr, iraCfg);
+          if (iraMode === 'fixed' && iraCfg.targetFn) yrIra = Math.min(yrIra, Math.max(0, iraCfg.targetFn(yr)));
+          if (iraMode === 'pct_salary') yrIra = Math.min(yrIra, Math.max(0, (yearlySalary[yr] || 0) * iraPct));
+          iraRem[yr] = yrIra;
+          targets.ira[yr] = yrIra;
+        }
         if (!(yr in esppAnn)) esppAnn[yr] = 0;
+        if (!(yr in esppRem)) {
+          const cap = opts.esppLimitFn ? opts.esppLimitFn(yr) : 0;
+          const maxPayroll = esppMode === 'pct_salary' ? (yearlySalary[yr] || 0) * esppPct : (yearlySalary[yr] || 0) * opts.esppR;
+          let yrEsppCap = Math.max(0, Math.min(cap * (1 - opts.esppDisc), maxPayroll));
+          if (esppMode === 'fixed' && esppCfg.targetFn) yrEsppCap = Math.min(yrEsppCap, Math.max(0, esppCfg.targetFn(yr)));
+          let yrEspp = esppCfg.enabled === false ? 0 : yrEsppCap;
+          esppRem[yr] = yrEspp;
+          targets.espp[yr] = yrEspp;
+        }
         const [per, ann] = salFn(pd);
         const rate = rates[yr] || 0.35;
         const k4t = kMap.get(pd.getTime()) || 0;
@@ -1686,35 +2669,58 @@
           if (bucket === 'ira') {
             const rem = iraRem[yr] || 0;
             if (rem <= 0) continue;
-            const isSpread = opts && opts.backdoor && opts.backdoor.timing === 'spread-paychecks';
+            const isSpread = iraCfg.timing === 'spread-paychecks';
             const left = Math.max(1, paycheckLeft[yr] || 1);
-            const target = isSpread ? rem / left : rem;
+            const target = iraMode === 'pct_salary' ? per * iraPct : (isSpread ? rem / left : rem);
             const c = Math.min(avail, rem, target);
             if (c <= 0) continue;
             avail -= c;
             iraRem[yr] -= c;
             iraCost += c;
             iraContribs.set(pd.getTime(), c);
-            iraFv += c * Math.pow(1 + MATCH_GROWTH_RATE, daysBetween(pd, opts.endD) / 365.25);
+            iraFv += c;
+            funded.ira[yr] = (funded.ira[yr] || 0) + c;
+            if (iraCfg.advanced && iraCfg.advanced.enabled) {
+              const preTax = Math.max(0, iraCfg.advanced.preTaxBalance || 0);
+              const totalIra = preTax + iraBasis + c;
+              const taxable = totalIra > 0 ? c * (preTax / totalIra) : 0;
+              iraTaxLeak += taxable * (iraCfg.advanced.taxRate || 0);
+              iraBasis += Math.max(0, c - taxable);
+            } else {
+              iraBasis += c;
+            }
             continue;
           }
           if (bucket === 'mega') {
-            const mt = Math.min(avail, megaRem[yr] || 0, dr);
+            const rem = megaRem[yr] || 0;
+            if (rem <= 0) continue;
+            const isSpread = megaCfg.timing === 'spread-paychecks';
+            const left = Math.max(1, paycheckLeft[yr] || 1);
+            const target = megaMode === 'pct_salary' ? per * megaPct : (isSpread ? rem / left : rem);
+            const mt = Math.min(avail, rem, dr, target);
             if (mt <= 0) continue;
             avail -= mt;
             megaRem[yr] -= mt;
             megaTot += mt;
+            funded.mega[yr] = (funded.mega[yr] || 0) + mt;
             continue;
           }
           if (bucket === 'espp') {
             const cap = opts.esppLimitFn ? opts.esppLimitFn(yr) : 0;
-            const maxPay = Math.min(ppg * opts.esppR, avail);
-            const c = Math.min(maxPay, Math.max(0, cap * (1 - opts.esppDisc) - esppAnn[yr]));
+            const maxPay = Math.min(esppMode === 'pct_salary' ? per * esppPct : (esppMode === 'fixed' ? avail : ppg * opts.esppR), avail);
+            const rem = esppRem[yr];
+            if (rem <= 0) continue;
+            const isSpread = esppCfg.timing === 'spread-paychecks';
+            const left = Math.max(1, paycheckLeft[yr] || 1);
+            const target = esppMode === 'pct_salary' ? per * esppPct : ((isSpread && Number.isFinite(rem)) ? (rem / left) : rem);
+            const c = Math.min(maxPay, rem, target, Math.max(0, cap * (1 - opts.esppDisc) - esppAnn[yr]));
             if (c <= 0) continue;
             avail -= c;
             esppAnn[yr] += c;
+            esppRem[yr] -= c;
             esppContribs.set(pd.getTime(), c);
-            const [os, pe] = offerPeriod(pd);
+            funded.espp[yr] = (funded.espp[yr] || 0) + c;
+            const [os, pe] = offerPeriod(pd, opts.esppOfferPeriods);
             const key = os.toISOString() + '_' + pe.toISOString();
             if (!(key in esppPeriods)) esppPeriods[key] = { os, pe, tot: 0 };
             esppPeriods[key].tot += c;
@@ -1743,8 +2749,17 @@
       return {
         availMap,
         megaTot,
-        ira: { cost: iraCost, fv: iraFv, leakage: 0, contribs: iraContribs },
-        espp: { shares: totSh, w2, cost: totCost, contribs: esppContribs }
+        ira: { cost: iraCost, fv: iraFv, taxLeak: iraTaxLeak, basis: iraBasis, contribs: iraContribs },
+        espp: { shares: totSh, w2, cost: totCost, contribs: esppContribs },
+        transparency: {
+          targets,
+          funded,
+          unmet: {
+            ira: Object.fromEntries(Object.keys(targets.ira).map(yr => [yr, Math.max(0, (targets.ira[yr] || 0) - (funded.ira[yr] || 0))])),
+            mega: Object.fromEntries(Object.keys(targets.mega).map(yr => [yr, Math.max(0, (targets.mega[yr] || 0) - (funded.mega[yr] || 0))])),
+            espp: Object.fromEntries(Object.keys(targets.espp).map(yr => [yr, Math.max(0, (targets.espp[yr] || 0) - (funded.espp[yr] || 0))]))
+          }
+        }
       };
     }
 
@@ -1816,16 +2831,76 @@
     // ===== SIMULATE DIRECT =====
     function simulateDirect(P) {
       const { filing, growth, aRaiseR, bRaiseR, price0, lv1Ref, aKCap, bKCap, aBase, reserveCash, lv1, priorityOrder,
-        enableBackdoorIra, applyAgeCatchup, startAge, backdoorTiming,
-        startD, exitD, aMatchVest, bMatchVest, aMatchType, bMatchType, aMatchValue, bMatchValue, aMatchCliff, bMatchCliff, aEsppR, aEsppDisc, bEsppR, bEsppDisc,
+        contributionPlan,
+        startD, exitD, aMatchVest, bMatchVest, aMatchType, bMatchType, aMatchValue, bMatchValue, aMatchCliff, bMatchCliff, aMatchTrueUp, bMatchTrueUp, aEsppR, aEsppDisc, bEsppR, bEsppDisc,
         aBonusPct, aBonusDate, aSign1, aSign2, vestPat, bgDate, bRaisePat, aRaisePat, taxA, taxB, cliff, grantUnit, initVestSplit } = P;
       const exitP = stockPrice(exitD, growth, startD, price0);
       const baseIrsYear = taxA.irsBaseYear || getYear(startD);
-      const compLimitFn = yr => irsValue(taxA.compLimitBase, taxA.compLimitInc, yr, baseIrsYear);
-      const k415cFn = yr => irsValue(taxA.k415cLimitBase, taxA.k415cLimitInc, yr, baseIrsYear);
-      const esppLimitFn = yr => irsValue(taxA.esppLimitBase, taxA.esppLimitInc, yr, baseIrsYear);
-      const iraLimitFn = yr => irsValue(taxA.iraLimitBase, taxA.iraLimitInc, yr, baseIrsYear);
-      const iraCatchupFn = yr => irsValue(taxA.iraCatchupBase, taxA.iraCatchupInc, yr, baseIrsYear);
+      const compLimitFn = yr => taxValue(taxA, yr, 'compLimitBase', 'compLimitInc', 'comp', baseIrsYear);
+      const k415cFn = yr => taxValue(taxA, yr, 'k415cLimitBase', 'k415cLimitInc', 'k415c', baseIrsYear);
+      const esppLimitFn = yr => taxValue(taxA, yr, 'esppLimitBase', 'esppLimitInc', 'espp', baseIrsYear);
+      const iraLimitFn = yr => taxValue(taxA, yr, 'iraLimitBase', 'iraLimitInc', 'ira', baseIrsYear);
+      const iraCatchupFn = yr => taxValue(taxA, yr, 'iraCatchupBase', 'iraCatchupInc', 'ira_catchup', baseIrsYear);
+      const cPlan = contributionPlan || {};
+      const cPlanA = cPlan.a || {};
+      const cPlanB = cPlan.b || {};
+      const ageCfg = {
+        startAge: cPlan.startAge,
+        startYear: getYear(startD),
+        applyCatchup: cPlan.apply401kCatchup,
+        applySuperCatchup: cPlan.apply401kSuperCatchup
+      };
+      const k401LimitFn = yr => k401LimitWithCatchup(taxA, yr, baseIrsYear, ageCfg);
+      const buildRuntimePlan = (cfg, baseEsppRate) => {
+        const k401 = cfg.k401 || {};
+        const ira = cfg.ira || {};
+        const mega = cfg.mega || {};
+        const espp = cfg.espp || {};
+        return {
+          k401,
+          ira: Object.assign({}, ira, {
+            applyCatchup: cPlan.applyIraCatchup,
+            startAge: cPlan.startAge,
+            startYear: getYear(startD),
+            limitFn: iraLimitFn,
+            catchupFn: iraCatchupFn,
+            targetFn: ira.mode === 'fixed' ? makeAnnualTargetFn(ira.targetBase, ira.targetInc, baseIrsYear) : null,
+            advanced: cPlan.iraAdvanced
+          }),
+          mega: Object.assign({}, mega, {
+            targetFn: mega.mode === 'fixed' ? makeAnnualTargetFn(mega.targetBase, mega.targetInc, baseIrsYear) : null
+          }),
+          espp: Object.assign({}, espp, {
+            targetFn: espp.mode === 'fixed' ? makeAnnualTargetFn(espp.targetBase, espp.targetInc, baseIrsYear) : null
+          }),
+          k401TargetFn: k401.mode === 'fixed' ? makeAnnualTargetFn(k401.targetBase, k401.targetInc, baseIrsYear) : null,
+          esppRateActive: espp.enabled === false ? 0 : baseEsppRate
+        };
+      };
+      const planA = buildRuntimePlan(cPlanA, aEsppR);
+      const planB = buildRuntimePlan(cPlanB, bEsppR);
+      const k401Opts = plan => ({
+        enabled: plan.k401.enabled,
+        timing: plan.k401.timing,
+        annualTargetFn: plan.k401TargetFn,
+        mode: plan.k401.mode,
+        pctSalaryRate: plan.k401.pctSalaryRate,
+        limitFn: k401LimitFn
+      });
+      const allocOpts = (plan, esppDisc) => ({
+        priorityOrder,
+        backdoor: plan.ira,
+        mega: plan.mega,
+        espp: plan.espp,
+        esppOfferPeriods: plan.espp.offerPeriods,
+        esppR: plan.esppRateActive,
+        esppDisc,
+        esppLimitFn,
+        growth,
+        startD,
+        endD: exitD,
+        p0: price0
+      });
       const joinYr = getYear(startD), leaveYr = getYear(exitD);
       const bStart = startD;
       const FP = fiscalYearProration(startD);
@@ -1855,27 +2930,28 @@
       }
       // B ESPP
       const bPds = allPds.filter(pd => pd >= bStart);
-      const bK = compute401kContribs(bPds, bSal, true, bKCap, getYear(startD), taxA.prior401k, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear);
-      const bMFVRaw = computeMatchFV(bK.contribs, bSal, bStart, exitD, bMatchType, bMatchValue, bMatchVest, 1, compLimitFn);
+      const bK = compute401kContribs(bPds, bSal, true, bKCap, getYear(startD), taxA.prior401k, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear, {
+        enabled: planB.k401.enabled,
+        timing: planB.k401.timing,
+        annualTargetFn: planB.k401TargetFn,
+        mode: planB.k401.mode,
+        pctSalaryRate: planB.k401.pctSalaryRate,
+        limitFn: k401LimitFn
+      });
+      const bMFVRaw = computeMatchFV(bK.contribs, bSal, bStart, exitD, bMatchType, bMatchValue, bMatchVest, 1, compLimitFn, bMatchTrueUp);
       const bTenure = daysBetween(startD, exitD) / 365;
       const bMFV = bTenure >= bMatchCliff ? bMFVRaw : 0;
       // B W2/rates
       const bW2 = computeW2CompanyB(allPds, bSal, rsu, signons, bonuses, {}, bStart, exitD);
       const bR = computeEffectiveRates(bW2, bK.ann, filing, taxB, joinYr, leaveYr);
-      const bMRaw = computeRawMatch(bK.contribs, bSal, bStart, bMatchType, bMatchValue, bMatchVest, 1, compLimitFn);
+      const bMRaw = computeRawMatch(bK.contribs, bSal, bStart, bMatchType, bMatchValue, bMatchVest, 1, compLimitFn, bMatchTrueUp);
       const bMCap = computeMegaCapacity(bK.ann, bMRaw, bPds, k415cFn);
       const bAlloc = allocatePostTaxBuckets(bPds, bSal, bK.contribs, bKCap, bR, bMCap, {
         priorityOrder,
-        backdoor: {
-          enabled: enableBackdoorIra,
-          applyCatchup: applyAgeCatchup,
-          startAge,
-          startYear: getYear(startD),
-          timing: backdoorTiming,
-          limitFn: iraLimitFn,
-          catchupFn: iraCatchupFn
-        },
-        esppR: bEsppR,
+        backdoor: planB.ira,
+        mega: planB.mega,
+        espp: planB.espp,
+        esppR: planB.esppRateActive,
         esppDisc: bEsppDisc,
         esppLimitFn,
         growth,
@@ -1918,30 +2994,31 @@
       const aW2raw = computeW2CompanyA(allPds, aSal);
       for (const [bd, amt] of aBonuses) { const yr = getYear(bd); aW2raw[yr] = (aW2raw[yr] || 0) + amt }
       for (const [sd, amt] of aSignons) { const yr = getYear(sd); aW2raw[yr] = (aW2raw[yr] || 0) + amt }
-      const aEspp = computeEspp(allPds, startD, exitD, growth, aSal, aEsppR, aEsppDisc, startD, price0, esppLimitFn);
+      const aEspp = computeEspp(allPds, startD, exitD, growth, aSal, planA.esppRateActive, aEsppDisc, startD, price0, esppLimitFn, planA.espp.offerPeriods);
       for (const yr in aEspp.w2) { aW2raw[yr] = (aW2raw[yr] || 0) + aEspp.w2[yr] }
-      const aK = compute401kContribs(allPds, aSal, true, aKCap, getYear(startD), taxA.prior401k, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear);
-      const aMFVRaw = computeMatchFV(aK.contribs, aSal, startD, exitD, aMatchType, aMatchValue, aMatchVest, 1, compLimitFn);
+      const aK = compute401kContribs(allPds, aSal, true, aKCap, getYear(startD), taxA.prior401k, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear, {
+        enabled: planA.k401.enabled,
+        timing: planA.k401.timing,
+        annualTargetFn: planA.k401TargetFn,
+        mode: planA.k401.mode,
+        pctSalaryRate: planA.k401.pctSalaryRate,
+        limitFn: k401LimitFn
+      });
+      const aMFVRaw = computeMatchFV(aK.contribs, aSal, startD, exitD, aMatchType, aMatchValue, aMatchVest, 1, compLimitFn, aMatchTrueUp);
       const aTenure = daysBetween(startD, exitD) / 365;
       const aMFV = aTenure >= aMatchCliff ? aMFVRaw : 0;
       const aR = computeEffectiveRates(aW2raw, aK.ann, filing, taxA, joinYr, leaveYr);
       // A mega cap
-      const aMR = computeRawMatchFromAnn(aK.ann, aSal, allPds, aMatchType, aMatchValue, startD, aMatchVest, 1, compLimitFn);
+      const aMR = computeRawMatchFromAnn(aK.ann, aSal, allPds, aMatchType, aMatchValue, startD, aMatchVest, 1, compLimitFn, aMatchTrueUp);
       const aMC = computeMegaCapacity(aK.ann, aMR, allPds, k415cFn);
       // A delta + mega
       let backlog = 0, aInvSh = 0;
       const aAlloc = allocatePostTaxBuckets(allPds, aSal, aK.contribs, aKCap, aR, aMC, {
         priorityOrder,
-        backdoor: {
-          enabled: enableBackdoorIra,
-          applyCatchup: applyAgeCatchup,
-          startAge,
-          startYear: getYear(startD),
-          timing: backdoorTiming,
-          limitFn: iraLimitFn,
-          catchupFn: iraCatchupFn
-        },
-        esppR: aEsppR,
+        backdoor: planA.ira,
+        mega: planA.mega,
+        espp: planA.espp,
+        esppR: planA.esppRateActive,
         esppDisc: aEsppDisc,
         esppLimitFn,
         growth,
@@ -1980,13 +3057,13 @@
         for (const pd of allPds) { if (pd >= sd) { aInvCashSh += at / stockPrice(pd, growth, startD, price0); break } }
       }
       const aEsppVal = aEsppAdj.shares * exitP;
-      const aSalCash = Math.max(0, cash);
+      const aSalCash = Math.max(0, cash - (aAlloc.ira.taxLeak || 0));
       // B salary cash
       const bSalYr = {}; for (const pd of bPds) { const yr = getYear(pd); const [p] = bSal(pd); bSalYr[yr] = (bSalYr[yr] || 0) + p }
       let bSalAT = 0; for (const yr in bSalYr) bSalAT += bSalYr[yr] * (1 - (bRFinal[yr] || .35));
       const bK4Emp = bK.contribs.reduce((s, [, c]) => s + c, 0);
       const bMegaTot = bAlloc.megaTot;
-      const bIraCost = bAlloc.ira.cost;
+      const bIraCost = bAlloc.ira.cost + (bAlloc.ira.taxLeak || 0);
       const bSalCash = Math.max(0, bSalAT - bK4Emp - espp.cost - bMegaTot - bIraCost);
       // Values
       const bRsuV = bHeld * exitP, bEsppV = espp.shares * exitP, bInvV = bInvSh * exitP, aInvV = aInvSh * exitP;
@@ -1995,41 +3072,116 @@
       for (const [sd, amt] of signons) bCashEv += amt * (1 - (bRFinal[getYear(sd)] || .35));
       for (const [bd, amt] of bonuses) bCashEv += amt * (1 - (bRFinal[getYear(bd)] || .35));
       const aMegaTot = aAlloc.megaTot;
-      const aIraVal = aAlloc.ira.fv, aIraCost = aAlloc.ira.cost;
+      const aIraVal = aAlloc.ira.fv, aIraCost = aAlloc.ira.cost + (aAlloc.ira.taxLeak || 0);
       const bIraVal = bAlloc.ira.fv;
       const rfA = applyReserveFloor(aSalCash, totalReserve, aMegaTot, aIraVal, aIraCost, aEsppVal, aEsppAdj.cost, aCashEv, 0, 0);
       const rfAInv = applyReserveFloor(aSalCash, totalReserve, aMegaTot, aIraVal, aIraCost, aEsppVal, aEsppAdj.cost, 0, aInvCashVal, aCashEv);
       const rfBBase = applyReserveFloor(bSalCash, totalReserve, bMegaTot, bIraVal, bIraCost, bEsppV, espp.cost, bCashEv, 0, 0);
       const rfBInv = applyReserveFloor(bSalCash, totalReserve, bMegaTot, bIraVal, bIraCost, bEsppV, espp.cost, 0, bInvV, bCashEv);
+      const unmetMap = (targets, fundedMap) => Object.fromEntries(Object.keys(targets || {}).map(yr => [yr, Math.max(0, (targets[yr] || 0) - (fundedMap[yr] || 0))]));
+      const transA = {
+        k401: { targets: aK.targets || {}, funded: aK.ann || {}, unmet: unmetMap(aK.targets || {}, aK.ann || {}) },
+        ira: { targets: aAlloc.transparency.targets.ira, funded: aAlloc.transparency.funded.ira, unmet: aAlloc.transparency.unmet.ira },
+        mega: { targets: aAlloc.transparency.targets.mega, funded: aAlloc.transparency.funded.mega, unmet: aAlloc.transparency.unmet.mega },
+        espp: { targets: aAlloc.transparency.targets.espp, funded: aAlloc.transparency.funded.espp, unmet: aAlloc.transparency.unmet.espp }
+      };
+      const transB = {
+        k401: { targets: bK.targets || {}, funded: bK.ann || {}, unmet: unmetMap(bK.targets || {}, bK.ann || {}) },
+        ira: { targets: bAlloc.transparency.targets.ira, funded: bAlloc.transparency.funded.ira, unmet: bAlloc.transparency.unmet.ira },
+        mega: { targets: bAlloc.transparency.targets.mega, funded: bAlloc.transparency.funded.mega, unmet: bAlloc.transparency.unmet.mega },
+        espp: { targets: bAlloc.transparency.targets.espp, funded: bAlloc.transparency.funded.espp, unmet: bAlloc.transparency.unmet.espp }
+      };
       return {
-        aSalCash: rfA.salCash, aInvD: aInvV, aK401: aMFV, aMega: rfA.mega, aIra: rfA.iraVal, aIraLeak: aAlloc.ira.leakage,
+        aSalCash: rfA.salCash, aInvD: aInvV, aK401: aMFV, aMega: rfA.mega, aIra: rfA.iraVal,
         aCashEv, aEspp: rfA.esppVal,
         aTotBase: rfA.salCash + aInvV + aMFV + rfA.mega + rfA.iraVal + aCashEv + rfA.esppVal,
         aSalCashInv: rfAInv.salCash, aMegaInv: rfAInv.mega, aIraInv: rfAInv.iraVal, aEsppInv: rfAInv.esppVal,
         aInvCash: rfAInv.invVal,
         aTotInv: rfAInv.salCash + aInvV + aMFV + rfAInv.mega + rfAInv.iraVal + rfAInv.invVal + rfAInv.esppVal,
-        bSalCash: rfBBase.salCash, bRsu: bRsuV, bEspp: rfBBase.esppVal, bK401: bMFV, bMega: rfBBase.mega, bIra: rfBBase.iraVal, bIraLeak: bAlloc.ira.leakage,
+        bSalCash: rfBBase.salCash, bRsu: bRsuV, bEspp: rfBBase.esppVal, bK401: bMFV, bMega: rfBBase.mega, bIra: rfBBase.iraVal,
         bCashEv,
         bTotBase: rfBBase.salCash + bCashEv + bRsuV + rfBBase.esppVal + bMFV + rfBBase.mega + rfBBase.iraVal,
         bSalCashInv: rfBInv.salCash, bEsppInv: rfBInv.esppVal, bMegaInv: rfBInv.mega, bIraInv: rfBInv.iraVal,
         bInvCash: rfBInv.invVal,
-        bTotInv: rfBInv.salCash + bRsuV + rfBInv.esppVal + bMFV + rfBInv.mega + rfBInv.iraVal + rfBInv.invVal
+        bTotInv: rfBInv.salCash + bRsuV + rfBInv.esppVal + bMFV + rfBInv.mega + rfBInv.iraVal + rfBInv.invVal,
+        transparency: { A: transA, B: transB },
+        iraAdvanced: { aTaxLeak: aAlloc.ira.taxLeak || 0, bTaxLeak: bAlloc.ira.taxLeak || 0, aBasis: aAlloc.ira.basis || 0, bBasis: bAlloc.ira.basis || 0 }
       };
     }
 
     // ===== SIMULATE PROMO =====
     function simulatePromo(P) {
       const { filing, growth, aRaiseR, bRaiseR, price0, lv1Ref, lv2Ref, aKCap, bKCap, aBase, reserveCash, aLv2, lv1, lv2, priorityOrder,
-        enableBackdoorIra, applyAgeCatchup, startAge, backdoorTiming,
-        startD, exitD, moveD, aMatchVest, bMatchVest, aMatchType, bMatchType, aMatchValue, bMatchValue, aMatchCliff, bMatchCliff, aEsppR, aEsppDisc, bEsppR, bEsppDisc,
+        contributionPlan,
+        startD, exitD, moveD, aMatchVest, bMatchVest, aMatchType, bMatchType, aMatchValue, bMatchValue, aMatchCliff, bMatchCliff, aMatchTrueUp, bMatchTrueUp, aEsppR, aEsppDisc, bEsppR, bEsppDisc,
         aBonusPct, aBonusDate, aSign1, aSign2, vestPat, bgDate, bRaisePat, aRaisePat, taxA, taxB, cliff, grantUnit, initVestSplit } = P;
       const exitP = stockPrice(exitD, growth, startD, price0);
       const baseIrsYear = taxA.irsBaseYear || getYear(startD);
-      const compLimitFn = yr => irsValue(taxA.compLimitBase, taxA.compLimitInc, yr, baseIrsYear);
-      const k415cFn = yr => irsValue(taxA.k415cLimitBase, taxA.k415cLimitInc, yr, baseIrsYear);
-      const esppLimitFn = yr => irsValue(taxA.esppLimitBase, taxA.esppLimitInc, yr, baseIrsYear);
-      const iraLimitFn = yr => irsValue(taxA.iraLimitBase, taxA.iraLimitInc, yr, baseIrsYear);
-      const iraCatchupFn = yr => irsValue(taxA.iraCatchupBase, taxA.iraCatchupInc, yr, baseIrsYear);
+      const compLimitFn = yr => taxValue(taxA, yr, 'compLimitBase', 'compLimitInc', 'comp', baseIrsYear);
+      const k415cFn = yr => taxValue(taxA, yr, 'k415cLimitBase', 'k415cLimitInc', 'k415c', baseIrsYear);
+      const esppLimitFn = yr => taxValue(taxA, yr, 'esppLimitBase', 'esppLimitInc', 'espp', baseIrsYear);
+      const iraLimitFn = yr => taxValue(taxA, yr, 'iraLimitBase', 'iraLimitInc', 'ira', baseIrsYear);
+      const iraCatchupFn = yr => taxValue(taxA, yr, 'iraCatchupBase', 'iraCatchupInc', 'ira_catchup', baseIrsYear);
+      const cPlan = contributionPlan || {};
+      const cPlanA = cPlan.a || {};
+      const cPlanB = cPlan.b || {};
+      const ageCfg = {
+        startAge: cPlan.startAge,
+        startYear: getYear(startD),
+        applyCatchup: cPlan.apply401kCatchup,
+        applySuperCatchup: cPlan.apply401kSuperCatchup
+      };
+      const k401LimitFn = yr => k401LimitWithCatchup(taxA, yr, baseIrsYear, ageCfg);
+      const buildRuntimePlan = (cfg, baseEsppRate) => {
+        const k401 = cfg.k401 || {};
+        const ira = cfg.ira || {};
+        const mega = cfg.mega || {};
+        const espp = cfg.espp || {};
+        return {
+          k401,
+          ira: Object.assign({}, ira, {
+            applyCatchup: cPlan.applyIraCatchup,
+            startAge: cPlan.startAge,
+            startYear: getYear(startD),
+            limitFn: iraLimitFn,
+            catchupFn: iraCatchupFn,
+            targetFn: ira.mode === 'fixed' ? makeAnnualTargetFn(ira.targetBase, ira.targetInc, baseIrsYear) : null,
+            advanced: cPlan.iraAdvanced
+          }),
+          mega: Object.assign({}, mega, {
+            targetFn: mega.mode === 'fixed' ? makeAnnualTargetFn(mega.targetBase, mega.targetInc, baseIrsYear) : null
+          }),
+          espp: Object.assign({}, espp, {
+            targetFn: espp.mode === 'fixed' ? makeAnnualTargetFn(espp.targetBase, espp.targetInc, baseIrsYear) : null
+          }),
+          k401TargetFn: k401.mode === 'fixed' ? makeAnnualTargetFn(k401.targetBase, k401.targetInc, baseIrsYear) : null,
+          esppRateActive: espp.enabled === false ? 0 : baseEsppRate
+        };
+      };
+      const planA = buildRuntimePlan(cPlanA, aEsppR);
+      const planB = buildRuntimePlan(cPlanB, bEsppR);
+      const k401Opts = plan => ({
+        enabled: plan.k401.enabled,
+        timing: plan.k401.timing,
+        annualTargetFn: plan.k401TargetFn,
+        mode: plan.k401.mode,
+        pctSalaryRate: plan.k401.pctSalaryRate,
+        limitFn: k401LimitFn
+      });
+      const allocOpts = (plan, esppDisc) => ({
+        priorityOrder,
+        backdoor: plan.ira,
+        mega: plan.mega,
+        espp: plan.espp,
+        esppOfferPeriods: plan.espp.offerPeriods,
+        esppR: plan.esppRateActive,
+        esppDisc,
+        esppLimitFn,
+        growth,
+        startD,
+        endD: exitD,
+        p0: price0
+      });
       const joinYr = getYear(startD), leaveYr = getYear(exitD);
       const FP = fiscalYearProration(startD);
       const allPds = payDates(startD, exitD);
@@ -2037,20 +3189,11 @@
       const totalReserve = reserveCash * daysBetween(startD, exitD) / 365.25;
       const aSegReserve = reserveCash * daysBetween(startD, switchD) / 365.25;
       const bSegReserve = reserveCash * daysBetween(switchD, exitD) / 365.25;
-      const backdoorCfg = {
-        enabled: enableBackdoorIra,
-        applyCatchup: applyAgeCatchup,
-        startAge,
-        startYear: getYear(startD),
-        timing: backdoorTiming,
-        limitFn: iraLimitFn,
-        catchupFn: iraCatchupFn
-      };
       const aPdsA = allPds.filter(pd => pd < switchD), aPdsB = allPds.filter(pd => pd >= switchD);
       const aSalFn = pd => companyASalaryAt(pd, aRaiseR, aBase, aRaisePat, startD);
       // A-path A segment 401k
-      const aK4A = compute401kContribs(aPdsA, aSalFn, true, aKCap, getYear(startD), taxA.prior401k, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear);
-      const aMtchARaw = computeMatchFV(aK4A.contribs, aSalFn, startD, exitD, aMatchType, aMatchValue, aMatchVest, 1, compLimitFn);
+      const aK4A = compute401kContribs(aPdsA, aSalFn, true, aKCap, getYear(startD), taxA.prior401k, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear, k401Opts(planA));
+      const aMtchARaw = computeMatchFV(aK4A.contribs, aSalFn, startD, exitD, aMatchType, aMatchValue, aMatchVest, 1, compLimitFn, aMatchTrueUp);
       const aTenureA = daysBetween(startD, switchD) / 365;
       const aMtchA = aTenureA >= aMatchCliff ? aMtchARaw : 0;
       // A bonuses during A segment
@@ -2069,7 +3212,7 @@
       const aASign2D = makeDate(getYear(startD) + 1, getMonth(startD), getDay(startD) + 2);
       if (aSign2 > 0 && aASign2D <= exitD && aASign2D < switchD) aASignons.push([aASign2D, signOnVested(aSign2, aASign2D, switchD)]);
       // A ESPP during A segment
-      const aAEspp = computeEspp(aPdsA, startD, switchD, growth, aSalFn, aEsppR, aEsppDisc, startD, price0, esppLimitFn);
+      const aAEspp = computeEspp(aPdsA, startD, switchD, growth, aSalFn, planA.esppRateActive, aEsppDisc, startD, price0, esppLimitFn, planA.espp.offerPeriods);
       const aW2A = computeW2CompanyA(aPdsA, aSalFn);
       for (const [bd, amt] of aABonuses) { const yr = getYear(bd); aW2A[yr] = (aW2A[yr] || 0) + amt }
       for (const [sd, amt] of aASignons) { const yr = getYear(sd); aW2A[yr] = (aW2A[yr] || 0) + amt }
@@ -2095,22 +3238,13 @@
         }
         b5Bon.push([bd, lv2.base * Math.pow(1 + bRaiseR, nr) * lv2.bonus_pct * (yo === 0 ? FPB : 1)]);
       }
-      const b5Espp = computeEspp(aPdsB, b5Start, exitD, growth, b5Sal, bEsppR, bEsppDisc, startD, price0, esppLimitFn);
+      const b5Espp = computeEspp(aPdsB, b5Start, exitD, growth, b5Sal, planB.esppRateActive, bEsppDisc, startD, price0, esppLimitFn, planB.espp.offerPeriods);
       // A-path B segment 401k (continuing IRS limit)
       const yrUsedA = {}; for (const [pd, c] of aK4A.contribs) yrUsedA[getYear(pd)] = (yrUsedA[getYear(pd)] || 0) + c;
-      const aK4Bc = [], aK4Bann = {}; const yrRemB2 = {};
-      for (const pd of aPdsB) {
-        const yr = getYear(pd);
-        if (!(yr in yrRemB2)) {
-          const limit = irsValue(taxA.k401LimitBase, taxA.k401LimitInc, yr, baseIrsYear);
-          yrRemB2[yr] = limit - (yrUsedA[yr] || 0);
-          aK4Bann[yr] = 0;
-        }
-        const [per] = b5Sal(pd);
-        const c = Math.min(per * bKCap, Math.max(0, yrRemB2[yr]));
-        aK4Bc.push([pd, c]); yrRemB2[yr] -= c; aK4Bann[yr] += c;
-      }
-      const aMtchBRaw = computeMatchFV(aK4Bc, b5Sal, b5Start, exitD, bMatchType, bMatchValue, bMatchVest, 1, compLimitFn);
+      const aK4B = compute401kContribsWithUsed(aPdsB, b5Sal, bKCap, yrUsedA, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear, k401Opts(planB));
+      const aK4Bc = aK4B.contribs;
+      const aK4Bann = aK4B.ann;
+      const aMtchBRaw = computeMatchFV(aK4Bc, b5Sal, b5Start, exitD, bMatchType, bMatchValue, bMatchVest, 1, compLimitFn, bMatchTrueUp);
       const bTenureAB = daysBetween(switchD, exitD) / 365;
       const aMtchB = bTenureAB >= bMatchCliff ? aMtchBRaw : 0;
       // A-path combined W2/rates
@@ -2121,19 +3255,9 @@
       for (const yr in aK4Bann) aPK4ann[yr] = (aPK4ann[yr] || 0) + aK4Bann[yr];
       const aPR = computeEffectiveRates(aPW2, aPK4ann, filing, taxA, joinYr, leaveYr, taxB, aW2A, b5W2);
       // A-path A-seg mega
-      const aMRA = computeRawMatchFromAnn(aK4A.ann, aSalFn, aPdsA, aMatchType, aMatchValue, startD, aMatchVest, 1, compLimitFn);
+      const aMRA = computeRawMatchFromAnn(aK4A.ann, aSalFn, aPdsA, aMatchType, aMatchValue, startD, aMatchVest, 1, compLimitFn, aMatchTrueUp);
       const aMCA = computeMegaCapacity(aK4A.ann, aMRA, aPdsA, k415cFn);
-      const aAllocA = allocatePostTaxBuckets(aPdsA, aSalFn, aK4A.contribs, aKCap, aPR, aMCA, {
-        priorityOrder,
-        backdoor: backdoorCfg,
-        esppR: aEsppR,
-        esppDisc: aEsppDisc,
-        esppLimitFn,
-        growth,
-        startD,
-        endD: exitD,
-        p0: price0
-      });
+      const aAllocA = allocatePostTaxBuckets(aPdsA, aSalFn, aK4A.contribs, aKCap, aPR, aMCA, allocOpts(planA, aEsppDisc));
       const aAEsppAdj = aAllocA.espp;
       let cashA = sumCashFromAvail(aPdsA, aAllocA.availMap);
       let backlogA = 0, aInvSh = 0;
@@ -2172,28 +3296,18 @@
         for (const pd of allPds) { if (pd >= bd) { aBInvSh += at / stockPrice(pd, growth, startD, price0); break } }
       }
       // A-path B-seg mega (fresh 415c)
-      const aMRB = computeRawMatch(aK4Bc, b5Sal, b5Start, bMatchType, bMatchValue, bMatchVest, 1, compLimitFn);
+      const aMRB = computeRawMatch(aK4Bc, b5Sal, b5Start, bMatchType, bMatchValue, bMatchVest, 1, compLimitFn, bMatchTrueUp);
       const aMCB = computeMegaCapacity(aK4Bann, aMRB, aPdsB, k415cFn);
-      const aAllocB = allocatePostTaxBuckets(aPdsB, b5Sal, aK4Bc, bKCap, aPR, aMCB, {
-        priorityOrder,
-        backdoor: backdoorCfg,
-        esppR: bEsppR,
-        esppDisc: bEsppDisc,
-        esppLimitFn,
-        growth,
-        startD,
-        endD: exitD,
-        p0: price0
-      });
+      const aAllocB = allocatePostTaxBuckets(aPdsB, b5Sal, aK4Bc, bKCap, aPR, aMCB, allocOpts(planB, bEsppDisc));
       const aBEsppAdj = aAllocB.espp;
       const aMegaB = aAllocB.megaTot;
       const aMegaTot = aAllocA.megaTot + aMegaB;
       // A-path salary cash
-      const aSalCashA = Math.max(0, cashA);
+      const aSalCashA = Math.max(0, cashA - (aAllocA.ira.taxLeak || 0));
       const aBSalYr = {}; for (const pd of aPdsB) { const yr = getYear(pd); const [p] = b5Sal(pd); aBSalYr[yr] = (aBSalYr[yr] || 0) + p }
       let aBSalAT = 0; for (const yr in aBSalYr) aBSalAT += aBSalYr[yr] * (1 - (aPR[yr] || .35));
       const aBK4Emp = aK4Bc.reduce((s, [, c]) => s + c, 0);
-      const aBSalCash = Math.max(0, aBSalAT - aBK4Emp - aBEsppAdj.cost - aMegaB - aAllocB.ira.cost);
+      const aBSalCash = Math.max(0, aBSalAT - aBK4Emp - aBEsppAdj.cost - aMegaB - (aAllocB.ira.cost + (aAllocB.ira.taxLeak || 0)));
       const aTotSalCash = aSalCashA + aBSalCash;
       // A-path cash events
       let aBCashEv = 0;
@@ -2236,23 +3350,13 @@
         }
         bpBon.push([bd, ba * bpct * (yo === 0 ? FP : 1)]);
       }
-      const bpK = compute401kContribs(allPds, bpSal, true, bKCap, getYear(startD), taxA.prior401k, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear);
-      const bpMFVRaw = computeMatchFV(bpK.contribs, bpSal, startD, exitD, bMatchType, bMatchValue, bMatchVest, 1, compLimitFn);
-      const bpMRaw = computeRawMatch(bpK.contribs, bpSal, startD, bMatchType, bMatchValue, bMatchVest, 1, compLimitFn);
+      const bpK = compute401kContribs(allPds, bpSal, true, bKCap, getYear(startD), taxA.prior401k, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear, k401Opts(planB));
+      const bpMFVRaw = computeMatchFV(bpK.contribs, bpSal, startD, exitD, bMatchType, bMatchValue, bMatchVest, 1, compLimitFn, bMatchTrueUp);
+      const bpMRaw = computeRawMatch(bpK.contribs, bpSal, startD, bMatchType, bMatchValue, bMatchVest, 1, compLimitFn, bMatchTrueUp);
       const bpMCap = computeMegaCapacity(bpK.ann, bpMRaw, allPds, k415cFn);
       const bpW2Base = computeW2CompanyB(allPds, bpSal, bpRsu, bpSign, bpBon, {}, startD, exitD);
       const bpR = computeEffectiveRates(bpW2Base, bpK.ann, filing, taxB, joinYr, leaveYr);
-      const bpAlloc = allocatePostTaxBuckets(allPds, bpSal, bpK.contribs, bKCap, bpR, bpMCap, {
-        priorityOrder,
-        backdoor: backdoorCfg,
-        esppR: bEsppR,
-        esppDisc: bEsppDisc,
-        esppLimitFn,
-        growth,
-        startD,
-        endD: exitD,
-        p0: price0
-      });
+      const bpAlloc = allocatePostTaxBuckets(allPds, bpSal, bpK.contribs, bKCap, bpR, bpMCap, allocOpts(planB, bEsppDisc));
       const bpEspp = bpAlloc.espp;
       const bpTenure = daysBetween(startD, exitD) / 365;
       const bpMFV = bpTenure >= bMatchCliff ? bpMFVRaw : 0;
@@ -2276,7 +3380,7 @@
       let bpSalAT = 0; for (const yr in bpSalYr) bpSalAT += bpSalYr[yr] * (1 - (bpRFinal[yr] || .35));
       const bpK4Emp = bpK.contribs.reduce((s, [, c]) => s + c, 0);
       const bpMegaTot = bpAlloc.megaTot;
-      const bpSalCash = Math.max(0, bpSalAT - bpK4Emp - bpEspp.cost - bpMegaTot - bpAlloc.ira.cost);
+      const bpSalCash = Math.max(0, bpSalAT - bpK4Emp - bpEspp.cost - bpMegaTot - (bpAlloc.ira.cost + (bpAlloc.ira.taxLeak || 0)));
 
       // ===== A→A PATH (stay at A, internal promo at moveD) =====
       const aaSalFn = pd => {
@@ -2293,29 +3397,19 @@
       if (aSign1 > 0 && startD <= exitD) aaSgn.push([startD, signOnVested(aSign1, startD, exitD)]);
       const aaS2d = addDays(makeDate(getYear(startD) + 1, getMonth(startD), getDay(startD)), 2);
       if (aSign2 > 0 && aaS2d <= exitD) aaSgn.push([aaS2d, signOnVested(aSign2, aaS2d, exitD)]);
-      const aaEspp = computeEspp(allPds, startD, exitD, growth, aaSalFn, aEsppR, aEsppDisc, startD, price0, esppLimitFn);
+      const aaEspp = computeEspp(allPds, startD, exitD, growth, aaSalFn, planA.esppRateActive, aEsppDisc, startD, price0, esppLimitFn, planA.espp.offerPeriods);
       const aaW2 = computeW2CompanyA(allPds, aaSalFn);
       for (const [d, a] of aaBon) { aaW2[getYear(d)] = (aaW2[getYear(d)] || 0) + a }
       for (const [d, a] of aaSgn) { aaW2[getYear(d)] = (aaW2[getYear(d)] || 0) + a }
       for (const yr in aaEspp.w2) aaW2[yr] = (aaW2[yr] || 0) + aaEspp.w2[yr];
-      const aaK = compute401kContribs(allPds, aaSalFn, true, aKCap, getYear(startD), taxA.prior401k, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear);
-      const aaMFVRaw = computeMatchFV(aaK.contribs, aaSalFn, startD, exitD, aMatchType, aMatchValue, aMatchVest, 1, compLimitFn);
+      const aaK = compute401kContribs(allPds, aaSalFn, true, aKCap, getYear(startD), taxA.prior401k, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear, k401Opts(planA));
+      const aaMFVRaw = computeMatchFV(aaK.contribs, aaSalFn, startD, exitD, aMatchType, aMatchValue, aMatchVest, 1, compLimitFn, aMatchTrueUp);
       const aaTenure = daysBetween(startD, exitD) / 365;
       const aaMFV = aaTenure >= aMatchCliff ? aaMFVRaw : 0;
       const aaR = computeEffectiveRates(aaW2, aaK.ann, filing, taxA, joinYr, leaveYr);
-      const aaMR = computeRawMatchFromAnn(aaK.ann, aaSalFn, allPds, aMatchType, aMatchValue, startD, aMatchVest, 1, compLimitFn);
+      const aaMR = computeRawMatchFromAnn(aaK.ann, aaSalFn, allPds, aMatchType, aMatchValue, startD, aMatchVest, 1, compLimitFn, aMatchTrueUp);
       const aaMC = computeMegaCapacity(aaK.ann, aaMR, allPds, k415cFn);
-      const aaAlloc = allocatePostTaxBuckets(allPds, aaSalFn, aaK.contribs, aKCap, aaR, aaMC, {
-        priorityOrder,
-        backdoor: backdoorCfg,
-        esppR: aEsppR,
-        esppDisc: aEsppDisc,
-        esppLimitFn,
-        growth,
-        startD,
-        endD: exitD,
-        p0: price0
-      });
+      const aaAlloc = allocatePostTaxBuckets(allPds, aaSalFn, aaK.contribs, aKCap, aaR, aaMC, allocOpts(planA, aEsppDisc));
       const aaEsppAdj = aaAlloc.espp;
       let aaCsh = sumCashFromAvail(allPds, aaAlloc.availMap);
       let aaBlg = 0, aaInvSh = 0; const aaMega = aaAlloc.megaTot;
@@ -2341,7 +3435,7 @@
         const r = aaR[getYear(d)] || .35; const at = a * (1 - r);
         for (const pd of allPds) { if (pd >= d) { aaInvCashSh += at / stockPrice(pd, growth, startD, price0); break } }
       }
-      const aaEsppV = aaEsppAdj.shares * exitP, aaSalCash = Math.max(0, aaCsh), aaInvV = aaInvSh * exitP;
+      const aaEsppV = aaEsppAdj.shares * exitP, aaSalCash = Math.max(0, aaCsh - (aaAlloc.ira.taxLeak || 0)), aaInvV = aaInvSh * exitP;
 
       // ===== B→A PATH (B Level 1 then A Level 2 external hire) =====
       const baPdsB = allPds.filter(pd => pd < switchD), baPdsA = allPds.filter(pd => pd >= switchD);
@@ -2363,23 +3457,13 @@
         }
         baBBon.push([bd, lv1.base * Math.pow(1 + bRaiseR, nr) * lv1.bonus_pct * (yo === 0 ? FP : 1)]);
       }
-      const baBK = compute401kContribs(baPdsB, baBSal, true, bKCap, getYear(startD), taxA.prior401k, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear);
-      const baBMFVRaw = computeMatchFV(baBK.contribs, baBSal, startD, exitD, bMatchType, bMatchValue, bMatchVest, 1, compLimitFn);
-      const baBMRaw = computeRawMatch(baBK.contribs, baBSal, startD, bMatchType, bMatchValue, bMatchVest, 1, compLimitFn);
+      const baBK = compute401kContribs(baPdsB, baBSal, true, bKCap, getYear(startD), taxA.prior401k, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear, k401Opts(planB));
+      const baBMFVRaw = computeMatchFV(baBK.contribs, baBSal, startD, exitD, bMatchType, bMatchValue, bMatchVest, 1, compLimitFn, bMatchTrueUp);
+      const baBMRaw = computeRawMatch(baBK.contribs, baBSal, startD, bMatchType, bMatchValue, bMatchVest, 1, compLimitFn, bMatchTrueUp);
       const baBMCap = computeMegaCapacity(baBK.ann, baBMRaw, baPdsB, k415cFn);
       const baW2Base = computeW2CompanyB(baPdsB, baBSal, baBRsu, baBSgn, baBBon, {}, startD, baSwitchEnd);
       const baPRBase = computeEffectiveRates(baW2Base, baBK.ann, filing, taxB, joinYr, leaveYr);
-      const baAllocB = allocatePostTaxBuckets(baPdsB, baBSal, baBK.contribs, bKCap, baPRBase, baBMCap, {
-        priorityOrder,
-        backdoor: backdoorCfg,
-        esppR: bEsppR,
-        esppDisc: bEsppDisc,
-        esppLimitFn,
-        growth,
-        startD,
-        endD: exitD,
-        p0: price0
-      });
+      const baAllocB = allocatePostTaxBuckets(baPdsB, baBSal, baBK.contribs, bKCap, baPRBase, baBMCap, allocOpts(planB, bEsppDisc));
       const baBEspp = baAllocB.espp;
       const baBTenure = daysBetween(startD, switchD) / 365;
       const baBMFV = baBTenure >= bMatchCliff ? baBMFVRaw : 0;
@@ -2396,20 +3480,12 @@
           const [, ann] = baASal(bd); baABon.push([bd, ann * aLv2.bonus_pct * (yo === 0 ? FPba : 1)]);
         }
       }
-      const baAEspp = computeEspp(baPdsA, switchD, exitD, growth, baASal, aEsppR, aEsppDisc, startD, price0, esppLimitFn);
+      const baAEspp = computeEspp(baPdsA, switchD, exitD, growth, baASal, planA.esppRateActive, aEsppDisc, startD, price0, esppLimitFn, planA.espp.offerPeriods);
       const baYrUsed = {}; for (const [pd, c] of baBK.contribs) baYrUsed[getYear(pd)] = (baYrUsed[getYear(pd)] || 0) + c;
-      const baAK4c = [], baAK4ann = {}, baYrRem = {};
-      for (const pd of baPdsA) {
-        const yr = getYear(pd);
-        if (!(yr in baYrRem)) {
-          const limit = irsValue(taxA.k401LimitBase, taxA.k401LimitInc, yr, baseIrsYear);
-          baYrRem[yr] = limit - (baYrUsed[yr] || 0);
-          baAK4ann[yr] = 0;
-        }
-        const [per] = baASal(pd); const c = Math.min(per * aKCap, Math.max(0, baYrRem[yr]));
-        baAK4c.push([pd, c]); baYrRem[yr] -= c; baAK4ann[yr] += c;
-      }
-      const baAMFVRaw = computeMatchFV(baAK4c, baASal, switchD, exitD, aMatchType, aMatchValue, aMatchVest, 1, compLimitFn);
+      const baAK4 = compute401kContribsWithUsed(baPdsA, baASal, aKCap, baYrUsed, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear, k401Opts(planA));
+      const baAK4c = baAK4.contribs;
+      const baAK4ann = baAK4.ann;
+      const baAMFVRaw = computeMatchFV(baAK4c, baASal, switchD, exitD, aMatchType, aMatchValue, aMatchVest, 1, compLimitFn, aMatchTrueUp);
       const baATenure = daysBetween(switchD, exitD) / 365;
       const baAMFV = baATenure >= aMatchCliff ? baAMFVRaw : 0;
       // B→A combined W2/rates
@@ -2438,19 +3514,9 @@
       // B Phase 1 mega
       const baBMega = baAllocB.megaTot;
       // A Phase 2 mega (fresh 415c) + delta investing
-      const baAMR = computeRawMatchFromAnn(baAK4ann, baASal, baPdsA, aMatchType, aMatchValue, switchD, aMatchVest, 1, compLimitFn);
+      const baAMR = computeRawMatchFromAnn(baAK4ann, baASal, baPdsA, aMatchType, aMatchValue, switchD, aMatchVest, 1, compLimitFn, aMatchTrueUp);
       const baAMC = computeMegaCapacity(baAK4ann, baAMR, baPdsA, k415cFn);
-      const baAllocA = allocatePostTaxBuckets(baPdsA, baASal, baAK4c, aKCap, baPR, baAMC, {
-        priorityOrder,
-        backdoor: backdoorCfg,
-        esppR: aEsppR,
-        esppDisc: aEsppDisc,
-        esppLimitFn,
-        growth,
-        startD,
-        endD: exitD,
-        p0: price0
-      });
+      const baAllocA = allocatePostTaxBuckets(baPdsA, baASal, baAK4c, aKCap, baPR, baAMC, allocOpts(planA, aEsppDisc));
       const baAEsppAdj = baAllocA.espp;
       let baACsh = sumCashFromAvail(baPdsA, baAllocA.availMap);
       let baABlg = 0, baAInvSh = 0; const baAMega = baAllocA.megaTot;
@@ -2466,8 +3532,8 @@
       const baBSalYr = {}; for (const pd of baPdsB) { const yr = getYear(pd); const [p] = baBSal(pd); baBSalYr[yr] = (baBSalYr[yr] || 0) + p }
       let baBSalAT = 0; for (const yr in baBSalYr) baBSalAT += baBSalYr[yr] * (1 - (baPR[yr] || .35));
       const baBK4E = baBK.contribs.reduce((s, [, c]) => s + c, 0);
-      const baBSalCsh = Math.max(0, baBSalAT - baBK4E - baBEspp.cost - baBMega - baAllocB.ira.cost);
-      const baASalCsh = Math.max(0, baACsh); const baTotSalCsh = baBSalCsh + baASalCsh;
+      const baBSalCsh = Math.max(0, baBSalAT - baBK4E - baBEspp.cost - baBMega - (baAllocB.ira.cost + (baAllocB.ira.taxLeak || 0)));
+      const baASalCsh = Math.max(0, baACsh - (baAllocA.ira.taxLeak || 0)); const baTotSalCsh = baBSalCsh + baASalCsh;
       // B→A cash events
       let baBCashEv = 0;
       for (const [sd, amt] of baBSgn) baBCashEv += amt * (1 - (baPR[getYear(sd)] || .35));
@@ -2495,11 +3561,11 @@
       const aaInvCash = aaInvCashSh * exitP;
       const baAInvCash = baAInvCashSh * exitP;
       const abIraVal = aAllocA.ira.fv + aAllocB.ira.fv;
-      const abIraCost = aAllocA.ira.cost + aAllocB.ira.cost;
-      const bbIraVal = bpAlloc.ira.fv, bbIraCost = bpAlloc.ira.cost;
-      const aaIraVal = aaAlloc.ira.fv, aaIraCost = aaAlloc.ira.cost;
+      const abIraCost = aAllocA.ira.cost + (aAllocA.ira.taxLeak || 0) + aAllocB.ira.cost + (aAllocB.ira.taxLeak || 0);
+      const bbIraVal = bpAlloc.ira.fv, bbIraCost = bpAlloc.ira.cost + (bpAlloc.ira.taxLeak || 0);
+      const aaIraVal = aaAlloc.ira.fv, aaIraCost = aaAlloc.ira.cost + (aaAlloc.ira.taxLeak || 0);
       const baIraVal = baAllocB.ira.fv + baAllocA.ira.fv;
-      const baIraCost = baAllocB.ira.cost + baAllocA.ira.cost;
+      const baIraCost = baAllocB.ira.cost + (baAllocB.ira.taxLeak || 0) + baAllocA.ira.cost + (baAllocA.ira.taxLeak || 0);
       // Apply reserve floor: baseline and invest variants per path
       const abEsppV = aAEsppVal + aBEsppV, abEsppC = aAEsppAdj.cost + aBEsppAdj.cost;
       const rfABBase = applyReserveFloor(aTotSalCash, totalReserve, aMegaTot, abIraVal, abIraCost, abEsppV, abEsppC, aACashEv + aBCashEv, 0, 0);
@@ -2511,21 +3577,79 @@
       const baEsppVT = baBEsppV + baAEsppV, baEsppC = baBEspp.cost + baAEsppAdj.cost;
       const rfBABase = applyReserveFloor(baTotSalCsh, totalReserve, baBMega + baAMega, baIraVal, baIraCost, baEsppVT, baEsppC, baBCashEv + baACashEv, 0, 0);
       const rfBAInv = applyReserveFloor(baTotSalCsh, totalReserve, baBMega + baAMega, baIraVal, baIraCost, baEsppVT, baEsppC, 0, baAInvCash + baBInvV, baACashEv + baBCashEv);
-      const mkP = (rfBase, rfInv, id, rsu, k4, ace, bce, iraLeak) => {
+      const mergeYears = (...objs) => {
+        const out = {};
+        for (const obj of objs) {
+          for (const yr in (obj || {})) out[yr] = (out[yr] || 0) + (obj[yr] || 0);
+        }
+        return out;
+      };
+      const unmetMap = (targets, funded) => Object.fromEntries(Object.keys(targets || {}).map(yr => [yr, Math.max(0, (targets[yr] || 0) - (funded[yr] || 0))]));
+      const buildTrans = (kTargets, kFunded, allocT) => ({
+        k401: { targets: kTargets || {}, funded: kFunded || {}, unmet: unmetMap(kTargets || {}, kFunded || {}) },
+        ira: {
+          targets: allocT.targets.ira,
+          funded: allocT.funded.ira,
+          unmet: allocT.unmet.ira
+        },
+        mega: {
+          targets: allocT.targets.mega,
+          funded: allocT.funded.mega,
+          unmet: allocT.unmet.mega
+        },
+        espp: {
+          targets: allocT.targets.espp,
+          funded: allocT.funded.espp,
+          unmet: allocT.unmet.espp
+        }
+      });
+      const mergeBucketTrans = (parts, bucket) => {
+        const targets = mergeYears(...parts.map(p => p[bucket].targets));
+        const funded = mergeYears(...parts.map(p => p[bucket].funded));
+        return { targets, funded, unmet: unmetMap(targets, funded) };
+      };
+      const mergePathTrans = (...parts) => ({
+        k401: mergeBucketTrans(parts, 'k401'),
+        ira: mergeBucketTrans(parts, 'ira'),
+        mega: mergeBucketTrans(parts, 'mega'),
+        espp: mergeBucketTrans(parts, 'espp')
+      });
+      const transAB = mergePathTrans(
+        buildTrans(aK4A.targets || {}, aK4A.ann || {}, aAllocA.transparency),
+        buildTrans(aK4B.targets || {}, aK4Bann || {}, aAllocB.transparency)
+      );
+      const transBB = buildTrans(bpK.targets || {}, bpK.ann || {}, bpAlloc.transparency);
+      const transAA = buildTrans(aaK.targets || {}, aaK.ann || {}, aaAlloc.transparency);
+      const transBA = mergePathTrans(
+        buildTrans(baBK.targets || {}, baBK.ann || {}, baAllocB.transparency),
+        buildTrans(baAK4.targets || {}, baAK4ann || {}, baAllocA.transparency)
+      );
+      const taxLeakAB = (aAllocA.ira.taxLeak || 0) + (aAllocB.ira.taxLeak || 0);
+      const taxLeakBB = bpAlloc.ira.taxLeak || 0;
+      const taxLeakAA = aaAlloc.ira.taxLeak || 0;
+      const taxLeakBA = (baAllocB.ira.taxLeak || 0) + (baAllocA.ira.taxLeak || 0);
+      const mkP = (rfBase, rfInv, id, rsu, k4, ace, bce) => {
         const tBase = rfBase.salCash + id + rsu + rfBase.esppVal + k4 + rfBase.mega + rfBase.iraVal;
         const tInv = rfInv.salCash + id + rsu + rfInv.esppVal + k4 + rfInv.mega + rfInv.iraVal;
         return {
-          salCash: rfBase.salCash, invD: id, rsu, espp: rfBase.esppVal, k401: k4, mega: rfBase.mega, ira: rfBase.iraVal, iraLeak,
+          salCash: rfBase.salCash, invD: id, rsu, espp: rfBase.esppVal, k401: k4, mega: rfBase.mega, ira: rfBase.iraVal,
           aCashEv: ace, bCashEv: bce, invCash: rfInv.invVal,
           salCashInv: rfInv.salCash, esppInv: rfInv.esppVal, megaInv: rfInv.mega, iraInv: rfInv.iraVal,
           totBase: tBase + ace + bce, totInv: tInv + rfInv.invVal
         };
       };
       return {
-        ab: mkP(rfABBase, rfABInv, aInvV, aBRsuV, aMtchA + aMtchB, aACashEv, aBCashEv, aAllocA.ira.leakage + aAllocB.ira.leakage),
-        bb: mkP(rfBBBase, rfBBInv, 0, bpRsuV, bpMFV, 0, bpCashEv, bpAlloc.ira.leakage),
-        aa: mkP(rfAABase, rfAAInv, aaInvV, 0, aaMFV, aaCashEv, 0, aaAlloc.ira.leakage),
-        ba: mkP(rfBABase, rfBAInv, baAInvV, baBRsuV, baBMFV + baAMFV, baACashEv, baBCashEv, baAllocA.ira.leakage + baAllocB.ira.leakage)
+        ab: mkP(rfABBase, rfABInv, aInvV, aBRsuV, aMtchA + aMtchB, aACashEv, aBCashEv),
+        bb: mkP(rfBBBase, rfBBInv, 0, bpRsuV, bpMFV, 0, bpCashEv),
+        aa: mkP(rfAABase, rfAAInv, aaInvV, 0, aaMFV, aaCashEv, 0),
+        ba: mkP(rfBABase, rfBAInv, baAInvV, baBRsuV, baBMFV + baAMFV, baACashEv, baBCashEv),
+        transparency: { ab: transAB, bb: transBB, aa: transAA, ba: transBA },
+        iraAdvanced: {
+          abTaxLeak: taxLeakAB,
+          bbTaxLeak: taxLeakBB,
+          aaTaxLeak: taxLeakAA,
+          baTaxLeak: taxLeakBA
+        }
       };
     }
 
@@ -2594,6 +3718,21 @@
       });
     }
 
+    function reorderPromoSections() {
+      const moveBefore = (headerId, blockIds) => {
+        const header = $(headerId);
+        if (!header || !header.parentElement) return;
+        const parent = header.parentElement;
+        for (const id of blockIds) {
+          const el = $(id);
+          if (!el || el.parentElement !== parent) continue;
+          parent.insertBefore(el, header);
+        }
+      };
+      moveBefore('a_contribution_plan_header', ['a_lv2_header', 'a_lv2_base_ctrl', 'a_lv2_raise_ctrl', 'a_lv2_bonus_ctrl', 'a_lv2_sign1_ctrl', 'a_lv2_sign2_ctrl']);
+      moveBefore('b_contribution_plan_header', ['b_lv2_header', 'b_lv2_base_ctrl', 'b_lv2_grant_ctrl', 'lv2_ref_ctrl', 'b_lv2_bonus_ctrl', 'b_lv2_sign1_ctrl', 'b_lv2_sign2_ctrl']);
+    }
+
     function computeMilestones(startD, leaveD) {
       const ms = [];
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -2616,12 +3755,80 @@
       return ms;
     }
 
+    const collapsibleSections = [];
+    const collapsibleSubTitles = new Set([
+      'Year Table Overrides',
+      'Company A Plan',
+      'Company B Plan',
+      'Contribution Plan',
+      '401k Catch-up + Backdoor Advanced'
+    ]);
+    const collapsibleSubDefaultClosed = new Set([
+      'Year Table Overrides',
+      '401k Catch-up + Backdoor Advanced'
+    ]);
+    const collapsiblePanelDefaultClosed = new Set(['Presets & Share']);
+    const collapsibleResultDefaultClosedIds = new Set(['allocation-card']);
+
+    function registerCollapsible(label, nodes, collapsed) {
+      if (!label || !nodes || !nodes.length) return;
+      const section = { label, nodes, collapsed: !!collapsed };
+      label.classList.add('collapse-toggle');
+      label.addEventListener('click', () => {
+        section.collapsed = !section.collapsed;
+        if (!section.collapsed) section.nodes.forEach(n => { n.style.display = '' });
+        update();
+      });
+      collapsibleSections.push(section);
+    }
+
+    function initCollapsibleSections() {
+      collapsibleSections.length = 0;
+      const labels = [...document.querySelectorAll('.sub-label')].filter(el => collapsibleSubTitles.has(el.textContent.trim()));
+      for (const label of labels) {
+        const title = label.textContent.trim();
+        const nodes = [];
+        let next = label.nextElementSibling;
+        while (next && !(next.classList && next.classList.contains('sub-label'))) {
+          nodes.push(next);
+          next = next.nextElementSibling;
+        }
+        registerCollapsible(label, nodes, collapsibleSubDefaultClosed.has(title));
+      }
+
+      const panelTitles = [...document.querySelectorAll('.panel > .section-title')];
+      for (const label of panelTitles) {
+        const panel = label.closest('.panel');
+        if (!panel) continue;
+        const title = label.textContent.trim();
+        const nodes = [...panel.children].filter(n => n !== label);
+        registerCollapsible(label, nodes, collapsiblePanelDefaultClosed.has(title));
+      }
+
+      const resultTitles = [...document.querySelectorAll('.results-section .card > h2')];
+      for (const label of resultTitles) {
+        const card = label.closest('.card');
+        if (!card) continue;
+        const nodes = [...card.children].filter(n => n !== label);
+        registerCollapsible(label, nodes, collapsibleResultDefaultClosedIds.has(card.id));
+      }
+      applyCollapsedSections();
+    }
+
+    function applyCollapsedSections() {
+      for (const section of collapsibleSections) {
+        section.label.classList.toggle('is-collapsed', !!section.collapsed);
+        if (section.collapsed) section.nodes.forEach(n => { n.style.display = 'none' });
+      }
+    }
+
     function getParams() {
       const startD = parseISODate($('start_date').value);
       const exitD = parseISODate($('leave_date').value);
       const moveD = parseISODate($('move_date').value);
       const n = (id, fallback) => numberOrDefault($(id).value, fallback);
       const i = (id, fallback) => intOrDefault($(id).value, fallback);
+      const optionalN = id => numberOrDefault($(id).value, NaN);
       const pct = (id, fallback) => n(id, fallback) / 100;
       const grantYears = i('b_grant_years', 4);
       let vestPat = parseMonthDays($('vest_dates').value);
@@ -2634,6 +3841,21 @@
       if (!aRaisePat.length) aRaisePat = [{ m: 10, d: 1 }];
       let aBonusDate = parseMonthDays($('a_bonus_date').value);
       if (!aBonusDate.length) aBonusDate = [{ m: 10, d: 1 }];
+      const readSingleMonthDay = (id, fallback) => {
+        const parsed = parseMonthDays($(id).value);
+        return parsed.length ? parsed[0] : { m: fallback.m, d: fallback.d };
+      };
+      const readOfferPeriods = prefix => ([
+        {
+          start: readSingleMonthDay(prefix + '_espp_p1_start', DEFAULT_ESPP_OFFER_PERIODS[0].start),
+          end: readSingleMonthDay(prefix + '_espp_p1_end', DEFAULT_ESPP_OFFER_PERIODS[0].end)
+        },
+        {
+          start: readSingleMonthDay(prefix + '_espp_p2_start', DEFAULT_ESPP_OFFER_PERIODS[1].start),
+          end: readSingleMonthDay(prefix + '_espp_p2_end', DEFAULT_ESPP_OFFER_PERIODS[1].end)
+        }
+      ]);
+      const yearOverrides = parseYearOverrides($('year_overrides').value);
       const sharedTax = {
         partnerBase: n('partner_income', 450000),
         partnerRaise: n('partner_raise', 25000),
@@ -2645,6 +3867,10 @@
         bracketInfl: pct('irs_bracket_inflation', 0),
         k401LimitBase: n('k401_limit_base', 24500),
         k401LimitInc: n('k401_limit_inc', 0),
+        k401CatchupBase: n('k401_catchup_base', 7500),
+        k401CatchupInc: n('k401_catchup_inc', 0),
+        k401SuperCatchupBase: n('k401_supercatchup_base', 11250),
+        k401SuperCatchupInc: n('k401_supercatchup_inc', 0),
         k415cLimitBase: n('k415c_limit_base', 72000),
         k415cLimitInc: n('k415c_limit_inc', 0),
         esppLimitBase: n('espp_fmv_limit_base', 25000),
@@ -2663,6 +3889,8 @@
         stdMfsInc: n('std_mfs_inc', 250),
         stdSingle: n('std_single', 16100),
         stdSingleInc: n('std_single_inc', 250),
+        useYearOverrides: $('use_year_overrides').checked,
+        yearOverrides,
         startYr: getYear(startD)
       };
       const taxA = Object.assign({}, sharedTax, {
@@ -2683,7 +3911,7 @@
         filing: $('filing').value,
         growth: parseGrowth($('stock_growth').value),
         aRaiseR: pct('a_raise_pct', 0),
-        bRaiseR: pct('b_raise_pct', 2),
+        bRaiseR: pct('b_raise_pct', 3),
         price0: n('b_stock_price', 260),
         lv1Ref: n('lv1_ref', 120000),
         lv2Ref: n('lv2_ref', 200000),
@@ -2699,6 +3927,8 @@
         bMatchValue: n('b_match_value', 0),
         aMatchCliff: n('a_match_cliff', 0),
         bMatchCliff: n('b_match_cliff', 0),
+        aMatchTrueUp: $('a_match_trueup').checked,
+        bMatchTrueUp: $('b_match_trueup').checked,
         aEsppR: pct('a_espp_pct', 0),
         aEsppDisc: pct('a_espp_disc', 0),
         bEsppR: pct('b_espp_pct', 0),
@@ -2707,11 +3937,97 @@
         aBonusDate,
         aSign1: n('a_sign1', 0),
         aSign2: n('a_sign2', 0),
-        enableBackdoorIra: $('enable_backdoor_ira').checked,
-        applyAgeCatchup: $('apply_age_catchup').checked,
-        startAge: numberOrDefault($('start_age').value, NaN),
-        backdoorTiming: $('backdoor_timing').value,
         priorityOrder: readPriorityFromList(),
+        contributionPlan: {
+          startAge: numberOrDefault($('start_age').value, NaN),
+          applyIraCatchup: $('apply_age_catchup').checked,
+          apply401kCatchup: $('apply_401k_catchup').checked,
+          apply401kSuperCatchup: $('apply_401k_supercatchup').checked,
+          iraAdvanced: {
+            enabled: $('ira_advanced_mode').checked,
+            preTaxBalance: n('ira_pretax_balance', 0),
+            taxRate: pct('ira_pro_rata_tax_rate', 35)
+          },
+          a: {
+            k401: {
+              enabled: $('enable_401k_contrib').checked,
+              timing: $('k401_timing').value,
+              mode: $('a_k401_mode').value,
+              pctSalaryRate: pct('a_k401_pct', 10),
+              targetBase: optionalN('k401_target_base'),
+              targetInc: n('k401_target_inc', 0)
+            },
+            ira: {
+              enabled: $('enable_backdoor_ira').checked,
+              timing: $('backdoor_timing').value,
+              mode: $('a_ira_mode').value,
+              pctSalaryRate: pct('a_ira_pct', 3),
+              targetBase: optionalN('ira_target_base'),
+              targetInc: n('ira_target_inc', 0)
+            },
+            mega: {
+              enabled: $('enable_mega_roth').checked,
+              timing: $('mega_timing').value,
+              mode: $('a_mega_mode').value,
+              pctSalaryRate: pct('a_mega_pct', 8),
+              targetBase: optionalN('mega_target_base'),
+              targetInc: n('mega_target_inc', 0)
+            },
+            espp: {
+              enabled: $('enable_espp').checked,
+              timing: $('espp_timing').value,
+              mode: $('a_espp_mode').value,
+              pctSalaryRate: pct('a_espp_pct_plan', 5),
+              targetBase: optionalN('espp_target_base'),
+              targetInc: n('espp_target_inc', 0),
+              offerPeriods: readOfferPeriods('a')
+            }
+          },
+          b: {
+            k401: {
+              enabled: $('b_enable_401k_contrib').checked,
+              timing: $('b_k401_timing').value,
+              mode: $('b_k401_mode').value,
+              pctSalaryRate: pct('b_k401_pct', 10),
+              targetBase: optionalN('b_k401_target_base'),
+              targetInc: n('b_k401_target_inc', 0)
+            },
+            ira: {
+              enabled: $('b_enable_backdoor_ira').checked,
+              timing: $('b_backdoor_timing').value,
+              mode: $('b_ira_mode').value,
+              pctSalaryRate: pct('b_ira_pct', 3),
+              targetBase: optionalN('b_ira_target_base'),
+              targetInc: n('b_ira_target_inc', 0)
+            },
+            mega: {
+              enabled: $('b_enable_mega_roth').checked,
+              timing: $('b_mega_timing').value,
+              mode: $('b_mega_mode').value,
+              pctSalaryRate: pct('b_mega_pct', 8),
+              targetBase: optionalN('b_mega_target_base'),
+              targetInc: n('b_mega_target_inc', 0)
+            },
+            espp: {
+              enabled: $('b_enable_espp').checked,
+              timing: $('b_espp_timing').value,
+              mode: $('b_espp_mode').value,
+              pctSalaryRate: pct('b_espp_pct_plan', 5),
+              targetBase: optionalN('b_espp_target_base'),
+              targetInc: n('b_espp_target_inc', 0),
+              offerPeriods: readOfferPeriods('b')
+            }
+          },
+          sensitivity: {
+            show: true,
+            growthWorst: parseGrowth($('sens_growth_worst').value, 8),
+            growthBase: parseGrowth($('sens_growth_base').value, 15),
+            growthBest: parseGrowth($('sens_growth_best').value, 25),
+            tenureWorst: i('sens_tenure_worst', 2),
+            tenureBase: i('sens_tenure_base', 4),
+            tenureBest: i('sens_tenure_best', 6)
+          }
+        },
         taxA,
         taxB,
         startD, exitD, moveD, vestPat, bgDate, bRaisePat, aRaisePat,
@@ -2736,29 +4052,226 @@
         aLv2: {
           base: n('a_lv2_base', 650000),
           raiseR: pct('a_lv2_raise_pct', 0),
-          bonus_pct: pct('a_lv2_bonus_pct', 5),
+          bonus_pct: pct('a_lv2_bonus_pct', 0),
           sign1: n('a_lv2_sign1', 0),
           sign2: n('a_lv2_sign2', 0)
         }
       };
     }
 
+    function setControlDisabled(id, disabled) {
+      const el = $(id);
+      if (!el) return;
+      el.disabled = !!disabled;
+      const g = el.closest('.ctrl-group');
+      if (g) g.classList.toggle('is-disabled', !!disabled);
+    }
+
+    function setControlGroupVisible(id, visible) {
+      const el = $(id);
+      if (!el) return;
+      const g = el.closest('.ctrl-group');
+      if (g) g.style.display = visible ? '' : 'none';
+    }
+
+    function setGroupVisible(id, visible) {
+      const el = $(id);
+      if (!el) return;
+      el.style.display = visible ? '' : 'none';
+    }
+
+    function syncBucketUi(cfg) {
+      const enabled = $(cfg.enabledId).checked;
+      const mode = $(cfg.modeId).value;
+      const extraIds = cfg.extraControlIds || [];
+      setControlDisabled(cfg.modeId, !enabled);
+      setControlDisabled(cfg.timingId, !enabled);
+      setControlGroupVisible(cfg.modeId, enabled);
+      setControlGroupVisible(cfg.timingId, enabled);
+      for (const id of extraIds) {
+        setControlDisabled(id, !enabled);
+        setControlGroupVisible(id, enabled);
+      }
+      const pctOn = enabled && mode === 'pct_salary';
+      const fixedOn = enabled && mode === 'fixed';
+      setControlDisabled(cfg.pctId, !pctOn);
+      setControlDisabled(cfg.fixedBaseId, !fixedOn);
+      setControlDisabled(cfg.fixedIncId, !fixedOn);
+      setControlGroupVisible(cfg.pctId, pctOn);
+      setControlGroupVisible(cfg.fixedBaseId, fixedOn);
+      setControlGroupVisible(cfg.fixedIncId, fixedOn);
+    }
+
+    function renderAllocationTable(entries) {
+      const table = $('allocation-table');
+      const bucketLabel = { k401: '401k', ira: 'Backdoor IRA', mega: 'Mega Backdoor', espp: 'ESPP' };
+      const isAB = (entries || []).length === 2 && ['A', 'B'].every(lbl => (entries || []).some(e => e.label === lbl));
+      if (isAB) {
+        const byKey = new Map();
+        const yearsSet = new Set();
+        for (const ent of entries || []) {
+          const tr = ent.trans || {};
+          for (const bucket of ['k401', 'ira', 'mega', 'espp']) {
+            const b = tr[bucket] || {};
+            const years = [...new Set([
+              ...Object.keys(b.targets || {}),
+              ...Object.keys(b.funded || {}),
+              ...Object.keys(b.unmet || {})
+            ])];
+            for (const yr of years) {
+              const key = yr + '|' + bucket;
+              if (!byKey.has(key)) byKey.set(key, { year: +yr, bucket, A: null, B: null });
+              byKey.get(key)[ent.label] = {
+                target: (b.targets || {})[yr] || 0,
+                funded: (b.funded || {})[yr] || 0,
+                unmet: (b.unmet || {})[yr] || 0
+              };
+              yearsSet.add(+yr);
+            }
+          }
+        }
+        const years = [...yearsSet].sort((a, b) => a - b);
+        const rows = [];
+        for (const yr of years) {
+          rows.push('<tr class="allocation-year-row"><td colspan="7">Year ' + yr + '</td></tr>');
+          for (const bucket of ['k401', 'ira', 'mega', 'espp']) {
+            const row = byKey.get(String(yr) + '|' + bucket);
+            if (!row) continue;
+            const a = row.A || { target: 0, funded: 0, unmet: 0 };
+            const b = row.B || { target: 0, funded: 0, unmet: 0 };
+            rows.push('<tr><td>' + bucketLabel[bucket] + '</td><td>' + formatCurrency(a.target) + '</td><td>' + formatCurrency(a.funded) + '</td><td>' + formatCurrency(a.unmet) + '</td><td>' + formatCurrency(b.target) + '</td><td>' + formatCurrency(b.funded) + '</td><td>' + formatCurrency(b.unmet) + '</td></tr>');
+          }
+        }
+        let html = '<tr><th>Bucket</th><th>A Target</th><th>A Funded</th><th>A Unmet</th><th>B Target</th><th>B Funded</th><th>B Unmet</th></tr>';
+        if (!rows.length) html += '<tr><td colspan="7">No allocation data for current inputs.</td></tr>';
+        else html += rows.join('');
+        table.innerHTML = html;
+        return;
+      }
+      const rows = [];
+      for (const ent of entries || []) {
+        const tr = ent.trans || {};
+        for (const bucket of ['k401', 'ira', 'mega', 'espp']) {
+          const b = tr[bucket] || {};
+          const years = [...new Set([
+            ...Object.keys(b.targets || {}),
+            ...Object.keys(b.funded || {}),
+            ...Object.keys(b.unmet || {})
+          ])].sort((a, b) => +a - +b);
+          for (const yr of years) {
+            rows.push('<tr><td>' + ent.label + '</td><td>' + bucketLabel[bucket] + '</td><td>' + yr + '</td><td>' + formatCurrency((b.targets || {})[yr] || 0) + '</td><td>' + formatCurrency((b.funded || {})[yr] || 0) + '</td><td>' + formatCurrency((b.unmet || {})[yr] || 0) + '</td></tr>');
+          }
+        }
+      }
+      let html = '<tr><th>Company</th><th>Bucket</th><th>Year</th><th>Target</th><th>Funded</th><th>Unmet</th></tr>';
+      if (!rows.length) html += '<tr><td colspan="6">No allocation data for current inputs.</td></tr>';
+      else html += rows.join('');
+      table.innerHTML = html;
+    }
+
+    function withYearlyDeltaRows(label, vals, rowClass) {
+      const deltas = vals.map((v, i) => i === 0 ? v : (v - vals[i - 1]));
+      const deltaCells = deltas.map(v => '<td class="' + (v >= 0 ? 'pos' : 'neg') + '">' + formatCurrency(v) + '</td>').join('');
+      const cls = rowClass ? ' class="' + rowClass + '"' : '';
+      return '<tr' + cls + '><td>' + label + '</td>' + vals.map(v => '<td>' + formatCurrency(v) + '</td>').join('') + '</tr>' +
+        '<tr class="breakdown-subrow"><td>+This Yr</td>' + deltaCells + '</tr>';
+    }
+
+    function renderTimelineMix(rows) {
+      const host = $('timeline-chart');
+      const legendHost = $('timeline-legend');
+      const colors = ['#857593', '#C4A3AA', '#D9CDBF', '#AFC1B2', '#B7A7BC', '#C8B6A8', '#E2D8CB'];
+      host.innerHTML = '';
+      legendHost.innerHTML = '';
+      if (!(rows || []).length) {
+        host.innerHTML = '<div class="note">No timeline mix data.</div>';
+        return;
+      }
+      const legendSegments = (rows[0] && rows[0].segments) || [];
+      legendHost.innerHTML = legendSegments.map((s, idx) =>
+        '<span class="timeline-legend-item"><span class="timeline-legend-swatch" style="background:' + (colors[idx % colors.length]) + '"></span>' + (s.label || ('Segment ' + (idx + 1))) + '</span>'
+      ).join('');
+      for (const row of rows || []) {
+        const total = Math.max(1, row.total || 0);
+        const bar = (row.segments || []).map((s, idx) => {
+          if ((s.value || 0) <= 0) return '';
+          const pct = Math.max(0, (s.value || 0) / total * 100);
+          return '<span style="width:' + pct.toFixed(3) + '%;background:' + (colors[idx % colors.length]) + ';display:block"></span>';
+        }).join('');
+        host.innerHTML += '<div class="timeline-row"><div class="timeline-label">' + row.label + '</div><div class="timeline-bar">' + bar + '</div><div class="timeline-val">' + formatCurrency(total) + '</div></div>';
+      }
+    }
+
+    function cloneWithScenario(P, growthPattern, tenureYears, isPromo) {
+      const out = Object.assign({}, P);
+      out.growth = Array.isArray(growthPattern) && growthPattern.length ? growthPattern.slice() : [0.15];
+      out.startD = new Date(P.startD.getTime());
+      out.exitD = makeDate(getYear(out.startD) + Math.max(1, tenureYears), getMonth(out.startD), getDay(out.startD));
+      if (out.exitD <= out.startD) out.exitD = addDays(out.startD, 1);
+      out.moveD = new Date(P.moveD.getTime());
+      if (isPromo && (out.moveD <= out.startD || out.moveD >= out.exitD)) {
+        const spanDays = Math.max(30, Math.floor(daysBetween(out.startD, out.exitD) / 2));
+        out.moveD = addDays(out.startD, spanDays);
+      }
+      return out;
+    }
+
+    function renderSensitivity(P, isPromo, paradigm) {
+      const cfg = P.contributionPlan.sensitivity;
+      const table = $('sensitivity-table');
+      if (!cfg.show) {
+        table.innerHTML = '';
+        return;
+      }
+      const scenarios = [
+        { label: 'Worst', g: cfg.growthWorst, gLabel: formatGrowthPattern(cfg.growthWorst), t: cfg.tenureWorst },
+        { label: 'Base', g: cfg.growthBase, gLabel: formatGrowthPattern(cfg.growthBase), t: cfg.tenureBase },
+        { label: 'Best', g: cfg.growthBest, gLabel: formatGrowthPattern(cfg.growthBest), t: cfg.tenureBest }
+      ];
+      const useInv = paradigm === 'B_invest';
+      let html = '';
+      if (isPromo) {
+        html = '<tr><th>Scenario</th><th>Growth %</th><th>Tenure</th><th>Best Path</th><th>Best Net Worth</th><th>Delta vs B->B</th></tr>';
+        for (const s of scenarios) {
+          const ps = cloneWithScenario(P, s.g, s.t, true);
+          const pr = simulatePromo(ps);
+          const vals = {
+            aa: useInv ? pr.aa.totInv : pr.aa.totBase,
+            bb: useInv ? pr.bb.totInv : pr.bb.totBase,
+            ab: useInv ? pr.ab.totInv : pr.ab.totBase,
+            ba: useInv ? pr.ba.totInv : pr.ba.totBase
+          };
+          const best = Object.entries(vals).sort((a, b) => b[1] - a[1])[0];
+          html += '<tr><td>' + s.label + '</td><td>' + s.gLabel + '</td><td>' + s.t + 'y</td><td>' + best[0].toUpperCase() + '</td><td>' + formatCurrency(best[1]) + '</td><td class="' + ((best[1] - vals.bb) >= 0 ? 'pos' : 'neg') + '">' + formatCurrency(best[1] - vals.bb) + '</td></tr>';
+        }
+      } else {
+        html = '<tr><th>Scenario</th><th>Growth %</th><th>Tenure</th><th>Company A</th><th>Company B</th><th>Delta (A-B)</th></tr>';
+        for (const s of scenarios) {
+          const ps = cloneWithScenario(P, s.g, s.t, false);
+          const dr = simulateDirect(ps);
+          const a = useInv ? dr.aTotInv : dr.aTotBase;
+          const b = useInv ? dr.bTotInv : dr.bTotBase;
+          const d = a - b;
+          html += '<tr><td>' + s.label + '</td><td>' + s.gLabel + '</td><td>' + s.t + 'y</td><td>' + formatCurrency(a) + '</td><td>' + formatCurrency(b) + '</td><td class="' + (d >= 0 ? 'pos' : 'neg') + '">' + formatCurrency(d) + '</td></tr>';
+        }
+      }
+      table.innerHTML = html;
+    }
+
     function update() {
-      const mode = $('mode').value; const par = $('paradigm').value;
+      const mode = $('mode').value;
+      const par = $('paradigm').value;
       const isPromo = mode === 'promo';
       const promoFields = ['b_lv2_base_ctrl', 'b_lv2_grant_ctrl', 'lv2_ref_ctrl', 'b_lv2_bonus_ctrl',
         'b_lv2_sign1_ctrl', 'b_lv2_sign2_ctrl', 'move_date_ctrl',
         'a_lv2_base_ctrl', 'a_lv2_raise_ctrl', 'a_lv2_bonus_ctrl', 'a_lv2_sign1_ctrl', 'a_lv2_sign2_ctrl',
         'a_lv2_header', 'b_lv2_header'];
-      promoFields.forEach(id => { $(id).style.display = isPromo ? '' : 'none' });
+      promoFields.forEach(id => setGroupVisible(id, isPromo));
       const isSingle = $('filing').value === 'Single';
-      ['partner_label', 'partner_income_ctrl', 'partner_raise_ctrl'].forEach(id => { $(id).style.display = isSingle ? 'none' : '' });
-      // Show Match % (graded vest schedule) only for comp_pct match type
-      $('a_match_vest_ctrl').style.display = $('a_match_type').value === 'comp_pct' ? '' : 'none';
-      $('b_match_vest_ctrl').style.display = $('b_match_type').value === 'comp_pct' ? '' : 'none';
-      // IRS overrides toggle
-      $('irs_fields').style.display = $('irs_toggle').checked ? '' : 'none';
-      // Per-company state/city tax toggle
+      ['partner_label', 'partner_income_ctrl', 'partner_raise_ctrl'].forEach(id => setGroupVisible(id, !isSingle));
+      $('a_match_vest_ctrl').style.display = ($('enable_401k_contrib').checked && $('a_match_type').value === 'comp_pct') ? '' : 'none';
+      $('b_match_vest_ctrl').style.display = ($('b_enable_401k_contrib').checked && $('b_match_type').value === 'comp_pct') ? '' : 'none';
+      $('year_overrides_ctrl').style.display = $('use_year_overrides').checked ? '' : 'none';
       const splitTax = $('split_state_tax').checked;
       ['b_state_tax_pct_ctrl', 'b_state_tax_thresh_ctrl', 'b_state_tax_start_yr_ctrl', 'b_city_tax_pct_ctrl', 'b_city_tax_thresh_ctrl']
         .forEach(id => { $(id).style.display = splitTax ? '' : 'none' });
@@ -2767,102 +4280,358 @@
       $('lbl_state_tax_start_yr').textContent = splitTax ? 'A State Start Year' : 'State Start Year';
       $('lbl_city_tax_pct').textContent = splitTax ? 'A City Tax %' : 'City Tax %';
       $('lbl_city_tax_thresh').textContent = splitTax ? 'A City Threshold' : 'City Threshold';
-      // Backdoor IRA controls toggle
-      const backdoorOn = $('enable_backdoor_ira').checked;
-      ['backdoor_timing', 'start_age', 'apply_age_catchup'].forEach(id => { $(id).disabled = !backdoorOn });
-      ['backdoor_timing_ctrl', 'start_age_ctrl', 'apply_age_catchup_ctrl']
-        .forEach(id => { $(id).classList.toggle('is-disabled', !backdoorOn) });
+
+      syncBucketUi({
+        enabledId: 'enable_401k_contrib', modeId: 'a_k401_mode', timingId: 'k401_timing',
+        pctId: 'a_k401_pct', fixedBaseId: 'k401_target_base', fixedIncId: 'k401_target_inc',
+        extraControlIds: ['a_max_def', 'a_match_type', 'a_match_value', 'a_match_cliff', 'a_match_trueup']
+      });
+      syncBucketUi({
+        enabledId: 'enable_backdoor_ira', modeId: 'a_ira_mode', timingId: 'backdoor_timing',
+        pctId: 'a_ira_pct', fixedBaseId: 'ira_target_base', fixedIncId: 'ira_target_inc'
+      });
+      syncBucketUi({
+        enabledId: 'enable_mega_roth', modeId: 'a_mega_mode', timingId: 'mega_timing',
+        pctId: 'a_mega_pct', fixedBaseId: 'mega_target_base', fixedIncId: 'mega_target_inc'
+      });
+      syncBucketUi({
+        enabledId: 'enable_espp', modeId: 'a_espp_mode', timingId: 'espp_timing',
+        pctId: 'a_espp_pct_plan', fixedBaseId: 'espp_target_base', fixedIncId: 'espp_target_inc',
+        extraControlIds: ['a_espp_pct', 'a_espp_disc', 'a_espp_p1_start', 'a_espp_p1_end', 'a_espp_p2_start', 'a_espp_p2_end']
+      });
+      syncBucketUi({
+        enabledId: 'b_enable_401k_contrib', modeId: 'b_k401_mode', timingId: 'b_k401_timing',
+        pctId: 'b_k401_pct', fixedBaseId: 'b_k401_target_base', fixedIncId: 'b_k401_target_inc',
+        extraControlIds: ['b_max_def', 'b_match_type', 'b_match_value', 'b_match_cliff', 'b_match_trueup']
+      });
+      syncBucketUi({
+        enabledId: 'b_enable_backdoor_ira', modeId: 'b_ira_mode', timingId: 'b_backdoor_timing',
+        pctId: 'b_ira_pct', fixedBaseId: 'b_ira_target_base', fixedIncId: 'b_ira_target_inc'
+      });
+      syncBucketUi({
+        enabledId: 'b_enable_mega_roth', modeId: 'b_mega_mode', timingId: 'b_mega_timing',
+        pctId: 'b_mega_pct', fixedBaseId: 'b_mega_target_base', fixedIncId: 'b_mega_target_inc'
+      });
+      syncBucketUi({
+        enabledId: 'b_enable_espp', modeId: 'b_espp_mode', timingId: 'b_espp_timing',
+        pctId: 'b_espp_pct_plan', fixedBaseId: 'b_espp_target_base', fixedIncId: 'b_espp_target_inc',
+        extraControlIds: ['b_espp_pct', 'b_espp_disc', 'b_espp_p1_start', 'b_espp_p1_end', 'b_espp_p2_start', 'b_espp_p2_end']
+      });
+
+      const backdoorOn = $('enable_backdoor_ira').checked || $('b_enable_backdoor_ira').checked;
+      setControlDisabled('start_age', !backdoorOn);
+      setControlDisabled('apply_age_catchup', !backdoorOn);
+      const iraAdvancedOn = backdoorOn && $('ira_advanced_mode').checked;
+      setGroupVisible('ira_pretax_balance_ctrl', iraAdvancedOn);
+      setGroupVisible('ira_pro_rata_tax_rate_ctrl', iraAdvancedOn);
       if (isPromo) {
-        $('mode-note').innerHTML = '<b>A\u2192A</b> = Stay at A, promotion. <b>B\u2192B</b> = Stay at B, promotion. ' +
-          '<b>A\u2192B</b> = Start at A, join B. <b>B\u2192A</b> = Start at B, join A. Deltas versus B\u2192B.';
+        $('mode-note').innerHTML = '<b>A->A</b> stay at A and promote. <b>B->B</b> stay at B and promote. <b>A->B</b> and <b>B->A</b> are cross-company transitions. Deltas are shown versus B->B.';
       } else {
-        $('mode-note').innerHTML = '<b>Company A</b> = cash-only. <b>Company B</b> = First Level. Delta = A \u2212 B (positive = A wins).';
+        $('mode-note').innerHTML = '<b>Company A</b> is cash-heavy. <b>Company B</b> is equity-heavy. Delta is A minus B.';
       }
+
       const P = getParams();
+      const useInv = par === 'B_invest';
+      let allocEntries = [];
+      let timelineRows = [];
 
       if (isPromo) {
         const r = simulatePromo(P);
-        const paths = [{ k: 'aa', l: 'A\u2192A' }, { k: 'bb', l: 'B\u2192B' }, { k: 'ab', l: 'A\u2192B' }, { k: 'ba', l: 'B\u2192A' }];
-        const useInv = par === 'B_invest';
+        const paths = [{ k: 'aa', l: 'A->A' }, { k: 'bb', l: 'B->B' }, { k: 'ab', l: 'A->B' }, { k: 'ba', l: 'B->A' }];
         const tots = paths.map(p => useInv ? r[p.k].totInv : r[p.k].totBase);
         const bbT = useInv ? r.bb.totInv : r.bb.totBase;
-        // Main table
         let h = '<tr><th>Metric</th>' + paths.map(p => '<th>' + p.l + '</th>').join('') + '</tr>';
         h += '<tr class="total-row"><td>Net Worth</td>' + tots.map(v => '<td>' + formatCurrency(v) + '</td>').join('') + '</tr>';
         const deltas = tots.map(t => t - bbT);
-        h += '<tr class="delta-row"><td>Delta versus B\u2192B</td>' + deltas.map((d, i) =>
-          i === 1 ? '<td>\u2014</td>' : '<td class="' + (d >= 0 ? 'pos' : 'neg') + '">' + formatCurrency(d) + '</td>'
-        ).join('') + '</tr>';
+        h += '<tr class="delta-row"><td>Delta versus B->B</td>' + deltas.map((d, i) =>
+          i === 1 ? '<td>—</td>' : '<td class="' + (d >= 0 ? 'pos' : 'neg') + '">' + formatCurrency(d) + '</td>').join('') + '</tr>';
         h += '<tr class="delta-row"><td>Delta %</td>' + deltas.map((d, i) =>
-          i === 1 ? '<td>\u2014</td>' : '<td class="' + (d >= 0 ? 'pos' : 'neg') + '">' + (bbT ? ((d / bbT) * 100).toFixed(1) + '%' : 'N/A') + '</td>'
-        ).join('') + '</tr>';
+          i === 1 ? '<td>—</td>' : '<td class="' + (d >= 0 ? 'pos' : 'neg') + '">' + (bbT ? ((d / bbT) * 100).toFixed(1) + '%' : 'N/A') + '</td>').join('') + '</tr>';
         $('main-table').innerHTML = h;
-        // Breakdown
+
         let b = '<tr><th>Component</th>' + paths.map(p => '<th>' + p.l + '</th>').join('') + '</tr>';
         const comps = useInv ?
-          [['Salary Cash', 'salCashInv'], ['Investment Delta', 'invD'], ['RSU', 'rsu'], ['ESPP', 'esppInv'],
-          ['401k Match', 'k401'], ['Backdoor IRA', 'iraInv'], ['Mega Backdoor Roth', 'megaInv'],
-          ['Invested Sign-on + Bonus', 'invCash']] :
-          [['Salary Cash', 'salCash'], ['Investment Delta', 'invD'], ['RSU', 'rsu'], ['ESPP', 'espp'],
-          ['401k Match', 'k401'], ['Backdoor IRA', 'ira'], ['Mega Backdoor Roth', 'mega'], ['Cash (Sign-on + Bonus)', '_cash']];
+          [['Salary Cash', 'salCashInv'], ['Investment Delta', 'invD'], ['RSU', 'rsu'], ['ESPP', 'esppInv'], ['401k Match', 'k401'], ['Backdoor IRA', 'iraInv'], ['Mega Backdoor Roth', 'megaInv'], ['Invested Sign-on + Bonus', 'invCash']] :
+          [['Salary Cash', 'salCash'], ['Investment Delta', 'invD'], ['RSU', 'rsu'], ['ESPP', 'espp'], ['401k Match', 'k401'], ['Backdoor IRA', 'ira'], ['Mega Backdoor Roth', 'mega'], ['Cash (Sign-on + Bonus)', '_cash']];
         comps.forEach(([lbl, key]) => {
-          b += '<tr><td>' + lbl + '</td>' + paths.map(p => {
-            if (key === '_cash') return '<td>' + formatCurrency(r[p.k].aCashEv + r[p.k].bCashEv) + '</td>';
-            return '<td>' + formatCurrency(r[p.k][key]) + '</td>';
-          }).join('') + '</tr>';
+          b += '<tr><td>' + lbl + '</td>' + paths.map(p => key === '_cash'
+            ? '<td>' + formatCurrency(r[p.k].aCashEv + r[p.k].bCashEv) + '</td>'
+            : '<td>' + formatCurrency(r[p.k][key]) + '</td>').join('') + '</tr>';
         });
         b += '<tr class="total-row"><td>Total</td>' + tots.map(v => '<td>' + formatCurrency(v) + '</td>').join('') + '</tr>';
         $('breakdown-table').innerHTML = b;
         $('table-title').textContent = 'Net Worth: Career Path Comparison';
+
+        allocEntries = [
+          { label: 'A->A', trans: (r.transparency || {}).aa },
+          { label: 'B->B', trans: (r.transparency || {}).bb },
+          { label: 'A->B', trans: (r.transparency || {}).ab },
+          { label: 'B->A', trans: (r.transparency || {}).ba }
+        ];
+        timelineRows = paths.map(p => ({
+          label: p.l,
+          total: useInv ? r[p.k].totInv : r[p.k].totBase,
+          segments: [
+            { label: 'Salary Cash', value: useInv ? r[p.k].salCashInv : r[p.k].salCash },
+            { label: 'Investment Delta', value: r[p.k].invD },
+            { label: 'RSU', value: r[p.k].rsu },
+            { label: 'ESPP', value: useInv ? r[p.k].esppInv : r[p.k].espp },
+            { label: '401k Match', value: r[p.k].k401 },
+            { label: 'Backdoor IRA', value: useInv ? r[p.k].iraInv : r[p.k].ira },
+            { label: 'Mega Backdoor', value: useInv ? r[p.k].megaInv : r[p.k].mega },
+            { label: 'Sign-on + Bonus', value: useInv ? r[p.k].invCash : (r[p.k].aCashEv + r[p.k].bCashEv) }
+          ]
+        }));
       } else {
-        // Direct: multi-column milestones
         const ms = computeMilestones(P.startD, P.exitD);
         if (ms.length === 0) {
           $('main-table').innerHTML = '<tr><td>No milestones (leave date must be after start date)</td></tr>';
-          $('breakdown-table').innerHTML = ''; $('table-title').textContent = 'Net Worth Comparison'; return;
+          $('breakdown-table').innerHTML = '';
+          $('table-title').textContent = 'Net Worth Comparison';
+          renderAllocationTable([]);
+          renderTimelineMix([]);
+          renderSensitivity(P, false, par);
+          return;
         }
         const results = ms.map(m => ({ label: m.label, r: simulateDirect(Object.assign({}, P, { exitD: m.date })) }));
         const cols = results.length;
         const colSpan = cols + 1;
-        // Main table
         let h = '<tr><th>Metric</th>' + results.map(x => '<th>' + x.label + '</th>').join('') + '</tr>';
-        const aTs = results.map(x => par === 'B_invest' ? x.r.aTotInv : x.r.aTotBase);
-        const bTs = results.map(x => par === 'B_invest' ? x.r.bTotInv : x.r.bTotBase);
+        const aTs = results.map(x => useInv ? x.r.aTotInv : x.r.aTotBase);
+        const bTs = results.map(x => useInv ? x.r.bTotInv : x.r.bTotBase);
         const deltas = aTs.map((a, i) => a - bTs[i]);
-        h += '<tr class="total-row"><td>Company A Net Worth</td>' + aTs.map(v => '<td>' + formatCurrency(v) + '</td>').join('') + '</tr>';
-        h += '<tr class="total-row"><td>Company B Net Worth</td>' + bTs.map(v => '<td>' + formatCurrency(v) + '</td>').join('') + '</tr>';
-        h += '<tr class="delta-row"><td>Delta (A \u2212 B)</td>' + deltas.map(d => '<td class="' + (d >= 0 ? 'pos' : 'neg') + '">' + formatCurrency(d) + '</td>').join('') + '</tr>';
-        h += '<tr class="delta-row"><td>Delta %</td>' + deltas.map((d, i) => {
-          const pct = bTs[i] ? ((d / bTs[i]) * 100).toFixed(1) + '%' : 'N/A';
-          return '<td class="' + (d >= 0 ? 'pos' : 'neg') + '">' + pct + '</td>';
-        }).join('') + '</tr>';
+        h += withYearlyDeltaRows('Company A Net Worth', aTs, 'total-row');
+        h += withYearlyDeltaRows('Company B Net Worth', bTs, 'total-row');
+        h += '<tr class="delta-row"><td>Delta (A - B)</td>' + deltas.map(d => '<td class="' + (d >= 0 ? 'pos' : 'neg') + '">' + formatCurrency(d) + '</td>').join('') + '</tr>';
+        h += '<tr class="delta-row"><td>Delta %</td>' + deltas.map((d, i) => '<td class="' + (d >= 0 ? 'pos' : 'neg') + '">' + (bTs[i] ? ((d / bTs[i]) * 100).toFixed(1) + '%' : 'N/A') + '</td>').join('') + '</tr>';
         $('main-table').innerHTML = h;
-        // Breakdown
-        let b = '<tr><th>Component</th>' + results.map(x => '<th>' + x.label + '</th>').join('') + '</tr>';
-        const aC = par === 'B_invest' ?
-          [['Salary Cash', 'aSalCashInv'], ['Investment Delta', 'aInvD'], ['401k Match', 'aK401'], ['Backdoor IRA', 'aIraInv'], ['Mega Backdoor Roth', 'aMegaInv'],
-          ['ESPP', 'aEsppInv'], ['Invested Sign-on + Bonus', 'aInvCash']] :
-          [['Salary Cash', 'aSalCash'], ['Investment Delta', 'aInvD'], ['401k Match', 'aK401'], ['Backdoor IRA', 'aIra'], ['Mega Backdoor Roth', 'aMega'],
-          ['ESPP', 'aEspp'], ['Cash (Sign-on + Bonus)', 'aCashEv']];
-        aC.forEach(([lbl, key]) => { b += '<tr><td>' + lbl + '</td>' + results.map(x => '<td>' + formatCurrency(x.r[key]) + '</td>').join('') + '</tr>' });
+
+        const breakdownCols = results.map(x => '<th>' + x.label + '</th>').join('');
+        let b = '<tr><th>Company A Components</th>' + breakdownCols + '</tr>';
+        const aC = useInv ?
+          [['Salary Cash', 'aSalCashInv'], ['Investment Delta', 'aInvD'], ['401k Match', 'aK401'], ['Backdoor IRA', 'aIraInv'], ['Mega Backdoor Roth', 'aMegaInv'], ['ESPP', 'aEsppInv'], ['Invested Sign-on + Bonus', 'aInvCash']] :
+          [['Salary Cash', 'aSalCash'], ['Investment Delta', 'aInvD'], ['401k Match', 'aK401'], ['Backdoor IRA', 'aIra'], ['Mega Backdoor Roth', 'aMega'], ['ESPP', 'aEspp'], ['Cash (Sign-on + Bonus)', 'aCashEv']];
+        aC.forEach(([lbl, key]) => { b += withYearlyDeltaRows(lbl, results.map(x => x.r[key])) });
         b += '<tr class="total-row"><td>Company A Total</td>' + aTs.map(v => '<td>' + formatCurrency(v) + '</td>').join('') + '</tr>';
         b += '<tr class="spacer-row"><td colspan="' + colSpan + '"></td></tr>';
-        const bC = par === 'B_invest' ?
-          [['Salary Cash', 'bSalCashInv'], ['RSU', 'bRsu'], ['ESPP', 'bEsppInv'], ['401k Match', 'bK401'], ['Backdoor IRA', 'bIraInv'], ['Mega Backdoor Roth', 'bMegaInv']] :
-          [['Salary Cash', 'bSalCash'], ['RSU', 'bRsu'], ['ESPP', 'bEspp'], ['401k Match', 'bK401'], ['Backdoor IRA', 'bIra'], ['Mega Backdoor Roth', 'bMega']];
-        if (par === 'baseline') bC.push(['Cash (Sign-on + Bonus)', 'bCashEv']);
-        if (par === 'B_invest') bC.push(['Invested Sign-on + Bonus', 'bInvCash']);
-        bC.forEach(([lbl, key]) => { b += '<tr><td>' + lbl + '</td>' + results.map(x => '<td>' + formatCurrency(x.r[key]) + '</td>').join('') + '</tr>' });
+        const bC = useInv ?
+          [['Salary Cash', 'bSalCashInv'], ['RSU', 'bRsu'], ['ESPP', 'bEsppInv'], ['401k Match', 'bK401'], ['Backdoor IRA', 'bIraInv'], ['Mega Backdoor Roth', 'bMegaInv'], ['Invested Sign-on + Bonus', 'bInvCash']] :
+          [['Salary Cash', 'bSalCash'], ['RSU', 'bRsu'], ['ESPP', 'bEspp'], ['401k Match', 'bK401'], ['Backdoor IRA', 'bIra'], ['Mega Backdoor Roth', 'bMega'], ['Cash (Sign-on + Bonus)', 'bCashEv']];
+        b += '<tr><th>Company B Components</th>' + breakdownCols + '</tr>';
+        bC.forEach(([lbl, key]) => { b += withYearlyDeltaRows(lbl, results.map(x => x.r[key])) });
         b += '<tr class="total-row"><td>Company B Total</td>' + bTs.map(v => '<td>' + formatCurrency(v) + '</td>').join('') + '</tr>';
         $('breakdown-table').innerHTML = b;
         $('table-title').textContent = 'Net Worth: Company A vs Company B';
+
+        const finalR = results[results.length - 1].r;
+        allocEntries = [{ label: 'A', trans: finalR.transparency.A }, { label: 'B', trans: finalR.transparency.B }];
+        timelineRows = [
+          {
+            label: 'A',
+            total: useInv ? finalR.aTotInv : finalR.aTotBase,
+            segments: [
+              { label: 'Salary Cash', value: useInv ? finalR.aSalCashInv : finalR.aSalCash },
+              { label: 'Investment Delta', value: finalR.aInvD },
+              { label: 'RSU', value: 0 },
+              { label: 'ESPP', value: useInv ? finalR.aEsppInv : finalR.aEspp },
+              { label: '401k Match', value: finalR.aK401 },
+              { label: 'Backdoor IRA', value: useInv ? finalR.aIraInv : finalR.aIra },
+              { label: 'Mega Backdoor', value: useInv ? finalR.aMegaInv : finalR.aMega },
+              { label: 'Sign-on + Bonus', value: useInv ? finalR.aInvCash : finalR.aCashEv }
+            ]
+          },
+          {
+            label: 'B',
+            total: useInv ? finalR.bTotInv : finalR.bTotBase,
+            segments: [
+              { label: 'Salary Cash', value: useInv ? finalR.bSalCashInv : finalR.bSalCash },
+              { label: 'Investment Delta', value: 0 },
+              { label: 'RSU', value: finalR.bRsu },
+              { label: 'ESPP', value: useInv ? finalR.bEsppInv : finalR.bEspp },
+              { label: '401k Match', value: finalR.bK401 },
+              { label: 'Backdoor IRA', value: useInv ? finalR.bIraInv : finalR.bIra },
+              { label: 'Mega Backdoor', value: useInv ? finalR.bMegaInv : finalR.bMega },
+              { label: 'Sign-on + Bonus', value: useInv ? finalR.bInvCash : finalR.bCashEv }
+            ]
+          }
+        ];
+      }
+
+      renderAllocationTable(allocEntries);
+      renderTimelineMix(timelineRows);
+      renderSensitivity(P, isPromo, par);
+      applyCollapsedSections();
+    }
+
+    const PRESET_KEY = 'compComparison.presets.v1';
+    const SHARE_KEY = 'state';
+    const STATE_EXCLUDE = new Set(['preset_name', 'preset_select']);
+
+    function collapsibleStateKey(section, idx) {
+      const label = section && section.label;
+      if (!label) return 'section|' + idx;
+      const text = (label.textContent || '').trim().replace(/\s+/g, ' ');
+      const idPart = label.id ? ('#' + label.id) : '';
+      return (label.tagName || 'NODE') + '|' + idPart + '|' + text + '|' + idx;
+    }
+
+    function readCollapsibleStateSnapshot() {
+      return collapsibleSections.map((section, idx) => ({
+        key: collapsibleStateKey(section, idx),
+        collapsed: !!section.collapsed
+      }));
+    }
+
+    function applyCollapsibleStateSnapshot(savedState) {
+      if (!Array.isArray(savedState) || !savedState.length) return;
+      const savedByKey = new Map(
+        savedState
+          .filter(item => item && typeof item.key === 'string')
+          .map(item => [item.key, !!item.collapsed])
+      );
+      collapsibleSections.forEach((section, idx) => {
+        const key = collapsibleStateKey(section, idx);
+        if (savedByKey.has(key)) section.collapsed = savedByKey.get(key);
+      });
+    }
+
+    function readStateSnapshot() {
+      const out = {};
+      document.querySelectorAll('input[id],select[id],textarea[id]').forEach(el => {
+        if (!el.id || STATE_EXCLUDE.has(el.id)) return;
+        if (el.type === 'checkbox') out[el.id] = !!el.checked;
+        else out[el.id] = el.value;
+      });
+      out.priorityOrder = readPriorityFromList();
+      out.collapsibleState = readCollapsibleStateSnapshot();
+      return out;
+    }
+
+    function applyStateSnapshot(state) {
+      if (!state || typeof state !== 'object') return;
+      for (const [id, val] of Object.entries(state)) {
+        if (id === 'priorityOrder' || id === 'collapsibleState') continue;
+        const el = $(id);
+        if (!el) continue;
+        if (el.type === 'checkbox') el.checked = !!val;
+        else el.value = String(val);
+      }
+      const order = Array.isArray(state.priorityOrder) ? state.priorityOrder.filter(x => PRIORITY_BUCKETS.includes(x)) : null;
+      if (order && order.length) renderPriorityList(order);
+      if (Object.prototype.hasOwnProperty.call(state, 'irs_base_year') && $('irs_base_year')) {
+        $('irs_base_year').dataset.manual = '1';
+      }
+      applyCollapsibleStateSnapshot(state.collapsibleState);
+      update();
+    }
+
+    function readPresets() {
+      const raw = localStorage.getItem(PRESET_KEY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    }
+
+    function writePresets(store) {
+      localStorage.setItem(PRESET_KEY, JSON.stringify(store));
+    }
+
+    function refreshPresetSelect() {
+      const store = readPresets();
+      const sel = $('preset_select');
+      const current = sel.value;
+      const names = Object.keys(store).sort((a, b) => a.localeCompare(b));
+      sel.innerHTML = '<option value="">Select preset</option>' + names.map(n => '<option value="' + n + '">' + n + '</option>').join('');
+      if (current && names.includes(current)) sel.value = current;
+    }
+
+    function setShareStatus(msg, isError) {
+      const el = $('share_status');
+      if (!msg) {
+        el.textContent = '';
+        el.style.display = 'none';
+        return;
+      }
+      el.style.display = 'block';
+      el.textContent = msg;
+      el.style.color = isError ? 'var(--neg)' : 'var(--text-muted)';
+    }
+
+    function copyText(text) {
+      if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text);
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+      return Promise.resolve();
+    }
+
+    function initPresetAndShare() {
+      refreshPresetSelect();
+      $('preset_save_btn').addEventListener('click', () => {
+        const name = $('preset_name').value.trim();
+        if (!name) { setShareStatus('Enter a preset name first.', true); return; }
+        const store = readPresets();
+        store[name] = readStateSnapshot();
+        writePresets(store);
+        refreshPresetSelect();
+        $('preset_select').value = name;
+        setShareStatus('Saved preset: ' + name, false);
+      });
+      $('preset_load_btn').addEventListener('click', () => {
+        const name = $('preset_select').value;
+        if (!name) { setShareStatus('Choose a preset to load.', true); return; }
+        const store = readPresets();
+        if (!store[name]) { setShareStatus('Preset not found.', true); return; }
+        applyStateSnapshot(store[name]);
+        setShareStatus('Loaded preset: ' + name, false);
+      });
+      $('preset_delete_btn').addEventListener('click', () => {
+        const name = $('preset_select').value;
+        if (!name) { setShareStatus('Choose a preset to delete.', true); return; }
+        const store = readPresets();
+        delete store[name];
+        writePresets(store);
+        refreshPresetSelect();
+        setShareStatus('Deleted preset: ' + name, false);
+      });
+      $('share_link_btn').addEventListener('click', () => {
+        const state = readStateSnapshot();
+        const url = new URL(window.location.href);
+        url.searchParams.set(SHARE_KEY, encodeURIComponent(JSON.stringify(state)));
+        copyText(url.toString())
+          .then(() => setShareStatus('Share link copied.', false))
+          .catch(() => setShareStatus('Unable to copy share link.', true));
+      });
+      const linkState = new URLSearchParams(window.location.search).get(SHARE_KEY);
+      if (linkState) {
+        try {
+          const parsed = JSON.parse(decodeURIComponent(linkState));
+          applyStateSnapshot(parsed);
+          setShareStatus('Loaded state from share link.', false);
+        } catch (e) {
+          setShareStatus('Share link could not be parsed.', true);
+        }
       }
     }
 
     let timer; function debounceUpdate() { clearTimeout(timer); timer = setTimeout(update, 150) }
+    if ($('start_date')) {
+      $('start_date').addEventListener('change', () => {
+        alignIrsBaseYearWithStartYear(false);
+        update();
+      });
+    }
+    if ($('irs_base_year')) {
+      const markManualIrsBaseYear = () => { $('irs_base_year').dataset.manual = '1' };
+      $('irs_base_year').addEventListener('input', markManualIrsBaseYear);
+      $('irs_base_year').addEventListener('change', markManualIrsBaseYear);
+    }
     document.querySelectorAll('select').forEach(el => el.addEventListener('change', update));
     document.querySelectorAll('input[type=checkbox]').forEach(el => el.addEventListener('change', update));
-    document.querySelectorAll('input[type=number],input[type=date],input[type=text]').forEach(el => el.addEventListener('input', debounceUpdate));
+    document.querySelectorAll('input[type=number],input[type=date],input[type=text],textarea').forEach(el => el.addEventListener('input', debounceUpdate));
 
     // ===== CSV DOWNLOAD =====
     $('csv-btn').addEventListener('click', function () {
@@ -2940,21 +4709,21 @@
         if(j.mode==='direct'){
           const r=simulateDirect(pp);
           rows.push([j.mode,j.filing,j.waLabel,j.growth,j.aRaise,j.lv1Ref,j.maxDef,j.tenure,j.lv2Ref,'A_base',
-            r.aSalCash,r.aInvD,0,r.aEspp,r.aK401,r.aIra,r.aIraLeak,r.aMega,r.aCashEv,0,r.aTotBase].map(v=>typeof v==='number'?Math.round(v):v));
+            r.aSalCash,r.aInvD,0,r.aEspp,r.aK401,r.aIra,r.aMega,r.aCashEv,0,r.aTotBase].map(v=>typeof v==='number'?Math.round(v):v));
           rows.push([j.mode,j.filing,j.waLabel,j.growth,j.aRaise,j.lv1Ref,j.maxDef,j.tenure,j.lv2Ref,'A_inv',
-            r.aSalCashInv,r.aInvD,0,r.aEsppInv,r.aK401,r.aIraInv,r.aIraLeak,r.aMegaInv,0,r.aInvCash,r.aTotInv].map(v=>typeof v==='number'?Math.round(v):v));
+            r.aSalCashInv,r.aInvD,0,r.aEsppInv,r.aK401,r.aIraInv,r.aMegaInv,0,r.aInvCash,r.aTotInv].map(v=>typeof v==='number'?Math.round(v):v));
           rows.push([j.mode,j.filing,j.waLabel,j.growth,j.aRaise,j.lv1Ref,j.maxDef,j.tenure,j.lv2Ref,'B_base',
-            r.bSalCash,0,r.bRsu,r.bEspp,r.bK401,r.bIra,r.bIraLeak,r.bMega,r.bCashEv,0,r.bTotBase].map(v=>typeof v==='number'?Math.round(v):v));
+            r.bSalCash,0,r.bRsu,r.bEspp,r.bK401,r.bIra,r.bMega,r.bCashEv,0,r.bTotBase].map(v=>typeof v==='number'?Math.round(v):v));
           rows.push([j.mode,j.filing,j.waLabel,j.growth,j.aRaise,j.lv1Ref,j.maxDef,j.tenure,j.lv2Ref,'B_inv',
-            r.bSalCashInv,0,r.bRsu,r.bEsppInv,r.bK401,r.bIraInv,r.bIraLeak,r.bMegaInv,0,r.bInvCash,r.bTotInv].map(v=>typeof v==='number'?Math.round(v):v));
+            r.bSalCashInv,0,r.bRsu,r.bEsppInv,r.bK401,r.bIraInv,r.bMegaInv,0,r.bInvCash,r.bTotInv].map(v=>typeof v==='number'?Math.round(v):v));
         }else{
           const r=simulatePromo(pp);
           for(const pk of ['aa','bb','ab','ba']){
             const p=r[pk];
             rows.push([j.mode,j.filing,j.waLabel,j.growth,j.aRaise,j.lv1Ref,j.maxDef,j.tenure,j.lv2Ref,pk+'_base',
-              p.salCash,p.invD,p.rsu,p.espp,p.k401,p.ira,p.iraLeak,p.mega,p.aCashEv+p.bCashEv,0,p.totBase].map(v=>typeof v==='number'?Math.round(v):v));
+              p.salCash,p.invD,p.rsu,p.espp,p.k401,p.ira,p.mega,p.aCashEv+p.bCashEv,0,p.totBase].map(v=>typeof v==='number'?Math.round(v):v));
             rows.push([j.mode,j.filing,j.waLabel,j.growth,j.aRaise,j.lv1Ref,j.maxDef,j.tenure,j.lv2Ref,pk+'_inv',
-              p.salCashInv,p.invD,p.rsu,p.esppInv,p.k401,p.iraInv,p.iraLeak,p.megaInv,0,p.invCash,p.totInv].map(v=>typeof v==='number'?Math.round(v):v));
+              p.salCashInv,p.invD,p.rsu,p.esppInv,p.k401,p.iraInv,p.megaInv,0,p.invCash,p.totInv].map(v=>typeof v==='number'?Math.round(v):v));
           }
         }
         if(ji%500===0)self.postMessage({type:'progress',done:ji,total:jobs.length});
@@ -2969,7 +4738,7 @@
           status.textContent = 'Running... ' + e.data.done.toLocaleString() + ' / ' + totalJobs.toLocaleString();
         } else if (e.data.type === 'done') {
           const hdr = ['mode', 'filing', 'wa_tax', 'growth_pct', 'a_raise_pct', 'lv1_ref', 'max_def', 'tenure', 'lv2_ref', 'path',
-            'sal_cash', 'inv_delta', 'rsu', 'espp', 'k401_match', 'backdoor_ira', 'backdoor_ira_tax_leakage', 'mega_roth', 'cash_sign_bonus', 'inv_sign_bonus', 'total'];
+            'sal_cash', 'inv_delta', 'rsu', 'espp', 'k401_match', 'backdoor_ira', 'mega_roth', 'cash_sign_bonus', 'inv_sign_bonus', 'total'];
           let csv = hdr.join(',') + '\n';
           for (const row of e.data.rows) csv += row.join(',') + '\n';
           const a = document.createElement('a');
@@ -2984,6 +4753,10 @@
     });
 
     initPriorityOrder();
+    reorderPromoSections();
+    initCollapsibleSections();
+    initPresetAndShare();
+    alignIrsBaseYearWithStartYear(false);
     update();
   </script>
 </body>
