@@ -385,6 +385,110 @@
       pointer-events: none
     }
 
+    .section-title.has-reset-btn {
+      position: relative;
+      padding-right: 40px
+    }
+
+    .section-title .section-title-action {
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface-soft);
+      color: var(--text-main);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 2
+    }
+
+    .section-title .section-title-action:hover {
+      background: var(--surface-alt)
+    }
+
+    .section-title .section-title-action svg {
+      width: 14px;
+      height: 14px;
+      pointer-events: none
+    }
+
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(9, 8, 16, 0.56);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1200;
+      padding: 16px
+    }
+
+    .modal-overlay.is-open {
+      display: flex
+    }
+
+    .modal-card {
+      width: min(420px, 100%);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: 0 12px 36px rgba(12, 10, 20, 0.28);
+      padding: 16px 16px 14px
+    }
+
+    .modal-title {
+      margin: 0 0 8px;
+      font-size: 0.9em;
+      font-weight: 700;
+      color: var(--text-main)
+    }
+
+    .modal-text {
+      margin: 0 0 14px;
+      font-size: 0.8em;
+      color: var(--text-muted);
+      line-height: 1.4
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px
+    }
+
+    .modal-actions button {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface-soft);
+      color: var(--text-main);
+      padding: 8px 12px;
+      font-size: 0.78em;
+      font-weight: 600;
+      cursor: pointer;
+      min-width: 78px
+    }
+
+    .modal-actions button:hover {
+      background: var(--surface-alt)
+    }
+
+    .modal-actions .btn-danger {
+      border-color: rgba(192, 100, 116, 0.42);
+      color: var(--neg);
+      background: rgba(192, 100, 116, 0.08)
+    }
+
+    .modal-actions .btn-danger:hover {
+      background: rgba(192, 100, 116, 0.14)
+    }
+
     .ctrl-group input[type=number] {
       font-variant-numeric: tabular-nums
     }
@@ -1204,7 +1308,16 @@
   <div class="container">
     <div class="setup-row" id="top-tools-row">
       <div class="panel">
-        <div class="section-title">Presets &amp; Share</div>
+        <div class="section-title has-reset-btn">Presets &amp; Share
+          <button id="reset_defaults_btn" type="button" class="section-title-action" title="Reset to Defaults"
+            aria-label="Reset to Defaults">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+              <path fill-rule="evenodd" d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2z" />
+              <path
+                d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466" />
+            </svg>
+          </button>
+        </div>
         <div class="ctrl-grid" id="preset-grid">
           <div class="ctrl-group"><label>Preset Name</label>
             <input type="text" id="preset_name" placeholder="e.g. Bay Area Offer Set">
@@ -1245,14 +1358,6 @@
                     d="M13.5 1a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3M11 2.5a2.5 2.5 0 1 1 .603 1.628l-6.718 3.12a2.5 2.5 0 0 1 0 1.504l6.718 3.12a2.5 2.5 0 1 1-.488.876l-6.718-3.12a2.5 2.5 0 1 1 0-3.256l6.718-3.12A2.5 2.5 0 0 1 11 2.5m-8.5 4a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3m11 5.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3" />
                 </svg>
               </button>
-              <button id="reset_defaults_btn" type="button" class="icon-btn" title="Reset to Defaults"
-                aria-label="Reset to Defaults">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
-                  <path d="M8 3a5 5 0 1 0 4.546 2.916.5.5 0 1 1 .908-.418A6 6 0 1 1 8 2v1z" />
-                  <path
-                    d="M8 0a.5.5 0 0 1 .5.5V3a.5.5 0 0 1-1 0V.5A.5.5 0 0 1 8 0m-.354 3.354a.5.5 0 0 1 .708 0L9.5 4.5l1.146-1.146a.5.5 0 0 1 .708.708L9.854 5.56a.5.5 0 0 1-.708 0L7.646 4.062a.5.5 0 0 1 0-.708" />
-                </svg>
-              </button>
             </div>
           </div>
           <div id="share_status" class="note full" style="display:none"></div>
@@ -1266,10 +1371,10 @@
       <div class="ctrl-grid">
         <div class="sub-label" id="partner_label" style="margin-top:0;padding-top:0;border-top:none">Partner</div>
         <div class="ctrl-group input-prefix" id="partner_income_ctrl"><label>Partner Income</label>
-          <input type="number" id="partner_income" value="450000" step="10000">
+          <input type="number" id="partner_income" value="400000" step="10000">
         </div>
-        <div class="ctrl-group input-prefix" id="partner_raise_ctrl"><label>Partner Raise per Year</label>
-          <input type="number" id="partner_raise" value="25000" step="5000">
+        <div class="ctrl-group input-prefix" id="partner_raise_ctrl"><label>Partner Raise ↑/YR</label>
+          <input type="number" id="partner_raise" value="20000" step="5000">
         </div>
         <div class="sub-label">State Tax</div>
         <div class="ctrl-group"><label id="lbl_state_tax_pct">State Tax %</label>
@@ -1322,10 +1427,10 @@
           <input type="number" id="partner_401k" value="24500" step="500">
         </div>
         <div class="ctrl-group input-prefix"><label>Join Year W2 Floor</label>
-          <input type="number" id="w2_floor_join" value="550000" step="50000">
+          <input type="number" id="w2_floor_join" value="500000" step="50000">
         </div>
         <div class="ctrl-group input-prefix"><label>Leave Year W2 Floor</label>
-          <input type="number" id="w2_floor_leave" value="600000" step="50000">
+          <input type="number" id="w2_floor_leave" value="550000" step="50000">
         </div>
         <div class="sub-label">IRS Base Year</div>
         <div class="ctrl-group"><label>IRS Base Year</label>
@@ -1465,10 +1570,7 @@
         <div class="section-title">Company A</div>
         <div class="ctrl-grid">
           <div class="ctrl-group input-prefix"><label>Base Salary</label>
-            <input type="number" id="a_base" value="550000" step="5000">
-          </div>
-          <div class="ctrl-group"><label>Bonus %</label>
-            <input type="number" id="a_bonus_pct" value="0" step="1" min="0" max="100">
+            <input type="number" id="a_base" value="500000" step="5000">
           </div>
           <div class="ctrl-group input-prefix"><label>Sign-on 1</label>
             <input type="number" id="a_sign1" value="0" step="5000">
@@ -1476,25 +1578,28 @@
           <div class="ctrl-group input-prefix"><label>Sign-on 2</label>
             <input type="number" id="a_sign2" value="0" step="5000">
           </div>
-          <div class="sub-label">Raises &amp; Dates</div>
+          <div class="sub-label">Raises, Bonus &amp; Dates</div>
+          <div class="ctrl-group"><label>Bonus %</label>
+            <input type="number" id="a_bonus_pct" value="0" step="1" min="0" max="100">
+          </div>
           <div class="ctrl-group"><label>Raise %</label>
             <input type="number" id="a_raise_pct" value="0" step="0.5" min="0" max="50">
           </div>
           <div class="ctrl-group"><label>Raise Dates</label>
-            <input type="text" id="a_raise_dates" value="Oct 1" placeholder="Oct 1">
+            <input type="text" id="a_raise_dates" value="Sep 1" placeholder="Oct 1">
           </div>
           <div class="ctrl-group"><label>Bonus Date</label>
-            <input type="text" id="a_bonus_date" value="Oct 1" placeholder="Oct 1">
+            <input type="text" id="a_bonus_date" value="Sep 1" placeholder="Oct 1">
           </div>
           <div class="sub-label" id="a_contribution_plan_header">Contribution Plan</div>
           <div class="plan-hint">Fields shown depend on Enable + Mode.</div>
           <div class="plan-bucket">401k Settings</div>
           <div class="ctrl-group check-group toggle-group full" id="enable_401k_contrib_ctrl">
             <input type="checkbox" id="enable_401k_contrib" checked>
-            <label for="enable_401k_contrib">Enable 401k</label>
+            <label for="enable_401k_contrib">401k</label>
           </div>
           <div class="ctrl-group"><label>Max Deferral %</label>
-            <input type="number" id="a_max_def" value="75" step="5" min="0">
+            <input type="number" id="a_max_def" value="70" step="5" min="0">
           </div>
           <div class="ctrl-group"><label>Match Basis</label>
             <select id="a_match_type">
@@ -1503,7 +1608,7 @@
               <option value="contrib_max">Dollar Cap</option>
             </select>
           </div>
-          <div class="ctrl-group"><label>401k Match Cap</label>
+          <div class="ctrl-group"><label>Match Cap</label>
             <input type="number" id="a_match_value" value="4" step="0.5" min="0">
           </div>
           <div class="ctrl-group" id="a_match_vest_ctrl"><label>Match %</label>
@@ -1514,7 +1619,7 @@
           </div>
           <div class="ctrl-group check-group toggle-group full">
             <input type="checkbox" id="a_match_trueup" checked>
-            <label for="a_match_trueup">401k Match True-up</label>
+            <label for="a_match_trueup">Match True-up</label>
           </div>
           <div class="ctrl-group"><label>Mode</label>
             <select id="a_k401_mode">
@@ -1529,7 +1634,7 @@
           <div class="ctrl-group input-prefix" id="k401_target_base_ctrl"><label>Target/Yr</label>
             <input type="number" id="k401_target_base" value="" step="500" placeholder="Blank = IRS max">
           </div>
-          <div class="ctrl-group input-prefix" id="k401_target_inc_ctrl"><label>↑/YR</label>
+          <div class="ctrl-group input-prefix" id="k401_target_inc_ctrl"><label>Target ↑/YR (Fixed)</label>
             <input type="number" id="k401_target_inc" value="0" step="100">
           </div>
           <div class="ctrl-group" id="k401_timing_ctrl"><label>Timing</label>
@@ -1541,7 +1646,7 @@
           <div class="plan-bucket">IRA Settings</div>
           <div class="ctrl-group check-group toggle-group full" id="enable_backdoor_ira_ctrl">
             <input type="checkbox" id="enable_backdoor_ira" checked>
-            <label for="enable_backdoor_ira">Enable IRA</label>
+            <label for="enable_backdoor_ira">Backdoor IRA</label>
           </div>
           <div class="ctrl-group"><label>Mode</label>
             <select id="a_ira_mode">
@@ -1556,7 +1661,7 @@
           <div class="ctrl-group input-prefix" id="ira_target_base_ctrl"><label>Target/Yr</label>
             <input type="number" id="ira_target_base" value="" step="100" placeholder="Blank = IRS IRA limit">
           </div>
-          <div class="ctrl-group input-prefix" id="ira_target_inc_ctrl"><label>↑/YR</label>
+          <div class="ctrl-group input-prefix" id="ira_target_inc_ctrl"><label>Target ↑/YR (Fixed)</label>
             <input type="number" id="ira_target_inc" value="0" step="50">
           </div>
           <div class="ctrl-group" id="backdoor_timing_ctrl">
@@ -1566,10 +1671,10 @@
               <option value="spread-paychecks">Per paycheck</option>
             </select>
           </div>
-          <div class="plan-bucket">Mega Settings</div>
+          <div class="plan-bucket">Mega Backdoor Roth Settings</div>
           <div class="ctrl-group check-group toggle-group full" id="enable_mega_roth_ctrl">
             <input type="checkbox" id="enable_mega_roth" checked>
-            <label for="enable_mega_roth">Enable Mega</label>
+            <label for="enable_mega_roth">Mega Backdoor Roth</label>
           </div>
           <div class="ctrl-group"><label>Mode</label>
             <select id="a_mega_mode">
@@ -1584,7 +1689,7 @@
           <div class="ctrl-group input-prefix" id="mega_target_base_ctrl"><label>Target/Yr</label>
             <input type="number" id="mega_target_base" value="" step="1000" placeholder="Blank = 415(c) capacity">
           </div>
-          <div class="ctrl-group input-prefix" id="mega_target_inc_ctrl"><label>↑/YR</label>
+          <div class="ctrl-group input-prefix" id="mega_target_inc_ctrl"><label>Target ↑/YR (Fixed)</label>
             <input type="number" id="mega_target_inc" value="0" step="250">
           </div>
           <div class="ctrl-group" id="mega_timing_ctrl"><label>Timing</label>
@@ -1596,13 +1701,13 @@
           <div class="plan-bucket">ESPP Settings</div>
           <div class="ctrl-group check-group toggle-group full" id="enable_espp_ctrl">
             <input type="checkbox" id="enable_espp">
-            <label for="enable_espp">Enable ESPP</label>
+            <label for="enable_espp">ESPP</label>
           </div>
-          <div class="ctrl-group"><label>ESPP Contribution %</label>
+          <div class="ctrl-group"><label>Contribution %</label>
             <input type="number" id="a_espp_pct" value="0" step="1" min="0" max="15">
           </div>
-          <div class="ctrl-group"><label>ESPP Discount %</label>
-            <input type="number" id="a_espp_disc" value="0" step="1" min="0" max="25">
+          <div class="ctrl-group"><label>Discount %</label>
+            <input type="number" id="a_espp_disc" value="5" step="1" min="0" max="25">
           </div>
           <div class="ctrl-group"><label>Mode</label>
             <select id="a_espp_mode">
@@ -1617,17 +1722,17 @@
               <option value="spread-paychecks">Per paycheck</option>
             </select>
           </div>
-          <div class="ctrl-group"><label>ESPP P1 Start</label>
-            <input type="text" id="a_espp_p1_start" value="Feb 1" placeholder="Feb 1">
+          <div class="ctrl-group"><label>P1 Start</label>
+            <input type="text" id="a_espp_p1_start" value="Mar 1" placeholder="Feb 1">
           </div>
-          <div class="ctrl-group"><label>ESPP P1 End</label>
-            <input type="text" id="a_espp_p1_end" value="Jul 31" placeholder="Jul 31">
+          <div class="ctrl-group"><label>P1 End</label>
+            <input type="text" id="a_espp_p1_end" value="Aug 31" placeholder="Jul 31">
           </div>
-          <div class="ctrl-group"><label>ESPP P2 Start</label>
-            <input type="text" id="a_espp_p2_start" value="Aug 1" placeholder="Aug 1">
+          <div class="ctrl-group"><label>P2 Start</label>
+            <input type="text" id="a_espp_p2_start" value="Sep 1" placeholder="Aug 1">
           </div>
-          <div class="ctrl-group"><label>ESPP P2 End</label>
-            <input type="text" id="a_espp_p2_end" value="Jan 31" placeholder="Jan 31">
+          <div class="ctrl-group"><label>P2 End</label>
+            <input type="text" id="a_espp_p2_end" value="Feb 28" placeholder="Jan 31">
           </div>
           <div class="ctrl-group" id="a_espp_pct_ctrl"><label>% Salary</label>
             <input type="number" id="a_espp_pct_plan" value="5" step="0.5" min="0" max="100">
@@ -1641,7 +1746,7 @@
           </div>
           <div class="sub-label" id="a_lv2_header">2nd Level (Promo)</div>
           <div class="ctrl-group input-prefix" id="a_lv2_base_ctrl"><label>Base Salary</label>
-            <input type="number" id="a_lv2_base" value="650000" step="5000">
+            <input type="number" id="a_lv2_base" value="600000" step="5000">
           </div>
           <div class="ctrl-group" id="a_lv2_raise_ctrl"><label>Raise %</label>
             <input type="number" id="a_lv2_raise_pct" value="0" step="0.5" min="0" max="50">
@@ -1661,39 +1766,39 @@
         <div class="section-title">Company B</div>
         <div class="ctrl-grid">
           <div class="ctrl-group input-prefix"><label>Base Salary</label>
-            <input type="number" id="b_lv1_base" value="225000" step="5000">
-          </div>
-          <div class="ctrl-group input-prefix"><label>Initial Grant</label>
-            <input type="number" id="b_lv1_grant" value="700000" step="10000">
-          </div>
-          <div class="ctrl-group input-prefix"><label>Refresher</label>
-            <input type="number" id="lv1_ref" value="120000" step="10000">
-          </div>
-          <div class="ctrl-group"><label>Bonus %</label>
-            <input type="number" id="b_lv1_bonus_pct" value="10" step="1" min="0" max="100">
+            <input type="number" id="b_lv1_base" value="240000" step="5000">
           </div>
           <div class="ctrl-group input-prefix"><label>Sign-on 1</label>
-            <input type="number" id="b_lv1_sign1" value="100000" step="5000">
+            <input type="number" id="b_lv1_sign1" value="75000" step="5000">
           </div>
           <div class="ctrl-group input-prefix"><label>Sign-on 2</label>
-            <input type="number" id="b_lv1_sign2" value="30000" step="5000">
+            <input type="number" id="b_lv1_sign2" value="25000" step="5000">
           </div>
-          <div class="sub-label">Raises &amp; Dates</div>
+          <div class="sub-label">Raises, Bonus &amp; Dates</div>
+          <div class="ctrl-group input-prefix"><label>Refresher</label>
+            <input type="number" id="lv1_ref" value="125000" step="10000">
+          </div>
+          <div class="ctrl-group"><label>Bonus %</label>
+            <input type="number" id="b_lv1_bonus_pct" value="12" step="1" min="0" max="100">
+          </div>
           <div class="ctrl-group"><label>Raise %</label>
-            <input type="number" id="b_raise_pct" value="3" step="0.5" min="0" max="50">
+            <input type="number" id="b_raise_pct" value="4" step="0.5" min="0" max="50">
           </div>
           <div class="ctrl-group"><label>Raise Date</label>
-            <input type="text" id="b_raise_date" value="Oct 15" placeholder="Oct 15">
+            <input type="text" id="b_raise_date" value="Sep 15" placeholder="Oct 15">
           </div>
           <div class="ctrl-group"><label>Vest Dates</label>
-            <input type="text" id="vest_dates" value="Apr 15, Oct 15" placeholder="Apr 15, Oct 15">
+            <input type="text" id="vest_dates" value="Mar 15, Sep 15" placeholder="Apr 15, Oct 15">
           </div>
           <div class="ctrl-group"><label>Bonus / Grant Date</label>
-            <input type="text" id="bonus_grant_date" value="Oct 16" placeholder="Oct 16">
+            <input type="text" id="bonus_grant_date" value="Sep 16" placeholder="Oct 16">
           </div>
           <div class="sub-label">Equity Config</div>
+          <div class="ctrl-group input-prefix"><label>Initial Grant</label>
+            <input type="number" id="b_lv1_grant" value="650000" step="10000">
+          </div>
           <div class="ctrl-group input-prefix"><label>Stock Price</label>
-            <input type="number" id="b_stock_price" value="260" step="5">
+            <input type="number" id="b_stock_price" value="250" step="5">
           </div>
           <div class="ctrl-group"><label>Grant Unit</label>
             <select id="b_grant_unit">
@@ -1716,10 +1821,10 @@
           <div class="plan-bucket">401k Settings</div>
           <div class="ctrl-group check-group toggle-group full" id="b_enable_401k_contrib_ctrl">
             <input type="checkbox" id="b_enable_401k_contrib" checked>
-            <label for="b_enable_401k_contrib">Enable 401k</label>
+            <label for="b_enable_401k_contrib">401k</label>
           </div>
           <div class="ctrl-group"><label>Max Deferral %</label>
-            <input type="number" id="b_max_def" value="75" step="5" min="0">
+            <input type="number" id="b_max_def" value="70" step="5" min="0">
           </div>
           <div class="ctrl-group"><label>Match Basis</label>
             <select id="b_match_type">
@@ -1728,7 +1833,7 @@
               <option value="contrib_max">Dollar Cap</option>
             </select>
           </div>
-          <div class="ctrl-group"><label>401k Match Cap</label>
+          <div class="ctrl-group"><label>Match Cap</label>
             <input type="number" id="b_match_value" value="6" step="0.5" min="0">
           </div>
           <div class="ctrl-group" id="b_match_vest_ctrl"><label>Match %</label>
@@ -1739,7 +1844,7 @@
           </div>
           <div class="ctrl-group check-group toggle-group full">
             <input type="checkbox" id="b_match_trueup" checked>
-            <label for="b_match_trueup">401k Match True-up</label>
+            <label for="b_match_trueup">Match True-up</label>
           </div>
           <div class="ctrl-group"><label>Mode</label>
             <select id="b_k401_mode">
@@ -1754,7 +1859,7 @@
           <div class="ctrl-group input-prefix" id="b_k401_target_base_ctrl"><label>Target/Yr</label>
             <input type="number" id="b_k401_target_base" value="" step="500" placeholder="Blank = IRS max">
           </div>
-          <div class="ctrl-group input-prefix" id="b_k401_target_inc_ctrl"><label>↑/YR</label>
+          <div class="ctrl-group input-prefix" id="b_k401_target_inc_ctrl"><label>Target ↑/YR (Fixed)</label>
             <input type="number" id="b_k401_target_inc" value="0" step="100">
           </div>
           <div class="ctrl-group" id="b_k401_timing_ctrl"><label>Timing</label>
@@ -1766,7 +1871,7 @@
           <div class="plan-bucket">IRA Settings</div>
           <div class="ctrl-group check-group toggle-group full" id="b_enable_backdoor_ira_ctrl">
             <input type="checkbox" id="b_enable_backdoor_ira" checked>
-            <label for="b_enable_backdoor_ira">Enable IRA</label>
+            <label for="b_enable_backdoor_ira">Backdoor IRA</label>
           </div>
           <div class="ctrl-group"><label>Mode</label>
             <select id="b_ira_mode">
@@ -1781,7 +1886,7 @@
           <div class="ctrl-group input-prefix" id="b_ira_target_base_ctrl"><label>Target/Yr</label>
             <input type="number" id="b_ira_target_base" value="" step="100" placeholder="Blank = IRS IRA limit">
           </div>
-          <div class="ctrl-group input-prefix" id="b_ira_target_inc_ctrl"><label>↑/YR</label>
+          <div class="ctrl-group input-prefix" id="b_ira_target_inc_ctrl"><label>Target ↑/YR (Fixed)</label>
             <input type="number" id="b_ira_target_inc" value="0" step="50">
           </div>
           <div class="ctrl-group" id="b_backdoor_timing_ctrl"><label>Timing</label>
@@ -1790,10 +1895,10 @@
               <option value="spread-paychecks">Per paycheck</option>
             </select>
           </div>
-          <div class="plan-bucket">Mega Settings</div>
+          <div class="plan-bucket">Mega Backdoor Roth Settings</div>
           <div class="ctrl-group check-group toggle-group full" id="b_enable_mega_roth_ctrl">
             <input type="checkbox" id="b_enable_mega_roth" checked>
-            <label for="b_enable_mega_roth">Enable Mega</label>
+            <label for="b_enable_mega_roth">Mega Backdoor Roth</label>
           </div>
           <div class="ctrl-group"><label>Mode</label>
             <select id="b_mega_mode">
@@ -1808,7 +1913,7 @@
           <div class="ctrl-group input-prefix" id="b_mega_target_base_ctrl"><label>Target/Yr</label>
             <input type="number" id="b_mega_target_base" value="" step="1000" placeholder="Blank = 415(c) capacity">
           </div>
-          <div class="ctrl-group input-prefix" id="b_mega_target_inc_ctrl"><label>↑/YR</label>
+          <div class="ctrl-group input-prefix" id="b_mega_target_inc_ctrl"><label>Target ↑/YR (Fixed)</label>
             <input type="number" id="b_mega_target_inc" value="0" step="250">
           </div>
           <div class="ctrl-group" id="b_mega_timing_ctrl"><label>Timing</label>
@@ -1820,13 +1925,13 @@
           <div class="plan-bucket">ESPP Settings</div>
           <div class="ctrl-group check-group toggle-group full" id="b_enable_espp_ctrl">
             <input type="checkbox" id="b_enable_espp" checked>
-            <label for="b_enable_espp">Enable ESPP</label>
+            <label for="b_enable_espp">ESPP</label>
           </div>
-          <div class="ctrl-group"><label>ESPP Contribution %</label>
+          <div class="ctrl-group"><label>Contribution %</label>
             <input type="number" id="b_espp_pct" value="10" step="1" min="0" max="15">
           </div>
-          <div class="ctrl-group"><label>ESPP Discount %</label>
-            <input type="number" id="b_espp_disc" value="15" step="1" min="0" max="25">
+          <div class="ctrl-group"><label>Discount %</label>
+            <input type="number" id="b_espp_disc" value="12" step="1" min="0" max="25">
           </div>
           <div class="ctrl-group"><label>Mode</label>
             <select id="b_espp_mode">
@@ -1841,17 +1946,17 @@
               <option value="spread-paychecks">Per paycheck</option>
             </select>
           </div>
-          <div class="ctrl-group"><label>ESPP P1 Start</label>
-            <input type="text" id="b_espp_p1_start" value="Feb 1" placeholder="Feb 1">
+          <div class="ctrl-group"><label>P1 Start</label>
+            <input type="text" id="b_espp_p1_start" value="Mar 1" placeholder="Feb 1">
           </div>
-          <div class="ctrl-group"><label>ESPP P1 End</label>
-            <input type="text" id="b_espp_p1_end" value="Jul 31" placeholder="Jul 31">
+          <div class="ctrl-group"><label>P1 End</label>
+            <input type="text" id="b_espp_p1_end" value="Aug 31" placeholder="Jul 31">
           </div>
-          <div class="ctrl-group"><label>ESPP P2 Start</label>
-            <input type="text" id="b_espp_p2_start" value="Aug 1" placeholder="Aug 1">
+          <div class="ctrl-group"><label>P2 Start</label>
+            <input type="text" id="b_espp_p2_start" value="Sep 1" placeholder="Aug 1">
           </div>
-          <div class="ctrl-group"><label>ESPP P2 End</label>
-            <input type="text" id="b_espp_p2_end" value="Jan 31" placeholder="Jan 31">
+          <div class="ctrl-group"><label>P2 End</label>
+            <input type="text" id="b_espp_p2_end" value="Feb 28" placeholder="Jan 31">
           </div>
           <div class="ctrl-group"><label>% Salary</label>
             <input type="number" id="b_espp_pct_plan" value="5" step="0.5" min="0" max="100">
@@ -1865,22 +1970,22 @@
           </div>
           <div class="sub-label" id="b_lv2_header">2nd Level (Promo)</div>
           <div class="ctrl-group input-prefix" id="b_lv2_base_ctrl"><label>Base Salary</label>
-            <input type="number" id="b_lv2_base" value="260000" step="5000">
+            <input type="number" id="b_lv2_base" value="300000" step="5000">
           </div>
           <div class="ctrl-group input-prefix" id="b_lv2_grant_ctrl"><label>Initial Grant</label>
-            <input type="number" id="b_lv2_grant" value="1050000" step="10000">
+            <input type="number" id="b_lv2_grant" value="900000" step="10000">
           </div>
           <div class="ctrl-group input-prefix" id="lv2_ref_ctrl"><label>Refresher</label>
-            <input type="number" id="lv2_ref" value="200000" step="10000">
+            <input type="number" id="lv2_ref" value="175000" step="10000">
           </div>
           <div class="ctrl-group" id="b_lv2_bonus_ctrl"><label>Bonus %</label>
-            <input type="number" id="b_lv2_bonus_pct" value="13" step="1" min="0" max="100">
+            <input type="number" id="b_lv2_bonus_pct" value="12" step="1" min="0" max="100">
           </div>
           <div class="ctrl-group input-prefix" id="b_lv2_sign1_ctrl"><label>Sign-on 1</label>
-            <input type="number" id="b_lv2_sign1" value="100000" step="5000">
+            <input type="number" id="b_lv2_sign1" value="75000" step="5000">
           </div>
           <div class="ctrl-group input-prefix" id="b_lv2_sign2_ctrl"><label>Sign-on 2</label>
-            <input type="number" id="b_lv2_sign2" value="40000" step="5000">
+            <input type="number" id="b_lv2_sign2" value="25000" step="5000">
           </div>
         </div>
       </div>
@@ -1920,10 +2025,10 @@
             <input type="number" id="prior_401k" value="15000" step="500">
           </div>
           <div class="ctrl-group input-prefix" id="reserve_cash_ctrl"><label>Reserve Cash per Year</label>
-            <input type="number" id="reserve_cash" value="60000" step="10000" min="0">
+            <input type="number" id="reserve_cash" value="50000" step="10000" min="0">
           </div>
-          <div class="ctrl-group input-prefix" id="reserve_cash_inc_ctrl"><label>Reserve Cash Increase / Year</label>
-            <input type="number" id="reserve_cash_inc" value="5000" step="1000">
+          <div class="ctrl-group input-prefix" id="reserve_cash_inc_ctrl"><label>Reserve Cash ↑/YR</label>
+            <input type="number" id="reserve_cash_inc" value="3000" step="1000">
           </div>
         </div>
       </div>
@@ -1931,13 +2036,13 @@
         <div class="section-title">Timeline</div>
         <div class="ctrl-grid cols-3">
           <div class="ctrl-group"><label>Start Date</label>
-            <input type="date" id="start_date" value="2026-04-15">
+            <input type="date" id="start_date" value="2026-01-15">
           </div>
           <div class="ctrl-group"><label>Leave Date</label>
-            <input type="date" id="leave_date" value="2030-04-15">
+            <input type="date" id="leave_date" value="2030-01-15">
           </div>
           <div class="ctrl-group" id="move_date_ctrl"><label>Move Date</label>
-            <input type="date" id="move_date" value="2028-04-15">
+            <input type="date" id="move_date" value="2028-01-15">
           </div>
         </div>
       </div>
@@ -1964,7 +2069,7 @@
             <li><b>Net Worth + Delta:</b> shown as after-tax cumulative values at each milestone date.</li>
             <li><b>Exclude reserve cash from net worth + delta:</b> toggles whether reserve drag is included in
               displayed net worth/delta values (breakdown component rows still show modeled components).</li>
-            <li><b>Reserve cash assumptions:</b> Reserve Cash per Year applies annually and Reserve Cash Increase / Year
+            <li><b>Reserve cash assumptions:</b> Reserve Cash per Year applies annually and Reserve Cash ↑/YR
               steps that annual reserve higher each year; partial periods are pro-rated.</li>
             <li><b>Salary Cash:</b> after-tax base pay after 401k, Backdoor IRA, ESPP, and Mega Backdoor Roth payroll
               contributions.</li>
@@ -2067,6 +2172,16 @@
         <h2>Timeline Mix</h2>
         <div id="timeline-legend" class="timeline-legend"></div>
         <div id="timeline-chart"></div>
+      </div>
+    </div>
+  </div>
+  <div id="reset_modal" class="modal-overlay" aria-hidden="true">
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="reset_modal_title">
+      <p id="reset_modal_title" class="modal-title">Reset to defaults?</p>
+      <p class="modal-text">This will clear this page’s saved local settings and reload default values.</p>
+      <div class="modal-actions">
+        <button id="reset_modal_cancel" type="button">Cancel</button>
+        <button id="reset_modal_confirm" type="button" class="btn-danger">Reset</button>
       </div>
     </div>
   </div>
@@ -4651,9 +4766,6 @@
           i === 1 ? '<td>—</td>' : '<td class="' + (d >= 0 ? 'pos' : 'neg') + '">' + formatCurrency(d) + '</td>').join('') + '</tr>';
         h += '<tr class="delta-row"><td>Delta %</td>' + deltas.map((d, i) =>
           i === 1 ? '<td>—</td>' : '<td class="' + (d >= 0 ? 'pos' : 'neg') + '">' + (bbT ? ((d / bbT) * 100).toFixed(1) + '%' : 'N/A') + '</td>').join('') + '</tr>';
-        if (reserveActive && !P.excludeReserveNetworth) {
-          h += '<tr class="total-row reserve-adjust-start"><td>Net Worth - Reserve Salary</td>' + tots.map(v => '<td>' + formatCurrency(v - reserveSpend) + '</td>').join('') + '</tr>';
-        }
         $('main-table').innerHTML = h;
 
         let b = '<tr><th>Component</th>' + paths.map(p => '<th>' + p.l + '</th>').join('') + '</tr>';
@@ -4667,11 +4779,11 @@
               ? '<td>' + formatCurrency((r[p.k].invD || 0) + (r[p.k].invCash || 0)) + '</td>'
               : '<td>' + formatCurrency(r[p.k][key]) + '</td>').join('') + '</tr>';
         });
+        b += '<tr class="breakdown-total-row"><td>Total</td>' + tots.map(v => '<td>' + formatCurrency(v) + '</td>').join('') + '</tr>';
+        b += '<tr class="breakdown-minor-row"><td>Taxes</td>' + paths.map(p => '<td>' + formatCurrency(r[p.k].tax || 0) + '</td>').join('') + '</tr>';
         if (reserveActive) {
           b += '<tr class="breakdown-minor-row"><td>Reserve Salary</td>' + tots.map(() => '<td>' + formatCurrency(reserveSpend) + '</td>').join('') + '</tr>';
         }
-        b += '<tr class="total-row"><td>Total</td>' + tots.map(v => '<td>' + formatCurrency(v) + '</td>').join('') + '</tr>';
-        b += '<tr class="breakdown-minor-row"><td>Taxes</td>' + paths.map(p => '<td>' + formatCurrency(r[p.k].tax || 0) + '</td>').join('') + '</tr>';
         $('breakdown-table').innerHTML = b;
         $('table-title').textContent = 'Net Worth: Career Path Comparison';
 
@@ -4795,8 +4907,16 @@
       scheduleLocalStateSave();
     }
 
-    const PRESET_KEY = 'compComparison.presets.v1';
-    const LOCAL_STATE_KEY = 'compComparison.lastState.v1';
+    const STORAGE_PAGE_SCOPE = (() => {
+      const cleaned = (window.location.pathname || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '');
+      return cleaned || 'root';
+    })();
+    const STORAGE_KEY_PREFIX = 'compComparison.' + STORAGE_PAGE_SCOPE + '.';
+    const PRESET_KEY = STORAGE_KEY_PREFIX + 'presets.v1';
+    const LOCAL_STATE_KEY = STORAGE_KEY_PREFIX + 'lastState.v1';
     const SHARE_KEY = 'state';
     const STATE_EXCLUDE = new Set(['preset_name', 'preset_select']);
 
@@ -4972,12 +5092,31 @@
           .then(() => setShareStatus('Share link copied.', false))
           .catch(() => setShareStatus('Unable to copy share link.', true));
       });
-      $('reset_defaults_btn').addEventListener('click', () => {
-        if (!window.confirm('Reset all inputs to default values?')) return;
-        localStorage.removeItem(LOCAL_STATE_KEY);
+      const resetModal = $('reset_modal');
+      const closeResetModal = () => {
+        resetModal.classList.remove('is-open');
+        resetModal.setAttribute('aria-hidden', 'true');
+      };
+      $('reset_defaults_btn').addEventListener('click', (evt) => {
+        evt.stopPropagation();
+        resetModal.classList.add('is-open');
+        resetModal.setAttribute('aria-hidden', 'false');
+      });
+      $('reset_modal_cancel').addEventListener('click', closeResetModal);
+      $('reset_modal_confirm').addEventListener('click', () => {
+        closeResetModal();
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith(STORAGE_KEY_PREFIX)) localStorage.removeItem(key);
+        });
         const url = new URL(window.location.href);
         url.searchParams.delete(SHARE_KEY);
         window.location.href = url.toString();
+      });
+      resetModal.addEventListener('click', evt => {
+        if (evt.target === resetModal) closeResetModal();
+      });
+      document.addEventListener('keydown', evt => {
+        if (evt.key === 'Escape' && resetModal.classList.contains('is-open')) closeResetModal();
       });
       const linkState = new URLSearchParams(window.location.search).get(SHARE_KEY);
       if (linkState) {
