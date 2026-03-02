@@ -151,15 +151,23 @@
     }
 
     #stock_growth_ctrl {
-      grid-column: 1 / span 2
+      grid-column: 1
     }
 
-    #reserve_cash_ctrl {
-      grid-column: 3
+    #market_growth_ctrl {
+      grid-column: 2
     }
 
     #prior_401k_ctrl {
-      grid-column: 4
+      grid-column: 3
+    }
+
+    #reserve_cash_ctrl {
+      grid-column: 1 / span 2
+    }
+
+    #reserve_cash_inc_ctrl {
+      grid-column: 3 / span 2
     }
 
     .setup-row {
@@ -764,6 +772,72 @@
       background: var(--surface-soft)
     }
 
+    .breakdown-total-row {
+      font-weight: 700
+    }
+
+    .breakdown-total-row td,
+    .breakdown-total-row th {
+      border-top: 1px solid var(--border-soft)
+    }
+
+    .breakdown-total-row td {
+      padding-top: 12px;
+      background: var(--bg-linen)
+    }
+
+    .breakdown-total-row:hover td {
+      background: var(--surface-soft)
+    }
+
+    .breakdown-section-divider th,
+    .breakdown-section-divider td {
+      border-top: 3px solid var(--accent-ink)
+    }
+
+    .reserve-adjust-start td {
+      border-top: 3px solid var(--accent-ink)
+    }
+
+    .networth-option-row {
+      display: flex;
+      justify-content: flex-end;
+      margin: 0 0 8px
+    }
+
+    .networth-inline-option {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.78em;
+      color: var(--text-muted);
+      white-space: nowrap
+    }
+
+    .networth-inline-option input[type="checkbox"] {
+      margin: 0;
+      width: 14px;
+      height: 14px
+    }
+
+    .breakdown-minor-row td {
+      font-size: 0.8em;
+      color: var(--text-muted);
+      font-weight: 500
+    }
+
+    .breakdown-minor-subrow td {
+      font-size: 0.72em;
+      color: var(--text-faint);
+      font-weight: 500
+    }
+
+    .breakdown-minor-subrow td.pos,
+    .breakdown-minor-subrow td.neg {
+      color: var(--text-faint);
+      font-weight: 500
+    }
+
     .delta-row {
       background: var(--surface-soft)
     }
@@ -956,8 +1030,10 @@
 
       #paradigm_ctrl,
       #stock_growth_ctrl,
+      #market_growth_ctrl,
+      #prior_401k_ctrl,
       #reserve_cash_ctrl,
-      #prior_401k_ctrl {
+      #reserve_cash_inc_ctrl {
         grid-column: auto
       }
     }
@@ -1169,6 +1245,14 @@
                     d="M13.5 1a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3M11 2.5a2.5 2.5 0 1 1 .603 1.628l-6.718 3.12a2.5 2.5 0 0 1 0 1.504l6.718 3.12a2.5 2.5 0 1 1-.488.876l-6.718-3.12a2.5 2.5 0 1 1 0-3.256l6.718-3.12A2.5 2.5 0 0 1 11 2.5m-8.5 4a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3m11 5.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3" />
                 </svg>
               </button>
+              <button id="reset_defaults_btn" type="button" class="icon-btn" title="Reset to Defaults"
+                aria-label="Reset to Defaults">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M8 3a5 5 0 1 0 4.546 2.916.5.5 0 1 1 .908-.418A6 6 0 1 1 8 2v1z" />
+                  <path
+                    d="M8 0a.5.5 0 0 1 .5.5V3a.5.5 0 0 1-1 0V.5A.5.5 0 0 1 8 0m-.354 3.354a.5.5 0 0 1 .708 0L9.5 4.5l1.146-1.146a.5.5 0 0 1 .708.708L9.854 5.56a.5.5 0 0 1-.708 0L7.646 4.062a.5.5 0 0 1 0-.708" />
+                </svg>
+              </button>
             </div>
           </div>
           <div id="share_status" class="note full" style="display:none"></div>
@@ -1309,6 +1393,11 @@
         <div class="ctrl-group input-prefix"><label>Catch-up ↑/YR</label>
           <input type="number" id="ira_catchup_inc" value="100" step="50">
         </div>
+        <div class="sub-label">Contribution Priority</div>
+        <div class="ctrl-group full">
+          <label>Contribution Priority (Drag)</label>
+          <ul id="priority_order_list" class="priority-list"></ul>
+        </div>
         <div class="sub-label">401k Catch-up + Backdoor Advanced</div>
         <div class="ctrl-group" id="start_age_ctrl"><label>Contributor Start Age (Optional)</label>
           <input type="number" id="start_age" value="" min="18" max="90" step="1" placeholder="Optional">
@@ -1337,10 +1426,6 @@
         </div>
         <div class="ctrl-group full note">
           <span>Form 8606 reminder: file nondeductible basis and conversion each year.</span>
-        </div>
-        <div class="ctrl-group full">
-          <label>Contribution Priority (Drag)</label>
-          <ul id="priority_order_list" class="priority-list"></ul>
         </div>
         <div class="sub-label">Standard Deduction (Base)</div>
         <div class="ctrl-group input-prefix"><label>MFJ Std Deduction</label>
@@ -1826,13 +1911,19 @@
             </select>
           </div>
           <div class="ctrl-group" id="stock_growth_ctrl"><label>Stock Growth %</label>
-            <input type="text" id="stock_growth" value="15" placeholder="e.g. 15 or 10,-8,15">
+            <input type="text" id="stock_growth" value="15,10,25,10" placeholder="e.g. 15 or 10,-8,15">
           </div>
-          <div class="ctrl-group input-prefix" id="reserve_cash_ctrl"><label>Reserve Cash per Year</label>
-            <input type="number" id="reserve_cash" value="0" step="10000" min="0">
+          <div class="ctrl-group" id="market_growth_ctrl"><label>Market Growth %</label>
+            <input type="text" id="market_growth" value="5" placeholder="e.g. 5 or 3,7,5">
           </div>
           <div class="ctrl-group input-prefix" id="prior_401k_ctrl"><label>Prior 401k Pre-tax</label>
             <input type="number" id="prior_401k" value="15000" step="500">
+          </div>
+          <div class="ctrl-group input-prefix" id="reserve_cash_ctrl"><label>Reserve Cash per Year</label>
+            <input type="number" id="reserve_cash" value="60000" step="10000" min="0">
+          </div>
+          <div class="ctrl-group input-prefix" id="reserve_cash_inc_ctrl"><label>Reserve Cash Increase / Year</label>
+            <input type="number" id="reserve_cash_inc" value="5000" step="1000">
           </div>
         </div>
       </div>
@@ -1861,7 +1952,63 @@
           <span id="csv-status"></span>
         </div>
       </div>
+      <div class="card" id="notes-card">
+        <h2>Notes &amp; Assumptions</h2>
+        <div class="note">
+          <p class="note-title">How to read the outputs</p>
+          <ul class="note-list">
+            <li><b>All values are cumulative</b> through each column date.</li>
+            <li><b>This Year</b> rows show the incremental value added in that column period.</li>
+            <li><b>Mode meaning:</b> Direct mode compares <b>Company A vs Company B</b> with <b>Delta = A minus B</b>.
+              Promotion mode compares <b>A-&gt;A, B-&gt;B, A-&gt;B, B-&gt;A</b> with deltas versus <b>B-&gt;B</b>.</li>
+            <li><b>Net Worth + Delta:</b> shown as after-tax cumulative values at each milestone date.</li>
+            <li><b>Exclude reserve cash from net worth + delta:</b> toggles whether reserve drag is included in
+              displayed net worth/delta values (breakdown component rows still show modeled components).</li>
+            <li><b>Reserve cash assumptions:</b> Reserve Cash per Year applies annually and Reserve Cash Increase / Year
+              steps that annual reserve higher each year; partial periods are pro-rated.</li>
+            <li><b>Salary Cash:</b> after-tax base pay after 401k, Backdoor IRA, ESPP, and Mega Backdoor Roth payroll
+              contributions.</li>
+            <li><b>Market Investment:</b> invested market exposure (salary-premium investing and/or invested
+              sign-on/bonus cash, depending on path/paradigm).</li>
+            <li><b>RSU:</b> value of vested shares kept after sell-to-cover taxes.</li>
+            <li><b>ESPP:</b> market value of purchased shares at exit; purchase cost is already deducted from Salary
+              Cash. This can show $0 before the first purchase date even if payroll ESPP contributions have started.
+            </li>
+            <li><b>Growth drivers:</b> Scenario <b>Stock Growth %</b> drives equity-style assets (e.g., RSU/stock-linked
+              investments). Scenario <b>Market Growth %</b> drives retirement bucket compounding.</li>
+            <li><b>401k Employee:</b> employee 401k deferrals compounded using Scenario <b>Market Growth %</b>.</li>
+            <li><b>401k Match:</b> employer match compounded using Scenario <b>Market Growth %</b>.</li>
+            <li><b>Backdoor IRA:</b> post-tax contribution converted to Roth IRA and compounded using Scenario <b>Market
+                Growth %</b>.</li>
+            <li><b>Mega Backdoor Roth:</b> after-tax 401k contribution value under the 415(c) limit, compounded using
+              Scenario <b>Market Growth %</b>.</li>
+            <li><b>Cash (Sign-on + Bonus):</b> after-tax sign-on and bonus paid as cash. <b>Invested Sign-on +
+                Bonus:</b> that same after-tax cash invested in Company B stock.</li>
+            <li><b>Taxes:</b> cumulative modeled taxes on W-2 cashflows. Shown below totals for interpretation (totals
+              are already after-tax), and partial periods are pro-rated by actual days/pay periods.</li>
+            <li><b>Allocation Transparency table:</b> <b>Target</b> is modeled desired contribution, <b>Funded</b> is
+              actual achieved contribution, and <b>Unmet</b> is remaining gap after all constraints.</li>
+            <li><b>Timeline Mix:</b> bar colors correspond to timeline segments listed in the legend directly above the
+              chart.</li>
+            <li><b>Sensitivity card:</b> uses current scenario settings (including reserve assumptions) while sweeping
+              growth/tenure inputs.</li>
+            <li><b>Growth pattern fallback:</b> if Stock/Market Growth has fewer values than tenure, remaining years use
+              the average of the entered rates.</li>
+          </ul>
+          <p class="note-foot">Assumptions: partner pre-tax 401k input reduces household federal taxable income; 401k
+            match uses the IRS compensation limit ($360k in 2026, +$5k/year); retirement buckets use Scenario Market
+            Growth %; Mega Backdoor room is 415(c) minus employee 401k and employer match, so it can decrease if match
+            grows faster than your 415(c) increase setting; ESPP uses the configured offering windows and can appear as
+            $0 before first purchase even when payroll deductions have started.</p>
+        </div>
+      </div>
       <div class="card">
+        <div class="networth-option-row">
+          <label class="networth-inline-option" for="exclude_reserve_networth">
+            <input type="checkbox" id="exclude_reserve_networth">
+            <span>Exclude reserve cash from net worth + delta</span>
+          </label>
+        </div>
         <div class="table-wrap">
           <table id="main-table">
             <tbody></tbody>
@@ -1875,31 +2022,6 @@
           <table id="breakdown-table">
             <tbody></tbody>
           </table>
-        </div>
-        <div class="note">
-          <p class="note-title">How to read this breakdown</p>
-          <ul class="note-list">
-            <li><b>All values are cumulative</b> through each column date.</li>
-            <li><b>+This Yr</b> rows show the incremental value added in that column period.</li>
-            <li><b>Salary Cash:</b> after-tax base pay after 401k, Backdoor IRA, ESPP, and Mega Backdoor Roth payroll
-              contributions.</li>
-            <li><b>Investment Delta:</b> after-tax salary premium invested in Company B stock.</li>
-            <li><b>RSU:</b> value of vested shares kept after sell-to-cover taxes.</li>
-            <li><b>ESPP:</b> market value of purchased shares at exit; purchase cost is already deducted from Salary
-              Cash. This can show $0 before the first purchase date even if payroll ESPP contributions have started.
-            </li>
-            <li><b>Backdoor IRA:</b> post-tax contribution converted to Roth IRA; no extra growth is applied.</li>
-            <li><b>401k Match:</b> employer match future value at 5% growth (the only growth modeled here, since match
-              can differ by company while other contribution buckets are user-controlled).</li>
-            <li><b>Mega Backdoor Roth:</b> after-tax 401k contribution value under the 415(c) limit; no extra growth
-              assumed.</li>
-            <li><b>Cash (Sign-on + Bonus):</b> after-tax sign-on and bonus paid as cash. <b>Invested Sign-on +
-                Bonus:</b> that same after-tax cash invested in Company B stock.</li>
-          </ul>
-          <p class="note-foot">Assumptions: partner pre-tax 401k input reduces household federal taxable income; 401k
-            match uses the IRS compensation limit ($360k in 2026, +$5k/year); Mega Backdoor room is 415(c) minus
-            employee
-            401k and employer match, so it can decrease if match grows faster than your 415(c) increase setting.</p>
         </div>
       </div>
       <div class="card" id="allocation-card">
@@ -1919,7 +2041,7 @@
             <input type="text" id="sens_growth_worst" value="8" placeholder="e.g. 8 or 5,8,10">
           </div>
           <div class="ctrl-group"><label>Base Growth %</label>
-            <input type="text" id="sens_growth_base" value="15" placeholder="e.g. 15 or 10,-8,15">
+            <input type="text" id="sens_growth_base" value="15,10,25,10" placeholder="e.g. 15 or 10,-8,15">
           </div>
           <div class="ctrl-group"><label>Best Growth %</label>
             <input type="text" id="sens_growth_best" value="25" placeholder="e.g. 25 or 20,25,30">
@@ -2017,13 +2139,36 @@
     }
 
     // ===== HELPERS =====
-    const PRIORITY_BUCKETS = ['k401', 'ira', 'mega', 'espp'];
+    const PRIORITY_BUCKETS = ['k401_match', 'k401_extra', 'ira', 'mega', 'espp', 'invest'];
     const PRIORITY_LABELS = {
-      k401: '401k Employee Deferral',
+      k401_match: '401k to Max Match',
+      k401_extra: '401k Extra',
       ira: 'Backdoor IRA',
       mega: 'Mega Backdoor Roth',
-      espp: 'ESPP'
+      espp: 'ESPP',
+      invest: 'Market Investment'
     };
+    function normalizePriorityOrder(order) {
+      const seen = new Set();
+      const out = [];
+      if (Array.isArray(order)) {
+        for (const key of order) {
+          if (key === 'k401') {
+            if (!seen.has('k401_match')) { seen.add('k401_match'); out.push('k401_match'); }
+            if (!seen.has('k401_extra')) { seen.add('k401_extra'); out.push('k401_extra'); }
+            continue;
+          }
+          if (PRIORITY_BUCKETS.includes(key) && !seen.has(key)) {
+            seen.add(key);
+            out.push(key);
+          }
+        }
+      }
+      for (const key of PRIORITY_BUCKETS) {
+        if (!seen.has(key)) out.push(key);
+      }
+      return out;
+    }
     const $ = id => document.getElementById(id);
     function numberOrDefault(raw, fallback) {
       const n = parseFloat(raw);
@@ -2073,10 +2218,35 @@
     function stockPrice(d, gArr, s, p0) {
       const td = daysBetween(s, d); if (td <= 0) return p0;
       if (gArr.length === 1) return p0 * Math.pow(1 + gArr[0], td / 365.25);
+      const avg = gArr.reduce((sum, r) => sum + r, 0) / gArr.length;
       let price = p0; const ty = td / 365.25; const fy = Math.floor(ty); const fr = ty - fy;
-      for (let y = 0; y < fy; y++)price *= 1 + (y < gArr.length ? gArr[y] : gArr[gArr.length - 1]);
-      price *= Math.pow(1 + (fy < gArr.length ? gArr[fy] : gArr[gArr.length - 1]), fr);
+      for (let y = 0; y < fy; y++)price *= 1 + (y < gArr.length ? gArr[y] : avg);
+      price *= Math.pow(1 + (fy < gArr.length ? gArr[fy] : avg), fr);
       return price;
+    }
+    function growthFactorBetween(fromD, toD, gArr, anchorD) {
+      if (!(toD > fromD)) return 1;
+      const anchor = anchorD || fromD;
+      const pFrom = stockPrice(fromD, gArr, anchor, 1);
+      const pTo = stockPrice(toD, gArr, anchor, 1);
+      return pFrom > 0 ? (pTo / pFrom) : 1;
+    }
+    function futureValueFromContribs(contribs, gArr, endD, anchorD) {
+      let fv = 0;
+      for (const [pd, c] of (contribs || [])) {
+        if (!(c > 0)) continue;
+        fv += c * growthFactorBetween(pd, endD, gArr, anchorD);
+      }
+      return fv;
+    }
+    function futureValueFromContribMap(contribMap, gArr, endD, anchorD) {
+      if (!contribMap || typeof contribMap.entries !== 'function') return 0;
+      let fv = 0;
+      for (const [ts, c] of contribMap.entries()) {
+        if (!(c > 0)) continue;
+        fv += c * growthFactorBetween(new Date(+ts), endD, gArr, anchorD);
+      }
+      return fv;
     }
     function fiscalYearProration(sd) {
       let ey; if (getMonth(sd) >= 10) ey = getYear(sd) + 1; else ey = getYear(sd);
@@ -2091,6 +2261,23 @@
       const period = daysBetween(payDate, vestEnd);
       if (period <= 0) return amount;
       return amount * Math.min(1, worked / period);
+    }
+    function cumulativeReserveForPeriod(startD, endD, annualBase, annualInc) {
+      const base = Math.max(0, annualBase || 0);
+      const inc = annualInc || 0;
+      if (!(endD > startD) || (base <= 0 && inc <= 0)) return 0;
+      let total = 0;
+      let segStart = startD;
+      let yearIdx = 0;
+      while (segStart < endD) {
+        const nextAnniv = makeDate(getYear(startD) + yearIdx + 1, getMonth(startD), getDay(startD));
+        const segEnd = nextAnniv < endD ? nextAnniv : endD;
+        const annualAmt = Math.max(0, base + inc * yearIdx);
+        total += annualAmt * daysBetween(segStart, segEnd) / 365.25;
+        segStart = segEnd;
+        yearIdx += 1;
+      }
+      return total;
     }
 
     function parseMatchVest(str) {
@@ -2412,17 +2599,41 @@
     }
 
     // ===== 401K =====
+    function required401kForMaxMatch(yr, annualSalary, matchCfg) {
+      if (!matchCfg) return 0;
+      const onRate = Number.isFinite(matchCfg.matchOnRate) ? matchCfg.matchOnRate : 1;
+      if (onRate <= 0) return 0;
+      const matchType = matchCfg.matchType || 'contrib_pct';
+      const matchValue = Number.isFinite(matchCfg.matchValue) ? matchCfg.matchValue : 0;
+      if (matchValue <= 0) return 0;
+      if (matchType === 'contrib_pct') return 0;
+      let annualCap = 0;
+      if (matchType === 'comp_pct') {
+        const compLimit = matchCfg.compLimitFn ? matchCfg.compLimitFn(yr) : Infinity;
+        annualCap = Math.max(0, Math.min(Math.max(0, annualSalary || 0), compLimit) * (matchValue / 100));
+      } else {
+        annualCap = Math.max(0, matchValue);
+      }
+      return Math.max(0, annualCap / onRate);
+    }
+
     function compute401kContribs(pds, salFn, isFirst, kCap, startYr, priorPreTax, k401LimitBase, k401LimitInc, irsBaseYear, opts) {
       const cfg = opts || {};
       const enabled = cfg.enabled !== false;
       const timing = cfg.timing === 'spread-paychecks' ? 'spread-paychecks' : 'front-load';
       const mode = cfg.mode || 'max';
       const pctRate = Number.isFinite(cfg.pctSalaryRate) ? Math.max(0, cfg.pctSalaryRate) : 0;
-      const contribs = [], ann = {}; const rem = {}, targets = {};
+      const allowExtra = cfg.allowExtra !== false;
+      const contribs = [], ann = {}, annMatch = {}, annExtra = {};
+      const rem = {}, remMatch = {}, remExtra = {};
+      const targets = {}, targetsMatch = {}, targetsExtra = {};
       const payLeft = {};
+      const annualSalaryByYear = {};
       for (const pd of pds) {
         const yr = getYear(pd);
+        const [, annSalary] = salFn(pd);
         payLeft[yr] = (payLeft[yr] || 0) + 1;
+        annualSalaryByYear[yr] = Math.max(annualSalaryByYear[yr] || 0, annSalary || 0);
       }
       for (const pd of pds) {
         const yr = getYear(pd);
@@ -2431,19 +2642,38 @@
           const prior = (yr === startYr && isFirst) ? (priorPreTax || 0) : 0;
           let yrCap = Math.max(0, limit - prior);
           if (enabled && cfg.annualTargetFn) yrCap = Math.min(yrCap, Math.max(0, cfg.annualTargetFn(yr)));
-          rem[yr] = enabled ? yrCap : 0;
+          const yrBudget = enabled ? yrCap : 0;
+          const matchNeed = Math.min(yrBudget, required401kForMaxMatch(yr, annualSalaryByYear[yr] || 0, cfg.matchConfig));
+          const extraNeed = allowExtra ? Math.max(0, yrBudget - matchNeed) : 0;
+          remMatch[yr] = matchNeed;
+          remExtra[yr] = extraNeed;
+          rem[yr] = matchNeed + extraNeed;
+          targetsMatch[yr] = matchNeed;
+          targetsExtra[yr] = extraNeed;
           targets[yr] = rem[yr];
           ann[yr] = 0;
+          annMatch[yr] = 0;
+          annExtra[yr] = 0;
         }
         const [pg] = salFn(pd);
         const desired = mode === 'pct_salary' ? pg * pctRate : pg * kCap;
         const left = Math.max(1, payLeft[yr] || 1);
-        const target = timing === 'spread-paychecks' ? rem[yr] / left : rem[yr];
-        let c = Math.min(desired, rem[yr], target); c = Math.max(0, c);
+        const matchTarget = timing === 'spread-paychecks' ? remMatch[yr] / left : remMatch[yr];
+        let cMatch = Math.min(desired, remMatch[yr], matchTarget);
+        cMatch = Math.max(0, cMatch);
+        const desiredAfterMatch = Math.max(0, desired - cMatch);
+        const extraTarget = timing === 'spread-paychecks' ? remExtra[yr] / left : remExtra[yr];
+        let cExtra = allowExtra ? Math.min(desiredAfterMatch, remExtra[yr], extraTarget) : 0;
+        cExtra = Math.max(0, cExtra);
+        let c = cMatch + cExtra;
         contribs.push([pd, c]); rem[yr] -= c; ann[yr] += c;
+        remMatch[yr] -= cMatch;
+        remExtra[yr] -= cExtra;
+        annMatch[yr] += cMatch;
+        annExtra[yr] += cExtra;
         payLeft[yr] = Math.max(0, left - 1);
       }
-      return { contribs, ann, targets };
+      return { contribs, ann, targets, annMatch, annExtra, targetsMatch, targetsExtra };
     }
 
     function compute401kContribsWithUsed(pds, salFn, kCap, usedByYear, k401LimitBase, k401LimitInc, irsBaseYear, opts) {
@@ -2452,10 +2682,15 @@
       const timing = cfg.timing === 'spread-paychecks' ? 'spread-paychecks' : 'front-load';
       const mode = cfg.mode || 'max';
       const pctRate = Number.isFinite(cfg.pctSalaryRate) ? Math.max(0, cfg.pctSalaryRate) : 0;
-      const contribs = [], ann = {}, rem = {}, payLeft = {}, targets = {};
+      const allowExtra = cfg.allowExtra !== false;
+      const contribs = [], ann = {}, annMatch = {}, annExtra = {};
+      const rem = {}, remMatch = {}, remExtra = {}, payLeft = {}, targets = {}, targetsMatch = {}, targetsExtra = {};
+      const annualSalaryByYear = {};
       for (const pd of pds) {
         const yr = getYear(pd);
+        const [, annSalary] = salFn(pd);
         payLeft[yr] = (payLeft[yr] || 0) + 1;
+        annualSalaryByYear[yr] = Math.max(annualSalaryByYear[yr] || 0, annSalary || 0);
       }
       for (const pd of pds) {
         const yr = getYear(pd);
@@ -2467,25 +2702,45 @@
             const targetRem = Math.max(0, cfg.annualTargetFn(yr) - used);
             yrCap = Math.min(yrCap, targetRem);
           }
-          rem[yr] = enabled ? yrCap : 0;
+          const yrBudget = enabled ? yrCap : 0;
+          const fullMatchNeed = required401kForMaxMatch(yr, annualSalaryByYear[yr] || 0, cfg.matchConfig);
+          const matchNeedRem = Math.max(0, fullMatchNeed - Math.min(fullMatchNeed, used));
+          const matchNeed = Math.min(yrBudget, matchNeedRem);
+          const extraNeed = allowExtra ? Math.max(0, yrBudget - matchNeed) : 0;
+          remMatch[yr] = matchNeed;
+          remExtra[yr] = extraNeed;
+          rem[yr] = matchNeed + extraNeed;
+          targetsMatch[yr] = matchNeed;
+          targetsExtra[yr] = extraNeed;
           targets[yr] = rem[yr];
           ann[yr] = 0;
+          annMatch[yr] = 0;
+          annExtra[yr] = 0;
         }
         const [pg] = salFn(pd);
         const desired = mode === 'pct_salary' ? pg * pctRate : pg * kCap;
         const left = Math.max(1, payLeft[yr] || 1);
-        const target = timing === 'spread-paychecks' ? rem[yr] / left : rem[yr];
-        let c = Math.min(desired, rem[yr], target);
-        c = Math.max(0, c);
+        const matchTarget = timing === 'spread-paychecks' ? remMatch[yr] / left : remMatch[yr];
+        let cMatch = Math.min(desired, remMatch[yr], matchTarget);
+        cMatch = Math.max(0, cMatch);
+        const desiredAfterMatch = Math.max(0, desired - cMatch);
+        const extraTarget = timing === 'spread-paychecks' ? remExtra[yr] / left : remExtra[yr];
+        let cExtra = allowExtra ? Math.min(desiredAfterMatch, remExtra[yr], extraTarget) : 0;
+        cExtra = Math.max(0, cExtra);
+        let c = cMatch + cExtra;
         contribs.push([pd, c]);
         rem[yr] -= c;
+        remMatch[yr] -= cMatch;
+        remExtra[yr] -= cExtra;
         ann[yr] += c;
+        annMatch[yr] += cMatch;
+        annExtra[yr] += cExtra;
         payLeft[yr] = Math.max(0, left - 1);
       }
-      return { contribs, ann, targets };
+      return { contribs, ann, targets, annMatch, annExtra, targetsMatch, targetsExtra };
     }
     function getVestMultiplier(pd, bStart, vestSched) { const ey = Math.floor(daysBetween(bStart, pd) / 365) + 1; for (const { pct, thruYear } of vestSched) { if (ey <= thruYear) return pct } return 1 }
-    function computeMatchFV(k4c, salFn, employerStart, exitD, matchType, matchValue, vestSched, matchOnRate, compLimitFn, trueUp) {
+    function computeMatchFV(k4c, salFn, employerStart, exitD, matchType, matchValue, vestSched, matchOnRate, compLimitFn, trueUp, growthPattern, growthAnchor) {
       const yrAnn = {}; for (const [pd] of k4c) { const [, a] = salFn(pd); yrAnn[getYear(pd)] = a }
       const used = {}; let fv = 0;
       const mRate = matchValue / 100;
@@ -2515,7 +2770,10 @@
             m = Math.min(ec * matchOnRate, Math.max(0, cap - used[yr])); used[yr] += m;
           }
         }
-        fv += m * Math.pow(1 + MATCH_GROWTH_RATE, daysBetween(pd, exitD) / 365.25);
+        const gf = Array.isArray(growthPattern) && growthPattern.length
+          ? growthFactorBetween(pd, exitD, growthPattern, growthAnchor || employerStart)
+          : Math.pow(1 + MATCH_GROWTH_RATE, daysBetween(pd, exitD) / 365.25);
+        fv += m * gf;
       }
       return fv;
     }
@@ -2610,6 +2868,7 @@
       const paycheckLeft = {};
       const esppPeriods = {};
       const esppContribs = new Map();
+      const megaContribs = new Map();
       const iraContribs = new Map();
       const yearlySalary = {};
       let megaTot = 0, iraCost = 0, iraFv = 0, iraTaxLeak = 0, iraBasis = 0;
@@ -2625,7 +2884,7 @@
       const funded = { ira: {}, mega: {}, espp: {} };
       const targets = { ira: {}, mega: {}, espp: {} };
       const order = (opts && Array.isArray(opts.priorityOrder) ? opts.priorityOrder : PRIORITY_BUCKETS)
-        .filter(k => k !== 'k401');
+        .filter(k => k !== 'k401' && k !== 'k401_match' && k !== 'k401_extra');
       for (const pd of pds) {
         const yr = getYear(pd);
         paycheckLeft[yr] = (paycheckLeft[yr] || 0) + 1;
@@ -2666,6 +2925,9 @@
         const ppg = ann / 24;
         for (const bucket of order) {
           if (avail <= 0) break;
+          if (bucket === 'invest') {
+            continue;
+          }
           if (bucket === 'ira') {
             const rem = iraRem[yr] || 0;
             if (rem <= 0) continue;
@@ -2702,6 +2964,7 @@
             avail -= mt;
             megaRem[yr] -= mt;
             megaTot += mt;
+            megaContribs.set(pd.getTime(), (megaContribs.get(pd.getTime()) || 0) + mt);
             funded.mega[yr] = (funded.mega[yr] || 0) + mt;
             continue;
           }
@@ -2749,6 +3012,7 @@
       return {
         availMap,
         megaTot,
+        mega: { cost: megaTot, contribs: megaContribs },
         ira: { cost: iraCost, fv: iraFv, taxLeak: iraTaxLeak, basis: iraBasis, contribs: iraContribs },
         espp: { shares: totSh, w2, cost: totCost, contribs: esppContribs },
         transparency: {
@@ -2788,6 +3052,11 @@
       for (const yr in w2) total += w2[yr] * (1 - (rates[yr] || .35));
       return total;
     }
+    function sumTaxFromW2(w2, rates) {
+      let total = 0;
+      for (const yr in w2) total += w2[yr] * (rates[yr] || .35);
+      return total;
+    }
     function computeEffectiveRates(w2y, k4y, filing, tax, jy, ly, taxB, w2yA, w2yB) {
       const r = {}; const yrs = new Set([...Object.keys(w2y), ...Object.keys(k4y)].map(Number));
       for (const yr of yrs) {
@@ -2801,10 +3070,10 @@
       }
       return r;
     }
-    function applyReserveFloor(salCash, reserve, mega, iraVal, iraCost, esppVal, esppCost, liquidExtra, invVal, invCost) {
-      if (reserve <= 0) return { salCash, mega, iraVal, esppVal, invVal };
+    function applyReserveFloor(salCash, reserve, megaVal, megaCost, iraVal, iraCost, esppVal, esppCost, liquidExtra, invVal, invCost) {
+      if (reserve <= 0) return { salCash, mega: megaVal, iraVal, esppVal, invVal };
       const liquid = salCash + liquidExtra;
-      if (liquid >= reserve) return { salCash, mega, iraVal, esppVal, invVal };
+      if (liquid >= reserve) return { salCash, mega: megaVal, iraVal, esppVal, invVal };
       let sf = reserve - liquid;
       if (sf > 0 && invCost > 0) {
         const ic = Math.min(sf, invCost);
@@ -2816,21 +3085,23 @@
         iraVal *= (iraCost - rc) / iraCost;
         salCash += rc; sf -= rc;
       }
-      if (sf > 0) {
-        const mc = Math.min(sf, mega);
-        mega -= mc; salCash += mc; sf -= mc;
+      if (sf > 0 && megaCost > 0) {
+        const mc = Math.min(sf, megaCost);
+        megaVal *= (megaCost - mc) / megaCost;
+        salCash += mc; sf -= mc;
+        megaCost -= mc;
       }
       if (sf > 0 && esppCost > 0) {
         const ec = Math.min(sf, esppCost);
         esppVal *= (esppCost - ec) / esppCost;
         salCash += ec;
       }
-      return { salCash, mega, iraVal, esppVal, invVal };
+      return { salCash, mega: megaVal, iraVal, esppVal, invVal };
     }
 
     // ===== SIMULATE DIRECT =====
     function simulateDirect(P) {
-      const { filing, growth, aRaiseR, bRaiseR, price0, lv1Ref, aKCap, bKCap, aBase, reserveCash, lv1, priorityOrder,
+      const { filing, growth, marketGrowth, aRaiseR, bRaiseR, price0, lv1Ref, aKCap, bKCap, aBase, reserveCash, reserveCashInc, lv1, priorityOrder,
         contributionPlan,
         startD, exitD, aMatchVest, bMatchVest, aMatchType, bMatchType, aMatchValue, bMatchValue, aMatchCliff, bMatchCliff, aMatchTrueUp, bMatchTrueUp, aEsppR, aEsppDisc, bEsppR, bEsppDisc,
         aBonusPct, aBonusDate, aSign1, aSign2, vestPat, bgDate, bRaisePat, aRaisePat, taxA, taxB, cliff, grantUnit, initVestSplit } = P;
@@ -2879,14 +3150,21 @@
       };
       const planA = buildRuntimePlan(cPlanA, aEsppR);
       const planB = buildRuntimePlan(cPlanB, bEsppR);
+      const normalizedPriority = normalizePriorityOrder(priorityOrder);
+      const k401ExtraIdx = normalizedPriority.indexOf('k401_extra');
+      const firstNon401Idx = Math.min(...['ira', 'mega', 'espp', 'invest'].map(k => normalizedPriority.indexOf(k)).filter(i => i >= 0));
+      const allowK401Extra = k401ExtraIdx >= 0 && (firstNon401Idx < 0 || k401ExtraIdx <= firstNon401Idx);
       const k401Opts = plan => ({
         enabled: plan.k401.enabled,
         timing: plan.k401.timing,
         annualTargetFn: plan.k401TargetFn,
         mode: plan.k401.mode,
         pctSalaryRate: plan.k401.pctSalaryRate,
-        limitFn: k401LimitFn
+        limitFn: k401LimitFn,
+        allowExtra: allowK401Extra
       });
+      const k401MatchCfgA = { matchType: aMatchType, matchValue: aMatchValue, matchOnRate: 1, compLimitFn };
+      const k401MatchCfgB = { matchType: bMatchType, matchValue: bMatchValue, matchOnRate: 1, compLimitFn };
       const allocOpts = (plan, esppDisc) => ({
         priorityOrder,
         backdoor: plan.ira,
@@ -2930,17 +3208,11 @@
       }
       // B ESPP
       const bPds = allPds.filter(pd => pd >= bStart);
-      const bK = compute401kContribs(bPds, bSal, true, bKCap, getYear(startD), taxA.prior401k, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear, {
-        enabled: planB.k401.enabled,
-        timing: planB.k401.timing,
-        annualTargetFn: planB.k401TargetFn,
-        mode: planB.k401.mode,
-        pctSalaryRate: planB.k401.pctSalaryRate,
-        limitFn: k401LimitFn
-      });
-      const bMFVRaw = computeMatchFV(bK.contribs, bSal, bStart, exitD, bMatchType, bMatchValue, bMatchVest, 1, compLimitFn, bMatchTrueUp);
+      const bK = compute401kContribs(bPds, bSal, true, bKCap, getYear(startD), taxA.prior401k, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear, Object.assign({}, k401Opts(planB), { matchConfig: k401MatchCfgB }));
+      const bMFVRaw = computeMatchFV(bK.contribs, bSal, bStart, exitD, bMatchType, bMatchValue, bMatchVest, 1, compLimitFn, bMatchTrueUp, marketGrowth, startD);
       const bTenure = daysBetween(startD, exitD) / 365;
       const bMFV = bTenure >= bMatchCliff ? bMFVRaw : 0;
+      const bK401EmpFv = futureValueFromContribs(bK.contribs, marketGrowth, exitD, startD);
       // B W2/rates
       const bW2 = computeW2CompanyB(allPds, bSal, rsu, signons, bonuses, {}, bStart, exitD);
       const bR = computeEffectiveRates(bW2, bK.ann, filing, taxB, joinYr, leaveYr);
@@ -2996,17 +3268,11 @@
       for (const [sd, amt] of aSignons) { const yr = getYear(sd); aW2raw[yr] = (aW2raw[yr] || 0) + amt }
       const aEspp = computeEspp(allPds, startD, exitD, growth, aSal, planA.esppRateActive, aEsppDisc, startD, price0, esppLimitFn, planA.espp.offerPeriods);
       for (const yr in aEspp.w2) { aW2raw[yr] = (aW2raw[yr] || 0) + aEspp.w2[yr] }
-      const aK = compute401kContribs(allPds, aSal, true, aKCap, getYear(startD), taxA.prior401k, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear, {
-        enabled: planA.k401.enabled,
-        timing: planA.k401.timing,
-        annualTargetFn: planA.k401TargetFn,
-        mode: planA.k401.mode,
-        pctSalaryRate: planA.k401.pctSalaryRate,
-        limitFn: k401LimitFn
-      });
-      const aMFVRaw = computeMatchFV(aK.contribs, aSal, startD, exitD, aMatchType, aMatchValue, aMatchVest, 1, compLimitFn, aMatchTrueUp);
+      const aK = compute401kContribs(allPds, aSal, true, aKCap, getYear(startD), taxA.prior401k, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear, Object.assign({}, k401Opts(planA), { matchConfig: k401MatchCfgA }));
+      const aMFVRaw = computeMatchFV(aK.contribs, aSal, startD, exitD, aMatchType, aMatchValue, aMatchVest, 1, compLimitFn, aMatchTrueUp, marketGrowth, startD);
       const aTenure = daysBetween(startD, exitD) / 365;
       const aMFV = aTenure >= aMatchCliff ? aMFVRaw : 0;
+      const aK401EmpFv = futureValueFromContribs(aK.contribs, marketGrowth, exitD, startD);
       const aR = computeEffectiveRates(aW2raw, aK.ann, filing, taxA, joinYr, leaveYr);
       // A mega cap
       const aMR = computeRawMatchFromAnn(aK.ann, aSal, allPds, aMatchType, aMatchValue, startD, aMatchVest, 1, compLimitFn, aMatchTrueUp);
@@ -3033,7 +3299,7 @@
       for (const yr in aEsppAdj.w2) { aW2Final[yr] = (aW2Final[yr] || 0) + aEsppAdj.w2[yr] }
       const aRFinal = computeEffectiveRates(aW2Final, aK.ann, filing, taxA, joinYr, leaveYr);
       let cash = sumCashFromAvail(allPds, aAlloc.availMap);
-      const totalReserve = reserveCash * daysBetween(startD, exitD) / 365.25;
+      const totalReserve = cumulativeReserveForPeriod(startD, exitD, reserveCash, reserveCashInc);
       for (const pd of allPds) {
         const yr = getYear(pd);
         const [ap] = aSal(pd); const [bp] = bSal(pd);
@@ -3071,13 +3337,19 @@
       let bCashEv = 0;
       for (const [sd, amt] of signons) bCashEv += amt * (1 - (bRFinal[getYear(sd)] || .35));
       for (const [bd, amt] of bonuses) bCashEv += amt * (1 - (bRFinal[getYear(bd)] || .35));
-      const aMegaTot = aAlloc.megaTot;
-      const aIraVal = aAlloc.ira.fv, aIraCost = aAlloc.ira.cost + (aAlloc.ira.taxLeak || 0);
-      const bIraVal = bAlloc.ira.fv;
-      const rfA = applyReserveFloor(aSalCash, totalReserve, aMegaTot, aIraVal, aIraCost, aEsppVal, aEsppAdj.cost, aCashEv, 0, 0);
-      const rfAInv = applyReserveFloor(aSalCash, totalReserve, aMegaTot, aIraVal, aIraCost, aEsppVal, aEsppAdj.cost, 0, aInvCashVal, aCashEv);
-      const rfBBase = applyReserveFloor(bSalCash, totalReserve, bMegaTot, bIraVal, bIraCost, bEsppV, espp.cost, bCashEv, 0, 0);
-      const rfBInv = applyReserveFloor(bSalCash, totalReserve, bMegaTot, bIraVal, bIraCost, bEsppV, espp.cost, 0, bInvV, bCashEv);
+      const aMegaCost = aAlloc.mega.cost;
+      const bMegaCost = bAlloc.mega.cost;
+      const aMegaVal = futureValueFromContribMap(aAlloc.mega.contribs, marketGrowth, exitD, startD);
+      const bMegaVal = futureValueFromContribMap(bAlloc.mega.contribs, marketGrowth, exitD, startD);
+      const aIraVal = futureValueFromContribMap(aAlloc.ira.contribs, marketGrowth, exitD, startD);
+      const aIraCost = aAlloc.ira.cost + (aAlloc.ira.taxLeak || 0);
+      const bIraVal = futureValueFromContribMap(bAlloc.ira.contribs, marketGrowth, exitD, startD);
+      const rfA = applyReserveFloor(aSalCash, totalReserve, aMegaVal, aMegaCost, aIraVal, aIraCost, aEsppVal, aEsppAdj.cost, aCashEv, 0, 0);
+      const rfAInv = applyReserveFloor(aSalCash, totalReserve, aMegaVal, aMegaCost, aIraVal, aIraCost, aEsppVal, aEsppAdj.cost, 0, aInvCashVal, aCashEv);
+      const rfBBase = applyReserveFloor(bSalCash, totalReserve, bMegaVal, bMegaCost, bIraVal, bIraCost, bEsppV, espp.cost, bCashEv, 0, 0);
+      const rfBInv = applyReserveFloor(bSalCash, totalReserve, bMegaVal, bMegaCost, bIraVal, bIraCost, bEsppV, espp.cost, 0, bInvV, bCashEv);
+      const aTaxPaid = sumTaxFromW2(aW2Final, aRFinal);
+      const bTaxPaid = sumTaxFromW2(bW2, bRFinal);
       const unmetMap = (targets, fundedMap) => Object.fromEntries(Object.keys(targets || {}).map(yr => [yr, Math.max(0, (targets[yr] || 0) - (fundedMap[yr] || 0))]));
       const transA = {
         k401: { targets: aK.targets || {}, funded: aK.ann || {}, unmet: unmetMap(aK.targets || {}, aK.ann || {}) },
@@ -3092,18 +3364,19 @@
         espp: { targets: bAlloc.transparency.targets.espp, funded: bAlloc.transparency.funded.espp, unmet: bAlloc.transparency.unmet.espp }
       };
       return {
-        aSalCash: rfA.salCash, aInvD: aInvV, aK401: aMFV, aMega: rfA.mega, aIra: rfA.iraVal,
+        aSalCash: rfA.salCash, aInvD: aInvV, aK401Emp: aK401EmpFv, aK401: aMFV, aMega: rfA.mega, aIra: rfA.iraVal,
         aCashEv, aEspp: rfA.esppVal,
-        aTotBase: rfA.salCash + aInvV + aMFV + rfA.mega + rfA.iraVal + aCashEv + rfA.esppVal,
+        aTotBase: rfA.salCash + aInvV + aK401EmpFv + aMFV + rfA.mega + rfA.iraVal + aCashEv + rfA.esppVal,
         aSalCashInv: rfAInv.salCash, aMegaInv: rfAInv.mega, aIraInv: rfAInv.iraVal, aEsppInv: rfAInv.esppVal,
         aInvCash: rfAInv.invVal,
-        aTotInv: rfAInv.salCash + aInvV + aMFV + rfAInv.mega + rfAInv.iraVal + rfAInv.invVal + rfAInv.esppVal,
-        bSalCash: rfBBase.salCash, bRsu: bRsuV, bEspp: rfBBase.esppVal, bK401: bMFV, bMega: rfBBase.mega, bIra: rfBBase.iraVal,
+        aTotInv: rfAInv.salCash + aInvV + aK401EmpFv + aMFV + rfAInv.mega + rfAInv.iraVal + rfAInv.invVal + rfAInv.esppVal,
+        bSalCash: rfBBase.salCash, bRsu: bRsuV, bEspp: rfBBase.esppVal, bK401Emp: bK401EmpFv, bK401: bMFV, bMega: rfBBase.mega, bIra: rfBBase.iraVal,
         bCashEv,
-        bTotBase: rfBBase.salCash + bCashEv + bRsuV + rfBBase.esppVal + bMFV + rfBBase.mega + rfBBase.iraVal,
+        bTotBase: rfBBase.salCash + bCashEv + bRsuV + rfBBase.esppVal + bK401EmpFv + bMFV + rfBBase.mega + rfBBase.iraVal,
         bSalCashInv: rfBInv.salCash, bEsppInv: rfBInv.esppVal, bMegaInv: rfBInv.mega, bIraInv: rfBInv.iraVal,
         bInvCash: rfBInv.invVal,
-        bTotInv: rfBInv.salCash + bRsuV + rfBInv.esppVal + bMFV + rfBInv.mega + rfBInv.iraVal + rfBInv.invVal,
+        bTotInv: rfBInv.salCash + bRsuV + rfBInv.esppVal + bK401EmpFv + bMFV + rfBInv.mega + rfBInv.iraVal + rfBInv.invVal,
+        aTax: aTaxPaid, bTax: bTaxPaid,
         transparency: { A: transA, B: transB },
         iraAdvanced: { aTaxLeak: aAlloc.ira.taxLeak || 0, bTaxLeak: bAlloc.ira.taxLeak || 0, aBasis: aAlloc.ira.basis || 0, bBasis: bAlloc.ira.basis || 0 }
       };
@@ -3111,7 +3384,7 @@
 
     // ===== SIMULATE PROMO =====
     function simulatePromo(P) {
-      const { filing, growth, aRaiseR, bRaiseR, price0, lv1Ref, lv2Ref, aKCap, bKCap, aBase, reserveCash, aLv2, lv1, lv2, priorityOrder,
+      const { filing, growth, marketGrowth, aRaiseR, bRaiseR, price0, lv1Ref, lv2Ref, aKCap, bKCap, aBase, reserveCash, reserveCashInc, aLv2, lv1, lv2, priorityOrder,
         contributionPlan,
         startD, exitD, moveD, aMatchVest, bMatchVest, aMatchType, bMatchType, aMatchValue, bMatchValue, aMatchCliff, bMatchCliff, aMatchTrueUp, bMatchTrueUp, aEsppR, aEsppDisc, bEsppR, bEsppDisc,
         aBonusPct, aBonusDate, aSign1, aSign2, vestPat, bgDate, bRaisePat, aRaisePat, taxA, taxB, cliff, grantUnit, initVestSplit } = P;
@@ -3160,14 +3433,21 @@
       };
       const planA = buildRuntimePlan(cPlanA, aEsppR);
       const planB = buildRuntimePlan(cPlanB, bEsppR);
+      const normalizedPriority = normalizePriorityOrder(priorityOrder);
+      const k401ExtraIdx = normalizedPriority.indexOf('k401_extra');
+      const firstNon401Idx = Math.min(...['ira', 'mega', 'espp', 'invest'].map(k => normalizedPriority.indexOf(k)).filter(i => i >= 0));
+      const allowK401Extra = k401ExtraIdx >= 0 && (firstNon401Idx < 0 || k401ExtraIdx <= firstNon401Idx);
       const k401Opts = plan => ({
         enabled: plan.k401.enabled,
         timing: plan.k401.timing,
         annualTargetFn: plan.k401TargetFn,
         mode: plan.k401.mode,
         pctSalaryRate: plan.k401.pctSalaryRate,
-        limitFn: k401LimitFn
+        limitFn: k401LimitFn,
+        allowExtra: allowK401Extra
       });
+      const k401MatchCfgA = { matchType: aMatchType, matchValue: aMatchValue, matchOnRate: 1, compLimitFn };
+      const k401MatchCfgB = { matchType: bMatchType, matchValue: bMatchValue, matchOnRate: 1, compLimitFn };
       const allocOpts = (plan, esppDisc) => ({
         priorityOrder,
         backdoor: plan.ira,
@@ -3186,14 +3466,14 @@
       const FP = fiscalYearProration(startD);
       const allPds = payDates(startD, exitD);
       const switchD = moveD;
-      const totalReserve = reserveCash * daysBetween(startD, exitD) / 365.25;
-      const aSegReserve = reserveCash * daysBetween(startD, switchD) / 365.25;
-      const bSegReserve = reserveCash * daysBetween(switchD, exitD) / 365.25;
+      const totalReserve = cumulativeReserveForPeriod(startD, exitD, reserveCash, reserveCashInc);
+      const aSegReserve = cumulativeReserveForPeriod(startD, switchD, reserveCash, reserveCashInc);
+      const bSegReserve = cumulativeReserveForPeriod(switchD, exitD, reserveCash, reserveCashInc);
       const aPdsA = allPds.filter(pd => pd < switchD), aPdsB = allPds.filter(pd => pd >= switchD);
       const aSalFn = pd => companyASalaryAt(pd, aRaiseR, aBase, aRaisePat, startD);
       // A-path A segment 401k
-      const aK4A = compute401kContribs(aPdsA, aSalFn, true, aKCap, getYear(startD), taxA.prior401k, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear, k401Opts(planA));
-      const aMtchARaw = computeMatchFV(aK4A.contribs, aSalFn, startD, exitD, aMatchType, aMatchValue, aMatchVest, 1, compLimitFn, aMatchTrueUp);
+      const aK4A = compute401kContribs(aPdsA, aSalFn, true, aKCap, getYear(startD), taxA.prior401k, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear, Object.assign({}, k401Opts(planA), { matchConfig: k401MatchCfgA }));
+      const aMtchARaw = computeMatchFV(aK4A.contribs, aSalFn, startD, exitD, aMatchType, aMatchValue, aMatchVest, 1, compLimitFn, aMatchTrueUp, marketGrowth, startD);
       const aTenureA = daysBetween(startD, switchD) / 365;
       const aMtchA = aTenureA >= aMatchCliff ? aMtchARaw : 0;
       // A bonuses during A segment
@@ -3241,10 +3521,10 @@
       const b5Espp = computeEspp(aPdsB, b5Start, exitD, growth, b5Sal, planB.esppRateActive, bEsppDisc, startD, price0, esppLimitFn, planB.espp.offerPeriods);
       // A-path B segment 401k (continuing IRS limit)
       const yrUsedA = {}; for (const [pd, c] of aK4A.contribs) yrUsedA[getYear(pd)] = (yrUsedA[getYear(pd)] || 0) + c;
-      const aK4B = compute401kContribsWithUsed(aPdsB, b5Sal, bKCap, yrUsedA, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear, k401Opts(planB));
+      const aK4B = compute401kContribsWithUsed(aPdsB, b5Sal, bKCap, yrUsedA, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear, Object.assign({}, k401Opts(planB), { matchConfig: k401MatchCfgB }));
       const aK4Bc = aK4B.contribs;
       const aK4Bann = aK4B.ann;
-      const aMtchBRaw = computeMatchFV(aK4Bc, b5Sal, b5Start, exitD, bMatchType, bMatchValue, bMatchVest, 1, compLimitFn, bMatchTrueUp);
+      const aMtchBRaw = computeMatchFV(aK4Bc, b5Sal, b5Start, exitD, bMatchType, bMatchValue, bMatchVest, 1, compLimitFn, bMatchTrueUp, marketGrowth, startD);
       const bTenureAB = daysBetween(switchD, exitD) / 365;
       const aMtchB = bTenureAB >= bMatchCliff ? aMtchBRaw : 0;
       // A-path combined W2/rates
@@ -3350,8 +3630,8 @@
         }
         bpBon.push([bd, ba * bpct * (yo === 0 ? FP : 1)]);
       }
-      const bpK = compute401kContribs(allPds, bpSal, true, bKCap, getYear(startD), taxA.prior401k, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear, k401Opts(planB));
-      const bpMFVRaw = computeMatchFV(bpK.contribs, bpSal, startD, exitD, bMatchType, bMatchValue, bMatchVest, 1, compLimitFn, bMatchTrueUp);
+      const bpK = compute401kContribs(allPds, bpSal, true, bKCap, getYear(startD), taxA.prior401k, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear, Object.assign({}, k401Opts(planB), { matchConfig: k401MatchCfgB }));
+      const bpMFVRaw = computeMatchFV(bpK.contribs, bpSal, startD, exitD, bMatchType, bMatchValue, bMatchVest, 1, compLimitFn, bMatchTrueUp, marketGrowth, startD);
       const bpMRaw = computeRawMatch(bpK.contribs, bpSal, startD, bMatchType, bMatchValue, bMatchVest, 1, compLimitFn, bMatchTrueUp);
       const bpMCap = computeMegaCapacity(bpK.ann, bpMRaw, allPds, k415cFn);
       const bpW2Base = computeW2CompanyB(allPds, bpSal, bpRsu, bpSign, bpBon, {}, startD, exitD);
@@ -3402,8 +3682,8 @@
       for (const [d, a] of aaBon) { aaW2[getYear(d)] = (aaW2[getYear(d)] || 0) + a }
       for (const [d, a] of aaSgn) { aaW2[getYear(d)] = (aaW2[getYear(d)] || 0) + a }
       for (const yr in aaEspp.w2) aaW2[yr] = (aaW2[yr] || 0) + aaEspp.w2[yr];
-      const aaK = compute401kContribs(allPds, aaSalFn, true, aKCap, getYear(startD), taxA.prior401k, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear, k401Opts(planA));
-      const aaMFVRaw = computeMatchFV(aaK.contribs, aaSalFn, startD, exitD, aMatchType, aMatchValue, aMatchVest, 1, compLimitFn, aMatchTrueUp);
+      const aaK = compute401kContribs(allPds, aaSalFn, true, aKCap, getYear(startD), taxA.prior401k, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear, Object.assign({}, k401Opts(planA), { matchConfig: k401MatchCfgA }));
+      const aaMFVRaw = computeMatchFV(aaK.contribs, aaSalFn, startD, exitD, aMatchType, aMatchValue, aMatchVest, 1, compLimitFn, aMatchTrueUp, marketGrowth, startD);
       const aaTenure = daysBetween(startD, exitD) / 365;
       const aaMFV = aaTenure >= aMatchCliff ? aaMFVRaw : 0;
       const aaR = computeEffectiveRates(aaW2, aaK.ann, filing, taxA, joinYr, leaveYr);
@@ -3457,8 +3737,8 @@
         }
         baBBon.push([bd, lv1.base * Math.pow(1 + bRaiseR, nr) * lv1.bonus_pct * (yo === 0 ? FP : 1)]);
       }
-      const baBK = compute401kContribs(baPdsB, baBSal, true, bKCap, getYear(startD), taxA.prior401k, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear, k401Opts(planB));
-      const baBMFVRaw = computeMatchFV(baBK.contribs, baBSal, startD, exitD, bMatchType, bMatchValue, bMatchVest, 1, compLimitFn, bMatchTrueUp);
+      const baBK = compute401kContribs(baPdsB, baBSal, true, bKCap, getYear(startD), taxA.prior401k, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear, Object.assign({}, k401Opts(planB), { matchConfig: k401MatchCfgB }));
+      const baBMFVRaw = computeMatchFV(baBK.contribs, baBSal, startD, exitD, bMatchType, bMatchValue, bMatchVest, 1, compLimitFn, bMatchTrueUp, marketGrowth, startD);
       const baBMRaw = computeRawMatch(baBK.contribs, baBSal, startD, bMatchType, bMatchValue, bMatchVest, 1, compLimitFn, bMatchTrueUp);
       const baBMCap = computeMegaCapacity(baBK.ann, baBMRaw, baPdsB, k415cFn);
       const baW2Base = computeW2CompanyB(baPdsB, baBSal, baBRsu, baBSgn, baBBon, {}, startD, baSwitchEnd);
@@ -3482,10 +3762,10 @@
       }
       const baAEspp = computeEspp(baPdsA, switchD, exitD, growth, baASal, planA.esppRateActive, aEsppDisc, startD, price0, esppLimitFn, planA.espp.offerPeriods);
       const baYrUsed = {}; for (const [pd, c] of baBK.contribs) baYrUsed[getYear(pd)] = (baYrUsed[getYear(pd)] || 0) + c;
-      const baAK4 = compute401kContribsWithUsed(baPdsA, baASal, aKCap, baYrUsed, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear, k401Opts(planA));
+      const baAK4 = compute401kContribsWithUsed(baPdsA, baASal, aKCap, baYrUsed, taxA.k401LimitBase, taxA.k401LimitInc, baseIrsYear, Object.assign({}, k401Opts(planA), { matchConfig: k401MatchCfgA }));
       const baAK4c = baAK4.contribs;
       const baAK4ann = baAK4.ann;
-      const baAMFVRaw = computeMatchFV(baAK4c, baASal, switchD, exitD, aMatchType, aMatchValue, aMatchVest, 1, compLimitFn, aMatchTrueUp);
+      const baAMFVRaw = computeMatchFV(baAK4c, baASal, switchD, exitD, aMatchType, aMatchValue, aMatchVest, 1, compLimitFn, aMatchTrueUp, marketGrowth, startD);
       const baATenure = daysBetween(switchD, exitD) / 365;
       const baAMFV = baATenure >= aMatchCliff ? baAMFVRaw : 0;
       // B→A combined W2/rates
@@ -3560,23 +3840,35 @@
       const baAEsppV = baAEsppAdj.shares * exitP, baAInvV = baAInvSh * exitP;
       const aaInvCash = aaInvCashSh * exitP;
       const baAInvCash = baAInvCashSh * exitP;
-      const abIraVal = aAllocA.ira.fv + aAllocB.ira.fv;
+      const abK401Emp = futureValueFromContribs(aK4A.contribs, marketGrowth, exitD, startD) + futureValueFromContribs(aK4Bc, marketGrowth, exitD, startD);
+      const bbK401Emp = futureValueFromContribs(bpK.contribs, marketGrowth, exitD, startD);
+      const aaK401Emp = futureValueFromContribs(aaK.contribs, marketGrowth, exitD, startD);
+      const baK401Emp = futureValueFromContribs(baBK.contribs, marketGrowth, exitD, startD) + futureValueFromContribs(baAK4c, marketGrowth, exitD, startD);
+      const abIraVal = futureValueFromContribMap(aAllocA.ira.contribs, marketGrowth, exitD, startD) + futureValueFromContribMap(aAllocB.ira.contribs, marketGrowth, exitD, startD);
       const abIraCost = aAllocA.ira.cost + (aAllocA.ira.taxLeak || 0) + aAllocB.ira.cost + (aAllocB.ira.taxLeak || 0);
-      const bbIraVal = bpAlloc.ira.fv, bbIraCost = bpAlloc.ira.cost + (bpAlloc.ira.taxLeak || 0);
-      const aaIraVal = aaAlloc.ira.fv, aaIraCost = aaAlloc.ira.cost + (aaAlloc.ira.taxLeak || 0);
-      const baIraVal = baAllocB.ira.fv + baAllocA.ira.fv;
+      const bbIraVal = futureValueFromContribMap(bpAlloc.ira.contribs, marketGrowth, exitD, startD), bbIraCost = bpAlloc.ira.cost + (bpAlloc.ira.taxLeak || 0);
+      const aaIraVal = futureValueFromContribMap(aaAlloc.ira.contribs, marketGrowth, exitD, startD), aaIraCost = aaAlloc.ira.cost + (aaAlloc.ira.taxLeak || 0);
+      const baIraVal = futureValueFromContribMap(baAllocB.ira.contribs, marketGrowth, exitD, startD) + futureValueFromContribMap(baAllocA.ira.contribs, marketGrowth, exitD, startD);
       const baIraCost = baAllocB.ira.cost + (baAllocB.ira.taxLeak || 0) + baAllocA.ira.cost + (baAllocA.ira.taxLeak || 0);
+      const abMegaVal = futureValueFromContribMap(aAllocA.mega.contribs, marketGrowth, exitD, startD) + futureValueFromContribMap(aAllocB.mega.contribs, marketGrowth, exitD, startD);
+      const abMegaCost = aAllocA.mega.cost + aAllocB.mega.cost;
+      const bbMegaVal = futureValueFromContribMap(bpAlloc.mega.contribs, marketGrowth, exitD, startD);
+      const bbMegaCost = bpAlloc.mega.cost;
+      const aaMegaVal = futureValueFromContribMap(aaAlloc.mega.contribs, marketGrowth, exitD, startD);
+      const aaMegaCost = aaAlloc.mega.cost;
+      const baMegaVal = futureValueFromContribMap(baAllocB.mega.contribs, marketGrowth, exitD, startD) + futureValueFromContribMap(baAllocA.mega.contribs, marketGrowth, exitD, startD);
+      const baMegaCost = baAllocB.mega.cost + baAllocA.mega.cost;
       // Apply reserve floor: baseline and invest variants per path
       const abEsppV = aAEsppVal + aBEsppV, abEsppC = aAEsppAdj.cost + aBEsppAdj.cost;
-      const rfABBase = applyReserveFloor(aTotSalCash, totalReserve, aMegaTot, abIraVal, abIraCost, abEsppV, abEsppC, aACashEv + aBCashEv, 0, 0);
-      const rfABInv = applyReserveFloor(aTotSalCash, totalReserve, aMegaTot, abIraVal, abIraCost, abEsppV, abEsppC, 0, aAInvCash + aBInvV, aACashEv + aBCashEv);
-      const rfBBBase = applyReserveFloor(bpSalCash, totalReserve, bpMegaTot, bbIraVal, bbIraCost, bpEsppV, bpEspp.cost, bpCashEv, 0, 0);
-      const rfBBInv = applyReserveFloor(bpSalCash, totalReserve, bpMegaTot, bbIraVal, bbIraCost, bpEsppV, bpEspp.cost, 0, bpInvV, bpCashEv);
-      const rfAABase = applyReserveFloor(aaSalCash, totalReserve, aaMega, aaIraVal, aaIraCost, aaEsppV, aaEsppAdj.cost, aaCashEv, 0, 0);
-      const rfAAInv = applyReserveFloor(aaSalCash, totalReserve, aaMega, aaIraVal, aaIraCost, aaEsppV, aaEsppAdj.cost, 0, aaInvCash, aaCashEv);
+      const rfABBase = applyReserveFloor(aTotSalCash, totalReserve, abMegaVal, abMegaCost, abIraVal, abIraCost, abEsppV, abEsppC, aACashEv + aBCashEv, 0, 0);
+      const rfABInv = applyReserveFloor(aTotSalCash, totalReserve, abMegaVal, abMegaCost, abIraVal, abIraCost, abEsppV, abEsppC, 0, aAInvCash + aBInvV, aACashEv + aBCashEv);
+      const rfBBBase = applyReserveFloor(bpSalCash, totalReserve, bbMegaVal, bbMegaCost, bbIraVal, bbIraCost, bpEsppV, bpEspp.cost, bpCashEv, 0, 0);
+      const rfBBInv = applyReserveFloor(bpSalCash, totalReserve, bbMegaVal, bbMegaCost, bbIraVal, bbIraCost, bpEsppV, bpEspp.cost, 0, bpInvV, bpCashEv);
+      const rfAABase = applyReserveFloor(aaSalCash, totalReserve, aaMegaVal, aaMegaCost, aaIraVal, aaIraCost, aaEsppV, aaEsppAdj.cost, aaCashEv, 0, 0);
+      const rfAAInv = applyReserveFloor(aaSalCash, totalReserve, aaMegaVal, aaMegaCost, aaIraVal, aaIraCost, aaEsppV, aaEsppAdj.cost, 0, aaInvCash, aaCashEv);
       const baEsppVT = baBEsppV + baAEsppV, baEsppC = baBEspp.cost + baAEsppAdj.cost;
-      const rfBABase = applyReserveFloor(baTotSalCsh, totalReserve, baBMega + baAMega, baIraVal, baIraCost, baEsppVT, baEsppC, baBCashEv + baACashEv, 0, 0);
-      const rfBAInv = applyReserveFloor(baTotSalCsh, totalReserve, baBMega + baAMega, baIraVal, baIraCost, baEsppVT, baEsppC, 0, baAInvCash + baBInvV, baACashEv + baBCashEv);
+      const rfBABase = applyReserveFloor(baTotSalCsh, totalReserve, baMegaVal, baMegaCost, baIraVal, baIraCost, baEsppVT, baEsppC, baBCashEv + baACashEv, 0, 0);
+      const rfBAInv = applyReserveFloor(baTotSalCsh, totalReserve, baMegaVal, baMegaCost, baIraVal, baIraCost, baEsppVT, baEsppC, 0, baAInvCash + baBInvV, baACashEv + baBCashEv);
       const mergeYears = (...objs) => {
         const out = {};
         for (const obj of objs) {
@@ -3624,25 +3916,30 @@
         buildTrans(baBK.targets || {}, baBK.ann || {}, baAllocB.transparency),
         buildTrans(baAK4.targets || {}, baAK4ann || {}, baAllocA.transparency)
       );
+      const abTax = sumTaxFromW2(aPW2, aPR);
+      const bbTax = sumTaxFromW2(bpW2, bpRFinal);
+      const aaTax = sumTaxFromW2(aaW2, aaR);
+      const baTax = sumTaxFromW2(baPW2, baPR);
       const taxLeakAB = (aAllocA.ira.taxLeak || 0) + (aAllocB.ira.taxLeak || 0);
       const taxLeakBB = bpAlloc.ira.taxLeak || 0;
       const taxLeakAA = aaAlloc.ira.taxLeak || 0;
       const taxLeakBA = (baAllocB.ira.taxLeak || 0) + (baAllocA.ira.taxLeak || 0);
-      const mkP = (rfBase, rfInv, id, rsu, k4, ace, bce) => {
-        const tBase = rfBase.salCash + id + rsu + rfBase.esppVal + k4 + rfBase.mega + rfBase.iraVal;
-        const tInv = rfInv.salCash + id + rsu + rfInv.esppVal + k4 + rfInv.mega + rfInv.iraVal;
+      const mkP = (rfBase, rfInv, id, rsu, k4, k4Emp, tax, ace, bce) => {
+        const tBase = rfBase.salCash + id + rsu + rfBase.esppVal + k4Emp + k4 + rfBase.mega + rfBase.iraVal;
+        const tInv = rfInv.salCash + id + rsu + rfInv.esppVal + k4Emp + k4 + rfInv.mega + rfInv.iraVal;
         return {
-          salCash: rfBase.salCash, invD: id, rsu, espp: rfBase.esppVal, k401: k4, mega: rfBase.mega, ira: rfBase.iraVal,
+          salCash: rfBase.salCash, invD: id, rsu, espp: rfBase.esppVal, k401Emp: k4Emp, k401: k4, mega: rfBase.mega, ira: rfBase.iraVal,
+          tax,
           aCashEv: ace, bCashEv: bce, invCash: rfInv.invVal,
           salCashInv: rfInv.salCash, esppInv: rfInv.esppVal, megaInv: rfInv.mega, iraInv: rfInv.iraVal,
           totBase: tBase + ace + bce, totInv: tInv + rfInv.invVal
         };
       };
       return {
-        ab: mkP(rfABBase, rfABInv, aInvV, aBRsuV, aMtchA + aMtchB, aACashEv, aBCashEv),
-        bb: mkP(rfBBBase, rfBBInv, 0, bpRsuV, bpMFV, 0, bpCashEv),
-        aa: mkP(rfAABase, rfAAInv, aaInvV, 0, aaMFV, aaCashEv, 0),
-        ba: mkP(rfBABase, rfBAInv, baAInvV, baBRsuV, baBMFV + baAMFV, baACashEv, baBCashEv),
+        ab: mkP(rfABBase, rfABInv, aInvV, aBRsuV, aMtchA + aMtchB, abK401Emp, abTax, aACashEv, aBCashEv),
+        bb: mkP(rfBBBase, rfBBInv, 0, bpRsuV, bpMFV, bbK401Emp, bbTax, 0, bpCashEv),
+        aa: mkP(rfAABase, rfAAInv, aaInvV, 0, aaMFV, aaK401Emp, aaTax, aaCashEv, 0),
+        ba: mkP(rfBABase, rfBAInv, baAInvV, baBRsuV, baBMFV + baAMFV, baK401Emp, baTax, baACashEv, baBCashEv),
         transparency: { ab: transAB, bb: transBB, aa: transAA, ba: transBA },
         iraAdvanced: {
           abTaxLeak: taxLeakAB,
@@ -3662,15 +3959,14 @@
     function renderPriorityList(order) {
       const list = $('priority_order_list');
       if (!list) return;
-      const normalized = Array.isArray(order) && order.length ? order : [...PRIORITY_BUCKETS];
+      const normalized = normalizePriorityOrder(order);
       list.innerHTML = '';
-      normalized.forEach((key, idx) => {
+      normalized.forEach((key) => {
         const li = document.createElement('li');
         li.className = 'priority-item';
         li.draggable = true;
         li.dataset.bucket = key;
         li.innerHTML =
-          '<span class="priority-rank">' + (idx + 1) + '.</span>' +
           '<span class="priority-handle">::</span>' +
           '<span class="priority-label">' + (PRIORITY_LABELS[key] || key) + '</span>';
         list.appendChild(li);
@@ -3679,9 +3975,9 @@
 
     function readPriorityFromList() {
       const list = $('priority_order_list');
-      if (!list) return [...PRIORITY_BUCKETS];
+      if (!list) return normalizePriorityOrder();
       const order = [...list.querySelectorAll('.priority-item')].map(el => el.dataset.bucket);
-      return order.length ? order : [...PRIORITY_BUCKETS];
+      return normalizePriorityOrder(order);
     }
 
     function commitPriorityOrder() {
@@ -3819,6 +4115,7 @@
       for (const section of collapsibleSections) {
         section.label.classList.toggle('is-collapsed', !!section.collapsed);
         if (section.collapsed) section.nodes.forEach(n => { n.style.display = 'none' });
+        else section.nodes.forEach(n => { n.style.display = '' });
       }
     }
 
@@ -3910,6 +4207,7 @@
       return {
         filing: $('filing').value,
         growth: parseGrowth($('stock_growth').value),
+        marketGrowth: parseGrowth($('market_growth').value, MATCH_GROWTH_RATE * 100),
         aRaiseR: pct('a_raise_pct', 0),
         bRaiseR: pct('b_raise_pct', 3),
         price0: n('b_stock_price', 260),
@@ -3919,6 +4217,8 @@
         bKCap: pct('b_max_def', 75),
         aBase: n('a_base', 550000),
         reserveCash: n('reserve_cash', 0),
+        reserveCashInc: n('reserve_cash_inc', 0),
+        excludeReserveNetworth: $('exclude_reserve_networth').checked,
         aMatchVest: parseMatchVest($('a_match_vest').value),
         bMatchVest: parseMatchVest($('b_match_vest').value),
         aMatchType: $('a_match_type').value,
@@ -4169,12 +4469,13 @@
       table.innerHTML = html;
     }
 
-    function withYearlyDeltaRows(label, vals, rowClass) {
+    function withYearlyDeltaRows(label, vals, rowClass, subRowClass) {
       const deltas = vals.map((v, i) => i === 0 ? v : (v - vals[i - 1]));
       const deltaCells = deltas.map(v => '<td class="' + (v >= 0 ? 'pos' : 'neg') + '">' + formatCurrency(v) + '</td>').join('');
       const cls = rowClass ? ' class="' + rowClass + '"' : '';
+      const subCls = subRowClass ? ' class="breakdown-subrow ' + subRowClass + '"' : ' class="breakdown-subrow"';
       return '<tr' + cls + '><td>' + label + '</td>' + vals.map(v => '<td>' + formatCurrency(v) + '</td>').join('') + '</tr>' +
-        '<tr class="breakdown-subrow"><td>+This Yr</td>' + deltaCells + '</tr>';
+        '<tr' + subCls + '><td>This Year</td>' + deltaCells + '</tr>';
     }
 
     function renderTimelineMix(rows) {
@@ -4339,26 +4640,38 @@
         const r = simulatePromo(P);
         const paths = [{ k: 'aa', l: 'A->A' }, { k: 'bb', l: 'B->B' }, { k: 'ab', l: 'A->B' }, { k: 'ba', l: 'B->A' }];
         const tots = paths.map(p => useInv ? r[p.k].totInv : r[p.k].totBase);
-        const bbT = useInv ? r.bb.totInv : r.bb.totBase;
+        const reserveSpend = cumulativeReserveForPeriod(P.startD, P.exitD, P.reserveCash, P.reserveCashInc);
+        const reserveActive = reserveSpend > 0;
+        const netWorths = (reserveActive && P.excludeReserveNetworth) ? tots.map(v => v - reserveSpend) : tots;
+        const bbT = netWorths[1];
         let h = '<tr><th>Metric</th>' + paths.map(p => '<th>' + p.l + '</th>').join('') + '</tr>';
-        h += '<tr class="total-row"><td>Net Worth</td>' + tots.map(v => '<td>' + formatCurrency(v) + '</td>').join('') + '</tr>';
-        const deltas = tots.map(t => t - bbT);
+        h += '<tr class="total-row"><td>Net Worth</td>' + netWorths.map(v => '<td>' + formatCurrency(v) + '</td>').join('') + '</tr>';
+        const deltas = netWorths.map(t => t - bbT);
         h += '<tr class="delta-row"><td>Delta versus B->B</td>' + deltas.map((d, i) =>
           i === 1 ? '<td>—</td>' : '<td class="' + (d >= 0 ? 'pos' : 'neg') + '">' + formatCurrency(d) + '</td>').join('') + '</tr>';
         h += '<tr class="delta-row"><td>Delta %</td>' + deltas.map((d, i) =>
           i === 1 ? '<td>—</td>' : '<td class="' + (d >= 0 ? 'pos' : 'neg') + '">' + (bbT ? ((d / bbT) * 100).toFixed(1) + '%' : 'N/A') + '</td>').join('') + '</tr>';
+        if (reserveActive && !P.excludeReserveNetworth) {
+          h += '<tr class="total-row reserve-adjust-start"><td>Net Worth - Reserve Salary</td>' + tots.map(v => '<td>' + formatCurrency(v - reserveSpend) + '</td>').join('') + '</tr>';
+        }
         $('main-table').innerHTML = h;
 
         let b = '<tr><th>Component</th>' + paths.map(p => '<th>' + p.l + '</th>').join('') + '</tr>';
         const comps = useInv ?
-          [['Salary Cash', 'salCashInv'], ['Investment Delta', 'invD'], ['RSU', 'rsu'], ['ESPP', 'esppInv'], ['401k Match', 'k401'], ['Backdoor IRA', 'iraInv'], ['Mega Backdoor Roth', 'megaInv'], ['Invested Sign-on + Bonus', 'invCash']] :
-          [['Salary Cash', 'salCash'], ['Investment Delta', 'invD'], ['RSU', 'rsu'], ['ESPP', 'espp'], ['401k Match', 'k401'], ['Backdoor IRA', 'ira'], ['Mega Backdoor Roth', 'mega'], ['Cash (Sign-on + Bonus)', '_cash']];
+          [['Salary Cash', 'salCashInv'], ['Market Investment', '_marketInv'], ['RSU', 'rsu'], ['ESPP', 'esppInv'], ['401k Employee', 'k401Emp'], ['401k Match', 'k401'], ['Backdoor IRA', 'iraInv'], ['Mega Backdoor Roth', 'megaInv']] :
+          [['Salary Cash', 'salCash'], ['Market Investment', 'invD'], ['RSU', 'rsu'], ['ESPP', 'espp'], ['401k Employee', 'k401Emp'], ['401k Match', 'k401'], ['Backdoor IRA', 'ira'], ['Mega Backdoor Roth', 'mega'], ['Cash (Sign-on + Bonus)', '_cash']];
         comps.forEach(([lbl, key]) => {
           b += '<tr><td>' + lbl + '</td>' + paths.map(p => key === '_cash'
             ? '<td>' + formatCurrency(r[p.k].aCashEv + r[p.k].bCashEv) + '</td>'
-            : '<td>' + formatCurrency(r[p.k][key]) + '</td>').join('') + '</tr>';
+            : key === '_marketInv'
+              ? '<td>' + formatCurrency((r[p.k].invD || 0) + (r[p.k].invCash || 0)) + '</td>'
+              : '<td>' + formatCurrency(r[p.k][key]) + '</td>').join('') + '</tr>';
         });
+        if (reserveActive) {
+          b += '<tr class="breakdown-minor-row"><td>Reserve Salary</td>' + tots.map(() => '<td>' + formatCurrency(reserveSpend) + '</td>').join('') + '</tr>';
+        }
         b += '<tr class="total-row"><td>Total</td>' + tots.map(v => '<td>' + formatCurrency(v) + '</td>').join('') + '</tr>';
+        b += '<tr class="breakdown-minor-row"><td>Taxes</td>' + paths.map(p => '<td>' + formatCurrency(r[p.k].tax || 0) + '</td>').join('') + '</tr>';
         $('breakdown-table').innerHTML = b;
         $('table-title').textContent = 'Net Worth: Career Path Comparison';
 
@@ -4373,13 +4686,14 @@
           total: useInv ? r[p.k].totInv : r[p.k].totBase,
           segments: [
             { label: 'Salary Cash', value: useInv ? r[p.k].salCashInv : r[p.k].salCash },
-            { label: 'Investment Delta', value: r[p.k].invD },
+            { label: 'Market Investment', value: useInv ? ((r[p.k].invD || 0) + (r[p.k].invCash || 0)) : r[p.k].invD },
             { label: 'RSU', value: r[p.k].rsu },
             { label: 'ESPP', value: useInv ? r[p.k].esppInv : r[p.k].espp },
+            { label: '401k Employee', value: r[p.k].k401Emp },
             { label: '401k Match', value: r[p.k].k401 },
             { label: 'Backdoor IRA', value: useInv ? r[p.k].iraInv : r[p.k].ira },
             { label: 'Mega Backdoor', value: useInv ? r[p.k].megaInv : r[p.k].mega },
-            { label: 'Sign-on + Bonus', value: useInv ? r[p.k].invCash : (r[p.k].aCashEv + r[p.k].bCashEv) }
+            { label: 'Sign-on + Bonus', value: useInv ? 0 : (r[p.k].aCashEv + r[p.k].bCashEv) }
           ]
         }));
       } else {
@@ -4393,33 +4707,48 @@
           renderSensitivity(P, false, par);
           return;
         }
-        const results = ms.map(m => ({ label: m.label, r: simulateDirect(Object.assign({}, P, { exitD: m.date })) }));
+        const results = ms.map(m => ({ label: m.label, date: m.date, r: simulateDirect(Object.assign({}, P, { exitD: m.date })) }));
         const cols = results.length;
         const colSpan = cols + 1;
         let h = '<tr><th>Metric</th>' + results.map(x => '<th>' + x.label + '</th>').join('') + '</tr>';
         const aTs = results.map(x => useInv ? x.r.aTotInv : x.r.aTotBase);
         const bTs = results.map(x => useInv ? x.r.bTotInv : x.r.bTotBase);
-        const deltas = aTs.map((a, i) => a - bTs[i]);
-        h += withYearlyDeltaRows('Company A Net Worth', aTs, 'total-row');
-        h += withYearlyDeltaRows('Company B Net Worth', bTs, 'total-row');
+        const reserveByCol = results.map(x => cumulativeReserveForPeriod(P.startD, x.date, P.reserveCash, P.reserveCashInc));
+        const reserveActive = reserveByCol.some(v => v > 0);
+        const netA = (reserveActive && P.excludeReserveNetworth) ? aTs.map((v, i) => v - reserveByCol[i]) : aTs;
+        const netB = (reserveActive && P.excludeReserveNetworth) ? bTs.map((v, i) => v - reserveByCol[i]) : bTs;
+        const deltas = netA.map((a, i) => a - netB[i]);
+        h += withYearlyDeltaRows('Company A Net Worth', netA, 'total-row');
+        h += withYearlyDeltaRows('Company B Net Worth', netB, 'total-row');
         h += '<tr class="delta-row"><td>Delta (A - B)</td>' + deltas.map(d => '<td class="' + (d >= 0 ? 'pos' : 'neg') + '">' + formatCurrency(d) + '</td>').join('') + '</tr>';
-        h += '<tr class="delta-row"><td>Delta %</td>' + deltas.map((d, i) => '<td class="' + (d >= 0 ? 'pos' : 'neg') + '">' + (bTs[i] ? ((d / bTs[i]) * 100).toFixed(1) + '%' : 'N/A') + '</td>').join('') + '</tr>';
+        h += '<tr class="delta-row"><td>Delta %</td>' + deltas.map((d, i) => '<td class="' + (d >= 0 ? 'pos' : 'neg') + '">' + (netB[i] ? ((d / netB[i]) * 100).toFixed(1) + '%' : 'N/A') + '</td>').join('') + '</tr>';
         $('main-table').innerHTML = h;
 
         const breakdownCols = results.map(x => '<th>' + x.label + '</th>').join('');
         let b = '<tr><th>Company A Components</th>' + breakdownCols + '</tr>';
         const aC = useInv ?
-          [['Salary Cash', 'aSalCashInv'], ['Investment Delta', 'aInvD'], ['401k Match', 'aK401'], ['Backdoor IRA', 'aIraInv'], ['Mega Backdoor Roth', 'aMegaInv'], ['ESPP', 'aEsppInv'], ['Invested Sign-on + Bonus', 'aInvCash']] :
-          [['Salary Cash', 'aSalCash'], ['Investment Delta', 'aInvD'], ['401k Match', 'aK401'], ['Backdoor IRA', 'aIra'], ['Mega Backdoor Roth', 'aMega'], ['ESPP', 'aEspp'], ['Cash (Sign-on + Bonus)', 'aCashEv']];
-        aC.forEach(([lbl, key]) => { b += withYearlyDeltaRows(lbl, results.map(x => x.r[key])) });
-        b += '<tr class="total-row"><td>Company A Total</td>' + aTs.map(v => '<td>' + formatCurrency(v) + '</td>').join('') + '</tr>';
+          [['Salary Cash', 'aSalCashInv'], ['Market Investment', '_aMarketInv'], ['401k Employee', 'aK401Emp'], ['401k Match', 'aK401'], ['Backdoor IRA', 'aIraInv'], ['Mega Backdoor Roth', 'aMegaInv'], ['ESPP', 'aEsppInv']] :
+          [['Salary Cash', 'aSalCash'], ['Market Investment', 'aInvD'], ['401k Employee', 'aK401Emp'], ['401k Match', 'aK401'], ['Backdoor IRA', 'aIra'], ['Mega Backdoor Roth', 'aMega'], ['ESPP', 'aEspp'], ['Cash (Sign-on + Bonus)', 'aCashEv']];
+        aC.forEach(([lbl, key]) => {
+          const vals = key === '_aMarketInv' ? results.map(x => (x.r.aInvD || 0) + (x.r.aInvCash || 0)) : results.map(x => x.r[key]);
+          b += withYearlyDeltaRows(lbl, vals);
+        });
+        b += '<tr class="breakdown-total-row"><td>Company A Total</td>' + aTs.map(v => '<td>' + formatCurrency(v) + '</td>').join('') + '</tr>';
+        b += withYearlyDeltaRows('Taxes', results.map(x => (x.r.aTax || 0)), 'breakdown-minor-row', 'breakdown-minor-subrow');
+        if (reserveByCol.some(v => v > 0)) {
+          b += withYearlyDeltaRows('Reserve Salary', reserveByCol.map(v => v), 'breakdown-minor-row', 'breakdown-minor-subrow');
+        }
         b += '<tr class="spacer-row"><td colspan="' + colSpan + '"></td></tr>';
         const bC = useInv ?
-          [['Salary Cash', 'bSalCashInv'], ['RSU', 'bRsu'], ['ESPP', 'bEsppInv'], ['401k Match', 'bK401'], ['Backdoor IRA', 'bIraInv'], ['Mega Backdoor Roth', 'bMegaInv'], ['Invested Sign-on + Bonus', 'bInvCash']] :
-          [['Salary Cash', 'bSalCash'], ['RSU', 'bRsu'], ['ESPP', 'bEspp'], ['401k Match', 'bK401'], ['Backdoor IRA', 'bIra'], ['Mega Backdoor Roth', 'bMega'], ['Cash (Sign-on + Bonus)', 'bCashEv']];
-        b += '<tr><th>Company B Components</th>' + breakdownCols + '</tr>';
+          [['Salary Cash', 'bSalCashInv'], ['Market Investment', 'bInvCash'], ['RSU', 'bRsu'], ['ESPP', 'bEsppInv'], ['401k Employee', 'bK401Emp'], ['401k Match', 'bK401'], ['Backdoor IRA', 'bIraInv'], ['Mega Backdoor Roth', 'bMegaInv']] :
+          [['Salary Cash', 'bSalCash'], ['RSU', 'bRsu'], ['ESPP', 'bEspp'], ['401k Employee', 'bK401Emp'], ['401k Match', 'bK401'], ['Backdoor IRA', 'bIra'], ['Mega Backdoor Roth', 'bMega'], ['Cash (Sign-on + Bonus)', 'bCashEv']];
+        b += '<tr class="breakdown-section-divider"><th>Company B Components</th>' + breakdownCols + '</tr>';
         bC.forEach(([lbl, key]) => { b += withYearlyDeltaRows(lbl, results.map(x => x.r[key])) });
-        b += '<tr class="total-row"><td>Company B Total</td>' + bTs.map(v => '<td>' + formatCurrency(v) + '</td>').join('') + '</tr>';
+        b += '<tr class="breakdown-total-row"><td>Company B Total</td>' + bTs.map(v => '<td>' + formatCurrency(v) + '</td>').join('') + '</tr>';
+        b += withYearlyDeltaRows('Taxes', results.map(x => (x.r.bTax || 0)), 'breakdown-minor-row', 'breakdown-minor-subrow');
+        if (reserveByCol.some(v => v > 0)) {
+          b += withYearlyDeltaRows('Reserve Salary', reserveByCol.map(v => v), 'breakdown-minor-row', 'breakdown-minor-subrow');
+        }
         $('breakdown-table').innerHTML = b;
         $('table-title').textContent = 'Net Worth: Company A vs Company B';
 
@@ -4431,13 +4760,14 @@
             total: useInv ? finalR.aTotInv : finalR.aTotBase,
             segments: [
               { label: 'Salary Cash', value: useInv ? finalR.aSalCashInv : finalR.aSalCash },
-              { label: 'Investment Delta', value: finalR.aInvD },
+              { label: 'Market Investment', value: useInv ? ((finalR.aInvD || 0) + (finalR.aInvCash || 0)) : finalR.aInvD },
               { label: 'RSU', value: 0 },
               { label: 'ESPP', value: useInv ? finalR.aEsppInv : finalR.aEspp },
+              { label: '401k Employee', value: finalR.aK401Emp },
               { label: '401k Match', value: finalR.aK401 },
               { label: 'Backdoor IRA', value: useInv ? finalR.aIraInv : finalR.aIra },
               { label: 'Mega Backdoor', value: useInv ? finalR.aMegaInv : finalR.aMega },
-              { label: 'Sign-on + Bonus', value: useInv ? finalR.aInvCash : finalR.aCashEv }
+              { label: 'Sign-on + Bonus', value: useInv ? 0 : finalR.aCashEv }
             ]
           },
           {
@@ -4445,13 +4775,14 @@
             total: useInv ? finalR.bTotInv : finalR.bTotBase,
             segments: [
               { label: 'Salary Cash', value: useInv ? finalR.bSalCashInv : finalR.bSalCash },
-              { label: 'Investment Delta', value: 0 },
+              { label: 'Market Investment', value: useInv ? finalR.bInvCash : 0 },
               { label: 'RSU', value: finalR.bRsu },
               { label: 'ESPP', value: useInv ? finalR.bEsppInv : finalR.bEspp },
+              { label: '401k Employee', value: finalR.bK401Emp },
               { label: '401k Match', value: finalR.bK401 },
               { label: 'Backdoor IRA', value: useInv ? finalR.bIraInv : finalR.bIra },
               { label: 'Mega Backdoor', value: useInv ? finalR.bMegaInv : finalR.bMega },
-              { label: 'Sign-on + Bonus', value: useInv ? finalR.bInvCash : finalR.bCashEv }
+              { label: 'Sign-on + Bonus', value: useInv ? 0 : finalR.bCashEv }
             ]
           }
         ];
@@ -4461,9 +4792,11 @@
       renderTimelineMix(timelineRows);
       renderSensitivity(P, isPromo, par);
       applyCollapsedSections();
+      scheduleLocalStateSave();
     }
 
     const PRESET_KEY = 'compComparison.presets.v1';
+    const LOCAL_STATE_KEY = 'compComparison.lastState.v1';
     const SHARE_KEY = 'state';
     const STATE_EXCLUDE = new Set(['preset_name', 'preset_select']);
 
@@ -4495,7 +4828,8 @@
       });
     }
 
-    function readStateSnapshot() {
+    function readStateSnapshot(options = {}) {
+      const includeCollapsibleState = options.includeCollapsibleState !== false;
       const out = {};
       document.querySelectorAll('input[id],select[id],textarea[id]').forEach(el => {
         if (!el.id || STATE_EXCLUDE.has(el.id)) return;
@@ -4503,7 +4837,7 @@
         else out[el.id] = el.value;
       });
       out.priorityOrder = readPriorityFromList();
-      out.collapsibleState = readCollapsibleStateSnapshot();
+      if (includeCollapsibleState) out.collapsibleState = readCollapsibleStateSnapshot();
       return out;
     }
 
@@ -4516,7 +4850,7 @@
         if (el.type === 'checkbox') el.checked = !!val;
         else el.value = String(val);
       }
-      const order = Array.isArray(state.priorityOrder) ? state.priorityOrder.filter(x => PRIORITY_BUCKETS.includes(x)) : null;
+      const order = Array.isArray(state.priorityOrder) ? state.priorityOrder : null;
       if (order && order.length) renderPriorityList(order);
       if (Object.prototype.hasOwnProperty.call(state, 'irs_base_year') && $('irs_base_year')) {
         $('irs_base_year').dataset.manual = '1';
@@ -4534,6 +4868,39 @@
 
     function writePresets(store) {
       localStorage.setItem(PRESET_KEY, JSON.stringify(store));
+    }
+
+    function writeLocalState() {
+      try {
+        localStorage.setItem(LOCAL_STATE_KEY, JSON.stringify(readStateSnapshot({ includeCollapsibleState: true })));
+      } catch (err) {
+        console.warn('Unable to persist local state.', err);
+      }
+    }
+
+    function readLocalState() {
+      try {
+        const raw = localStorage.getItem(LOCAL_STATE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : null;
+      } catch (err) {
+        console.warn('Unable to read local state.', err);
+        return null;
+      }
+    }
+
+    function initLocalState() {
+      const hasShareState = new URLSearchParams(window.location.search).has(SHARE_KEY);
+      if (hasShareState) return;
+      const saved = readLocalState();
+      if (saved) applyStateSnapshot(saved);
+    }
+
+    let localStateTimer = null;
+    function scheduleLocalStateSave() {
+      clearTimeout(localStateTimer);
+      localStateTimer = setTimeout(writeLocalState, 200);
     }
 
     function refreshPresetSelect() {
@@ -4574,7 +4941,7 @@
         const name = $('preset_name').value.trim();
         if (!name) { setShareStatus('Enter a preset name first.', true); return; }
         const store = readPresets();
-        store[name] = readStateSnapshot();
+        store[name] = readStateSnapshot({ includeCollapsibleState: false });
         writePresets(store);
         refreshPresetSelect();
         $('preset_select').value = name;
@@ -4598,12 +4965,19 @@
         setShareStatus('Deleted preset: ' + name, false);
       });
       $('share_link_btn').addEventListener('click', () => {
-        const state = readStateSnapshot();
+        const state = readStateSnapshot({ includeCollapsibleState: true });
         const url = new URL(window.location.href);
         url.searchParams.set(SHARE_KEY, encodeURIComponent(JSON.stringify(state)));
         copyText(url.toString())
           .then(() => setShareStatus('Share link copied.', false))
           .catch(() => setShareStatus('Unable to copy share link.', true));
+      });
+      $('reset_defaults_btn').addEventListener('click', () => {
+        if (!window.confirm('Reset all inputs to default values?')) return;
+        localStorage.removeItem(LOCAL_STATE_KEY);
+        const url = new URL(window.location.href);
+        url.searchParams.delete(SHARE_KEY);
+        window.location.href = url.toString();
       });
       const linkState = new URLSearchParams(window.location.search).get(SHARE_KEY);
       if (linkState) {
@@ -4709,21 +5083,21 @@
         if(j.mode==='direct'){
           const r=simulateDirect(pp);
           rows.push([j.mode,j.filing,j.waLabel,j.growth,j.aRaise,j.lv1Ref,j.maxDef,j.tenure,j.lv2Ref,'A_base',
-            r.aSalCash,r.aInvD,0,r.aEspp,r.aK401,r.aIra,r.aMega,r.aCashEv,0,r.aTotBase].map(v=>typeof v==='number'?Math.round(v):v));
+            r.aSalCash,r.aInvD,0,r.aEspp,r.aK401Emp,r.aK401,r.aIra,r.aMega,r.aCashEv,0,r.aTotBase].map(v=>typeof v==='number'?Math.round(v):v));
           rows.push([j.mode,j.filing,j.waLabel,j.growth,j.aRaise,j.lv1Ref,j.maxDef,j.tenure,j.lv2Ref,'A_inv',
-            r.aSalCashInv,r.aInvD,0,r.aEsppInv,r.aK401,r.aIraInv,r.aMegaInv,0,r.aInvCash,r.aTotInv].map(v=>typeof v==='number'?Math.round(v):v));
+            r.aSalCashInv,r.aInvD,0,r.aEsppInv,r.aK401Emp,r.aK401,r.aIraInv,r.aMegaInv,0,r.aInvCash,r.aTotInv].map(v=>typeof v==='number'?Math.round(v):v));
           rows.push([j.mode,j.filing,j.waLabel,j.growth,j.aRaise,j.lv1Ref,j.maxDef,j.tenure,j.lv2Ref,'B_base',
-            r.bSalCash,0,r.bRsu,r.bEspp,r.bK401,r.bIra,r.bMega,r.bCashEv,0,r.bTotBase].map(v=>typeof v==='number'?Math.round(v):v));
+            r.bSalCash,0,r.bRsu,r.bEspp,r.bK401Emp,r.bK401,r.bIra,r.bMega,r.bCashEv,0,r.bTotBase].map(v=>typeof v==='number'?Math.round(v):v));
           rows.push([j.mode,j.filing,j.waLabel,j.growth,j.aRaise,j.lv1Ref,j.maxDef,j.tenure,j.lv2Ref,'B_inv',
-            r.bSalCashInv,0,r.bRsu,r.bEsppInv,r.bK401,r.bIraInv,r.bMegaInv,0,r.bInvCash,r.bTotInv].map(v=>typeof v==='number'?Math.round(v):v));
+            r.bSalCashInv,0,r.bRsu,r.bEsppInv,r.bK401Emp,r.bK401,r.bIraInv,r.bMegaInv,0,r.bInvCash,r.bTotInv].map(v=>typeof v==='number'?Math.round(v):v));
         }else{
           const r=simulatePromo(pp);
           for(const pk of ['aa','bb','ab','ba']){
             const p=r[pk];
             rows.push([j.mode,j.filing,j.waLabel,j.growth,j.aRaise,j.lv1Ref,j.maxDef,j.tenure,j.lv2Ref,pk+'_base',
-              p.salCash,p.invD,p.rsu,p.espp,p.k401,p.ira,p.mega,p.aCashEv+p.bCashEv,0,p.totBase].map(v=>typeof v==='number'?Math.round(v):v));
+              p.salCash,p.invD,p.rsu,p.espp,p.k401Emp,p.k401,p.ira,p.mega,p.aCashEv+p.bCashEv,0,p.totBase].map(v=>typeof v==='number'?Math.round(v):v));
             rows.push([j.mode,j.filing,j.waLabel,j.growth,j.aRaise,j.lv1Ref,j.maxDef,j.tenure,j.lv2Ref,pk+'_inv',
-              p.salCashInv,p.invD,p.rsu,p.esppInv,p.k401,p.iraInv,p.megaInv,0,p.invCash,p.totInv].map(v=>typeof v==='number'?Math.round(v):v));
+              p.salCashInv,p.invD,p.rsu,p.esppInv,p.k401Emp,p.k401,p.iraInv,p.megaInv,0,p.invCash,p.totInv].map(v=>typeof v==='number'?Math.round(v):v));
           }
         }
         if(ji%500===0)self.postMessage({type:'progress',done:ji,total:jobs.length});
@@ -4738,7 +5112,7 @@
           status.textContent = 'Running... ' + e.data.done.toLocaleString() + ' / ' + totalJobs.toLocaleString();
         } else if (e.data.type === 'done') {
           const hdr = ['mode', 'filing', 'wa_tax', 'growth_pct', 'a_raise_pct', 'lv1_ref', 'max_def', 'tenure', 'lv2_ref', 'path',
-            'sal_cash', 'inv_delta', 'rsu', 'espp', 'k401_match', 'backdoor_ira', 'mega_roth', 'cash_sign_bonus', 'inv_sign_bonus', 'total'];
+            'sal_cash', 'market_investment', 'rsu', 'espp', 'k401_employee', 'k401_match', 'backdoor_ira', 'mega_roth', 'cash_sign_bonus', 'inv_sign_bonus', 'total'];
           let csv = hdr.join(',') + '\n';
           for (const row of e.data.rows) csv += row.join(',') + '\n';
           const a = document.createElement('a');
@@ -4755,7 +5129,9 @@
     initPriorityOrder();
     reorderPromoSections();
     initCollapsibleSections();
+    initLocalState();
     initPresetAndShare();
+    window.addEventListener('beforeunload', writeLocalState);
     alignIrsBaseYearWithStartYear(false);
     update();
   </script>
