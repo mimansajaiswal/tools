@@ -75,17 +75,10 @@ function connectTabs(tabContainerId, attrName, panelSelector, opts = {}) {
 }
 
 const exampleTabsApi = connectTabs('exampleTabs', 'data-example', '[data-example-panel]', {
-    onChange: (value, btn) => {
-        const selectEl = document.getElementById('exampleTabsSelect');
-        if (!selectEl) return;
-        selectEl.querySelectorAll('[data-example]').forEach((option) => {
-            const active = option.getAttribute('data-example') === value;
-            option.classList.toggle('active', active);
-            option.setAttribute('aria-selected', active ? 'true' : 'false');
-        });
-        const trigger = document.getElementById('exampleTabsTrigger');
-        if (trigger) {
-            trigger.textContent = btn ? btn.textContent.trim() : value;
+    onChange: (value) => {
+        const nativeSelect = document.getElementById('exampleTabsNative');
+        if (nativeSelect && nativeSelect.value !== value) {
+            nativeSelect.value = value;
         }
     }
 });
@@ -117,14 +110,23 @@ const ALLOWED_TOP_LEVEL_KEYS = new Set([
     'entrySeparator',
     'fieldTerminator',
     'fieldTerminatorMode',
+    'hideFieldTerminatorInPills',
+    'autoCloseFieldOnSpace',
+    'autoCloseFieldOnSpaceConfidenceThreshold',
     'multiSelectSeparator',
     'multiSelectDisplaySeparator',
+    'sortSelectedMultiOptionsToBottom',
     'enableNumberPillStepper',
     'numberPillStep',
     'escapeChar',
     'fallbackField',
     'showJsonOutput',
     'showDropdownOnTyping',
+    'showFieldMenuOnTyping',
+    'fieldMenuTrigger',
+    'fieldMenuShowUsedFields',
+    'fieldMenuShowRequiredMeta',
+    'fieldMenuShowAutoDetectMeta',
     'showAttachmentDropdownPreview',
     'showInlinePills',
     'showEntryCards',
@@ -472,12 +474,22 @@ function validateEditableConfig(config) {
         'allowAttachmentReuse',
         'autoDetectOptionsWithoutPrefix',
         'reduceInferredOptions',
-        'enableNumberPillStepper'
+        'enableNumberPillStepper',
+        'sortSelectedMultiOptionsToBottom',
+        'hideFieldTerminatorInPills',
+        'autoCloseFieldOnSpace'
     ].forEach((key) => {
         if (config[key] !== undefined && typeof config[key] !== 'boolean') {
             pushValidationError(errors, `config.${key}`, 'must be a boolean');
         }
     });
+    if (config.autoCloseFieldOnSpaceConfidenceThreshold !== undefined) {
+        if (typeof config.autoCloseFieldOnSpaceConfidenceThreshold !== 'number' || !Number.isFinite(config.autoCloseFieldOnSpaceConfidenceThreshold)) {
+            pushValidationError(errors, 'config.autoCloseFieldOnSpaceConfidenceThreshold', 'must be a number');
+        } else if (config.autoCloseFieldOnSpaceConfidenceThreshold < 0 || config.autoCloseFieldOnSpaceConfidenceThreshold > 1) {
+            pushValidationError(errors, 'config.autoCloseFieldOnSpaceConfidenceThreshold', 'must be between 0 and 1');
+        }
+    }
     if (config.numberPillStep !== undefined) {
         if (typeof config.numberPillStep !== 'number' || !Number.isFinite(config.numberPillStep)) {
             pushValidationError(errors, 'config.numberPillStep', 'must be a number');
@@ -816,28 +828,160 @@ function setupAiRuntimeControls(options) {
         lastProvider = normalized;
     }
 
-    if (providerSelectEl && providerTriggerEl) {
-        providerTriggerEl.addEventListener('click', () => {
-            providerSelectEl.classList.toggle('open');
+    function syncProviderSelectUi(value) {
+        if (!providerSelectEl || !providerTriggerEl) {
+            return null;
+        }
+        const normalized = String(value || '');
+        const options = Array.from(providerSelectEl.querySelectorAll('.custom-select-option'));
+        let activeOption = null;
+        options.forEach((option) => {
+            const active = (option.getAttribute('data-value') || '') === normalized;
+            option.classList.toggle('selected', active);
+            option.classList.toggle('active', active);
+            option.setAttribute('aria-selected', active ? 'true' : 'false');
+            option.tabIndex = active ? 0 : -1;
+            if (active) {
+                activeOption = option;
+            }
         });
-        providerSelectEl.addEventListener('click', (event) => {
-            const option = event.target.closest('.custom-select-option');
-            if (!option) return;
-            const value = option.getAttribute('data-value');
-            const text = option.textContent;
-            providerInputEl.value = value;
-            providerTriggerEl.textContent = text;
+        providerTriggerEl.textContent = activeOption ? optionText(activeOption) : normalized;
+        return activeOption;
+    }
+
+    function optionText(option) {
+        return option ? String(option.textContent || '').trim() : '';
+    }
+
+    if (providerSelectEl && providerTriggerEl) {
+        const providerMenuEl = providerSelectEl.querySelector('.custom-select-menu');
+        const optionEls = Array.from(providerSelectEl.querySelectorAll('.custom-select-option'));
+        const menuId = providerMenuEl
+            ? (providerMenuEl.id || `${providerSelectId || providerSelectEl.id || 'aiProviderSelect'}Menu`)
+            : '';
+        providerTriggerEl.setAttribute('aria-haspopup', 'listbox');
+        providerTriggerEl.setAttribute('aria-expanded', 'false');
+        if (providerMenuEl) {
+            providerMenuEl.id = menuId;
+            providerMenuEl.setAttribute('role', 'listbox');
+            providerMenuEl.setAttribute('tabindex', '-1');
+            providerTriggerEl.setAttribute('aria-controls', menuId);
+        }
+        optionEls.forEach((option) => {
+            option.setAttribute('role', 'option');
+            option.setAttribute('aria-selected', 'false');
+            option.tabIndex = -1;
+        });
+        const closeProviderMenu = (restoreFocus) => {
             providerSelectEl.classList.remove('open');
+            providerTriggerEl.setAttribute('aria-expanded', 'false');
+            if (restoreFocus && typeof providerTriggerEl.focus === 'function') {
+                providerTriggerEl.focus();
+            }
+        };
+        const openProviderMenu = () => {
+            providerSelectEl.classList.add('open');
+            providerTriggerEl.setAttribute('aria-expanded', 'true');
+            const active = syncProviderSelectUi(providerInputEl.value) || optionEls[0] || null;
+            if (active && typeof active.focus === 'function') {
+                active.focus();
+            }
+        };
+        const focusProviderOptionByDelta = (delta) => {
+            if (!optionEls.length) {
+                return;
+            }
+            const current = document.activeElement && document.activeElement.closest('.custom-select-option');
+            const currentIndex = Math.max(0, optionEls.indexOf(current));
+            const nextIndex = Math.max(0, Math.min(optionEls.length - 1, currentIndex + delta));
+            optionEls[nextIndex].focus();
+        };
+        const commitProviderOption = (option, opts = {}) => {
+            if (!option) {
+                return;
+            }
+            const value = option.getAttribute('data-value') || '';
+            providerInputEl.value = value;
+            syncProviderSelectUi(value);
+            if (opts.closeMenu !== false) {
+                closeProviderMenu(!!opts.restoreFocus);
+            }
             syncFieldVisibility(value);
             syncModelDefaults(value);
             syncApplyState();
             if (allowDemoProvider && String(value || '').toLowerCase() === 'demo') {
                 applyRuntimeToEditor();
             }
+        };
+        providerTriggerEl.addEventListener('click', () => {
+            if (providerSelectEl.classList.contains('open')) {
+                closeProviderMenu(false);
+            } else {
+                openProviderMenu();
+            }
+        });
+        providerTriggerEl.addEventListener('keydown', (event) => {
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                openProviderMenu();
+                if (event.key === 'ArrowUp' && optionEls.length) {
+                    optionEls[optionEls.length - 1].focus();
+                }
+            } else if (event.key === 'Escape') {
+                closeProviderMenu(false);
+            }
+        });
+        if (providerMenuEl) {
+            providerMenuEl.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    closeProviderMenu(true);
+                    return;
+                }
+                if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    focusProviderOptionByDelta(1);
+                    return;
+                }
+                if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    focusProviderOptionByDelta(-1);
+                    return;
+                }
+                if (event.key === 'Home' && optionEls.length) {
+                    event.preventDefault();
+                    optionEls[0].focus();
+                    return;
+                }
+                if (event.key === 'End' && optionEls.length) {
+                    event.preventDefault();
+                    optionEls[optionEls.length - 1].focus();
+                    return;
+                }
+                if (event.key === 'Enter' || event.key === ' ') {
+                    const focusedOption = document.activeElement && document.activeElement.closest('.custom-select-option');
+                    if (!focusedOption) return;
+                    event.preventDefault();
+                    commitProviderOption(focusedOption, { closeMenu: true, restoreFocus: true });
+                }
+            });
+        }
+        syncProviderSelectUi(providerInputEl.value);
+        providerSelectEl.addEventListener('focusout', () => {
+            window.requestAnimationFrame(() => {
+                if (!providerSelectEl.contains(document.activeElement)) {
+                    closeProviderMenu(false);
+                }
+            });
+        });
+        providerSelectEl.addEventListener('click', (event) => {
+            const option = event.target.closest('.custom-select-option');
+            if (!option) return;
+            commitProviderOption(option, { closeMenu: true, restoreFocus: false });
         });
         document.addEventListener('click', (event) => {
             if (!providerSelectEl.contains(event.target)) {
-                providerSelectEl.classList.remove('open');
+                closeProviderMenu(false);
             }
         });
     }
@@ -910,10 +1054,7 @@ function setupAiRuntimeControls(options) {
         }
 
         providerInputEl.value = activeProvider;
-        if (providerTriggerEl && providerSelectEl) {
-            const option = providerSelectEl.querySelector(`[data-value="${activeProvider}"]`);
-            providerTriggerEl.textContent = option ? option.textContent : activeProvider;
-        }
+        syncProviderSelectUi(activeProvider);
 
         apiKeyEl.value = String(ai.apiKey || '');
         modelEl.value = String(ai.model || '');
@@ -1354,9 +1495,23 @@ const modalDefaultInputs = [
     'Close invoice gap !p1;; st:doing;; tag:internal;; due:2026-03-10T19:00;; @Mimansa;; file:entry-1-note.svg;;\n\nSend payment reminder !p2;; st:todo;; tag:client,follow-up;; due:2026-03-11T09:00;; @Mimansa;; file:entry-1-note.svg;;',
     'Review production alerts !p1;; st:doing;; tag:internal;; due:2026-03-11T20:00;; @Mimansa;; file:entry-1-note.svg;;\n\nPatch retry timeout !p2;; st:todo;; tag:follow-up;; due:2026-03-12T13:00;; @Mimansa;; file:entry-1-note.svg;;'
 ];
+const modalInputIndexFromQuery = (() => {
+    if (typeof window === 'undefined' || !window.location || !window.location.search) {
+        return null;
+    }
+    const raw = new URLSearchParams(window.location.search).get('modalInputIndex');
+    if (raw === null) {
+        return null;
+    }
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : null;
+})();
 const pickRandomModalDefaultInput = () => {
     if (!modalDefaultInputs.length) {
         return '';
+    }
+    if (Number.isFinite(modalInputIndexFromQuery)) {
+        return modalDefaultInputs[modalInputIndexFromQuery % modalDefaultInputs.length];
     }
     const index = Math.floor(Math.random() * modalDefaultInputs.length);
     return modalDefaultInputs[index];
@@ -2083,8 +2238,7 @@ const modalResultHeadEl = document.getElementById('modalResultHead');
 const modalResultRowsEl = document.getElementById('modalResultRows');
 const modalResultSummaryEl = document.getElementById('modalResultSummary');
 const exampleTabsEl = document.getElementById('exampleTabs');
-const exampleTabsSelectEl = document.getElementById('exampleTabsSelect');
-const exampleTabsTriggerEl = document.getElementById('exampleTabsTrigger');
+const exampleTabsNativeEl = document.getElementById('exampleTabsNative');
 const modalSchemaColumns = ((modalConfig && modalConfig.schema && Array.isArray(modalConfig.schema.fields))
     ? modalConfig.schema.fields
     : [])
@@ -2466,11 +2620,14 @@ const openModal = () => {
 };
 const closeModal = async (options) => {
     const opts = options || {};
-    if (!modalBackdropEl) return;
+    if (!modalBackdropEl) return false;
     if (!opts.skipWarning && modalAdd && typeof modalAdd.checkWarnings === 'function') {
         const warning = await modalAdd.checkWarnings({ action: 'close', attachmentMode: 'metadata-only' });
         if (!warning || warning.ok === false) {
-            return;
+            if (modalResultSummaryEl) {
+                modalResultSummaryEl.textContent = 'Close paused: resolve the unlinked-attachment warning in the modal.';
+            }
+            return false;
         }
     }
     modalBackdropEl.hidden = true;
@@ -2482,6 +2639,7 @@ const closeModal = async (options) => {
     } else if (openModalBtn && typeof openModalBtn.focus === 'function') {
         openModalBtn.focus();
     }
+    return true;
 };
 if (openModalBtn) {
     openModalBtn.addEventListener('click', openModal);
@@ -2502,6 +2660,9 @@ if (saveModalBtn) {
             renderModalResultTable();
         } catch (err) {
             if (String(err && err.message || '').includes('cancelled by warnings check')) {
+                if (modalResultSummaryEl) {
+                    modalResultSummaryEl.textContent = 'Save paused: resolve the unlinked-attachment warning in the modal and try again.';
+                }
                 return;
             }
             if (modalResultSummaryEl) {
@@ -2526,136 +2687,13 @@ if (exampleTabsEl) {
         }
     });
 }
-const setupTabSelect = (config) => {
-    const {
-        selectEl,
-        triggerEl,
-        attrName,
-        tabApi,
-        onSelect
-    } = config || {};
-    if (!selectEl || !triggerEl || !attrName || !tabApi) {
-        return;
-    }
-    const menuEl = selectEl.querySelector('.tab-select-menu');
-    const options = menuEl ? Array.from(menuEl.querySelectorAll(`[${attrName}]`)) : [];
-    if (!menuEl || !options.length) {
-        return;
-    }
-    const menuId = menuEl.id || `${selectEl.id || 'tabSelect'}Menu`;
-    menuEl.id = menuId;
-    menuEl.setAttribute('role', 'listbox');
-    menuEl.setAttribute('tabindex', '-1');
-    triggerEl.setAttribute('aria-haspopup', 'listbox');
-    triggerEl.setAttribute('aria-controls', menuId);
-    triggerEl.setAttribute('aria-expanded', 'false');
-    options.forEach((option) => {
-        const active = option.classList.contains('active');
-        option.setAttribute('role', 'option');
-        option.setAttribute('aria-selected', active ? 'true' : 'false');
-        option.tabIndex = active ? 0 : -1;
-    });
-
-    const closeMenu = () => {
-        selectEl.classList.remove('open');
-        triggerEl.setAttribute('aria-expanded', 'false');
-    };
-    const openMenu = () => {
-        selectEl.classList.add('open');
-        triggerEl.setAttribute('aria-expanded', 'true');
-    };
-    const activeOption = () => options.find((opt) => opt.classList.contains('active')) || options[0];
-
-    const focusOptionByDelta = (delta) => {
-        const current = document.activeElement && document.activeElement.closest(`[${attrName}]`);
-        const base = current && options.includes(current) ? options.indexOf(current) : Math.max(0, options.indexOf(activeOption()));
-        const next = Math.max(0, Math.min(options.length - 1, base + delta));
-        options[next].focus();
-    };
-
-    triggerEl.addEventListener('click', () => {
-        if (selectEl.classList.contains('open')) {
-            closeMenu();
+if (exampleTabsNativeEl && exampleTabsApi) {
+    exampleTabsNativeEl.addEventListener('change', () => {
+        const value = String(exampleTabsNativeEl.value || '');
+        if (!value) {
             return;
         }
-        openMenu();
-        const active = activeOption();
-        if (active) {
-            active.focus();
-        }
-    });
-
-    triggerEl.addEventListener('keydown', (event) => {
-        if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            openMenu();
-            const active = activeOption();
-            if (active) {
-                active.focus();
-            }
-        } else if (event.key === 'Escape') {
-            closeMenu();
-        }
-    });
-
-    menuEl.addEventListener('keydown', (event) => {
-        if (event.key === 'ArrowDown') {
-            event.preventDefault();
-            focusOptionByDelta(1);
-            return;
-        }
-        if (event.key === 'ArrowUp') {
-            event.preventDefault();
-            focusOptionByDelta(-1);
-            return;
-        }
-        if (event.key === 'Escape') {
-            event.preventDefault();
-            closeMenu();
-            triggerEl.focus();
-            return;
-        }
-        if (event.key === 'Enter' || event.key === ' ') {
-            const focusedOption = document.activeElement && document.activeElement.closest(`[${attrName}]`);
-            if (!focusedOption) return;
-            event.preventDefault();
-            const value = focusedOption.getAttribute(attrName);
-            if (!value) return;
-            tabApi.setActive(value);
-            if (typeof onSelect === 'function') {
-                onSelect(value);
-            }
-            closeMenu();
-            triggerEl.focus();
-        }
-    });
-
-    selectEl.addEventListener('click', (event) => {
-        const option = event.target.closest(`[${attrName}]`);
-        if (!option) return;
-        const value = option.getAttribute(attrName);
-        if (!value) return;
-        tabApi.setActive(value);
-        if (typeof onSelect === 'function') {
-            onSelect(value);
-        }
-        closeMenu();
-        triggerEl.focus();
-    });
-
-    document.addEventListener('click', (event) => {
-        if (!selectEl.contains(event.target)) {
-            closeMenu();
-        }
-    });
-};
-
-setupTabSelect({
-    selectEl: exampleTabsSelectEl,
-    triggerEl: exampleTabsTriggerEl,
-    attrName: 'data-example',
-    tabApi: exampleTabsApi,
-    onSelect: (value) => {
+        exampleTabsApi.setActive(value);
         if (value !== 'example4') {
             void closeModal();
         }
@@ -2667,8 +2705,8 @@ setupTabSelect({
         if (panel && typeof panel.scrollIntoView === 'function') {
             panel.scrollIntoView({ block: 'start', behavior: 'smooth' });
         }
-    }
-});
+    });
+}
 
 document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && modalBackdropEl && !modalBackdropEl.hidden) {
@@ -2681,3 +2719,157 @@ document.addEventListener('keydown', (event) => {
         void closeModal();
     }
 }, true);
+
+const smokeQuery = (() => {
+    if (typeof window === 'undefined' || !window.location || !window.location.search) {
+        return '';
+    }
+    return new URLSearchParams(window.location.search).get('qaSmoke') || '';
+})();
+
+const waitForFrames = (count = 2) => new Promise((resolve) => {
+    const step = (remaining) => {
+        if (remaining <= 0) {
+            resolve();
+            return;
+        }
+        window.requestAnimationFrame(() => step(remaining - 1));
+    };
+    step(Math.max(1, Number(count) || 1));
+});
+
+const runQuickAddSmoke = async () => {
+    const result = {
+        startedAt: new Date().toISOString(),
+        viewport: {
+            width: window.innerWidth,
+            height: window.innerHeight
+        },
+        steps: [],
+        failures: []
+    };
+    const ensure = (condition, message) => {
+        if (!condition) {
+            throw new Error(message);
+        }
+    };
+    const recordFailure = (label, error) => {
+        result.failures.push(`${label}: ${String(error && error.message ? error.message : error)}`);
+    };
+    const checkBounds = (selector, label) => {
+        const el = document.querySelector(selector);
+        if (!el || el.hidden) {
+            return;
+        }
+        const rect = el.getBoundingClientRect();
+        if (!(rect.width > 0 && rect.height > 0)) {
+            return;
+        }
+        const tolerance = 2;
+        const overflows = rect.left < (0 - tolerance)
+            || rect.top < (0 - tolerance)
+            || rect.right > (window.innerWidth + tolerance)
+            || rect.bottom > (window.innerHeight + tolerance);
+        if (overflows) {
+            result.failures.push(
+                `${label}: floating UI exceeded viewport bounds (l=${Math.round(rect.left)}, t=${Math.round(rect.top)}, r=${Math.round(rect.right)}, b=${Math.round(rect.bottom)}, vw=${window.innerWidth}, vh=${window.innerHeight})`
+            );
+        }
+    };
+    const activateExample = async (exampleKey) => {
+        ensure(exampleTabsApi && typeof exampleTabsApi.setActive === 'function', 'example tab API is unavailable');
+        ensure(exampleTabsApi.setActive(exampleKey), `could not activate ${exampleKey}`);
+        const panel = document.querySelector(`[data-example-panel="${exampleKey}"]`);
+        if (panel) {
+            const top = panel.getBoundingClientRect().top + window.scrollY - 12;
+            window.scrollTo({ top: Math.max(0, top), behavior: 'auto' });
+        }
+        await waitForFrames(4);
+    };
+    const smokeStep = async (label, fn) => {
+        try {
+            await fn();
+            result.steps.push(label);
+        } catch (error) {
+            recordFailure(label, error);
+        }
+    };
+
+    await smokeStep('example1-base', async () => {
+        await activateExample('example1');
+        ensure(document.querySelector('#quickAddExample1 [data-role="input"]'), 'example1 input missing');
+        const fileLink = document.querySelector('#quickAddExample1 [data-entry-file-link="1"]');
+        if (fileLink) {
+            fileLink.click();
+            await waitForFrames(2);
+            checkBounds('#quickAddExample1 [data-role="dropdown"]', 'example1 dropdown');
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+            await waitForFrames(1);
+        }
+        const duePill = document.querySelector('#quickAddExample1 [data-qa-date-pill="1"]');
+        if (duePill) {
+            duePill.click();
+            await waitForFrames(2);
+            checkBounds('#quickAddExample1 [data-role="datePicker"]', 'example1 datePicker');
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+            await waitForFrames(1);
+        }
+    });
+
+    await smokeStep('example2-base', async () => {
+        await activateExample('example2');
+        ensure(document.querySelector('#quickAddExample2 [data-role="input"]'), 'example2 input missing');
+    });
+
+    await smokeStep('example3-base', async () => {
+        await activateExample('example3');
+        ensure(document.querySelector('#quickAddExample3 [data-role="input"]'), 'example3 input missing');
+    });
+
+    await smokeStep('example4-modal-open-save-close', async () => {
+        await activateExample('example4');
+        ensure(openModalBtn, 'open modal button missing');
+        openModalBtn.click();
+        await waitForFrames(3);
+        ensure(modalBackdropEl && !modalBackdropEl.hidden, 'modal did not open');
+        ensure(document.querySelector('#quickAddExample4 [data-role="input"]'), 'modal quick add input missing');
+        if (saveModalBtn) {
+            saveModalBtn.click();
+            await waitForFrames(4);
+        }
+        if (modalBackdropEl && !modalBackdropEl.hidden && closeModalBtn) {
+            closeModalBtn.click();
+            await waitForFrames(4);
+        }
+        ensure(modalBackdropEl && modalBackdropEl.hidden, 'modal did not close');
+    });
+
+    await smokeStep('example5-ai-controls', async () => {
+        await activateExample('example5');
+        const trigger = document.getElementById('aiProviderTrigger5');
+        ensure(trigger, 'example5 provider trigger missing');
+        ensure(trigger.getAttribute('aria-haspopup') === 'listbox', 'example5 provider trigger aria-haspopup missing');
+        ensure(trigger.getAttribute('aria-controls'), 'example5 provider trigger aria-controls missing');
+    });
+
+    await smokeStep('example6-ai-controls', async () => {
+        await activateExample('example6');
+        const trigger = document.getElementById('aiProviderTrigger6');
+        ensure(trigger, 'example6 provider trigger missing');
+        ensure(trigger.getAttribute('aria-haspopup') === 'listbox', 'example6 provider trigger aria-haspopup missing');
+        ensure(trigger.getAttribute('aria-controls'), 'example6 provider trigger aria-controls missing');
+    });
+
+    result.completedAt = new Date().toISOString();
+    result.passed = result.failures.length === 0;
+    window.__quickAddSmoke = result;
+    window.dispatchEvent(new CustomEvent('quickadd-smoke-complete', { detail: result }));
+    return result;
+};
+
+window.runQuickAddSmoke = runQuickAddSmoke;
+if (smokeQuery === '1') {
+    window.requestAnimationFrame(() => {
+        void runQuickAddSmoke();
+    });
+}

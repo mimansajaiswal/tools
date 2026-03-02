@@ -74,6 +74,19 @@
         dropdownAdd: 'qa-dropdown-add',
         dropdownColor: 'qa-dropdown-color',
         dropdownMeta: 'qa-dropdown-meta',
+        dropdownMetaType: 'qa-dropdown-meta-type',
+        dropdownMetaBadges: 'qa-dropdown-meta-badges',
+        dropdownMetaBadgeRequired: 'qa-dropdown-meta-badge-required',
+        dropdownMetaBadgeAuto: 'qa-dropdown-meta-badge-auto',
+        dropdownFieldGlyph: 'qa-dropdown-field-glyph',
+        dropdownFieldGlyphTonePlain: 'qa-dropdown-field-glyph-tone-plain',
+        dropdownFieldGlyphToneRequired: 'qa-dropdown-field-glyph-tone-required',
+        dropdownFieldGlyphToneAuto: 'qa-dropdown-field-glyph-tone-auto',
+        dropdownFieldGlyphToneDefault: 'qa-dropdown-field-glyph-tone-default',
+        dropdownFieldGlyphToneLimited: 'qa-dropdown-field-glyph-tone-limited',
+        dropdownFieldGlyphToneMulti: 'qa-dropdown-field-glyph-tone-multi',
+        dropdownFieldGlyphToneMeta: 'qa-dropdown-field-glyph-tone-meta',
+        dropdownFieldPrefix: 'qa-dropdown-field-prefix',
         dropdownUsedMeta: 'qa-dropdown-used-meta',
         dropdownCountMeta: 'qa-dropdown-count-meta',
         dropdownUsedIcon: 'qa-dropdown-used-icon',
@@ -182,14 +195,23 @@
         entrySeparator: '\n',
         fieldTerminator: ';;',
         fieldTerminatorMode: 'strict',
+        hideFieldTerminatorInPills: false,
+        autoCloseFieldOnSpace: false,
+        autoCloseFieldOnSpaceConfidenceThreshold: 0.9,
         multiSelectSeparator: ',',
         multiSelectDisplaySeparator: ', ',
+        sortSelectedMultiOptionsToBottom: true,
         enableNumberPillStepper: false,
         numberPillStep: 1,
         escapeChar: '\\',
         fallbackField: 'title',
         showJsonOutput: true,
         showDropdownOnTyping: true,
+        showFieldMenuOnTyping: true,
+        fieldMenuTrigger: '/',
+        fieldMenuShowUsedFields: false,
+        fieldMenuShowRequiredMeta: true,
+        fieldMenuShowAutoDetectMeta: true,
         showAttachmentDropdownPreview: true,
         showInlinePills: true,
         showEntryCards: true,
@@ -286,7 +308,23 @@
                 ? `${merged.multiSelectSeparator} `
                 : merged.multiSelectDisplaySeparator
         );
+        merged.hideFieldTerminatorInPills = merged.hideFieldTerminatorInPills === true;
+        merged.autoCloseFieldOnSpace = merged.autoCloseFieldOnSpace === true;
+        const rawAutoCloseThreshold = Number(merged.autoCloseFieldOnSpaceConfidenceThreshold);
+        merged.autoCloseFieldOnSpaceConfidenceThreshold = Number.isFinite(rawAutoCloseThreshold)
+            ? Math.max(0, Math.min(1, rawAutoCloseThreshold))
+            : 0.9;
+        merged.sortSelectedMultiOptionsToBottom = merged.sortSelectedMultiOptionsToBottom !== false;
         merged.showDropdownOnTyping = merged.showDropdownOnTyping !== false;
+        merged.showFieldMenuOnTyping = merged.showFieldMenuOnTyping !== false;
+        merged.fieldMenuTrigger = String(
+            merged.fieldMenuTrigger === undefined || merged.fieldMenuTrigger === null
+                ? DEFAULT_CONFIG.fieldMenuTrigger
+                : merged.fieldMenuTrigger
+        );
+        merged.fieldMenuShowUsedFields = merged.fieldMenuShowUsedFields !== false;
+        merged.fieldMenuShowRequiredMeta = merged.fieldMenuShowRequiredMeta !== false;
+        merged.fieldMenuShowAutoDetectMeta = merged.fieldMenuShowAutoDetectMeta !== false;
         merged.showAttachmentDropdownPreview = merged.showAttachmentDropdownPreview !== false;
         merged.enableNumberPillStepper = merged.enableNumberPillStepper === true;
         const rawNumberStep = Number(merged.numberPillStep);
@@ -1852,6 +1890,81 @@
         return String(value);
     }
 
+    function humanizeIdentifier(raw) {
+        const value = String(raw || '').trim();
+        if (!value) {
+            return 'field';
+        }
+        return value
+            .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+            .replace(/[_-]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    function resolveReasonFieldLabel(fieldRef, context) {
+        const ctx = context || {};
+        const ref = String(fieldRef || '').trim();
+        if (!ref) {
+            return 'field';
+        }
+        if (ref === ctx.selfFieldKey) {
+            const selfLabel = String(ctx.selfFieldLabel || '').trim();
+            return selfLabel || 'this field';
+        }
+        const lookup = ctx.fieldLabelLookup;
+        if (lookup && lookup[ref]) {
+            const next = lookup[ref];
+            if (typeof next === 'string') {
+                const text = next.trim();
+                if (text) {
+                    return text;
+                }
+            }
+            if (typeof next === 'object') {
+                const text = String(next.label || next.key || '').trim();
+                if (text) {
+                    return text;
+                }
+            }
+        }
+        return humanizeIdentifier(ref);
+    }
+
+    function reasonValueText(value) {
+        if (Array.isArray(value)) {
+            const rendered = value.map((item) => reasonValueText(item));
+            return rendered.join(', ');
+        }
+        if (value === undefined || value === null || value === '') {
+            return 'empty';
+        }
+        if (typeof value === 'number' || typeof value === 'boolean') {
+            return String(value);
+        }
+        return `"${String(value)}"`;
+    }
+
+    function reasonClauseForRule(rule, context) {
+        const ctx = context || {};
+        const fieldRef = normalizeRuleField(rule.field, ctx.selfFieldKey);
+        const fieldLabel = resolveReasonFieldLabel(fieldRef, ctx);
+        const op = String(rule.op || 'eq').toLowerCase();
+        const valueText = reasonValueText(rule.value);
+        if (op === 'exists') return `${fieldLabel} is set`;
+        if (op === 'notexists') return `${fieldLabel} is empty`;
+        if (op === 'eq') return `${fieldLabel} is ${valueText}`;
+        if (op === 'neq') return `${fieldLabel} is not ${valueText}`;
+        if (op === 'in') return `${fieldLabel} is one of ${valueText}`;
+        if (op === 'notin') return `${fieldLabel} is not any of ${valueText}`;
+        if (op === 'includes') return `${fieldLabel} includes ${valueText}`;
+        if (op === 'gt') return `${fieldLabel} is greater than ${valueText}`;
+        if (op === 'gte') return `${fieldLabel} is at least ${valueText}`;
+        if (op === 'lt') return `${fieldLabel} is less than ${valueText}`;
+        if (op === 'lte') return `${fieldLabel} is at most ${valueText}`;
+        return `${fieldLabel} satisfies ${humanOp(op)} ${valueText}`;
+    }
+
     function formatRuleTemplate(template, vars) {
         return String(template || '').replace(/\{([a-zA-Z0-9_]+)\}/g, (_, key) => {
             if (Object.prototype.hasOwnProperty.call(vars, key)) {
@@ -1878,13 +1991,13 @@
     function dependencyReason(rule, context) {
         const ctx = context || { selfFieldKey: '' };
         if (!rule) {
-            return 'constraint not met';
+            return 'requirements were not met';
         }
         if (Array.isArray(rule)) {
             return rule.map((item) => dependencyReason(item, ctx)).join(' and ');
         }
         if (typeof rule !== 'object') {
-            return 'constraint not met';
+            return 'requirements were not met';
         }
         if (Array.isArray(rule.and)) {
             return rule.and.map((item) => dependencyReason(item, ctx)).join(' and ');
@@ -1895,14 +2008,7 @@
         if (rule.not !== undefined) {
             return `not (${dependencyReason(rule.not, ctx)})`;
         }
-
-        const fieldRef = normalizeRuleField(rule.field, ctx.selfFieldKey);
-        const fieldLabel = fieldRef === ctx.selfFieldKey ? 'this field' : fieldRef;
-        const op = (rule.op || 'eq').toLowerCase();
-        if (op === 'exists' || op === 'notexists') {
-            return `${fieldLabel} ${humanOp(op)}`;
-        }
-        return `${fieldLabel} ${humanOp(op)} ${humanValue(rule.value)}`;
+        return reasonClauseForRule(rule, ctx);
     }
 
     function evaluateRuleSet(rulesRaw, fields, context) {
@@ -1948,10 +2054,10 @@
             if (whenRule) {
                 return {
                     ok: false,
-                    reason: `${prefix}When ${dependencyReason(whenRule, ctx)}, ${dependencyReason(targetRule, ctx)}`
+                    reason: `${prefix}Allowed only when ${dependencyReason(whenRule, ctx)} and ${dependencyReason(targetRule, ctx)}.`
                 };
             }
-            return { ok: false, reason: `${prefix}${dependencyReason(targetRule, ctx)}` };
+            return { ok: false, reason: `${prefix}Allowed only when ${dependencyReason(targetRule, ctx)}.` };
         }
         return { ok: true, reason: '' };
     }
@@ -1962,11 +2068,16 @@
         return options.find((option) => option.value.toLowerCase() === target) || null;
     }
 
-    function evaluateFieldDependency(field, parsedValue, fields) {
+    function evaluateFieldDependency(field, parsedValue, fields, fieldLabelLookup) {
         if (!field) {
             return { ok: true, reason: '' };
         }
-        const context = { selfFieldKey: field.key, selfValue: parsedValue };
+        const context = {
+            selfFieldKey: field.key,
+            selfValue: parsedValue,
+            selfFieldLabel: field.label || field.key,
+            fieldLabelLookup: fieldLabelLookup || null
+        };
         const fieldRule = field.dependsOn;
         const fieldRuleResult = evaluateRuleSet(fieldRule, fields, context);
         if (!fieldRuleResult.ok) {
@@ -2038,7 +2149,7 @@
             }
             const values = field.multiple && Array.isArray(parsed.value) ? parsed.value : [parsed.value];
             values.forEach((nextParsedValue) => {
-                const allowed = evaluateFieldDependency(field, nextParsedValue, entry.fields);
+                const allowed = evaluateFieldDependency(field, nextParsedValue, entry.fields, normalizedSchema.byKey);
                 if (allowed.ok) {
                     return;
                 }
@@ -2061,7 +2172,7 @@
             if (!field) {
                 return;
             }
-            const allowed = evaluateFieldDependency(field, inf.value, entry.fields);
+            const allowed = evaluateFieldDependency(field, inf.value, entry.fields, normalizedSchema.byKey);
             if (allowed.ok) {
                 return;
             }
@@ -2100,7 +2211,7 @@
                 }
                 const nextParsedValue = Array.isArray(parsed.value) ? parsed.value[0] : parsed.value;
                 const trialFields = Object.assign({}, entry.fields, { [fieldKey]: nextParsedValue });
-                const allowed = evaluateFieldDependency(field, nextParsedValue, trialFields);
+                const allowed = evaluateFieldDependency(field, nextParsedValue, trialFields, normalizedSchema.byKey);
                 if (!allowed.ok) {
                     continue;
                 }
@@ -4806,7 +4917,7 @@
         panelEl.style.visibility = 'hidden';
         panelEl.style.removeProperty('display');
         panelEl.style.width = `${Math.max(0, Number(width) || 0)}px`;
-        panelEl.style.removeProperty('maxHeight');
+        panelEl.style.removeProperty('max-height');
 
         const measuredHeight = Math.ceil(panelEl.getBoundingClientRect().height || panelEl.scrollHeight || 0);
 
@@ -4827,7 +4938,7 @@
         if (prevMaxHeight) {
             panelEl.style.maxHeight = prevMaxHeight;
         } else {
-            panelEl.style.removeProperty('maxHeight');
+            panelEl.style.removeProperty('max-height');
         }
 
         return measuredHeight;
@@ -4841,7 +4952,10 @@
             ? Number(opts.pad)
             : (window.innerWidth <= 480 ? 8 : 10);
         const gap = Number.isFinite(Number(opts.gap)) ? Number(opts.gap) : 0;
-        const bounds = this.getFloatingBounds(opts.ignoreAnchorClip ? null : anchorEl);
+        const bounds = this.getFloatingBounds(
+            opts.ignoreAnchorClip ? null : anchorEl,
+            { includeMountBounds: opts.ignoreAnchorClip !== true }
+        );
         const viewportWidth = Math.max(0, (bounds.right - bounds.left) - (pad * 2));
 
         const minWidthRaw = Number(opts.minWidth);
@@ -5263,7 +5377,9 @@
         return false;
     };
 
-    QuickAddComponent.prototype.getFloatingBounds = function getFloatingBounds(anchorEl) {
+    QuickAddComponent.prototype.getFloatingBounds = function getFloatingBounds(anchorEl, options) {
+        const opts = options || {};
+        const includeMountBounds = opts.includeMountBounds !== false;
         const viewport = {
             left: 0,
             top: 0,
@@ -5344,7 +5460,7 @@
         if (anchorEl) {
             applyAncestors(anchorEl);
         }
-        if (this.mountEl) {
+        if (includeMountBounds && this.mountEl) {
             applyAncestors(this.mountEl);
         }
 
@@ -5502,6 +5618,11 @@
             if (tokenTail !== terminator) {
                 updated = this.replaceRange(updated, caret, caret, terminator);
                 caret += terminator.length;
+                const nextChar = updated.charAt(caret);
+                if (nextChar !== '\n' && !/\s/.test(nextChar || '')) {
+                    updated = this.replaceRange(updated, caret, caret, ' ');
+                    caret += 1;
+                }
             }
         }
         const sourceRegion = this.datePickerState && this.datePickerState.sourceRegion ? this.datePickerState.sourceRegion : 'inline';
@@ -5536,7 +5657,15 @@
             if (this.isRenderingInput) {
                 return;
             }
-            this.closeDropdown();
+            const keepTypingDropdownOpen = !!(
+                this.dropdownState
+                && (this.dropdownState.source === 'typing' || this.dropdownState.source === 'field-menu')
+                && !this.dropdownEl.hidden
+                && document.activeElement === this.inputEl
+            );
+            if (!keepTypingDropdownOpen) {
+                this.closeDropdown();
+            }
             this.closeAttachmentSourceMenu();
             this.closeBlockedInfo();
             this.closeDatePicker();
@@ -5587,6 +5716,24 @@
                 return;
             }
 
+            if (inputType === 'insertText' && event.data === ' ') {
+                const offsets = this.getSelectionOffsets();
+                if (offsets && offsets.isCollapsed) {
+                    const tokenAtCaret = this.findFieldTokenAtOffset(offsets.start);
+                    const tokenEndingAtCaret = this.findCommittedFieldTokenEndingAtOffset(offsets.start);
+                    const boundaryToken = tokenAtCaret || tokenEndingAtCaret;
+                    if (boundaryToken && boundaryToken.kind === 'field' && boundaryToken.committed) {
+                        event.preventDefault();
+                        this.insertTextAtSelection(' ', { preferTokenBoundary: true });
+                        return;
+                    }
+                    if (this.tryAutoCloseFieldOnSpace(offsets.start)) {
+                        event.preventDefault();
+                        return;
+                    }
+                }
+            }
+
             if (inputType === 'insertFromPaste') {
                 const pasted = this.getPlainTextFromEvent(event);
                 if (pasted === null) {
@@ -5599,7 +5746,11 @@
         };
 
         this.onInputKeyDown = (event) => {
-            const isTypingDropdown = !!(this.dropdownState && this.dropdownState.source === 'typing' && !this.dropdownEl.hidden);
+            const isTypingDropdown = !!(
+                this.dropdownState
+                && (this.dropdownState.source === 'typing' || this.dropdownState.source === 'field-menu')
+                && !this.dropdownEl.hidden
+            );
             if ((event.key === 'Backspace' || event.key === 'Delete') && !event.metaKey && !event.ctrlKey && !event.altKey) {
                 const offsets = this.getSelectionOffsets();
                 if (offsets) {
@@ -5774,6 +5925,7 @@
             }
             const pill = event.target.closest('[data-qa-pill="1"]');
             if (!pill) {
+                this.normalizeCaretAfterCommittedTokenBoundary();
                 return;
             }
             event.preventDefault();
@@ -6388,7 +6540,7 @@
             }
             if (this.dropdownEl && !this.dropdownEl.hidden) {
                 if (!this.dropdownEl.contains(targetEl) && !targetEl.closest('[data-qa-pill="1"]')) {
-                    this.closeDropdown({ restoreFocus: false });
+                    this.closeDropdown({ restoreFocus: false, finalizeOpenToken: true });
                     return;
                 }
             }
@@ -6459,7 +6611,7 @@
                     return;
                 }
                 if (this.dropdownState) {
-                    this.closeDropdown();
+                    this.closeDropdown({ finalizeOpenToken: true });
                     event.preventDefault();
                     event.stopPropagation();
                     return;
@@ -6825,14 +6977,38 @@
         const safeStart = Math.max(0, Math.min(Number(start) || 0, len));
         const safeEnd = Math.max(safeStart, Math.min(Number(end) || 0, len));
         const inserted = this.normalizeInsertedText(replacement);
-        const updated = this.replaceRange(source, safeStart, safeEnd, inserted);
-        const caret = safeStart + inserted.length;
+        let replaceStart = safeStart;
+        let replaceEnd = safeEnd;
+        if (safeStart === safeEnd && inserted === String(this.config.multiSelectSeparator || ',')) {
+            const boundaryToken = this.findCommittedFieldTokenEndingAtOffset(safeStart)
+                || this.findCommittedFieldTokenEndingAtOffset(safeStart - 1);
+            if (boundaryToken) {
+                const boundaryField = this.getFieldDefinition(boundaryToken.key);
+                if (boundaryField && boundaryField.type === 'options' && boundaryField.multiple) {
+                    const valueEnd = Number.isFinite(Number(boundaryToken.globalValueEnd))
+                        ? Number(boundaryToken.globalValueEnd)
+                        : Number(boundaryToken.globalEnd);
+                    replaceStart = Math.max(0, Math.min(valueEnd, len));
+                    replaceEnd = replaceStart;
+                }
+            }
+        }
+        const updated = this.replaceRange(source, replaceStart, replaceEnd, inserted);
+        const caret = replaceStart + inserted.length;
 
         if (this.timer) {
             clearTimeout(this.timer);
             this.timer = null;
         }
-        this.closeDropdown();
+        const keepTypingDropdownOpen = !!(
+            this.dropdownState
+            && this.dropdownState.source === 'typing'
+            && !this.dropdownEl.hidden
+            && document.activeElement === this.inputEl
+        );
+        if (!keepTypingDropdownOpen) {
+            this.closeDropdown();
+        }
         this.closeBlockedInfo();
         this.parseAndRender({
             source: updated,
@@ -6861,6 +7037,186 @@
             });
         });
         return best;
+    };
+
+    QuickAddComponent.prototype.findCommittedFieldTokenEndingAtOffset = function findCommittedFieldTokenEndingAtOffset(offset) {
+        if (typeof offset !== 'number') {
+            return null;
+        }
+        let best = null;
+        this.lastResult.entries.forEach((entry) => {
+            entry.tokens.forEach((token) => {
+                if (token.kind !== 'field' || !token.committed) {
+                    return;
+                }
+                if (Number(token.globalEnd) !== Number(offset)) {
+                    return;
+                }
+                if (!best || token.globalStart >= best.globalStart) {
+                    best = token;
+                }
+            });
+        });
+        return best;
+    };
+
+    QuickAddComponent.prototype.getFieldAutoCloseConfidence = function getFieldAutoCloseConfidence(field, rawValue) {
+        if (!field) {
+            return 0;
+        }
+        const value = String(rawValue || '').trim();
+        if (!value) {
+            return 0;
+        }
+        const parsed = parseByType(field, value, this.config);
+        if (!parsed.ok) {
+            return 0;
+        }
+        const type = String(field.type || 'string').toLowerCase();
+        if (type === 'number') {
+            return /^[-+]?\d+(\.\d+)?$/.test(value) ? 0.98 : 0.93;
+        }
+        if (type === 'boolean') {
+            return 0.98;
+        }
+        if (type === 'options') {
+            const options = getFieldOptions(field);
+            const exact = options.some((option) =>
+                String(option.value || '').toLowerCase() === value.toLowerCase()
+                || String(option.label || '').toLowerCase() === value.toLowerCase()
+            );
+            if (exact) {
+                return 0.98;
+            }
+            return field.allowCustom ? 0.74 : 0;
+        }
+        if (isDateFieldType(type)) {
+            const hasDigits = /\d/.test(value);
+            const hasMonthWord = /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)\b/i.test(value);
+            const hasTime = /(\b\d{1,2}:\d{2}\b|\b\d{1,2}\s*(am|pm)\b|\bat\s+\d{1,2}\b)/i.test(value);
+            const minLengthBonus = value.length >= 8 ? 0.04 : 0;
+            let score = type === 'datetime' ? 0.62 : 0.78;
+            if (hasDigits) score += 0.08;
+            if (hasMonthWord) score += 0.08;
+            if (type === 'datetime') {
+                if (hasTime) {
+                    score += 0.2;
+                } else if (field.allowDateOnly) {
+                    score += 0.08;
+                }
+            }
+            score += minLengthBonus;
+            return Math.max(0, Math.min(1, score));
+        }
+        if (isFileFieldType(type)) {
+            return value.length >= 2 ? 0.8 : 0.4;
+        }
+        return 0;
+    };
+
+    QuickAddComponent.prototype.tryAutoCloseFieldOnSpace = function tryAutoCloseFieldOnSpace(caretOffset) {
+        if (this.config.autoCloseFieldOnSpace !== true || typeof caretOffset !== 'number') {
+            return false;
+        }
+        const terminator = String(this.config.fieldTerminator || '');
+        if (!terminator) {
+            return false;
+        }
+        const source = String(this.readInputText() || this.inputText || '');
+        const safeCaret = Math.max(0, Math.min(Number(caretOffset) || 0, source.length));
+        const liveResult = parseInput(source, this.config);
+        let token = null;
+        (liveResult.entries || []).forEach((entry) => {
+            (entry.tokens || []).forEach((candidate) => {
+                if (!candidate || candidate.kind !== 'field' || candidate.committed) {
+                    return;
+                }
+                if (!candidate.prefix || !String(candidate.prefix).trim()) {
+                    return;
+                }
+                const valueStart = Number.isFinite(Number(candidate.globalValueStart))
+                    ? Number(candidate.globalValueStart)
+                    : Number(candidate.globalStart);
+                const tokenEnd = Number.isFinite(Number(candidate.globalEnd))
+                    ? Number(candidate.globalEnd)
+                    : Number(valueStart);
+                if (!Number.isFinite(valueStart) || !Number.isFinite(tokenEnd)) {
+                    return;
+                }
+                if (safeCaret < valueStart || safeCaret > tokenEnd) {
+                    return;
+                }
+                if (!token || Number(candidate.globalStart) >= Number(token.globalStart)) {
+                    token = candidate;
+                }
+            });
+        });
+        if (!token) {
+            return false;
+        }
+        const field = this.getFieldDefinition(token.key);
+        if (!field) {
+            return false;
+        }
+        const valueStart = Number.isFinite(Number(token.globalValueStart))
+            ? Number(token.globalValueStart)
+            : Number(token.globalStart);
+        const valueEnd = Number.isFinite(Number(token.globalValueEnd))
+            ? Number(token.globalValueEnd)
+            : Number(token.globalEnd);
+        if (!Number.isFinite(valueStart) || !Number.isFinite(valueEnd) || safeCaret < valueEnd) {
+            return false;
+        }
+        const rawValue = source.slice(Math.max(0, valueStart), Math.max(valueStart, valueEnd));
+        const threshold = Number(this.config.autoCloseFieldOnSpaceConfidenceThreshold);
+        const confidence = this.getFieldAutoCloseConfidence(field, rawValue);
+        if (!(confidence >= threshold)) {
+            return false;
+        }
+        let updated = source;
+        let caret = Math.max(0, Math.min(valueEnd, updated.length));
+        const tokenTail = updated.slice(caret, caret + terminator.length);
+        if (tokenTail !== terminator) {
+            updated = this.replaceRange(updated, caret, caret, terminator);
+            caret += terminator.length;
+        }
+        const nextChar = updated.charAt(caret);
+        if (nextChar !== '\n' && !/\s/.test(nextChar || '')) {
+            updated = this.replaceRange(updated, caret, caret, ' ');
+            caret += 1;
+        } else if (nextChar === ' ') {
+            caret += 1;
+        }
+        if (this.dropdownState && !this.dropdownEl.hidden) {
+            this.closeDropdown({ restoreFocus: false });
+        }
+        this.parseAndRender({
+            source: updated,
+            caretOffset: caret,
+            focusInput: true,
+            skipTypingSync: true
+        });
+        return true;
+    };
+
+    QuickAddComponent.prototype.normalizeCaretAfterCommittedTokenBoundary = function normalizeCaretAfterCommittedTokenBoundary() {
+        if (this.isAiMode()) {
+            return;
+        }
+        const offsets = this.getSelectionOffsets();
+        if (!offsets || !offsets.isCollapsed) {
+            return;
+        }
+        const source = String(this.inputText || this.readInputText() || '');
+        const caret = Math.max(0, Math.min(Number(offsets.start) || 0, source.length));
+        if (!/\s/.test(source.charAt(caret) || '')) {
+            return;
+        }
+        const token = this.findCommittedFieldTokenEndingAtOffset(caret);
+        if (!token) {
+            return;
+        }
+        this.setCaretOffset(caret + 1, true);
     };
 
     QuickAddComponent.prototype.insertTextAtSelection = function insertTextAtSelection(text, options) {
@@ -6943,6 +7299,7 @@
                 range.collapse(true);
                 selection.removeAllRanges();
                 selection.addRange(range);
+                this.ensureCaretVisibleInInput();
                 return;
             }
             remaining -= len;
@@ -6953,6 +7310,36 @@
         range.collapse(false);
         selection.removeAllRanges();
         selection.addRange(range);
+        this.ensureCaretVisibleInInput();
+    };
+
+    QuickAddComponent.prototype.ensureCaretVisibleInInput = function ensureCaretVisibleInInput() {
+        if (!this.inputEl || this.inputEl.scrollHeight <= this.inputEl.clientHeight + 1) {
+            return;
+        }
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) {
+            return;
+        }
+        const range = selection.getRangeAt(0).cloneRange();
+        range.collapse(true);
+        const inputRect = this.inputEl.getBoundingClientRect();
+        let caretRect = range.getBoundingClientRect();
+        if ((!caretRect || (caretRect.width === 0 && caretRect.height === 0)) && typeof range.getClientRects === 'function') {
+            const rects = range.getClientRects();
+            if (rects && rects.length > 0) {
+                caretRect = rects[0];
+            }
+        }
+        if (!caretRect || (!caretRect.width && !caretRect.height)) {
+            return;
+        }
+        const pad = 6;
+        if (caretRect.bottom > inputRect.bottom - pad) {
+            this.inputEl.scrollTop += caretRect.bottom - (inputRect.bottom - pad);
+        } else if (caretRect.top < inputRect.top + pad) {
+            this.inputEl.scrollTop -= (inputRect.top + pad) - caretRect.top;
+        }
     };
 
     QuickAddComponent.prototype.renderInlineLayer = function renderInlineLayer(result, options) {
@@ -7066,6 +7453,28 @@
         return `${base}|${count}`;
     };
 
+    QuickAddComponent.prototype.extendAIInlineMarkRangeWithTerminator = function extendAIInlineMarkRangeWithTerminator(mark, rawInput) {
+        if (!mark || !mark.explicit || !mark.fieldKey) {
+            return mark;
+        }
+        const raw = String(rawInput || '');
+        const terminator = String(this.config.fieldTerminator || '');
+        if (!terminator) {
+            return mark;
+        }
+        const start = Number(mark.start);
+        const end = Number(mark.end);
+        if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || end > raw.length) {
+            return mark;
+        }
+        if (!raw.startsWith(terminator, end)) {
+            return mark;
+        }
+        return Object.assign({}, mark, {
+            end: Math.min(raw.length, end + terminator.length)
+        });
+    };
+
     QuickAddComponent.prototype.indexAIInlineMarks = function indexAIInlineMarks(marks) {
         const index = {};
         const occurrenceMap = {};
@@ -7161,6 +7570,7 @@
                         };
                     })
                     .filter(Boolean)
+                    .map((mark) => this.extendAIInlineMarkRangeWithTerminator(mark, raw))
                     .sort((a, b) => a.start - b.start || a.end - b.end);
                 this.indexAIInlineMarks(customMarks);
                 return customMarks;
@@ -7276,9 +7686,11 @@
             }
         });
 
-        marks.sort((a, b) => a.start - b.start || a.end - b.end);
-        this.indexAIInlineMarks(marks);
-        return marks;
+        const normalizedMarks = marks
+            .map((mark) => this.extendAIInlineMarkRangeWithTerminator(mark, raw))
+            .sort((a, b) => a.start - b.start || a.end - b.end);
+        this.indexAIInlineMarks(normalizedMarks);
+        return normalizedMarks;
     };
 
     QuickAddComponent.prototype.renderAIInlineLayer = function renderAIInlineLayer(options) {
@@ -7412,7 +7824,10 @@
                 ? opts.caretOffset
                 : this.getCaretOffset();
             if (!opts.skipTypingSync) {
-                this.syncTypingDropdown(caretOffset);
+                const fieldMenuOpen = this.syncFieldMenuDropdown(caretOffset);
+                if (!fieldMenuOpen) {
+                    this.syncTypingDropdown(caretOffset);
+                }
             }
         }
 
@@ -7562,7 +7977,7 @@
             return { ok: true, reason: '' };
         }
         const fields = this.getEntryFieldsForDependency(entryIndex);
-        return evaluateFieldDependency(field, value, fields);
+        return evaluateFieldDependency(field, value, fields, this.normalizedSchema.byKey);
     };
 
     QuickAddComponent.prototype.resolvePillColor = function resolvePillColor(field, value) {
@@ -7694,6 +8109,13 @@
         const color = this.resolvePillColor(field, token.value);
         const interactive = this.isInteractivePill(field);
         const numberInteractive = !!(field && field.type === 'number' && this.isNumberStepperEnabledForField(field));
+        let displayChunk = String(rawChunk || '');
+        if (this.config.hideFieldTerminatorInPills === true && token.committed) {
+            const terminator = String(this.config.fieldTerminator || '');
+            if (terminator && displayChunk.endsWith(terminator)) {
+                displayChunk = displayChunk.slice(0, -terminator.length);
+            }
+        }
         const styleAttr = (!token.blocked && color) ? ` style="--qa-inline-accent:${escHtml(color)}"` : '';
         const classes = [
             c.inlineMark,
@@ -7719,8 +8141,8 @@
             : '';
         const titleAttr = token.blocked && token.reason ? ` title="${escHtml(`Blocked by constraints: ${token.reason}`)}"` : '';
         const numberControls = (numberInteractive && !token.blocked)
-            ? `<span class="${c.numberPillStepper}"><button type="button" class="${c.numberPillStepBtn}" data-qa-ignore="1" contenteditable="false" data-number-step="-1" aria-label="Decrease ${escHtml(fieldLabelText)}">−</button><span class="${c.inlineMarkLabel}">${escHtml(rawChunk)}</span><button type="button" class="${c.numberPillStepBtn}" data-qa-ignore="1" contenteditable="false" data-number-step="1" aria-label="Increase ${escHtml(fieldLabelText)}">+</button></span>`
-            : `<span class="${c.inlineMarkLabel}">${escHtml(rawChunk)}</span>`;
+            ? `<span class="${c.numberPillStepper}"><button type="button" class="${c.numberPillStepBtn}" data-qa-ignore="1" contenteditable="false" data-number-step="-1" aria-label="Decrease ${escHtml(fieldLabelText)}">−</button><span class="${c.inlineMarkLabel}">${escHtml(displayChunk)}</span><button type="button" class="${c.numberPillStepBtn}" data-qa-ignore="1" contenteditable="false" data-number-step="1" aria-label="Increase ${escHtml(fieldLabelText)}">+</button></span>`
+            : `<span class="${c.inlineMarkLabel}">${escHtml(displayChunk)}</span>`;
         return `<span class="${classes}"${attrs}${blockedAttrs}${styleAttr}${titleAttr}>${blockedIcon}${inferredIcon}${numberControls}${dismiss}</span>`;
     };
 
@@ -9810,6 +10232,7 @@
         }
 
         let best = null;
+        let bestKind = -1;
         this.lastResult.entries.forEach((entry) => {
             entry.tokens.forEach((token) => {
                 if (token.kind !== 'field') {
@@ -9826,17 +10249,234 @@
                 const valueEnd = Number.isFinite(Number(token.globalValueEnd))
                     ? Number(token.globalValueEnd)
                     : Number(token.globalEnd);
-                const inRange = caretOffset >= valueStart && caretOffset <= valueEnd;
-                if (!inRange) {
+                const inPrefixGap = caretOffset >= Number(token.globalStart) && caretOffset <= valueStart;
+                const inValueRange = caretOffset >= valueStart && caretOffset <= valueEnd;
+                if (!inPrefixGap && !inValueRange) {
                     return;
                 }
-                if (!best || token.globalStart >= best.globalStart) {
+                const kind = inPrefixGap ? 2 : 1;
+                if (
+                    !best
+                    || kind > bestKind
+                    || (kind === bestKind && token.globalStart >= best.globalStart)
+                ) {
                     best = token;
+                    bestKind = kind;
                 }
             });
         });
 
         return best;
+    };
+
+    QuickAddComponent.prototype.getEntryIndexAtCaret = function getEntryIndexAtCaret(caretOffset) {
+        if (typeof caretOffset !== 'number') {
+            return 0;
+        }
+        const entries = Array.isArray(this.lastResult && this.lastResult.entries) ? this.lastResult.entries : [];
+        if (!entries.length) {
+            return 0;
+        }
+        const safeCaret = Math.max(0, Math.min(Number(caretOffset), String(this.inputText || this.readInputText() || '').length));
+        let fallback = entries[entries.length - 1].index;
+        for (let i = 0; i < entries.length; i += 1) {
+            const entry = entries[i];
+            const start = Number(entry.globalStart);
+            const end = Number(entry.globalEnd);
+            if (!Number.isFinite(start) || !Number.isFinite(end)) {
+                continue;
+            }
+            if (safeCaret >= start && safeCaret <= end) {
+                return entry.index;
+            }
+            if (safeCaret < start) {
+                return entry.index;
+            }
+            fallback = entry.index;
+        }
+        return fallback;
+    };
+
+    QuickAddComponent.prototype.findFieldMenuContextAtCaret = function findFieldMenuContextAtCaret(caretOffset) {
+        if (typeof caretOffset !== 'number' || this.config.showFieldMenuOnTyping === false) {
+            return null;
+        }
+        const trigger = String(this.config.fieldMenuTrigger || '');
+        if (!trigger) {
+            return null;
+        }
+        const sourceText = String(this.inputText || this.readInputText() || '');
+        const safeCaret = Math.max(0, Math.min(Number(caretOffset), sourceText.length));
+        const beforeCaret = sourceText.slice(0, safeCaret);
+        const triggerStart = beforeCaret.lastIndexOf(trigger);
+        if (triggerStart < 0) {
+            return null;
+        }
+        const prevChar = triggerStart > 0 ? sourceText.charAt(triggerStart - 1) : '';
+        if (prevChar && !/\s/.test(prevChar)) {
+            return null;
+        }
+        const queryStart = triggerStart + trigger.length;
+        const queryRaw = sourceText.slice(queryStart, safeCaret);
+        if (/[\r\n]/.test(queryRaw)) {
+            return null;
+        }
+        const query = queryRaw.trimStart();
+        if (/\s/.test(query)) {
+            return null;
+        }
+        return {
+            triggerStart,
+            queryStart,
+            caretOffset: safeCaret,
+            query,
+            entryIndex: this.getEntryIndexAtCaret(safeCaret)
+        };
+    };
+
+    QuickAddComponent.prototype.buildFieldMenuOptions = function buildFieldMenuOptions(entryIndex) {
+        const fields = Array.isArray(this.normalizedSchema && this.normalizedSchema.fields)
+            ? this.normalizedSchema.fields
+            : [];
+        if (!fields.length) {
+            return [];
+        }
+        const fallbackKey = String(this.config.fallbackField || '');
+        const entry = (this.lastResult.entries || []).find((item) => item.index === entryIndex) || null;
+        const usedKeys = new Set();
+        if (entry && Array.isArray(entry.tokens)) {
+            entry.tokens.forEach((token) => {
+                if (token && token.kind === 'field' && token.key) {
+                    usedKeys.add(String(token.key));
+                }
+            });
+        }
+        return fields
+            .filter((field) => String(field.key || '') !== fallbackKey)
+            .filter((field) => this.config.fieldMenuShowUsedFields !== false || !usedKeys.has(String(field.key)))
+            .map((field) => {
+                const prefix = (Array.isArray(field.prefixes) && field.prefixes[0])
+                    ? String(field.prefixes[0])
+                    : `${field.key}:`;
+                const isRequired = !!(field.required && this.config.fieldMenuShowRequiredMeta !== false);
+                const isAutoDetect = !!(
+                    this.config.fieldMenuShowAutoDetectMeta !== false
+                    && (field.autoDetectWithoutPrefix === true || (this.config.autoDetectOptionsWithoutPrefix && field.autoDetectWithoutPrefix !== false))
+                );
+                const typeLabel = String(field.type || 'string');
+                const typeKey = typeLabel.toLowerCase();
+                const typeGlyph = ({
+                    string: 'Aa',
+                    number: '12',
+                    options: '≡',
+                    date: 'D',
+                    datetime: 'DT',
+                    file: '📎',
+                    boolean: '✓'
+                })[typeKey] || String(typeLabel || '?').slice(0, 2).toUpperCase();
+                const hasDefault = !(
+                    field.defaultValue === undefined
+                    || field.defaultValue === null
+                    || (typeof field.defaultValue === 'string' && field.defaultValue.trim() === '')
+                    || (Array.isArray(field.defaultValue) && field.defaultValue.length === 0)
+                );
+                const isLimited = typeKey === 'options' && field.allowCustom === false;
+                const isDateType = isDateFieldType(typeKey);
+                const hasMeta = !!(
+                    isRequired
+                    || isAutoDetect
+                    || hasDefault
+                    || field.multiple
+                    || isLimited
+                    || (isDateType && field.naturalDate)
+                    || (isDateType && field.allowDateOnly)
+                    || field.allowMathExpression
+                    || field.showNumberStepper
+                    || (Array.isArray(field.prefixes) && field.prefixes.length > 1)
+                );
+                let metaTone = 'plain';
+                if (isRequired) {
+                    metaTone = 'required';
+                } else if (isAutoDetect) {
+                    metaTone = 'auto';
+                } else if (hasDefault) {
+                    metaTone = 'default';
+                } else if (isLimited) {
+                    metaTone = 'limited';
+                } else if (field.multiple) {
+                    metaTone = 'multi';
+                } else if (hasMeta) {
+                    metaTone = 'meta';
+                }
+                const metaFlags = [];
+                if (isRequired) metaFlags.push('required');
+                if (isAutoDetect) metaFlags.push('auto');
+                if (hasDefault) metaFlags.push('default');
+                if (field.multiple) metaFlags.push('multiple');
+                if (isLimited) metaFlags.push('limited');
+                if (isDateType && field.naturalDate) metaFlags.push('natural-date');
+                if (isDateType && field.allowDateOnly) metaFlags.push('date-only');
+                if (field.allowMathExpression) metaFlags.push('math');
+                if (field.showNumberStepper) metaFlags.push('stepper');
+                if (Array.isArray(field.prefixes) && field.prefixes.length > 1) metaFlags.push('aliases');
+                return {
+                    value: String(field.key),
+                    label: `${field.label || field.key}`,
+                    meta: typeLabel,
+                    metaType: typeLabel,
+                    required: isRequired,
+                    autoDetect: isAutoDetect,
+                    prefix,
+                    typeGlyph,
+                    metaTone,
+                    metaSummary: metaFlags.length ? metaFlags.join(' · ') : 'no field flags',
+                    color: field.color || null
+                };
+            });
+    };
+
+    QuickAddComponent.prototype.syncFieldMenuDropdown = function syncFieldMenuDropdown(caretOffset) {
+        const context = this.findFieldMenuContextAtCaret(caretOffset);
+        if (!context) {
+            if (this.dropdownState && this.dropdownState.source === 'field-menu') {
+                this.closeDropdown();
+            }
+            return false;
+        }
+        const options = this.buildFieldMenuOptions(context.entryIndex);
+        if (!options.length) {
+            if (this.dropdownState && this.dropdownState.source === 'field-menu') {
+                this.closeDropdown();
+            }
+            return false;
+        }
+        this.dropdownState = {
+            fieldKey: '__field_menu__',
+            fieldType: 'field-menu',
+            tokenId: '',
+            entryIndex: context.entryIndex,
+            entryKey: context.entryIndex,
+            currentValue: context.query,
+            allowCustom: false,
+            options,
+            sourceRegion: 'inline',
+            anchorRect: null,
+            source: 'field-menu',
+            activeOptionValue: null,
+            filteredOptions: [],
+            activateFirstOnOpen: true,
+            keepActiveWhenFiltering: false,
+            fieldMenuContext: context
+        };
+        this.dropdownSearchEl.hidden = true;
+        this.dropdownSearchEl.value = context.query;
+        this.renderDropdownList();
+        this.positionDropdownAtRect(this.getCaretClientRect());
+        this.captureFocusOrigin('dropdown', this.inputEl, this.inputEl);
+        this.dropdownEl.hidden = false;
+        this.dropdownEl.classList.add(this.config.classNames.dropdownOpen);
+        this.syncDropdownA11y();
+        return true;
     };
 
     QuickAddComponent.prototype.syncTypingDropdown = function syncTypingDropdown(caretOffset) {
@@ -9878,13 +10518,45 @@
             return;
         }
 
+        const sourceText = String(this.inputText || this.readInputText() || '');
+        const tokenValueStartRaw = Number.isFinite(Number(token.globalValueStart))
+            ? Number(token.globalValueStart)
+            : Number(token.globalStart);
+        const tokenValueEndRaw = Number.isFinite(Number(token.globalValueEnd))
+            ? Number(token.globalValueEnd)
+            : Number(token.globalEnd);
+        const safeSourceLength = sourceText.length;
+        const safeValueStart = Math.max(0, Math.min(tokenValueStartRaw, safeSourceLength));
+        const safeCaret = Number.isFinite(Number(caretOffset))
+            ? Math.max(safeValueStart, Math.min(Number(caretOffset), safeSourceLength))
+            : safeValueStart;
+        const safeValueEnd = token.committed
+            ? Math.max(safeValueStart, Math.min(tokenValueEndRaw, safeSourceLength))
+            : Math.max(
+                safeValueStart,
+                Math.min(Math.max(tokenValueEndRaw, safeCaret), safeSourceLength)
+            );
+        const isCommittedValueEdge = !!(token.committed && safeCaret >= safeValueEnd);
+        let typedValue = isCommittedValueEdge
+            ? ''
+            : (safeCaret >= safeValueStart && safeCaret <= safeValueEnd
+                ? sourceText.slice(safeValueStart, safeCaret)
+                : '');
+        if (token.committed && field && field.type === 'options' && !field.multiple) {
+            const normalizedTyped = normValue(String(typedValue || '').replace(/[;:,]+$/g, '').trim());
+            const normalizedToken = normValue(token.value || '');
+            typedValue = (!normalizedTyped || normalizedTyped === normalizedToken)
+                ? ''
+                : String(typedValue || '').replace(/[;:,]+$/g, '').trim();
+        }
+
         this.dropdownState = {
             fieldKey: token.key,
             fieldType: field.type,
             tokenId: token.id,
             entryIndex: typeof token.entryIndex === 'number' ? token.entryIndex : 0,
             entryKey: typeof token.entryIndex === 'number' ? token.entryIndex : 0,
-            currentValue: token.value || '',
+            currentValue: typedValue,
             allowCustom: !!field.allowCustom,
             options,
             sourceRegion: 'inline',
@@ -9897,7 +10569,7 @@
         };
 
         this.dropdownSearchEl.hidden = true;
-        this.dropdownSearchEl.value = token.value || '';
+        this.dropdownSearchEl.value = typedValue;
         this.renderDropdownList();
         this.positionDropdownAtRect(this.getCaretClientRect());
         this.captureFocusOrigin('dropdown', this.inputEl, this.inputEl);
@@ -10064,7 +10736,7 @@
             entryIndex,
             entryKey: entryIndex,
             currentValue: (field.multiple && field.type === 'options')
-                ? pillValue
+                ? (pillValue || (token ? token.value : ''))
                 : (token ? token.value : pillValue),
             allowCustom: !!field.allowCustom,
             options,
@@ -10127,11 +10799,26 @@
             const source = this.inputText || this.readInputText();
             caretOffset = source.length;
         }
+        if (Number.isFinite(Number(caretOffset))) {
+            const source = String(this.inputText || this.readInputText() || '');
+            const safeOffset = Math.max(0, Math.min(Number(caretOffset), source.length));
+            if (safeOffset < source.length && /\s/.test(source.charAt(safeOffset) || '')) {
+                const token = tokenId ? this.tokenMap[tokenId] : null;
+                const isTokenRightEdge = token && safeOffset === Number(token.globalEnd) && clickX >= midpoint;
+                if (isTokenRightEdge || this.findCommittedFieldTokenEndingAtOffset(safeOffset)) {
+                    caretOffset = safeOffset + 1;
+                }
+            }
+        }
         this.closeDropdown();
         this.setCaretOffset(Number(caretOffset), true);
     };
 
     QuickAddComponent.prototype.positionDropdownAtRect = function positionDropdownAtRect(rect, anchorEl) {
+        // Reset stale max-height constraints before measurement so the panel can grow
+        // when option count increases between typing/backspace cycles.
+        this.dropdownEl.style.removeProperty('max-height');
+        this.dropdownListEl.style.removeProperty('max-height');
         const maxPanelHeight = 250;
         const layout = this.computeFloatingLayout({
             panelEl: this.dropdownEl,
@@ -10149,17 +10836,30 @@
             allowExpand: false
         });
 
+        const viewportPad = 8;
+        const viewportBottom = Math.max(viewportPad, window.innerHeight - viewportPad);
+        let nextTop = Number(layout.top || 0);
+        let nextPanelHeight = Math.max(0, Number(layout.panelHeight || 0));
+        if ((nextTop + nextPanelHeight) > viewportBottom) {
+            const overflow = (nextTop + nextPanelHeight) - viewportBottom;
+            nextTop = Math.max(viewportPad, nextTop - overflow);
+        }
+        if (nextTop < viewportPad) {
+            nextTop = viewportPad;
+        }
+        nextPanelHeight = Math.min(nextPanelHeight, Math.max(0, viewportBottom - nextTop));
+
         this.dropdownEl.style.position = 'fixed';
         this.dropdownEl.style.left = `${layout.left}px`;
-        this.dropdownEl.style.top = `${layout.top}px`;
+        this.dropdownEl.style.top = `${nextTop}px`;
         this.dropdownEl.style.width = `${layout.width}px`;
         this.dropdownEl.style.maxWidth = `${Math.max(0, layout.viewportWidth)}px`;
-        this.dropdownEl.style.maxHeight = `${Math.floor(layout.panelHeight)}px`;
+        this.dropdownEl.style.maxHeight = `${Math.floor(nextPanelHeight)}px`;
         this.dropdownEl.style.zIndex = '9999';
         const searchHeight = (this.dropdownSearchEl && !this.dropdownSearchEl.hidden)
             ? Math.ceil(this.dropdownSearchEl.getBoundingClientRect().height || 0)
             : 0;
-        const listMaxHeight = Math.max(0, layout.panelHeight - searchHeight - 1);
+        const listMaxHeight = Math.max(0, nextPanelHeight - searchHeight - 1);
         this.dropdownListEl.style.maxHeight = `${Math.floor(listMaxHeight)}px`;
         this.updateDropdownScrollIndicators();
     };
@@ -10263,6 +10963,7 @@
 
         const c = this.config.classNames;
         const field = this.getFieldDefinition(this.dropdownState.fieldKey);
+        const isFieldMenu = this.dropdownState.source === 'field-menu';
         const fieldLabel = field && field.label ? field.label : (this.dropdownState.fieldKey || 'options');
         this.dropdownListEl.setAttribute('aria-label', `${fieldLabel} options`);
         const isMultiSelectOptions = !!(field && field.type === 'options' && field.multiple);
@@ -10298,8 +10999,22 @@
         let filtered = dependencyFiltered;
         if (query) {
             filtered = filtered.filter((option) =>
-                option.label.toLowerCase().includes(query) || option.value.toLowerCase().includes(query)
+                option.label.toLowerCase().includes(query)
+                || option.value.toLowerCase().includes(query)
+                || String(option.prefix || '').toLowerCase().includes(query)
             );
+        }
+        if (isMultiSelectOptions && this.config.sortSelectedMultiOptionsToBottom !== false && filtered.length > 1) {
+            const unselected = [];
+            const selected = [];
+            filtered.forEach((option) => {
+                if (selectedNorm.has(normValue(option.value))) {
+                    selected.push(option);
+                } else {
+                    unselected.push(option);
+                }
+            });
+            filtered = unselected.concat(selected);
         }
 
         const items = filtered.map((option, idx) => {
@@ -10326,19 +11041,48 @@
                     usedMeta = `<span class="${c.dropdownMeta} ${c.dropdownCountMeta}" title="${escHtml(usedTitle)}">(${usedCount})</span>`;
                 }
             }
+            const typeMeta = option.metaType
+                ? `<span class="${c.dropdownMeta} ${c.dropdownMetaType}">${escHtml(option.metaType)}</span>`
+                : (option.meta ? `<span class="${c.dropdownMeta} ${c.dropdownMetaType}">${escHtml(option.meta)}</span>` : '');
+            const badgeBits = [];
+            if (option.required) {
+                badgeBits.push(`<span class="${c.dropdownMetaBadgeRequired}" title="Required" aria-label="Required">✱</span>`);
+            }
+            if (option.autoDetect) {
+                badgeBits.push(`<span class="${c.dropdownMetaBadgeAuto}" title="Auto-detected" aria-label="Auto-detected">⚡</span>`);
+            }
+            const badgeMeta = badgeBits.length
+                ? `<span class="${c.dropdownMeta} ${c.dropdownMetaBadges}">${badgeBits.join('')}</span>`
+                : '';
+            const fieldGlyphToneClass = (
+                {
+                    required: c.dropdownFieldGlyphToneRequired,
+                    auto: c.dropdownFieldGlyphToneAuto,
+                    default: c.dropdownFieldGlyphToneDefault,
+                    limited: c.dropdownFieldGlyphToneLimited,
+                    multi: c.dropdownFieldGlyphToneMulti,
+                    meta: c.dropdownFieldGlyphToneMeta
+                }[String(option.metaTone || '')]
+                || c.dropdownFieldGlyphTonePlain
+            );
+            const trailingMeta = isFieldMenu
+                ? `<span class="${c.dropdownMeta} ${c.dropdownFieldPrefix}" title="${escHtml(String(option.prefix || ''))}">${escHtml(String(option.prefix || ''))}</span>`
+                : (selected
+                    ? `<span class="${c.dropdownMeta} qa-dropdown-selected-meta" aria-hidden="true">${selectedCheckIcon}</span>`
+                    : (usedMeta || `${typeMeta}${badgeMeta}`));
             const showAttachmentPreview = this.config.showAttachmentDropdownPreview !== false;
-            const leadingVisual = isFileFieldType(this.dropdownState.fieldType) && showAttachmentPreview
-                ? (option.previewUrl
-                    ? `<img class="${c.dropdownAttachmentPreview}" src="${escHtml(option.previewUrl)}" alt="" loading="lazy" aria-hidden="true" />`
-                    : `<span class="${c.dropdownAttachmentIcon}" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="13 2 13 9 20 9"/></svg></span>`)
-                : `<span class="${c.dropdownColor}"${colorStyle}></span>`;
+            const leadingVisual = isFieldMenu
+                ? `<span class="${c.dropdownFieldGlyph} ${fieldGlyphToneClass}" title="${escHtml(String(option.metaSummary || ''))}" aria-hidden="true">${escHtml(String(option.typeGlyph || ''))}</span>`
+                : (isFileFieldType(this.dropdownState.fieldType) && showAttachmentPreview
+                    ? (option.previewUrl
+                        ? `<img class="${c.dropdownAttachmentPreview}" src="${escHtml(option.previewUrl)}" alt="" loading="lazy" aria-hidden="true" />`
+                        : `<span class="${c.dropdownAttachmentIcon}" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" points="13 2 13 9 20 9"/></svg></span>`)
+                    : `<span class="${c.dropdownColor}"${colorStyle}></span>`);
             return `
                 <button type="button" id="${optionId}" role="option" aria-selected="${selected ? 'true' : 'false'}" class="${c.dropdownOption}${active ? ` ${c.dropdownOptionActive}` : ''}" data-option-value="${escHtml(option.value)}">
                     ${leadingVisual}
                     <span class="qa-dropdown-label">${escHtml(option.label)}</span>
-                    ${selected
-                    ? `<span class="${c.dropdownMeta} qa-dropdown-selected-meta" aria-hidden="true">${selectedCheckIcon}</span>`
-                    : usedMeta}
+                    ${trailingMeta}
                 </button>
             `;
         });
@@ -10534,6 +11278,28 @@
             return;
         }
         const state = Object.assign({}, this.dropdownState);
+        if (state.source === 'field-menu') {
+            const menuOption = (state.options || []).find((option) => normValue(option && option.value) === normValue(nextValue)) || null;
+            if (!menuOption || !menuOption.prefix) {
+                this.closeDropdown();
+                return;
+            }
+            const context = state.fieldMenuContext || this.findFieldMenuContextAtCaret(this.getCaretOffset());
+            if (!context) {
+                this.closeDropdown();
+                return;
+            }
+            const source = String(this.inputText || this.readInputText() || '');
+            const updated = this.replaceRange(source, context.triggerStart, context.caretOffset, String(menuOption.prefix));
+            const caret = context.triggerStart + String(menuOption.prefix).length;
+            this.closeDropdown();
+            this.parseAndRender({
+                source: updated,
+                caretOffset: caret,
+                focusInput: true
+            });
+            return;
+        }
         const field = this.getFieldDefinition(state.fieldKey);
         const isMultiSelectOptions = !!(field && field.type === 'options' && field.multiple);
         let selectedOption = (state.options || []).find((option) => normValue(option.value) === normValue(nextValue)) || null;
@@ -10642,7 +11408,8 @@
         let keepOpen = false;
 
         if (isMultiSelectOptions) {
-            keepOpen = fromTyping;
+            keepOpen = fromTyping || state.source === 'click';
+            let appendedContinuationSpace = false;
             let values;
             if (fromTyping) {
                 const rawTokenValue = String(token.value || '');
@@ -10672,10 +11439,11 @@
                 values.splice(existingIndex, 1);
             }
             replacement = values.join(`${separator} `);
-            if (fromTyping && didAdd && values.length > 0 && !token.committed && !terminator) {
+            if (fromTyping && didAdd && values.length > 0 && !token.committed) {
                 replacement = `${replacement}${separator} `;
+                appendedContinuationSpace = true;
             }
-            caret = token.globalValueStart + replacement.length;
+            caret = token.globalValueStart + replacement.length - (appendedContinuationSpace ? 1 : 0);
             updated = this.replaceRange(source, token.globalValueStart, token.globalValueEnd, replacement);
         } else {
             updated = this.replaceRange(source, token.globalValueStart, token.globalValueEnd, replacement);
@@ -10696,8 +11464,9 @@
             }
         }
 
-        if (!token.committed && terminator) {
+        if (!token.committed && terminator && !(isMultiSelectOptions && fromTyping && keepOpen)) {
             const tokenTail = updated.slice(caret, caret + terminator.length);
+            let appendedTerminator = false;
             const shouldAppendTerminator = (
                 tokenTail !== terminator
                 && (fromTyping || this.config.fieldTerminatorMode === 'strict')
@@ -10720,8 +11489,9 @@
                 }
                 updated = this.replaceRange(updated, caret, caret, terminator);
                 caret += terminator.length;
+                appendedTerminator = true;
             }
-            if (fromTyping) {
+            if (fromTyping || appendedTerminator) {
                 const nextChar = updated.charAt(caret);
                 if (nextChar !== '\n' && !/\s/.test(nextChar || '')) {
                     updated = this.replaceRange(updated, caret, caret, ' ');
@@ -10774,7 +11544,7 @@
             skipTypingSync: !shouldRunTypingSync
         });
 
-        if (keepOpen && state.sourceRegion === 'card') {
+        if (keepOpen && !fromTyping) {
             const entry = (this.lastResult.entries || []).find((item) => item.index === state.entryIndex);
             const nextToken = entry
                 ? (entry.tokens || []).filter((item) => item.kind === 'field' && item.key === state.fieldKey && item.committed).slice(-1)[0]
@@ -10788,7 +11558,7 @@
                 currentValue: replacement,
                 allowCustom: !!state.allowCustom,
                 options: Array.isArray(state.options) ? state.options.slice() : [],
-                sourceRegion: 'card',
+                sourceRegion: state.sourceRegion || 'inline',
                 anchorRect: state.anchorRect || (state.anchorEl && state.anchorEl.getBoundingClientRect ? state.anchorEl.getBoundingClientRect() : null),
                 anchorEl: state.anchorEl || null,
                 source: state.source,
@@ -10923,7 +11693,26 @@
             && effectiveSyncEnd > effectiveSyncStart;
         const shouldSyncInlineSource = hasEffectiveSyncRange;
         if (shouldSyncInlineSource) {
-            const replacementText = String(normalizedNextValue);
+            const currentChunkText = source.slice(effectiveSyncStart, effectiveSyncEnd);
+            let replacementText = String(normalizedNextValue);
+            if (currentChunkText) {
+                const lowerChunkText = currentChunkText.toLowerCase();
+                const needleCandidates = [
+                    currentValueText,
+                    mappingValueText
+                ]
+                    .map((value) => String(value === undefined || value === null ? '' : value))
+                    .filter(Boolean);
+                for (let i = 0; i < needleCandidates.length; i++) {
+                    const needle = needleCandidates[i];
+                    const startIdx = lowerChunkText.indexOf(needle.toLowerCase());
+                    if (startIdx === -1) {
+                        continue;
+                    }
+                    replacementText = `${currentChunkText.slice(0, startIdx)}${String(normalizedNextValue)}${currentChunkText.slice(startIdx + needle.length)}`;
+                    break;
+                }
+            }
             nextSource = this.replaceRange(source, effectiveSyncStart, effectiveSyncEnd, replacementText);
             if (sourceRegion !== 'card') {
                 caretOffset = effectiveSyncStart + replacementText.length;
@@ -10952,9 +11741,13 @@
                         && (start <= effectiveSyncStart && end >= effectiveSyncEnd);
                     if (!updatedCurrent && (isDirectMatch || isOccurrenceMatch)) {
                         updatedCurrent = true;
+                        const nextStart = start;
+                        const nextEnd = isDirectMatch
+                            ? (nextStart + replacementText.length)
+                            : (effectiveSyncStart + replacementText.length);
                         nextSpan = Object.assign({}, span, {
-                            start,
-                            end: start + replacementText.length,
+                            start: nextStart,
+                            end: nextEnd,
                             value: normalizedNextValue
                         });
                     } else if (start >= effectiveSyncEnd && delta !== 0) {
@@ -10976,6 +11769,37 @@
                 }
                 if (Number.isFinite(Number(entry._sourceEnd))) {
                     entry._sourceEnd = Number(entry._sourceEnd) + delta;
+                }
+                if (delta !== 0) {
+                    (this.aiState.entries || []).forEach((candidate) => {
+                        if (!candidate || candidate === entry || candidate._id === entryId) {
+                            return;
+                        }
+                        const candidateStart = Number(candidate._sourceStart);
+                        const candidateEnd = Number(candidate._sourceEnd);
+                        if (Number.isFinite(candidateStart) && candidateStart >= effectiveSyncEnd) {
+                            candidate._sourceStart = candidateStart + delta;
+                        }
+                        if (Number.isFinite(candidateEnd) && candidateEnd >= effectiveSyncEnd) {
+                            candidate._sourceEnd = candidateEnd + delta;
+                        }
+                        if (Array.isArray(candidate.spans)) {
+                            candidate.spans = candidate.spans.map((span) => {
+                                const start = Number(span && span.start);
+                                const end = Number(span && span.end);
+                                if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+                                    return span;
+                                }
+                                if (start >= effectiveSyncEnd) {
+                                    return Object.assign({}, span, { start: start + delta, end: end + delta });
+                                }
+                                if (end > effectiveSyncEnd) {
+                                    return Object.assign({}, span, { end: end + delta });
+                                }
+                                return span;
+                            });
+                        }
+                    });
                 }
             }
             this.aiState.lastParsedInput = nextSource;
@@ -11037,8 +11861,67 @@
         }
     };
 
+    QuickAddComponent.prototype.finalizeOpenMultiValueTokenOnDropdownClose = function finalizeOpenMultiValueTokenOnDropdownClose(state) {
+        if (!state || state.source !== 'typing') {
+            return false;
+        }
+        const field = this.getFieldDefinition(state.fieldKey);
+        if (!field || field.type !== 'options' || !field.multiple) {
+            return false;
+        }
+        const token = this.tokenMap[state.tokenId];
+        if (!token || token.committed) {
+            return false;
+        }
+        const terminator = String(this.config.fieldTerminator || '');
+        if (!terminator) {
+            return false;
+        }
+        const source = String(this.inputText || this.readInputText() || '');
+        const separator = String(this.config.multiSelectSeparator || ',');
+        const escapedSeparator = String(separator || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const valueEnd = Number.isFinite(Number(token.globalValueEnd))
+            ? Number(token.globalValueEnd)
+            : Number(token.globalEnd);
+        const safeValueEnd = Math.max(0, Math.min(Number(valueEnd) || 0, source.length));
+        let updated = source;
+        let caret = safeValueEnd;
+        if (escapedSeparator) {
+            const beforeCaret = updated.slice(0, caret);
+            const trimmedBefore = beforeCaret.replace(new RegExp(`${escapedSeparator}\\s*$`), '');
+            if (trimmedBefore.length !== beforeCaret.length) {
+                updated = trimmedBefore + updated.slice(caret);
+                caret = trimmedBefore.length;
+            }
+        }
+        const tokenTail = updated.slice(caret, caret + terminator.length);
+        if (tokenTail !== terminator) {
+            updated = this.replaceRange(updated, caret, caret, terminator);
+            caret += terminator.length;
+        }
+        const nextChar = updated.charAt(caret);
+        if (nextChar !== '\n' && !/\s/.test(nextChar || '')) {
+            updated = this.replaceRange(updated, caret, caret, ' ');
+            caret += 1;
+        }
+        if (updated === source) {
+            return false;
+        }
+        this.parseAndRender({
+            source: updated,
+            caretOffset: caret,
+            focusInput: true,
+            skipTypingSync: true
+        });
+        return true;
+    };
+
     QuickAddComponent.prototype.closeDropdown = function closeDropdown(options) {
         const opts = options || {};
+        const previousState = this.dropdownState;
+        if (opts.finalizeOpenToken === true) {
+            this.finalizeOpenMultiValueTokenOnDropdownClose(previousState);
+        }
         this.dropdownState = null;
         if (!this.dropdownEl) {
             return;
@@ -11048,9 +11931,9 @@
         this.dropdownListEl.innerHTML = '';
         this.dropdownSearchEl.hidden = false;
         this.dropdownSearchEl.value = '';
-        this.dropdownEl.style.removeProperty('maxHeight');
-        this.dropdownListEl.style.removeProperty('maxHeight');
-        this.dropdownListEl.style.removeProperty('minHeight');
+        this.dropdownEl.style.removeProperty('max-height');
+        this.dropdownListEl.style.removeProperty('max-height');
+        this.dropdownListEl.style.removeProperty('min-height');
         this.dropdownListEl.scrollTop = 0;
         this.syncDropdownA11y();
         if (opts.restoreFocus !== false) {

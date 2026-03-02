@@ -188,6 +188,30 @@ history: {
 }
 ```
 
+### Field Slash Menu
+
+```ts
+showFieldMenuOnTyping?: boolean;      // default: true
+fieldMenuTrigger?: string;            // default: "/"
+fieldMenuShowUsedFields?: boolean;    // default: false (shows only fields not yet used in the current entry)
+fieldMenuShowRequiredMeta?: boolean;  // default: true
+fieldMenuShowAutoDetectMeta?: boolean;// default: true
+hideFieldTerminatorInPills?: boolean; // default: false (keeps underlying text intact; only visual inline pills hide terminator)
+autoCloseFieldOnSpace?: boolean;      // default: false
+autoCloseFieldOnSpaceConfidenceThreshold?: number; // default: 0.9, range 0..1
+```
+
+Typing the trigger (for example `/`) opens a field menu in the dropdown; selecting an item inserts that field's prefix at the caret. The fallback field (usually `title`) is intentionally excluded from this menu.
+When `autoCloseFieldOnSpace` is enabled, pressing space at the end of an active field value can auto-commit that field (append terminator) when confidence meets the configured threshold.
+
+### Multi-select dropdown ordering
+
+```ts
+sortSelectedMultiOptionsToBottom?: boolean; // default: true
+```
+
+When enabled, already-selected options are shown at the bottom of option dropdowns for multi-select fields.
+
 ### Number Math (safe arithmetic)
 
 ```ts

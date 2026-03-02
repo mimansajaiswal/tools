@@ -11,7 +11,7 @@
         href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Figtree:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="./components-demo.css?v=20260301">
-    <link rel="stylesheet" data-qa-style="1" href="../quick-add/quick-add-component.css?v=20260301g">
+    <link rel="stylesheet" data-qa-style="1" href="../quick-add/quick-add-component.css?v=20260302k">
     <style>
         :root {
             --bg: #f5f0e8;
@@ -81,69 +81,28 @@
             margin-top: 16px;
         }
 
-        .tab-select {
-            position: relative;
+        .tab-native {
+            display: grid;
+            gap: 6px;
             margin-bottom: 18px;
         }
 
-        .tab-select-trigger {
+        .tab-native label {
+            font: 700 11px/1 "JetBrains Mono", monospace;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--ink-soft);
+        }
+
+        .tab-native-select {
             width: 100%;
             border: 1px solid var(--line);
             background: var(--surface);
             color: var(--ink);
             border-radius: 12px;
             padding: 10px 12px;
-            cursor: pointer;
             font: 500 13px/1 "JetBrains Mono", monospace;
             letter-spacing: 0.01em;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-        }
-
-        .tab-select-trigger::after {
-            content: "▾";
-            color: var(--ink-soft);
-            font-size: 12px;
-        }
-
-        .tab-select-menu {
-            position: absolute;
-            top: calc(100% + 6px);
-            left: 0;
-            right: 0;
-            border: 1px solid var(--line);
-            background: #fff;
-            border-radius: 12px;
-            padding: 6px;
-            display: none;
-            box-shadow: 0 16px 40px rgba(32, 27, 22, 0.12);
-            z-index: 20;
-            max-height: 280px;
-            overflow-y: auto;
-        }
-
-        .tab-select.open .tab-select-menu {
-            display: grid;
-            gap: 4px;
-        }
-
-        .tab-select-option {
-            border: 1px solid transparent;
-            background: #fff;
-            color: var(--ink);
-            border-radius: 10px;
-            padding: 8px 10px;
-            cursor: pointer;
-            text-align: left;
-            font: 500 13px/1 "JetBrains Mono", monospace;
-        }
-
-        .tab-select-option.active {
-            border-color: var(--accent);
-            background: var(--accent-soft);
-            color: var(--accent);
         }
 
         .tab-btn {
@@ -211,7 +170,7 @@
                 border-radius: 999px;
             }
 
-            .example-tabs .tab-select {
+            .example-tabs .tab-native {
                 display: none;
             }
         }
@@ -776,7 +735,8 @@
 
         .custom-select {
             position: relative;
-            min-width: 140px;
+            min-width: 0;
+            width: 100%;
         }
 
         .custom-select-trigger {
@@ -811,7 +771,7 @@
             padding: 4px;
             display: none;
             box-shadow: 0 10px 24px rgba(32, 27, 22, 0.12);
-            z-index: 20;
+            z-index: 40;
             max-height: 200px;
             overflow-y: auto;
         }
@@ -864,26 +824,20 @@
                     parsing
                     and six variant demos.</p>
                 <div class="import-note">Single-file import:
-                    <code>&lt;script src=\"../quick-add/quick-add-component.js?v=20260301e\"&gt;&lt;/script&gt;</code>
+                    <code>&lt;script src=\"../quick-add/quick-add-component.js?v=20260302k\"&gt;&lt;/script&gt;</code>
                 </div>
             </div>
             <div class="example-tabs" id="exampleTabsWrap">
-                <div class="tab-select" id="exampleTabsSelect">
-                    <button class="tab-select-trigger" type="button" id="exampleTabsTrigger">1: Task Planner
-                        Variant</button>
-                    <div class="tab-select-menu" id="exampleTabsMenu">
-                        <button class="tab-select-option active" type="button" data-example="example1">1: Task Planner
-                            Variant</button>
-                        <button class="tab-select-option" type="button" data-example="example2">2: Pet Event
-                            Variant</button>
-                        <button class="tab-select-option" type="button" data-example="example3">3: Expense
-                            Variant</button>
-                        <button class="tab-select-option" type="button" data-example="example4">4: Modal Embed
-                            Variant</button>
-                        <button class="tab-select-option" type="button" data-example="example5">5: ✦ AI Parsing</button>
-                        <button class="tab-select-option" type="button" data-example="example6">6: ✦ AI Parsing w/
-                            Inline</button>
-                    </div>
+                <div class="tab-native">
+                    <label for="exampleTabsNative">Example</label>
+                    <select class="tab-native-select" id="exampleTabsNative" aria-label="Choose demo example">
+                        <option value="example1" selected>1: Task Planner Variant</option>
+                        <option value="example2">2: Pet Event Variant</option>
+                        <option value="example3">3: Expense Variant</option>
+                        <option value="example4">4: Modal Embed Variant</option>
+                        <option value="example5">5: ✦ AI Parsing</option>
+                        <option value="example6">6: ✦ AI Parsing w/ Inline</option>
+                    </select>
                 </div>
                 <div class="tab-row tab-row--scroll" id="exampleTabs">
                     <button class="tab-btn active" data-example="example1">1: Task Planner Variant</button>
@@ -1164,8 +1118,8 @@
     </main>
 
     <script src="https://unpkg.com/chrono-node@2.7.7/dist/chrono.min.js"></script>
-    <script src="../quick-add/quick-add-component.js?v=20260301e"></script>
-    <script defer src="./quick-add-demo.js?v=20260301e"></script>
+    <script src="../quick-add/quick-add-component.js?v=20260302k"></script>
+    <script defer src="./quick-add-demo.js?v=20260302k"></script>
 </body>
 
 </html>
