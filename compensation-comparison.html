@@ -341,6 +341,13 @@
       box-shadow: none
     }
 
+    button:focus-visible,
+    .collapse-toggle:focus-visible {
+      outline: 2px solid var(--focus-ring);
+      outline-offset: 2px;
+      border-radius: 4px
+    }
+
     .ctrl-group textarea {
       height: auto;
       min-height: 108px;
@@ -432,6 +439,10 @@
 
     .modal-overlay.is-open {
       display: flex
+    }
+
+    .is-hidden {
+      display: none !important
     }
 
     .modal-card {
@@ -989,6 +1000,15 @@
       border: 1px solid var(--border-soft)
     }
 
+    .note.is-error {
+      color: var(--neg);
+      border-color: var(--neg)
+    }
+
+    .note.is-success {
+      color: var(--text-muted)
+    }
+
     .note-title {
       margin: 0 0 6px;
       font-size: 1em;
@@ -1360,7 +1380,8 @@
               </button>
             </div>
           </div>
-          <div id="share_status" class="note full" style="display:none"></div>
+          <div id="share_status" class="note full is-hidden" role="status" aria-live="polite"></div>
+          <div id="validation_status" class="note full is-hidden" role="status" aria-live="polite"></div>
         </div>
       </div>
     </div>
@@ -1398,20 +1419,20 @@
           <input type="checkbox" id="split_state_tax">
           <label for="split_state_tax">Different per company</label>
         </div>
-        <div class="ctrl-group" id="b_state_tax_pct_ctrl" style="display:none"><label>B State Tax %</label>
+        <div class="ctrl-group is-hidden" id="b_state_tax_pct_ctrl"><label>B State Tax %</label>
           <input type="number" id="b_state_tax_pct" value="0" step="0.1" min="0" max="20">
         </div>
-        <div class="ctrl-group input-prefix" id="b_state_tax_thresh_ctrl" style="display:none"><label>B State
+        <div class="ctrl-group input-prefix is-hidden" id="b_state_tax_thresh_ctrl"><label>B State
             Threshold</label>
           <input type="number" id="b_state_tax_thresh" value="0" step="50000" min="0">
         </div>
-        <div class="ctrl-group" id="b_state_tax_start_yr_ctrl" style="display:none"><label>B State Start Year</label>
+        <div class="ctrl-group is-hidden" id="b_state_tax_start_yr_ctrl"><label>B State Start Year</label>
           <input type="number" id="b_state_tax_start_yr" value="2026" step="1" min="2024" max="2040">
         </div>
-        <div class="ctrl-group" id="b_city_tax_pct_ctrl" style="display:none"><label>B City Tax %</label>
+        <div class="ctrl-group is-hidden" id="b_city_tax_pct_ctrl"><label>B City Tax %</label>
           <input type="number" id="b_city_tax_pct" value="0" step="0.1" min="0" max="10">
         </div>
-        <div class="ctrl-group input-prefix" id="b_city_tax_thresh_ctrl" style="display:none"><label>B City
+        <div class="ctrl-group input-prefix is-hidden" id="b_city_tax_thresh_ctrl"><label>B City
             Threshold</label>
           <input type="number" id="b_city_tax_thresh" value="0" step="50000" min="0">
         </div>
@@ -1573,10 +1594,10 @@
             <input type="number" id="a_base" value="500000" step="5000">
           </div>
           <div class="ctrl-group input-prefix"><label>Sign-on 1</label>
-            <input type="number" id="a_sign1" value="0" step="5000">
+            <input type="number" id="a_sign1" value="20000" step="5000">
           </div>
           <div class="ctrl-group input-prefix"><label>Sign-on 2</label>
-            <input type="number" id="a_sign2" value="0" step="5000">
+            <input type="number" id="a_sign2" value="20000" step="5000">
           </div>
           <div class="sub-label">Raises, Bonus &amp; Dates</div>
           <div class="ctrl-group"><label>Bonus %</label>
@@ -1755,10 +1776,10 @@
             <input type="number" id="a_lv2_bonus_pct" value="0" step="1" min="0" max="100">
           </div>
           <div class="ctrl-group input-prefix" id="a_lv2_sign1_ctrl"><label>Sign-on 1</label>
-            <input type="number" id="a_lv2_sign1" value="0" step="5000">
+            <input type="number" id="a_lv2_sign1" value="20000" step="5000">
           </div>
           <div class="ctrl-group input-prefix" id="a_lv2_sign2_ctrl"><label>Sign-on 2</label>
-            <input type="number" id="a_lv2_sign2" value="0" step="5000">
+            <input type="number" id="a_lv2_sign2" value="20000" step="5000">
           </div>
         </div>
       </div>
@@ -2024,11 +2045,11 @@
           <div class="ctrl-group input-prefix" id="prior_401k_ctrl"><label>Prior 401k Pre-tax</label>
             <input type="number" id="prior_401k" value="15000" step="500">
           </div>
-          <div class="ctrl-group input-prefix" id="reserve_cash_ctrl"><label>Reserve Cash per Year</label>
-            <input type="number" id="reserve_cash" value="50000" step="10000" min="0">
+          <div class="ctrl-group input-prefix" id="reserve_cash_ctrl"><label>Living Expenses / Year</label>
+            <input type="number" id="reserve_cash" value="75000" step="10000" min="0">
           </div>
-          <div class="ctrl-group input-prefix" id="reserve_cash_inc_ctrl"><label>Reserve Cash ↑/YR</label>
-            <input type="number" id="reserve_cash_inc" value="3000" step="1000">
+          <div class="ctrl-group input-prefix" id="reserve_cash_inc_ctrl"><label>Living Expenses ↑/YR</label>
+            <input type="number" id="reserve_cash_inc" value="8000" step="1000">
           </div>
         </div>
       </div>
@@ -2067,10 +2088,11 @@
             <li><b>Mode meaning:</b> Direct mode compares <b>Company A vs Company B</b> with <b>Delta = A minus B</b>.
               Promotion mode compares <b>A-&gt;A, B-&gt;B, A-&gt;B, B-&gt;A</b> with deltas versus <b>B-&gt;B</b>.</li>
             <li><b>Net Worth + Delta:</b> shown as after-tax cumulative values at each milestone date.</li>
-            <li><b>Exclude reserve cash from net worth + delta:</b> toggles whether reserve drag is included in
+            <li><b>Exclude living expenses from net worth + delta:</b> toggles whether living expense drag is included
+              in
               displayed net worth/delta values (breakdown component rows still show modeled components).</li>
-            <li><b>Reserve cash assumptions:</b> Reserve Cash per Year applies annually and Reserve Cash ↑/YR
-              steps that annual reserve higher each year; partial periods are pro-rated.</li>
+            <li><b>Living expense assumptions:</b> Living Expenses / Year applies annually and Living Expenses ↑/YR
+              steps annual living expenses higher each year; partial periods are pro-rated.</li>
             <li><b>Salary Cash:</b> after-tax base pay after 401k, Backdoor IRA, ESPP, and Mega Backdoor Roth payroll
               contributions.</li>
             <li><b>Market Investment:</b> invested market exposure (salary-premium investing and/or invested
@@ -2095,8 +2117,7 @@
               actual achieved contribution, and <b>Unmet</b> is remaining gap after all constraints.</li>
             <li><b>Timeline Mix:</b> bar colors correspond to timeline segments listed in the legend directly above the
               chart.</li>
-            <li><b>Sensitivity card:</b> uses current scenario settings (including reserve assumptions) while sweeping
-              growth/tenure inputs.</li>
+            <li><b>Sensitivity card:</b> uses current scenario settings while sweeping growth/tenure inputs.</li>
             <li><b>Growth pattern fallback:</b> if Stock/Market Growth has fewer values than tenure, remaining years use
               the average of the entered rates.</li>
           </ul>
@@ -2111,7 +2132,7 @@
         <div class="networth-option-row">
           <label class="networth-inline-option" for="exclude_reserve_networth">
             <input type="checkbox" id="exclude_reserve_networth">
-            <span>Exclude reserve cash from net worth + delta</span>
+            <span>Subtract Living Expenses</span>
           </label>
         </div>
         <div class="table-wrap">
@@ -2141,6 +2162,12 @@
       </div>
       <div class="card" id="sensitivity-card">
         <h2>Sensitivity (Best / Base / Worst)</h2>
+        <div class="networth-option-row">
+          <label class="networth-inline-option" for="exclude_reserve_sensitivity">
+            <input type="checkbox" id="exclude_reserve_sensitivity">
+            <span>Subtract Living Expenses</span>
+          </label>
+        </div>
         <div class="ctrl-grid cols-3" style="margin-bottom:10px">
           <div class="ctrl-group"><label>Worst Growth %</label>
             <input type="text" id="sens_growth_worst" value="8" placeholder="e.g. 8 or 5,8,10">
@@ -2161,7 +2188,6 @@
             <input type="number" id="sens_tenure_best" value="6" step="1" min="1">
           </div>
         </div>
-        <p class="note">Includes current Scenario inputs (including Reserve Cash per Year).</p>
         <div class="table-wrap">
           <table id="sensitivity-table">
             <tbody></tbody>
@@ -2203,14 +2229,25 @@
       jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
       january: 1, february: 2, march: 3, april: 4, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12
     };
+    function isValidMonthDay(m, d) {
+      return Number.isInteger(m) && Number.isInteger(d) && m >= 1 && m <= 12 && d >= 1 && d <= daysInMonth(2000, m);
+    }
     function parseMonthDays(str) {
       const parts = str.split(',').map(s => s.trim()).filter(Boolean);
       const result = [];
       for (const p of parts) {
         const m1 = p.match(/^([a-z]+)\s+(\d+)$/i);
-        if (m1) { const mo = MON[m1[1].toLowerCase()]; if (mo) { result.push({ m: mo, d: +m1[2] }); continue } }
+        if (m1) {
+          const mo = MON[m1[1].toLowerCase()];
+          const day = +m1[2];
+          if (mo && isValidMonthDay(mo, day)) { result.push({ m: mo, d: day }); continue }
+        }
         const m2 = p.match(/^(\d{1,2})\/(\d{1,2})$/);
-        if (m2) { result.push({ m: +m2[1], d: +m2[2] }); continue }
+        if (m2) {
+          const mo = +m2[1];
+          const day = +m2[2];
+          if (isValidMonthDay(mo, day)) { result.push({ m: mo, d: day }); continue }
+        }
       }
       result.sort((a, b) => a.m - b.m || a.d - b.d);
       return result;
@@ -2263,6 +2300,32 @@
       espp: 'ESPP',
       invest: 'Market Investment'
     };
+    const MONTH_DAY_MULTI_FIELDS = [
+      { id: 'a_raise_dates', label: 'A Raise Dates' },
+      { id: 'a_bonus_date', label: 'A Bonus Date' },
+      { id: 'b_raise_date', label: 'B Raise Date' },
+      { id: 'vest_dates', label: 'Vest Dates' },
+      { id: 'bonus_grant_date', label: 'Bonus Grant Date' }
+    ];
+    const MONTH_DAY_SINGLE_FIELDS = [
+      { id: 'a_espp_p1_start', label: 'A ESPP P1 Start' },
+      { id: 'a_espp_p1_end', label: 'A ESPP P1 End' },
+      { id: 'a_espp_p2_start', label: 'A ESPP P2 Start' },
+      { id: 'a_espp_p2_end', label: 'A ESPP P2 End' },
+      { id: 'b_espp_p1_start', label: 'B ESPP P1 Start' },
+      { id: 'b_espp_p1_end', label: 'B ESPP P1 End' },
+      { id: 'b_espp_p2_start', label: 'B ESPP P2 Start' },
+      { id: 'b_espp_p2_end', label: 'B ESPP P2 End' }
+    ];
+    const GROWTH_FIELDS = [
+      { id: 'stock_growth', label: 'Stock Growth %' },
+      { id: 'market_growth', label: 'Market Growth %' },
+      { id: 'sens_growth_worst', label: 'Worst Growth %' },
+      { id: 'sens_growth_base', label: 'Base Growth %' },
+      { id: 'sens_growth_best', label: 'Best Growth %' }
+    ];
+    const MONTH_DAY_INPUT_PATTERN = '^\\s*(?:[A-Za-z]+\\s+\\d{1,2}|\\d{1,2}\\/\\d{1,2})(?:\\s*,\\s*(?:[A-Za-z]+\\s+\\d{1,2}|\\d{1,2}\\/\\d{1,2}))*\\s*$';
+    const GROWTH_LIST_PATTERN = '^\\s*-?\\d+(?:\\.\\d+)?(?:\\s*,\\s*-?\\d+(?:\\.\\d+)?)*\\s*$';
     function normalizePriorityOrder(order) {
       const seen = new Set();
       const out = [];
@@ -2285,6 +2348,10 @@
       return out;
     }
     const $ = id => document.getElementById(id);
+    function setHidden(el, hidden) {
+      if (!el) return;
+      el.classList.toggle('is-hidden', !!hidden);
+    }
     function numberOrDefault(raw, fallback) {
       const n = parseFloat(raw);
       return Number.isFinite(n) ? n : fallback;
@@ -2292,6 +2359,38 @@
     function intOrDefault(raw, fallback) {
       const n = parseInt(raw, 10);
       return Number.isFinite(n) ? n : fallback;
+    }
+    function parsePercentList(str) {
+      const parts = String(str || '').split(',').map(s => s.trim()).filter(Boolean);
+      if (!parts.length) return null;
+      const out = [];
+      for (const part of parts) {
+        const n = parseFloat(part);
+        if (!Number.isFinite(n)) return null;
+        out.push(n);
+      }
+      return out;
+    }
+    function initFormSemantics() {
+      document.querySelectorAll('.ctrl-group > label').forEach(label => {
+        if (label.hasAttribute('for')) return;
+        const group = label.closest('.ctrl-group');
+        if (!group) return;
+        const control = group.querySelector('input[id],select[id],textarea[id]');
+        if (control) label.setAttribute('for', control.id);
+      });
+      [...MONTH_DAY_MULTI_FIELDS, ...MONTH_DAY_SINGLE_FIELDS].forEach(({ id }) => {
+        const el = $(id);
+        if (!el) return;
+        el.setAttribute('pattern', MONTH_DAY_INPUT_PATTERN);
+        el.setAttribute('title', 'Use "Mon D" or "M/D" (example: Sep 15 or 9/15).');
+      });
+      GROWTH_FIELDS.forEach(({ id }) => {
+        const el = $(id);
+        if (!el) return;
+        el.setAttribute('pattern', GROWTH_LIST_PATTERN);
+        el.setAttribute('title', 'Use comma-separated percentages (example: 15 or 10,-8,15).');
+      });
     }
     function alignIrsBaseYearWithStartYear(force = false) {
       const startEl = $('start_date');
@@ -2319,9 +2418,9 @@
       baseYearEl.value = String(startYear);
     }
     function parseGrowth(str, fallbackPct = 15) {
-      const parts = str.split(',').map(s => s.trim()).filter(Boolean);
-      const rates = parts.map(p => parseFloat(p) / 100).filter(r => !isNaN(r));
-      return rates.length ? rates : [fallbackPct / 100];
+      const rates = parsePercentList(str);
+      if (!rates) return [fallbackPct / 100];
+      return rates.map(v => v / 100);
     }
     function formatGrowthPattern(gArr) {
       const arr = Array.isArray(gArr) && gArr.length ? gArr : [0.15];
@@ -4179,16 +4278,30 @@
       '401k Catch-up + Backdoor Advanced'
     ]);
     const collapsiblePanelDefaultClosed = new Set(['Presets & Share']);
-    const collapsibleResultDefaultClosedIds = new Set(['allocation-card']);
+    const collapsibleResultDefaultClosedIds = new Set(['allocation-card', 'notes-card']);
 
     function registerCollapsible(label, nodes, collapsed) {
       if (!label || !nodes || !nodes.length) return;
       const section = { label, nodes, collapsed: !!collapsed };
       label.classList.add('collapse-toggle');
-      label.addEventListener('click', () => {
+      label.setAttribute('role', 'button');
+      if (!label.hasAttribute('tabindex')) label.tabIndex = 0;
+      const controlIds = nodes.map((node, nodeIdx) => {
+        if (!node.id) node.id = 'collapsible_node_' + collapsibleSections.length + '_' + nodeIdx;
+        return node.id;
+      }).filter(Boolean);
+      if (controlIds.length) label.setAttribute('aria-controls', controlIds.join(' '));
+      const toggle = () => {
         section.collapsed = !section.collapsed;
-        if (!section.collapsed) section.nodes.forEach(n => { n.style.display = '' });
-        update();
+        applyCollapsedSections();
+        scheduleLocalStateSave();
+      };
+      label.addEventListener('click', toggle);
+      label.addEventListener('keydown', evt => {
+        if (evt.target !== label) return;
+        if (evt.key !== 'Enter' && evt.key !== ' ') return;
+        evt.preventDefault();
+        toggle();
       });
       collapsibleSections.push(section);
     }
@@ -4229,8 +4342,8 @@
     function applyCollapsedSections() {
       for (const section of collapsibleSections) {
         section.label.classList.toggle('is-collapsed', !!section.collapsed);
-        if (section.collapsed) section.nodes.forEach(n => { n.style.display = 'none' });
-        else section.nodes.forEach(n => { n.style.display = '' });
+        section.label.setAttribute('aria-expanded', section.collapsed ? 'false' : 'true');
+        section.nodes.forEach(n => setHidden(n, !!section.collapsed));
       }
     }
 
@@ -4350,8 +4463,8 @@
         bEsppDisc: pct('b_espp_disc', 15),
         aBonusPct: pct('a_bonus_pct', 0),
         aBonusDate,
-        aSign1: n('a_sign1', 0),
-        aSign2: n('a_sign2', 0),
+        aSign1: n('a_sign1', 20000),
+        aSign2: n('a_sign2', 20000),
         priorityOrder: readPriorityFromList(),
         contributionPlan: {
           startAge: numberOrDefault($('start_age').value, NaN),
@@ -4468,8 +4581,8 @@
           base: n('a_lv2_base', 650000),
           raiseR: pct('a_lv2_raise_pct', 0),
           bonus_pct: pct('a_lv2_bonus_pct', 0),
-          sign1: n('a_lv2_sign1', 0),
-          sign2: n('a_lv2_sign2', 0)
+          sign1: n('a_lv2_sign1', 20000),
+          sign2: n('a_lv2_sign2', 20000)
         }
       };
     }
@@ -4486,13 +4599,13 @@
       const el = $(id);
       if (!el) return;
       const g = el.closest('.ctrl-group');
-      if (g) g.style.display = visible ? '' : 'none';
+      if (g) setHidden(g, !visible);
     }
 
     function setGroupVisible(id, visible) {
       const el = $(id);
       if (!el) return;
-      el.style.display = visible ? '' : 'none';
+      setHidden(el, !visible);
     }
 
     function syncBucketUi(cfg) {
@@ -4515,6 +4628,23 @@
       setControlGroupVisible(cfg.pctId, pctOn);
       setControlGroupVisible(cfg.fixedBaseId, fixedOn);
       setControlGroupVisible(cfg.fixedIncId, fixedOn);
+    }
+
+    function formatTrendCurrency(value, isGoodWhenPositive) {
+      const v = Number.isFinite(value) ? value : 0;
+      if (!v) return formatCurrency(0);
+      const favorable = isGoodWhenPositive ? (v >= 0) : (v < 0);
+      const cls = favorable ? 'pos' : 'neg';
+      const arrow = favorable ? '↑' : '↓';
+      return '<span class="' + cls + '">' + arrow + ' ' + formatCurrency(Math.abs(v)) + '</span>';
+    }
+
+    function formatDeltaWithArrow(value) {
+      const v = Number.isFinite(value) ? value : 0;
+      if (!v) return formatCurrency(0);
+      const cls = v >= 0 ? 'pos' : 'neg';
+      const arrow = v >= 0 ? '↑' : '↓';
+      return '<span class="' + cls + '">' + arrow + ' ' + formatCurrency(Math.abs(v)) + '</span>';
     }
 
     function renderAllocationTable(entries) {
@@ -4554,7 +4684,7 @@
             if (!row) continue;
             const a = row.A || { target: 0, funded: 0, unmet: 0 };
             const b = row.B || { target: 0, funded: 0, unmet: 0 };
-            rows.push('<tr><td>' + bucketLabel[bucket] + '</td><td>' + formatCurrency(a.target) + '</td><td>' + formatCurrency(a.funded) + '</td><td>' + formatCurrency(a.unmet) + '</td><td>' + formatCurrency(b.target) + '</td><td>' + formatCurrency(b.funded) + '</td><td>' + formatCurrency(b.unmet) + '</td></tr>');
+            rows.push('<tr><td>' + bucketLabel[bucket] + '</td><td>' + formatCurrency(a.target) + '</td><td>' + formatTrendCurrency(a.funded, true) + '</td><td>' + formatTrendCurrency(a.unmet, false) + '</td><td>' + formatCurrency(b.target) + '</td><td>' + formatTrendCurrency(b.funded, true) + '</td><td>' + formatTrendCurrency(b.unmet, false) + '</td></tr>');
           }
         }
         let html = '<tr><th>Bucket</th><th>A Target</th><th>A Funded</th><th>A Unmet</th><th>B Target</th><th>B Funded</th><th>B Unmet</th></tr>';
@@ -4574,7 +4704,7 @@
             ...Object.keys(b.unmet || {})
           ])].sort((a, b) => +a - +b);
           for (const yr of years) {
-            rows.push('<tr><td>' + ent.label + '</td><td>' + bucketLabel[bucket] + '</td><td>' + yr + '</td><td>' + formatCurrency((b.targets || {})[yr] || 0) + '</td><td>' + formatCurrency((b.funded || {})[yr] || 0) + '</td><td>' + formatCurrency((b.unmet || {})[yr] || 0) + '</td></tr>');
+            rows.push('<tr><td>' + ent.label + '</td><td>' + bucketLabel[bucket] + '</td><td>' + yr + '</td><td>' + formatCurrency((b.targets || {})[yr] || 0) + '</td><td>' + formatTrendCurrency((b.funded || {})[yr] || 0, true) + '</td><td>' + formatTrendCurrency((b.unmet || {})[yr] || 0, false) + '</td></tr>');
           }
         }
       }
@@ -4635,6 +4765,7 @@
     function renderSensitivity(P, isPromo, paradigm) {
       const cfg = P.contributionPlan.sensitivity;
       const table = $('sensitivity-table');
+      const excludeReserveSensitivity = !!($('exclude_reserve_sensitivity') && $('exclude_reserve_sensitivity').checked);
       if (!cfg.show) {
         table.innerHTML = '';
         return;
@@ -4651,27 +4782,69 @@
         for (const s of scenarios) {
           const ps = cloneWithScenario(P, s.g, s.t, true);
           const pr = simulatePromo(ps);
+          const reserveAdj = excludeReserveSensitivity ? cumulativeReserveForPeriod(P.startD, ps.exitD, P.reserveCash, P.reserveCashInc) : 0;
           const vals = {
-            aa: useInv ? pr.aa.totInv : pr.aa.totBase,
-            bb: useInv ? pr.bb.totInv : pr.bb.totBase,
-            ab: useInv ? pr.ab.totInv : pr.ab.totBase,
-            ba: useInv ? pr.ba.totInv : pr.ba.totBase
+            aa: (useInv ? pr.aa.totInv : pr.aa.totBase) - reserveAdj,
+            bb: (useInv ? pr.bb.totInv : pr.bb.totBase) - reserveAdj,
+            ab: (useInv ? pr.ab.totInv : pr.ab.totBase) - reserveAdj,
+            ba: (useInv ? pr.ba.totInv : pr.ba.totBase) - reserveAdj
           };
           const best = Object.entries(vals).sort((a, b) => b[1] - a[1])[0];
-          html += '<tr><td>' + s.label + '</td><td>' + s.gLabel + '</td><td>' + s.t + 'y</td><td>' + best[0].toUpperCase() + '</td><td>' + formatCurrency(best[1]) + '</td><td class="' + ((best[1] - vals.bb) >= 0 ? 'pos' : 'neg') + '">' + formatCurrency(best[1] - vals.bb) + '</td></tr>';
+          const delta = best[1] - vals.bb;
+          html += '<tr><td>' + s.label + '</td><td>' + s.gLabel + '</td><td>' + s.t + 'y</td><td>' + best[0].toUpperCase() + '</td><td>' + formatCurrency(best[1]) + '</td><td>' + formatDeltaWithArrow(delta) + '</td></tr>';
         }
       } else {
         html = '<tr><th>Scenario</th><th>Growth %</th><th>Tenure</th><th>Company A</th><th>Company B</th><th>Delta (A-B)</th></tr>';
         for (const s of scenarios) {
           const ps = cloneWithScenario(P, s.g, s.t, false);
           const dr = simulateDirect(ps);
-          const a = useInv ? dr.aTotInv : dr.aTotBase;
-          const b = useInv ? dr.bTotInv : dr.bTotBase;
+          const reserveAdj = excludeReserveSensitivity ? cumulativeReserveForPeriod(P.startD, ps.exitD, P.reserveCash, P.reserveCashInc) : 0;
+          const a = (useInv ? dr.aTotInv : dr.aTotBase) - reserveAdj;
+          const b = (useInv ? dr.bTotInv : dr.bTotBase) - reserveAdj;
           const d = a - b;
-          html += '<tr><td>' + s.label + '</td><td>' + s.gLabel + '</td><td>' + s.t + 'y</td><td>' + formatCurrency(a) + '</td><td>' + formatCurrency(b) + '</td><td class="' + (d >= 0 ? 'pos' : 'neg') + '">' + formatCurrency(d) + '</td></tr>';
+          html += '<tr><td>' + s.label + '</td><td>' + s.gLabel + '</td><td>' + s.t + 'y</td><td>' + formatCurrency(a) + '</td><td>' + formatCurrency(b) + '</td><td>' + formatDeltaWithArrow(d) + '</td></tr>';
         }
       }
       table.innerHTML = html;
+    }
+
+    function validateInputs(isPromo) {
+      const startD = parseISODate($('start_date').value);
+      const leaveD = parseISODate($('leave_date').value);
+      if (!(leaveD > startD)) return 'Leave date must be after start date.';
+      if (isPromo) {
+        const moveD = parseISODate($('move_date').value);
+        if (!(moveD > startD && leaveD > moveD)) return 'Move date must be between start and leave date in promo mode.';
+      }
+      const checkMonthDayField = (field, allowMultiple) => {
+        const el = $(field.id);
+        if (!el) return '';
+        if (el.disabled || (el.closest('.is-hidden'))) return '';
+        const tokens = el.value.split(',').map(s => s.trim()).filter(Boolean);
+        if (!tokens.length) return field.label + ' is required.';
+        if (!allowMultiple && tokens.length !== 1) return field.label + ' accepts one date value.';
+        for (const token of tokens) {
+          if (parseMonthDays(token).length !== 1) return field.label + ' has an invalid value: ' + token + '.';
+        }
+        return '';
+      };
+      for (const field of MONTH_DAY_MULTI_FIELDS) {
+        const err = checkMonthDayField(field, true);
+        if (err) return err;
+      }
+      for (const field of MONTH_DAY_SINGLE_FIELDS) {
+        const err = checkMonthDayField(field, false);
+        if (err) return err;
+      }
+      for (const field of GROWTH_FIELDS) {
+        const el = $(field.id);
+        if (!el) continue;
+        if (el.disabled || (el.closest('.is-hidden'))) continue;
+        const vals = parsePercentList(el.value);
+        if (!vals) return field.label + ' must be comma-separated numbers.';
+        if (vals.some(v => v < -100 || v > 500)) return field.label + ' values must be between -100 and 500.';
+      }
+      return '';
     }
 
     function update() {
@@ -4685,12 +4858,12 @@
       promoFields.forEach(id => setGroupVisible(id, isPromo));
       const isSingle = $('filing').value === 'Single';
       ['partner_label', 'partner_income_ctrl', 'partner_raise_ctrl'].forEach(id => setGroupVisible(id, !isSingle));
-      $('a_match_vest_ctrl').style.display = ($('enable_401k_contrib').checked && $('a_match_type').value === 'comp_pct') ? '' : 'none';
-      $('b_match_vest_ctrl').style.display = ($('b_enable_401k_contrib').checked && $('b_match_type').value === 'comp_pct') ? '' : 'none';
-      $('year_overrides_ctrl').style.display = $('use_year_overrides').checked ? '' : 'none';
+      setGroupVisible('a_match_vest_ctrl', $('enable_401k_contrib').checked && $('a_match_type').value === 'comp_pct');
+      setGroupVisible('b_match_vest_ctrl', $('b_enable_401k_contrib').checked && $('b_match_type').value === 'comp_pct');
+      setGroupVisible('year_overrides_ctrl', $('use_year_overrides').checked);
       const splitTax = $('split_state_tax').checked;
       ['b_state_tax_pct_ctrl', 'b_state_tax_thresh_ctrl', 'b_state_tax_start_yr_ctrl', 'b_city_tax_pct_ctrl', 'b_city_tax_thresh_ctrl']
-        .forEach(id => { $(id).style.display = splitTax ? '' : 'none' });
+        .forEach(id => setGroupVisible(id, splitTax));
       $('lbl_state_tax_pct').textContent = splitTax ? 'A State Tax %' : 'State Tax %';
       $('lbl_state_tax_thresh').textContent = splitTax ? 'A State Threshold' : 'State Threshold';
       $('lbl_state_tax_start_yr').textContent = splitTax ? 'A State Start Year' : 'State Start Year';
@@ -4745,6 +4918,9 @@
       } else {
         $('mode-note').innerHTML = '<b>Company A</b> is cash-heavy. <b>Company B</b> is equity-heavy. Delta is A minus B.';
       }
+      const validationError = validateInputs(isPromo);
+      setValidationStatus(validationError);
+      if (validationError) return;
 
       const P = getParams();
       const useInv = par === 'B_invest';
@@ -4782,7 +4958,7 @@
         b += '<tr class="breakdown-total-row"><td>Total</td>' + tots.map(v => '<td>' + formatCurrency(v) + '</td>').join('') + '</tr>';
         b += '<tr class="breakdown-minor-row"><td>Taxes</td>' + paths.map(p => '<td>' + formatCurrency(r[p.k].tax || 0) + '</td>').join('') + '</tr>';
         if (reserveActive) {
-          b += '<tr class="breakdown-minor-row"><td>Reserve Salary</td>' + tots.map(() => '<td>' + formatCurrency(reserveSpend) + '</td>').join('') + '</tr>';
+          b += '<tr class="breakdown-minor-row"><td>Living Expenses</td>' + tots.map(() => '<td>' + formatCurrency(reserveSpend) + '</td>').join('') + '</tr>';
         }
         $('breakdown-table').innerHTML = b;
         $('table-title').textContent = 'Net Worth: Career Path Comparison';
@@ -4848,7 +5024,7 @@
         b += '<tr class="breakdown-total-row"><td>Company A Total</td>' + aTs.map(v => '<td>' + formatCurrency(v) + '</td>').join('') + '</tr>';
         b += withYearlyDeltaRows('Taxes', results.map(x => (x.r.aTax || 0)), 'breakdown-minor-row', 'breakdown-minor-subrow');
         if (reserveByCol.some(v => v > 0)) {
-          b += withYearlyDeltaRows('Reserve Salary', reserveByCol.map(v => v), 'breakdown-minor-row', 'breakdown-minor-subrow');
+          b += withYearlyDeltaRows('Living Expenses', reserveByCol.map(v => v), 'breakdown-minor-row', 'breakdown-minor-subrow');
         }
         b += '<tr class="spacer-row"><td colspan="' + colSpan + '"></td></tr>';
         const bC = useInv ?
@@ -4859,7 +5035,7 @@
         b += '<tr class="breakdown-total-row"><td>Company B Total</td>' + bTs.map(v => '<td>' + formatCurrency(v) + '</td>').join('') + '</tr>';
         b += withYearlyDeltaRows('Taxes', results.map(x => (x.r.bTax || 0)), 'breakdown-minor-row', 'breakdown-minor-subrow');
         if (reserveByCol.some(v => v > 0)) {
-          b += withYearlyDeltaRows('Reserve Salary', reserveByCol.map(v => v), 'breakdown-minor-row', 'breakdown-minor-subrow');
+          b += withYearlyDeltaRows('Living Expenses', reserveByCol.map(v => v), 'breakdown-minor-row', 'breakdown-minor-subrow');
         }
         $('breakdown-table').innerHTML = b;
         $('table-title').textContent = 'Net Worth: Company A vs Company B';
@@ -4917,6 +5093,7 @@
     const STORAGE_KEY_PREFIX = 'compComparison.' + STORAGE_PAGE_SCOPE + '.';
     const PRESET_KEY = STORAGE_KEY_PREFIX + 'presets.v1';
     const LOCAL_STATE_KEY = STORAGE_KEY_PREFIX + 'lastState.v1';
+    const STATE_SCHEMA_VERSION = 1;
     const SHARE_KEY = 'state';
     const STATE_EXCLUDE = new Set(['preset_name', 'preset_select']);
 
@@ -4956,34 +5133,48 @@
         if (el.type === 'checkbox') out[el.id] = !!el.checked;
         else out[el.id] = el.value;
       });
+      out.__version = STATE_SCHEMA_VERSION;
       out.priorityOrder = readPriorityFromList();
       if (includeCollapsibleState) out.collapsibleState = readCollapsibleStateSnapshot();
       return out;
     }
 
+    function migrateStateSnapshot(state) {
+      if (!state || typeof state !== 'object') return null;
+      const migrated = Object.assign({}, state);
+      if (!Number.isFinite(parseInt(migrated.__version, 10))) migrated.__version = STATE_SCHEMA_VERSION;
+      return migrated;
+    }
+
     function applyStateSnapshot(state) {
-      if (!state || typeof state !== 'object') return;
-      for (const [id, val] of Object.entries(state)) {
-        if (id === 'priorityOrder' || id === 'collapsibleState') continue;
+      const migratedState = migrateStateSnapshot(state);
+      if (!migratedState) return;
+      for (const [id, val] of Object.entries(migratedState)) {
+        if (id === 'priorityOrder' || id === 'collapsibleState' || id === '__version') continue;
         const el = $(id);
         if (!el) continue;
         if (el.type === 'checkbox') el.checked = !!val;
         else el.value = String(val);
       }
-      const order = Array.isArray(state.priorityOrder) ? state.priorityOrder : null;
+      const order = Array.isArray(migratedState.priorityOrder) ? migratedState.priorityOrder : null;
       if (order && order.length) renderPriorityList(order);
-      if (Object.prototype.hasOwnProperty.call(state, 'irs_base_year') && $('irs_base_year')) {
+      if (Object.prototype.hasOwnProperty.call(migratedState, 'irs_base_year') && $('irs_base_year')) {
         $('irs_base_year').dataset.manual = '1';
       }
-      applyCollapsibleStateSnapshot(state.collapsibleState);
+      applyCollapsibleStateSnapshot(migratedState.collapsibleState);
       update();
     }
 
     function readPresets() {
       const raw = localStorage.getItem(PRESET_KEY);
       if (!raw) return {};
-      const parsed = JSON.parse(raw);
-      return parsed && typeof parsed === 'object' ? parsed : {};
+      try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+      } catch (err) {
+        console.warn('Unable to parse presets.', err);
+        return {};
+      }
     }
 
     function writePresets(store) {
@@ -5032,16 +5223,27 @@
       if (current && names.includes(current)) sel.value = current;
     }
 
-    function setShareStatus(msg, isError) {
-      const el = $('share_status');
+    function setStatusMessage(id, msg, isError) {
+      const el = $(id);
+      if (!el) return;
       if (!msg) {
         el.textContent = '';
-        el.style.display = 'none';
+        el.classList.remove('is-error', 'is-success');
+        setHidden(el, true);
         return;
       }
-      el.style.display = 'block';
+      setHidden(el, false);
       el.textContent = msg;
-      el.style.color = isError ? 'var(--neg)' : 'var(--text-muted)';
+      el.classList.toggle('is-error', !!isError);
+      el.classList.toggle('is-success', !isError);
+    }
+
+    function setShareStatus(msg, isError) {
+      setStatusMessage('share_status', msg, isError);
+    }
+
+    function setValidationStatus(msg) {
+      setStatusMessage('validation_status', msg, true);
     }
 
     function copyText(text) {
@@ -5151,6 +5353,13 @@
       const btn = this; btn.disabled = true;
       const status = $('csv-status');
       status.textContent = 'Preparing...';
+      const validationError = validateInputs($('mode').value === 'promo');
+      setValidationStatus(validationError);
+      if (validationError) {
+        status.textContent = 'Fix validation errors before CSV export.';
+        btn.disabled = false;
+        return;
+      }
       const P = getParams();
       // Extract computation code from the script tag
       const scriptEl = document.querySelector('script');
@@ -5265,6 +5474,7 @@
       w.postMessage(jobs);
     });
 
+    initFormSemantics();
     initPriorityOrder();
     reorderPromoSections();
     initCollapsibleSections();
