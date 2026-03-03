@@ -1187,7 +1187,7 @@ const taskConfig = {
     attachmentSources: ['camera', 'gallery', 'files'],
     fallbackField: 'title',
     pillColorStyle: 'background',
-    placeholder: 'Example: ... !p2;; !p1;; and #work;; #health ... (last value wins)',
+    placeholder: 'Example: Follow up with clinic tomorrow morning, high priority, project health; then prep reimbursement docs for client review',
     inputHeightMode: 'scroll',
     inputMaxHeight: 160,
     fontFamily: '"Spline Sans Mono", "JetBrains Mono", monospace',
@@ -1748,11 +1748,6 @@ function parseDateFromToken(rawToken, now, withTime) {
     return null;
 }
 
-function extractDueToken(source) {
-    const match = String(source || '').match(/due:([^\n;]+)/i);
-    return match ? String(match[1]).trim() : '';
-}
-
 function collectAttachmentRefs(source) {
     const text = String(source || '');
     const refs = [];
@@ -1791,22 +1786,37 @@ function buildDemoTaskAiEntriesForSegment(text) {
     const lower = source.toLowerCase();
     const now = new Date();
     const attachments = collectAttachmentRefs(source);
-    const priorityToken = source.match(/!([pP][123])\b/);
-    const priority = priorityToken
-        ? priorityToken[1].toLowerCase()
-        : (lower.includes('urgent') || lower.includes('p1') ? 'p1' : (lower.includes('p3') ? 'p3' : 'p2'));
-    const projectToken = source.match(/#([a-zA-Z][\w-]*)/);
-    const project = projectToken
-        ? projectToken[1].toLowerCase()
+    const priorityPhrase = source.match(/\b(high|medium|low)\s+priority\b/i);
+    const priority = (
+        lower.includes('urgent')
+        || lower.includes('high priority')
+        || lower.includes('critical')
+        || lower.includes('asap')
+        || (priorityPhrase && String(priorityPhrase[1] || '').toLowerCase() === 'high')
+    )
+        ? 'p1'
+        : ((lower.includes('low priority') || (priorityPhrase && String(priorityPhrase[1] || '').toLowerCase() === 'low')) ? 'p3' : 'p2');
+    const projectPhrase = source.match(/\bproject\s+([a-zA-Z][\w-]*)\b/i);
+    const project = projectPhrase
+        ? String(projectPhrase[1]).toLowerCase()
         : (lower.includes('health')
             ? 'health'
             : (lower.includes('home') ? 'home' : (lower.includes('errand') ? 'errands' : 'work')));
-    const ownerMatch = source.match(/@([\w-]+)/);
-    const owner = ownerMatch ? ownerMatch[1] : 'Mimansa';
-    const dueToken = extractDueToken(source);
-    const due = parseDateFromToken(dueToken || source, now, true) || toLocalDateTime(addDays(now, 1), 9, 0);
-    const tagsMatch = source.match(/tag:([^\n.;]+)/i);
-    const tags = tagsMatch ? dedupeTextList(tagsMatch[1].split(',')) : [];
+    const ownerPhraseMatch = source.match(/\b(?:owner|assign(?:ed)?\s+to)\s+([A-Za-z][\w-]*)\b/i);
+    const owner = ownerPhraseMatch ? ownerPhraseMatch[1] : 'Mimansa';
+    const duePhrase = source.match(/\bdue(?:\s+on|\s+by)?\s+([^,.;\n]+)/i);
+    const due = parseDateFromToken(duePhrase ? duePhrase[1] : source, now, true) || toLocalDateTime(addDays(now, 1), 9, 0);
+    const naturalTagsMatch = source.match(/\btags?\s+([a-zA-Z0-9,\s-]+)/i);
+    const inferredTags = [];
+    if (lower.includes('urgent')) inferredTags.push('urgent');
+    if (lower.includes('follow-up') || lower.includes('follow up')) inferredTags.push('follow-up');
+    if (lower.includes('client')) inferredTags.push('client');
+    if (lower.includes('internal')) inferredTags.push('internal');
+    const tags = dedupeTextList(
+        naturalTagsMatch
+            ? String(naturalTagsMatch[1]).split(/,|\band\b/i).concat(inferredTags)
+            : inferredTags
+    );
     const payload = {
         title: source || 'Synthetic AI task',
         priority,
@@ -1821,10 +1831,10 @@ function buildDemoTaskAiEntriesForSegment(text) {
     }
 
     const warnings = [];
-    if (!priorityToken) warnings.push('priority inferred');
-    if (!projectToken) warnings.push('project inferred');
-    if (!ownerMatch) warnings.push('owner inferred');
-    if (!dueToken) warnings.push('due inferred from natural language/default');
+    if (!priorityPhrase && !lower.includes('urgent') && !lower.includes('critical') && !lower.includes('asap')) warnings.push('priority inferred');
+    if (!projectPhrase) warnings.push('project inferred');
+    if (!ownerPhraseMatch) warnings.push('owner inferred');
+    if (!duePhrase) warnings.push('due inferred from natural language/default');
 
     return {
         entries: [payload],
@@ -1853,16 +1863,16 @@ function buildDemoTaskAiStructuredResponse(input) {
                 end
             });
         };
-        const priorityToken = text.match(/!([pP][123])\b/);
-        const projectToken = text.match(/#([a-zA-Z][\w-]*)/);
-        const dueToken = extractDueToken(text);
-        const ownerToken = text.match(/@([\w-]+)/);
-        const tagToken = text.match(/tag:([^\n.;]+)/i);
-        if (priorityToken) addSpan('priority', priorityToken[0], entry.priority);
-        if (projectToken) addSpan('project', projectToken[0], entry.project);
-        if (dueToken) addSpan('due', `due:${dueToken}`, entry.due);
-        if (ownerToken) addSpan('owner', ownerToken[0], entry.owner);
-        if (tagToken && Array.isArray(entry.tags)) {
+        const priorityPhrase = text.match(/\b(?:high|medium|low)\s+priority\b/i);
+        const projectPhrase = text.match(/\bproject\s+([a-zA-Z][\w-]*)\b/i);
+        const ownerPhrase = text.match(/\b(?:owner|assign(?:ed)?\s+to)\s+([A-Za-z][\w-]*)\b/i);
+        const duePhrase = text.match(/\bdue(?:\s+on|\s+by)?\s+([^,.;\n]+)/i)
+            || text.match(/\b(?:today|tomorrow|yesterday|next week|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i);
+        if (priorityPhrase) addSpan('priority', priorityPhrase[0], entry.priority);
+        if (projectPhrase) addSpan('project', projectPhrase[0], entry.project);
+        if (duePhrase) addSpan('due', duePhrase[0], entry.due);
+        if (ownerPhrase) addSpan('owner', ownerPhrase[0], entry.owner);
+        if (Array.isArray(entry.tags)) {
             entry.tags.forEach((tag) => addSpan('tags', tag, tag));
         }
         return Object.assign({}, entry, { spans });
@@ -1876,39 +1886,56 @@ function buildDemoTaskAiStructuredResponse(input) {
 
 function buildDemoPetAiEntriesForSegment(text) {
     const source = String(text || '').trim();
-    const lower = source.toLowerCase();
     const now = new Date();
-    const pet = lower.includes('luna') ? 'Luna' : (lower.includes('mochi') ? 'Mochi' : (lower.includes('pico') ? 'Pico' : ''));
-    const event = lower.includes('groom')
-        ? 'groom'
-        : (lower.includes('vet') ? 'vet' : (lower.includes('fetch') ? 'fetch' : (lower.includes('litter') ? 'litter' : (lower.includes('walk') ? 'walk' : ''))));
-    const symptom = lower.includes('cough')
-        ? 'cough'
-        : (lower.includes('vomit') ? 'vomit' : (lower.includes('itch') ? 'itching' : 'low energy'));
-    const severityMatch = source.match(/\b(?:sev(?:erity)?\s*[:=]?\s*)(\d+)\b/i);
-    const severity = severityMatch ? Number(severityMatch[1]) : 2;
-    const dueToken = extractDueToken(source);
-    const atTokenMatch = source.match(/at:([^\n;]+)/i);
-    const due = parseDateFromToken(dueToken || source, now, false) || toLocalYmd(addDays(now, 2));
-    const at = parseDateFromToken(atTokenMatch ? atTokenMatch[1] : source, now, false) || toLocalYmd(now);
-
+    const petMentions = Array.from(source.matchAll(/\b(?:Luna|Mochi|Pico)\b/gi));
+    const segments = petMentions.length > 1
+        ? petMentions
+            .map((match, idx) => {
+                const start = Number(match.index);
+                const next = petMentions[idx + 1];
+                const end = next ? Number(next.index) : source.length;
+                return source.slice(start, end).replace(/^[\s,.;]+|[\s,.;]+$/g, '').trim();
+            })
+            .filter(Boolean)
+        : (source ? [source] : []);
+    const unitSegments = segments.length ? segments : [source];
+    const entries = [];
     const warnings = [];
-    if (!pet) warnings.push('pet inferred as Luna');
-    if (!event) warnings.push('event inferred as vet');
-    if (!dueToken) warnings.push('due inferred from natural language/default');
-    if (!atTokenMatch) warnings.push('at inferred from natural language/default');
 
-    return {
-        entries: [{
-            note: source || 'Synthetic AI pet note',
+    unitSegments.forEach((segmentRaw) => {
+        const segment = String(segmentRaw || '').trim();
+        const lower = segment.toLowerCase();
+        const pet = lower.includes('luna') ? 'Luna' : (lower.includes('mochi') ? 'Mochi' : (lower.includes('pico') ? 'Pico' : ''));
+        const event = lower.includes('groom')
+            ? 'groom'
+            : (lower.includes('vet') ? 'vet' : (lower.includes('fetch') ? 'fetch' : (lower.includes('litter') ? 'litter' : (lower.includes('walk') ? 'walk' : ''))));
+        const symptom = lower.includes('cough')
+            ? 'cough'
+            : (lower.includes('vomit') ? 'vomit' : (lower.includes('itch') ? 'itching' : 'low energy'));
+        const severityMatch = segment.match(/\b(?:severity\s*[:=]?\s*)(\d+)\b/i);
+        const severity = severityMatch ? Number(severityMatch[1]) : 2;
+        const duePhraseMatch = segment.match(/\bdue(?:\s+on|\s+by)?\s+([^,.;\n]+)/i);
+        const atPhraseMatch = segment.match(/\b(?:happened|at|on)\s+([^,.;\n]+)/i);
+        const due = parseDateFromToken(duePhraseMatch ? duePhraseMatch[1] : segment, now, false) || toLocalYmd(addDays(now, 2));
+        const at = parseDateFromToken(atPhraseMatch ? atPhraseMatch[1] : segment, now, false) || toLocalYmd(now);
+        entries.push({
+            note: segment || source || 'Synthetic AI pet note',
             pet: pet || 'Luna',
             event: event || 'vet',
             due,
             symptom,
             severity,
             at
-        }],
-        warnings,
+        });
+        if (!pet) warnings.push('pet inferred as Luna');
+        if (!event) warnings.push('event inferred as vet');
+        if (!duePhraseMatch) warnings.push('due inferred from natural language/default');
+        if (!atPhraseMatch) warnings.push('at inferred from natural language/default');
+    });
+
+    return {
+        entries,
+        warnings: dedupeTextList(warnings),
         missing: source ? [] : ['note']
     };
 }
@@ -1985,7 +2012,7 @@ const aiConfig5 = {
     allowedAttachmentTypes: ['.pdf', '.png', '.jpg', 'image/*'],
     attachmentSources: ['camera', 'gallery', 'files'],
     fallbackField: 'title',
-    placeholder: 'Example: ... !p2;; !p1;; and #work;; #health ... (last value wins)',
+    placeholder: 'Use a blank line between entries. Example: Follow up with clinic tomorrow morning, high priority, project health.\n\nPrep reimbursement docs for client review.',
     inputHeightMode: 'scroll',
     inputMaxHeight: 160,
     schema: {
@@ -2044,7 +2071,7 @@ const aiConfig5 = {
         apiKey: 'demo-key',
         model: 'gpt-4o-mini',
         promptMode: 'custom',
-        promptTemplate: 'Extract structured task entries as JSON with keys: {{schemaKeys}}. Current date={{currentDate}} timezone={{timezone}}. Input:\n{{input}}',
+        promptTemplate: 'Extract structured task entries as JSON with keys: {{schemaKeys}}. Use natural language understanding; field delimiters and key:value prefixes may be absent. Infer fields from context. Current date={{currentDate}} timezone={{timezone}}. Input:\n{{input}}',
         dispatch: createDemoAIDispatch((input) => buildDemoTaskAiStructuredResponse(input), 420),
         controls: { parse: true, clear: true }
     },
@@ -2060,8 +2087,8 @@ const aiConfig5 = {
     }
 };
 const aiDefaultInput5 =
-    'Prepare health follow-up !p2;; #health;; due:2026-02-20T09:00;; @Mimansa;; with photo 1 and file 2.\n\n' +
-    'Book dentist check !p1;; #work;; tag:client,internal;; due:2026-02-21T15:00;; @Mimansa;;';
+    'Prepare a health follow-up with the clinic tomorrow at 9am, medium priority, assign to Mimansa, include photo 1 and file 2.\n\n' +
+    'Book a dentist check for Friday 3pm, high priority, project work, tags client and internal, owner Mimansa.';
 const aiAdd5 = QuickAdd.create(aiConfig5);
 aiAdd5.setInput(aiDefaultInput5);
 seedGlobalAttachments(aiAdd5, ['attachment-1.png', 'attachment-2.svg', 'attachment-3.png']);
@@ -2097,7 +2124,7 @@ const aiConfig6 = {
     mount: document.getElementById('quickAddExample6'),
     mode: 'ai',
     debounceMs: 320,
-    entrySeparator: ';',
+    entrySeparator: '',
     fieldTerminator: '~~',
     fieldTerminatorMode: 'strict',
     showEntryHeader: false,
@@ -2106,7 +2133,7 @@ const aiConfig6 = {
     inferredMatchMode: 'fuzzy',
     inferredMatchThreshold: 0.8,
     fallbackField: 'note',
-    placeholder: 'Use ; for new entry. Example: pet:Luna~~ event:walk~~ due:2025-02-01~~ at:yesterday~~',
+    placeholder: 'No entry delimiter required. Example: Luna needs a walk on 2025-02-01 happened yesterday. Mochi needs grooming next week.',
     inputHeightMode: 'scroll',
     inputMaxHeight: 150,
     showInlinePills: true,
@@ -2184,7 +2211,7 @@ const aiConfig6 = {
         autoParse: true,
         debounceMs: 900,
         minInputLength: 8,
-        separatorAware: true,
+        separatorAware: false,
         inlinePills: true,
         provider: 'openai',
         apiKey: 'demo-key',
@@ -2288,7 +2315,9 @@ const aiConfig6 = {
     }
 };
 const aiDefaultInput6 =
-    petDefaultInput;
+    'Luna needs litter cleanup with mild cough, severity 2, due 2025-02-16, happened yesterday. ' +
+    'Mochi needs grooming with low energy, severity 3, due 2026-03-01, happened today. ' +
+    'Pico needs a vet checkup due 2026-04-01';
 const aiAdd6 = QuickAdd.create(aiConfig6);
 aiAdd6.setInput(aiDefaultInput6);
 const aiPlayground6 = setupConfigPlayground({

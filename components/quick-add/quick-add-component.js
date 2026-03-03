@@ -3449,6 +3449,9 @@
         const separatorHint = this.isAISeparatorAwareEnabled()
             ? `\nInput may be one segment split by entrySeparator from a larger note. Parse only this segment independently.`
             : '';
+        const noEntryDelimiterHint = (!this.isAISeparatorAwareEnabled() || !String(this.config.entrySeparator || ''))
+            ? `\nDo not require explicit entry delimiters. Infer entry boundaries from natural-language context when multiple entries are present.`
+            : '';
         const spanHint = this.isAIInlinePillsEnabled() && schemaKeys.length
             ? `\nIf possible include \`spans\` per entry (0-based offsets relative to this input segment): [{"field":"${schemaKeys[0]}","value":"example","start":3,"end":7}].`
             : '';
@@ -3467,6 +3470,9 @@
             `For each entry use keys: ${schemaHint || '[no fields specified]'}\n` +
             `Rules:\n` +
             `- Use only the keys defined above\n` +
+            `- Treat input as natural language; key:value field prefixes and field delimiters may be absent\n` +
+            `- Infer fields from context even when explicit field syntax is not used\n` +
+            `${noEntryDelimiterHint}` +
             `- Keep unknown optional fields as null or empty string/array\n` +
             `- If multiple pets/events are present, create separate entries\n` +
             `- Put unresolved entities in "missing"\n` +
