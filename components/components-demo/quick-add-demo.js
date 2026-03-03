@@ -1,0 +1,2994 @@
+function connectTabs(tabContainerId, attrName, panelSelector, opts = {}) {
+    const container = document.getElementById(tabContainerId);
+    if (!container) return null;
+    const allButtons = () => Array.from(container.querySelectorAll(`[${attrName}]`));
+    const findButton = (value) => allButtons().find((btn) => btn.getAttribute(attrName) === value) || null;
+    const panelValue = (panel) => panel.id || panel.getAttribute('data-example-panel') || '';
+
+    const applyActive = (value, sourceBtn) => {
+        const btn = sourceBtn || findButton(value);
+        if (!btn) return null;
+        const nextValue = btn.getAttribute(attrName) || '';
+        allButtons().forEach((item) => {
+            const active = item === btn;
+            item.classList.toggle('active', active);
+            item.setAttribute('aria-selected', active ? 'true' : 'false');
+            item.tabIndex = active ? 0 : -1;
+        });
+        let activePanel = null;
+        document.querySelectorAll(panelSelector).forEach((panel) => {
+            const active = panelValue(panel) === nextValue;
+            panel.classList.toggle('active', active);
+            panel.style.display = active ? '' : 'none';
+            panel.hidden = !active;
+            if (active) {
+                activePanel = panel;
+            }
+        });
+        if (typeof opts.onChange === 'function') {
+            opts.onChange(nextValue, btn, activePanel);
+        }
+        return btn;
+    };
+
+    container.addEventListener('click', (event) => {
+        const btn = event.target.closest(`[${attrName}]`);
+        if (!btn) return;
+        applyActive(btn.getAttribute(attrName) || '', btn);
+    });
+
+    container.addEventListener('keydown', (event) => {
+        const current = event.target.closest(`[${attrName}]`);
+        if (!current) return;
+        const buttons = allButtons();
+        if (!buttons.length) return;
+        const currentIndex = Math.max(0, buttons.indexOf(current));
+        let nextIndex = -1;
+        if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+            nextIndex = Math.min(buttons.length - 1, currentIndex + 1);
+        } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+            nextIndex = Math.max(0, currentIndex - 1);
+        } else if (event.key === 'Home') {
+            nextIndex = 0;
+        } else if (event.key === 'End') {
+            nextIndex = buttons.length - 1;
+        }
+        if (nextIndex === -1) return;
+        event.preventDefault();
+        const nextBtn = buttons[nextIndex];
+        applyActive(nextBtn.getAttribute(attrName) || '', nextBtn);
+        nextBtn.focus();
+    });
+
+    const initialBtn = allButtons().find((btn) => btn.classList.contains('active')) || allButtons()[0] || null;
+    if (initialBtn) {
+        applyActive(initialBtn.getAttribute(attrName) || '', initialBtn);
+    }
+
+    return {
+        setActive: (value) => !!applyActive(String(value || ''), null),
+        getActive: () => {
+            const active = allButtons().find((btn) => btn.classList.contains('active')) || null;
+            return active ? (active.getAttribute(attrName) || '') : '';
+        }
+    };
+}
+
+const exampleTabsApi = connectTabs('exampleTabs', 'data-example', '[data-example-panel]', {
+    onChange: (value) => {
+        const nativeSelect = document.getElementById('exampleTabsNative');
+        if (nativeSelect && nativeSelect.value !== value) {
+            nativeSelect.value = value;
+        }
+    }
+});
+
+function cloneJson(value) {
+    return JSON.parse(JSON.stringify(value));
+}
+
+function toEditableConfig(baseConfig) {
+    const editable = cloneJson(baseConfig);
+    delete editable.mount;
+    delete editable.onParse;
+    return editable;
+}
+
+function setConfigStatus(statusEl, text, type) {
+    if (!statusEl) return;
+    statusEl.textContent = text || '';
+    statusEl.classList.remove('ok', 'error');
+    if (type) {
+        statusEl.classList.add(type);
+    }
+}
+
+const ALLOWED_TOP_LEVEL_KEYS = new Set([
+    'mode',
+    'debounceMs',
+    'allowMultipleEntries',
+    'entrySeparator',
+    'fieldTerminator',
+    'fieldTerminatorMode',
+    'hideFieldTerminatorInPills',
+    'autoCloseFieldOnSpace',
+    'autoCloseFieldOnSpaceConfidenceThreshold',
+    'multiSelectSeparator',
+    'multiSelectDisplaySeparator',
+    'sortSelectedMultiOptionsToBottom',
+    'enableNumberPillStepper',
+    'numberPillStep',
+    'pillColorStyle',
+    'escapeChar',
+    'fallbackField',
+    'showJsonOutput',
+    'showDropdownOnTyping',
+    'showFieldMenuOnTyping',
+    'fieldMenuTrigger',
+    'fieldMenuShowUsedFields',
+    'fieldMenuShowRequiredMeta',
+    'fieldMenuShowAutoDetectMeta',
+    'showFieldActionBar',
+    'fieldActionBarExpandOnValue',
+    'fieldActionBarShowMetaIndicators',
+    'fieldActionBarApplyToAllToggle',
+    'fieldActionBarApplyToAllDefault',
+    'fieldActionBarApplyToAllLabel',
+    'fieldActionBarButtons',
+    'showAttachmentDropdownPreview',
+    'showInlinePills',
+    'showEntryCards',
+    'showEntryHeader',
+    'inputHeightMode',
+    'inputMaxHeight',
+    'fontFamily',
+    'allowMultipleAttachments',
+    'allowAttachmentReuse',
+    'allowedAttachmentTypes',
+    'attachmentSources',
+    'autoDetectOptionsWithoutPrefix',
+    'reduceInferredOptions',
+    'inferredMatchMode',
+    'inferredMatchThreshold',
+    'placeholder',
+    'hintText',
+    'schema',
+    'ai',
+    'classNames',
+    'tokens'
+]);
+const ALLOWED_AI_KEYS = new Set([
+    'autoParse',
+    'debounceMs',
+    'minInputLength',
+    'preserveEditedEntries',
+    'separatorAware',
+    'inlinePills',
+    'forceJson',
+    'timeoutMs',
+    'provider',
+    'apiKey',
+    'model',
+    'endpoint',
+    'temperature',
+    'systemPrompt',
+    'promptMode',
+    'promptTemplate',
+    'outputType',
+    'outputSchema',
+    'webSearch',
+    'tools',
+    'dispatch',
+    'mockResponse',
+    'mockLatencyMs',
+    'controls'
+]);
+const ALLOWED_SCHEMA_KEYS = new Set(['fields']);
+const ALLOWED_FIELD_KEYS = new Set([
+    'key',
+    'label',
+    'prefixes',
+    'type',
+    'options',
+    'required',
+    'multiple',
+    'naturalDate',
+    'allowDateOnly',
+    'defaultValue',
+    'defaultTime',
+    'timeFormat',
+    'min',
+    'max',
+    'color',
+    'autoDetectWithoutPrefix',
+    'reduceInferredOptions',
+    'allowCustom',
+    'allowMathExpression',
+    'showNumberStepper',
+    'numberStep',
+    'dependsOn',
+    'constraints',
+]);
+const ALLOWED_OPTION_KEYS = new Set([
+    'value',
+    'label',
+    'color',
+    'dependsOn',
+    'constraints',
+]);
+const ALLOWED_FIELD_ACTION_BUTTON_KEYS = new Set(['fieldKey', 'iconSvg', 'showLabel', 'expandOnValue', 'visible']);
+const ALLOWED_CONDITION_KEYS = new Set(['field', 'op', 'value', 'values', 'and', 'or', 'not', 'when', 'message']);
+const VALID_FIELD_TYPES = new Set(['string', 'number', 'options', 'date', 'datetime', 'boolean', 'file']);
+const VALID_FIELD_TERMINATOR_MODES = new Set(['strict', 'or-next-prefix', 'or-end']);
+const VALID_QA_MODES = new Set(['deterministic', 'ai']);
+const VALID_PILL_COLOR_STYLES = new Set(['background', 'border']);
+const VALID_AI_PROVIDERS = new Set(['openai', 'anthropic', 'google', 'custom']);
+const VALID_CONDITION_OPERATORS = new Set([
+    'eq',
+    'neq',
+    'in',
+    'notin',
+    'gt',
+    'gte',
+    'lt',
+    'lte',
+    'includes',
+    'exists',
+    'notexists'
+]);
+
+function isPlainObject(value) {
+    return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function pushValidationError(errors, path, message) {
+    errors.push(path ? `${path}: ${message}` : message);
+}
+
+function validateAllowedKeys(obj, allowedKeys, path, errors) {
+    Object.keys(obj || {}).forEach((key) => {
+        if (!allowedKeys.has(key)) {
+            pushValidationError(errors, `${path}.${key}`, 'key is not allowed');
+        }
+    });
+}
+
+function validateConstraintNode(node, path, errors) {
+    if (!isPlainObject(node)) {
+        pushValidationError(errors, path, 'must be an object');
+        return;
+    }
+    validateAllowedKeys(node, ALLOWED_CONDITION_KEYS, path, errors);
+
+    if (node.field !== undefined && typeof node.field !== 'string') {
+        pushValidationError(errors, `${path}.field`, 'must be a string');
+    }
+    if (node.message !== undefined && typeof node.message !== 'string') {
+        pushValidationError(errors, `${path}.message`, 'must be a string');
+    }
+    if (node.op !== undefined) {
+        if (typeof node.op !== 'string') {
+            pushValidationError(errors, `${path}.op`, 'must be a string');
+        } else if (!VALID_CONDITION_OPERATORS.has(node.op)) {
+            pushValidationError(
+                errors,
+                `${path}.op`,
+                `must be one of: ${Array.from(VALID_CONDITION_OPERATORS).join(', ')}`
+            );
+        }
+    }
+    if (node.values !== undefined && !Array.isArray(node.values)) {
+        pushValidationError(errors, `${path}.values`, 'must be an array');
+    }
+    if (node.and !== undefined) {
+        if (!Array.isArray(node.and)) {
+            pushValidationError(errors, `${path}.and`, 'must be an array');
+        } else {
+            node.and.forEach((item, index) => validateConstraintNode(item, `${path}.and[${index}]`, errors));
+        }
+    }
+    if (node.or !== undefined) {
+        if (!Array.isArray(node.or)) {
+            pushValidationError(errors, `${path}.or`, 'must be an array');
+        } else {
+            node.or.forEach((item, index) => validateConstraintNode(item, `${path}.or[${index}]`, errors));
+        }
+    }
+    if (node.not !== undefined) {
+        validateConstraintNode(node.not, `${path}.not`, errors);
+    }
+    if (node.when !== undefined) {
+        validateConstraintNode(node.when, `${path}.when`, errors);
+    }
+}
+
+function validateConstraintSet(value, path, errors) {
+    if (value === undefined) {
+        return;
+    }
+    if (Array.isArray(value)) {
+        value.forEach((item, index) => validateConstraintNode(item, `${path}[${index}]`, errors));
+        return;
+    }
+    validateConstraintNode(value, path, errors);
+}
+
+function validateOption(option, path, errors) {
+    if (!isPlainObject(option)) {
+        if (typeof option !== 'string' && typeof option !== 'number' && typeof option !== 'boolean') {
+            pushValidationError(errors, path, 'option must be string/number/boolean or object');
+        }
+        return;
+    }
+
+    validateAllowedKeys(option, ALLOWED_OPTION_KEYS, path, errors);
+    if (option.value === undefined) {
+        pushValidationError(errors, `${path}.value`, 'is required for object options');
+    }
+    if (option.label !== undefined && typeof option.label !== 'string') {
+        pushValidationError(errors, `${path}.label`, 'must be a string');
+    }
+    if (option.color !== undefined && typeof option.color !== 'string') {
+        pushValidationError(errors, `${path}.color`, 'must be a string');
+    }
+    validateConstraintSet(option.dependsOn, `${path}.dependsOn`, errors);
+    validateConstraintSet(option.constraints, `${path}.constraints`, errors);
+}
+
+function validateField(field, path, errors) {
+    if (!isPlainObject(field)) {
+        pushValidationError(errors, path, 'field must be an object');
+        return;
+    }
+
+    validateAllowedKeys(field, ALLOWED_FIELD_KEYS, path, errors);
+    if (!field.key || typeof field.key !== 'string') {
+        pushValidationError(errors, `${path}.key`, 'is required and must be a string');
+    }
+    if (field.type !== undefined) {
+        if (typeof field.type !== 'string' || !VALID_FIELD_TYPES.has(field.type)) {
+            pushValidationError(errors, `${path}.type`, `must be one of: ${Array.from(VALID_FIELD_TYPES).join(', ')}`);
+        }
+    }
+    if (field.label !== undefined && typeof field.label !== 'string') {
+        pushValidationError(errors, `${path}.label`, 'must be a string');
+    }
+    if (field.prefixes !== undefined) {
+        if (!Array.isArray(field.prefixes)) {
+            pushValidationError(errors, `${path}.prefixes`, 'must be an array of strings');
+        } else if (field.prefixes.some((item) => typeof item !== 'string')) {
+            pushValidationError(errors, `${path}.prefixes`, 'must contain only strings');
+        }
+    }
+    if (field.options !== undefined) {
+        if (!Array.isArray(field.options)) {
+            pushValidationError(errors, `${path}.options`, 'must be an array');
+        } else {
+            field.options.forEach((option, index) => validateOption(option, `${path}.options[${index}]`, errors));
+        }
+    }
+    ['required', 'multiple', 'naturalDate', 'allowDateOnly', 'autoDetectWithoutPrefix', 'reduceInferredOptions', 'allowCustom', 'allowMathExpression', 'showNumberStepper']
+        .forEach((key) => {
+            if (field[key] !== undefined && typeof field[key] !== 'boolean') {
+                pushValidationError(errors, `${path}.${key}`, 'must be a boolean');
+            }
+        });
+    if (field.numberStep !== undefined) {
+        if (typeof field.numberStep !== 'number' || !Number.isFinite(field.numberStep)) {
+            pushValidationError(errors, `${path}.numberStep`, 'must be a number');
+        } else if (field.numberStep <= 0) {
+            pushValidationError(errors, `${path}.numberStep`, 'must be greater than 0');
+        }
+    }
+    ['min', 'max'].forEach((key) => {
+        if (field[key] !== undefined && (typeof field[key] !== 'number' || !Number.isFinite(field[key]))) {
+            pushValidationError(errors, `${path}.${key}`, 'must be a finite number');
+        }
+    });
+    if (field.defaultTime !== undefined && typeof field.defaultTime !== 'string') {
+        pushValidationError(errors, `${path}.defaultTime`, 'must be a string in HH:mm format');
+    }
+    if (field.timeFormat !== undefined) {
+        const format = String(field.timeFormat).toLowerCase();
+        if (format !== '24h' && format !== 'ampm') {
+            pushValidationError(errors, `${path}.timeFormat`, 'must be "24h" or "ampm"');
+        }
+    }
+    if (field.color !== undefined && typeof field.color !== 'string') {
+        pushValidationError(errors, `${path}.color`, 'must be a string');
+    }
+    validateConstraintSet(field.dependsOn, `${path}.dependsOn`, errors);
+    validateConstraintSet(field.constraints, `${path}.constraints`, errors);
+}
+
+function validateEditableConfig(config) {
+    const errors = [];
+
+    if (!isPlainObject(config)) {
+        return ['Config must be a JSON object.'];
+    }
+
+    validateAllowedKeys(config, ALLOWED_TOP_LEVEL_KEYS, 'config', errors);
+
+    if (config.debounceMs !== undefined && typeof config.debounceMs !== 'number') {
+        pushValidationError(errors, 'config.debounceMs', 'must be a number');
+    }
+    if (config.entrySeparator !== undefined && typeof config.entrySeparator !== 'string') {
+        pushValidationError(errors, 'config.entrySeparator', 'must be a string');
+    }
+    if (config.fieldTerminator !== undefined && typeof config.fieldTerminator !== 'string') {
+        pushValidationError(errors, 'config.fieldTerminator', 'must be a string');
+    }
+    if (config.multiSelectSeparator !== undefined && typeof config.multiSelectSeparator !== 'string') {
+        pushValidationError(errors, 'config.multiSelectSeparator', 'must be a string');
+    }
+    if (config.multiSelectSeparator === '') {
+        pushValidationError(errors, 'config.multiSelectSeparator', 'must be a non-empty string');
+    }
+    if (config.multiSelectDisplaySeparator !== undefined && typeof config.multiSelectDisplaySeparator !== 'string') {
+        pushValidationError(errors, 'config.multiSelectDisplaySeparator', 'must be a string');
+    }
+    if (config.fieldTerminatorMode !== undefined) {
+        if (typeof config.fieldTerminatorMode !== 'string' || !VALID_FIELD_TERMINATOR_MODES.has(config.fieldTerminatorMode)) {
+            pushValidationError(
+                errors,
+                'config.fieldTerminatorMode',
+                `must be one of: ${Array.from(VALID_FIELD_TERMINATOR_MODES).join(', ')}`
+            );
+        }
+    }
+    if (config.escapeChar !== undefined && typeof config.escapeChar !== 'string') {
+        pushValidationError(errors, 'config.escapeChar', 'must be a string');
+    }
+    if (config.fallbackField !== undefined && typeof config.fallbackField !== 'string') {
+        pushValidationError(errors, 'config.fallbackField', 'must be a string');
+    }
+    if (config.placeholder !== undefined && typeof config.placeholder !== 'string') {
+        pushValidationError(errors, 'config.placeholder', 'must be a string');
+    }
+    if (config.hintText !== undefined && typeof config.hintText !== 'string') {
+        pushValidationError(errors, 'config.hintText', 'must be a string');
+    }
+    if (config.fontFamily !== undefined && typeof config.fontFamily !== 'string') {
+        pushValidationError(errors, 'config.fontFamily', 'must be a string');
+    }
+    if (
+        typeof config.multiSelectSeparator === 'string'
+        && (
+            config.multiSelectSeparator === config.fieldTerminator
+            || config.multiSelectSeparator === config.entrySeparator
+        )
+    ) {
+        pushValidationError(errors, 'config.multiSelectSeparator', 'must not match entrySeparator or fieldTerminator');
+    }
+    if (
+        typeof config.multiSelectDisplaySeparator === 'string'
+        && (
+            config.multiSelectDisplaySeparator === config.fieldTerminator
+            || config.multiSelectDisplaySeparator === config.entrySeparator
+        )
+    ) {
+        pushValidationError(errors, 'config.multiSelectDisplaySeparator', 'must not match entrySeparator or fieldTerminator');
+    }
+    if (config.mode !== undefined) {
+        if (typeof config.mode !== 'string' || !VALID_QA_MODES.has(config.mode)) {
+            pushValidationError(errors, 'config.mode', `must be one of: ${Array.from(VALID_QA_MODES).join(', ')}`);
+        }
+    }
+
+    [
+        'allowMultipleEntries',
+        'showJsonOutput',
+        'showDropdownOnTyping',
+        'showFieldActionBar',
+        'fieldActionBarExpandOnValue',
+        'fieldActionBarShowMetaIndicators',
+        'fieldActionBarApplyToAllToggle',
+        'fieldActionBarApplyToAllDefault',
+        'showAttachmentDropdownPreview',
+        'showInlinePills',
+        'showEntryCards',
+        'showEntryHeader',
+        'allowMultipleAttachments',
+        'allowAttachmentReuse',
+        'autoDetectOptionsWithoutPrefix',
+        'reduceInferredOptions',
+        'enableNumberPillStepper',
+        'sortSelectedMultiOptionsToBottom',
+        'hideFieldTerminatorInPills',
+        'autoCloseFieldOnSpace'
+    ].forEach((key) => {
+        if (config[key] !== undefined && typeof config[key] !== 'boolean') {
+            pushValidationError(errors, `config.${key}`, 'must be a boolean');
+        }
+    });
+    if (config.autoCloseFieldOnSpaceConfidenceThreshold !== undefined) {
+        if (typeof config.autoCloseFieldOnSpaceConfidenceThreshold !== 'number' || !Number.isFinite(config.autoCloseFieldOnSpaceConfidenceThreshold)) {
+            pushValidationError(errors, 'config.autoCloseFieldOnSpaceConfidenceThreshold', 'must be a number');
+        } else if (config.autoCloseFieldOnSpaceConfidenceThreshold < 0 || config.autoCloseFieldOnSpaceConfidenceThreshold > 1) {
+            pushValidationError(errors, 'config.autoCloseFieldOnSpaceConfidenceThreshold', 'must be between 0 and 1');
+        }
+    }
+    if (config.numberPillStep !== undefined) {
+        if (typeof config.numberPillStep !== 'number' || !Number.isFinite(config.numberPillStep)) {
+            pushValidationError(errors, 'config.numberPillStep', 'must be a number');
+        } else if (config.numberPillStep <= 0) {
+            pushValidationError(errors, 'config.numberPillStep', 'must be greater than 0');
+        }
+    }
+    if (config.pillColorStyle !== undefined) {
+        if (typeof config.pillColorStyle !== 'string' || !VALID_PILL_COLOR_STYLES.has(config.pillColorStyle)) {
+            pushValidationError(errors, 'config.pillColorStyle', `must be one of: ${Array.from(VALID_PILL_COLOR_STYLES).join(', ')}`);
+        }
+    }
+    if (config.fieldActionBarApplyToAllLabel !== undefined && typeof config.fieldActionBarApplyToAllLabel !== 'string') {
+        pushValidationError(errors, 'config.fieldActionBarApplyToAllLabel', 'must be a string');
+    }
+
+    if (config.attachmentSources !== undefined) {
+        if (!Array.isArray(config.attachmentSources)) {
+            pushValidationError(errors, 'config.attachmentSources', 'must be an array of strings');
+        } else if (config.attachmentSources.some((item) => typeof item !== 'string')) {
+            pushValidationError(errors, 'config.attachmentSources', 'must contain only strings');
+        }
+    }
+
+    if (config.allowedAttachmentTypes !== undefined) {
+        if (!Array.isArray(config.allowedAttachmentTypes)) {
+            pushValidationError(errors, 'config.allowedAttachmentTypes', 'must be an array of strings');
+        } else if (config.allowedAttachmentTypes.some((item) => typeof item !== 'string')) {
+            pushValidationError(errors, 'config.allowedAttachmentTypes', 'must contain only strings');
+        }
+    }
+
+    if (config.classNames !== undefined) {
+        if (!isPlainObject(config.classNames)) {
+            pushValidationError(errors, 'config.classNames', 'must be an object');
+        } else {
+            Object.keys(config.classNames).forEach((key) => {
+                if (typeof config.classNames[key] !== 'string') {
+                    pushValidationError(errors, `config.classNames.${key}`, 'must be a string');
+                }
+            });
+        }
+    }
+
+    if (config.fieldActionBarButtons !== undefined) {
+        if (!Array.isArray(config.fieldActionBarButtons)) {
+            pushValidationError(errors, 'config.fieldActionBarButtons', 'must be an array');
+        } else {
+            config.fieldActionBarButtons.forEach((item, index) => {
+                if (!isPlainObject(item)) {
+                    pushValidationError(errors, `config.fieldActionBarButtons[${index}]`, 'must be an object');
+                    return;
+                }
+                validateAllowedKeys(item, ALLOWED_FIELD_ACTION_BUTTON_KEYS, `config.fieldActionBarButtons[${index}]`, errors);
+                if (typeof item.fieldKey !== 'string' || !item.fieldKey.trim()) {
+                    pushValidationError(errors, `config.fieldActionBarButtons[${index}].fieldKey`, 'must be a non-empty string');
+                }
+                if (item.iconSvg !== undefined && typeof item.iconSvg !== 'string') {
+                    pushValidationError(errors, `config.fieldActionBarButtons[${index}].iconSvg`, 'must be a string');
+                }
+                if (item.showLabel !== undefined && typeof item.showLabel !== 'boolean') {
+                    pushValidationError(errors, `config.fieldActionBarButtons[${index}].showLabel`, 'must be a boolean');
+                }
+                if (item.expandOnValue !== undefined && typeof item.expandOnValue !== 'boolean') {
+                    pushValidationError(errors, `config.fieldActionBarButtons[${index}].expandOnValue`, 'must be a boolean');
+                }
+                if (item.visible !== undefined && typeof item.visible !== 'boolean') {
+                    pushValidationError(errors, `config.fieldActionBarButtons[${index}].visible`, 'must be a boolean');
+                }
+            });
+        }
+    }
+
+    if (config.tokens !== undefined) {
+        if (!isPlainObject(config.tokens)) {
+            pushValidationError(errors, 'config.tokens', 'must be an object');
+        } else {
+            Object.keys(config.tokens).forEach((key) => {
+                const tokenValue = config.tokens[key];
+                if (typeof tokenValue !== 'string' && typeof tokenValue !== 'number') {
+                    pushValidationError(errors, `config.tokens.${key}`, 'must be a string or number');
+                }
+            });
+        }
+    }
+
+    if (config.ai !== undefined) {
+        if (!isPlainObject(config.ai)) {
+            pushValidationError(errors, 'config.ai', 'must be an object');
+        } else {
+            validateAllowedKeys(config.ai, ALLOWED_AI_KEYS, 'config.ai', errors);
+            ['autoParse', 'preserveEditedEntries', 'separatorAware', 'inlinePills', 'forceJson', 'webSearch']
+                .forEach((key) => {
+                    if (config.ai[key] !== undefined && typeof config.ai[key] !== 'boolean') {
+                        pushValidationError(errors, `config.ai.${key}`, 'must be a boolean');
+                    }
+                });
+            ['debounceMs', 'minInputLength', 'temperature', 'mockLatencyMs', 'timeoutMs']
+                .forEach((key) => {
+                    if (config.ai[key] !== undefined && typeof config.ai[key] !== 'number') {
+                        pushValidationError(errors, `config.ai.${key}`, 'must be a number');
+                    }
+                });
+            ['provider', 'apiKey', 'model', 'endpoint', 'systemPrompt', 'outputType', 'promptMode', 'promptTemplate']
+                .forEach((key) => {
+                    if (config.ai[key] !== undefined && typeof config.ai[key] !== 'string') {
+                        pushValidationError(errors, `config.ai.${key}`, 'must be a string');
+                    }
+                });
+            if (config.ai.promptMode !== undefined) {
+                const mode = String(config.ai.promptMode || '');
+                if (mode !== 'default' && mode !== 'custom') {
+                    pushValidationError(errors, 'config.ai.promptMode', 'must be "default" or "custom"');
+                }
+            }
+            if (config.ai.outputSchema !== undefined && config.ai.outputSchema !== null && !isPlainObject(config.ai.outputSchema)) {
+                pushValidationError(errors, 'config.ai.outputSchema', 'must be an object or null');
+            }
+            if (config.ai.tools !== undefined && config.ai.tools !== null) {
+                if (!Array.isArray(config.ai.tools)) {
+                    pushValidationError(errors, 'config.ai.tools', 'must be an array of objects or null');
+                } else {
+                    config.ai.tools.forEach((tool, toolIndex) => {
+                        if (!isPlainObject(tool)) {
+                            pushValidationError(errors, `config.ai.tools[${toolIndex}]`, 'must be an object');
+                        }
+                    });
+                }
+            }
+            if (config.ai.mockResponse !== undefined) {
+                const value = config.ai.mockResponse;
+                const isString = typeof value === 'string';
+                const isObject = isPlainObject(value);
+                const isNull = value === null;
+                if (!isString && !isObject && !isNull) {
+                    pushValidationError(errors, 'config.ai.mockResponse', 'must be a JSON object, JSON string, or null');
+                }
+            }
+            if (config.ai.provider !== undefined && !VALID_AI_PROVIDERS.has(String(config.ai.provider || '').toLowerCase())) {
+                pushValidationError(errors, 'config.ai.provider', `must be one of: ${Array.from(VALID_AI_PROVIDERS).join(', ')}`);
+            }
+        }
+    }
+
+    if (!isPlainObject(config.schema)) {
+        pushValidationError(errors, 'config.schema', 'is required and must be an object');
+    } else {
+        validateAllowedKeys(config.schema, ALLOWED_SCHEMA_KEYS, 'config.schema', errors);
+        if (!Array.isArray(config.schema.fields)) {
+            pushValidationError(errors, 'config.schema.fields', 'is required and must be an array');
+        } else {
+            config.schema.fields.forEach((field, index) => validateField(field, `config.schema.fields[${index}]`, errors));
+        }
+    }
+
+    return errors;
+}
+
+function setupConfigPlayground(options) {
+    const {
+        editorId,
+        applyButtonId,
+        resetButtonId,
+        statusId,
+        errorsBoxId,
+        errorsSummaryId,
+        errorsListId,
+        component,
+        baseConfig,
+        defaultInput
+    } = options;
+
+    const editorEl = document.getElementById(editorId);
+    const applyBtn = document.getElementById(applyButtonId);
+    const resetBtn = document.getElementById(resetButtonId);
+    const statusEl = document.getElementById(statusId);
+    const errorsBoxEl = document.getElementById(errorsBoxId);
+    const errorsSummaryEl = document.getElementById(errorsSummaryId);
+    const errorsListEl = document.getElementById(errorsListId);
+    if (!editorEl || !applyBtn || !resetBtn || !component) {
+        return;
+    }
+
+    const defaultEditable = toEditableConfig(baseConfig);
+    editorEl.value = JSON.stringify(defaultEditable, null, 2);
+    const validationDebounceMs = 260;
+    let validationTimer = null;
+
+    function parseAndValidateEditor() {
+        let parsed;
+        try {
+            parsed = JSON.parse(editorEl.value);
+        } catch (error) {
+            return {
+                ok: false,
+                parsed: null,
+                errors: [`Invalid JSON: ${error.message}`]
+            };
+        }
+
+        const errors = validateEditableConfig(parsed);
+        return {
+            ok: errors.length === 0,
+            parsed,
+            errors
+        };
+    }
+
+    function renderValidationErrors(errors) {
+        if (!errorsBoxEl || !errorsListEl || !errorsSummaryEl) {
+            return;
+        }
+        const list = Array.isArray(errors) ? errors : [];
+        errorsListEl.innerHTML = '';
+        if (!list.length) {
+            errorsBoxEl.hidden = true;
+            errorsBoxEl.open = false;
+            errorsSummaryEl.textContent = 'Show all errors';
+            return;
+        }
+
+        errorsBoxEl.hidden = false;
+        errorsSummaryEl.textContent = `Show all errors (${list.length})`;
+        list.forEach((message) => {
+            const item = document.createElement('li');
+            item.textContent = message;
+            errorsListEl.appendChild(item);
+        });
+    }
+
+    function refreshValidationUI() {
+        const result = parseAndValidateEditor();
+        applyBtn.disabled = !result.ok;
+        if (result.ok) {
+            setConfigStatus(statusEl, 'Valid config. Click Apply to update parser.', 'ok');
+            renderValidationErrors([]);
+        } else {
+            const firstError = result.errors[0] || 'Not valid.';
+            const extraCount = Math.max(0, result.errors.length - 1);
+            const suffix = extraCount ? ` (+${extraCount} more)` : '';
+            setConfigStatus(statusEl, `Not valid: ${firstError}${suffix}`, 'error');
+            renderValidationErrors(result.errors);
+        }
+        return result;
+    }
+
+    function scheduleValidation() {
+        if (validationTimer) {
+            clearTimeout(validationTimer);
+        }
+        validationTimer = setTimeout(() => {
+            validationTimer = null;
+            refreshValidationUI();
+        }, validationDebounceMs);
+    }
+
+    function applyFromEditor() {
+        if (validationTimer) {
+            clearTimeout(validationTimer);
+            validationTimer = null;
+        }
+        const validation = parseAndValidateEditor();
+        if (!validation.ok) {
+            refreshValidationUI();
+            return;
+        }
+        const parsed = validation.parsed;
+
+        if (component && typeof component.resetAiVerification === 'function') {
+            component.resetAiVerification('Config updated.');
+        }
+
+        const currentInput = component.getResult()?.input || defaultInput || '';
+        const nextConfig = Object.assign({}, baseConfig, parsed, {
+            ai: Object.assign({}, baseConfig.ai || {}, parsed.ai || {}),
+            mount: baseConfig.mount,
+            onParse: baseConfig.onParse
+        });
+
+        try {
+            component.updateConfig(nextConfig);
+            component.setInput(currentInput);
+        } catch (error) {
+            const message = `Config error: ${error.message}`;
+            setConfigStatus(statusEl, message, 'error');
+            renderValidationErrors([message]);
+            return;
+        }
+        setConfigStatus(statusEl, 'Applied.', 'ok');
+        renderValidationErrors([]);
+        return true;
+    }
+
+    applyBtn.addEventListener('click', applyFromEditor);
+    resetBtn.addEventListener('click', () => {
+        editorEl.value = JSON.stringify(defaultEditable, null, 2);
+        applyFromEditor();
+        setConfigStatus(statusEl, 'Reset to default and applied.', 'ok');
+    });
+    editorEl.addEventListener('input', () => {
+        applyBtn.disabled = true;
+        setConfigStatus(statusEl, 'Checking...', '');
+        scheduleValidation();
+    });
+    refreshValidationUI();
+
+    return {
+        editorEl,
+        applyBtn,
+        resetBtn,
+        applyFromEditor,
+        parseAndValidateEditor,
+        refreshValidationUI,
+        setConfigStatus: (text, type) => setConfigStatus(statusEl, text, type)
+    };
+}
+
+function setupAiRuntimeControls(options) {
+    const {
+        playground,
+        providerSelectId,
+        providerTriggerId,
+        providerInputId,
+        apiKeyId,
+        modelId,
+        endpointId,
+        applyId,
+        endpointFieldId,
+        modelFieldId,
+        keyFieldId,
+        defaultProvider = 'openai',
+        allowDemoProvider = true
+    } = options || {};
+    if (!playground) {
+        return;
+    }
+    const providerSelectEl = document.getElementById(providerSelectId);
+    const providerTriggerEl = document.getElementById(providerTriggerId);
+    const providerInputEl = document.getElementById(providerInputId);
+    const apiKeyEl = document.getElementById(apiKeyId);
+    const modelEl = document.getElementById(modelId);
+    const endpointEl = document.getElementById(endpointId);
+    const applyEl = document.getElementById(applyId);
+    const applyRowEl = applyEl ? applyEl.closest('.ai-runtime-row') : null;
+    const endpointFieldEl = document.getElementById(endpointFieldId);
+    const modelFieldEl = document.getElementById(modelFieldId);
+    const keyFieldEl = document.getElementById(keyFieldId);
+    let lastProvider = '';
+
+    if (!providerInputEl || !apiKeyEl || !modelEl || !endpointEl || !applyEl) {
+        return;
+    }
+
+    function getDefaultModel(provider) {
+        const normalized = String(provider || '').toLowerCase();
+        if (normalized === 'anthropic') return 'claude-3-haiku-20240307';
+        if (normalized === 'google') return 'gemini-1.5-flash';
+        return 'gpt-4o-mini';
+    }
+
+    function syncModelDefaults(provider) {
+        const normalized = String(provider || '').toLowerCase();
+        const defaultModel = getDefaultModel(normalized);
+        modelEl.placeholder = defaultModel;
+        if (!modelEl.value) {
+            modelEl.value = defaultModel;
+        } else {
+            const previousDefault = lastProvider ? getDefaultModel(lastProvider) : '';
+            if (modelEl.value === previousDefault) {
+                modelEl.value = defaultModel;
+            }
+        }
+        lastProvider = normalized;
+    }
+
+    function syncProviderSelectUi(value) {
+        if (!providerSelectEl || !providerTriggerEl) {
+            return null;
+        }
+        const normalized = String(value || '');
+        const options = Array.from(providerSelectEl.querySelectorAll('.custom-select-option'));
+        let activeOption = null;
+        options.forEach((option) => {
+            const active = (option.getAttribute('data-value') || '') === normalized;
+            option.classList.toggle('selected', active);
+            option.classList.toggle('active', active);
+            option.setAttribute('aria-selected', active ? 'true' : 'false');
+            option.tabIndex = active ? 0 : -1;
+            if (active) {
+                activeOption = option;
+            }
+        });
+        providerTriggerEl.textContent = activeOption ? optionText(activeOption) : normalized;
+        return activeOption;
+    }
+
+    function optionText(option) {
+        return option ? String(option.textContent || '').trim() : '';
+    }
+
+    if (providerSelectEl && providerTriggerEl) {
+        const providerMenuEl = providerSelectEl.querySelector('.custom-select-menu');
+        const optionEls = Array.from(providerSelectEl.querySelectorAll('.custom-select-option'));
+        const menuId = providerMenuEl
+            ? (providerMenuEl.id || `${providerSelectId || providerSelectEl.id || 'aiProviderSelect'}Menu`)
+            : '';
+        providerTriggerEl.setAttribute('aria-haspopup', 'listbox');
+        providerTriggerEl.setAttribute('aria-expanded', 'false');
+        if (providerMenuEl) {
+            providerMenuEl.id = menuId;
+            providerMenuEl.setAttribute('role', 'listbox');
+            providerMenuEl.setAttribute('tabindex', '-1');
+            providerTriggerEl.setAttribute('aria-controls', menuId);
+        }
+        optionEls.forEach((option) => {
+            option.setAttribute('role', 'option');
+            option.setAttribute('aria-selected', 'false');
+            option.tabIndex = -1;
+        });
+        const closeProviderMenu = (restoreFocus) => {
+            providerSelectEl.classList.remove('open');
+            providerTriggerEl.setAttribute('aria-expanded', 'false');
+            if (restoreFocus && typeof providerTriggerEl.focus === 'function') {
+                providerTriggerEl.focus();
+            }
+        };
+        const openProviderMenu = () => {
+            providerSelectEl.classList.add('open');
+            providerTriggerEl.setAttribute('aria-expanded', 'true');
+            const active = syncProviderSelectUi(providerInputEl.value) || optionEls[0] || null;
+            if (active && typeof active.focus === 'function') {
+                active.focus();
+            }
+        };
+        const focusProviderOptionByDelta = (delta) => {
+            if (!optionEls.length) {
+                return;
+            }
+            const current = document.activeElement && document.activeElement.closest('.custom-select-option');
+            const currentIndex = Math.max(0, optionEls.indexOf(current));
+            const nextIndex = Math.max(0, Math.min(optionEls.length - 1, currentIndex + delta));
+            optionEls[nextIndex].focus();
+        };
+        const commitProviderOption = (option, opts = {}) => {
+            if (!option) {
+                return;
+            }
+            const value = option.getAttribute('data-value') || '';
+            providerInputEl.value = value;
+            syncProviderSelectUi(value);
+            if (opts.closeMenu !== false) {
+                closeProviderMenu(!!opts.restoreFocus);
+            }
+            syncFieldVisibility(value);
+            syncModelDefaults(value);
+            syncApplyState();
+            if (allowDemoProvider && String(value || '').toLowerCase() === 'demo') {
+                applyRuntimeToEditor();
+            }
+        };
+        providerTriggerEl.addEventListener('click', () => {
+            if (providerSelectEl.classList.contains('open')) {
+                closeProviderMenu(false);
+            } else {
+                openProviderMenu();
+            }
+        });
+        providerTriggerEl.addEventListener('keydown', (event) => {
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                openProviderMenu();
+                if (event.key === 'ArrowUp' && optionEls.length) {
+                    optionEls[optionEls.length - 1].focus();
+                }
+            } else if (event.key === 'Escape') {
+                closeProviderMenu(false);
+            }
+        });
+        if (providerMenuEl) {
+            providerMenuEl.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    closeProviderMenu(true);
+                    return;
+                }
+                if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    focusProviderOptionByDelta(1);
+                    return;
+                }
+                if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    focusProviderOptionByDelta(-1);
+                    return;
+                }
+                if (event.key === 'Home' && optionEls.length) {
+                    event.preventDefault();
+                    optionEls[0].focus();
+                    return;
+                }
+                if (event.key === 'End' && optionEls.length) {
+                    event.preventDefault();
+                    optionEls[optionEls.length - 1].focus();
+                    return;
+                }
+                if (event.key === 'Enter' || event.key === ' ') {
+                    const focusedOption = document.activeElement && document.activeElement.closest('.custom-select-option');
+                    if (!focusedOption) return;
+                    event.preventDefault();
+                    commitProviderOption(focusedOption, { closeMenu: true, restoreFocus: true });
+                }
+            });
+        }
+        syncProviderSelectUi(providerInputEl.value);
+        providerSelectEl.addEventListener('focusout', () => {
+            window.requestAnimationFrame(() => {
+                if (!providerSelectEl.contains(document.activeElement)) {
+                    closeProviderMenu(false);
+                }
+            });
+        });
+        providerSelectEl.addEventListener('click', (event) => {
+            const option = event.target.closest('.custom-select-option');
+            if (!option) return;
+            commitProviderOption(option, { closeMenu: true, restoreFocus: false });
+        });
+        document.addEventListener('click', (event) => {
+            if (!providerSelectEl.contains(event.target)) {
+                closeProviderMenu(false);
+            }
+        });
+    }
+
+    function syncFieldVisibility(value) {
+        const provider = String(value || providerInputEl.value || '').toLowerCase();
+        const isDemo = allowDemoProvider && provider === 'demo';
+        const isCustom = provider === 'custom';
+
+        if (endpointFieldEl) {
+            endpointFieldEl.hidden = !isCustom;
+        }
+        if (modelFieldEl) {
+            modelFieldEl.hidden = isDemo;
+        }
+        if (keyFieldEl) {
+            keyFieldEl.hidden = isDemo;
+        }
+        if (applyEl) {
+            applyEl.hidden = isDemo;
+        }
+        if (applyRowEl) {
+            applyRowEl.hidden = isDemo;
+        }
+
+        const runtimeGrid = providerSelectEl ? providerSelectEl.closest('.ai-runtime') : null;
+        if (runtimeGrid) {
+            runtimeGrid.classList.toggle('ai-runtime--compact', isDemo);
+        }
+    }
+
+    function syncApplyState() {
+        const provider = String(providerInputEl.value || '').toLowerCase();
+        const isDemo = allowDemoProvider && provider === 'demo';
+        const isCustom = provider === 'custom';
+        if (isDemo) {
+            applyEl.disabled = true;
+            return;
+        }
+        const hasApiKey = String(apiKeyEl.value || '').trim().length > 0;
+        const hasModel = String(modelEl.value || '').trim().length > 0;
+        const hasEndpoint = !isCustom || String(endpointEl.value || '').trim().length > 0;
+        applyEl.disabled = !(hasApiKey && hasModel && hasEndpoint);
+    }
+
+    function readEditorConfig() {
+        try {
+            return JSON.parse(playground.editorEl.value || '{}');
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function syncControlsFromEditor() {
+        const parsed = readEditorConfig();
+        const ai = (parsed && parsed.ai && typeof parsed.ai === 'object') ? parsed.ai : {};
+        const hasMockResponse = Object.prototype.hasOwnProperty.call(ai, 'mockResponse');
+        const hasDispatchOverride = Object.prototype.hasOwnProperty.call(ai, 'dispatch');
+        let activeProvider = String(ai.provider || defaultProvider || 'openai');
+
+        const hasDemoMarker = allowDemoProvider
+            && ((hasMockResponse && ai.mockResponse !== null) || (hasDispatchOverride && ai.dispatch !== null));
+        const hasRealProviderMarker = (hasMockResponse && ai.mockResponse === null) || (hasDispatchOverride && ai.dispatch === null);
+
+        if (hasDemoMarker || (allowDemoProvider && defaultProvider === 'demo' && !hasRealProviderMarker)) {
+            activeProvider = 'demo';
+        }
+        if (!allowDemoProvider && activeProvider === 'demo') {
+            activeProvider = String(defaultProvider || 'openai');
+        }
+
+        providerInputEl.value = activeProvider;
+        syncProviderSelectUi(activeProvider);
+
+        apiKeyEl.value = String(ai.apiKey || '');
+        modelEl.value = String(ai.model || '');
+        endpointEl.value = String(ai.endpoint || '');
+
+        syncFieldVisibility(activeProvider);
+        syncModelDefaults(activeProvider);
+        syncApplyState();
+    }
+
+    function applyRuntimeToEditor() {
+        const parsed = readEditorConfig();
+        if (!parsed || typeof parsed !== 'object') {
+            playground.setConfigStatus('Invalid JSON: cannot apply runtime controls.', 'error');
+            return;
+        }
+        parsed.ai = (parsed.ai && typeof parsed.ai === 'object') ? parsed.ai : {};
+        const chosenProvider = providerInputEl.value;
+        const isDemo = allowDemoProvider && chosenProvider === 'demo';
+
+        if (isDemo) {
+            delete parsed.ai.mockResponse;
+            delete parsed.ai.dispatch;
+        } else {
+            parsed.ai.provider = chosenProvider;
+            parsed.ai.mockResponse = null;
+            parsed.ai.dispatch = null;
+        }
+
+        parsed.ai.apiKey = String(apiKeyEl.value || '');
+        parsed.ai.model = String(modelEl.value || '');
+        parsed.ai.endpoint = String(endpointEl.value || '');
+        parsed.ai.forceJson = true;
+
+        playground.editorEl.value = JSON.stringify(parsed, null, 2);
+        const applied = playground.applyFromEditor();
+        if (applied) {
+            playground.setConfigStatus(`Applied AI details (${chosenProvider}).`, 'ok');
+            syncControlsFromEditor();
+        }
+    }
+    [apiKeyEl, modelEl, endpointEl].forEach((el) => {
+        el.addEventListener('input', syncApplyState);
+    });
+    providerInputEl.addEventListener('change', syncApplyState);
+    applyEl.addEventListener('click', applyRuntimeToEditor);
+    playground.applyBtn.addEventListener('click', () => {
+        window.requestAnimationFrame(syncControlsFromEditor);
+    });
+    playground.resetBtn.addEventListener('click', () => {
+        window.requestAnimationFrame(syncControlsFromEditor);
+    });
+    syncControlsFromEditor();
+}
+
+const demoActionIconCalendar = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>';
+const demoActionIconPriority = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v20"/><path d="M10 4h9l-3 4 3 4h-9"/></svg>';
+const demoActionIconProject = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+const demoActionIconTag = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg>';
+const demoActionIconEstimate = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>';
+const demoActionIconOwner = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>';
+const demoActionIconReceipt = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h10a2 2 0 0 1 2 2v16l-3-2-2 2-2-2-2 2-2-2-3 2V5a2 2 0 0 1 2-2z"/><path d="M9 8h6"/><path d="M9 12h6"/></svg>';
+
+const taskConfig = {
+    mount: document.getElementById('quickAddExample1'),
+    debounceMs: 280,
+    entrySeparator: '\n\n',
+    fieldTerminator: ';;',
+    fieldTerminatorMode: 'or-next-prefix',
+    multiSelectSeparator: ',',
+    allowMultipleAttachments: true,
+    allowAttachmentReuse: true,
+    allowedAttachmentTypes: ['.pdf', '.png', '.jpg', 'image/*'],
+    attachmentSources: ['camera', 'gallery', 'files'],
+    fallbackField: 'title',
+    pillColorStyle: 'background',
+    placeholder: 'Example: Follow up with clinic tomorrow morning, high priority, project health; then prep reimbursement docs for client review',
+    inputHeightMode: 'scroll',
+    inputMaxHeight: 160,
+    fontFamily: '"Spline Sans Mono", "JetBrains Mono", monospace',
+    showFieldActionBar: true,
+    fieldActionBarExpandOnValue: true,
+    fieldActionBarShowMetaIndicators: true,
+    fieldActionBarApplyToAllToggle: true,
+    fieldActionBarApplyToAllDefault: false,
+    fieldActionBarApplyToAllLabel: 'Apply to all entries',
+    fieldActionBarButtons: [
+        { fieldKey: 'priority', iconSvg: demoActionIconPriority, showLabel: false, visible: true },
+        { fieldKey: 'project', iconSvg: demoActionIconProject, showLabel: true, visible: true },
+        { fieldKey: 'tags', iconSvg: demoActionIconTag, showLabel: true, visible: true },
+        { fieldKey: 'due', iconSvg: demoActionIconCalendar, showLabel: true, visible: true },
+        { fieldKey: 'estimate', iconSvg: demoActionIconEstimate, showLabel: false, visible: true },
+        { fieldKey: 'owner', iconSvg: demoActionIconOwner, showLabel: false, visible: true },
+        { fieldKey: 'receipt', iconSvg: demoActionIconReceipt, showLabel: false, visible: false }
+    ],
+    tokens: {
+        '--qa-entry-marker-bg': '#f6ede3',
+        '--qa-entry-marker-fg': '#7f6c58',
+        '--qa-entry-marker-active-bg': 'rgba(31, 93, 105, 0.2)',
+        '--qa-entry-marker-active-fg': '#1f5d69',
+        '--qa-entry-marker-active-border': '#8eb8c4'
+    },
+    schema: {
+        fields: [
+            { key: 'title', type: 'string', required: true },
+            {
+                key: 'priority',
+                type: 'options',
+                required: true,
+                prefixes: ['!'],
+                allowCustom: false,
+                defaultValue: 'p2',
+                options: [
+                    { value: 'p1', color: '#dc2626' },
+                    { value: 'p2', color: '#d97706' },
+                    { value: 'p3', color: '#0284c7' }
+                ]
+            },
+            {
+                key: 'project',
+                type: 'options',
+                prefixes: ['#'],
+                allowCustom: false,
+                options: [
+                    { value: 'health', color: '#0d9488' },
+                    { value: 'work', color: '#7c3aed' },
+                    { value: 'home', color: '#16a34a' },
+                    { value: 'errands', color: '#475569' }
+                ]
+            },
+            {
+                key: 'tags',
+                type: 'options',
+                prefixes: ['tag:'],
+                multiple: true,
+                defaultValue: ['urgent', 'follow-up'],
+                options: [
+                    { value: 'urgent', color: '#dc2626' },
+                    { value: 'follow-up', color: '#f59e0b' },
+                    { value: 'client', color: '#0ea5e9' },
+                    { value: 'internal', color: '#64748b' }
+                ]
+            },
+            { key: 'due', type: 'datetime', naturalDate: true, allowDateOnly: true, defaultTime: '08:00', defaultValue: '2026-02-23T15:00', prefixes: ['due:'] },
+            { key: 'estimate', type: 'number', prefixes: ['est:'], defaultValue: 2 },
+            { key: 'owner', type: 'string', prefixes: ['@'], autoDetectWithoutPrefix: true },
+            { key: 'receipt', type: 'file', prefixes: ['file:'] },
+            { key: 'photos', type: 'file', prefixes: ['files:'], multiple: true }
+        ]
+    },
+    tokens: {
+        '--qa-bg': '#fff8ef',
+        '--qa-border': '#e5d7c4',
+        '--qa-accent': '#8b4a2f',
+        '--qa-accent-soft': '#f4e7df'
+    },
+    onParse: (result) => {
+        document.getElementById('meta1').textContent = `entries=${result.entryCount}, valid=${result.validCount}, invalid=${result.invalidCount}`;
+    }
+};
+const taskDefaultInput =
+    'Book vet appointment then call clinic !p3;; shift to urgent !p1;; prep records #health;; and confirm slot due:23 feb 26 at 3pm;; est:4;; with @Mimansa;; file:attachment-1.png;; files:attachment-2.svg;; before breakfast\n\n' +
+    'Pick up supplements !p2;; #errands;; tag:client,internal;; due:next week at 9:15am;; est:1;; @Mimansa;; file:attachment-2.svg;;';
+const taskAdd = QuickAdd.create(taskConfig);
+taskAdd.setInput(taskDefaultInput);
+seedGlobalAttachments(taskAdd, ['attachment-1.png', 'attachment-2.svg', 'attachment-3.png']);
+setupConfigPlayground({
+    editorId: 'config1',
+    applyButtonId: 'applyConfig1',
+    resetButtonId: 'resetConfig1',
+    statusId: 'config1Status',
+    errorsBoxId: 'config1ErrorsBox',
+    errorsSummaryId: 'config1ErrorsSummary',
+    errorsListId: 'config1Errors',
+    component: taskAdd,
+    baseConfig: taskConfig,
+    defaultInput: taskDefaultInput
+});
+
+const petConfig = {
+    mount: document.getElementById('quickAddExample2'),
+    debounceMs: 320,
+    entrySeparator: ';',
+    fieldTerminator: '~~',
+    fieldTerminatorMode: 'strict',
+    showEntryHeader: false,
+    autoDetectOptionsWithoutPrefix: true,
+    reduceInferredOptions: false,
+    pillColorStyle: 'border',
+    inferredMatchMode: 'fuzzy',
+    inferredMatchThreshold: 0.8,
+    fallbackField: 'note',
+    placeholder: 'Use ; for new entry. Example: pet:Luna~~ event:walk~~ due:2025-02-01~~ at:yesterday~~',
+    inputHeightMode: 'scroll',
+    inputMaxHeight: 150,
+    classNames: {
+        root: 'qa-root petqa-root',
+        entry: 'qa-entry petqa-entry'
+    },
+    schema: {
+        fields: [
+            { key: 'note', type: 'string' },
+            {
+                key: 'pet',
+                type: 'options',
+                prefixes: ['pet:'],
+                required: true,
+                allowCustom: false,
+                options: [
+                    { value: 'Luna', color: '#22c55e' },
+                    { value: 'Mochi', color: '#f97316' },
+                    { value: 'Pico', color: '#3b82f6' }
+                ]
+            },
+            {
+                key: 'event',
+                type: 'options',
+                prefixes: ['event:', 'ev:'],
+                required: true,
+                allowCustom: false,
+                options: [
+                    { value: 'walk', color: '#22c55e', dependsOn: { field: 'pet', op: 'in', value: ['Luna', 'Mochi'] } },
+                    { value: 'fetch', color: '#16a34a', dependsOn: { field: 'pet', op: 'eq', value: 'Luna' } },
+                    { value: 'litter', color: '#2563eb', dependsOn: { field: 'pet', op: 'eq', value: 'Pico' } },
+                    { value: 'groom', color: '#f97316', dependsOn: { field: 'pet', op: 'eq', value: 'Mochi' } },
+                    { value: 'vet', color: '#7c3aed' }
+                ]
+            },
+            {
+                key: 'due',
+                type: 'date',
+                naturalDate: false,
+                prefixes: ['due:'],
+                constraints: [
+                    {
+                        op: 'gte',
+                        value: '2025-02-15',
+                        message: 'Due date must be on or after 2025-02-15'
+                    },
+                    {
+                        when: { field: 'pet', op: 'eq', value: 'Pico' },
+                        op: 'gte',
+                        value: '2026-01-01',
+                        message: 'For pet Pico, due date must be on or after 2026-01-01'
+                    }
+                ]
+            },
+            {
+                key: 'symptom',
+                type: 'options',
+                prefixes: ['symptom:', 'sym:'],
+                allowCustom: true,
+                autoDetectWithoutPrefix: true,
+                reduceInferredOptions: true,
+                options: [
+                    { value: 'cough', color: '#dc2626' },
+                    { value: 'vomit', color: '#ea580c' },
+                    { value: 'itching', color: '#d97706' },
+                    { value: 'low energy', color: '#7c3aed' }
+                ]
+            },
+            { key: 'severity', type: 'number', prefixes: ['sev:'], defaultValue: 2 },
+            { key: 'at', type: 'date', naturalDate: true, prefixes: ['at:'], required: true, defaultValue: '2026-02-14' }
+        ]
+    },
+    onParse: (result) => {
+        document.getElementById('meta2').textContent = `entries=${result.entryCount}, valid=${result.validCount}, invalid=${result.invalidCount}`;
+    }
+};
+const petDefaultInput =
+    'pet:Luna~~ event:litter~~ due:2025-02-01~~ sev:2~~ at:yesterday~~ cogh and appetite normal;' +
+    ' pet:Mochi~~ event:groom~~ due:2026-03-01~~ sev:3~~ at:today~~ low enery and slept longer than usyal;' +
+    ' pet:Pico~~ event:vet~~ due:2026-04-01~~ checkup (auto-dated)';
+const petAdd = QuickAdd.create(petConfig);
+petAdd.setInput(petDefaultInput);
+setupConfigPlayground({
+    editorId: 'config2',
+    applyButtonId: 'applyConfig2',
+    resetButtonId: 'resetConfig2',
+    statusId: 'config2Status',
+    errorsBoxId: 'config2ErrorsBox',
+    errorsSummaryId: 'config2ErrorsSummary',
+    errorsListId: 'config2Errors',
+    component: petAdd,
+    baseConfig: petConfig,
+    defaultInput: petDefaultInput
+});
+
+const expenseConfig = {
+    mount: document.getElementById('quickAddExample3'),
+    debounceMs: 250,
+    entrySeparator: '\n',
+    fieldTerminator: '::',
+    fieldTerminatorMode: 'or-next-prefix',
+    enableNumberPillStepper: true,
+    numberPillStep: 1,
+    fallbackField: 'memo',
+    placeholder: 'Example: Team lunch $((24+6-2)/4)^2:: cat:Food:: pay:Card:: on:2026-02-06:: rb:no::',
+    inputHeightMode: 'scroll',
+    inputMaxHeight: 140,
+    schema: {
+        fields: [
+            { key: 'memo', type: 'string', required: true },
+            { key: 'amount', type: 'number', prefixes: ['$'], required: true, defaultValue: 18.5, allowMathExpression: true, showNumberStepper: true, numberStep: 1 },
+            {
+                key: 'category',
+                type: 'options',
+                prefixes: ['cat:'],
+                required: true,
+                allowCustom: false,
+                defaultValue: 'Food',
+                options: [
+                    { value: 'Food', color: '#f59e0b' },
+                    { value: 'Travel', color: '#0ea5e9' },
+                    { value: 'Supplies', color: '#22c55e' },
+                    { value: 'Software', color: '#a855f7' }
+                ]
+            },
+            {
+                key: 'payment',
+                type: 'options',
+                prefixes: ['pay:'],
+                allowCustom: false,
+                options: [
+                    { value: 'Card', color: '#06b6d4' },
+                    { value: 'Cash', color: '#84cc16' },
+                    { value: 'UPI', color: '#f97316' },
+                    { value: 'Bank', color: '#8b5cf6' }
+                ]
+            },
+            {
+                key: 'tags',
+                type: 'options',
+                prefixes: ['tag:'],
+                multiple: true,
+                defaultValue: ['ops'],
+                options: [
+                    { value: 'ops', color: '#334155' },
+                    { value: 'client', color: '#0ea5e9' },
+                    { value: 'travel', color: '#0284c7' },
+                    { value: 'meal', color: '#f59e0b' }
+                ]
+            },
+            { key: 'on', type: 'date', naturalDate: false, prefixes: ['on:'], required: true, defaultValue: '2026-02-06' },
+            { key: 'reimbursable', type: 'boolean', prefixes: ['rb:'] }
+        ]
+    },
+    tokens: {
+        '--qa-color-scheme': 'dark',
+        '--qa-bg': '#1d2328',
+        '--qa-fg': '#edf2f8',
+        '--qa-muted': '#a6b3c0',
+        '--qa-border': '#33404a',
+        '--qa-accent': '#66d9ef',
+        '--qa-accent-soft': '#27414c',
+        '--qa-danger': '#f28b82',
+        '--qa-card-bg': '#111a20',
+        '--qa-card-fg': '#edf2f8',
+        '--qa-input-bg': '#0f171d',
+        '--qa-input-fg': '#edf2f8',
+        '--qa-output-bg': '#0f171d',
+        '--qa-output-fg': '#dbe7f3',
+        '--qa-pill-bg': '#13232d',
+        '--qa-pill-border': '#3f5f74',
+        '--qa-pill-fg': '#dceaf8',
+        '--qa-date-picker-control-bg': '#162028',
+        '--qa-date-picker-control-fg': '#b3c2d0',
+        '--qa-date-picker-control-border': '#415262',
+        '--qa-date-picker-control-hover-bg': '#273743',
+        '--qa-date-picker-selected-bg': '#244551',
+        '--qa-date-picker-selected-fg': '#a7e8ff',
+        '--qa-date-picker-today-border': '#66d9ef',
+        '--qa-date-picker-time-bg': '#15212a',
+        '--qa-date-picker-time-border': '#415262',
+        '--qa-date-picker-day-muted-fg': '#778697'
+    },
+    onParse: (result) => {
+        document.getElementById('meta3').textContent = `entries=${result.entryCount}, valid=${result.validCount}, invalid=${result.invalidCount}`;
+    }
+};
+const expenseDefaultInput =
+    'Team lunch $((24 + 6 - 2) / 4)^2:: cat:Food:: pay:Card:: tag:meal,client:: on:2026-02-06:: rb:no::\n' +
+    'Airport cab $48 cat:Travel pay:Cash on:2026-02-05 rb:yes';
+const expenseAdd = QuickAdd.create(expenseConfig);
+expenseAdd.setInput(expenseDefaultInput);
+setupConfigPlayground({
+    editorId: 'config3',
+    applyButtonId: 'applyConfig3',
+    resetButtonId: 'resetConfig3',
+    statusId: 'config3Status',
+    errorsBoxId: 'config3ErrorsBox',
+    errorsSummaryId: 'config3ErrorsSummary',
+    errorsListId: 'config3Errors',
+    component: expenseAdd,
+    baseConfig: expenseConfig,
+    defaultInput: expenseDefaultInput
+});
+
+const modalConfig = {
+    mount: document.getElementById('quickAddExample4'),
+    debounceMs: 260,
+    entrySeparator: '\n\n',
+    fieldTerminator: ';;',
+    fieldTerminatorMode: 'or-next-prefix',
+    fallbackField: 'title',
+    placeholder: 'Try: prep update !p2;; due:next week at 9:15am;; @Mimansa;;',
+    schema: {
+        fields: [
+            { key: 'title', type: 'string', required: true },
+            {
+                key: 'priority',
+                type: 'options',
+                prefixes: ['!'],
+                allowCustom: false,
+                options: [
+                    { value: 'p1', color: '#dc2626' },
+                    { value: 'p2', color: '#d97706' },
+                    { value: 'p3', color: '#0284c7' }
+                ]
+            },
+            {
+                key: 'status',
+                type: 'options',
+                prefixes: ['st:'],
+                allowCustom: false,
+                defaultValue: 'todo',
+                options: [
+                    { value: 'todo', color: '#475569' },
+                    { value: 'doing', color: '#0ea5e9' },
+                    { value: 'done', color: '#16a34a' }
+                ]
+            },
+            {
+                key: 'labels',
+                type: 'options',
+                prefixes: ['tag:'],
+                multiple: true,
+                allowCustom: false,
+                defaultValue: ['internal'],
+                options: [
+                    { value: 'internal', color: '#64748b' },
+                    { value: 'client', color: '#0ea5e9' },
+                    { value: 'follow-up', color: '#f59e0b' }
+                ]
+            },
+            { key: 'due', type: 'datetime', naturalDate: true, allowDateOnly: true, defaultTime: '08:00', defaultValue: '2026-02-18T08:00', prefixes: ['due:'] },
+            { key: 'owner', type: 'string', prefixes: ['@'] },
+            { key: 'receipt', type: 'file', prefixes: ['file:'] },
+            { key: 'photos', type: 'file', prefixes: ['files:'], multiple: true }
+        ]
+    },
+    allowMultipleAttachments: true,
+    allowAttachmentReuse: false,
+    allowedAttachmentTypes: ['image/*'],
+    attachmentSources: ['camera', 'gallery', 'files'],
+    tokens: {
+        '--qa-bg': '#fff9f1',
+        '--qa-border': '#d9ccb8',
+        '--qa-accent': '#7c4a2a',
+        '--qa-accent-soft': '#efe2d5',
+        '--qa-max-width': '100%'
+    },
+    onParse: (result) => {
+        document.getElementById('meta4').textContent = `entries=${result.entryCount}, valid=${result.validCount}, invalid=${result.invalidCount}`;
+    }
+};
+const modalDefaultInputs = [
+    'Finalize investor update !p2;; st:doing;; tag:internal,follow-up;; due:2026-03-04T15:00;; @Mimansa;; file:entry-1-note.svg;; files:entry-1-pixel.png;;\n\nBook dentist !p1;; st:todo;; tag:client;; due:2026-03-05T09:15;; @Mimansa;; file:entry-1-pixel.png;;',
+    'Share onboarding plan !p2;; st:todo;; tag:client;; due:2026-03-06T11:00;; @Mimansa;; file:entry-1-note.svg;;\n\nCollect KYC docs !p1;; st:doing;; tag:follow-up;; due:2026-03-06T16:00;; @Mimansa;; files:entry-1-pixel.png;;',
+    'Prep sprint review deck !p2;; st:doing;; tag:internal;; due:2026-03-07T14:00;; @Mimansa;; file:entry-1-note.svg;;\n\nSync blockers with QA !p1;; st:todo;; tag:follow-up;; due:2026-03-07T18:00;; @Mimansa;; file:entry-1-note.svg;;',
+    'Schedule customer interview !p2;; st:todo;; tag:client;; due:2026-03-09T10:00;; @Mimansa;; file:entry-1-note.svg;;\n\nDraft interview guide !p3;; st:doing;; tag:internal;; due:2026-03-09T17:00;; @Mimansa;; file:entry-1-note.svg;;',
+    'Close invoice gap !p1;; st:doing;; tag:internal;; due:2026-03-10T19:00;; @Mimansa;; file:entry-1-note.svg;;\n\nSend payment reminder !p2;; st:todo;; tag:client,follow-up;; due:2026-03-11T09:00;; @Mimansa;; file:entry-1-note.svg;;',
+    'Review production alerts !p1;; st:doing;; tag:internal;; due:2026-03-11T20:00;; @Mimansa;; file:entry-1-note.svg;;\n\nPatch retry timeout !p2;; st:todo;; tag:follow-up;; due:2026-03-12T13:00;; @Mimansa;; file:entry-1-note.svg;;'
+];
+const modalInputIndexFromQuery = (() => {
+    if (typeof window === 'undefined' || !window.location || !window.location.search) {
+        return null;
+    }
+    const raw = new URLSearchParams(window.location.search).get('modalInputIndex');
+    if (raw === null) {
+        return null;
+    }
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : null;
+})();
+const pickRandomModalDefaultInput = () => {
+    if (!modalDefaultInputs.length) {
+        return '';
+    }
+    if (Number.isFinite(modalInputIndexFromQuery)) {
+        return modalDefaultInputs[modalInputIndexFromQuery % modalDefaultInputs.length];
+    }
+    const index = Math.floor(Math.random() * modalDefaultInputs.length);
+    return modalDefaultInputs[index];
+};
+let modalAdd = null;
+
+function createDemoGlobalAttachments() {
+    if (typeof File !== 'function') {
+        return [];
+    }
+    const lastModified = Date.now();
+    const catSvg1 = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640"><path fill="currentColor" d="M96 160c53 0 96 43 96 96v85.8c29.7-44.7 77.8-76.2 133.4-84c25.6 60 85.2 102.1 154.6 102.1c10.9 0 21.6-1.1 32-3.1V544c0 17.7-14.3 32-32 32s-32-14.3-32-32V403.2L312 512h56c17.7 0 32 14.3 32 32s-14.3 32-32 32H224c-53 0-96-43-96-96V256c0-16.6-12.6-30.2-28.7-31.8l-6.6-.3C76.6 222.2 64 208.6 64 192c0-17.7 14.3-32 32-32m469.8-92.8c10.4-8.7 26.2-1.3 26.2 12.3V192c0 61.9-50.1 112-112 112s-112-50.1-112-112V79.5c0-13.6 15.8-21 26.2-12.3L448 112h64zM432 172c-11 0-20 9-20 20s9 20 20 20s20-9 20-20s-9-20-20-20m96 0c-11 0-20 9-20 20s9 20 20 20s20-9 20-20s-9-20-20-20"/></svg>`;
+    const catSvg2 = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><g fill="none"><path fill="#d3883e" d="M14.9 30h2.13c.24 0 .42-.23.36-.45L15.5 21.6h-3l1.91 8.02c.06.22.26.38.49.38m5.88 0h-2.13c-.24 0-.42-.23-.36-.45l1.89-7.95h3l-1.91 8.02c-.06.22-.26.38-.49.38"/><path fill="#f3ad61" d="M21.41 3.18c.53-.12 1.09-.19 1.66-.18c3.78.04 6.88 3.12 6.93 6.9a7 7 0 0 1-2.393 5.369c.254.696.393 1.447.393 2.231v4.54c0 .63-.13 1.26-.39 1.84l-2.52 5.89c-.05.14-.19.23-.34.23h-2.18c-.27 0-.45-.28-.33-.52l1.3-3.03c.12-.27.06-.58-.15-.79l-2.41-2.41c-.16-.16-4.299-2.54-4.529-2.54L13.01 23v6.62c0 .21-.17.38-.38.38h-2.25c-.21 0-.38-.17-.38-.37v-6.65l-1.974-3.978L6.02 17A4.02 4.02 0 0 1 2 12.98v-.22c0-.42.34-.76.76-.76c.25 0 .47-.18.52-.43C3.66 9.62 5.13 7.73 7 7.3V4.59c0-.38.47-.55.72-.27l3.31 3.686l-.262.98l1.771 1.008q.226.478.344 1.006l-.646.996l.773 1.015v.409c0 .45.47.75.88.55l.12-.058l1.065.394l.914-1.357l1.03-.5l.974.312l.975-1.251q.497-.21 1.023-.334l.957 1.186l1.002-1.347a6.5 6.5 0 0 1 4.644 2.447a5 5 0 0 0 1.396-3.212C28.14 7.38 25.84 5 23 5c-.38 0-.76.04-1.12.13c-.41.09-.83-.08-1.06-.43q-.001-.007-.005-.01q-.005-.003-.005-.01a.98.98 0 0 1 .6-1.5"/><path fill="#d3883e" d="M11.76 8.83L11.02 8H10c-.55 0-1 .45-1 1s.45 1 1 1h2.547c-.2-.43-.477-.82-.787-1.17m8.21 2.35q.75-.18 1.53-.18c.15 0 .31.01.47.02v3.36c0 .55-.45 1-1 1s-1-.45-1-1zm-1.32.47l-1.67.81v2.75c0 .55.45 1 1 1s1-.45 1-1v-3.7c-.11.04-.22.09-.33.14M15 17.04c.55 0 1-.45 1-1v-3.1l-2 .97v2.13c0 .55.45 1 1 1M12.88 11c.08.35.12.71.12 1.09V13h-1.5c-.55 0-1-.45-1-1s.45-1 1-1z"/><path fill="#ffdea7" d="M8.725 17.903A1.59 1.59 0 0 0 7.29 17H6.02v1.59A4.41 4.41 0 0 0 10 22.98v-2.89zm7.915 2.247H13V23h7.36c.23 0 .45.09.61.25l-1.5-1.78c-.7-.84-1.74-1.32-2.83-1.32"/><path fill="#212121" d="M6.02 11.587c0-.32.223-.567.49-.567c.276 0 .49.258.49.567v.846c0 .31-.214.557-.49.567c-.276 0-.49-.258-.49-.567zM3.44 12c.24 0 .37.27.23.46l-1.42 1.91c-.16-.43-.25-.9-.25-1.39v-.22c0-.42.34-.76.76-.76z"/></g></svg>`;
+    const catSvg3 = `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><path fill="#4d4d4d" d="M41.94 80.79s-4.22 7.41-5.54 12.86c-1.31 5.44-.59 7.57.84 12.01c1.64 5.07 3.63 9.19 7.46 6.76c3.1-1.97 3.43-6.71 2.96-8.59s-.89-4.5-.7-5.63s2.3-6.24 3.99-8.68s1.69-6.01 1.41-6.29c-.29-.28-10.42-2.44-10.42-2.44m9.81 36.56s-1.2 6.62-.56 6.62c.63 0 5.07-.21 6.62-1.27s2.94-4.65 4.22-8.73c1.55-4.93 3.71-11.25 4.22-12.81c.94-2.86 1.97-5.77 1.97-5.77s4.78-.43 7.74-.56c4.72-.21 8-.43 8.73.07c.92.63 5.15 3.48 6.19 5c1.55 2.25-3.8 12.81-3.8 12.81s-3.8 3.38-3.66 5.28s3.8 1.69 7.04 1.55s4.97-1.06 5.42-1.55c1.69-1.83 3.45-6.83 4.58-10.91c1.08-3.91 2.53-6.34 2.11-8.87S89.34 84.84 89.34 84.84l-31.46 7.6zM34.02 29.16l16.52-6.66s-1.6-4.22-3.66-7.88s-6.66-10.51-8.82-9.95s-4.42 11-4.93 13.8c-1.04 5.71.89 10.69.89 10.69"/><path fill="#b0b1b2" d="M18.72 43.75c-.03 0-3.42 0-5.73-.07c-2.32-.07-4.48-.14-4.48-.14s-1.07-.03-1.07-1.08c0-1.06 1.11-1.01 1.11-1.01s2.17.07 4.5.14c2.28.07 5.64.07 5.67.07c.58 0 1.05.47 1.05 1.05s-.47 1.04-1.05 1.04M8.57 50.1s-.99.27-1.21-.81c-.22-1.09.76-1.24.76-1.24s2.87-.85 4.85-1.27c1.96-.42 6.04-1.19 6.08-1.2c.57-.11 1.12.27 1.23.84s-.27 1.12-.84 1.23c-.04.01-4.09.78-6.03 1.19c-1.97.41-4.84 1.26-4.84 1.26m4.85 5.41c-.34 0-.67-.17-.88-.47a1.06 1.06 0 0 1 .29-1.46l5.48-4.29a1.06 1.06 0 0 1 1.46.29c.32.48.19 1.13-.29 1.46l-5.14 4.05c-.18.12-.72.42-.92.42"/><path fill="#5d6265" d="M36.54 67.37c0 .84.59 7.08 1.27 11.54c.7 4.65 2.82 8.17 7.04 10.98c5.07 3.38 9.57 3.94 9.57 3.94s-1.55 9.57-3.66 15.91c-.38 1.15-2.67 5.84-3.17 6.62s-1.83 3.03-1.62 4.65c.23 1.76 1.55 3.8 7.18 2.67c4.56-.91 5-5.51 6.34-9.24c.5-1.4 3.61-10.04 4.22-12.06c1.35-4.47 2.11-7.48 2.82-8.26c.7-.77 8.17-1.13 12.81-1.41c4.65-.28 12.11-.42 12.11-.42s3.17 2.6 6.69 4.22c5.48 2.52 10.63 3.24 13.02 6.48c2.31 3.12 1.93 6.13 1.41 8.66c-.84 4.08-2.38 6.33-2.11 7.81c.35 1.97 2.25 2.18 6.19 2.25c3.81.07 4.55-.69 5.28-2.53c2.89-7.3-1.76-16.75-2.11-23.02c-.17-2.97-4.86-3.8-5.91-8.17c-1.06-4.36-1.38-8.8-2.65-13.16c-1.38-4.76-3.1-8.78-3.1-8.78s4.9-2.98 7.93-6.29s7.35-7.7 5.58-16.38c-1.41-6.9-6.01-11.5-16.92-14.95c-10.79-3.41-12.99.55-13.3 3.14c-.42 3.52 4.08 4.74 8.87 5.65s13.96 3.83 11.26 11.83c-1.69 5-9.15 8.05-9.15 8.05s-7.18-1.08-16.89-.02c-7.84.87-11.56 2.92-12.4 2.55c-1.27-.56-.42-2.39.92-4.5c2.12-3.35 4.72-7.74 4.72-13.23s-2.6-8.45-2.6-8.45s-.07-10.77-1.62-16.89s-4.44-13.24-7.47-13.38s-8.38 7.25-9.78 9.57s-3.73 7.11-3.73 7.11s-8.2-.99-15.06 2.32c-6.02 2.9-9.71 11.97-11.54 12.67s-6.15.54-7.84 3.36c-.7 1.16-.77 8.89-.77 8.89s.53 1.83 1.09 3.43c.44 1.25 2.72 4.6 5.46 6.61c3.56 2.61 8.32 6.3 9.37 7.14s2.25 3.09 2.25 3.09"/><path fill="#ffab93" d="M57.24 24.22c.07 1.48 3.45 3.45 5.21 4.72s4.29 4.05 5.28 3.87c1.75-.31 1.62-7.74 1.27-11.05s-2.11-8.8-3.24-9.22s-4.05 3.79-4.79 4.93c-1.27 1.97-3.8 5.42-3.73 6.75"/><path fill="#2f2f2f" d="M21.63 44.61c.47-.56 7.57-2.44 7.8-3.71s-1.45-2.3-4.41-3c-2.66-.63-5.09-.38-5.69.05c-.8.56-1.69 3.43-1.45 6.34c.24 3.01 1.26 5.47 2.58 6.8c.92.93 3.16 2.39 5.13 2.53s3.8-.7 4.79-1.69s.28-2.58-1.22-1.69s-2.5 1.16-3.8.8c-1.36-.38-3.31-1.71-3.72-3.89c-.26-1.3-.01-2.54-.01-2.54"/><path fill="#b0b1b2" d="M51.12 53.64c-.16 0-.32-.04-.47-.11c-.03-.01-2.81-1.42-5.22-2.13c-2.48-.73-4.8-1.29-4.83-1.3c-.56-.14-.91-.7-.78-1.27c.14-.56.7-.91 1.27-.78c.02.01 2.4.58 4.93 1.33c2.6.77 5.45 2.22 5.57 2.28a1.046 1.046 0 0 1-.47 1.98m-1.08 7.23c-.22 0-.44-.07-.62-.21c-.03-.02-3.25-2.4-5.32-3.83c-2.01-1.38-4.79-2.67-4.82-2.68a1.05 1.05 0 0 1 .87-1.91c.12.06 2.97 1.37 5.13 2.86c2.1 1.45 5.35 3.84 5.38 3.87c.47.34.56 1 .22 1.47c-.2.28-.52.43-.84.43m-4.97 3.66c-.25 0-.5-.09-.7-.27l-6.94-6.19c-.43-.39-.47-1.05-.08-1.48s1.05-.47 1.48-.08l6.94 6.19a1.05 1.05 0 0 1-.7 1.83"/><ellipse cx="41.93" cy="38.7" fill="#010000" rx="4.76" ry="3.75" transform="rotate(-60 41.931 38.703)"/><path fill="#dedede" d="M41.61 37.99c-.55 1.03-1.51 1.69-2.3 1.2s-.34-2.06.1-2.65s1.23-1.33 2.01-.84c.8.5.56 1.61.19 2.29"/></svg>`;
+    const catSvg4 = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><path fill="#292f33" d="M10.478 22.439s.702 2.281-.337 7.993c-.186 1.025-.46 2.072-.599 2.93c-1.757 0-1.851 2.002-1.478 2.002h2.094c1.337 0 2.971-3.334 3.854-7.961s-3.534-4.964-3.534-4.964m13.042 3.702s2.272 1.22 2.188 4.081c-.033 1.131-.249 2.091-.355 3.024c-1.832 0-1.839 1.985-1.305 1.985h1.856c.923 0 3.001-3.158 3.379-7.281s-5.763-1.809-5.763-1.809"/><path fill="#292f33" d="M36 8.447C36 3.525 31.859 1 27 1a1 1 0 1 0 0 2c1.804 0 6.717.934 6.717 5.447c0 2.881-1.567 5.462-3.77 5.982c-.164-.073-.345-.104-.509-.192c-7.239-3.917-13.457.902-15.226-.29c-1.752-1.182-.539-3.255-2.824-5.243c-.33-1.841-1.073-4.477-1.794-4.477c-.549 0-1.265 1.825-1.74 3.656c-.591-1.381-1.363-2.756-1.86-2.756c-.64 0-1.278 2.273-1.594 4.235c-1.68 1.147-2.906 2.809-2.906 4.765c0 2.7 4.05 3.357 5.4 3.411s3.023 3.562 3.585 5.072c1.242 4.367 2.051 8.699 2.698 11.183c-1.649 0-1.804 2.111-1.348 2.111c.713 0 1.953-.003 2.225 0c1.381.014 2.026-4.706 2.026-8.849c0-.212-.011-.627-.011-.627s1.93.505 6.038-.208c2.444-.424 5.03.849 5.746 3.163c.527 1.704 1.399 3.305 1.868 4.484c-1.589 0-1.545 2.037-1.084 2.037c.787 0 1.801.014 2.183 0c1.468-.055.643-7.574 1.03-10.097s1.267-5.578-.229-8.797C34.857 15.236 36 11.505 36 8.447"/><circle cx="5.994" cy="11.768" r=".9" fill="#c3c914"/><path fill="#66757f" d="M2.984 12.86c-.677.423-.677 1.777-1.015 1.777S.954 13.841.954 12.86c-.001-.981 2.862-.52 2.03 0m3.594 1.483q-.063.04-.142.026c-.018-.004-1.548-.241-2.545.146c-.129.05-.341-.023-.413-.191s.023-.365.152-.415c1.44-.569 2.857-.234 2.934-.218c.139.029.195.19.188.372c-.004.114-.104.235-.174.28m-.472 2.339a.2.2 0 0 1-.141-.031c-.015-.01-1.331-.83-2.402-.853c-.138-.003-.305-.154-.305-.341c0-.186.165-.335.304-.333c1.552.024 2.724.891 2.789.937c.117.082.104.255.027.424c-.049.107-.189.182-.272.197"/><path fill="#7f676d" d="M7.854 7.881s.372-.039.859.033c.217-.46.585-.887.585-.887s.281.668.386 1.179c.025.12.218.117.322.189c0 0 .038-3.463-.863-3.836c.001-.002-.755 1.124-1.289 3.322M4.399 9.36s.384-.267.883-.574c.217-.624.568-1.333.568-1.333s.307.602.345.81c.21-.114.21-.106.403-.19c0 0-.114-2.286-1.099-2.527c0 0-.732 1.372-1.1 3.814"/><path fill="#66757f" d="M18.45 23.644c-2.649.57-2.38 2.782-2.38 2.782s1.93.505 6.038-.208a5.54 5.54 0 0 1 3.107.377c-1.607-3.047-4.315-3.479-6.765-2.951"/><path fill="#292f33" d="M5.976 10.982s.333.347.319.778c-.014.43-.25.833-.25.833s-.292-.347-.319-.826c-.027-.48.25-.785.25-.785"/></svg>`;
+    const catSvg5 = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><g fill="none"><path fill="#ffb02e" d="M4 25.942C4 28.174 5.763 30 7.918 30h16.164C26.237 30 28 28.073 28 25.84V6.43c0-1.3-1.59-1.9-2.485-1L20.975 10h-9.812L6.5 5.43c-.9-.9-2.5-.3-2.5 1z"/><path fill="#ff822d" d="m9 10.927l-2.8 2.6c-.5.5-1.4.1-1.4-.6v-5.2c0-.6.9-1 1.4-.5l2.8 2.6c.3.3.3.8 0 1.1m14.05 0l2.8 2.6c.5.5 1.4.1 1.4-.6v-5.2c0-.6-.9-1-1.4-.5l-2.8 2.6c-.3.3-.3.8 0 1.1"/><path fill="#ff6723" d="M2.724 20.053a.5.5 0 1 0-.448.894l4 2a.5.5 0 1 0 .448-.894zm0 6.894a.5.5 0 1 1-.448-.894l4-2a.5.5 0 1 1 .448.894zm27.223-6.671a.5.5 0 0 0-.67-.223l-4 2a.5.5 0 1 0 .447.894l4-2a.5.5 0 0 0 .223-.67m-.67 6.67a.5.5 0 1 0 .447-.894l-4-2a.5.5 0 1 0-.448.894z"/><path fill="#402a32" d="M12.621 17.015a.5.5 0 0 1 .364.606c-.146.584-.412 1.025-.77 1.33c-.356.304-.77.444-1.165.484c-.392.04-.774-.02-1.095-.123c-.311-.101-.61-.26-.809-.459a.5.5 0 1 1 .708-.707c.05.051.19.143.41.214c.21.068.453.103.686.08c.23-.023.441-.1.616-.25c.174-.148.345-.395.449-.811a.5.5 0 0 1 .606-.364M16 24.5c-1.39 0-2.317.877-2.584 1.277a.5.5 0 1 1-.832-.554c.362-.543 1.384-1.514 2.916-1.694V21a.5.5 0 0 1 1 0v2.53c1.532.179 2.554 1.15 2.916 1.693a.5.5 0 1 1-.832.554c-.267-.4-1.194-1.277-2.584-1.277m3.015-6.879a.5.5 0 0 1 .97-.242c.104.416.275.663.449.81c.175.15.386.228.616.251c.233.023.476-.012.687-.08c.22-.07.359-.163.41-.214a.5.5 0 0 1 .707.707c-.2.2-.498.358-.81.459c-.32.103-.702.162-1.094.123a2.1 2.1 0 0 1-1.165-.484c-.358-.305-.624-.746-.77-1.33"/><path fill="#f70a8d" d="M17.043 20h-2.086a.5.5 0 0 0-.353.854l1.043 1.042a.5.5 0 0 0 .707 0l1.043-1.042a.5.5 0 0 0-.354-.854"/><path fill="#5092ff" d="M8 23a2 2 0 1 1 4 0v3a2 2 0 1 1-4 0z"/></g></svg>`;
+    const files = [
+        new File([catSvg1], 'attachment-1.png', { type: 'image/svg+xml', lastModified }),
+        new File([catSvg2], 'attachment-2.svg', { type: 'image/svg+xml', lastModified }),
+        new File([catSvg3], 'attachment-3.png', { type: 'image/svg+xml', lastModified }),
+        new File([catSvg4], 'entry-1-note.svg', { type: 'image/svg+xml', lastModified }),
+        new File([catSvg5], 'entry-1-pixel.png', { type: 'image/svg+xml', lastModified })
+    ];
+    return files;
+}
+
+function seedGlobalAttachments(component, names) {
+    if (!component || typeof component.addGlobalAttachments !== 'function') {
+        return;
+    }
+    const include = new Set((Array.isArray(names) ? names : []).map((item) => String(item || '')));
+    const files = createDemoGlobalAttachments().filter((file) => include.has(file.name));
+    if (!files.length) {
+        return;
+    }
+    component.addGlobalAttachments(files);
+}
+
+function mountModalQuickAdd() {
+    if (modalAdd) {
+        return modalAdd;
+    }
+    modalAdd = QuickAdd.create(modalConfig);
+    modalAdd.setInput(pickRandomModalDefaultInput());
+    seedGlobalAttachments(modalAdd, ['entry-1-note.svg', 'entry-1-pixel.png']);
+    return modalAdd;
+}
+
+function unmountModalQuickAdd() {
+    if (!modalAdd) {
+        return;
+    }
+    modalAdd.destroy();
+    modalAdd = null;
+}
+
+function pad2(num) {
+    return String(Math.max(0, Number(num) || 0)).padStart(2, '0');
+}
+
+function toLocalYmd(date) {
+    const d = date instanceof Date ? date : new Date(date);
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function toLocalDateTime(date, hour, minute) {
+    const base = date instanceof Date ? new Date(date.getTime()) : new Date(date);
+    base.setHours(Number(hour), Number(minute), 0, 0);
+    return `${toLocalYmd(base)}T${pad2(base.getHours())}:${pad2(base.getMinutes())}`;
+}
+
+function addDays(date, days) {
+    const base = date instanceof Date ? new Date(date.getTime()) : new Date(date);
+    base.setDate(base.getDate() + Number(days || 0));
+    return base;
+}
+
+function parseTimeHint(text, fallbackHour, fallbackMinute) {
+    const source = String(text || '');
+    const match = source.match(/\bat\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i);
+    if (!match) {
+        return { hour: fallbackHour, minute: fallbackMinute };
+    }
+    let hour = Number(match[1]);
+    const minute = Number(match[2] || 0);
+    const meridian = String(match[3] || '').toLowerCase();
+    if (meridian === 'pm' && hour < 12) {
+        hour += 12;
+    } else if (meridian === 'am' && hour === 12) {
+        hour = 0;
+    }
+    if (!Number.isFinite(hour) || hour < 0 || hour > 23 || !Number.isFinite(minute) || minute < 0 || minute > 59) {
+        return { hour: fallbackHour, minute: fallbackMinute };
+    }
+    return { hour, minute };
+}
+
+function resolveRelativeDate(text, now) {
+    const lower = String(text || '').toLowerCase();
+    if (lower.includes('next week')) return addDays(now, 7);
+    if (lower.includes('tomorrow')) return addDays(now, 1);
+    if (lower.includes('yesterday')) return addDays(now, -1);
+    if (lower.includes('today')) return new Date(now);
+    return null;
+}
+
+function parseDateFromToken(rawToken, now, withTime) {
+    const token = String(rawToken || '').trim();
+    if (!token) {
+        return null;
+    }
+
+    const isoDateTime = token.match(/^(\d{4}-\d{2}-\d{2})(?:[tT](\d{2}):(\d{2}))?$/);
+    if (isoDateTime) {
+        const datePart = isoDateTime[1];
+        if (!withTime) {
+            return datePart;
+        }
+        const hour = Number(isoDateTime[2] || 9);
+        const minute = Number(isoDateTime[3] || 0);
+        const date = new Date(`${datePart}T00:00`);
+        return toLocalDateTime(date, hour, minute);
+    }
+
+    const relative = resolveRelativeDate(token, now);
+    if (relative) {
+        if (!withTime) {
+            return toLocalYmd(relative);
+        }
+        const time = parseTimeHint(token, 9, 0);
+        return toLocalDateTime(relative, time.hour, time.minute);
+    }
+
+    const parsed = new Date(token);
+    if (Number.isFinite(parsed.getTime())) {
+        if (!withTime) {
+            return toLocalYmd(parsed);
+        }
+        const hasTime = /\d{1,2}:\d{2}|\d{1,2}\s*(am|pm)\b/i.test(token);
+        const time = hasTime ? parseTimeHint(token, parsed.getHours(), parsed.getMinutes()) : { hour: 9, minute: 0 };
+        return toLocalDateTime(parsed, time.hour, time.minute);
+    }
+
+    return null;
+}
+
+function collectAttachmentRefs(source) {
+    const text = String(source || '');
+    const refs = [];
+    const pushRef = (ref) => {
+        const next = String(ref || '').trim();
+        if (!next) return;
+        if (!refs.some((item) => item.toLowerCase() === next.toLowerCase())) {
+            refs.push(next);
+        }
+    };
+    (text.match(/\battachment-\d+\.(?:png|jpg|jpeg|pdf|svg)\b/gi) || []).forEach((match) => pushRef(match));
+    (text.match(/\b(?:photo|file)\s*(\d+)\b/gi) || []).forEach((item) => {
+        const num = item.replace(/\D+/g, '').trim();
+        if (!num) return;
+        pushRef(num === '2' ? 'attachment-2.svg' : `attachment-${num}.png`);
+    });
+    return refs;
+}
+
+function dedupeTextList(values) {
+    const seen = new Set();
+    const out = [];
+    (Array.isArray(values) ? values : []).forEach((item) => {
+        const text = String(item || '').trim();
+        if (!text) return;
+        const key = text.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        out.push(text);
+    });
+    return out;
+}
+
+function buildDemoTaskAiEntriesForSegment(text) {
+    const source = String(text || '').trim();
+    const lower = source.toLowerCase();
+    const now = new Date();
+    const attachments = collectAttachmentRefs(source);
+    const priorityPhrase = source.match(/\b(high|medium|low)\s+priority\b/i);
+    const priority = (
+        lower.includes('urgent')
+        || lower.includes('high priority')
+        || lower.includes('critical')
+        || lower.includes('asap')
+        || (priorityPhrase && String(priorityPhrase[1] || '').toLowerCase() === 'high')
+    )
+        ? 'p1'
+        : ((lower.includes('low priority') || (priorityPhrase && String(priorityPhrase[1] || '').toLowerCase() === 'low')) ? 'p3' : 'p2');
+    const projectPhrase = source.match(/\bproject\s+([a-zA-Z][\w-]*)\b/i);
+    const project = projectPhrase
+        ? String(projectPhrase[1]).toLowerCase()
+        : (lower.includes('health')
+            ? 'health'
+            : (lower.includes('home') ? 'home' : (lower.includes('errand') ? 'errands' : 'work')));
+    const ownerPhraseMatch = source.match(/\b(?:owner|assign(?:ed)?\s+to)\s+([A-Za-z][\w-]*)\b/i);
+    const owner = ownerPhraseMatch ? ownerPhraseMatch[1] : 'Mimansa';
+    const duePhrase = source.match(/\bdue(?:\s+on|\s+by)?\s+([^,.;\n]+)/i);
+    const due = parseDateFromToken(duePhrase ? duePhrase[1] : source, now, true) || toLocalDateTime(addDays(now, 1), 9, 0);
+    const naturalTagsMatch = source.match(/\btags?\s+([a-zA-Z0-9,\s-]+)/i);
+    const inferredTags = [];
+    if (lower.includes('urgent')) inferredTags.push('urgent');
+    if (lower.includes('follow-up') || lower.includes('follow up')) inferredTags.push('follow-up');
+    if (lower.includes('client')) inferredTags.push('client');
+    if (lower.includes('internal')) inferredTags.push('internal');
+    const tags = dedupeTextList(
+        naturalTagsMatch
+            ? String(naturalTagsMatch[1]).split(/,|\band\b/i).concat(inferredTags)
+            : inferredTags
+    );
+    const payload = {
+        title: source || 'Synthetic AI task',
+        priority,
+        project,
+        due,
+        owner,
+        receipt: attachments[0] || '',
+        photos: attachments
+    };
+    if (tags.length) {
+        payload.tags = tags;
+    }
+
+    const warnings = [];
+    if (!priorityPhrase && !lower.includes('urgent') && !lower.includes('critical') && !lower.includes('asap')) warnings.push('priority inferred');
+    if (!projectPhrase) warnings.push('project inferred');
+    if (!ownerPhraseMatch) warnings.push('owner inferred');
+    if (!duePhrase) warnings.push('due inferred from natural language/default');
+
+    return {
+        entries: [payload],
+        warnings,
+        missing: source ? [] : ['title']
+    };
+}
+
+function buildDemoTaskAiStructuredResponse(input) {
+    const text = String(input || '').trim();
+    const lower = text.toLowerCase();
+    const built = buildDemoTaskAiEntriesForSegment(text);
+    const entries = built.entries.map((entry) => {
+        const spans = [];
+        const addSpan = (field, phrase, value) => {
+            if (!phrase) return;
+            const phraseLower = String(phrase).toLowerCase();
+            const start = lower.indexOf(phraseLower);
+            if (start < 0) return;
+            const end = Math.min(text.length, start + String(phrase).length);
+            if (end <= start) return;
+            spans.push({
+                field,
+                value: value !== undefined ? value : text.slice(start, start + String(phrase).length),
+                start,
+                end
+            });
+        };
+        const priorityPhrase = text.match(/\b(?:high|medium|low)\s+priority\b/i);
+        const projectPhrase = text.match(/\bproject\s+([a-zA-Z][\w-]*)\b/i);
+        const ownerPhrase = text.match(/\b(?:owner|assign(?:ed)?\s+to)\s+([A-Za-z][\w-]*)\b/i);
+        const duePhrase = text.match(/\bdue(?:\s+on|\s+by)?\s+([^,.;\n]+)/i)
+            || text.match(/\b(?:today|tomorrow|yesterday|next week|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i);
+        if (priorityPhrase) addSpan('priority', priorityPhrase[0], entry.priority);
+        if (projectPhrase) addSpan('project', projectPhrase[0], entry.project);
+        if (duePhrase) addSpan('due', duePhrase[0], entry.due);
+        if (ownerPhrase) addSpan('owner', ownerPhrase[0], entry.owner);
+        if (Array.isArray(entry.tags)) {
+            entry.tags.forEach((tag) => addSpan('tags', tag, tag));
+        }
+        return Object.assign({}, entry, { spans });
+    });
+    return {
+        entries,
+        missing: built.missing.slice(),
+        warnings: ['Synthetic response enabled in demo (config.ai.mockResponse).'].concat(built.warnings || [])
+    };
+}
+
+function buildDemoPetAiEntriesForSegment(text) {
+    const source = String(text || '').trim();
+    const now = new Date();
+    const petMentions = Array.from(source.matchAll(/\b(?:Luna|Mochi|Pico)\b/gi));
+    const segments = petMentions.length > 1
+        ? petMentions
+            .map((match, idx) => {
+                const start = Number(match.index);
+                const next = petMentions[idx + 1];
+                const end = next ? Number(next.index) : source.length;
+                return source.slice(start, end).replace(/^[\s,.;]+|[\s,.;]+$/g, '').trim();
+            })
+            .filter(Boolean)
+        : (source ? [source] : []);
+    const unitSegments = segments.length ? segments : [source];
+    const entries = [];
+    const warnings = [];
+
+    unitSegments.forEach((segmentRaw) => {
+        const segment = String(segmentRaw || '').trim();
+        const lower = segment.toLowerCase();
+        const pet = lower.includes('luna') ? 'Luna' : (lower.includes('mochi') ? 'Mochi' : (lower.includes('pico') ? 'Pico' : ''));
+        const event = lower.includes('groom')
+            ? 'groom'
+            : (lower.includes('vet') ? 'vet' : (lower.includes('fetch') ? 'fetch' : (lower.includes('litter') ? 'litter' : (lower.includes('walk') ? 'walk' : ''))));
+        const symptom = lower.includes('cough')
+            ? 'cough'
+            : (lower.includes('vomit') ? 'vomit' : (lower.includes('itch') ? 'itching' : 'low energy'));
+        const severityMatch = segment.match(/\b(?:severity\s*[:=]?\s*)(\d+)\b/i);
+        const severity = severityMatch ? Number(severityMatch[1]) : 2;
+        const duePhraseMatch = segment.match(/\bdue(?:\s+on|\s+by)?\s+([^,.;\n]+)/i);
+        const atPhraseMatch = segment.match(/\b(?:happened|at|on)\s+([^,.;\n]+)/i);
+        const due = parseDateFromToken(duePhraseMatch ? duePhraseMatch[1] : segment, now, false) || toLocalYmd(addDays(now, 2));
+        const at = parseDateFromToken(atPhraseMatch ? atPhraseMatch[1] : segment, now, false) || toLocalYmd(now);
+        entries.push({
+            note: segment || source || 'Synthetic AI pet note',
+            pet: pet || 'Luna',
+            event: event || 'vet',
+            due,
+            symptom,
+            severity,
+            at
+        });
+        if (!pet) warnings.push('pet inferred as Luna');
+        if (!event) warnings.push('event inferred as vet');
+        if (!duePhraseMatch) warnings.push('due inferred from natural language/default');
+        if (!atPhraseMatch) warnings.push('at inferred from natural language/default');
+    });
+
+    return {
+        entries,
+        warnings: dedupeTextList(warnings),
+        missing: source ? [] : ['note']
+    };
+}
+
+function buildDemoPetAiInlineResponse(input) {
+    const text = String(input || '').trim();
+    const lower = text.toLowerCase();
+    const built = buildDemoPetAiEntriesForSegment(text);
+    const entries = built.entries.map((entry) => {
+        const spans = [];
+        const addSpan = (field, phrase) => {
+            if (!phrase) return;
+            const start = lower.indexOf(String(phrase).toLowerCase());
+            if (start < 0) return;
+            const end = Math.min(text.length, start + String(phrase).length);
+            if (end <= start) return;
+            spans.push({
+                field,
+                value: text.slice(start, start + String(phrase).length),
+                start,
+                end
+            });
+        };
+        addSpan('pet', entry.pet);
+        addSpan('event', entry.event);
+        addSpan('symptom', entry.symptom);
+        addSpan('due', entry.due);
+        addSpan('at', entry.at);
+        return Object.assign({}, entry, { spans });
+    });
+    return {
+        entries,
+        missing: built.missing.slice(),
+        warnings: ['Synthetic response enabled in demo (config.ai.mockResponse).'].concat(built.warnings || [])
+    };
+}
+
+function createDemoAIDispatch(builder, latencyMs) {
+    const waitMs = Number.isFinite(Number(latencyMs)) ? Number(latencyMs) : 420;
+    return async function dispatch(batch, context) {
+        const chunks = Array.isArray(batch) ? batch : [];
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        const responses = chunks.map((chunk) => ({
+            chunkId: chunk.chunkId,
+            chunkIndex: chunk.chunkIndex,
+            result: builder(String(chunk && chunk.input ? chunk.input : '')),
+            raw: {
+                provider: chunk.provider,
+                requestId: Number(context && context.requestId),
+                chunkId: chunk.chunkId
+            }
+        }));
+        return {
+            status: 'completed',
+            responses,
+            providerRawResponse: {
+                simulator: true,
+                completedAt: new Date().toISOString(),
+                requestId: Number(context && context.requestId)
+            }
+        };
+    };
+}
+
+const aiConfig5 = {
+    mount: document.getElementById('quickAddExample5'),
+    mode: 'ai',
+    debounceMs: 280,
+    entrySeparator: '\n\n',
+    fieldTerminator: ';;',
+    fieldTerminatorMode: 'or-next-prefix',
+    allowMultipleAttachments: true,
+    allowAttachmentReuse: true,
+    allowedAttachmentTypes: ['.pdf', '.png', '.jpg', 'image/*'],
+    attachmentSources: ['camera', 'gallery', 'files'],
+    fallbackField: 'title',
+    placeholder: 'Use a blank line between entries. Example: Follow up with clinic tomorrow morning, high priority, project health.\n\nPrep reimbursement docs for client review.',
+    inputHeightMode: 'scroll',
+    inputMaxHeight: 160,
+    schema: {
+        fields: [
+            { key: 'title', type: 'string', required: true },
+            {
+                key: 'priority',
+                type: 'options',
+                prefixes: ['!'],
+                allowCustom: false,
+                options: [
+                    { value: 'p1', color: '#dc2626' },
+                    { value: 'p2', color: '#d97706' },
+                    { value: 'p3', color: '#0284c7' }
+                ]
+            },
+            {
+                key: 'project',
+                type: 'options',
+                prefixes: ['#'],
+                allowCustom: false,
+                defaultValue: 'work',
+                options: [
+                    { value: 'health', color: '#0d9488' },
+                    { value: 'work', color: '#7c3aed' },
+                    { value: 'home', color: '#16a34a' },
+                    { value: 'errands', color: '#475569' }
+                ]
+            },
+            {
+                key: 'tags',
+                type: 'options',
+                prefixes: ['tag:'],
+                multiple: true,
+                defaultValue: ['urgent', 'follow-up'],
+                options: [
+                    { value: 'urgent', color: '#dc2626' },
+                    { value: 'follow-up', color: '#f59e0b' },
+                    { value: 'client', color: '#0ea5e9' },
+                    { value: 'internal', color: '#64748b' }
+                ]
+            },
+            { key: 'due', type: 'datetime', naturalDate: true, allowDateOnly: true, defaultTime: '08:00', defaultValue: '2026-02-20T09:00', prefixes: ['due:'] },
+            { key: 'owner', type: 'string', prefixes: ['@'] },
+            { key: 'receipt', type: 'file', prefixes: ['file:'] },
+            { key: 'photos', type: 'file', prefixes: ['files:'], multiple: true }
+        ]
+    },
+    ai: {
+        autoParse: true,
+        debounceMs: 900,
+        minInputLength: 8,
+        separatorAware: true,
+        inlinePills: true,
+        provider: 'openai',
+        apiKey: 'demo-key',
+        model: 'gpt-4o-mini',
+        promptMode: 'custom',
+        promptTemplate: 'Extract structured task entries as JSON with keys: {{schemaKeys}}. Use natural language understanding; field delimiters and key:value prefixes may be absent. Infer fields from context. Current date={{currentDate}} timezone={{timezone}}. Input:\n{{input}}',
+        dispatch: createDemoAIDispatch((input) => buildDemoTaskAiStructuredResponse(input), 420),
+        controls: { parse: true, clear: true }
+    },
+    tokens: {
+        '--qa-bg': '#fff8ef',
+        '--qa-border': '#e5d7c4',
+        '--qa-accent': '#8b4a2f',
+        '--qa-accent-soft': '#f4e7df'
+    },
+    onParse: (result) => {
+        document.getElementById('meta5').textContent =
+            `mode=${result.mode || 'deterministic'}, entries=${result.entryCount}, valid=${result.validCount}, parse=${(result.parseState && result.parseState.status) || 'n/a'}`;
+    }
+};
+const aiDefaultInput5 =
+    'Prepare a health follow-up with the clinic tomorrow at 9am, medium priority, assign to Mimansa, include photo 1 and file 2.\n\n' +
+    'Book a dentist check for Friday 3pm, high priority, project work, tags client and internal, owner Mimansa.';
+const aiAdd5 = QuickAdd.create(aiConfig5);
+aiAdd5.setInput(aiDefaultInput5);
+seedGlobalAttachments(aiAdd5, ['attachment-1.png', 'attachment-2.svg', 'attachment-3.png']);
+const aiPlayground5 = setupConfigPlayground({
+    editorId: 'config5',
+    applyButtonId: 'applyConfig5',
+    resetButtonId: 'resetConfig5',
+    statusId: 'config5Status',
+    errorsBoxId: 'config5ErrorsBox',
+    errorsSummaryId: 'config5ErrorsSummary',
+    errorsListId: 'config5Errors',
+    component: aiAdd5,
+    baseConfig: aiConfig5,
+    defaultInput: aiDefaultInput5
+});
+setupAiRuntimeControls({
+    playground: aiPlayground5,
+    providerSelectId: 'aiProviderSelect5',
+    providerTriggerId: 'aiProviderTrigger5',
+    providerInputId: 'aiProvider5',
+    apiKeyId: 'aiApiKey5',
+    modelId: 'aiModel5',
+    endpointId: 'aiEndpoint5',
+    applyId: 'aiApply5',
+    endpointFieldId: 'aiEndpointField5',
+    modelFieldId: 'aiModelField5',
+    keyFieldId: 'aiKeyField5',
+    defaultProvider: 'demo',
+    allowDemoProvider: true
+});
+
+const aiConfig6 = {
+    mount: document.getElementById('quickAddExample6'),
+    mode: 'ai',
+    debounceMs: 320,
+    entrySeparator: '',
+    fieldTerminator: '~~',
+    fieldTerminatorMode: 'strict',
+    showEntryHeader: false,
+    autoDetectOptionsWithoutPrefix: true,
+    reduceInferredOptions: false,
+    inferredMatchMode: 'fuzzy',
+    inferredMatchThreshold: 0.8,
+    fallbackField: 'note',
+    placeholder: 'No entry delimiter required. Example: Luna needs a walk on 2025-02-01 happened yesterday. Mochi needs grooming next week.',
+    inputHeightMode: 'scroll',
+    inputMaxHeight: 150,
+    showInlinePills: true,
+    classNames: {
+        root: 'qa-root petqa-root',
+        entry: 'qa-entry petqa-entry'
+    },
+    schema: {
+        fields: [
+            { key: 'note', type: 'string' },
+            {
+                key: 'pet',
+                type: 'options',
+                prefixes: ['pet:'],
+                required: true,
+                allowCustom: false,
+                options: [
+                    { value: 'Luna', color: '#22c55e' },
+                    { value: 'Mochi', color: '#f97316' },
+                    { value: 'Pico', color: '#3b82f6' }
+                ]
+            },
+            {
+                key: 'event',
+                type: 'options',
+                prefixes: ['event:', 'ev:'],
+                required: true,
+                allowCustom: false,
+                options: [
+                    { value: 'walk', color: '#22c55e', dependsOn: { field: 'pet', op: 'in', value: ['Luna', 'Mochi'] } },
+                    { value: 'fetch', color: '#16a34a', dependsOn: { field: 'pet', op: 'eq', value: 'Luna' } },
+                    { value: 'litter', color: '#2563eb', dependsOn: { field: 'pet', op: 'eq', value: 'Pico' } },
+                    { value: 'groom', color: '#f97316', dependsOn: { field: 'pet', op: 'eq', value: 'Mochi' } },
+                    { value: 'vet', color: '#7c3aed' }
+                ]
+            },
+            {
+                key: 'due',
+                type: 'date',
+                naturalDate: false,
+                prefixes: ['due:'],
+                constraints: [
+                    {
+                        op: 'gte',
+                        value: '2025-02-15',
+                        message: 'Due date must be on or after 2025-02-15'
+                    },
+                    {
+                        when: { field: 'pet', op: 'eq', value: 'Pico' },
+                        op: 'gte',
+                        value: '2026-01-01',
+                        message: 'For pet Pico, due date must be on or after 2026-01-01'
+                    }
+                ]
+            },
+            {
+                key: 'symptom',
+                type: 'options',
+                prefixes: ['symptom:', 'sym:'],
+                allowCustom: true,
+                autoDetectWithoutPrefix: true,
+                reduceInferredOptions: true,
+                options: [
+                    { value: 'cough', color: '#dc2626' },
+                    { value: 'vomit', color: '#ea580c' },
+                    { value: 'itching', color: '#d97706' },
+                    { value: 'low energy', color: '#7c3aed' }
+                ]
+            },
+            { key: 'severity', type: 'number', prefixes: ['sev:'], defaultValue: 2 },
+            { key: 'at', type: 'date', naturalDate: true, prefixes: ['at:'], required: true, defaultValue: '2026-02-14' }
+        ]
+    },
+    ai: {
+        autoParse: true,
+        debounceMs: 900,
+        minInputLength: 8,
+        separatorAware: false,
+        inlinePills: true,
+        provider: 'openai',
+        apiKey: 'demo-key',
+        model: 'gpt-4o-mini',
+        dispatch: createDemoAIDispatch((input) => buildDemoPetAiInlineResponse(input), 420),
+        inlinePillHarness: ({ input, entries }) => {
+            const rawInput = String(input || '');
+            const marks = [];
+            const pushMark = (mark) => {
+                if (!mark) return;
+                const start = Number(mark.start);
+                const end = Number(mark.end);
+                if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+                    return;
+                }
+                if (start < 0 || end > rawInput.length) {
+                    return;
+                }
+                marks.push({
+                    start,
+                    end,
+                    label: String(mark.label || rawInput.slice(start, end)),
+                    inferred: true,
+                    fieldKey: mark.fieldKey || mark.field || '',
+                    value: mark.value
+                });
+            };
+            (entries || []).forEach((entry) => {
+                const segmentStart = Number.isFinite(Number(entry && entry._sourceStart))
+                    ? Number(entry._sourceStart)
+                    : 0;
+                const segmentEnd = Number.isFinite(Number(entry && entry._sourceEnd))
+                    ? Number(entry._sourceEnd)
+                    : rawInput.length;
+                const segmentSafeStart = Math.max(0, Math.min(segmentStart, rawInput.length));
+                const segmentSafeEnd = Math.max(segmentSafeStart, Math.min(segmentEnd, rawInput.length));
+                const segmentLength = Math.max(0, segmentSafeEnd - segmentSafeStart);
+                const segmentSlice = rawInput.slice(segmentSafeStart, segmentSafeEnd);
+
+                (entry.spans || []).forEach((span) => {
+                    const rawStart = Number(span && span.start);
+                    const rawEnd = Number(span && span.end);
+                    const spanValue = String((span && span.value) || '').trim();
+                    const hasNumeric = Number.isFinite(rawStart) && Number.isFinite(rawEnd) && rawEnd > rawStart;
+                    let start = NaN;
+                    let end = NaN;
+
+                    if (hasNumeric) {
+                        const appearsGlobal = rawStart >= segmentSafeStart && rawEnd <= segmentSafeEnd;
+                        const appearsRelative = rawStart >= 0 && rawEnd <= segmentLength;
+                        if (appearsGlobal) {
+                            start = rawStart;
+                            end = rawEnd;
+                        } else if (appearsRelative) {
+                            start = segmentSafeStart + rawStart;
+                            end = segmentSafeStart + rawEnd;
+                        } else {
+                            start = rawStart;
+                            end = rawEnd;
+                        }
+                    }
+
+                    const isValidRange = Number.isFinite(start) && Number.isFinite(end) && end > start;
+                    const inBounds = isValidRange && start >= 0 && end <= rawInput.length;
+                    const snippet = inBounds ? rawInput.slice(start, end) : '';
+                    const valueMatches = !spanValue
+                        || snippet.toLowerCase().includes(spanValue.toLowerCase());
+
+                    if (!inBounds || !valueMatches) {
+                        if (!spanValue || !segmentSlice) {
+                            return;
+                        }
+                        const rel = segmentSlice.toLowerCase().indexOf(spanValue.toLowerCase());
+                        if (rel < 0) {
+                            return;
+                        }
+                        start = segmentSafeStart + rel;
+                        end = start + spanValue.length;
+                    }
+
+                    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+                        return;
+                    }
+
+                    pushMark({
+                        start,
+                        end,
+                        label: `${span.field || 'field'}: ${span.value || ''}`,
+                        inferred: true,
+                        fieldKey: span.field || '',
+                        value: span.value
+                    });
+                });
+            });
+            return marks;
+        }
+    },
+    onParse: (result) => {
+        document.getElementById('meta6').textContent =
+            `mode=${result.mode || 'deterministic'}, entries=${result.entryCount}, valid=${result.validCount}, parse=${(result.parseState && result.parseState.status) || 'n/a'}`;
+    }
+};
+const aiDefaultInput6 =
+    'Luna needs litter cleanup with mild cough, severity 2, due 2025-02-16, happened yesterday. ' +
+    'Mochi needs grooming with low energy, severity 3, due 2026-03-01, happened today. ' +
+    'Pico needs a vet checkup due 2026-04-01';
+const aiAdd6 = QuickAdd.create(aiConfig6);
+aiAdd6.setInput(aiDefaultInput6);
+const aiPlayground6 = setupConfigPlayground({
+    editorId: 'config6',
+    applyButtonId: 'applyConfig6',
+    resetButtonId: 'resetConfig6',
+    statusId: 'config6Status',
+    errorsBoxId: 'config6ErrorsBox',
+    errorsSummaryId: 'config6ErrorsSummary',
+    errorsListId: 'config6Errors',
+    component: aiAdd6,
+    baseConfig: aiConfig6,
+    defaultInput: aiDefaultInput6
+});
+setupAiRuntimeControls({
+    playground: aiPlayground6,
+    providerSelectId: 'aiProviderSelect6',
+    providerTriggerId: 'aiProviderTrigger6',
+    providerInputId: 'aiProvider6',
+    apiKeyId: 'aiApiKey6',
+    modelId: 'aiModel6',
+    endpointId: 'aiEndpoint6',
+    applyId: 'aiApply6',
+    endpointFieldId: 'aiEndpointField6',
+    modelFieldId: 'aiModelField6',
+    keyFieldId: 'aiKeyField6',
+    defaultProvider: 'demo',
+    allowDemoProvider: true
+});
+
+const modalBackdropEl = document.getElementById('quickAddModalBackdrop');
+const openModalBtn = document.getElementById('openQuickAddModal');
+const closeModalBtn = document.getElementById('closeQuickAddModal');
+const saveModalBtn = document.getElementById('saveQuickAddModal');
+const modalResultTableEl = document.getElementById('modalResultTable');
+const modalResultHeadEl = document.getElementById('modalResultHead');
+const modalResultRowsEl = document.getElementById('modalResultRows');
+const modalResultSummaryEl = document.getElementById('modalResultSummary');
+const exampleTabsEl = document.getElementById('exampleTabs');
+const exampleTabsNativeEl = document.getElementById('exampleTabsNative');
+const modalSchemaColumns = ((modalConfig && modalConfig.schema && Array.isArray(modalConfig.schema.fields))
+    ? modalConfig.schema.fields
+    : [])
+    .map((field) => ({
+        key: String((field && field.key) || '').trim(),
+        label: String((field && (field.label || field.key)) || '').trim()
+    }))
+    .filter((column) => column.key);
+const modalTableColumns = [{ key: '__row', label: '#' }]
+    .concat(modalSchemaColumns)
+    .concat([
+        { key: '__attachments', label: 'Attachments' },
+        { key: '__issues', label: 'Issues' }
+    ]);
+const esc = (value) => String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+const toText = (value) => {
+    if (value === undefined || value === null) return '—';
+    if (Array.isArray(value)) {
+        const flat = value
+            .map((item) => (item === undefined || item === null ? '' : String(item).trim()))
+            .filter(Boolean);
+        return flat.length ? flat.join(', ') : '—';
+    }
+    if (typeof value === 'object') {
+        return '[object]';
+    }
+    const text = String(value).trim();
+    return text || '—';
+};
+const formatFileSize = (value) => {
+    const bytes = Number(value);
+    if (!Number.isFinite(bytes) || bytes < 0) {
+        return '—';
+    }
+    if (bytes < 1024) {
+        return `${bytes} B`;
+    }
+    if (bytes < (1024 * 1024)) {
+        return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+const getEntryAttachments = (entry, savedResult) => {
+    if (!entry || typeof entry !== 'object') {
+        return [];
+    }
+    const entryKey = entry && (entry._id !== undefined ? entry._id : entry.index);
+    const all = Array.isArray(savedResult && savedResult.attachments) ? savedResult.attachments : [];
+    if (entryKey === undefined || entryKey === null) {
+        return Array.isArray(entry.attachments) ? entry.attachments : [];
+    }
+    if (all.length) {
+        const fromExport = all.filter((item) => String(item && item.entryKey || '') === String(entryKey));
+        if (fromExport.length) {
+            return fromExport;
+        }
+    }
+    return Array.isArray(entry.attachments) ? entry.attachments : [];
+};
+const cloneAttachmentForSave = (item) => {
+    if (!item || typeof item !== 'object') {
+        return null;
+    }
+    const file = (
+        item.file
+        && typeof Blob !== 'undefined'
+        && item.file instanceof Blob
+    ) ? item.file : null;
+    const mimeType = item.mimeType || item.type || (file && file.type) || '';
+    return Object.assign({}, item, {
+        file,
+        name: item.name || (file && file.name) || 'attachment',
+        mimeType,
+        type: mimeType,
+        size: Number.isFinite(Number(item.size)) ? Number(item.size) : Number(item.byteLength || (file && file.size ? file.size : 0)),
+        lastModified: Number.isFinite(Number(item.lastModified)) ? Number(item.lastModified) : Number(file && file.lastModified ? file.lastModified : 0),
+        previewUrl: item.previewUrl || null
+    });
+};
+const cloneEntryForSave = (entry) => {
+    if (!entry || typeof entry !== 'object') {
+        return {};
+    }
+    const cloned = Object.assign({}, entry);
+    if (entry.fields && typeof entry.fields === 'object') {
+        cloned.fields = Object.assign({}, entry.fields);
+    }
+    if (entry.explicitValues && typeof entry.explicitValues === 'object') {
+        const explicitValues = {};
+        Object.keys(entry.explicitValues).forEach((key) => {
+            const rawValue = entry.explicitValues[key];
+            explicitValues[key] = Array.isArray(rawValue) ? rawValue.slice() : rawValue;
+        });
+        cloned.explicitValues = explicitValues;
+    }
+    if (Array.isArray(entry.pending)) {
+        cloned.pending = entry.pending.slice();
+    }
+    if (Array.isArray(entry.errors)) {
+        cloned.errors = entry.errors.slice();
+    }
+    if (Array.isArray(entry.inferred)) {
+        cloned.inferred = entry.inferred.slice();
+    }
+    if (Array.isArray(entry.tokens)) {
+        cloned.tokens = entry.tokens.slice();
+    }
+    if (Array.isArray(entry.blocked)) {
+        cloned.blocked = entry.blocked.slice();
+    }
+    if (entry.autoFields instanceof Set) {
+        cloned.autoFields = new Set(Array.from(entry.autoFields));
+    }
+    if (entry.aiMeta && typeof entry.aiMeta === 'object') {
+        cloned.aiMeta = Object.assign({}, entry.aiMeta);
+    }
+    if (Array.isArray(entry.attachments)) {
+        cloned.attachments = entry.attachments.map(cloneAttachmentForSave).filter(Boolean);
+    }
+    return cloned;
+};
+const cloneResultForSave = (result) => {
+    if (!result || typeof result !== 'object') {
+        return null;
+    }
+    const cloned = Object.assign({}, result);
+    cloned.entries = Array.isArray(result.entries) ? result.entries.map(cloneEntryForSave) : [];
+    if (Array.isArray(result.warnings)) {
+        cloned.warnings = result.warnings.slice();
+    }
+    if (Array.isArray(result.missing)) {
+        cloned.missing = result.missing.slice();
+    }
+    if (result.verification && typeof result.verification === 'object') {
+        cloned.verification = Object.assign({}, result.verification);
+    }
+    if (result.parseState && typeof result.parseState === 'object') {
+        cloned.parseState = Object.assign({}, result.parseState);
+    }
+    if (result.callerRequest && typeof result.callerRequest === 'object') {
+        cloned.callerRequest = Object.assign({}, result.callerRequest);
+        if (Array.isArray(result.callerRequest.chunks)) {
+            cloned.callerRequest.chunks = result.callerRequest.chunks.map((chunk) => Object.assign({}, chunk));
+        }
+    }
+    return cloned;
+};
+const modalSavedResults = [];
+const modalSavedPreviewUrls = new Set();
+const persistModalResult = (result) => {
+    const snapshot = cloneResultForSave(result);
+    if (!snapshot) {
+        return null;
+    }
+    modalSavedResults.push(snapshot);
+    return snapshot;
+};
+const rememberModalSavedPreviewUrl = (url) => {
+    if (typeof url !== 'string' || !url) {
+        return;
+    }
+    modalSavedPreviewUrls.add(url);
+};
+const releaseModalSavedPreviewUrls = () => {
+    if (typeof URL === 'undefined' || typeof URL.revokeObjectURL !== 'function') {
+        modalSavedPreviewUrls.clear();
+        return;
+    }
+    modalSavedPreviewUrls.forEach((url) => {
+        URL.revokeObjectURL(url);
+    });
+    modalSavedPreviewUrls.clear();
+};
+window.addEventListener('beforeunload', releaseModalSavedPreviewUrls);
+const resolveAttachmentPreviewUrl = (item) => {
+    if (!item || typeof item !== 'object') {
+        return '';
+    }
+    if (item.__modalSavedPreviewUrl) {
+        return item.__modalSavedPreviewUrl;
+    }
+    if (
+        item.file
+        && typeof Blob !== 'undefined'
+        && item.file instanceof Blob
+        && typeof URL !== 'undefined'
+        && typeof URL.createObjectURL === 'function'
+    ) {
+        try {
+            item.__modalSavedPreviewUrl = URL.createObjectURL(item.file);
+            rememberModalSavedPreviewUrl(item.__modalSavedPreviewUrl);
+            return item.__modalSavedPreviewUrl;
+        } catch (err) {
+            item.__modalSavedPreviewUrl = '';
+        }
+    }
+    if (item.contentBase64 && (item.mimeType || item.type)) {
+        return `data:${String(item.mimeType || item.type)};base64,${String(item.contentBase64)}`;
+    }
+    return item.previewUrl ? String(item.previewUrl) : '';
+};
+const isImageAttachment = (item) => {
+    const type = String(item && (item.mimeType || item.type || (item.file && item.file.type) || '')).toLowerCase();
+    return type.startsWith('image/');
+};
+const formatAttachmentCell = (entry, savedResult) => {
+    const attachments = getEntryAttachments(entry, savedResult);
+    if (!attachments.length) {
+        return '—';
+    }
+    const attachmentItems = attachments.map((item) => {
+        const nameRaw = item && item.name ? item.name : (item && item.file && item.file.name ? item.file.name : 'attachment');
+        const typeRaw = item && (item.mimeType || item.type) ? (item.mimeType || item.type) : (item && item.file && item.file.type ? item.file.type : 'unknown');
+        const sizeText = formatFileSize(item && (item.size || item.byteLength));
+        const lastModified = Number.isFinite(Number(item && item.lastModified)) ? String(Number(item.lastModified)) : '—';
+        const hasFile = !!(item && item.file && typeof Blob !== 'undefined' && item.file instanceof Blob);
+        const hasBase64 = !!(item && item.contentBase64);
+        const previewUrl = isImageAttachment(item) ? resolveAttachmentPreviewUrl(item) : '';
+        const previewHtml = previewUrl
+            ? `<img src="${esc(previewUrl)}" class="modal-attachment-thumb" alt="${esc(nameRaw)}" loading="lazy" />`
+            : `<span class="modal-attachment-icon">${isImageAttachment(item) ? 'IMG' : 'FILE'}</span>`;
+        return `
+                    <div class="modal-attachment-item">
+                        ${previewHtml}
+                        <div class="modal-attachment-meta">
+                            <div class="modal-attachment-name">${esc(nameRaw)}</div>
+                            <div class="modal-attachment-detail">${esc(typeRaw)} · ${esc(sizeText)}</div>
+                            <div class="modal-attachment-detail">file:${hasFile ? 'yes' : 'no'} · base64:${hasBase64 ? 'yes' : 'no'} · lastModified:${esc(lastModified)}</div>
+                        </div>
+                    </div>
+                `;
+    }).join('');
+    return `<div class="modal-attachments">${attachmentItems}</div>`;
+};
+const getFlattenedSavedRows = () => modalSavedResults.flatMap((savedResult) => {
+    const entries = Array.isArray(savedResult && savedResult.entries) ? savedResult.entries : [];
+    return entries.map((entry) => ({ entry, savedResult }));
+});
+const renderModalResultTable = () => {
+    if (!modalResultRowsEl || !modalResultSummaryEl || !modalResultHeadEl) {
+        return;
+    }
+    modalResultHeadEl.innerHTML = `<tr>${modalTableColumns.map((column) => `<th>${esc(column.label)}</th>`).join('')}</tr>`;
+    const rows = getFlattenedSavedRows();
+    if (!rows.length) {
+        modalResultRowsEl.innerHTML = `<tr><td colspan="${modalTableColumns.length}">No entries in saved result.</td></tr>`;
+        modalResultSummaryEl.textContent = modalSavedResults.length
+            ? `Saved ${modalSavedResults.length} payload snapshot${modalSavedResults.length === 1 ? '' : 's'} but no rows were parsed.`
+            : 'Saved result contains 0 entries.';
+        if (modalResultTableEl) {
+            modalResultTableEl.dataset.providerRawResponse = '';
+        }
+        return;
+    }
+    modalResultRowsEl.innerHTML = rows.map((row, index) => {
+        const entry = row.entry;
+        const savedResult = row.savedResult;
+        const fields = entry && typeof entry === 'object' && entry.fields && typeof entry.fields === 'object'
+            ? entry.fields
+            : {};
+        const issues = []
+            .concat(Array.isArray(entry && entry.pending) ? entry.pending : [])
+            .concat(Array.isArray(entry && entry.errors) ? entry.errors : []);
+        const cells = modalTableColumns.map((column) => {
+            if (column.key === '__row') {
+                return `<td>${index + 1}</td>`;
+            }
+            if (column.key === '__attachments') {
+                return `<td class="modal-attachment-cell">${formatAttachmentCell(entry, savedResult)}</td>`;
+            }
+            if (column.key === '__issues') {
+                return `<td>${esc(issues.length ? issues.join(' | ') : '—')}</td>`;
+            }
+            return `<td>${esc(toText(fields[column.key]))}</td>`;
+        });
+        return `
+                    <tr>
+                        ${cells.join('')}
+                    </tr>
+                `;
+    }).join('');
+
+    const allAttachments = rows.flatMap((row) => getEntryAttachments(row.entry, row.savedResult));
+    const richAttachmentCount = allAttachments
+        .filter((item) => item && typeof item === 'object' && ('file' in item || 'previewUrl' in item || 'fingerprint' in item))
+        .length;
+    const attachmentFileCount = allAttachments.filter((item) => item && item.file).length;
+    const attachmentBase64Count = allAttachments.filter((item) => item && typeof item.contentBase64 === 'string' && item.contentBase64.length > 0).length;
+    const providerAwareSnapshots = modalSavedResults.filter((savedResult) => Object.prototype.hasOwnProperty.call(savedResult, 'providerRawResponse'));
+    const providerRawPresentCount = providerAwareSnapshots
+        .filter((savedResult) => String(savedResult.providerRawResponse || '').trim().length > 0)
+        .length;
+    modalResultSummaryEl.textContent =
+        `Saved ${rows.length} entr${rows.length === 1 ? 'y' : 'ies'} across ${modalSavedResults.length} save actions (add-only). ` +
+        `Attachments with File objects: ${attachmentFileCount}. ` +
+        `Attachments with base64 content: ${attachmentBase64Count}. ` +
+        `Attachments with rich fields: ${richAttachmentCount}. ` +
+        (providerAwareSnapshots.length
+            ? `providerRawResponse non-empty in ${providerRawPresentCount}/${providerAwareSnapshots.length} saved AI snapshots.`
+            : 'providerRawResponse is not applicable in deterministic snapshots.');
+    if (modalResultTableEl) {
+        const latestResult = modalSavedResults.length ? modalSavedResults[modalSavedResults.length - 1] : null;
+        const providerRawResponse = latestResult && Object.prototype.hasOwnProperty.call(latestResult, 'providerRawResponse')
+            ? String(latestResult.providerRawResponse || '')
+            : '';
+        modalResultTableEl.dataset.providerRawResponse = providerRawResponse;
+    }
+};
+renderModalResultTable();
+const modalDialogEl = modalBackdropEl ? modalBackdropEl.querySelector('.qa-modal') : null;
+const demoAppEl = document.querySelector('.demo-app');
+const modalBackgroundEls = [demoAppEl].filter(Boolean);
+let modalLastOpener = null;
+const setModalBackgroundState = (active) => {
+    modalBackgroundEls.forEach((el) => {
+        if (!el) return;
+        if (active) {
+            el.setAttribute('aria-hidden', 'true');
+            el.inert = true;
+        } else {
+            el.removeAttribute('aria-hidden');
+            el.inert = false;
+        }
+    });
+};
+const getModalFocusables = () => {
+    if (!modalDialogEl) return [];
+    return Array.from(modalDialogEl.querySelectorAll(
+        'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])'
+    )).filter((node) => node && typeof node.focus === 'function' && !node.hidden);
+};
+const onModalTrapKeyDown = (event) => {
+    if (!modalBackdropEl || modalBackdropEl.hidden || !modalDialogEl) {
+        return;
+    }
+    if (event.key !== 'Tab') {
+        return;
+    }
+    const focusables = getModalFocusables();
+    if (!focusables.length) {
+        event.preventDefault();
+        return;
+    }
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    const active = document.activeElement;
+    if (event.shiftKey) {
+        if (active === first || !modalDialogEl.contains(active)) {
+            event.preventDefault();
+            last.focus();
+        }
+        return;
+    }
+    if (active === last || !modalDialogEl.contains(active)) {
+        event.preventDefault();
+        first.focus();
+    }
+};
+const openModal = () => {
+    if (!modalBackdropEl) return;
+    modalLastOpener = document.activeElement && document.activeElement !== document.body
+        ? document.activeElement
+        : openModalBtn;
+    modalBackdropEl.hidden = false;
+    document.body.classList.add('qa-modal-open');
+    setModalBackgroundState(true);
+    mountModalQuickAdd();
+    window.requestAnimationFrame(() => {
+        const input = modalBackdropEl.querySelector('[data-role="input"]');
+        if (input && typeof input.focus === 'function') {
+            input.focus();
+        }
+    });
+};
+const closeModal = async (options) => {
+    const opts = options || {};
+    if (!modalBackdropEl) return false;
+    if (!opts.skipWarning && modalAdd && typeof modalAdd.checkWarnings === 'function') {
+        const warning = await modalAdd.checkWarnings({ action: 'close', attachmentMode: 'metadata-only' });
+        if (!warning || warning.ok === false) {
+            if (modalResultSummaryEl) {
+                modalResultSummaryEl.textContent = 'Close paused: resolve the unlinked-attachment warning in the modal.';
+            }
+            return false;
+        }
+    }
+    modalBackdropEl.hidden = true;
+    document.body.classList.remove('qa-modal-open');
+    setModalBackgroundState(false);
+    unmountModalQuickAdd();
+    if (modalLastOpener && typeof modalLastOpener.focus === 'function') {
+        modalLastOpener.focus();
+    } else if (openModalBtn && typeof openModalBtn.focus === 'function') {
+        openModalBtn.focus();
+    }
+    return true;
+};
+if (openModalBtn) {
+    openModalBtn.addEventListener('click', openModal);
+}
+if (closeModalBtn) {
+    closeModalBtn.addEventListener('click', () => {
+        void closeModal();
+    });
+}
+if (saveModalBtn) {
+    saveModalBtn.addEventListener('click', async () => {
+        try {
+            const currentResult = modalAdd && typeof modalAdd.exportResult === 'function'
+                ? await modalAdd.exportResult({ attachmentMode: 'base64', includeUnlinked: false, runWarnings: true, runValidation: true })
+                : (modalAdd ? modalAdd.getResult() : null);
+            persistModalResult(currentResult);
+            await closeModal({ skipWarning: true });
+            renderModalResultTable();
+        } catch (err) {
+            if (String(err && err.message || '').includes('cancelled by warnings check')) {
+                if (modalResultSummaryEl) {
+                    modalResultSummaryEl.textContent = 'Save paused: resolve the unlinked-attachment warning in the modal and try again.';
+                }
+                return;
+            }
+            if (modalResultSummaryEl) {
+                modalResultSummaryEl.textContent = `Save failed: ${String(err && err.message ? err.message : err)}`;
+            }
+        }
+    });
+}
+if (modalBackdropEl) {
+    modalBackdropEl.addEventListener('keydown', onModalTrapKeyDown, true);
+    modalBackdropEl.addEventListener('click', (event) => {
+        if (event.target === modalBackdropEl) {
+            void closeModal();
+        }
+    });
+}
+if (exampleTabsEl) {
+    exampleTabsEl.addEventListener('click', (event) => {
+        const tab = event.target.closest('[data-example]');
+        if (tab && tab.getAttribute('data-example') !== 'example4') {
+            void closeModal();
+        }
+    });
+}
+if (exampleTabsNativeEl && exampleTabsApi) {
+    exampleTabsNativeEl.addEventListener('change', () => {
+        const value = String(exampleTabsNativeEl.value || '');
+        if (!value) {
+            return;
+        }
+        exampleTabsApi.setActive(value);
+        if (value !== 'example4') {
+            void closeModal();
+        }
+        const mobile = window.matchMedia && window.matchMedia('(max-width: 719px)').matches;
+        if (!mobile) {
+            return;
+        }
+        const panel = document.querySelector(`[data-example-panel="${value}"]`);
+        if (panel && typeof panel.scrollIntoView === 'function') {
+            panel.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        }
+    });
+}
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && modalBackdropEl && !modalBackdropEl.hidden) {
+        const hasOpenQuickAddPopup = !!modalBackdropEl.querySelector(
+            '[data-role="datePicker"]:not([hidden]), [data-role="dropdown"]:not([hidden]), [data-role="blockedInfo"]:not([hidden])'
+        );
+        if (hasOpenQuickAddPopup) {
+            return;
+        }
+        void closeModal();
+    }
+}, true);
+
+const smokeQuery = (() => {
+    if (typeof window === 'undefined' || !window.location || !window.location.search) {
+        return '';
+    }
+    return new URLSearchParams(window.location.search).get('qaSmoke') || '';
+})();
+
+const waitForFrames = (count = 2) => new Promise((resolve) => {
+    const step = (remaining) => {
+        if (remaining <= 0) {
+            resolve();
+            return;
+        }
+        window.requestAnimationFrame(() => step(remaining - 1));
+    };
+    step(Math.max(1, Number(count) || 1));
+});
+
+const runQuickAddSmoke = async () => {
+    const result = {
+        startedAt: new Date().toISOString(),
+        viewport: {
+            width: window.innerWidth,
+            height: window.innerHeight
+        },
+        steps: [],
+        failures: []
+    };
+    const ensure = (condition, message) => {
+        if (!condition) {
+            throw new Error(message);
+        }
+    };
+    const recordFailure = (label, error) => {
+        result.failures.push(`${label}: ${String(error && error.message ? error.message : error)}`);
+    };
+    const checkBounds = (selector, label) => {
+        const el = document.querySelector(selector);
+        if (!el || el.hidden) {
+            return;
+        }
+        const rect = el.getBoundingClientRect();
+        if (!(rect.width > 0 && rect.height > 0)) {
+            return;
+        }
+        const tolerance = 2;
+        const overflows = rect.left < (0 - tolerance)
+            || rect.top < (0 - tolerance)
+            || rect.right > (window.innerWidth + tolerance)
+            || rect.bottom > (window.innerHeight + tolerance);
+        if (overflows) {
+            result.failures.push(
+                `${label}: floating UI exceeded viewport bounds (l=${Math.round(rect.left)}, t=${Math.round(rect.top)}, r=${Math.round(rect.right)}, b=${Math.round(rect.bottom)}, vw=${window.innerWidth}, vh=${window.innerHeight})`
+            );
+        }
+    };
+    const activateExample = async (exampleKey) => {
+        ensure(exampleTabsApi && typeof exampleTabsApi.setActive === 'function', 'example tab API is unavailable');
+        ensure(exampleTabsApi.setActive(exampleKey), `could not activate ${exampleKey}`);
+        const panel = document.querySelector(`[data-example-panel="${exampleKey}"]`);
+        if (panel) {
+            const top = panel.getBoundingClientRect().top + window.scrollY - 12;
+            window.scrollTo({ top: Math.max(0, top), behavior: 'auto' });
+        }
+        await waitForFrames(4);
+    };
+    const smokeStep = async (label, fn) => {
+        try {
+            await fn();
+            result.steps.push(label);
+        } catch (error) {
+            recordFailure(label, error);
+        }
+    };
+
+    await smokeStep('example1-base', async () => {
+        await activateExample('example1');
+        ensure(document.querySelector('#quickAddExample1 [data-role="input"]'), 'example1 input missing');
+        const fileLink = document.querySelector('#quickAddExample1 [data-entry-file-link="1"]');
+        if (fileLink) {
+            fileLink.click();
+            await waitForFrames(2);
+            checkBounds('#quickAddExample1 [data-role="dropdown"]', 'example1 dropdown');
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+            await waitForFrames(1);
+        }
+        const duePill = document.querySelector('#quickAddExample1 [data-qa-date-pill="1"]');
+        if (duePill) {
+            duePill.click();
+            await waitForFrames(2);
+            checkBounds('#quickAddExample1 [data-role="datePicker"]', 'example1 datePicker');
+            document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+            await waitForFrames(1);
+        }
+    });
+
+    await smokeStep('example2-base', async () => {
+        await activateExample('example2');
+        ensure(document.querySelector('#quickAddExample2 [data-role="input"]'), 'example2 input missing');
+    });
+
+    await smokeStep('example3-base', async () => {
+        await activateExample('example3');
+        ensure(document.querySelector('#quickAddExample3 [data-role="input"]'), 'example3 input missing');
+    });
+
+    await smokeStep('example4-modal-open-save-close', async () => {
+        await activateExample('example4');
+        ensure(openModalBtn, 'open modal button missing');
+        openModalBtn.click();
+        await waitForFrames(3);
+        ensure(modalBackdropEl && !modalBackdropEl.hidden, 'modal did not open');
+        ensure(document.querySelector('#quickAddExample4 [data-role="input"]'), 'modal quick add input missing');
+        if (saveModalBtn) {
+            saveModalBtn.click();
+            await waitForFrames(4);
+        }
+        if (modalBackdropEl && !modalBackdropEl.hidden && closeModalBtn) {
+            closeModalBtn.click();
+            await waitForFrames(4);
+        }
+        ensure(modalBackdropEl && modalBackdropEl.hidden, 'modal did not close');
+    });
+
+    await smokeStep('example5-ai-controls', async () => {
+        await activateExample('example5');
+        const trigger = document.getElementById('aiProviderTrigger5');
+        ensure(trigger, 'example5 provider trigger missing');
+        ensure(trigger.getAttribute('aria-haspopup') === 'listbox', 'example5 provider trigger aria-haspopup missing');
+        ensure(trigger.getAttribute('aria-controls'), 'example5 provider trigger aria-controls missing');
+    });
+
+    await smokeStep('example6-ai-controls', async () => {
+        await activateExample('example6');
+        const trigger = document.getElementById('aiProviderTrigger6');
+        ensure(trigger, 'example6 provider trigger missing');
+        ensure(trigger.getAttribute('aria-haspopup') === 'listbox', 'example6 provider trigger aria-haspopup missing');
+        ensure(trigger.getAttribute('aria-controls'), 'example6 provider trigger aria-controls missing');
+    });
+
+    result.completedAt = new Date().toISOString();
+    result.passed = result.failures.length === 0;
+    window.__quickAddSmoke = result;
+    window.dispatchEvent(new CustomEvent('quickadd-smoke-complete', { detail: result }));
+    return result;
+};
+
+window.runQuickAddSmoke = runQuickAddSmoke;
+if (smokeQuery === '1') {
+    window.requestAnimationFrame(() => {
+        void runQuickAddSmoke();
+    });
+}
