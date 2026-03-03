@@ -118,6 +118,7 @@ const ALLOWED_TOP_LEVEL_KEYS = new Set([
     'sortSelectedMultiOptionsToBottom',
     'enableNumberPillStepper',
     'numberPillStep',
+    'pillColorStyle',
     'escapeChar',
     'fallbackField',
     'showJsonOutput',
@@ -127,12 +128,20 @@ const ALLOWED_TOP_LEVEL_KEYS = new Set([
     'fieldMenuShowUsedFields',
     'fieldMenuShowRequiredMeta',
     'fieldMenuShowAutoDetectMeta',
+    'showFieldActionBar',
+    'fieldActionBarExpandOnValue',
+    'fieldActionBarShowMetaIndicators',
+    'fieldActionBarApplyToAllToggle',
+    'fieldActionBarApplyToAllDefault',
+    'fieldActionBarApplyToAllLabel',
+    'fieldActionBarButtons',
     'showAttachmentDropdownPreview',
     'showInlinePills',
     'showEntryCards',
     'showEntryHeader',
     'inputHeightMode',
     'inputMaxHeight',
+    'fontFamily',
     'allowMultipleAttachments',
     'allowAttachmentReuse',
     'allowedAttachmentTypes',
@@ -207,10 +216,12 @@ const ALLOWED_OPTION_KEYS = new Set([
     'dependsOn',
     'constraints',
 ]);
+const ALLOWED_FIELD_ACTION_BUTTON_KEYS = new Set(['fieldKey', 'iconSvg', 'showLabel', 'expandOnValue', 'visible']);
 const ALLOWED_CONDITION_KEYS = new Set(['field', 'op', 'value', 'values', 'and', 'or', 'not', 'when', 'message']);
 const VALID_FIELD_TYPES = new Set(['string', 'number', 'options', 'date', 'datetime', 'boolean', 'file']);
 const VALID_FIELD_TERMINATOR_MODES = new Set(['strict', 'or-next-prefix', 'or-end']);
 const VALID_QA_MODES = new Set(['deterministic', 'ai']);
+const VALID_PILL_COLOR_STYLES = new Set(['background', 'border']);
 const VALID_AI_PROVIDERS = new Set(['openai', 'anthropic', 'google', 'custom']);
 const VALID_CONDITION_OPERATORS = new Set([
     'eq',
@@ -438,6 +449,9 @@ function validateEditableConfig(config) {
     if (config.hintText !== undefined && typeof config.hintText !== 'string') {
         pushValidationError(errors, 'config.hintText', 'must be a string');
     }
+    if (config.fontFamily !== undefined && typeof config.fontFamily !== 'string') {
+        pushValidationError(errors, 'config.fontFamily', 'must be a string');
+    }
     if (
         typeof config.multiSelectSeparator === 'string'
         && (
@@ -466,6 +480,11 @@ function validateEditableConfig(config) {
         'allowMultipleEntries',
         'showJsonOutput',
         'showDropdownOnTyping',
+        'showFieldActionBar',
+        'fieldActionBarExpandOnValue',
+        'fieldActionBarShowMetaIndicators',
+        'fieldActionBarApplyToAllToggle',
+        'fieldActionBarApplyToAllDefault',
         'showAttachmentDropdownPreview',
         'showInlinePills',
         'showEntryCards',
@@ -497,6 +516,14 @@ function validateEditableConfig(config) {
             pushValidationError(errors, 'config.numberPillStep', 'must be greater than 0');
         }
     }
+    if (config.pillColorStyle !== undefined) {
+        if (typeof config.pillColorStyle !== 'string' || !VALID_PILL_COLOR_STYLES.has(config.pillColorStyle)) {
+            pushValidationError(errors, 'config.pillColorStyle', `must be one of: ${Array.from(VALID_PILL_COLOR_STYLES).join(', ')}`);
+        }
+    }
+    if (config.fieldActionBarApplyToAllLabel !== undefined && typeof config.fieldActionBarApplyToAllLabel !== 'string') {
+        pushValidationError(errors, 'config.fieldActionBarApplyToAllLabel', 'must be a string');
+    }
 
     if (config.attachmentSources !== undefined) {
         if (!Array.isArray(config.attachmentSources)) {
@@ -521,6 +548,35 @@ function validateEditableConfig(config) {
             Object.keys(config.classNames).forEach((key) => {
                 if (typeof config.classNames[key] !== 'string') {
                     pushValidationError(errors, `config.classNames.${key}`, 'must be a string');
+                }
+            });
+        }
+    }
+
+    if (config.fieldActionBarButtons !== undefined) {
+        if (!Array.isArray(config.fieldActionBarButtons)) {
+            pushValidationError(errors, 'config.fieldActionBarButtons', 'must be an array');
+        } else {
+            config.fieldActionBarButtons.forEach((item, index) => {
+                if (!isPlainObject(item)) {
+                    pushValidationError(errors, `config.fieldActionBarButtons[${index}]`, 'must be an object');
+                    return;
+                }
+                validateAllowedKeys(item, ALLOWED_FIELD_ACTION_BUTTON_KEYS, `config.fieldActionBarButtons[${index}]`, errors);
+                if (typeof item.fieldKey !== 'string' || !item.fieldKey.trim()) {
+                    pushValidationError(errors, `config.fieldActionBarButtons[${index}].fieldKey`, 'must be a non-empty string');
+                }
+                if (item.iconSvg !== undefined && typeof item.iconSvg !== 'string') {
+                    pushValidationError(errors, `config.fieldActionBarButtons[${index}].iconSvg`, 'must be a string');
+                }
+                if (item.showLabel !== undefined && typeof item.showLabel !== 'boolean') {
+                    pushValidationError(errors, `config.fieldActionBarButtons[${index}].showLabel`, 'must be a boolean');
+                }
+                if (item.expandOnValue !== undefined && typeof item.expandOnValue !== 'boolean') {
+                    pushValidationError(errors, `config.fieldActionBarButtons[${index}].expandOnValue`, 'must be a boolean');
+                }
+                if (item.visible !== undefined && typeof item.visible !== 'boolean') {
+                    pushValidationError(errors, `config.fieldActionBarButtons[${index}].visible`, 'must be a boolean');
                 }
             });
         }
@@ -1110,6 +1166,14 @@ function setupAiRuntimeControls(options) {
     syncControlsFromEditor();
 }
 
+const demoActionIconCalendar = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>';
+const demoActionIconPriority = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v20"/><path d="M10 4h9l-3 4 3 4h-9"/></svg>';
+const demoActionIconProject = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+const demoActionIconTag = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg>';
+const demoActionIconEstimate = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>';
+const demoActionIconOwner = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>';
+const demoActionIconReceipt = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h10a2 2 0 0 1 2 2v16l-3-2-2 2-2-2-2 2-2-2-3 2V5a2 2 0 0 1 2-2z"/><path d="M9 8h6"/><path d="M9 12h6"/></svg>';
+
 const taskConfig = {
     mount: document.getElementById('quickAddExample1'),
     debounceMs: 280,
@@ -1122,15 +1186,40 @@ const taskConfig = {
     allowedAttachmentTypes: ['.pdf', '.png', '.jpg', 'image/*'],
     attachmentSources: ['camera', 'gallery', 'files'],
     fallbackField: 'title',
+    pillColorStyle: 'background',
     placeholder: 'Example: ... !p2;; !p1;; and #work;; #health ... (last value wins)',
     inputHeightMode: 'scroll',
     inputMaxHeight: 160,
+    fontFamily: '"Spline Sans Mono", "JetBrains Mono", monospace',
+    showFieldActionBar: true,
+    fieldActionBarExpandOnValue: true,
+    fieldActionBarShowMetaIndicators: true,
+    fieldActionBarApplyToAllToggle: true,
+    fieldActionBarApplyToAllDefault: false,
+    fieldActionBarApplyToAllLabel: 'Apply to all entries',
+    fieldActionBarButtons: [
+        { fieldKey: 'priority', iconSvg: demoActionIconPriority, showLabel: false, visible: true },
+        { fieldKey: 'project', iconSvg: demoActionIconProject, showLabel: true, visible: true },
+        { fieldKey: 'tags', iconSvg: demoActionIconTag, showLabel: true, visible: true },
+        { fieldKey: 'due', iconSvg: demoActionIconCalendar, showLabel: true, visible: true },
+        { fieldKey: 'estimate', iconSvg: demoActionIconEstimate, showLabel: false, visible: true },
+        { fieldKey: 'owner', iconSvg: demoActionIconOwner, showLabel: false, visible: true },
+        { fieldKey: 'receipt', iconSvg: demoActionIconReceipt, showLabel: false, visible: false }
+    ],
+    tokens: {
+        '--qa-entry-marker-bg': '#f6ede3',
+        '--qa-entry-marker-fg': '#7f6c58',
+        '--qa-entry-marker-active-bg': 'rgba(31, 93, 105, 0.2)',
+        '--qa-entry-marker-active-fg': '#1f5d69',
+        '--qa-entry-marker-active-border': '#8eb8c4'
+    },
     schema: {
         fields: [
             { key: 'title', type: 'string', required: true },
             {
                 key: 'priority',
                 type: 'options',
+                required: true,
                 prefixes: ['!'],
                 allowCustom: false,
                 defaultValue: 'p2',
@@ -1167,7 +1256,7 @@ const taskConfig = {
             },
             { key: 'due', type: 'datetime', naturalDate: true, allowDateOnly: true, defaultTime: '08:00', defaultValue: '2026-02-23T15:00', prefixes: ['due:'] },
             { key: 'estimate', type: 'number', prefixes: ['est:'], defaultValue: 2 },
-            { key: 'owner', type: 'string', prefixes: ['@'] },
+            { key: 'owner', type: 'string', prefixes: ['@'], autoDetectWithoutPrefix: true },
             { key: 'receipt', type: 'file', prefixes: ['file:'] },
             { key: 'photos', type: 'file', prefixes: ['files:'], multiple: true }
         ]
@@ -1210,6 +1299,7 @@ const petConfig = {
     showEntryHeader: false,
     autoDetectOptionsWithoutPrefix: true,
     reduceInferredOptions: false,
+    pillColorStyle: 'border',
     inferredMatchMode: 'fuzzy',
     inferredMatchThreshold: 0.8,
     fallbackField: 'note',

@@ -16,7 +16,26 @@
         inlineMarkLabel: 'qa-inline-mark-label',
         inputTail: 'qa-input-tail',
         input: 'qa-input',
+        entryMarkers: 'qa-entry-markers',
+        entryMarker: 'qa-entry-marker',
+        entryMarkerActive: 'qa-entry-marker-active',
+        entryActive: 'qa-entry-active',
         inputClearBtn: 'qa-input-clear-btn',
+        fieldActionBar: 'qa-field-action-bar',
+        fieldActionBarButtons: 'qa-field-action-bar-buttons',
+        fieldActionBtn: 'qa-field-action-btn',
+        fieldActionBtnExpanded: 'qa-field-action-btn-expanded',
+        fieldActionBtnWithMeta: 'qa-field-action-btn-with-meta',
+        fieldActionBtnIcon: 'qa-field-action-btn-icon',
+        fieldActionBtnLabel: 'qa-field-action-btn-label',
+        fieldActionBtnValue: 'qa-field-action-btn-value',
+        fieldActionBtnMeta: 'qa-field-action-btn-meta',
+        fieldActionBtnMetaBadge: 'qa-field-action-btn-meta-badge',
+        fieldActionBtnMetaBadgeRequired: 'qa-field-action-btn-meta-badge-required',
+        fieldActionBtnMetaBadgeAuto: 'qa-field-action-btn-meta-badge-auto',
+        fieldActionApplyAll: 'qa-field-action-apply-all',
+        fieldActionApplyAllCheckbox: 'qa-field-action-apply-all-checkbox',
+        fieldActionApplyAllLabel: 'qa-field-action-apply-all-label',
         hint: 'qa-hint',
         status: 'qa-status',
         preview: 'qa-preview',
@@ -67,6 +86,7 @@
         dropdown: 'qa-dropdown',
         dropdownOpen: 'qa-dropdown-open',
         dropdownSearch: 'qa-dropdown-search',
+        dropdownSearchMultiline: 'qa-dropdown-search-multiline',
         dropdownListWrap: 'qa-dropdown-list-wrap',
         dropdownList: 'qa-dropdown-list',
         dropdownOption: 'qa-dropdown-option',
@@ -203,6 +223,7 @@
         sortSelectedMultiOptionsToBottom: true,
         enableNumberPillStepper: false,
         numberPillStep: 1,
+        pillColorStyle: 'background',
         escapeChar: '\\',
         fallbackField: 'title',
         showJsonOutput: true,
@@ -212,12 +233,20 @@
         fieldMenuShowUsedFields: false,
         fieldMenuShowRequiredMeta: true,
         fieldMenuShowAutoDetectMeta: true,
+        showFieldActionBar: false,
+        fieldActionBarExpandOnValue: true,
+        fieldActionBarShowMetaIndicators: true,
+        fieldActionBarApplyToAllToggle: false,
+        fieldActionBarApplyToAllDefault: false,
+        fieldActionBarApplyToAllLabel: 'Apply to all',
+        fieldActionBarButtons: [],
         showAttachmentDropdownPreview: true,
         showInlinePills: true,
         showEntryCards: true,
         showEntryHeader: true,
         inputHeightMode: 'grow',
         inputMaxHeight: null,
+        fontFamily: '',
         allowMultipleAttachments: true,
         allowAttachmentReuse: true,
         allowedAttachmentTypes: [],
@@ -242,6 +271,8 @@
         onParse: null
     };
     const DEFAULT_DATETIME_TIME = '08:00';
+    const ACTION_META_REQUIRED_ICON = '<svg viewBox="0 0 16 16" focusable="false" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M8 1.75l1.9 3.15 3.55.64-2.5 2.45.6 3.51L8 9.9l-3.55 1.6.6-3.51L2.55 5.54l3.55-.64z"/></svg>';
+    const ACTION_META_AUTO_ICON = '<svg viewBox="0 0 16 16" focusable="false" aria-hidden="true"><path fill="currentColor" d="M8.98 1.15 3.72 8.04c-.13.17-.01.41.2.41h2.52l-.78 6.34c-.04.34.4.52.61.24l5.12-6.83c.13-.17.01-.41-.2-.41H8.65l.95-6.36c.05-.34-.39-.54-.62-.28Z"/></svg>';
 
     function ensureQuickAddStyles() {
         if (typeof document === 'undefined') {
@@ -302,6 +333,22 @@
             .map((item) => String(item || '').trim())
             .filter(Boolean);
         merged.attachmentSources = normalizeAttachmentSources(merged.attachmentSources);
+        merged.showFieldActionBar = merged.showFieldActionBar === true;
+        merged.fieldActionBarButtons = normalizeFieldActionButtons(merged.fieldActionBarButtons);
+        merged.fieldActionBarExpandOnValue = merged.fieldActionBarExpandOnValue !== false;
+        merged.fieldActionBarShowMetaIndicators = merged.fieldActionBarShowMetaIndicators !== false;
+        merged.fieldActionBarApplyToAllToggle = merged.fieldActionBarApplyToAllToggle === true;
+        merged.fieldActionBarApplyToAllDefault = merged.fieldActionBarApplyToAllDefault === true;
+        merged.fieldActionBarApplyToAllLabel = typeof merged.fieldActionBarApplyToAllLabel === 'string'
+            ? merged.fieldActionBarApplyToAllLabel.trim()
+            : DEFAULT_CONFIG.fieldActionBarApplyToAllLabel;
+        if (!merged.fieldActionBarApplyToAllLabel) {
+            merged.fieldActionBarApplyToAllLabel = DEFAULT_CONFIG.fieldActionBarApplyToAllLabel;
+        }
+        if (!merged.fieldActionBarApplyToAllToggle) {
+            merged.fieldActionBarApplyToAllDefault = false;
+        }
+        merged.fontFamily = typeof merged.fontFamily === 'string' ? merged.fontFamily.trim() : '';
         merged.multiSelectSeparator = String(merged.multiSelectSeparator === undefined ? ',' : merged.multiSelectSeparator);
         merged.multiSelectDisplaySeparator = String(
             merged.multiSelectDisplaySeparator === undefined || merged.multiSelectDisplaySeparator === null
@@ -329,6 +376,8 @@
         merged.enableNumberPillStepper = merged.enableNumberPillStepper === true;
         const rawNumberStep = Number(merged.numberPillStep);
         merged.numberPillStep = Number.isFinite(rawNumberStep) && rawNumberStep > 0 ? rawNumberStep : 1;
+        const pillColorStyle = String(merged.pillColorStyle || 'background').trim().toLowerCase();
+        merged.pillColorStyle = pillColorStyle === 'border' ? 'border' : 'background';
         if (!merged.multiSelectSeparator) {
             throw new Error('QuickAdd: multiSelectSeparator must be a non-empty string');
         }
@@ -2766,6 +2815,22 @@
             .replace(/'/g, '&#39;');
     }
 
+    function sanitizeInlineSvgMarkup(raw) {
+        const value = String(raw || '').trim();
+        if (!value) {
+            return '';
+        }
+        if (!/^<svg[\s\S]*<\/svg>$/i.test(value)) {
+            return '';
+        }
+        return value
+            .replace(/<script[\s\S]*?<\/script>/gi, '')
+            .replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, '')
+            .replace(/\son[a-z0-9_-]+\s*=\s*"[^"]*"/gi, '')
+            .replace(/\son[a-z0-9_-]+\s*=\s*'[^']*'/gi, '')
+            .replace(/\s(?:href|xlink:href)\s*=\s*(['"])\s*javascript:[^'"]*\1/gi, '');
+    }
+
     function eventTargetElement(event) {
         const target = event && event.target ? event.target : null;
         if (target && typeof target.closest === 'function') {
@@ -2877,6 +2942,26 @@
         throw new Error('QuickAdd: attachmentSources must be an array of strings');
     }
 
+    function normalizeFieldActionButtons(raw) {
+        if (raw === undefined || raw === null) {
+            return [];
+        }
+        if (!Array.isArray(raw)) {
+            throw new Error('QuickAdd: fieldActionBarButtons must be an array');
+        }
+        return raw
+            .map((item) => (item && typeof item === 'object' ? item : null))
+            .filter(Boolean)
+            .map((item) => ({
+                fieldKey: String(item.fieldKey || '').trim(),
+                iconSvg: typeof item.iconSvg === 'string' ? item.iconSvg : '',
+                showLabel: item.showLabel !== false,
+                expandOnValue: item.expandOnValue !== false,
+                visible: item.visible !== false
+            }))
+            .filter((item) => !!item.fieldKey);
+    }
+
     function normalizeAiToolsConfig(raw) {
         if (raw === undefined || raw === null) {
             return null;
@@ -2955,6 +3040,9 @@
         this.datePickerSuppressUntil = 0;
         this.datePickerInternalClickUntil = 0;
         this.blockedInfoState = null;
+        this.lastInteractedEntryIndex = null;
+        this.fieldActionApplyToAllEnabled = this.config.fieldActionBarApplyToAllToggle === true
+            && this.config.fieldActionBarApplyToAllDefault === true;
         this.aiVerificationState = {
             status: 'idle',
             message: '',
@@ -4614,13 +4702,14 @@
                             </svg>
                         </button>
                     </div>
+                    <div class="${c.fieldActionBar}" data-role="fieldActionBar" hidden></div>
                     <div class="${c.hint}">${escHtml(hint)}</div>
                 </div>
                 <div class="${c.status}" data-role="status" role="status" aria-live="polite"></div>
                 <div class="${c.preview}" data-role="preview"></div>
                 ${outputBlock}
                 <div class="${c.dropdown}" data-role="dropdown" hidden>
-                    <input class="${c.dropdownSearch}" data-role="dropdownSearch" type="text" placeholder="Filter options..." />
+                    <textarea class="${c.dropdownSearch}" data-role="dropdownSearch" rows="1" placeholder="Filter options..." spellcheck="false"></textarea>
                     <div class="${c.dropdownListWrap}">
                         <div class="${c.dropdownList}" data-role="dropdownList" role="listbox" id="${this.dropdownListId}"></div>
                     </div>
@@ -4651,6 +4740,7 @@
         this.inputSurfaceEl = this.mountEl.querySelector('[data-role="inputSurface"]');
         this.inputEl = this.mountEl.querySelector('[data-role="input"]');
         this.inputClearBtnEl = this.mountEl.querySelector('[data-role="inputClear"]');
+        this.fieldActionBarEl = this.mountEl.querySelector('[data-role="fieldActionBar"]');
         this.statusEl = this.mountEl.querySelector('[data-role="status"]');
         this.previewEl = this.mountEl.querySelector('[data-role="preview"]');
         this.outputEl = this.mountEl.querySelector('[data-role="output"]');
@@ -4667,6 +4757,7 @@
         this.datePickerQuickEl = this.mountEl.querySelector('[data-role="datePickerQuick"]');
         this.datePickerTimeEl = this.mountEl.querySelector('[data-role="datePickerTime"]');
         this.blockedInfoEl = null;
+        this.renderFieldActionBar();
         this.syncDropdownA11y();
     };
 
@@ -4702,6 +4793,151 @@
                 this.rootEl.style.setProperty(name, String(tokens[name]));
             }
         });
+        const colorScheme = String(tokens['--qa-color-scheme'] || '').trim().toLowerCase() === 'dark' ? 'dark' : 'light';
+        this.rootEl.setAttribute('data-color-scheme', colorScheme);
+        if (this.config.fontFamily) {
+            this.rootEl.style.setProperty('--qa-font', String(this.config.fontFamily));
+        } else {
+            this.rootEl.style.removeProperty('--qa-font');
+        }
+        this.rootEl.setAttribute('data-pill-color-style', this.config.pillColorStyle === 'border' ? 'border' : 'background');
+    };
+
+    QuickAddComponent.prototype.isFieldActionApplyAllActive = function isFieldActionApplyAllActive() {
+        return this.config.fieldActionBarApplyToAllToggle === true && this.fieldActionApplyToAllEnabled === true;
+    };
+
+    QuickAddComponent.prototype.getEntryFieldCurrentValueForActionBar = function getEntryFieldCurrentValueForActionBar(entryIndex, fieldKey) {
+        if (!Number.isFinite(Number(entryIndex)) || !fieldKey) {
+            return '';
+        }
+        const entry = (this.lastResult.entries || []).find((item) => Number(item.index) === Number(entryIndex));
+        if (!entry) {
+            return '';
+        }
+        const values = this.resolveEntryFieldValues(entry, fieldKey);
+        if (!values.length) {
+            return '';
+        }
+        const field = this.getFieldDefinition(fieldKey);
+        if (field && field.multiple) {
+            const separator = String(this.config.multiSelectSeparator || ',');
+            return values.join(`${separator} `);
+        }
+        return String(values[values.length - 1]);
+    };
+
+    QuickAddComponent.prototype.getActionBarValuePreview = function getActionBarValuePreview(entryIndex, fieldKey) {
+        const rawValue = this.getEntryFieldCurrentValueForActionBar(entryIndex, fieldKey);
+        if (!rawValue) {
+            return '';
+        }
+        const compact = String(rawValue).replace(/\s+/g, ' ').trim();
+        if (!compact) {
+            return '';
+        }
+        return compact.length > 42 ? `${compact.slice(0, 41).trimEnd()}…` : compact;
+    };
+
+    QuickAddComponent.prototype.getFieldActionBarItems = function getFieldActionBarItems() {
+        if (this.config.showFieldActionBar !== true) {
+            return [];
+        }
+        const buttons = Array.isArray(this.config.fieldActionBarButtons) ? this.config.fieldActionBarButtons : [];
+        if (!buttons.length) {
+            return [];
+        }
+        const activeEntryIndex = this.resolvePreferredEntryIndexForFieldAction();
+        const showMetaIndicators = this.config.fieldActionBarShowMetaIndicators !== false;
+        const expandOnValue = this.config.fieldActionBarExpandOnValue !== false && !this.isFieldActionApplyAllActive();
+        return buttons
+            .filter((item) => item && item.visible !== false)
+            .map((item) => {
+                const field = this.getFieldDefinition(item.fieldKey);
+                if (!field) {
+                    return null;
+                }
+                const label = String(field.label || field.key || '').trim() || String(field.key || '').trim();
+                if (!label) {
+                    return null;
+                }
+                const iconSvg = sanitizeInlineSvgMarkup(item.iconSvg);
+                const required = showMetaIndicators && !!field.required;
+                const autoDetect = showMetaIndicators && !!(
+                    field.autoDetectWithoutPrefix === true
+                    || (this.config.autoDetectOptionsWithoutPrefix && field.autoDetectWithoutPrefix !== false)
+                );
+                const currentValue = expandOnValue && item.expandOnValue !== false
+                    ? this.getActionBarValuePreview(activeEntryIndex, field.key)
+                    : '';
+                const expanded = !!currentValue;
+                return {
+                    fieldKey: String(field.key),
+                    label,
+                    showLabel: item.showLabel !== false && !expanded,
+                    iconSvg,
+                    required,
+                    autoDetect,
+                    currentValue,
+                    expanded
+                };
+            })
+            .filter(Boolean);
+    };
+
+    QuickAddComponent.prototype.renderFieldActionBar = function renderFieldActionBar() {
+        if (!this.fieldActionBarEl) {
+            return;
+        }
+        if (this.config.fieldActionBarApplyToAllToggle === true) {
+            const existingToggle = this.fieldActionBarEl.querySelector('[data-field-action-apply-all="1"]');
+            if (existingToggle) {
+                this.fieldActionApplyToAllEnabled = existingToggle.checked === true;
+            }
+        }
+        const c = this.config.classNames;
+        const items = this.getFieldActionBarItems();
+        if (!items.length) {
+            this.fieldActionBarEl.innerHTML = '';
+            this.fieldActionBarEl.hidden = true;
+            return;
+        }
+        const buttonsHtml = items.map((item) => {
+            const iconHtml = item.iconSvg
+                ? `<span class="${c.fieldActionBtnIcon}" aria-hidden="true">${item.iconSvg}</span>`
+                : `<span class="${c.fieldActionBtnIcon}" aria-hidden="true">${escHtml((item.label || '?').slice(0, 2).toUpperCase())}</span>`;
+            const labelHtml = item.showLabel !== false
+                ? `<span class="${c.fieldActionBtnLabel}">${escHtml(item.label)}</span>`
+                : '';
+            const valueHtml = item.currentValue
+                ? `<span class="${c.fieldActionBtnValue}" title="${escHtml(item.currentValue)}">${escHtml(item.currentValue)}</span>`
+                : '';
+            const metaBadges = [];
+            if (item.required) {
+                metaBadges.push(`<span class="${c.fieldActionBtnMetaBadge} ${c.fieldActionBtnMetaBadgeRequired}" title="Required">${ACTION_META_REQUIRED_ICON}</span>`);
+            }
+            if (item.autoDetect) {
+                metaBadges.push(`<span class="${c.fieldActionBtnMetaBadge} ${c.fieldActionBtnMetaBadgeAuto}" title="Auto">${ACTION_META_AUTO_ICON}</span>`);
+            }
+            const metaHtml = metaBadges.length
+                ? `<span class="${c.fieldActionBtnMeta}" aria-hidden="true">${metaBadges.join('')}</span>`
+                : '';
+            const classList = [
+                c.fieldActionBtn,
+                item.currentValue ? c.fieldActionBtnExpanded : '',
+                metaBadges.length ? c.fieldActionBtnWithMeta : ''
+            ].filter(Boolean).join(' ');
+            return `<button type="button" class="${classList}" data-field-action-btn="1" data-field-key="${escHtml(item.fieldKey)}" aria-label="${escHtml(item.label)}">${metaHtml}${iconHtml}${labelHtml}${valueHtml}</button>`;
+        }).join('');
+        const applyAllEnabled = this.isFieldActionApplyAllActive();
+        const applyAllToggleHtml = this.config.fieldActionBarApplyToAllToggle === true
+            ? `<label class="${c.fieldActionApplyAll}"><input type="checkbox" class="${c.fieldActionApplyAllCheckbox}" data-field-action-apply-all="1"${applyAllEnabled ? ' checked' : ''}><span class="${c.fieldActionApplyAllLabel}">${escHtml(String(this.config.fieldActionBarApplyToAllLabel || 'Apply to all'))}</span></label>`
+            : '';
+        this.fieldActionBarEl.innerHTML = `${applyAllToggleHtml}<div class="${c.fieldActionBarButtons}">${buttonsHtml}</div>`;
+        if (this.rootEl) {
+            this.rootEl.setAttribute('data-field-action-apply-all', applyAllEnabled ? '1' : '0');
+        }
+        this.fieldActionBarEl.hidden = false;
     };
 
     QuickAddComponent.prototype.applyInputSizing = function applyInputSizing() {
@@ -4761,6 +4997,18 @@
             return true;
         }
         return focusElementIfPossible(origin.fallbackEl || this.inputEl);
+    };
+
+    QuickAddComponent.prototype.shouldRefocusInputAfterCommit = function shouldRefocusInputAfterCommit(options) {
+        const opts = options || {};
+        if (opts.source === 'typing' || opts.source === 'field-menu') {
+            return true;
+        }
+        if (opts.sourceRegion === 'card') {
+            return false;
+        }
+        const anchorEl = opts.anchorEl || null;
+        return !!(anchorEl && this.inputSurfaceEl && this.inputSurfaceEl.contains(anchorEl));
     };
 
     QuickAddComponent.prototype.syncDropdownA11y = function syncDropdownA11y() {
@@ -4824,9 +5072,11 @@
         this.datePickerState = {
             fieldKey: options.field.key,
             tokenId: options.token && options.token.id ? options.token.id : '',
+            cleanupTokenIdOnClose: options.cleanupTokenIdOnClose ? String(options.cleanupTokenIdOnClose) : '',
             entryIndex: options.entryIndex,
             anchorEl: options.anchorEl || null,
             fieldType: options.field.type,
+            source: options.source || 'click',
             naturalDate: !!options.field.naturalDate,
             allowDateOnly: options.field.allowDateOnly !== false,
             defaultTime,
@@ -4837,6 +5087,7 @@
             selectedTimeValue,
             aiContext: options.aiContext || null,
             sourceRegion: options.sourceRegion || 'inline',
+            applyToAll: options.applyToAll === true,
             titleMenu: ''
         };
         this.renderDatePicker();
@@ -4853,6 +5104,10 @@
 
     QuickAddComponent.prototype.closeDatePicker = function closeDatePicker(options) {
         const opts = options || {};
+        const previousState = this.datePickerState;
+        const cleanupTokenId = previousState && previousState.cleanupTokenIdOnClose
+            ? String(previousState.cleanupTokenIdOnClose)
+            : '';
         this.datePickerState = null;
         if (!this.datePickerEl) {
             return;
@@ -4865,6 +5120,9 @@
         if (this.datePickerTimeEl) {
             this.datePickerTimeEl.innerHTML = '';
             this.datePickerTimeEl.hidden = true;
+        }
+        if (cleanupTokenId && opts.discardPendingToken !== false) {
+            this.discardPendingTokenById(cleanupTokenId, { focusInput: false });
         }
         if (opts.restoreFocus !== false) {
             this.restoreFocusOrigin('datePicker');
@@ -5578,6 +5836,7 @@
             this.statusEl.textContent = commitValidation.warning;
         }
         this.datePickerState.selectedValue = commitValue;
+        this.datePickerState.cleanupTokenIdOnClose = '';
 
         if (this.datePickerState.aiContext) {
             const context = Object.assign({}, this.datePickerState.aiContext);
@@ -5593,6 +5852,30 @@
                 nextValue: commitValue,
                 sourceRegion: context.sourceRegion || sourceRegion
             });
+            return;
+        }
+        if (this.datePickerState.applyToAll === true && !this.isAiMode()) {
+            const sourceRegion = this.datePickerState.sourceRegion || 'inline';
+            const pickerSource = this.datePickerState.source || 'click';
+            const pickerAnchorEl = this.datePickerState.anchorEl || null;
+            this.fieldActionApplyToAllEnabled = true;
+            const updatedAll = this.applyDeterministicFieldValueToAllEntries({
+                fieldKey: this.datePickerState.fieldKey,
+                nextValue: commitValue
+            });
+            this.datePickerSuppressUntil = Date.now() + 150;
+            this.closeDatePicker();
+            if (typeof updatedAll === 'string') {
+                this.parseAndRender({
+                    source: updatedAll,
+                    focusInput: this.shouldRefocusInputAfterCommit({
+                        source: pickerSource,
+                        sourceRegion,
+                        anchorEl: pickerAnchorEl
+                    }),
+                    skipTypingSync: sourceRegion === 'card'
+                });
+            }
             return;
         }
 
@@ -5626,12 +5909,18 @@
             }
         }
         const sourceRegion = this.datePickerState && this.datePickerState.sourceRegion ? this.datePickerState.sourceRegion : 'inline';
+        const pickerSource = this.datePickerState && this.datePickerState.source ? this.datePickerState.source : 'click';
+        const pickerAnchorEl = this.datePickerState && this.datePickerState.anchorEl ? this.datePickerState.anchorEl : null;
         this.datePickerSuppressUntil = Date.now() + 150;
         this.closeDatePicker();
         this.parseAndRender({
             source: updated,
             caretOffset: caret,
-            focusInput: sourceRegion !== 'card',
+            focusInput: this.shouldRefocusInputAfterCommit({
+                source: pickerSource,
+                sourceRegion,
+                anchorEl: pickerAnchorEl
+            }),
             skipTypingSync: sourceRegion === 'card'
         });
     };
@@ -5730,6 +6019,35 @@
                     if (this.tryAutoCloseFieldOnSpace(offsets.start)) {
                         event.preventDefault();
                         return;
+                    }
+                }
+            }
+
+            if (
+                inputType === 'insertText'
+                && typeof event.data === 'string'
+                && event.data.length === 1
+                && this.config.allowMultipleEntries !== false
+            ) {
+                const entrySeparator = String(this.config.entrySeparator || '');
+                if (entrySeparator && !/[\r\n]/.test(entrySeparator)) {
+                    const offsets = this.getSelectionOffsets();
+                    if (offsets && offsets.isCollapsed) {
+                        const source = String(this.inputText || this.readInputText() || '');
+                        const next = `${source.slice(0, offsets.start)}${event.data}${source.slice(offsets.end)}`;
+                        const caretAfter = offsets.start + event.data.length;
+                        const recentStart = Math.max(0, caretAfter - entrySeparator.length);
+                        const recent = next.slice(recentStart, caretAfter);
+                        const escapeChar = String(this.config.escapeChar || '');
+                        const escapedSeparator = escapeChar ? `${escapeChar}${entrySeparator}` : '';
+                        const escapedStart = Math.max(0, caretAfter - escapedSeparator.length);
+                        const escapedMatch = !!escapedSeparator && next.slice(escapedStart, caretAfter) === escapedSeparator;
+                        const nextChar = next.charAt(caretAfter);
+                        if (recent === entrySeparator && !escapedMatch && nextChar !== '\n' && nextChar !== '\r') {
+                            event.preventDefault();
+                            this.insertTextAtSelection(`${event.data}\n`, { preferTokenBoundary: true });
+                            return;
+                        }
                     }
                 }
             }
@@ -5865,6 +6183,7 @@
 
         this.onInputBlur = () => {
             this.inputText = this.readInputText();
+            this.syncActiveEntryIndicator();
         };
 
         this.onInputClick = (event) => {
@@ -5904,6 +6223,11 @@
                 this.showBlockedInfoFromElement(blocked);
                 return;
             }
+            const clickedEntryIndex = this.getEntryIndexAtCaret(this.getCaretOffset());
+            if (Number.isFinite(Number(clickedEntryIndex))) {
+                this.lastInteractedEntryIndex = Number(clickedEntryIndex);
+            }
+            this.syncActiveEntryIndicator();
             const dismissBtn = event.target.closest('[data-dismiss-key]');
             if (dismissBtn) {
                 event.preventDefault();
@@ -5934,6 +6258,26 @@
         };
 
         this.onPreviewClick = (event) => {
+            const cardEntryEl = event.target.closest('[data-qa-entry-index]');
+            if (cardEntryEl) {
+                const cardEntryIndex = Number(cardEntryEl.getAttribute('data-qa-entry-index'));
+                if (Number.isFinite(cardEntryIndex)) {
+                    this.lastInteractedEntryIndex = cardEntryIndex;
+                    this.syncActiveEntryIndicator();
+                }
+            } else if (this.isAiMode()) {
+                const aiCardEl = event.target.closest('[data-ai-entry-id]');
+                if (aiCardEl) {
+                    const aiEntryId = String(aiCardEl.getAttribute('data-ai-entry-id') || '');
+                    if (aiEntryId) {
+                        const aiEntryIndex = (this.aiState.entries || []).findIndex((item) => item && item._id === aiEntryId);
+                        if (aiEntryIndex >= 0) {
+                            this.lastInteractedEntryIndex = aiEntryIndex;
+                            this.syncActiveEntryIndicator();
+                        }
+                    }
+                }
+            }
             const numberStepBtn = event.target.closest('[data-number-step]');
             if (numberStepBtn) {
                 event.preventDefault();
@@ -6483,7 +6827,7 @@
             if (!this.dropdownState) {
                 return;
             }
-            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && this.dropdownState.source !== 'action-input') {
                 event.preventDefault();
                 this.moveDropdownActiveOption(event.key === 'ArrowDown' ? 1 : -1);
                 return;
@@ -6493,6 +6837,16 @@
                 if (active !== undefined && active !== null && active !== '') {
                     event.preventDefault();
                     this.commitDropdownSelection(active);
+                    return;
+                }
+                const query = String(this.dropdownSearchEl.value || '').trim();
+                if (
+                    this.dropdownState.allowCustom
+                    && !isFileFieldType(this.dropdownState.fieldType)
+                    && query
+                ) {
+                    event.preventDefault();
+                    this.commitDropdownSelection(query);
                 }
             }
         };
@@ -6651,7 +7005,30 @@
                     this.positionAttachmentSourceMenu(this.attachmentSourceMenuState.anchorEl || null);
                 }
                 this.syncInputClearButton();
+                this.syncActiveEntryIndicator();
             });
+        };
+
+        this.onRootClick = (event) => {
+            const actionBtn = event.target.closest('[data-field-action-btn="1"]');
+            if (!actionBtn) {
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            const fieldKey = String(actionBtn.getAttribute('data-field-key') || '').trim();
+            if (!fieldKey) {
+                return;
+            }
+            this.handleFieldActionButtonClick(fieldKey, actionBtn);
+        };
+        this.onRootChange = (event) => {
+            const applyToAllInput = event.target.closest('[data-field-action-apply-all="1"]');
+            if (!applyToAllInput) {
+                return;
+            }
+            this.fieldActionApplyToAllEnabled = applyToAllInput.checked === true;
+            this.renderFieldActionBar();
         };
 
         this.inputEl.addEventListener('input', this.onInput);
@@ -6662,6 +7039,10 @@
         this.inputEl.addEventListener('cut', this.onInputCut);
         this.inputEl.addEventListener('blur', this.onInputBlur);
         this.inputEl.addEventListener('click', this.onInputClick);
+        this.onInputScroll = () => {
+            this.syncActiveEntryIndicator();
+        };
+        this.inputEl.addEventListener('scroll', this.onInputScroll, { passive: true });
         this.onInputClearClick = (event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -6677,6 +7058,12 @@
         this.dropdownListEl.addEventListener('click', this.onDropdownListClick);
         this.dropdownListEl.addEventListener('scroll', this.onDropdownListScroll, { passive: true });
         this.attachmentSourceMenuEl.addEventListener('click', this.onAttachmentSourceMenuClick);
+        if (this.rootEl && this.onRootClick) {
+            this.rootEl.addEventListener('click', this.onRootClick);
+        }
+        if (this.rootEl && this.onRootChange) {
+            this.rootEl.addEventListener('change', this.onRootChange);
+        }
         if (this.conflictModalOverlayEl) {
             this.conflictModalOverlayEl.addEventListener('click', this.onConflictModalClick);
         }
@@ -6715,6 +7102,9 @@
         if (this.inputEl && this.onInputClick) {
             this.inputEl.removeEventListener('click', this.onInputClick);
         }
+        if (this.inputEl && this.onInputScroll) {
+            this.inputEl.removeEventListener('scroll', this.onInputScroll);
+        }
         if (this.inputClearBtnEl && this.onInputClearClick) {
             this.inputClearBtnEl.removeEventListener('click', this.onInputClearClick);
         }
@@ -6738,6 +7128,12 @@
         }
         if (this.attachmentSourceMenuEl && this.onAttachmentSourceMenuClick) {
             this.attachmentSourceMenuEl.removeEventListener('click', this.onAttachmentSourceMenuClick);
+        }
+        if (this.rootEl && this.onRootClick) {
+            this.rootEl.removeEventListener('click', this.onRootClick);
+        }
+        if (this.rootEl && this.onRootChange) {
+            this.rootEl.removeEventListener('change', this.onRootChange);
         }
         if (this.conflictModalOverlayEl && this.onConflictModalClick) {
             this.conflictModalOverlayEl.removeEventListener('click', this.onConflictModalClick);
@@ -7300,6 +7696,7 @@
                 selection.removeAllRanges();
                 selection.addRange(range);
                 this.ensureCaretVisibleInInput();
+                this.syncActiveEntryIndicator();
                 return;
             }
             remaining -= len;
@@ -7311,10 +7708,17 @@
         selection.removeAllRanges();
         selection.addRange(range);
         this.ensureCaretVisibleInInput();
+        this.syncActiveEntryIndicator();
     };
 
     QuickAddComponent.prototype.ensureCaretVisibleInInput = function ensureCaretVisibleInInput() {
         if (!this.inputEl || this.inputEl.scrollHeight <= this.inputEl.clientHeight + 1) {
+            return;
+        }
+        const caretOffset = this.getCaretOffset();
+        const source = String(this.inputText || this.readInputText() || '');
+        if (Number.isFinite(Number(caretOffset)) && Number(caretOffset) >= source.length) {
+            this.inputEl.scrollTop = this.inputEl.scrollHeight;
             return;
         }
         const selection = window.getSelection();
@@ -7332,6 +7736,9 @@
             }
         }
         if (!caretRect || (!caretRect.width && !caretRect.height)) {
+            if (Number.isFinite(Number(caretOffset)) && Number(caretOffset) >= source.length) {
+                this.inputEl.scrollTop = this.inputEl.scrollHeight;
+            }
             return;
         }
         const pad = 6;
@@ -7365,9 +7772,71 @@
             return;
         }
 
+        const markerClass = c.entryMarker || 'qa-entry-marker';
+        const markerActiveClass = c.entryMarkerActive || 'qa-entry-marker-active';
+        const preferredEntryIndex = this.resolvePreferredEntryIndexForFieldAction();
+        const entryStarts = (result.entries || [])
+            .filter((entry) => Number.isFinite(Number(entry.globalStart)))
+            .map((entry, idx) => {
+                let start = Math.max(0, Math.min(raw.length, Number(entry.globalStart)));
+                while (start < raw.length) {
+                    const ch = raw.charAt(start);
+                    if (ch !== '\n' && ch !== '\r') {
+                        break;
+                    }
+                    start += 1;
+                }
+                return {
+                    index: Number(entry.index),
+                    displayIndex: idx,
+                    start
+                };
+            })
+            .sort((a, b) => a.start - b.start || a.displayIndex - b.displayIndex);
+        const buildEntryMarkerHtml = (entryInfo) => {
+            const label = String(Number(entryInfo.displayIndex) + 1).padStart(2, '0');
+            const active = Number(entryInfo.index) === Number(preferredEntryIndex);
+            return `<span class="${markerClass}${active ? ` ${markerActiveClass}` : ''}" data-qa-ignore="1" contenteditable="false" data-entry-marker-index="${entryInfo.index}" title="Entry ${Number(entryInfo.displayIndex) + 1}" aria-hidden="true">${label}</span>`;
+        };
+        let entryCursor = 0;
+        const pushMarkersAt = (position, parts) => {
+            while (entryCursor < entryStarts.length && entryStarts[entryCursor].start === position) {
+                parts.push(buildEntryMarkerHtml(entryStarts[entryCursor]));
+                entryCursor += 1;
+            }
+        };
+        const pushRawSegmentWithMarkers = (start, end, parts) => {
+            if (end <= start) {
+                return;
+            }
+            let rawCursor = start;
+            while (entryCursor < entryStarts.length) {
+                const marker = entryStarts[entryCursor];
+                if (marker.start < start) {
+                    entryCursor += 1;
+                    continue;
+                }
+                if (marker.start >= end) {
+                    break;
+                }
+                if (marker.start > rawCursor) {
+                    parts.push(escHtml(raw.slice(rawCursor, marker.start)));
+                }
+                parts.push(buildEntryMarkerHtml(marker));
+                entryCursor += 1;
+                rawCursor = marker.start;
+            }
+            if (end > rawCursor) {
+                parts.push(escHtml(raw.slice(rawCursor, end)));
+            }
+        };
+
         let html = '';
         if (!this.config.showInlinePills) {
-            html = `<span class="${c.inlineText}">${escHtml(raw)}</span>`;
+            const parts = [];
+            pushRawSegmentWithMarkers(0, raw.length, parts);
+            pushMarkersAt(raw.length, parts);
+            html = `<span class="${c.inlineText}">${parts.join('')}</span>`;
         } else {
             const fieldTokens = [];
             result.entries.forEach((entry) => {
@@ -7384,8 +7853,9 @@
                     return;
                 }
                 if (token.globalStart > cursor) {
-                    parts.push(escHtml(raw.slice(cursor, token.globalStart)));
+                    pushRawSegmentWithMarkers(cursor, token.globalStart, parts);
                 }
+                pushMarkersAt(token.globalStart, parts);
 
                 const rawTokenChunk = raw.slice(token.globalStart, token.globalEnd);
                 const trailingWhitespaceMatch = rawTokenChunk.match(/\s+$/);
@@ -7400,8 +7870,9 @@
                 cursor = token.globalEnd;
             });
             if (cursor < raw.length) {
-                parts.push(escHtml(raw.slice(cursor)));
+                pushRawSegmentWithMarkers(cursor, raw.length, parts);
             }
+            pushMarkersAt(raw.length, parts);
             html = `<span class="${c.inlineText}">${parts.join('')}<span class="${c.inputTail}" data-qa-tail="1" data-qa-ignore="1" contenteditable="false" aria-hidden="true"></span></span>`;
         }
 
@@ -7835,6 +8306,8 @@
             this.config.onParse(this.lastResult);
         }
         this.syncInputClearButton();
+        this.renderFieldActionBar();
+        this.syncActiveEntryIndicator();
         if (!opts.skipHistory) {
             this.captureHistorySnapshot('parse');
         }
@@ -8035,6 +8508,16 @@
         return isFileFieldType(field.type) && this.getDropdownOptionsForField(field, entryKey, fieldKey).length > 0;
     };
 
+    QuickAddComponent.prototype.fieldSupportsActionInput = function fieldSupportsActionInput(field) {
+        if (!field) {
+            return false;
+        }
+        if (isDateFieldType(field.type) || isFileFieldType(field.type)) {
+            return false;
+        }
+        return field.type !== 'options';
+    };
+
     QuickAddComponent.prototype.isInteractivePill = function isInteractivePill(field) {
         if (!field) {
             return false;
@@ -8045,7 +8528,60 @@
         if (field.type === 'number' && this.isNumberStepperEnabledForField(field)) {
             return true;
         }
-        return this.fieldSupportsDropdown(field);
+        return this.fieldSupportsDropdown(field) || this.fieldSupportsActionInput(field);
+    };
+
+    QuickAddComponent.prototype.openFieldInputDropdown = function openFieldInputDropdown(options) {
+        const opts = options || {};
+        const field = opts.field || null;
+        if (!field || !opts.anchorEl) {
+            return false;
+        }
+        const entryIndex = Number.isFinite(Number(opts.entryIndex)) ? Number(opts.entryIndex) : 0;
+        const currentValue = opts.currentValue === undefined || opts.currentValue === null
+            ? ''
+            : String(opts.currentValue);
+        const searchValue = opts.searchValue === undefined || opts.searchValue === null
+            ? currentValue
+            : String(opts.searchValue);
+        const openOptions = Array.isArray(opts.options) ? opts.options.slice() : [];
+        this.dropdownState = {
+            fieldKey: field.key,
+            fieldType: field.type,
+            tokenId: opts.tokenId || '',
+            cleanupTokenIdOnClose: opts.cleanupTokenIdOnClose ? String(opts.cleanupTokenIdOnClose) : '',
+            entryIndex,
+            entryKey: opts.entryKey !== undefined ? opts.entryKey : entryIndex,
+            currentValue,
+            allowCustom: opts.allowCustom === true,
+            options: openOptions,
+            sourceRegion: opts.sourceRegion || 'inline',
+            anchorRect: opts.anchorRect || (opts.anchorEl && opts.anchorEl.getBoundingClientRect ? opts.anchorEl.getBoundingClientRect() : null),
+            anchorEl: opts.anchorEl || null,
+            source: opts.source || 'click',
+            activeOptionValue: null,
+            filteredOptions: [],
+            activateFirstOnOpen: true,
+            keepActiveWhenFiltering: false,
+            aiContext: opts.aiContext || null,
+            applyToAll: opts.applyToAll === true
+        };
+        if (this.timer) {
+            clearTimeout(this.timer);
+            this.timer = null;
+        }
+        this.dropdownSearchEl.hidden = false;
+        this.dropdownSearchEl.value = searchValue;
+        this.renderDropdownList();
+        this.positionDropdown(opts.anchorEl);
+        this.captureFocusOrigin('dropdown', opts.anchorEl, this.inputEl);
+        this.dropdownEl.hidden = false;
+        this.dropdownEl.classList.add(this.config.classNames.dropdownOpen);
+        this.scrollDropdownActiveOptionIntoView();
+        this.syncDropdownA11y();
+        this.dropdownSearchEl.focus();
+        this.dropdownSearchEl.select();
+        return true;
     };
 
     QuickAddComponent.prototype.buildPillHtml = function buildPillHtml(data) {
@@ -8521,6 +9057,23 @@
         return null;
     };
 
+    QuickAddComponent.prototype.findInferredById = function findInferredById(inferredId) {
+        const targetId = String(inferredId || '');
+        if (!targetId) {
+            return null;
+        }
+        const entries = this.lastResult && Array.isArray(this.lastResult.entries) ? this.lastResult.entries : [];
+        for (let i = 0; i < entries.length; i++) {
+            const inferred = entries[i] && Array.isArray(entries[i].inferred) ? entries[i].inferred : [];
+            for (let j = 0; j < inferred.length; j++) {
+                if (String(inferred[j] && inferred[j].id || '') === targetId) {
+                    return inferred[j];
+                }
+            }
+        }
+        return null;
+    };
+
     QuickAddComponent.prototype.findTokenById = function findTokenById(entry, tokenId) {
         if (!tokenId) {
             return null;
@@ -8598,6 +9151,25 @@
         });
 
         return selections;
+    };
+
+    QuickAddComponent.prototype.resolvePillAnchorForToken = function resolvePillAnchorForToken(sourceRegion, tokenId, fallbackEl) {
+        const id = String(tokenId || '').trim();
+        if (!id) {
+            return fallbackEl || null;
+        }
+        const scope = sourceRegion === 'card' ? this.previewEl : this.inputEl;
+        if (!scope || typeof scope.querySelectorAll !== 'function') {
+            return fallbackEl || null;
+        }
+        const candidates = scope.querySelectorAll('[data-qa-pill="1"][data-pill-token]');
+        for (let i = 0; i < candidates.length; i++) {
+            const candidate = candidates[i];
+            if (String(candidate.getAttribute('data-pill-token') || '') === id) {
+                return candidate;
+            }
+        }
+        return fallbackEl || null;
     };
 
     QuickAddComponent.prototype.getMultiSelectDisplaySeparator = function getMultiSelectDisplaySeparator() {
@@ -10191,7 +10763,7 @@
                     : '';
 
                 return `
-                    <article class="${c.entry}${removed ? ` ${c.pillBlocked}` : ''}">
+                    <article class="${c.entry}${removed ? ` ${c.pillBlocked}` : ''}" data-qa-entry-index="${entry.index}">
                         ${headerHtml}
                         ${pillsHtml}
                         ${attachmentsHtml}
@@ -10213,17 +10785,38 @@
     };
 
     QuickAddComponent.prototype.getCaretClientRect = function getCaretClientRect() {
+        const hasArea = (rect) => !!(rect && (Number(rect.width) + Number(rect.height) > 0));
+        const fallbackInputRect = this.inputEl ? this.inputEl.getBoundingClientRect() : null;
         const sel = window.getSelection();
-        if (!sel || sel.rangeCount === 0) {
-            return this.inputEl.getBoundingClientRect();
+        if (sel && sel.rangeCount > 0) {
+            const range = sel.getRangeAt(0).cloneRange();
+            range.collapse(true);
+            const rect = range.getBoundingClientRect();
+            if (hasArea(rect)) {
+                return rect;
+            }
+            if (typeof range.getClientRects === 'function') {
+                const rects = range.getClientRects();
+                if (rects && rects.length > 0 && hasArea(rects[0])) {
+                    return rects[0];
+                }
+            }
         }
-        const range = sel.getRangeAt(0).cloneRange();
-        range.collapse(true);
-        const rect = range.getBoundingClientRect();
-        if (rect && rect.width + rect.height > 0) {
-            return rect;
+        const caretOffset = this.getCaretOffset();
+        if (Number.isFinite(Number(caretOffset))) {
+            const offsetRect = this.getTextOffsetClientRect(Number(caretOffset));
+            if (hasArea(offsetRect)) {
+                return offsetRect;
+            }
         }
-        return this.inputEl.getBoundingClientRect();
+        const source = String(this.inputText || this.readInputText() || '');
+        const tailRect = this.getTextOffsetClientRect(source.length);
+        if (hasArea(tailRect)) {
+            return tailRect;
+        }
+        return fallbackInputRect || {
+            left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0
+        };
     };
 
     QuickAddComponent.prototype.findOptionTokenAtCaret = function findOptionTokenAtCaret(caretOffset) {
@@ -10295,6 +10888,115 @@
             fallback = entry.index;
         }
         return fallback;
+    };
+
+    QuickAddComponent.prototype.getTextOffsetClientRect = function getTextOffsetClientRect(offset) {
+        if (!this.inputEl) {
+            return null;
+        }
+        const source = String(this.inputText || this.readInputText() || '');
+        const safeOffset = Math.max(0, Math.min(Number(offset) || 0, source.length));
+        const range = document.createRange();
+        const walker = document.createTreeWalker(
+            this.inputEl,
+            NodeFilter.SHOW_TEXT,
+            {
+                acceptNode: (node) => {
+                    if (!node || !(node.nodeValue || '').length) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+                    if (this.isIgnoredTextNode(node)) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+                    return NodeFilter.FILTER_ACCEPT;
+                }
+            }
+        );
+        let remaining = safeOffset;
+        let node = walker.nextNode();
+        while (node) {
+            const len = (node.nodeValue || '').length;
+            if (remaining <= len) {
+                range.setStart(node, remaining);
+                range.collapse(true);
+                const rect = range.getBoundingClientRect();
+                if (rect && (rect.width + rect.height) > 0) {
+                    return rect;
+                }
+                break;
+            }
+            remaining -= len;
+            node = walker.nextNode();
+        }
+        range.selectNodeContents(this.inputEl);
+        range.collapse(false);
+        const fallback = range.getBoundingClientRect();
+        return fallback && (fallback.width + fallback.height) > 0 ? fallback : null;
+    };
+
+    QuickAddComponent.prototype.syncActiveEntryIndicator = function syncActiveEntryIndicator() {
+        const c = this.config.classNames || {};
+        const activeClass = c.entryActive || 'qa-entry-active';
+        const preferredIndex = this.resolvePreferredEntryIndexForFieldAction();
+        if (this.previewEl) {
+            const cards = Array.from(this.previewEl.querySelectorAll(`.${c.entry}`));
+            cards.forEach((card) => card.classList.remove(activeClass));
+            if (cards.length) {
+                let activeCard = null;
+                if (this.isAiMode()) {
+                    const aiCards = Array.from(this.previewEl.querySelectorAll(`.${c.entry}[data-ai-entry-id]`));
+                    const preferred = Number(preferredIndex);
+                    const aiIndex = Number.isFinite(preferred) ? preferred : (aiCards.length - 1);
+                    activeCard = aiCards[aiIndex] || aiCards[aiCards.length - 1] || null;
+                } else {
+                    const deterministicCards = Array.from(this.previewEl.querySelectorAll(`.${c.entry}[data-qa-entry-index]`));
+                    const preferred = Number(preferredIndex);
+                    if (Number.isFinite(preferred)) {
+                        activeCard = this.previewEl.querySelector(`.${c.entry}[data-qa-entry-index="${preferred}"]`);
+                    }
+                    if (!activeCard) {
+                        activeCard = deterministicCards[deterministicCards.length - 1] || null;
+                    }
+                }
+                if (activeCard) {
+                    activeCard.classList.add(activeClass);
+                }
+            }
+        }
+        if (this.inputEl) {
+            const markerActiveClass = c.entryMarkerActive || 'qa-entry-marker-active';
+            const markerEls = Array.from(this.inputEl.querySelectorAll('[data-entry-marker-index]'));
+            markerEls.forEach((el) => {
+                const markerIndex = Number(el.getAttribute('data-entry-marker-index'));
+                const isActive = Number.isFinite(markerIndex) && markerIndex === Number(preferredIndex);
+                el.classList.toggle(markerActiveClass, isActive);
+            });
+        }
+    };
+
+    QuickAddComponent.prototype.resolvePreferredEntryIndexForFieldAction = function resolvePreferredEntryIndexForFieldAction(options) {
+        const opts = options || {};
+        const preferCaret = opts.preferCaret !== false;
+        const dropdownEntryIndex = this.dropdownState && Number(this.dropdownState.entryIndex);
+        if (Number.isFinite(dropdownEntryIndex)) {
+            return dropdownEntryIndex;
+        }
+        const dateEntryIndex = this.datePickerState && Number(this.datePickerState.entryIndex);
+        if (Number.isFinite(dateEntryIndex)) {
+            return dateEntryIndex;
+        }
+        if (preferCaret && this.inputEl && document.activeElement === this.inputEl) {
+            const caret = this.getCaretOffset();
+            if (Number.isFinite(Number(caret))) {
+                return this.getEntryIndexAtCaret(Number(caret));
+            }
+        }
+        const lastInteracted = Number(this.lastInteractedEntryIndex);
+        if (Number.isFinite(lastInteracted)) {
+            return lastInteracted;
+        }
+        const entries = Array.isArray(this.lastResult && this.lastResult.entries) ? this.lastResult.entries : [];
+        return entries.length ? Number(entries[entries.length - 1].index) : 0;
     };
 
     QuickAddComponent.prototype.findFieldMenuContextAtCaret = function findFieldMenuContextAtCaret(caretOffset) {
@@ -10578,6 +11280,171 @@
         this.syncDropdownA11y();
     };
 
+    QuickAddComponent.prototype.getPrimaryPrefixForField = function getPrimaryPrefixForField(field) {
+        if (!field) {
+            return '';
+        }
+        if (Array.isArray(field.prefixes) && field.prefixes.length > 0 && String(field.prefixes[0] || '').trim()) {
+            return String(field.prefixes[0]);
+        }
+        return `${field.key}:`;
+    };
+
+    QuickAddComponent.prototype.findFieldTokenAtCaretForField = function findFieldTokenAtCaretForField(caretOffset, fieldKey) {
+        if (!Number.isFinite(Number(caretOffset)) || !fieldKey) {
+            return null;
+        }
+        const caret = Number(caretOffset);
+        let match = null;
+        (this.lastResult.entries || []).forEach((entry) => {
+            (entry.tokens || []).forEach((token) => {
+                if (!token || token.kind !== 'field' || token.key !== fieldKey) {
+                    return;
+                }
+                const start = Number(token.globalStart);
+                const end = Number(token.globalEnd);
+                if (!Number.isFinite(start) || !Number.isFinite(end)) {
+                    return;
+                }
+                const touchesCaret = (caret >= start && caret <= end) || ((caret - 1) >= start && (caret - 1) <= end);
+                if (!touchesCaret) {
+                    return;
+                }
+                if (!match || start >= Number(match.globalStart)) {
+                    match = token;
+                }
+            });
+        });
+        if (match) {
+            return match;
+        }
+        const fallback = this.findCommittedFieldTokenEndingAtOffset(caret) || this.findCommittedFieldTokenEndingAtOffset(caret - 1);
+        if (fallback && fallback.key === fieldKey) {
+            return fallback;
+        }
+        return null;
+    };
+
+    QuickAddComponent.prototype.resolveFieldTokenForInteraction = function resolveFieldTokenForInteraction(entryIndex, fieldKey, preferredValue, sourceRegion) {
+        const entry = (this.lastResult.entries || []).find((item) => item.index === entryIndex);
+        if (!entry) {
+            return null;
+        }
+        const tokens = (entry.tokens || []).filter((token) => token && token.kind === 'field' && token.key === fieldKey);
+        if (!tokens.length) {
+            return null;
+        }
+        if (preferredValue !== undefined && preferredValue !== null && preferredValue !== '') {
+            const exact = tokens.find((token) => normValue(token.value || '') === normValue(preferredValue));
+            if (exact) {
+                return exact;
+            }
+        }
+        return tokens[tokens.length - 1] || null;
+    };
+
+    QuickAddComponent.prototype.handleFieldActionButtonClick = function handleFieldActionButtonClick(fieldKey, anchorEl) {
+        const field = this.getFieldDefinition(fieldKey);
+        if (!field || !this.inputEl) {
+            return;
+        }
+        const applyToAll = this.isFieldActionApplyAllActive() && !this.isAiMode();
+        this.closeAttachmentSourceMenu();
+        this.closeBlockedInfo();
+        this.closeDatePicker();
+        const hadInputFocus = document.activeElement === this.inputEl;
+        const targetEntryIndex = hadInputFocus
+            ? this.getEntryIndexAtCaret(this.getCaretOffset())
+            : this.resolvePreferredEntryIndexForFieldAction({ preferCaret: false });
+        if (document.activeElement !== this.inputEl) {
+            this.inputEl.focus();
+        }
+        let source = String(this.inputText || this.readInputText() || '');
+        let caret = hadInputFocus ? this.getCaretOffset() : NaN;
+        if (!hadInputFocus) {
+            const targetEntry = (this.lastResult.entries || []).find((entry) => Number(entry.index) === Number(targetEntryIndex));
+            if (targetEntry && Number.isFinite(Number(targetEntry.globalEnd))) {
+                caret = Number(targetEntry.globalEnd);
+            }
+        }
+        if (!Number.isFinite(Number(caret))) {
+            caret = source.length;
+        }
+        caret = Math.max(0, Math.min(Number(caret), source.length));
+        this.setCaretOffset(caret, true);
+        this.lastInteractedEntryIndex = targetEntryIndex;
+        let token = this.findFieldTokenAtCaretForField(caret, field.key);
+        let cleanupTokenIdOnClose = '';
+        if (!token) {
+            token = this.resolveFieldTokenForInteraction(targetEntryIndex, field.key, '', 'inline');
+        }
+        if (!token && !applyToAll) {
+            const prefix = this.getPrimaryPrefixForField(field);
+            const beforeChar = source.charAt(Math.max(0, caret - 1));
+            const needsSpace = !!beforeChar && !/\s/.test(beforeChar);
+            const snippet = `${needsSpace ? ' ' : ''}${prefix}`;
+            source = this.replaceRange(source, caret, caret, snippet);
+            caret += snippet.length;
+            this.parseAndRender({
+                source,
+                caretOffset: caret,
+                focusInput: true,
+                skipTypingSync: true
+            });
+            token = this.resolveFieldTokenForInteraction(targetEntryIndex, field.key, '', 'inline')
+                || this.findFieldTokenAtCaretForField(caret, field.key);
+            if (token && token.id) {
+                cleanupTokenIdOnClose = String(token.id);
+            }
+        }
+        if (!token && !applyToAll) {
+            return;
+        }
+        const currentEntryValue = this.getEntryFieldCurrentValueForActionBar(targetEntryIndex, field.key);
+        const entryIndex = token && Number.isFinite(Number(token.entryIndex))
+            ? Number(token.entryIndex)
+            : this.getEntryIndexAtCaret(caret);
+        if (isDateFieldType(field.type)) {
+            this.openDatePicker({
+                field,
+                token,
+                value: token ? token.value : currentEntryValue,
+                entryIndex,
+                anchorEl: anchorEl || this.inputEl,
+                sourceRegion: 'inline',
+                cleanupTokenIdOnClose,
+                applyToAll
+            });
+            return;
+        }
+        const supportsDropdown = this.fieldSupportsDropdown(field, entryIndex, field.key);
+        const supportsInput = this.fieldSupportsActionInput(field);
+        if (!supportsDropdown && !supportsInput) {
+            return;
+        }
+        const options = supportsDropdown
+            ? this.getDropdownOptionsForField(field, entryIndex, field.key)
+            : [];
+        if (supportsDropdown && options.length === 0) {
+            return;
+        }
+        this.openFieldInputDropdown({
+            field,
+            tokenId: token && token.id ? token.id : '',
+            entryIndex,
+            entryKey: entryIndex,
+            currentValue: token ? (token.value || '') : currentEntryValue,
+            searchValue: supportsDropdown ? '' : (token ? (token.value || '') : currentEntryValue),
+            allowCustom: supportsDropdown ? !!field.allowCustom : true,
+            options,
+            sourceRegion: 'inline',
+            anchorEl: anchorEl || this.inputEl,
+            source: supportsDropdown ? 'click' : 'action-input',
+            cleanupTokenIdOnClose,
+            applyToAll
+        });
+    };
+
     QuickAddComponent.prototype.handlePillClick = function handlePillClick(pillEl) {
         this.closeAttachmentSourceMenu();
         this.closeBlockedInfo();
@@ -10602,6 +11469,7 @@
             if (!Number.isFinite(resolvedEntryIndex)) {
                 resolvedEntryIndex = 0;
             }
+            this.lastInteractedEntryIndex = resolvedEntryIndex;
             const field = this.getFieldDefinition(fieldKey);
             if (!field || !entryId) {
                 return;
@@ -10630,30 +11498,30 @@
             if (field.type === 'number' && this.isNumberStepperEnabledForField(field)) {
                 return;
             }
-            if (!this.fieldSupportsDropdown(field, entryId, fieldKey)) {
+            const supportsDropdown = this.fieldSupportsDropdown(field, entryId, fieldKey);
+            const supportsInput = this.fieldSupportsActionInput(field);
+            if (!supportsDropdown && !supportsInput) {
                 return;
             }
-            const options = this.getDropdownOptionsForField(field, entryId, fieldKey);
-            if (options.length === 0) {
+            const options = supportsDropdown
+                ? this.getDropdownOptionsForField(field, entryId, fieldKey)
+                : [];
+            if (supportsDropdown && options.length === 0) {
                 return;
             }
-            this.dropdownState = {
-                fieldKey,
-                fieldType: field.type,
+            this.openFieldInputDropdown({
+                field,
                 tokenId: '',
                 entryIndex: resolvedEntryIndex,
                 entryKey: entryId,
                 currentValue,
-                allowCustom: !!field.allowCustom,
+                searchValue: supportsDropdown ? '' : currentValue,
+                allowCustom: supportsDropdown ? !!field.allowCustom : true,
                 options,
                 sourceRegion,
                 anchorRect: pillEl.getBoundingClientRect(),
                 anchorEl: pillEl,
-                source: 'click',
-                activeOptionValue: null,
-                filteredOptions: [],
-                activateFirstOnOpen: true,
-                keepActiveWhenFiltering: false,
+                source: supportsDropdown ? 'click' : 'action-input',
                 aiContext: {
                     entryId,
                     fieldKey,
@@ -10662,22 +11530,7 @@
                     mappingKey,
                     sourceRegion
                 }
-            };
-            if (this.timer) {
-                clearTimeout(this.timer);
-                this.timer = null;
-            }
-            this.dropdownSearchEl.hidden = false;
-            this.dropdownSearchEl.value = '';
-            this.renderDropdownList();
-            this.positionDropdown(pillEl);
-            this.captureFocusOrigin('dropdown', pillEl, this.inputEl);
-            this.dropdownEl.hidden = false;
-            this.dropdownEl.classList.add(this.config.classNames.dropdownOpen);
-            this.scrollDropdownActiveOptionIntoView();
-            this.syncDropdownA11y();
-            this.dropdownSearchEl.focus();
-            this.dropdownSearchEl.select();
+            });
             return;
         }
 
@@ -10687,6 +11540,7 @@
         if (!fieldKey || Number.isNaN(entryIndex)) {
             return;
         }
+        this.lastInteractedEntryIndex = entryIndex;
 
         const field = this.getFieldDefinition(fieldKey);
         if (!field) {
@@ -10694,8 +11548,12 @@
         }
 
         let token = tokenId ? this.tokenMap[tokenId] : null;
+        let anchorElForOpen = pillEl;
         if (!token && pillValue) {
             token = this.materializeEntryFieldToken(entryIndex, fieldKey, pillValue, sourceRegion);
+            if (token && token.id) {
+                anchorElForOpen = this.resolvePillAnchorForToken(sourceRegion, token.id, pillEl);
+            }
         }
 
         if (isDateFieldType(field.type)) {
@@ -10706,12 +11564,14 @@
                 this.closeDatePicker();
                 return;
             }
-            pillEl.setAttribute('data-qa-date-pill', '1');
+            if (anchorElForOpen) {
+                anchorElForOpen.setAttribute('data-qa-date-pill', '1');
+            }
             this.openDatePicker({
                 field,
                 token,
                 entryIndex,
-                anchorEl: pillEl,
+                anchorEl: anchorElForOpen || pillEl,
                 sourceRegion
             });
             return;
@@ -10720,51 +11580,41 @@
             return;
         }
 
-        if (!this.fieldSupportsDropdown(field, entryIndex, fieldKey)) {
+        const supportsDropdown = this.fieldSupportsDropdown(field, entryIndex, fieldKey);
+        const supportsInput = this.fieldSupportsActionInput(field);
+        if (!supportsDropdown && !supportsInput) {
             return;
         }
 
-        const options = this.getDropdownOptionsForField(field, entryIndex, fieldKey);
-        if (options.length === 0) {
+        const options = supportsDropdown
+            ? this.getDropdownOptionsForField(field, entryIndex, fieldKey)
+            : [];
+        if (supportsDropdown && options.length === 0) {
             return;
         }
 
-        this.dropdownState = {
-            fieldKey,
-            fieldType: field.type,
+        this.openFieldInputDropdown({
+            field,
             tokenId: token ? token.id : '',
             entryIndex,
             entryKey: entryIndex,
             currentValue: (field.multiple && field.type === 'options')
                 ? (pillValue || (token ? token.value : ''))
                 : (token ? token.value : pillValue),
-            allowCustom: !!field.allowCustom,
+            searchValue: supportsDropdown
+                ? ''
+                : ((field.multiple && field.type === 'options')
+                    ? (pillValue || (token ? token.value : ''))
+                    : (token ? token.value : pillValue)),
+            allowCustom: supportsDropdown ? !!field.allowCustom : true,
             options,
             sourceRegion,
-            anchorRect: pillEl.getBoundingClientRect(),
-            anchorEl: pillEl,
-            source: 'click',
-            activeOptionValue: null,
-            filteredOptions: [],
-            activateFirstOnOpen: true,
-            keepActiveWhenFiltering: false
-        };
-        if (this.timer) {
-            clearTimeout(this.timer);
-            this.timer = null;
-        }
-
-        this.dropdownSearchEl.hidden = false;
-        this.dropdownSearchEl.value = '';
-        this.renderDropdownList();
-        this.positionDropdown(pillEl);
-        this.captureFocusOrigin('dropdown', pillEl, this.inputEl);
-        this.dropdownEl.hidden = false;
-        this.dropdownEl.classList.add(this.config.classNames.dropdownOpen);
-        this.scrollDropdownActiveOptionIntoView();
-        this.syncDropdownA11y();
-        this.dropdownSearchEl.focus();
-        this.dropdownSearchEl.select();
+            anchorRect: anchorElForOpen && anchorElForOpen.getBoundingClientRect
+                ? anchorElForOpen.getBoundingClientRect()
+                : pillEl.getBoundingClientRect(),
+            anchorEl: anchorElForOpen || pillEl,
+            source: supportsDropdown ? 'click' : 'action-input'
+        });
     };
 
     QuickAddComponent.prototype.placeCaretNearPill = function placeCaretNearPill(pillEl, clickEvent) {
@@ -10779,7 +11629,7 @@
         const midpoint = rect.left + (rect.width / 2);
         let caretOffset = null;
         if (tokenId) {
-            const token = this.tokenMap[tokenId];
+            const token = this.tokenMap[tokenId] || this.findInferredById(tokenId);
             if (token) {
                 caretOffset = clickX >= midpoint ? token.globalEnd : token.globalStart;
             }
@@ -11096,13 +11946,25 @@
             filterRaw.trim(),
             this.dropdownState.entryIndex
         ).ok;
+        const customValue = filterRaw.trim();
+        const allowCustomOption = !!(
+            this.dropdownState.allowCustom
+            && !!(field && field.type === 'options')
+            && !isFileFieldType(this.dropdownState.fieldType)
+            && query
+            && !exactMatch
+            && customAllowedByDependency
+        );
 
-        if (this.dropdownState.allowCustom && !isFileFieldType(this.dropdownState.fieldType) && query && !exactMatch && customAllowedByDependency) {
+        if (allowCustomOption) {
             const customId = `${this.dropdownOptionIdPrefix}${filtered.length}`;
+            const customActive = this.dropdownState.activeOptionValue !== null
+                && this.dropdownState.activeOptionValue !== undefined
+                && normValue(this.dropdownState.activeOptionValue) === normValue(customValue);
             items.push(`
-                <button type="button" id="${customId}" role="option" aria-selected="false" class="${c.dropdownOption} ${c.dropdownAdd}" data-option-value="${escHtml(filterRaw.trim())}">
+                <button type="button" id="${customId}" role="option" aria-selected="${customActive ? 'true' : 'false'}" class="${c.dropdownOption} ${c.dropdownAdd}${customActive ? ` ${c.dropdownOptionActive}` : ''}" data-option-value="${escHtml(customValue)}">
                     <span class="${c.dropdownColor}"></span>
-                    <span class="qa-dropdown-label">Add "${escHtml(filterRaw.trim())}"</span>
+                    <span class="qa-dropdown-label">Add "${escHtml(customValue)}"</span>
                     <span class="${c.dropdownMeta}">custom</span>
                 </button>
             `);
@@ -11110,7 +11972,9 @@
 
         if (items.length === 0) {
             const dependencyBlocked = dependencyFiltered.length === 0;
-            const msg = dependencyBlocked ? 'No options (constraints active)' : 'No options';
+            const msg = this.dropdownState.source === 'action-input'
+                ? 'Type a value and press Enter'
+                : (dependencyBlocked ? 'No options (constraints active)' : 'No options');
             this.dropdownListEl.innerHTML = `<div class="${c.dropdownMeta}" style="padding:8px 10px;">${escHtml(msg)}</div>`;
             this.dropdownState.filteredOptions = [];
             this.dropdownState.activeOptionValue = null;
@@ -11119,13 +11983,23 @@
             return;
         }
 
-        this.dropdownState.filteredOptions = filtered.slice();
+        const navigableOptions = filtered.slice();
+        if (allowCustomOption) {
+            navigableOptions.push({ value: customValue });
+        }
+        this.dropdownState.filteredOptions = navigableOptions;
         const hasActive = this.dropdownState.activeOptionValue !== null
             && this.dropdownState.activeOptionValue !== undefined
-            && filtered.some((option) => normValue(option.value) === normValue(this.dropdownState.activeOptionValue));
+            && navigableOptions.some((option) => normValue(option.value) === normValue(this.dropdownState.activeOptionValue));
         if (!hasActive && this.dropdownState.activateFirstOnOpen) {
-            const firstSelected = filtered.find((option) => selectedNorm.has(normValue(option.value)));
-            this.dropdownState.activeOptionValue = (firstSelected || filtered[0] || {}).value || null;
+            const preferTopUnselected = isMultiSelectOptions && this.config.sortSelectedMultiOptionsToBottom !== false;
+            const firstSelected = navigableOptions.find((option) => selectedNorm.has(normValue(option.value)));
+            const firstUnselected = navigableOptions.find((option) => !selectedNorm.has(normValue(option.value)));
+            this.dropdownState.activeOptionValue = (
+                preferTopUnselected
+                    ? (firstUnselected || navigableOptions[0] || {})
+                    : (firstSelected || navigableOptions[0] || {})
+            ).value || null;
             this.dropdownState.activateFirstOnOpen = false;
             return this.renderDropdownList();
         }
@@ -11182,6 +12056,35 @@
 
     QuickAddComponent.prototype.replaceRange = function replaceRange(text, start, end, replacement) {
         return text.slice(0, start) + replacement + text.slice(end);
+    };
+
+    QuickAddComponent.prototype.discardPendingTokenById = function discardPendingTokenById(tokenId, options) {
+        const id = String(tokenId || '').trim();
+        if (!id) {
+            return false;
+        }
+        const token = this.tokenMap && this.tokenMap[id];
+        if (!token || token.kind !== 'field' || token.committed) {
+            return false;
+        }
+        const source = String(this.inputText || this.readInputText() || '');
+        const start = Math.max(0, Math.min(Number(token.globalStart) || 0, source.length));
+        const end = Math.max(start, Math.min(Number(token.globalEnd) || start, source.length));
+        if (end <= start) {
+            return false;
+        }
+        let updated = this.replaceRange(source, start, end, '');
+        if (start > 0 && start < updated.length && updated.charAt(start - 1) === ' ' && updated.charAt(start) === ' ') {
+            updated = this.replaceRange(updated, start, start + 1, '');
+        }
+        const opts = options || {};
+        this.parseAndRender({
+            source: updated,
+            caretOffset: Math.max(0, Math.min(start, updated.length)),
+            focusInput: opts.focusInput === true,
+            skipTypingSync: true
+        });
+        return true;
     };
 
     QuickAddComponent.prototype.runBeforeCommitField = async function runBeforeCommitField(context) {
@@ -11273,6 +12176,84 @@
         };
     };
 
+    QuickAddComponent.prototype.applyDeterministicFieldValueToAllEntries = function applyDeterministicFieldValueToAllEntries(options) {
+        if (this.isAiMode() || !options || !options.fieldKey) {
+            return null;
+        }
+        const field = this.getFieldDefinition(options.fieldKey);
+        if (!field) {
+            return null;
+        }
+        const entries = Array.isArray(this.lastResult && this.lastResult.entries)
+            ? this.lastResult.entries.slice().sort((a, b) => Number(b.globalStart) - Number(a.globalStart))
+            : [];
+        if (!entries.length) {
+            return null;
+        }
+        const separator = String(this.config.multiSelectSeparator || ',');
+        const terminator = String(this.config.fieldTerminator || '');
+        const targetValue = String(options.nextValue === undefined || options.nextValue === null ? '' : options.nextValue);
+        const multiToggleMode = options.multiToggleMode === 'add' || options.multiToggleMode === 'remove'
+            ? options.multiToggleMode
+            : '';
+        let source = String(this.inputText || this.readInputText() || '');
+        entries.forEach((entry) => {
+            const tokens = (entry.tokens || []).filter((token) => token && token.kind === 'field' && token.key === field.key);
+            const token = tokens.length ? tokens[tokens.length - 1] : null;
+            let nextValueForEntry = targetValue;
+            if (field.multiple && field.type === 'options' && multiToggleMode) {
+                const existingValues = token
+                    ? splitByMultiSeparator(token.value || '', separator)
+                    : this.resolveEntryFieldValues(entry, field.key);
+                const targetNorm = normValue(targetValue);
+                const nextValues = dedupeMultiValues(existingValues);
+                const existingIndex = nextValues.findIndex((item) => normValue(item) === targetNorm);
+                if (multiToggleMode === 'add') {
+                    if (existingIndex < 0) {
+                        nextValues.push(targetValue);
+                    }
+                } else if (existingIndex >= 0) {
+                    nextValues.splice(existingIndex, 1);
+                }
+                nextValueForEntry = nextValues.join(`${separator} `);
+            }
+            if (!token && multiToggleMode === 'remove') {
+                return;
+            }
+            if (token) {
+                source = this.replaceRange(source, token.globalValueStart, token.globalValueEnd, nextValueForEntry);
+                let caret = token.globalValueStart + nextValueForEntry.length;
+                if (!token.committed && terminator) {
+                    const tokenTail = source.slice(caret, caret + terminator.length);
+                    if (tokenTail !== terminator) {
+                        source = this.replaceRange(source, caret, caret, terminator);
+                        caret += terminator.length;
+                    }
+                    const nextChar = source.charAt(caret);
+                    if (nextChar !== '\n' && !/\s/.test(nextChar || '')) {
+                        source = this.replaceRange(source, caret, caret, ' ');
+                    }
+                }
+                return;
+            }
+            if (!nextValueForEntry && !terminator) {
+                return;
+            }
+            const prefix = this.getPrimaryPrefixForField(field);
+            const insertAt = Math.max(0, Math.min(Number(entry.globalEnd) || 0, source.length));
+            const beforeChar = source.charAt(Math.max(0, insertAt - 1));
+            const needsSpace = !!beforeChar && !/\s/.test(beforeChar);
+            const snippet = `${needsSpace ? ' ' : ''}${prefix}${nextValueForEntry}${terminator}`;
+            source = this.replaceRange(source, insertAt, insertAt, snippet);
+            const afterInsert = insertAt + snippet.length;
+            const nextChar = source.charAt(afterInsert);
+            if (nextChar && nextChar !== '\n' && !/\s/.test(nextChar)) {
+                source = this.replaceRange(source, afterInsert, afterInsert, ' ');
+            }
+        });
+        return source;
+    };
+
     QuickAddComponent.prototype.applyDropdownSelection = async function applyDropdownSelection(nextValue) {
         if (!this.dropdownState) {
             return;
@@ -11343,6 +12324,9 @@
         if (commitValidation.warning) {
             this.statusEl.textContent = commitValidation.warning;
         }
+        if (this.dropdownState) {
+            this.dropdownState.cleanupTokenIdOnClose = '';
+        }
 
         if (isFileFieldType(state.fieldType) && selectedOption && selectedOption.attachmentId) {
             const targetEntryKey = state.aiContext
@@ -11381,6 +12365,33 @@
             });
             return;
         }
+        if (state.applyToAll === true && !this.isAiMode() && !isFileFieldType(state.fieldType)) {
+            const separator = String(this.config.multiSelectSeparator || ',');
+            const selectedNorm = normValue(nextValue);
+            const selectedInCurrent = isMultiSelectOptions
+                ? splitByMultiSeparator(state.currentValue || '', separator).some((item) => normValue(item) === selectedNorm)
+                : false;
+            this.fieldActionApplyToAllEnabled = true;
+            const updatedAll = this.applyDeterministicFieldValueToAllEntries({
+                fieldKey: state.fieldKey,
+                nextValue,
+                multiToggleMode: isMultiSelectOptions ? (selectedInCurrent ? 'remove' : 'add') : ''
+            });
+            const focusInput = this.shouldRefocusInputAfterCommit({
+                source: state.source,
+                sourceRegion: state.sourceRegion,
+                anchorEl: state.anchorEl
+            });
+            this.closeDropdown();
+            if (typeof updatedAll === 'string') {
+                this.parseAndRender({
+                    source: updatedAll,
+                    focusInput,
+                    skipTypingSync: true
+                });
+            }
+            return;
+        }
 
         let token = this.tokenMap[state.tokenId];
         if (!token && state.sourceRegion === 'card') {
@@ -11399,7 +12410,7 @@
         const source = this.inputText || this.readInputText();
         const separator = String(this.config.multiSelectSeparator || ',');
         const terminator = String(this.config.fieldTerminator || '');
-        const fromTyping = state.source === 'typing';
+        const fromTyping = state.source === 'typing' || state.source === 'action-input';
         const escapedSeparator = String(separator || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const escapedTerminator = String(terminator || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         let replacement = String(nextValue);
@@ -11469,7 +12480,7 @@
             let appendedTerminator = false;
             const shouldAppendTerminator = (
                 tokenTail !== terminator
-                && (fromTyping || this.config.fieldTerminatorMode === 'strict')
+                && (fromTyping || state.source === 'click' || this.config.fieldTerminatorMode === 'strict')
             );
             if (shouldAppendTerminator) {
                 if (isMultiSelectOptions && fromTyping) {
@@ -11532,7 +12543,11 @@
             this.timer = null;
         }
 
-        const focusInput = state.sourceRegion !== 'card';
+        const focusInput = this.shouldRefocusInputAfterCommit({
+            source: state.source,
+            sourceRegion: state.sourceRegion,
+            anchorEl: state.anchorEl
+        });
         if (!keepOpen) {
             this.closeDropdown();
         }
@@ -11549,6 +12564,7 @@
             const nextToken = entry
                 ? (entry.tokens || []).filter((item) => item.kind === 'field' && item.key === state.fieldKey && item.committed).slice(-1)[0]
                 : null;
+            const preferTopUnselected = isMultiSelectOptions && this.config.sortSelectedMultiOptionsToBottom !== false;
             this.dropdownState = {
                 fieldKey: state.fieldKey,
                 fieldType: state.fieldType,
@@ -11562,9 +12578,9 @@
                 anchorRect: state.anchorRect || (state.anchorEl && state.anchorEl.getBoundingClientRect ? state.anchorEl.getBoundingClientRect() : null),
                 anchorEl: state.anchorEl || null,
                 source: state.source,
-                activeOptionValue: nextValue,
+                activeOptionValue: preferTopUnselected ? null : nextValue,
                 filteredOptions: [],
-                activateFirstOnOpen: false,
+                activateFirstOnOpen: preferTopUnselected,
                 keepActiveWhenFiltering: false
             };
             this.dropdownSearchEl.hidden = false;
@@ -11820,6 +12836,7 @@
         this.parseAndRender(renderOptions);
 
         if (keepDropdownOpen && sourceRegion === 'card' && field.type === 'options') {
+            const preferTopUnselected = !!(field.multiple && this.config.sortSelectedMultiOptionsToBottom !== false);
             this.dropdownState = {
                 fieldKey,
                 fieldType: field.type,
@@ -11843,9 +12860,9 @@
                     mappingKey,
                     sourceRegion: 'card'
                 },
-                activeOptionValue: normalizedNextValue,
+                activeOptionValue: preferTopUnselected ? null : normalizedNextValue,
                 filteredOptions: [],
-                activateFirstOnOpen: false,
+                activateFirstOnOpen: preferTopUnselected,
                 keepActiveWhenFiltering: false
             };
             this.dropdownSearchEl.hidden = false;
@@ -11919,6 +12936,9 @@
     QuickAddComponent.prototype.closeDropdown = function closeDropdown(options) {
         const opts = options || {};
         const previousState = this.dropdownState;
+        const cleanupTokenId = previousState && previousState.cleanupTokenIdOnClose
+            ? String(previousState.cleanupTokenIdOnClose)
+            : '';
         if (opts.finalizeOpenToken === true) {
             this.finalizeOpenMultiValueTokenOnDropdownClose(previousState);
         }
@@ -11935,6 +12955,9 @@
         this.dropdownListEl.style.removeProperty('max-height');
         this.dropdownListEl.style.removeProperty('min-height');
         this.dropdownListEl.scrollTop = 0;
+        if (cleanupTokenId && opts.discardPendingToken !== false) {
+            this.discardPendingTokenById(cleanupTokenId, { focusInput: false });
+        }
         this.syncDropdownA11y();
         if (opts.restoreFocus !== false) {
             this.restoreFocusOrigin('dropdown');

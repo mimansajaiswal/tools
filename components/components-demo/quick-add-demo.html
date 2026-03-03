@@ -8,10 +8,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Figtree:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Figtree:wght@400;500;700&family=JetBrains+Mono:wght@400;500&family=Spline+Sans+Mono:wght@400;500;600;700&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="./components-demo.css?v=20260301">
-    <link rel="stylesheet" data-qa-style="1" href="../quick-add/quick-add-component.css?v=20260302k">
+    <link rel="stylesheet" data-qa-style="1" href="../quick-add/quick-add-component.css?v=20260303p">
     <style>
         :root {
             --bg: #f5f0e8;
@@ -21,6 +21,8 @@
             --surface: #fffaf3;
             --accent: #1f5d69;
             --accent-soft: #d9eef2;
+            --demo-font: "Spline Sans Mono", "JetBrains Mono", monospace;
+            --qa-font: var(--demo-font);
         }
 
         * {
@@ -34,8 +36,12 @@
                 radial-gradient(circle at 85% 95%, #e0efe9 0%, transparent 30%),
                 var(--bg);
             color: var(--ink);
-            font-family: "Figtree", "Avenir Next", "Segoe UI", sans-serif;
+            font-family: var(--demo-font);
             line-height: 1.45;
+        }
+
+        body * {
+            font-family: var(--demo-font) !important;
         }
 
         .shell {
@@ -824,7 +830,7 @@
                     parsing
                     and six variant demos.</p>
                 <div class="import-note">Single-file import:
-                    <code>&lt;script src=\"../quick-add/quick-add-component.js?v=20260302k\"&gt;&lt;/script&gt;</code>
+                    <code>&lt;script src=\"../quick-add/quick-add-component.js?v=20260303p\"&gt;&lt;/script&gt;</code>
                 </div>
             </div>
             <div class="example-tabs" id="exampleTabsWrap">
@@ -1118,8 +1124,8 @@
     </main>
 
     <script src="https://unpkg.com/chrono-node@2.7.7/dist/chrono.min.js"></script>
-    <script src="../quick-add/quick-add-component.js?v=20260302k"></script>
-    <script defer src="./quick-add-demo.js?v=20260302k"></script>
+    <script src="../quick-add/quick-add-component.js?v=20260303p"></script>
+    <script defer src="./quick-add-demo.js?v=20260303p"></script>
 </body>
 
 </html>

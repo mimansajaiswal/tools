@@ -196,13 +196,22 @@ fieldMenuTrigger?: string;            // default: "/"
 fieldMenuShowUsedFields?: boolean;    // default: false (shows only fields not yet used in the current entry)
 fieldMenuShowRequiredMeta?: boolean;  // default: true
 fieldMenuShowAutoDetectMeta?: boolean;// default: true
+showFieldActionBar?: boolean;         // default: false
+fieldActionBarButtons?: Array<{       // default: []
+  fieldKey: string;                   // required field key from schema
+  iconSvg?: string;                   // inline SVG markup for the button icon
+  showLabel?: boolean;                // default: true
+  visible?: boolean;                  // default: true
+}>;
 hideFieldTerminatorInPills?: boolean; // default: false (keeps underlying text intact; only visual inline pills hide terminator)
 autoCloseFieldOnSpace?: boolean;      // default: false
 autoCloseFieldOnSpaceConfidenceThreshold?: number; // default: 0.9, range 0..1
+fontFamily?: string;                  // default: CSS token --qa-font
 ```
 
 Typing the trigger (for example `/`) opens a field menu in the dropdown; selecting an item inserts that field's prefix at the caret. The fallback field (usually `title`) is intentionally excluded from this menu.
 When `autoCloseFieldOnSpace` is enabled, pressing space at the end of an active field value can auto-commit that field (append terminator) when confidence meets the configured threshold.
+When `showFieldActionBar` is enabled, action buttons render under the input surface and remain available while the input area scrolls. Clicking a button inserts/open-focuses that field and opens date picker, option dropdown, or an input-style dropdown for non-dropdown field types.
 
 ### Multi-select dropdown ordering
 
