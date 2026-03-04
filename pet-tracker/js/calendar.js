@@ -345,6 +345,15 @@ const Calendar = {
         return `#${toHex(rgb.r)}${toHex(rgb.g)}${toHex(rgb.b)}`;
     },
 
+    toRgba: (color, alpha = 1) => {
+        const safeAlpha = Math.max(0, Math.min(1, Number(alpha)));
+        const rgb = Calendar.hexToRgb(color);
+        if (rgb) {
+            return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${safeAlpha})`;
+        }
+        return color || `rgba(139, 123, 142, ${safeAlpha})`;
+    },
+
     mixHex: (a, b, weight = 0.5) => {
         const ar = Calendar.hexToRgb(a);
         const br = Calendar.hexToRgb(b);
@@ -403,10 +412,13 @@ const Calendar = {
         const chipClasses = compact
             ? 'calendar-event-chip calendar-event-chip-compact'
             : 'calendar-event-chip';
+        const chipBorder = Calendar.toRgba(color, 0.42);
+        const chipBg = Calendar.toRgba(color, 0.12);
+        const chipBgHover = Calendar.toRgba(color, 0.2);
 
         return `
             <button type="button" class="${chipClasses}" onclick="event.stopPropagation(); Calendar.showEventDetail('${event.id}')"
-                style="border-left-color:${color};">
+                style="border-left-color:${color}; --chip-border:${chipBorder}; --chip-bg:${chipBg}; --chip-bg-hover:${chipBgHover};">
                 <span class="calendar-event-chip-inner">
                     <span class="calendar-event-pet-dot" style="background:${pet?.color || '#8b7b8e'}"></span>
                     <span class="calendar-event-type-icon" style="color:${typeColor}">

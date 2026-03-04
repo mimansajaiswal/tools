@@ -32,7 +32,7 @@ const AI = {
         const eventTypes = await PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES);
         const scales = await PetTracker.DB.getAll(PetTracker.STORES.SCALES);
         const scaleLevels = await PetTracker.DB.getAll(PetTracker.STORES.SCALE_LEVELS);
-        const attachmentCatalog = (window.PetTracker?.QuickAddModal?.getAttachmentCatalog?.() || []);
+        const attachmentCatalog = PetTracker.QuickAddModal.getAttachmentCatalog();
 
         const now = new Date();
         const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -437,13 +437,13 @@ Parse the following input:`;
                 const normalizedStatus = AI.normalizeStatus(entry.status);
                 const attachmentRefs = AI.normalizeAttachmentRefs(entry.attachments || entry.attachmentRefs);
                 let media = [];
-                if (attachmentRefs.length > 0 && window.PetTracker?.QuickAddModal?.mapAttachmentRefsToMedia) {
-                    media = await window.PetTracker.QuickAddModal.mapAttachmentRefsToMedia(attachmentRefs);
+                if (attachmentRefs.length > 0) {
+                    media = await PetTracker.QuickAddModal.mapAttachmentRefsToMedia(attachmentRefs);
                 }
 
                 let providerId = entry.provider || null;
-                if (providerId && window.PetTracker?.QuickAddModal?.resolveProviderId) {
-                    providerId = window.PetTracker.QuickAddModal.resolveProviderId(providerId);
+                if (providerId) {
+                    providerId = PetTracker.QuickAddModal.resolveProviderId(providerId);
                 }
 
                 // Resolve severityLabel to severityLevelId
@@ -493,11 +493,7 @@ Parse the following input:`;
 
         PetTracker.UI.toast(`Saved ${saved} entries`, 'success');
         AI.reset();
-        if (PetTracker.QuickAddModal) {
-            PetTracker.QuickAddModal.close();
-        } else {
-            PetTracker.UI.closeModal('quickAddModal');
-        }
+        PetTracker.QuickAddModal.close();
         App.renderDashboard();
     },
 
@@ -680,11 +676,7 @@ Parse the following input:`;
         await AI.updateQueueCount();
         AI.renderEntries();
         AI.renderQueueIndicator();
-        if (PetTracker.QuickAddModal) {
-            PetTracker.QuickAddModal.open('ai');
-        } else {
-            PetTracker.UI.openModal('quickAddModal');
-        }
+        await PetTracker.QuickAddModal.open('ai');
     },
 
     /**

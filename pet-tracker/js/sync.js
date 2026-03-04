@@ -16,6 +16,10 @@ const Sync = {
 
     // Background sync interval (2 minutes)
     syncIntervalMs: 2 * 60 * 1000,
+    minAutoSyncGapMs: 45 * 1000,
+    remoteAuditIntervalMs: 10 * 60 * 1000,
+    lastRemoteAuditAt: 0,
+    maxRetryCount: 5,
 
     requiredDataSourceKeys: ['pets', 'events', 'eventTypes', 'scales', 'scaleLevels', 'contacts'],
 
@@ -200,6 +204,16 @@ const Sync = {
             return;
         }
 
+        const pendingAtStart = await PetTracker.SyncQueue.getPending();
+        if (!showToast && pendingAtStart.length === 0) {
+            const lastSync = PetTracker.Settings.getLastSync();
+            const elapsed = lastSync ? (Date.now() - new Date(lastSync).getTime()) : Infinity;
+            if (Number.isFinite(elapsed) && elapsed < Sync.minAutoSyncGapMs) {
+                console.log('[Sync] Recently synced with no local changes, skipping');
+                return;
+            }
+        }
+
         Sync.isRunning = true;
         Sync.lastError = null;
         Sync.updateSyncUI();
@@ -264,23 +278,43 @@ const Sync = {
      * Sort pending operations by dependency order
      */
     sortByDependencyOrder: (pending) => {
-        const orderMap = {};
+        const createUpdateOrderMap = {};
+        const deleteOrderMap = {};
         Sync.storeOrder.forEach((store, idx) => {
-            orderMap[store] = idx;
+            createUpdateOrderMap[store] = idx;
+        });
+        [...Sync.storeOrder].reverse().forEach((store, idx) => {
+            deleteOrderMap[store] = idx;
         });
 
         return [...pending].sort((a, b) => {
-            const orderA = orderMap[a.store] ?? 999;
-            const orderB = orderMap[b.store] ?? 999;
-            if (orderA !== orderB) return orderA - orderB;
-            // Within same store, process creates before updates before deletes
             const typeOrder = { create: 0, update: 1, delete: 2 };
             const typeA = typeOrder[a.type] ?? 1;
             const typeB = typeOrder[b.type] ?? 1;
             if (typeA !== typeB) return typeA - typeB;
+
+            const mapA = a.type === 'delete' ? deleteOrderMap : createUpdateOrderMap;
+            const mapB = b.type === 'delete' ? deleteOrderMap : createUpdateOrderMap;
+            const orderA = mapA[a.store] ?? 999;
+            const orderB = mapB[b.store] ?? 999;
+            if (orderA !== orderB) return orderA - orderB;
+
             // Finally by creation time
             return new Date(a.createdAt) - new Date(b.createdAt);
         });
+    },
+
+    isTransientSyncError: (error) => {
+        if (!error) return false;
+        if (!navigator.onLine) return true;
+        if (error.isRateLimit) return true;
+
+        const message = String(error.message || error || '').toLowerCase();
+        return message.includes('failed to fetch') ||
+            message.includes('networkerror') ||
+            message.includes('network request failed') ||
+            message.includes('load failed') ||
+            message.includes('timeout');
     },
 
     /**
@@ -408,6 +442,10 @@ const Sync = {
                 lastError = e;
                 failCount++;
 
+                if (!e.isRetryable && Sync.isTransientSyncError(e)) {
+                    e.isRetryable = true;
+                }
+
                 if (e.isRateLimit) {
                     // Wait and retry later
                     await new Promise(r => setTimeout(r, (e.retryAfter || 1) * 1000));
@@ -420,9 +458,11 @@ const Sync = {
                         op.error = null;
                         op.lastAttempt = new Date().toISOString();
                         await PetTracker.DB.put(PetTracker.STORES.SYNC_QUEUE, op);
-                    } else if ((op.retryCount || 0) < 3) {
+                    } else if ((op.retryCount || 0) < Sync.maxRetryCount) {
                         // Retryable error - keep in queue for next sync cycle
                         op.retryCount = (op.retryCount || 0) + 1;
+                        op.status = 'pending';
+                        op.error = null;
                         op.lastAttempt = new Date().toISOString();
                         await PetTracker.DB.put(PetTracker.STORES.SYNC_QUEUE, op);
                     } else {
@@ -430,6 +470,11 @@ const Sync = {
                     }
                 } else {
                     await PetTracker.SyncQueue.fail(op.id, e.message);
+                }
+
+                if (!navigator.onLine) {
+                    console.log('[Sync] Went offline mid-sync; pausing queue processing');
+                    break;
                 }
             }
         }
@@ -583,6 +628,14 @@ const Sync = {
 
         // FIX #1: Second pass - repair any relations that couldn't be resolved on first pull
         await Sync.repairBrokenRelations();
+
+        const now = Date.now();
+        if (!Sync.lastRemoteAuditAt || (now - Sync.lastRemoteAuditAt) >= Sync.remoteAuditIntervalMs) {
+            await Sync.auditReferencedRemoteExistence();
+            Sync.lastRemoteAuditAt = now;
+        }
+
+        await Sync.enforceReferentialIntegrity();
     },
 
     /**
@@ -1407,6 +1460,243 @@ const Sync = {
 
         if (repaired > 0) {
             console.log(`[Sync] Repaired ${repaired} broken relation(s)`);
+        }
+    },
+
+    auditReferencedRemoteExistence: async () => {
+        const [pets, contacts, scales, scaleLevels, eventTypes, events] = await Promise.all([
+            PetTracker.DB.getAll(PetTracker.STORES.PETS),
+            PetTracker.DB.getAll(PetTracker.STORES.CONTACTS),
+            PetTracker.DB.getAll(PetTracker.STORES.SCALES),
+            PetTracker.DB.getAll(PetTracker.STORES.SCALE_LEVELS),
+            PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES),
+            PetTracker.DB.getAll(PetTracker.STORES.EVENTS)
+        ]);
+
+        const referenced = {
+            pets: new Set(),
+            contacts: new Set(),
+            scales: new Set(),
+            scaleLevels: new Set(),
+            eventTypes: new Set()
+        };
+
+        for (const event of events) {
+            for (const petId of (event.petIds || [])) if (petId) referenced.pets.add(petId);
+            if (event.eventTypeId) referenced.eventTypes.add(event.eventTypeId);
+            if (event.severityLevelId) referenced.scaleLevels.add(event.severityLevelId);
+            if (event.providerId) referenced.contacts.add(event.providerId);
+        }
+        for (const pet of pets) {
+            if (pet.primaryVetId) referenced.contacts.add(pet.primaryVetId);
+            for (const contactId of (pet.relatedContactIds || [])) if (contactId) referenced.contacts.add(contactId);
+        }
+        for (const eventType of eventTypes) {
+            if (eventType.defaultScaleId) referenced.scales.add(eventType.defaultScaleId);
+            for (const petId of (eventType.relatedPetIds || [])) if (petId) referenced.pets.add(petId);
+        }
+        for (const level of scaleLevels) {
+            if (level.scaleId) referenced.scales.add(level.scaleId);
+        }
+        for (const contact of contacts) {
+            for (const petId of (contact.relatedPetIds || [])) if (petId) referenced.pets.add(petId);
+        }
+
+        const recordsByStore = {
+            pets,
+            contacts,
+            scales,
+            scaleLevels,
+            eventTypes
+        };
+        const storeConstants = {
+            pets: PetTracker.STORES.PETS,
+            contacts: PetTracker.STORES.CONTACTS,
+            scales: PetTracker.STORES.SCALES,
+            scaleLevels: PetTracker.STORES.SCALE_LEVELS,
+            eventTypes: PetTracker.STORES.EVENT_TYPES
+        };
+
+        const seenNotionIds = new Set();
+        const candidates = [];
+        for (const store of Object.keys(referenced)) {
+            const ids = referenced[store];
+            const records = recordsByStore[store] || [];
+            for (const id of ids) {
+                const record = records.find(r => r.id === id);
+                if (!record?.notionId) continue;
+                if (seenNotionIds.has(record.notionId)) continue;
+                seenNotionIds.add(record.notionId);
+                candidates.push({ store, storeConstant: storeConstants[store], record });
+            }
+        }
+
+        let removed = 0;
+        for (const candidate of candidates) {
+            try {
+                const page = await PetTracker.API.getPage(candidate.record.notionId);
+                if (page?.archived) {
+                    await PetTracker.DB.delete(candidate.storeConstant, candidate.record.id);
+                    removed++;
+                }
+            } catch (e) {
+                const msg = String(e?.message || '').toLowerCase();
+                const notFound = msg.includes('object_not_found') ||
+                    msg.includes('could not find') ||
+                    msg.includes('not found');
+                if (notFound) {
+                    await PetTracker.DB.delete(candidate.storeConstant, candidate.record.id);
+                    removed++;
+                } else {
+                    console.warn(`[Sync] Remote existence check failed for ${candidate.store}:${candidate.record.id}:`, e.message);
+                }
+            }
+        }
+
+        if (removed > 0) {
+            console.log(`[Sync] Removed ${removed} locally-stale referenced record(s) after remote audit`);
+        }
+    },
+
+    enforceReferentialIntegrity: async () => {
+        const nowIso = new Date().toISOString();
+        const [pets, contacts, scales, scaleLevels, eventTypes, events] = await Promise.all([
+            PetTracker.DB.getAll(PetTracker.STORES.PETS),
+            PetTracker.DB.getAll(PetTracker.STORES.CONTACTS),
+            PetTracker.DB.getAll(PetTracker.STORES.SCALES),
+            PetTracker.DB.getAll(PetTracker.STORES.SCALE_LEVELS),
+            PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES),
+            PetTracker.DB.getAll(PetTracker.STORES.EVENTS)
+        ]);
+
+        const petIds = new Set((pets || []).map(r => r.id));
+        const contactIds = new Set((contacts || []).map(r => r.id));
+        const scaleIds = new Set((scales || []).map(r => r.id));
+        const scaleLevelIds = new Set((scaleLevels || []).map(r => r.id));
+        const eventTypeIds = new Set((eventTypes || []).map(r => r.id));
+
+        const uniqueIds = (arr) => [...new Set((Array.isArray(arr) ? arr : []).filter(Boolean))];
+        const sameSet = (a, b) => JSON.stringify(uniqueIds(a).sort()) === JSON.stringify(uniqueIds(b).sort());
+        const queueUpdate = async (store, record) => {
+            if (!record?.notionId) return;
+            await PetTracker.SyncQueue.add({
+                type: 'update',
+                store,
+                recordId: record.id,
+                data: { ...record }
+            });
+        };
+        const queueDelete = async (store, storeConstant, record, extraData = {}) => {
+            if (record?.notionId) {
+                await PetTracker.SyncQueue.add({
+                    type: 'delete',
+                    store,
+                    recordId: record.id,
+                    data: { notionId: record.notionId, ...extraData }
+                });
+            }
+            await PetTracker.DB.delete(storeConstant, record.id);
+        };
+
+        let fixed = 0;
+        let removed = 0;
+
+        for (const pet of pets) {
+            let changed = false;
+            const nextRelated = uniqueIds((pet.relatedContactIds || []).filter(id => contactIds.has(id)));
+            if (!sameSet(pet.relatedContactIds || [], nextRelated)) {
+                pet.relatedContactIds = nextRelated;
+                changed = true;
+            }
+            if (pet.primaryVetId && !contactIds.has(pet.primaryVetId)) {
+                pet.primaryVetId = null;
+                changed = true;
+            }
+            if (changed) {
+                pet.updatedAt = nowIso;
+                if (pet.notionId) pet.synced = false;
+                await PetTracker.DB.put(PetTracker.STORES.PETS, pet);
+                await queueUpdate('pets', pet);
+                fixed++;
+            }
+        }
+
+        for (const contact of contacts) {
+            const nextRelated = uniqueIds((contact.relatedPetIds || []).filter(id => petIds.has(id)));
+            if (!sameSet(contact.relatedPetIds || [], nextRelated)) {
+                contact.relatedPetIds = nextRelated;
+                contact.updatedAt = nowIso;
+                if (contact.notionId) contact.synced = false;
+                await PetTracker.DB.put(PetTracker.STORES.CONTACTS, contact);
+                await queueUpdate('contacts', contact);
+                fixed++;
+            }
+        }
+
+        for (const eventType of eventTypes) {
+            let changed = false;
+            const nextRelated = uniqueIds((eventType.relatedPetIds || []).filter(id => petIds.has(id)));
+            if (!sameSet(eventType.relatedPetIds || [], nextRelated)) {
+                eventType.relatedPetIds = nextRelated;
+                changed = true;
+            }
+            if (eventType.defaultScaleId && !scaleIds.has(eventType.defaultScaleId)) {
+                eventType.defaultScaleId = null;
+                if (eventType.usesSeverity) eventType.usesSeverity = false;
+                changed = true;
+            }
+            if (changed) {
+                eventType.updatedAt = nowIso;
+                if (eventType.notionId) eventType.synced = false;
+                await PetTracker.DB.put(PetTracker.STORES.EVENT_TYPES, eventType);
+                await queueUpdate('eventTypes', eventType);
+                fixed++;
+            }
+        }
+
+        for (const level of scaleLevels) {
+            if (!level.scaleId || !scaleIds.has(level.scaleId)) {
+                await queueDelete('scaleLevels', PetTracker.STORES.SCALE_LEVELS, level);
+                scaleLevelIds.delete(level.id);
+                removed++;
+            }
+        }
+
+        for (const event of events) {
+            const nextPetIds = uniqueIds((event.petIds || []).filter(id => petIds.has(id)));
+            const hasEventType = !!(event.eventTypeId && eventTypeIds.has(event.eventTypeId));
+            if (!hasEventType || nextPetIds.length === 0) {
+                await queueDelete('events', PetTracker.STORES.EVENTS, event, {
+                    googleCalendarEventId: event.googleCalendarEventId || null
+                });
+                removed++;
+                continue;
+            }
+
+            let changed = false;
+            if (!sameSet(event.petIds || [], nextPetIds)) {
+                event.petIds = nextPetIds;
+                changed = true;
+            }
+            if (event.severityLevelId && !scaleLevelIds.has(event.severityLevelId)) {
+                event.severityLevelId = null;
+                changed = true;
+            }
+            if (event.providerId && !contactIds.has(event.providerId)) {
+                event.providerId = null;
+                changed = true;
+            }
+            if (changed) {
+                event.updatedAt = nowIso;
+                if (event.notionId) event.synced = false;
+                await PetTracker.DB.put(PetTracker.STORES.EVENTS, event);
+                await queueUpdate('events', event);
+                fixed++;
+            }
+        }
+
+        if (fixed > 0 || removed > 0) {
+            console.log(`[Sync] Referential integrity cleanup: ${fixed} fixed, ${removed} removed`);
         }
     },
 

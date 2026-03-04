@@ -57,7 +57,7 @@
     </script>
 
     <!-- Quick Add Component -->
-    <link rel="stylesheet" href="../components/quick-add/quick-add-component.css">
+    <link rel="stylesheet" data-qa-style="1" href="../components/quick-add/quick-add-component.css">
 
     <!-- Custom Styles -->
     <link rel="stylesheet" href="./css/styles.css">
@@ -1338,6 +1338,27 @@
             <section id="qaPanelQuick" class="flex-1 overflow-y-auto">
                 <div class="p-4 space-y-4">
                     <div id="qaMount"></div>
+                    <div class="flex flex-wrap items-center gap-2 pt-3 border-t border-oatmeal">
+                        <button type="button" id="qaUndoBtn" onclick="PetTracker.QuickAddModal.undo()"
+                            class="btn-secondary px-3 py-1 font-mono text-[10px] uppercase" disabled>
+                            Undo
+                        </button>
+                        <button type="button" id="qaRedoBtn" onclick="PetTracker.QuickAddModal.redo()"
+                            class="btn-secondary px-3 py-1 font-mono text-[10px] uppercase" disabled>
+                            Redo
+                        </button>
+                        <button type="button" id="qaRestoreDraftBtn" onclick="PetTracker.QuickAddModal.restoreDraft()"
+                            class="btn-secondary px-3 py-1 font-mono text-[10px] uppercase" disabled>
+                            Restore Draft
+                        </button>
+                        <button type="button" id="qaClearBtn" onclick="PetTracker.QuickAddModal.clearQuickInput()"
+                            class="btn-secondary px-3 py-1 font-mono text-[10px] uppercase" disabled>
+                            Clear Input
+                        </button>
+                        <span class="sm:ml-auto text-[10px] text-earth-metal font-mono">
+                            Ctrl/Cmd+Z to undo, Shift+Ctrl/Cmd+Z to redo
+                        </span>
+                    </div>
                     <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-3 border-t border-oatmeal">
                         <button type="button" onclick="PetTracker.QuickAddModal.close()"
                             class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Close</button>

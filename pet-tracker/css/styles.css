@@ -94,6 +94,7 @@
     color: #f8f6f3;
     padding: 4px 8px;
     display: inline-block;
+    border-radius: 6px;
 }
 
 /* Metadata Row */
@@ -116,66 +117,85 @@
 .card {
     background: #f8f6f3;
     border: 1px solid #d4c8b8;
+    border-radius: 10px;
+    box-shadow: 0 1px 0 rgba(45, 41, 38, 0.04);
+    transition: border-color 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease;
 }
 
 .card-hover:hover {
     border-color: #8b7b8e;
+    box-shadow: 0 6px 16px rgba(45, 41, 38, 0.08);
+    transform: translateY(-1px);
 }
 
 /* Button Styles */
 .btn-primary {
     background: #2d2926;
     color: #f8f6f3;
-    transition: background-color 0.1s ease;
+    border: 1px solid #2d2926;
+    border-radius: 8px;
+    transition: background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
 .btn-primary:hover {
     background: #6b6357;
+    border-color: #6b6357;
+    box-shadow: 0 4px 10px rgba(45, 41, 38, 0.14);
 }
 
 .btn-secondary {
     background: #f8f6f3;
     color: #2d2926;
     border: 1px solid #d4c8b8;
-    transition: all 0.1s ease;
+    border-radius: 8px;
+    transition: all 0.12s ease;
 }
 
 .btn-secondary:hover {
     border-color: #8b7b8e;
     color: #8b7b8e;
+    background: #fdfbf8;
 }
 
 .btn-accent {
     background: #8b7b8e;
     color: #f8f6f3;
-    transition: background-color 0.1s ease;
+    border: 1px solid #8b7b8e;
+    border-radius: 8px;
+    transition: background-color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
 .btn-accent:hover {
     background: #6b6357;
+    border-color: #6b6357;
+    box-shadow: 0 4px 10px rgba(45, 41, 38, 0.14);
 }
 
 .btn-danger {
     background: #c9a9a6;
     color: #2d2926;
-    transition: background-color 0.1s ease;
+    border: 1px solid #c9a9a6;
+    border-radius: 8px;
+    transition: background-color 0.12s ease, border-color 0.12s ease;
 }
 
 .btn-danger:hover {
     background: #b89895;
+    border-color: #b89895;
 }
 
 /* Input Styles */
 .input-field {
     background: #f8f6f3;
     border: 1px solid #d4c8b8;
+    border-radius: 8px;
     color: #2d2926;
     font-family: 'Inter', sans-serif;
     font-size: 14px;
     padding: 8px 12px;
     width: 100%;
     outline: none;
-    transition: border-color 0.1s ease;
+    transition: border-color 0.1s ease, box-shadow 0.1s ease;
 }
 
 .input-field:focus {
@@ -198,6 +218,7 @@
 .select-field {
     background: #f8f6f3;
     border: 1px solid #d4c8b8;
+    border-radius: 8px;
     color: #2d2926;
     font-family: 'Inter', sans-serif;
     font-size: 14px;
@@ -237,10 +258,12 @@
     background: #f8f6f3;
     border: 1px solid #d4c8b8;
     border-top: none;
+    border-radius: 0 0 8px 8px;
     max-height: 200px;
     overflow-y: auto;
     z-index: 100;
     display: none;
+    box-shadow: 0 10px 20px rgba(45, 41, 38, 0.08);
 }
 
 .combobox-dropdown.open {
@@ -283,6 +306,7 @@
     text-transform: uppercase;
     padding: 2px 6px;
     display: inline-block;
+    border-radius: 999px;
 }
 
 .badge-dark {
@@ -397,6 +421,8 @@
     width: 8px;
     height: 8px;
     flex-shrink: 0;
+    border-radius: 999px;
+    border: 1px solid rgba(45, 41, 38, 0.14);
 }
 
 /* Focus States */
@@ -493,13 +519,15 @@ textarea:focus-visible {
     min-height: 100px;
     background: #f8f6f3;
     border: 1px solid #d4c8b8;
+    border-radius: 8px;
     padding: 4px;
     cursor: pointer;
-    transition: border-color 0.1s ease;
+    transition: border-color 0.1s ease, box-shadow 0.1s ease;
 }
 
 .calendar-day:hover {
     border-color: #8b7b8e;
+    box-shadow: inset 0 0 0 1px rgba(139, 123, 142, 0.18);
 }
 
 .calendar-day-empty {
@@ -537,17 +565,19 @@ textarea:focus-visible {
 
 .calendar-event-chip {
     width: 100%;
-    border: 1px solid rgba(212, 200, 184, 0.85);
+    border: 1px solid var(--chip-border, rgba(212, 200, 184, 0.85));
     border-left: 2px solid #8b7b8e;
-    background: rgba(212, 200, 184, 0.14);
+    border-radius: 6px;
+    background: var(--chip-bg, rgba(212, 200, 184, 0.14));
     padding: 3px 5px;
     text-align: left;
-    transition: border-color 0.1s ease, background-color 0.1s ease;
+    transition: border-color 0.1s ease, background-color 0.1s ease, box-shadow 0.1s ease;
 }
 
 .calendar-event-chip:hover {
-    border-color: #8b7b8e;
-    background: rgba(212, 200, 184, 0.24);
+    border-color: var(--chip-border, #8b7b8e);
+    background: var(--chip-bg-hover, rgba(212, 200, 184, 0.24));
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
 }
 
 .calendar-event-chip-compact {
@@ -614,8 +644,8 @@ textarea:focus-visible {
     font-size: 9px;
     color: #6b6357;
     background: rgba(212, 200, 184, 0.55);
-    padding: 0 3px;
-    border-radius: 2px;
+    padding: 0 4px;
+    border-radius: 999px;
     flex-shrink: 0;
 }
 
@@ -657,6 +687,7 @@ textarea:focus-visible {
     color: #6b6357;
     background: #f8f6f3;
     border: 1px solid #d4c8b8;
+    border-radius: 8px;
     cursor: pointer;
     transition: all 0.1s ease;
     user-select: none;
@@ -670,6 +701,7 @@ textarea:focus-visible {
     background: #8b7b8e;
     color: #f8f6f3;
     border-color: #8b7b8e;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
 }
 
 .stamp-day-today {
@@ -855,7 +887,7 @@ a:focus-visible,
 }
 
 .multiselect-menu {
-    border-radius: 0;
+    border-radius: 8px;
     box-shadow: 0 8px 20px rgba(45, 41, 38, 0.14);
 }
 
@@ -946,6 +978,7 @@ a:focus-visible,
     font-size: 10px;
     padding: 2px 6px;
     margin-left: 4px;
+    border-radius: 999px;
 }
 
 .multiselect-tags {
@@ -964,6 +997,7 @@ a:focus-visible,
     font-size: 11px;
     padding: 2px 8px;
     font-family: 'JetBrains Mono', monospace;
+    border-radius: 999px;
 }
 
 .multiselect-tag button {
@@ -1162,6 +1196,7 @@ a:focus-visible,
     align-items: stretch;
     gap: 0;
     border: 1px solid #d4c8b8;
+    border-radius: 10px;
     background: #f8f6f3;
     box-shadow: 0 8px 24px rgba(45, 41, 38, 0.16);
     z-index: 35;

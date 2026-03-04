@@ -4,6 +4,7 @@
  */
 (function () {
     'use strict';
+    const QUICK_ADD_DRAFT_KEY = 'pettracker_quickadd_draft_v2';
 
     const QuickAddModal = {
         state: {
@@ -16,7 +17,9 @@
             scaleLevels: [],
             contacts: [],
             stagedAttachments: [],
-            processedAttachmentPool: null
+            processedAttachmentPool: null,
+            draftSaveTimer: null,
+            skipDraftOnClose: false
         },
 
         open: async function (defaultTab) {
@@ -24,11 +27,16 @@
             QuickAddModal._applyAiState();
             QuickAddModal.clearAttachments();
             QuickAddModal.selectTab(defaultTab || 'quick');
-            QuickAddModal._mountQuickAdd();
+            await QuickAddModal._mountQuickAdd();
             PetTracker.UI.openModal('quickAddModal');
         },
 
-        close: function () {
+        close: async function () {
+            if (QuickAddModal.state.tab === 'quick') {
+                var canClose = await QuickAddModal._prepareQuickClose();
+                if (!canClose) return;
+            }
+            QuickAddModal._destroyQuickAdd();
             QuickAddModal.clearAttachments();
             PetTracker.UI.closeModal('quickAddModal');
         },
@@ -92,7 +100,7 @@
             if (aiHint) aiHint.classList.toggle('hidden', configured);
         },
 
-        _buildConfig: function () {
+        _buildConfig: function (mountEl) {
             var pets = QuickAddModal.state.pets;
             var eventTypes = QuickAddModal.state.eventTypes;
             var contacts = QuickAddModal.state.contacts || [];
@@ -131,11 +139,13 @@
             var typeName = eventTypes.length > 0 ? eventTypes[0].name : 'Walk';
 
             return {
-                mount: '#qaMount',
+                mount: mountEl,
                 allowMultipleEntries: true,
                 entrySeparator: '\n',
                 fieldTerminator: ';;',
                 fieldTerminatorMode: 'or-next-prefix',
+                autoCloseFieldOnSpace: true,
+                autoCloseFieldOnSpaceConfidenceThreshold: 0.92,
                 escapeChar: '\\',
                 fallbackField: 'notes',
                 showJsonOutput: false,
@@ -143,8 +153,35 @@
                 showEntryCards: true,
                 showEntryHeader: true,
                 showEntryPills: true,
+                showFieldMenuOnTyping: true,
+                fieldMenuShowUsedFields: true,
+                showFieldActionBar: true,
+                fieldActionBarApplyToAllToggle: true,
+                fieldActionBarButtons: [
+                    { fieldKey: 'pet' },
+                    { fieldKey: 'type' },
+                    { fieldKey: 'date' },
+                    { fieldKey: 'time' },
+                    { fieldKey: 'status' },
+                    { fieldKey: 'severity' },
+                    { fieldKey: 'value' },
+                    { fieldKey: 'unit' },
+                    { fieldKey: 'notes' }
+                ],
                 autoDetectOptionsWithoutPrefix: true,
                 reduceInferredOptions: true,
+                history: {
+                    enabled: true,
+                    maxDepth: 200
+                },
+                a11y: {
+                    inputAriaLabel: 'Quick add events input'
+                },
+                warnings: {
+                    unlinkedAttachments: {
+                        enabled: true
+                    }
+                },
                 placeholder: firstPetPrefix + petName + ' ' + firstTypePrefix + typeName + ' ' + firstDatePrefix + 'today ' + firstTimePrefix + '08:00 ' + pf('notes')[0] + 'Morning walk',
                 hintText: 'Prefixes: ' + [firstPetPrefix, firstTypePrefix, firstDatePrefix, firstTimePrefix, pf('status')[0], pf('severity')[0], pf('value')[0], pf('unit')[0], pf('tags')[0], pf('notes')[0], pf('attachments')[0], pf('endDate')[0], pf('duration')[0], pf('provider')[0], pf('cost')[0], pf('costCategory')[0], pf('costCurrency')[0], pf('todoistTaskId')[0]].filter(Boolean).join(' ') + ' — ";;" ends multi-word values. New line = new entry.',
                 schema: {
@@ -210,6 +247,7 @@
                             key: 'value',
                             label: 'Value',
                             type: 'number',
+                            allowMathExpression: true,
                             required: false,
                             prefixes: pf('value')
                         },
@@ -255,6 +293,7 @@
                             key: 'duration',
                             label: 'Duration',
                             type: 'number',
+                            allowMathExpression: true,
                             required: false,
                             prefixes: pf('duration')
                         },
@@ -271,6 +310,7 @@
                             key: 'cost',
                             label: 'Cost',
                             type: 'number',
+                            allowMathExpression: true,
                             required: false,
                             prefixes: pf('cost')
                         },
@@ -311,39 +351,214 @@
                     '--qa-radius': '2px'
                 },
                 onParse: function (result) {
-                    QuickAddModal.state.lastParse = result;
-                    var saveBtn = document.getElementById('qaSaveBtn');
-                    if (saveBtn) {
-                        var count = result.validCount || 0;
-                        saveBtn.textContent = count > 0
-                            ? 'Save ' + count + ' event' + (count > 1 ? 's' : '')
-                            : 'Save Events';
-                        saveBtn.disabled = count === 0;
-                    }
+                    QuickAddModal._onParse(result);
                 }
             };
         },
 
-        _mountQuickAdd: function () {
+        _onParse: function (result) {
+            QuickAddModal.state.lastParse = result;
+            var saveBtn = document.getElementById('qaSaveBtn');
+            if (saveBtn) {
+                var count = result.validCount || 0;
+                saveBtn.textContent = count > 0
+                    ? 'Save ' + count + ' event' + (count > 1 ? 's' : '')
+                    : 'Save Events';
+                saveBtn.disabled = count === 0;
+            }
+            QuickAddModal._syncQuickActionButtons();
+            QuickAddModal._scheduleDraftSave();
+        },
+
+        _mountQuickAdd: async function () {
             var mountEl = document.getElementById('qaMount');
             if (!mountEl) return;
 
-            mountEl.innerHTML = '';
+            QuickAddModal._destroyQuickAdd();
             QuickAddModal.state.lastParse = null;
 
             if (typeof QuickAdd === 'undefined' || !QuickAdd.create) {
-                mountEl.innerHTML = '<p class="text-earth-metal text-sm py-4">Quick Add component not loaded.</p>';
-                return;
+                throw new Error('Quick Add component is not available');
             }
-
-            var config = QuickAddModal._buildConfig();
-            QuickAddModal.state.qaInstance = QuickAdd.create(config);
 
             var saveBtn = document.getElementById('qaSaveBtn');
             if (saveBtn) {
                 saveBtn.textContent = 'Save Events';
                 saveBtn.disabled = true;
             }
+
+            var config = QuickAddModal._buildConfig(mountEl);
+            QuickAddModal.state.qaInstance = QuickAdd.create(config);
+            await QuickAddModal._restoreDraft(false, true);
+            QuickAddModal._syncQuickActionButtons();
+        },
+
+        _destroyQuickAdd: function () {
+            if (QuickAddModal.state.draftSaveTimer) {
+                clearTimeout(QuickAddModal.state.draftSaveTimer);
+                QuickAddModal.state.draftSaveTimer = null;
+            }
+            var inst = QuickAddModal.state.qaInstance;
+            if (inst && typeof inst.destroy === 'function') {
+                inst.destroy();
+            }
+            QuickAddModal.state.qaInstance = null;
+            QuickAddModal.state.lastParse = null;
+        },
+
+        _syncQuickActionButtons: function () {
+            var inst = QuickAddModal.state.qaInstance;
+            var undoBtn = document.getElementById('qaUndoBtn');
+            var redoBtn = document.getElementById('qaRedoBtn');
+            var clearBtn = document.getElementById('qaClearBtn');
+            var restoreBtn = document.getElementById('qaRestoreDraftBtn');
+
+            if (undoBtn) {
+                var canUndo = !!(inst && typeof inst.canUndo === 'function' && inst.canUndo());
+                undoBtn.disabled = !canUndo;
+            }
+            if (redoBtn) {
+                var canRedo = !!(inst && typeof inst.canRedo === 'function' && inst.canRedo());
+                redoBtn.disabled = !canRedo;
+            }
+            if (clearBtn) {
+                var r = inst && typeof inst.getResult === 'function' ? inst.getResult() : null;
+                var hasInput = !!String((r && r.input) || '').trim();
+                clearBtn.disabled = !hasInput;
+            }
+            if (restoreBtn) {
+                restoreBtn.disabled = !QuickAddModal._readDraftPayload();
+            }
+        },
+
+        undo: function () {
+            var inst = QuickAddModal.state.qaInstance;
+            if (!inst || typeof inst.undo !== 'function') return;
+            inst.undo();
+            QuickAddModal._syncQuickActionButtons();
+            QuickAddModal._scheduleDraftSave();
+        },
+
+        redo: function () {
+            var inst = QuickAddModal.state.qaInstance;
+            if (!inst || typeof inst.redo !== 'function') return;
+            inst.redo();
+            QuickAddModal._syncQuickActionButtons();
+            QuickAddModal._scheduleDraftSave();
+        },
+
+        clearQuickInput: function () {
+            var inst = QuickAddModal.state.qaInstance;
+            if (!inst || typeof inst.setInput !== 'function') return;
+            inst.setInput('');
+            QuickAddModal._syncQuickActionButtons();
+            QuickAddModal.clearDraft();
+        },
+
+        _readDraftPayload: function () {
+            try {
+                var raw = localStorage.getItem(QUICK_ADD_DRAFT_KEY);
+                if (!raw) return null;
+                var parsed = JSON.parse(raw);
+                return parsed && typeof parsed === 'object' ? parsed : null;
+            } catch (_) {
+                return null;
+            }
+        },
+
+        clearDraft: function () {
+            localStorage.removeItem(QUICK_ADD_DRAFT_KEY);
+            QuickAddModal._syncQuickActionButtons();
+        },
+
+        _persistDraft: async function () {
+            var inst = QuickAddModal.state.qaInstance;
+            if (!inst || typeof inst.exportResult !== 'function' || typeof inst.getResult !== 'function') return false;
+            var runtime = inst.getResult() || {};
+            var hasInput = !!String(runtime.input || '').trim();
+            var hasEntries = Array.isArray(runtime.entries) && runtime.entries.length > 0;
+            var hasAttachments = (QuickAddModal.state.stagedAttachments || []).length > 0;
+            if (!hasInput && !hasEntries && !hasAttachments) {
+                QuickAddModal.clearDraft();
+                return false;
+            }
+            try {
+                var payload = await inst.exportResult({
+                    attachmentMode: 'metadata-only',
+                    includeUnlinked: true,
+                    runValidation: false,
+                    runWarnings: false
+                });
+                localStorage.setItem(QUICK_ADD_DRAFT_KEY, JSON.stringify(payload));
+                return true;
+            } catch (e) {
+                console.warn('[QuickAdd] Could not persist draft:', e);
+                return false;
+            }
+        },
+
+        _scheduleDraftSave: function () {
+            if (QuickAddModal.state.draftSaveTimer) {
+                clearTimeout(QuickAddModal.state.draftSaveTimer);
+            }
+            QuickAddModal.state.draftSaveTimer = setTimeout(function () {
+                QuickAddModal._persistDraft().then(function () {
+                    QuickAddModal._syncQuickActionButtons();
+                });
+            }, 350);
+        },
+
+        _restoreDraft: async function (showNoDraftToast, silent) {
+            var inst = QuickAddModal.state.qaInstance;
+            if (!inst || typeof inst.importResult !== 'function') return false;
+            var payload = QuickAddModal._readDraftPayload();
+            if (!payload) {
+                if (showNoDraftToast) {
+                    PetTracker.UI.toast('No saved Quick Add draft', 'warning');
+                }
+                QuickAddModal._syncQuickActionButtons();
+                return false;
+            }
+
+            try {
+                await inst.importResult(payload, { mergeStrategy: 'replace' });
+                QuickAddModal._syncQuickActionButtons();
+                if (!silent) {
+                    PetTracker.UI.toast('Quick Add draft restored', 'success', 1800);
+                }
+                return true;
+            } catch (e) {
+                console.warn('[QuickAdd] Could not restore draft:', e);
+                QuickAddModal.clearDraft();
+                if (showNoDraftToast) {
+                    PetTracker.UI.toast('Draft restore failed', 'error');
+                }
+                return false;
+            }
+        },
+
+        restoreDraft: async function () {
+            await QuickAddModal._restoreDraft(true, false);
+        },
+
+        _prepareQuickClose: async function () {
+            var inst = QuickAddModal.state.qaInstance;
+            if (!inst) return true;
+            if (QuickAddModal.state.skipDraftOnClose) {
+                QuickAddModal.state.skipDraftOnClose = false;
+                QuickAddModal.clearDraft();
+                return true;
+            }
+            if (typeof inst.checkWarnings === 'function') {
+                try {
+                    var warningResult = await inst.checkWarnings({ action: 'close', attachmentMode: 'metadata-only' });
+                    if (!warningResult.ok) return false;
+                } catch (e) {
+                    console.warn('[QuickAdd] Warning check failed during close:', e);
+                }
+            }
+            await QuickAddModal._persistDraft();
+            return true;
         },
 
         _mountAiContent: function () {
@@ -594,13 +809,38 @@
         },
 
         save: async function () {
-            var result = QuickAddModal.state.lastParse;
+            var inst = QuickAddModal.state.qaInstance;
+            if (!inst || typeof inst.getResult !== 'function') {
+                PetTracker.UI.toast('Quick Add is not initialized', 'error');
+                return;
+            }
+
+            var result = inst.getResult();
             if (!result || !result.entries || result.entries.length === 0) {
                 PetTracker.UI.toast('No entries to save', 'warning');
                 return;
             }
 
-            var validEntries = result.entries.filter(function (e) { return e.isValid; });
+            if (typeof inst.exportResult !== 'function') {
+                PetTracker.UI.toast('Quick Add export is not available', 'error');
+                return;
+            }
+
+            var exportPayload = null;
+            try {
+                exportPayload = await inst.exportResult({
+                    attachmentMode: 'metadata-only',
+                    includeUnlinked: false,
+                    runWarnings: true,
+                    runValidation: false
+                });
+            } catch (e) {
+                if (String(e && e.message || '').indexOf('warnings check') >= 0) return;
+                PetTracker.UI.toast('Could not prepare Quick Add entries', 'error');
+                return;
+            }
+
+            var validEntries = (exportPayload.entries || []).filter(function (e) { return e.isValid; });
             if (validEntries.length === 0) {
                 PetTracker.UI.toast('No valid entries — fill required fields (pet, type)', 'error');
                 return;
@@ -648,8 +888,12 @@
 
                     var status = QuickAddModal.normalizeStatus(QuickAddModal._fieldValue(fields.status));
                     var notes = QuickAddModal._fieldValue(fields.notes) || '';
-                    var valueNum = fields.value !== undefined ? parseFloat(QuickAddModal._fieldValue(fields.value)) : null;
-                    if (valueNum !== null && isNaN(valueNum)) valueNum = null;
+                    var parsedValue = QuickAddModal._parseOptionalNumber(fields.value, 'Value');
+                    if (parsedValue.error) {
+                        errors.push(parsedValue.error);
+                        continue;
+                    }
+                    var valueNum = parsedValue.value;
                     var unit = QuickAddModal._fieldValue(fields.unit) || eventType.defaultUnit || null;
 
                     var tags = Array.isArray(fields.tags) ? fields.tags : [];
@@ -674,12 +918,20 @@
                     }
 
                     var endDateVal = QuickAddModal._fieldValue(fields.endDate) || null;
-                    var durationVal = fields.duration !== undefined ? parseFloat(QuickAddModal._fieldValue(fields.duration)) : null;
-                    if (durationVal !== null && isNaN(durationVal)) durationVal = null;
+                    var parsedDuration = QuickAddModal._parseOptionalNumber(fields.duration, 'Duration');
+                    if (parsedDuration.error) {
+                        errors.push(parsedDuration.error);
+                        continue;
+                    }
+                    var durationVal = parsedDuration.value;
                     var providerInput = QuickAddModal._fieldValue(fields.provider) || null;
                     var providerVal = QuickAddModal.resolveProviderId(providerInput);
-                    var costVal = fields.cost !== undefined ? parseFloat(QuickAddModal._fieldValue(fields.cost)) : null;
-                    if (costVal !== null && isNaN(costVal)) costVal = null;
+                    var parsedCost = QuickAddModal._parseOptionalNumber(fields.cost, 'Cost');
+                    if (parsedCost.error) {
+                        errors.push(parsedCost.error);
+                        continue;
+                    }
+                    var costVal = parsedCost.value;
                     var costCatVal = QuickAddModal._fieldValue(fields.costCategory) || null;
                     var costCurVal = QuickAddModal._fieldValue(fields.costCurrency) || null;
                     var todoistVal = QuickAddModal._fieldValue(fields.todoistTaskId) || null;
@@ -715,6 +967,8 @@
             }
 
             if (saved > 0) {
+                QuickAddModal.state.skipDraftOnClose = true;
+                QuickAddModal.clearDraft();
                 PetTracker.UI.toast('Saved ' + saved + ' event' + (saved > 1 ? 's' : ''), 'success');
                 QuickAddModal.close();
                 App.renderDashboard();
@@ -773,13 +1027,11 @@
                 errors.push('Event type "' + eventType.name + '" does not use severity');
             }
 
-            var valStr = QuickAddModal._fieldValue(fields.value);
-            if (valStr) {
-                var num = parseFloat(valStr);
-                if (isNaN(num)) {
-                    errors.push('Value "' + valStr + '" is not a valid number');
-                }
-            }
+            ['value', 'duration', 'cost'].forEach(function (key) {
+                var label = key === 'value' ? 'Value' : (key === 'duration' ? 'Duration' : 'Cost');
+                var parsed = QuickAddModal._parseOptionalNumber(fields[key], label);
+                if (parsed.error) errors.push(parsed.error);
+            });
 
             var statusInput = QuickAddModal._fieldValue(fields.status);
             if (statusInput) {
@@ -807,6 +1059,19 @@
             if (val === undefined || val === null) return '';
             if (Array.isArray(val)) return val[0] !== undefined ? String(val[0]) : '';
             return String(val);
+        },
+
+        _parseOptionalNumber: function (raw, label) {
+            var text = QuickAddModal._fieldValue(raw).trim();
+            if (!text) return { value: null, error: null };
+            if (!/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(text)) {
+                return { value: null, error: label + ' "' + text + '" is not a valid number' };
+            }
+            var parsed = Number(text);
+            if (!isFinite(parsed)) {
+                return { value: null, error: label + ' "' + text + '" is not a valid number' };
+            }
+            return { value: parsed, error: null };
         }
     };
 

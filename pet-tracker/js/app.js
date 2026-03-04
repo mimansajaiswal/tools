@@ -1326,6 +1326,21 @@ const App = {
 
         const pets = App.state.pets;
         const recentEvents = await Events.getRecent(10);
+        const getActivityTileStyle = (hex) => {
+            if (!hex || typeof hex !== 'string') {
+                return 'background:#f8f6f3; border:1px solid rgba(212, 200, 184, 0.9); border-radius:8px;';
+            }
+            const clean = hex.replace('#', '').trim();
+            const full = clean.length === 3 ? clean.split('').map(c => c + c).join('') : clean;
+            if (!/^[0-9a-fA-F]{6}$/.test(full)) {
+                return 'background:#f8f6f3; border:1px solid rgba(212, 200, 184, 0.9); border-radius:8px;';
+            }
+            const num = parseInt(full, 16);
+            const r = (num >> 16) & 255;
+            const g = (num >> 8) & 255;
+            const b = num & 255;
+            return `background: rgba(${r}, ${g}, ${b}, 0.16); border:1px solid rgba(${r}, ${g}, ${b}, 0.45); border-radius:8px;`;
+        };
 
         if (pets.length === 0) {
             container.innerHTML = PetTracker.UI.emptyState(
@@ -1395,7 +1410,7 @@ const App = {
                 }
                 return `
                             <div class="card card-hover p-3 flex items-center gap-3 cursor-pointer" onclick="Calendar.showEventDetail('${event.id}')">
-                                <div class="w-10 h-10 bg-oatmeal flex items-center justify-center flex-shrink-0" style="${pet?.color ? `border-left: 3px solid ${pet.color}` : ''}">
+                                <div class="w-10 h-10 flex items-center justify-center flex-shrink-0" style="${getActivityTileStyle(pet?.color)}">
                                     ${eventIconHtml}
                                 </div>
                                 <div class="flex-1 min-w-0">

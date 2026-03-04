@@ -9,6 +9,8 @@ const ONBOARDING_OAUTH_BASE = 'https://notion-oauth-handler.mimansa-jaiswal.work
 const Onboarding = {
     currentStep: 1,
     totalSteps: 5,
+    hasExistingData: false,
+    existingDataCheckInFlight: false,
 
     // Default event types for ad-hoc logging (not scheduled/recurring)
     defaultEventTypes: [
@@ -73,6 +75,8 @@ const Onboarding = {
         } else {
             Onboarding.currentStep = 1;
         }
+        Onboarding.hasExistingData = settings.onboardingHasExistingData === true;
+        Onboarding.existingDataCheckInFlight = false;
 
         const savedSelections = settings.onboardingSelections || {};
         Onboarding.selections.eventTypes = Array.isArray(savedSelections.eventTypes)
@@ -107,6 +111,11 @@ const Onboarding = {
         }
 
         await Onboarding.saveStepData(Onboarding.currentStep);
+
+        if (Onboarding.currentStep === 3 && Onboarding.hasExistingData) {
+            await Onboarding.complete();
+            return;
+        }
 
         if (Onboarding.currentStep < Onboarding.totalSteps) {
             Onboarding.currentStep++;
@@ -168,7 +177,7 @@ const Onboarding = {
         // Update next button text
         const nextBtn = document.getElementById('onboardingNext');
         if (nextBtn) {
-            if (Onboarding.currentStep === Onboarding.totalSteps) {
+            if (Onboarding.currentStep === Onboarding.totalSteps || (Onboarding.currentStep === 3 && Onboarding.hasExistingData)) {
                 nextBtn.innerHTML = '<i data-lucide="check" class="w-4 h-4 inline mr-1"></i>Complete';
             } else {
                 nextBtn.innerHTML = 'Next<i data-lucide="arrow-right" class="w-4 h-4 inline ml-1"></i>';
@@ -181,8 +190,9 @@ const Onboarding = {
                 nextBtn.classList.toggle('opacity-50', !verified);
             } else if (Onboarding.currentStep === 3) {
                 const verified = document.getElementById('onboardingDatabasesVerified')?.value === 'true';
-                nextBtn.disabled = !verified;
-                nextBtn.classList.toggle('opacity-50', !verified);
+                const disabled = !verified || Onboarding.existingDataCheckInFlight;
+                nextBtn.disabled = disabled;
+                nextBtn.classList.toggle('opacity-50', disabled);
             } else {
                 nextBtn.disabled = false;
                 nextBtn.classList.remove('opacity-50');
@@ -466,7 +476,9 @@ const Onboarding = {
      * Verify Worker connection
      */
     verifyWorker: async () => {
-        const workerUrl = document.getElementById('onboardingWorkerUrl')?.value?.trim();
+        const workerUrlInput = document.getElementById('onboardingWorkerUrl');
+        const workerUrlRaw = workerUrlInput?.value?.trim();
+        const workerUrl = PetTracker.Settings.normalizeWorkerUrl(workerUrlRaw);
         const proxyToken = document.getElementById('onboardingProxyToken')?.value?.trim();
         const btn = document.getElementById('onboardingVerifyWorkerBtn');
         const statusDiv = document.getElementById('onboardingWorkerStatus');
@@ -479,6 +491,7 @@ const Onboarding = {
         try {
             if (btn) btn.disabled = true;
             PetTracker.UI.showLoading('Verifying Worker...');
+            if (workerUrlInput) workerUrlInput.value = workerUrl;
 
             PetTracker.Settings.set({ workerUrl, proxyToken });
 
@@ -625,6 +638,11 @@ const Onboarding = {
 
         try {
             PetTracker.UI.showLoading('Scanning Notion...');
+            try {
+                await PetTracker.API.verifyConnection();
+            } catch (authErr) {
+                throw new Error('Notion authentication failed: ' + authErr.message);
+            }
 
             const dataSources = await PetTracker.API.listDatabases();
 
@@ -702,7 +720,7 @@ const Onboarding = {
     /**
      * Check if all databases are mapped
      */
-    checkDbMapping: () => {
+    checkDbMapping: async () => {
         const selects = document.querySelectorAll('#onboardingDbList select[data-source]');
         let allSet = true;
         const mapping = {};
@@ -767,12 +785,53 @@ const Onboarding = {
 
         if (allSet) {
             document.getElementById('onboardingDatabasesVerified').value = 'true';
-            PetTracker.UI.toast('Mapping complete', 'success');
+            const hasExistingData = await Onboarding.detectExistingData(dataSources);
+            if (hasExistingData) {
+                PetTracker.UI.toast('Existing data found. Skipping starter setup.', 'success');
+            } else {
+                PetTracker.UI.toast('Mapping complete', 'success');
+            }
         } else {
+            Onboarding.hasExistingData = false;
+            Onboarding.existingDataCheckInFlight = false;
+            PetTracker.Settings.set({ onboardingHasExistingData: false });
             document.getElementById('onboardingDatabasesVerified').value = 'false';
         }
 
         Onboarding.updateUI();
+    },
+
+    /**
+     * Check whether mapped Notion data sources already contain records.
+     */
+    detectExistingData: async (dataSources) => {
+        Onboarding.existingDataCheckInFlight = true;
+        Onboarding.updateUI();
+
+        try {
+            const stores = ['pets', 'events', 'eventTypes', 'scales', 'scaleLevels', 'contacts'];
+            for (const store of stores) {
+                const dataSourceId = dataSources?.[store];
+                if (!dataSourceId) continue;
+                const result = await PetTracker.API.queryDatabase(dataSourceId);
+                if ((result?.results || []).length > 0) {
+                    Onboarding.hasExistingData = true;
+                    PetTracker.Settings.set({ onboardingHasExistingData: true });
+                    return true;
+                }
+            }
+
+            Onboarding.hasExistingData = false;
+            PetTracker.Settings.set({ onboardingHasExistingData: false });
+            return false;
+        } catch (e) {
+            Onboarding.hasExistingData = false;
+            PetTracker.Settings.set({ onboardingHasExistingData: false });
+            console.warn('[Onboarding] Existing data check failed:', e);
+            return false;
+        } finally {
+            Onboarding.existingDataCheckInFlight = false;
+        }
     },
 
     /**
@@ -782,29 +841,36 @@ const Onboarding = {
         try {
             PetTracker.UI.showLoading('Setting up...');
 
-            // Create selected event types, scales, and care items
-            await Onboarding.createSelectedData();
+            const skipStarterSetup = Onboarding.hasExistingData;
 
-            // Create first pet
-            const petName = document.getElementById('onboardingPetName')?.value?.trim();
-            const petSpecies = document.getElementById('onboardingPetSpecies')?.value;
-            const petColor = document.getElementById('onboardingPetColor')?.value;
+            if (!skipStarterSetup) {
+                // Create selected event types, scales, and care items
+                await Onboarding.createSelectedData();
 
-            let pet = null;
-            if (petName) {
-                pet = await Pets.save({
-                    name: petName,
-                    species: petSpecies || 'Dog',
-                    color: petColor || '#8b7b8e',
-                    status: 'Active',
-                    isPrimary: true
-                });
-            }
+                // Create first pet
+                const petName = document.getElementById('onboardingPetName')?.value?.trim();
+                const petSpecies = document.getElementById('onboardingPetSpecies')?.value;
+                const petColor = document.getElementById('onboardingPetColor')?.value;
 
-            // Create sample events if checked
-            const createSampleEvents = document.getElementById('onboardingCreateSampleEvents')?.checked;
-            if (createSampleEvents && pet) {
-                await Onboarding.createSampleEvents(pet.id);
+                let pet = null;
+                if (petName) {
+                    pet = await Pets.save({
+                        name: petName,
+                        species: petSpecies || 'Dog',
+                        color: petColor || '#8b7b8e',
+                        status: 'Active',
+                        isPrimary: true
+                    });
+                }
+
+                // Create sample events if checked
+                const createSampleEvents = document.getElementById('onboardingCreateSampleEvents')?.checked;
+                if (createSampleEvents && pet) {
+                    await Onboarding.createSampleEvents(pet.id);
+                }
+            } else if (PetTracker.Sync?.pullRemoteUpdates) {
+                await PetTracker.Sync.pullRemoteUpdates();
+                PetTracker.Settings.setLastSync();
             }
 
             // Mark onboarding complete
@@ -812,7 +878,8 @@ const Onboarding = {
             PetTracker.Settings.set({
                 onboardingInProgress: false,
                 onboardingStep: null,
-                onboardingSelections: null
+                onboardingSelections: null,
+                onboardingHasExistingData: false
             });
 
             // Clean up event listener

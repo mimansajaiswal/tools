@@ -120,20 +120,58 @@ const API = {
 
     /**
      * Upload file to Notion (get upload URL)
-     * Prefer modern /file_uploads endpoint; fall back to /files for older workers.
      */
     getFileUploadUrl: async (fileName, contentType) => {
+        return API.request('POST', '/file_uploads', {
+            object: 'file_upload',
+            filename: fileName,
+            content_type: contentType
+        });
+    },
+
+    /**
+     * Send file content to a Notion upload URL through proxy (multipart/form-data)
+     */
+    uploadFileContent: async (uploadUrl, fileBlob, fileName = 'upload.bin') => {
+        const settings = PetTracker.Settings.get();
+        const { workerUrl, proxyToken, notionToken, notionOAuthData, authMode } = settings;
+
+        const token = authMode === 'oauth'
+            ? (notionOAuthData?.access_token || notionToken)
+            : (notionToken || notionOAuthData?.access_token);
+
+        if (!workerUrl) throw new Error('Worker URL not configured');
+        if (!token) throw new Error('Notion token not configured');
+        if (!uploadUrl) throw new Error('Upload URL missing');
+
+        const cleanWorkerUrl = workerUrl.trim().replace(/\/$/, '');
+        const fetchUrl = new URL(cleanWorkerUrl);
+        fetchUrl.searchParams.append('url', uploadUrl);
+
+        const headers = {
+            'Authorization': `Bearer ${token.trim()}`,
+            'Notion-Version': '2025-09-03'
+        };
+        if (proxyToken) headers['X-Proxy-Token'] = proxyToken.trim();
+
+        const formData = new FormData();
+        formData.append('file', fileBlob, fileName);
+
+        const res = await fetch(fetchUrl.toString(), {
+            method: 'POST',
+            headers,
+            body: formData
+        });
+
+        if (!res.ok) {
+            const txt = await res.text();
+            throw new Error(txt || `Upload failed (${res.status})`);
+        }
+
         try {
-            return await API.request('POST', '/file_uploads', {
-                object: 'file_upload',
-                filename: fileName,
-                content_type: contentType
-            });
-        } catch (e) {
-            return API.request('POST', '/files', {
-                file_name: fileName,
-                content_type: contentType
-            });
+            return await res.json();
+        } catch (_) {
+            return { ok: true };
         }
     },
 

@@ -335,17 +335,29 @@ const Media = {
             throw new Error('Failed to get upload URL');
         }
 
-        // Upload to the provided URL (this goes directly to S3, not through proxy)
-        const uploadRes = await fetch(uploadInfo.upload_url, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': blob.type
-            },
-            body: blob
-        });
+        let notionUploadEndpoint = false;
+        try {
+            const parsed = new URL(uploadInfo.upload_url);
+            notionUploadEndpoint = /(^|\.)api\.notion\.com$/i.test(parsed.hostname) &&
+                /\/v1\/file_uploads\/.+\/send$/i.test(parsed.pathname);
+        } catch (_) {
+            notionUploadEndpoint = false;
+        }
 
-        if (!uploadRes.ok) {
-            throw new Error('Upload failed');
+        if (notionUploadEndpoint) {
+            await PetTracker.API.uploadFileContent(uploadInfo.upload_url, blob, filename || 'upload.bin');
+        } else {
+            const uploadRes = await fetch(uploadInfo.upload_url, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': blob.type
+                },
+                body: blob
+            });
+
+            if (!uploadRes.ok) {
+                throw new Error('Upload failed');
+            }
         }
 
         return {

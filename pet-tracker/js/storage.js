@@ -24,6 +24,7 @@ const STORES = {
 
 // Media cache limit (~200MB)
 const MEDIA_CACHE_LIMIT = 200 * 1024 * 1024;
+const AI_QUEUE_PROCESSING_STALE_MS = 5 * 60 * 1000;
 
 /**
  * IndexedDB Database Manager
@@ -235,6 +236,22 @@ const DB = {
  * Sync Queue Manager
  */
 const SyncQueue = {
+    _addLock: Promise.resolve(),
+
+    _withAddLock: async (fn) => {
+        const previous = SyncQueue._addLock;
+        let release;
+        SyncQueue._addLock = new Promise((resolve) => {
+            release = resolve;
+        });
+        await previous;
+        try {
+            return await fn();
+        } finally {
+            release();
+        }
+    },
+
     getActiveForRecord: async (store, recordId) => {
         return DB.query(
             STORES.SYNC_QUEUE,
@@ -251,93 +268,95 @@ const SyncQueue = {
     },
 
     add: async (operation) => {
-        const existing = await SyncQueue.getActiveForRecord(operation.store, operation.recordId);
-        const now = new Date().toISOString();
+        return SyncQueue._withAddLock(async () => {
+            const existing = await SyncQueue.getActiveForRecord(operation.store, operation.recordId);
+            const now = new Date().toISOString();
 
-        const existingCreate = existing.find(item => item.type === 'create');
-        const existingUpdate = existing.find(item => item.type === 'update');
-        const existingDelete = existing.find(item => item.type === 'delete');
+            const existingCreate = existing.find(item => item.type === 'create');
+            const existingUpdate = existing.find(item => item.type === 'update');
+            const existingDelete = existing.find(item => item.type === 'delete');
 
-        // Queue compaction: collapse conflicting operations for same record.
-        if (operation.type === 'update') {
-            if (existingDelete) {
-                return existingDelete;
+            // Queue compaction: collapse conflicting operations for same record.
+            if (operation.type === 'update') {
+                if (existingDelete) {
+                    return existingDelete;
+                }
+
+                if (existingCreate) {
+                    existingCreate.data = { ...(existingCreate.data || {}), ...(operation.data || {}) };
+                    existingCreate.status = 'pending';
+                    existingCreate.error = null;
+                    existingCreate.retryCount = existingCreate.retryCount || 0;
+                    existingCreate.lastAttempt = now;
+                    return DB.put(STORES.SYNC_QUEUE, existingCreate);
+                }
+
+                if (existingUpdate) {
+                    existingUpdate.data = { ...(existingUpdate.data || {}), ...(operation.data || {}) };
+                    existingUpdate.status = 'pending';
+                    existingUpdate.error = null;
+                    existingUpdate.lastAttempt = now;
+                    return DB.put(STORES.SYNC_QUEUE, existingUpdate);
+                }
             }
 
-            if (existingCreate) {
-                existingCreate.data = { ...(existingCreate.data || {}), ...(operation.data || {}) };
-                existingCreate.status = 'pending';
-                existingCreate.error = null;
-                existingCreate.retryCount = existingCreate.retryCount || 0;
-                existingCreate.lastAttempt = now;
-                return DB.put(STORES.SYNC_QUEUE, existingCreate);
-            }
-
-            if (existingUpdate) {
-                existingUpdate.data = { ...(existingUpdate.data || {}), ...(operation.data || {}) };
-                existingUpdate.status = 'pending';
-                existingUpdate.error = null;
-                existingUpdate.lastAttempt = now;
-                return DB.put(STORES.SYNC_QUEUE, existingUpdate);
-            }
-        }
-
-        if (operation.type === 'create') {
-            if (existingDelete) {
-                await DB.delete(STORES.SYNC_QUEUE, existingDelete.id);
-            }
-
-            if (existingCreate) {
-                existingCreate.data = { ...(existingCreate.data || {}), ...(operation.data || {}) };
-                existingCreate.status = 'pending';
-                existingCreate.error = null;
-                existingCreate.lastAttempt = now;
-                return DB.put(STORES.SYNC_QUEUE, existingCreate);
-            }
-        }
-
-        if (operation.type === 'delete') {
-            const hasPendingCreateOrUpdate = existing.some(
-                item => item.type === 'create' || item.type === 'update'
-            );
-            await SyncQueue.removeMany(existing.filter(
-                item => item.type === 'create' || item.type === 'update'
-            ));
-
-            // Created-and-deleted before first sync: remove queue noise and skip remote delete.
-            if (hasPendingCreateOrUpdate && !operation.data?.notionId) {
+            if (operation.type === 'create') {
                 if (existingDelete) {
                     await DB.delete(STORES.SYNC_QUEUE, existingDelete.id);
                 }
-                return null;
+
+                if (existingCreate) {
+                    existingCreate.data = { ...(existingCreate.data || {}), ...(operation.data || {}) };
+                    existingCreate.status = 'pending';
+                    existingCreate.error = null;
+                    existingCreate.lastAttempt = now;
+                    return DB.put(STORES.SYNC_QUEUE, existingCreate);
+                }
             }
 
-            if (existingDelete) {
-                existingDelete.data = {
-                    ...(existingDelete.data || {}),
-                    ...(operation.data || {}),
-                    notionId: operation.data?.notionId || existingDelete.data?.notionId || null
-                };
-                existingDelete.status = 'pending';
-                existingDelete.error = null;
-                existingDelete.lastAttempt = now;
-                return DB.put(STORES.SYNC_QUEUE, existingDelete);
+            if (operation.type === 'delete') {
+                const hasPendingCreateOrUpdate = existing.some(
+                    item => item.type === 'create' || item.type === 'update'
+                );
+                await SyncQueue.removeMany(existing.filter(
+                    item => item.type === 'create' || item.type === 'update'
+                ));
+
+                // Created-and-deleted before first sync: remove queue noise and skip remote delete.
+                if (hasPendingCreateOrUpdate && !operation.data?.notionId) {
+                    if (existingDelete) {
+                        await DB.delete(STORES.SYNC_QUEUE, existingDelete.id);
+                    }
+                    return null;
+                }
+
+                if (existingDelete) {
+                    existingDelete.data = {
+                        ...(existingDelete.data || {}),
+                        ...(operation.data || {}),
+                        notionId: operation.data?.notionId || existingDelete.data?.notionId || null
+                    };
+                    existingDelete.status = 'pending';
+                    existingDelete.error = null;
+                    existingDelete.lastAttempt = now;
+                    return DB.put(STORES.SYNC_QUEUE, existingDelete);
+                }
+
+                // No known remote ID and no pending create/update to cancel -> skip.
+                if (!operation.data?.notionId) {
+                    return null;
+                }
             }
 
-            // No known remote ID and no pending create/update to cancel -> skip.
-            if (!operation.data?.notionId) {
-                return null;
-            }
-        }
-
-        const queueItem = {
-            ...operation,
-            id: generateId(),
-            status: 'pending',
-            createdAt: now,
-            retryCount: 0
-        };
-        return DB.put(STORES.SYNC_QUEUE, queueItem);
+            const queueItem = {
+                ...operation,
+                id: generateId(),
+                status: 'pending',
+                createdAt: now,
+                retryCount: 0
+            };
+            return DB.put(STORES.SYNC_QUEUE, queueItem);
+        });
     },
 
     getPending: async () => {
@@ -409,9 +428,19 @@ const AIQueue = {
     updateStatus: async (id, status, error = null) => {
         const item = await DB.get(STORES.AI_QUEUE, id);
         if (item) {
+            const now = new Date().toISOString();
             item.status = status;
             item.error = error;
-            item.processedAt = status !== 'pending' ? new Date().toISOString() : null;
+            if (status === 'processing') {
+                item.processingAt = now;
+                item.processedAt = null;
+            } else if (status === 'pending') {
+                item.processingAt = null;
+                item.processedAt = null;
+            } else {
+                item.processingAt = null;
+                item.processedAt = now;
+            }
             return DB.put(STORES.AI_QUEUE, item);
         }
     },
@@ -433,12 +462,20 @@ const AIQueue = {
     },
 
     resetStaleProcessing: async () => {
+        var cutoff = Date.now() - AI_QUEUE_PROCESSING_STALE_MS;
         var stale = await DB.query(STORES.AI_QUEUE, function (item) {
-            return item.status === 'processing';
+            if (item.status !== 'processing') return false;
+            var startedAt = item.processingAt || item.createdAt;
+            if (!startedAt) return true;
+            var startedMs = Date.parse(startedAt);
+            if (isNaN(startedMs)) return true;
+            return startedMs <= cutoff;
         });
         for (var i = 0; i < stale.length; i++) {
             stale[i].status = 'pending';
             stale[i].error = null;
+            stale[i].processingAt = null;
+            stale[i].processedAt = null;
             await DB.put(STORES.AI_QUEUE, stale[i]);
         }
         return stale.length;
@@ -570,6 +607,21 @@ const Settings = {
         UI_STATE: LS_PREFIX + 'ui_state'
     },
 
+    normalizeWorkerUrl: (value) => {
+        const raw = String(value || '').trim();
+        if (!raw) return '';
+
+        const withProtocol = /^[a-zA-Z][a-zA-Z\d+.-]*:\/\//.test(raw)
+            ? raw
+            : `https://${raw}`;
+
+        try {
+            return new URL(withProtocol).toString().replace(/\/$/, '');
+        } catch (_) {
+            return withProtocol;
+        }
+    },
+
     defaults: {
         workerUrl: '',
         proxyToken: '',
@@ -598,6 +650,7 @@ const Settings = {
         gcalCalendarId: '',
         gcalUserEmail: '',
         syncCursors: {},
+        onboardingHasExistingData: false,
         uploadCapMb: 5,
         defaultPetId: null,
         calendarView: 'month',
@@ -634,6 +687,7 @@ const Settings = {
                 ...parsed,
                 quickAddPrefixes: { ...(Settings.defaults.quickAddPrefixes || {}), ...(parsed.quickAddPrefixes || {}) }
             };
+            merged.workerUrl = Settings.normalizeWorkerUrl(merged.workerUrl);
             merged.uploadCapMb = Number(merged.uploadCapMb) >= 20 ? 20 : 5;
             return merged;
         } catch (e) {
@@ -648,10 +702,12 @@ const Settings = {
         const hasDataSourceNames = Object.prototype.hasOwnProperty.call(updates, 'dataSourceNames');
         const hasSyncCursors = Object.prototype.hasOwnProperty.call(updates, 'syncCursors');
         const hasQaPrefixes = Object.prototype.hasOwnProperty.call(updates, 'quickAddPrefixes');
+        const hasWorkerUrl = Object.prototype.hasOwnProperty.call(updates, 'workerUrl');
 
         const merged = {
             ...current,
             ...updates,
+            workerUrl: Settings.normalizeWorkerUrl(hasWorkerUrl ? updates.workerUrl : current.workerUrl),
             dataSources: hasDataSources
                 ? { ...(Settings.defaults.dataSources || {}), ...(updates.dataSources || {}) }
                 : { ...(current.dataSources || {}) },

@@ -88,6 +88,8 @@ const UI = {
                         App.confirmCloseAddModal();
                     } else if (modalId === 'addPetModal' && typeof Pets !== 'undefined') {
                         Pets.requestCloseModal();
+                    } else if (modalId === 'quickAddModal' && typeof PetTracker !== 'undefined' && PetTracker.QuickAddModal) {
+                        PetTracker.QuickAddModal.close();
                     } else if (modalId) {
                         UI.closeModal(modalId);
                     }
@@ -119,6 +121,8 @@ const UI = {
                 App.confirmCloseAddModal();
             } else if (modalId === 'addPetModal' && typeof Pets !== 'undefined') {
                 Pets.requestCloseModal();
+            } else if (modalId === 'quickAddModal' && typeof PetTracker !== 'undefined' && PetTracker.QuickAddModal) {
+                PetTracker.QuickAddModal.close();
             } else {
                 UI.closeModal(modalId);
             }
