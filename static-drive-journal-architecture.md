@@ -2833,6 +2833,203 @@ That is the narrowest architecture that still satisfies the real thing you want,
 - "just a sync wrapper around Drive files", or
 - "a fake Notion clone that needs a backend anyway"
 
+## Current implementation status
+
+There is now a working static prototype at `journaling-app/` in this repo.
+
+What is already implemented in code:
+
+- static HTML/CSS/JS app shell intended for GitHub Pages style hosting
+- PWA manifest and service worker
+- IndexedDB persistence for documents, assets, health logs, settings, views, and sync queue
+- Google Drive sync adapter stub and queue state for later OAuth wiring
+- multiple journals with active-journal switching
+- journal drawer and current-journal filtering
+- inline QuickAdd integration
+- user-defined custom fields / compact schema layer wired into QuickAdd and document metadata
+- custom block editor with:
+  - block type switching
+  - add/remove/reorder
+  - split block on Enter
+  - remove empty block on Backspace
+  - indent/outdent with Tab / Shift+Tab
+  - slash-command style block conversion
+- write surface with:
+  - date-led editorial header
+  - inline title editing
+  - favorite + highlight actions
+  - collapsed secondary details instead of front-loading all metadata
+- dedicated views for:
+  - journals
+  - timeline
+  - calendar
+  - reflect
+  - insights
+  - highlights
+  - tags
+  - people
+  - templates
+  - reminders
+  - map
+  - health
+  - transcription
+- map view powered by document latitude/longitude metadata
+- templates and reminder builders
+- favorites/highlights, tags, people, categories, and saved-search filtering
+- JSON export/import and Markdown export
+- browser-side image optimization before storage
+- health logging and dashboard summaries
+- browser recording and transcript insertion flow
+- local AI reflection layer with:
+  - summary
+  - title suggestion
+  - journal chat
+- responsive editor-first UI pass with desktop and mobile Playwright checks
+
+What is still not done:
+
+- real Google OAuth + Drive API sync
+- a fully swapped-in document editor engine that behaves like a real Notion-style block editor instead of a custom textarea stack
+- richer Notion-level editor affordances like drag handle feel, richer paste retention, nested block structures, and slash menu polish
+- full BYOK AI provider wiring beyond the local reflection provider
+- BYOK transcription provider wiring beyond browser-native flows
+- Fitbit / Google health import wiring
+- Apple Shortcut bridge / native companion paths for Apple Health and Health Connect
+- production-level conflict handling and media lifecycle rules
+
+Implementation direction that emerged from the prototype:
+
+- the editor must remain the primary surface
+- the editor interaction model should follow the same primitives described in Notion's own block documentation:
+  - each line is a block
+  - slash inserts/transforms blocks
+  - the left block handle is where structure controls live
+- capture / transcription / health work better as companion tools around the editor, not equal-weight dashboard panels
+- mobile must open on journal content first, not navigation first
+- the write page should keep only the current page and its immediate context visible; richer metadata belongs behind progressive disclosure
+- the desktop left rail should collapse to an icon rail by default so the writing surface stays dominant
+- the library/browser should be a dedicated page, not a permanent sidebar payload
+- sections inside the left rail should collapse independently so the shell stays quiet even when the rail is open
+- multiple journals, favorites/highlights, people, tags, reminders, templates, and map coordinates all fit the same unified document model
+- cache busting matters during local PWA iteration because service worker state can mask layout changes
+- the compact schema layer is real product infrastructure, not a later enhancement
+
+## Journalistic and Day One follow-up requirements
+
+The newer Journalistic screenshots make the intended visual bar much clearer:
+
+- sparse left navigation rail, not a card-heavy dashboard
+- very large centered content column
+- quiet, almost empty writing surface
+- dedicated navigation views for things like highlights, tags, and people
+- soft borders and whitespace doing the structural work instead of loud panels
+
+Additional metadata / organization requirements clarified from the latest discussion:
+
+- highlights must be first-class
+- tags must have a dedicated browse/filter surface
+- people must have a dedicated browse/filter surface
+- custom categories / custom fields must be user-defined
+- custom fields should behave like a compact Notion-style schema layer:
+  - name/key
+  - type
+  - parse prefix(es) for QuickAdd
+  - optional choices / limits
+  - optional multiple-value behavior
+- those custom fields should be usable in:
+  - QuickAdd
+  - document metadata
+  - future filters/search
+
+Relevant Day One feature surface to compare against when deciding final scope:
+
+- multiple journals and journal drawer organization
+- favorites / highlighted entries
+- tags, filters, and bulk tagging workflows
+- search + filtered list views
+- calendar and On This Day views
+- reminders
+- templates
+- entry metadata including location, date/time, favorite, weather, activity, music, and device details
+- import/export formats and archive flows
+- rich attachment/media support
+- sync and end-to-end encryption
+
+The Day One subset most aligned with your product direction is:
+
+- favorites/highlights
+- tags
+- people/entity browsing
+- multiple journals
+- map view
+- calendar / timeline / On This Day recall
+- reminders and templates
+- rich metadata and attachments
+- strong search/filtering
+- AI overlay features similar in spirit to the 2026.7 release:
+  - daily chat
+  - entry summaries
+  - smart title suggestions
+
+## Current prototype notes
+
+The current `journaling-app/` implementation is already beyond a bare prototype shell.
+
+It now demonstrates the actual product shape:
+
+- date-led editor-first writing view
+- collapsible icon-first left rail with a quieter Journalistic/Notion-style shell
+- dedicated Library page for search and saved retrieval views
+- multiple journals without splitting the data model
+- favorites/highlights, tags, people, and categories as first-class retrieval layers
+- compact custom schema fields that also pipe into QuickAdd
+- map-linked entries
+- reminders, templates, health logging, and transcripts in the same local-first system
+- local AI reflection layer
+- progressive disclosure for heavier metadata plus a studio rail for sync / AI / schema controls
+- flatter, quieter chrome with a single sans direction and less decorative editorial styling
+- independently collapsible sidebar sections for journals, views, and workspace context
+- replace symbol-font icons with a proper icon system and avoid overly rounded pill controls
+
+Playwright validation status from the current implementation pass:
+
+- desktop write view renders and saves cleanly
+- desktop write view with studio rail renders cleanly
+- journal view renders cleanly
+- map view renders with markers
+- mobile write view and section drawer render cleanly
+- no console errors on the most recent browser pass
+
+Implementation caveats observed during the current pass:
+
+- local calendar dates need to be treated as date-only values, not UTC timestamps
+- service worker cache busting is necessary during active UI iteration or older shells can mask current changes
+
+Still intentionally deferred to later implementation passes:
+
+- actual Google OAuth wiring
+- actual Drive push/pull
+- actual Fitbit / Google health import
+- actual external AI / transcription providers
+- stronger Notion-level block editing polish
+
+Latest editor implementation direction:
+
+- move the editor away from a textarea-per-block custom renderer
+- use a richer block-editor engine for the page body
+- current prototype now uses Tiptap core as the live page editor inside the static app
+- keep the app's persisted document model as flat journal blocks for the rest of the product
+- adapt between the persisted block list and the richer editor document model at the editor boundary
+- preserve slash-driven block conversion and the quiet left-gutter / block-handle interaction model
+- the write view should now be title-first and page-first:
+  - small journal/date meta line
+  - large wrapping page title
+  - optional summary line only when present
+  - compact inline property summary instead of a visible chip wall
+  - Quick Add and Details hidden behind icon-only controls until opened
+- avoid persistent bordered panels around the writing surface; the editor body should read as one clean document page, not a form
+- mobile title behavior should wrap like a real page title instead of clipping like a single-line input
+
 ## Sources
 
 Product references:
@@ -2845,6 +3042,13 @@ Product references:
 - [Gami](https://gaminote.com/)
 - [Bearable](https://bearable.app/)
 - [Bearable support and tracking tips](https://bearable.app/support/tips/track-your-mental-health/)
+- [Day One features](https://dayoneapp.com/features/)
+- [Day One map view](https://dayoneapp.com/features/map-view/)
+- [Day One templates guide](https://dayoneapp.com/guides/tips-and-tutorials/templates/)
+- [Day One reminders guide](https://dayoneapp.com/guides/tips-and-tutorials/reminders/)
+- [Day One On This Day guide](https://dayoneapp.com/guides/tips-and-tutorials/on-this-day-view/)
+- [Day One favorite entries guide](https://dayoneapp.com/guides/tips-and-tutorials/favorite-entries/)
+- [Day One release notes](https://dayoneapp.com/guides/release-notes/ios-release-notes/)
 
 Official capability references:
 
@@ -2865,6 +3069,13 @@ Official capability references:
 - [MDN Periodic Background Sync](https://developer.mozilla.org/en-US/docs/Web/API/Web_Periodic_Background_Synchronization_API)
 - [MDN PWA offline and background operation](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Guides/Offline_and_background_operation)
 - [web.dev service workers](https://web.dev/learn/pwa/service-workers)
+- [Chrome Prompt API](https://developer.chrome.com/docs/ai/prompt-api)
+- [Chrome built-in AI overview](https://developer.chrome.com/docs/ai/get-started)
+- [Fitbit Web API](https://dev.fitbit.com/build/reference/web-api/)
+- [Google Fit REST](https://developers.google.com/fit/rest)
+- [Health Connect availability](https://developer.android.com/health-and-fitness/health-connect/availability)
+- [Apple Health & Fitness developer overview](https://developer.apple.com/health-fitness/)
+- [Apple Shortcuts health sample actions](https://support.apple.com/en-hk/guide/shortcuts/apd8b28e2166/ios)
 
 Editor references:
 
@@ -2901,3 +3112,20 @@ Repo context used:
 - `components/quick-add/quick-add-component.js`
 - `ghostink-flashcards/js/storage.js`
 - `voxmark/js/storage.js`
+
+Current prototype UI rules now being enforced:
+
+- normal app shell, not a floating dashboard shell
+- fixed-width left rail with a plain border-right and no outer rounded container
+- library is its own page instead of being embedded into the sidebar
+- left rail can collapse to an icon rail, and each rail section can collapse independently
+- no serif/editorial display stack shortcut; current prototype uses a single sans family for headings and body
+- no eyebrow labels or decorative micro-headings in visible UI
+- low-radius controls and panels only; avoid pill-heavy controls
+- Lucide icon set is now vendored locally as static SVG assets instead of relying on runtime remote icon replacement
+- icon-led actions should be consistent across topbar, navigation, write actions, settings, reminders, templates, health, sync, and AI controls
+- local testing should not be polluted by a stale service worker; localhost now unregisters service workers automatically
+- production service worker should use network-first behavior for code-like assets so updated JS/CSS do not get stuck behind cache-first imports
+- the shell now honors the URL hash immediately for initial page visibility, even before the full app boot finishes
+- Quick Add and Details are now treated as secondary utilities, not permanent first-class panels in the write view
+- the visible write page should present one dominant document column with minimal surrounding chrome

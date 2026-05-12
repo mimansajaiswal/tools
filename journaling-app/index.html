@@ -1,0 +1,972 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Journaling</title>
+  <meta name="description"
+    content="A static, Journalistic-inspired journaling workspace with block editing, multiple journals, maps, health tracking, transcription, templates, reminders, and Drive-ready sync planning." />
+  <meta name="theme-color" content="#f6efe6" />
+  <meta name="color-scheme" content="light" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Journaling" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./assets/logo-mark.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="./assets/logo-mark.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <link rel="stylesheet" href="../components/quick-add/quick-add-component.css?v=16" data-qa-style="1" />
+  <link rel="stylesheet" href="./styles.css?v=17" />
+  <script>
+    (() => {
+      const raw = window.location.hash.replace(/^#/, '');
+      const view = raw === 'journal' ? 'journals' : (raw || 'write');
+      document.documentElement.dataset.initialView = view;
+    })();
+  </script>
+</head>
+
+<body data-right-panel-hidden="true" data-left-rail-open="false">
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="Journaling home">
+      <img class="brand-mark" src="./assets/logo-mark.svg" alt="" aria-hidden="true" />
+      <span class="brand-copy">
+        <span class="brand-kicker">Local-first journaling</span>
+        <span class="brand-title">Journaling</span>
+      </span>
+    </a>
+
+    <div class="topbar-center">
+      <span id="topbarContext" class="topbar-context">Library</span>
+    </div>
+
+    <div class="topbar-actions">
+      <button id="toggleSectionsBtn" class="btn btn-secondary btn-icon" type="button" aria-expanded="false" aria-label="Toggle left rail" title="Toggle left rail">
+        <img class="app-icon" data-lucide="panel-left-open" src="./assets/lucide/panel-left-open.svg" alt="" aria-hidden="true" />
+      </button>
+      <button id="toggleStudioBtn" class="btn btn-secondary btn-icon" type="button" aria-expanded="false" aria-label="Toggle sidebar" title="Toggle sidebar">
+        <img class="app-icon" data-lucide="panel-right-open" src="./assets/lucide/panel-right-open.svg" alt="" aria-hidden="true" />
+      </button>
+      <button id="topNewEntryBtn" class="btn btn-primary btn-icon" type="button" aria-label="New entry" title="New entry">
+        <img class="app-icon" data-lucide="plus" src="./assets/lucide/plus.svg" alt="" aria-hidden="true" />
+      </button>
+      <details class="topbar-menu">
+        <summary class="btn btn-secondary btn-icon" aria-label="Library actions" title="Library actions">
+          <img class="app-icon" data-lucide="ellipsis" src="./assets/lucide/ellipsis.svg" alt="" aria-hidden="true" />
+        </summary>
+        <div class="topbar-menu-sheet">
+          <button id="topMarkdownBtn" class="menu-action" type="button"><img class="app-icon" data-lucide="file-text" src="./assets/lucide/file-text.svg" alt="" aria-hidden="true" /><span>Export Markdown</span></button>
+          <button id="topImportBtn" class="menu-action" type="button"><img class="app-icon" data-lucide="upload" src="./assets/lucide/upload.svg" alt="" aria-hidden="true" /><span>Import JSON</span></button>
+          <button id="topExportBtn" class="menu-action" type="button"><img class="app-icon" data-lucide="download" src="./assets/lucide/download.svg" alt="" aria-hidden="true" /><span>Export JSON</span></button>
+        </div>
+      </details>
+    </div>
+  </header>
+  <input id="importJsonInput" type="file" accept="application/json" hidden />
+
+  <main id="main" class="app-shell">
+    <aside class="rail rail-left">
+      <section class="panel list-panel rail-section" data-rail-section="journals">
+        <div class="panel-head row rail-section-head">
+          <div>
+            <h3>Journals</h3>
+          </div>
+          <div class="rail-section-actions">
+            <button id="createJournalBtn" class="btn btn-secondary btn-icon" type="button" aria-label="New journal" title="New journal">
+              <img class="app-icon" data-lucide="folder-plus" src="./assets/lucide/folder-plus.svg" alt="" aria-hidden="true" />
+            </button>
+            <button class="btn btn-secondary btn-icon rail-section-toggle" type="button" data-toggle-rail-section="journals" aria-expanded="true" aria-label="Collapse journals section" title="Collapse journals section">
+              <img class="app-icon" data-lucide="chevron-up" src="./assets/lucide/chevron-up.svg" alt="" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+        <div class="rail-section-body">
+          <div id="journalList" class="stack-list"></div>
+        </div>
+      </section>
+
+      <nav class="panel nav-panel rail-section" aria-label="Primary" data-rail-section="views">
+        <div class="panel-head row rail-section-head">
+          <div>
+            <h3>Views</h3>
+          </div>
+          <button class="btn btn-secondary btn-icon rail-section-toggle" type="button" data-toggle-rail-section="views" aria-expanded="true" aria-label="Collapse views section" title="Collapse views section">
+            <img class="app-icon" data-lucide="chevron-up" src="./assets/lucide/chevron-up.svg" alt="" aria-hidden="true" />
+          </button>
+        </div>
+        <div class="rail-section-body">
+          <a class="nav-link nav-link--write" href="#write" data-view-link="write" title="Write">
+            <img class="app-icon nav-link-icon" data-lucide="square-pen" src="./assets/lucide/square-pen.svg" alt="" aria-hidden="true" />
+            <span class="nav-link-label">Write</span>
+          </a>
+          <a class="nav-link nav-link--library" href="#library" data-view-link="library" title="Library">
+            <img class="app-icon nav-link-icon" data-lucide="files" src="./assets/lucide/files.svg" alt="" aria-hidden="true" />
+            <span class="nav-link-label">Library</span>
+          </a>
+          <a class="nav-link nav-link--journal" href="#journals" data-view-link="journals" title="Journals">
+            <img class="app-icon nav-link-icon" data-lucide="book-open" src="./assets/lucide/book-open.svg" alt="" aria-hidden="true" />
+            <span class="nav-link-label">Journals</span>
+          </a>
+          <a class="nav-link nav-link--reflect" href="#reflect" data-view-link="reflect" title="Reflect">
+            <img class="app-icon nav-link-icon" data-lucide="history" src="./assets/lucide/history.svg" alt="" aria-hidden="true" />
+            <span class="nav-link-label">Reflect</span>
+          </a>
+          <a class="nav-link nav-link--insights" href="#insights" data-view-link="insights" title="Insights">
+            <img class="app-icon nav-link-icon" data-lucide="bar-chart-3" src="./assets/lucide/bar-chart-3.svg" alt="" aria-hidden="true" />
+            <span class="nav-link-label">Insights</span>
+          </a>
+          <div class="nav-divider" aria-hidden="true"></div>
+          <a class="nav-link nav-link--highlights" href="#highlights" data-view-link="highlights" title="Highlights">
+            <img class="app-icon nav-link-icon" data-lucide="heart" src="./assets/lucide/heart.svg" alt="" aria-hidden="true" />
+            <span class="nav-link-label">Highlights</span>
+          </a>
+          <a class="nav-link nav-link--tags" href="#tags" data-view-link="tags" title="Tags">
+            <img class="app-icon nav-link-icon" data-lucide="tags" src="./assets/lucide/tags.svg" alt="" aria-hidden="true" />
+            <span class="nav-link-label">Tags</span>
+          </a>
+          <a class="nav-link nav-link--people" href="#people" data-view-link="people" title="People">
+            <img class="app-icon nav-link-icon" data-lucide="at-sign" src="./assets/lucide/at-sign.svg" alt="" aria-hidden="true" />
+            <span class="nav-link-label">People</span>
+          </a>
+          <a class="nav-link nav-link--map" href="#map" data-view-link="map" title="Map">
+            <img class="app-icon nav-link-icon" data-lucide="map-pinned" src="./assets/lucide/map-pinned.svg" alt="" aria-hidden="true" />
+            <span class="nav-link-label">Map</span>
+          </a>
+          <a class="nav-link nav-link--templates" href="#templates" data-view-link="templates" title="Templates">
+            <img class="app-icon nav-link-icon" data-lucide="layout-template" src="./assets/lucide/layout-template.svg" alt="" aria-hidden="true" />
+            <span class="nav-link-label">Templates</span>
+          </a>
+          <a class="nav-link nav-link--reminders" href="#reminders" data-view-link="reminders" title="Reminders">
+            <img class="app-icon nav-link-icon" data-lucide="bell" src="./assets/lucide/bell.svg" alt="" aria-hidden="true" />
+            <span class="nav-link-label">Reminders</span>
+          </a>
+          <a class="nav-link nav-link--health" href="#health" data-view-link="health" title="Health">
+            <img class="app-icon nav-link-icon" data-lucide="heart-pulse" src="./assets/lucide/heart-pulse.svg" alt="" aria-hidden="true" />
+            <span class="nav-link-label">Health</span>
+          </a>
+          <a class="nav-link nav-link--transcribe" href="#transcribe" data-view-link="transcribe" title="Transcribe">
+            <img class="app-icon nav-link-icon" data-lucide="mic" src="./assets/lucide/mic.svg" alt="" aria-hidden="true" />
+            <span class="nav-link-label">Transcribe</span>
+          </a>
+        </div>
+      </nav>
+
+      <section class="panel brand-panel rail-section" data-rail-section="workspace">
+        <div class="panel-head row rail-section-head">
+          <h3>Workspace</h3>
+          <button class="btn btn-secondary btn-icon rail-section-toggle" type="button" data-toggle-rail-section="workspace" aria-expanded="false" aria-label="Expand workspace section" title="Expand workspace section">
+            <img class="app-icon" data-lucide="chevron-down" src="./assets/lucide/chevron-down.svg" alt="" aria-hidden="true" />
+          </button>
+        </div>
+        <div class="rail-section-body">
+          <div id="workspaceStats" class="metric-row"></div>
+        </div>
+      </section>
+    </aside>
+
+    <section class="workspace">
+      <section id="librarySection" class="panel reveal workspace-section" data-view="library">
+        <div class="panel-head row">
+          <div>
+            <h1>Library</h1>
+          </div>
+          <button class="btn btn-primary btn-icon" type="button" id="libraryCreateDocumentBtn" aria-label="New page" title="New page">
+            <img class="app-icon" data-lucide="plus" src="./assets/lucide/plus.svg" alt="" aria-hidden="true" />
+          </button>
+        </div>
+        <div class="library-layout">
+          <section class="subpanel">
+            <div class="subpanel-head">
+              <h3>Pages</h3>
+            </div>
+            <label class="field search-row">
+              <span>Search</span>
+              <input id="searchInput" type="search" placeholder="Search pages, tags, people" />
+            </label>
+            <div id="docList" class="stack-list"></div>
+          </section>
+          <section class="subpanel">
+            <div class="subpanel-head">
+              <h3>Saved views</h3>
+            </div>
+            <div id="librarySavedSearchList" class="stack-list small"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="editor" class="panel reveal workspace-section" data-view="write">
+        <div class="editor-layout">
+          <section class="editor-main">
+            <header class="entry-header">
+              <div class="entry-header-copy">
+                <p id="editorPageMeta" class="entry-page-meta">Personal · Monday, Mar 30</p>
+                <label class="entry-title-field entry-title-field--hero">
+                  <span class="sr-only">Entry title</span>
+                  <textarea id="docTitleInput" class="entry-title-input" rows="1" placeholder="Untitled page"></textarea>
+                </label>
+                <p id="editorSubtitle" class="entry-context-line"></p>
+                <div id="editorMetaChips" class="entry-property-row"></div>
+              </div>
+              <div class="entry-header-actions">
+                <button id="toggleQuickAddBtn" class="btn btn-secondary btn-icon" type="button" aria-label="Open quick add" title="Open quick add" aria-expanded="false">
+                  <img class="app-icon" data-lucide="sparkles" src="./assets/lucide/sparkles.svg" alt="" aria-hidden="true" />
+                </button>
+                <button id="toggleDetailsBtn" class="btn btn-secondary btn-icon" type="button" aria-label="Open page details" title="Open page details" aria-expanded="false">
+                  <img class="app-icon" data-lucide="files" src="./assets/lucide/files.svg" alt="" aria-hidden="true" />
+                </button>
+                <button id="toggleFavoriteBtn" class="btn btn-secondary btn-icon" type="button" aria-label="Favorite entry" title="Favorite entry">
+                  <img class="app-icon" data-lucide="star" src="./assets/lucide/star.svg" alt="" aria-hidden="true" />
+                </button>
+                <button id="toggleHighlightBtn" class="btn btn-secondary btn-icon" type="button" aria-label="Highlight entry" title="Highlight entry">
+                  <img class="app-icon" data-lucide="heart" src="./assets/lucide/heart.svg" alt="" aria-hidden="true" />
+                </button>
+                <button id="saveDocBtn" class="btn btn-primary btn-icon" type="button" aria-label="Save page" title="Save page">
+                  <img class="app-icon" data-lucide="check" src="./assets/lucide/check.svg" alt="" aria-hidden="true" />
+                </button>
+              </div>
+            </header>
+
+            <section id="quickAddPanel" class="entry-utility-panel entry-quickadd-panel" hidden>
+              <div class="entry-utility-panel-head">
+                <strong>Quick add</strong>
+                <div class="entry-utility-actions">
+                  <button id="insertQuickAddBtn" class="btn btn-secondary btn-icon" type="button" aria-label="Insert into page" title="Insert into page"><img class="app-icon" data-lucide="corner-down-right" src="./assets/lucide/corner-down-right.svg" alt="" aria-hidden="true" /></button>
+                  <button id="saveQuickAddBtn" class="btn btn-secondary btn-icon" type="button" aria-label="Save as new page" title="Save as new page"><img class="app-icon" data-lucide="file-plus" src="./assets/lucide/file-plus.svg" alt="" aria-hidden="true" /></button>
+                  <button id="clearQuickAddBtn" class="btn btn-secondary btn-icon" type="button" aria-label="Clear quick add" title="Clear quick add"><img class="app-icon" data-lucide="x" src="./assets/lucide/x.svg" alt="" aria-hidden="true" /></button>
+                </div>
+              </div>
+              <div id="quickAddMount" class="quickadd-shell"></div>
+            </section>
+
+            <section class="entry-writing-panel">
+              <div id="documentEditorRoot" class="document-editor-root"></div>
+            </section>
+
+            <section id="detailsPanel" class="entry-details-panel" hidden>
+              <div class="entry-utility-panel-head">
+                <strong>Details</strong>
+              </div>
+              <div class="composer-grid editor-detail-grid">
+                <label class="field">
+                  <span>Journal</span>
+                  <select id="docJournalInput">
+                    <option value="">General journal</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Template</span>
+                  <select id="docTemplateInput">
+                    <option value="">Blank page</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Date</span>
+                  <input id="docDateInput" type="date" />
+                </label>
+                <label class="field">
+                  <span>Time</span>
+                  <input id="docTimeInput" type="time" />
+                </label>
+                <label class="field">
+                  <span>Status</span>
+                  <select id="docStatusInput">
+                    <option value="today">Today</option>
+                    <option value="active">Active</option>
+                    <option value="review">Review</option>
+                    <option value="archive">Archive</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Reminder</span>
+                  <input id="docReminderInput" type="datetime-local" />
+                </label>
+                <label class="field">
+                  <span>Tags</span>
+                  <input id="docTagsInput" type="text" placeholder="comma separated" />
+                </label>
+                <label class="field">
+                  <span>People</span>
+                  <input id="docPeopleInput" type="text" placeholder="comma separated" />
+                </label>
+                <label class="field">
+                  <span>Categories</span>
+                  <input id="docCategoriesInput" type="text" placeholder="ritual, workstream, theme" />
+                </label>
+                <label class="field">
+                  <span>Location</span>
+                  <input id="docLocationInput" type="text" placeholder="Home, San Francisco, trailhead..." />
+                </label>
+                <label class="field">
+                  <span>Latitude</span>
+                  <input id="docLatitudeInput" type="number" step="any" placeholder="37.7749" />
+                </label>
+                <label class="field">
+                  <span>Longitude</span>
+                  <input id="docLongitudeInput" type="number" step="any" placeholder="-122.4194" />
+                </label>
+                <label class="field">
+                  <span>Weather</span>
+                  <input id="docWeatherInput" type="text" placeholder="Cool, bright, windy" />
+                </label>
+                <label class="field">
+                  <span>Activity</span>
+                  <input id="docActivityInput" type="text" placeholder="Walk, deep work, dinner" />
+                </label>
+                <label class="field">
+                  <span>Music</span>
+                  <input id="docMusicInput" type="text" placeholder="Album, playlist, artist" />
+                </label>
+                <label class="field">
+                  <span>Mood</span>
+                  <input id="docMoodInput" type="number" min="1" max="10" step="1" placeholder="7" />
+                </label>
+                <label class="field">
+                  <span>Energy</span>
+                  <input id="docEnergyInput" type="number" min="1" max="10" step="1" placeholder="6" />
+                </label>
+                <label class="field">
+                  <span>Media</span>
+                  <input id="assetInput" type="file" accept="image/*,audio/*,video/*" multiple />
+                </label>
+              </div>
+              <div id="customFieldsMount" class="composer-grid editor-detail-grid"></div>
+              <div class="editor-support-grid">
+                <section class="subpanel">
+                  <div class="subpanel-head">
+                    <h3>Attachments</h3>
+                  </div>
+                  <div id="assetList" class="asset-list"></div>
+                </section>
+
+                <section class="subpanel">
+                  <div class="subpanel-head">
+                    <h3>Linked pages</h3>
+                  </div>
+                  <div id="linkedDocList" class="stack-list"></div>
+                </section>
+              </div>
+            </section>
+          </section>
+        </div>
+      </section>
+
+      <section id="today" class="panel hero-panel reveal workspace-section" data-view="write" hidden>
+        <div class="hero-copy entry-hero-copy">
+          <p class="eyebrow">Current entry</p>
+          <span id="todayDateLine" class="entry-date-line">Mar 30</span>
+          <h1 id="todayDayTitle">Sunday</h1>
+          <div class="entry-kicker-row">
+            <span id="todayJournalPill" class="status-pill">Personal</span>
+            <span id="todayStatusPill" class="status-pill status-pill--queued">Today</span>
+          </div>
+          <p id="todaySummaryLine" class="lede entry-summary-line">
+            Clean writing first. Details, reminders, media, and maps remain attached without taking over the page.
+          </p>
+        </div>
+        <div id="heroMetrics" class="hero-metrics"></div>
+      </section>
+
+      <section id="journalsSection" class="panel reveal workspace-section" data-view="journals">
+        <div class="panel-head row">
+          <div>
+            <h1>Journals</h1>
+          </div>
+        </div>
+        <div class="capture-grid">
+          <section class="subpanel">
+            <div class="subpanel-head">
+              <h3>All journals</h3>
+            </div>
+            <div id="journalDrawerContent" class="stack-list"></div>
+          </section>
+          <section class="subpanel">
+            <div class="subpanel-head">
+              <h3>New journal</h3>
+            </div>
+            <form id="journalForm" class="composer">
+              <div class="composer-grid">
+                <label class="field">
+                  <span>Name</span>
+                  <input id="journalNameInput" type="text" placeholder="Travel notes" />
+                </label>
+                <label class="field">
+                  <span>Color</span>
+                  <input id="journalColorInput" type="text" placeholder="plum, pink, oat" />
+                </label>
+              </div>
+              <label class="field">
+                <span>Description</span>
+                <textarea id="journalDescriptionInput" rows="4"
+                  placeholder="What belongs in this journal, and how should it feel?"></textarea>
+              </label>
+              <div class="composer-actions">
+                <button class="btn btn-primary" type="submit"><img class="app-icon" data-lucide="save" src="./assets/lucide/save.svg" alt="" aria-hidden="true" /><span>Save journal</span></button>
+              </div>
+            </form>
+          </section>
+          <section class="subpanel">
+            <div class="subpanel-head">
+              <h3>On this day</h3>
+            </div>
+            <div id="onThisDayContent" class="stack-list"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="compose" class="panel composer-panel reveal workspace-section" data-view="reflect">
+        <div class="panel-head row">
+          <div>
+            <h1>Reflect</h1>
+          </div>
+        </div>
+
+        <div class="capture-grid capture-grid-single">
+          <section class="subpanel">
+            <div class="subpanel-head">
+              <h3>Draft</h3>
+            </div>
+            <form id="draftForm" class="composer">
+              <label class="field">
+                <span>Title</span>
+                <input id="draftTitle" type="text" placeholder="Morning reflection" />
+              </label>
+              <label class="field field-wide">
+                <span>Body</span>
+                <textarea id="draftBody" rows="8"
+                  placeholder="Write freely, paste rough notes, or capture a thought before turning it into blocks."></textarea>
+              </label>
+              <div class="composer-grid">
+                <label class="field">
+                  <span>Date</span>
+                  <input id="draftDate" type="date" />
+                </label>
+                <label class="field">
+                  <span>Tags</span>
+                  <input id="draftTags" type="text" placeholder="morning, writing, health" />
+                </label>
+              </div>
+              <div class="composer-actions">
+                <button class="btn btn-primary" type="submit"><img class="app-icon" data-lucide="save" src="./assets/lucide/save.svg" alt="" aria-hidden="true" /><span>Save draft</span></button>
+              </div>
+            </form>
+          </section>
+        </div>
+      </section>
+
+      <section id="timeline" class="panel reveal workspace-section" data-view="journals">
+        <div class="panel-head row">
+          <div>
+            <h1>Timeline</h1>
+          </div>
+        </div>
+        <div id="timelineContent"></div>
+      </section>
+
+      <section id="boards" class="panel reveal workspace-section" data-view="reflect">
+        <div class="panel-head row">
+          <div>
+            <h1>Boards</h1>
+          </div>
+        </div>
+        <div id="boardContent"></div>
+      </section>
+
+      <section id="calendar" class="panel reveal workspace-section" data-view="journals">
+        <div class="panel-head row">
+          <div>
+            <h1>Calendar</h1>
+          </div>
+          <div class="calendar-controls">
+            <button id="calendarPrevBtn" class="btn btn-secondary" type="button"><img class="app-icon" data-lucide="chevron-left" src="./assets/lucide/chevron-left.svg" alt="" aria-hidden="true" /><span>Previous</span></button>
+            <span id="calendarLabel" class="link-chip">Month</span>
+            <button id="calendarNextBtn" class="btn btn-secondary" type="button"><img class="app-icon" data-lucide="chevron-right" src="./assets/lucide/chevron-right.svg" alt="" aria-hidden="true" /><span>Next</span></button>
+          </div>
+        </div>
+        <div id="calendarContent"></div>
+      </section>
+
+      <section id="mapSection" class="panel reveal workspace-section" data-view="map">
+        <div class="panel-head row">
+          <div>
+            <h1>Map</h1>
+          </div>
+        </div>
+        <div class="capture-grid">
+          <section class="subpanel">
+            <div class="subpanel-head">
+              <h3>Locations</h3>
+            </div>
+            <div id="mapCanvas" class="map-canvas" aria-label="Journal map"></div>
+          </section>
+          <section class="subpanel">
+            <div class="subpanel-head">
+              <h3>Recent places</h3>
+            </div>
+            <div id="mapLocationList" class="stack-list"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="templatesSection" class="panel reveal workspace-section" data-view="templates">
+        <div class="panel-head row">
+          <div>
+            <h1>Templates</h1>
+          </div>
+        </div>
+        <div class="capture-grid">
+          <section class="subpanel">
+            <div class="subpanel-head">
+              <h3>Saved templates</h3>
+            </div>
+            <div id="templatesList" class="stack-list"></div>
+          </section>
+          <section class="subpanel">
+            <div class="subpanel-head">
+              <h3>Edit template</h3>
+            </div>
+            <form id="templateForm" class="composer">
+              <div class="composer-grid">
+                <label class="field">
+                  <span>Name</span>
+                  <input id="templateNameInput" type="text" placeholder="Morning reflection" />
+                </label>
+                <label class="field">
+                  <span>Journal</span>
+                  <select id="templateJournalInput">
+                    <option value="">All journals</option>
+                  </select>
+                </label>
+              </div>
+              <label class="field field-wide">
+                <span>Body</span>
+                <textarea id="templateBodyInput" rows="6"
+                  placeholder="Structure, prompts, and block starter text."></textarea>
+              </label>
+              <label class="field">
+                <span>Tags</span>
+                <input id="templateTagsInput" type="text" placeholder="morning, review, focus" />
+              </label>
+              <div class="composer-actions">
+                <button class="btn btn-primary" type="submit"><img class="app-icon" data-lucide="save" src="./assets/lucide/save.svg" alt="" aria-hidden="true" /><span>Save template</span></button>
+              </div>
+            </form>
+          </section>
+        </div>
+      </section>
+
+      <section id="remindersSection" class="panel reveal workspace-section" data-view="reminders">
+        <div class="panel-head row">
+          <div>
+            <h1>Reminders</h1>
+          </div>
+        </div>
+        <div class="capture-grid">
+          <section class="subpanel">
+            <div class="subpanel-head">
+              <h3>Queue</h3>
+            </div>
+            <div id="remindersList" class="stack-list"></div>
+          </section>
+          <section class="subpanel">
+            <div class="subpanel-head">
+              <h3>New reminder</h3>
+            </div>
+            <form id="reminderForm" class="composer">
+              <div class="composer-grid">
+                <label class="field">
+                  <span>Title</span>
+                  <input id="reminderTitleInput" type="text" placeholder="Journal at 7am" />
+                </label>
+                <label class="field">
+                  <span>Journal</span>
+                  <select id="reminderJournalInput">
+                    <option value="">Any journal</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Date</span>
+                  <input id="reminderDateInput" type="date" />
+                </label>
+                <label class="field">
+                  <span>Time</span>
+                  <input id="reminderTimeInput" type="time" />
+                </label>
+              </div>
+              <label class="field">
+                <span>Repeat</span>
+                <select id="reminderFrequencyInput">
+                  <option value="none">No repeat</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                </select>
+              </label>
+              <div class="composer-actions">
+                <button class="btn btn-primary" type="submit"><img class="app-icon" data-lucide="save" src="./assets/lucide/save.svg" alt="" aria-hidden="true" /><span>Save reminder</span></button>
+              </div>
+            </form>
+          </section>
+        </div>
+      </section>
+
+      <section id="health" class="panel reveal workspace-section" data-view="health">
+        <div class="panel-head row">
+          <div>
+            <h1>Health</h1>
+          </div>
+        </div>
+
+        <div id="healthSummaryGrid" class="health-grid"></div>
+
+        <div class="capture-grid">
+          <section class="subpanel">
+            <div class="subpanel-head">
+              <h3>New entry</h3>
+            </div>
+            <form id="healthLogForm" class="composer">
+              <div class="composer-grid">
+                <label class="field">
+                  <span>Kind</span>
+                  <select id="healthKindInput">
+                    <option value="symptom">Symptom</option>
+                    <option value="factor">Factor</option>
+                    <option value="treatment">Treatment</option>
+                    <option value="medication">Medication</option>
+                    <option value="measurement">Measurement</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Title</span>
+                  <input id="healthTitleInput" type="text" placeholder="Headache" />
+                </label>
+                <label class="field">
+                  <span>Value</span>
+                  <input id="healthValueInput" type="number" step="any" placeholder="3" />
+                </label>
+                <label class="field">
+                  <span>Unit</span>
+                  <input id="healthUnitInput" type="text" placeholder="score, hours, bpm" />
+                </label>
+              </div>
+              <label class="field field-wide">
+                <span>Notes</span>
+                <textarea id="healthNotesInput" rows="4"
+                  placeholder="Context, trigger, medication, effect, or anything useful."></textarea>
+              </label>
+              <div class="composer-actions">
+                <button class="btn btn-primary" type="submit"><img class="app-icon" data-lucide="plus" src="./assets/lucide/plus.svg" alt="" aria-hidden="true" /><span>Add entry</span></button>
+              </div>
+            </form>
+          </section>
+
+          <section class="subpanel">
+            <div class="subpanel-head">
+              <h3>Measurements</h3>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Metric</th>
+                    <th>Value</th>
+                    <th>Unit</th>
+                    <th>Source</th>
+                    <th>Date</th>
+                  </tr>
+                </thead>
+                <tbody id="healthMeasurementsBody"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="transcribe" class="panel reveal workspace-section" data-view="transcribe">
+        <div class="panel-head row">
+          <div>
+            <h1>Transcription</h1>
+          </div>
+          <span id="recordingStatus" class="link-chip">Idle</span>
+        </div>
+
+        <div class="capture-grid">
+          <section class="subpanel">
+            <div class="subpanel-head">
+              <h3>Audio</h3>
+            </div>
+            <div class="composer-actions">
+              <button id="recordAudioBtn" class="btn btn-primary" type="button"><img class="app-icon" data-lucide="circle" src="./assets/lucide/circle.svg" alt="" aria-hidden="true" /><span>Record</span></button>
+              <button id="stopAudioBtn" class="btn btn-secondary" type="button" disabled><img class="app-icon" data-lucide="square" src="./assets/lucide/square.svg" alt="" aria-hidden="true" /><span>Stop</span></button>
+            </div>
+            <label class="field">
+              <span>Upload audio</span>
+              <input id="audioUploadInput" type="file" accept="audio/*" />
+            </label>
+          </section>
+
+          <section class="subpanel">
+            <div class="subpanel-head">
+              <h3>Settings</h3>
+            </div>
+            <div class="composer-grid">
+              <label class="field">
+                <span>Provider</span>
+                <select id="transcriptionProviderInput">
+                  <option value="browser_native">Browser native</option>
+                  <option value="openai_byo_key">OpenAI BYOK</option>
+                  <option value="google_byo_key">Google BYOK</option>
+                  <option value="deepgram_byo_key">Deepgram BYOK</option>
+                  <option value="custom_endpoint">Custom endpoint</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Language</span>
+                <input id="transcriptionLanguageInput" type="text" value="en-US" />
+              </label>
+            </div>
+            <label class="toggle">
+              <input id="transcriptionInsertModeInput" type="checkbox" checked />
+              Insert transcript as collapsible callout
+            </label>
+          </section>
+        </div>
+
+        <section class="subpanel">
+          <div class="subpanel-head">
+            <h3>History</h3>
+          </div>
+          <div id="transcriptList" class="stack-list"></div>
+        </section>
+      </section>
+
+      <section id="insights" class="panel reveal workspace-section" data-view="insights">
+        <div class="panel-head row">
+          <div>
+            <h1>Insights</h1>
+          </div>
+          <span id="insightStreakChip" class="link-chip">0-day streak</span>
+        </div>
+
+        <div class="capture-grid">
+          <section class="subpanel">
+            <div class="subpanel-head">
+              <h3>Tags</h3>
+            </div>
+            <div id="insightTags" class="insight-bars"></div>
+          </section>
+
+          <section class="subpanel">
+            <div class="subpanel-head">
+              <h3>Health</h3>
+            </div>
+            <div id="insightHealth" class="insight-bars"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="highlightsSection" class="panel reveal workspace-section" data-view="highlights">
+        <div class="panel-head row">
+          <div>
+            <h1>Highlights</h1>
+          </div>
+        </div>
+        <div id="highlightsContent" class="stack-list"></div>
+      </section>
+
+      <section id="tagsSection" class="panel reveal workspace-section" data-view="tags">
+        <div class="panel-head row">
+          <div>
+            <h1>Tags</h1>
+          </div>
+        </div>
+        <div id="tagsContent" class="stack-list"></div>
+      </section>
+
+      <section id="peopleSection" class="panel reveal workspace-section" data-view="people">
+        <div class="panel-head row">
+          <div>
+            <h1>People</h1>
+          </div>
+        </div>
+        <div id="peopleContent" class="stack-list"></div>
+      </section>
+    </section>
+
+    <aside class="rail rail-right">
+      <section id="sync" class="panel sync-panel">
+        <div class="panel-head">
+          <h3>Sync</h3>
+        </div>
+        <div id="syncStatusCard" class="sync-status"></div>
+        <div id="syncQueueList" class="stack-list small"></div>
+        <div class="composer-actions">
+          <button id="runSyncBtn" class="btn btn-secondary" type="button"><img class="app-icon" data-lucide="refresh-cw" src="./assets/lucide/refresh-cw.svg" alt="" aria-hidden="true" /><span>Refresh queue</span></button>
+          <button id="connectDriveBtn" class="btn btn-secondary" type="button"><img class="app-icon" data-lucide="link" src="./assets/lucide/link.svg" alt="" aria-hidden="true" /><span>Connect Drive</span></button>
+        </div>
+      </section>
+
+      <section id="inspector" class="panel inspector-panel">
+        <div class="panel-head">
+          <h3>Page</h3>
+        </div>
+        <div id="inspectorContent"></div>
+      </section>
+
+      <section id="settings" class="panel settings-panel">
+        <div class="panel-head">
+          <h3>Settings</h3>
+        </div>
+        <form id="settingsForm" class="settings-form">
+          <div class="composer-grid">
+            <label class="field">
+              <span>Image max edge</span>
+              <input name="imageMaxEdge" type="number" value="2560" min="640" step="10" />
+            </label>
+            <label class="field">
+              <span>Image quality</span>
+              <input name="imageQuality" type="number" value="0.84" min="0.1" max="1" step="0.01" />
+            </label>
+          </div>
+          <label class="toggle">
+            <input name="keepOriginalImages" type="checkbox" />
+            Keep original images instead of only optimized versions
+          </label>
+          <label class="toggle">
+            <input name="storeOriginalAudio" type="checkbox" checked />
+            Store original audio with transcripts
+          </label>
+          <label class="toggle">
+            <input name="showRightPanel" type="checkbox" checked />
+            Keep right rail visible
+          </label>
+          <section class="subpanel">
+            <div class="subpanel-head">
+              <h3>AI</h3>
+            </div>
+            <div class="composer-grid">
+              <label class="field">
+                <span>Provider</span>
+                <select name="aiProvider">
+                  <option value="local-reflection">Local reflection</option>
+                  <option value="byok">BYOK</option>
+                  <option value="prompt_api">Chrome Prompt API</option>
+                  <option value="local_model">Local model</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Model / preset</span>
+                <input name="aiModel" type="text" placeholder="gemini-nano, gpt-4o-mini, local-llm" />
+              </label>
+              <label class="field field-wide">
+                <span>Endpoint</span>
+                <input name="aiEndpoint" type="url" placeholder="https://api.openai.com/v1/chat/completions" />
+              </label>
+              <label class="field field-wide">
+                <span>API key</span>
+                <input name="aiApiKey" type="password" placeholder="Paste a BYOK key when you want live AI." />
+              </label>
+            </div>
+          </section>
+          <section class="subpanel">
+            <div class="subpanel-head">
+              <h3>Saved searches</h3>
+            </div>
+            <div id="savedSearchList" class="stack-list small"></div>
+            <div class="composer-grid">
+              <label class="field">
+                <span>Name</span>
+                <input id="savedSearchNameInput" type="text" placeholder="Morning people mentions" />
+              </label>
+              <label class="field">
+                <span>Query</span>
+                <input id="savedSearchQueryInput" type="text" placeholder="journal:personal tag:morning @Mira" />
+              </label>
+            </div>
+            <div class="composer-actions">
+              <button id="addSavedSearchBtn" class="btn btn-secondary" type="button"><img class="app-icon" data-lucide="plus" src="./assets/lucide/plus.svg" alt="" aria-hidden="true" /><span>Add saved search</span></button>
+            </div>
+          </section>
+          <section class="subpanel">
+            <div class="subpanel-head">
+              <h3>Custom fields</h3>
+            </div>
+            <div id="customFieldsList" class="stack-list small"></div>
+            <div class="composer-grid">
+              <label class="field">
+                <span>Name</span>
+                <input id="customFieldNameInput" type="text" placeholder="Sleep quality" />
+              </label>
+              <label class="field">
+                <span>Key</span>
+                <input id="customFieldKeyInput" type="text" placeholder="sleep_quality" />
+              </label>
+              <label class="field">
+                <span>Type</span>
+                <select id="customFieldTypeInput">
+                  <option value="string">Text</option>
+                  <option value="number">Number</option>
+                  <option value="options">Options</option>
+                  <option value="boolean">Toggle</option>
+                  <option value="datetime">Date or time</option>
+                  <option value="rating">Rating</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Prefix</span>
+                <input id="customFieldPrefixesInput" type="text" placeholder="sleep:, sq:" />
+              </label>
+              <label class="field">
+                <span>Options</span>
+                <input id="customFieldOptionsInput" type="text" placeholder="great, okay, poor" />
+              </label>
+              <label class="field">
+                <span>Max</span>
+                <input id="customFieldMaxInput" type="number" step="any" placeholder="5" />
+              </label>
+            </div>
+            <label class="toggle">
+              <input id="customFieldMultipleInput" type="checkbox" />
+              Allow multiple values
+            </label>
+            <div class="composer-actions">
+              <button id="addCustomFieldBtn" class="btn btn-secondary" type="button"><img class="app-icon" data-lucide="plus" src="./assets/lucide/plus.svg" alt="" aria-hidden="true" /><span>Add field</span></button>
+            </div>
+          </section>
+          <div class="composer-actions">
+            <button class="btn btn-primary" type="submit"><img class="app-icon" data-lucide="save" src="./assets/lucide/save.svg" alt="" aria-hidden="true" /><span>Save settings</span></button>
+          </div>
+        </form>
+      </section>
+    </aside>
+  </main>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', async () => {
+        const isLocalhost = ['127.0.0.1', 'localhost'].includes(window.location.hostname);
+        if (isLocalhost) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map((registration) => registration.unregister()));
+          return;
+        }
+        navigator.serviceWorker.register('./sw.js');
+      });
+    }
+  </script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="../components/quick-add/quick-add-component.js?v=16"></script>
+  <script type="module" src="./js/app.js?v=17"></script>
+</body>
+
+</html>

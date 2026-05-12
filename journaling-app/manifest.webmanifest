@@ -1,0 +1,38 @@
+{
+  "name": "Journaling",
+  "short_name": "Journaling",
+  "description": "A static, Journalistic-inspired journaling workspace with block editing, multiple journals, maps, health tracking, transcription, reminders, and Drive-ready sync planning.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6efe6",
+  "theme_color": "#f6efe6",
+  "lang": "en",
+  "categories": [
+    "productivity",
+    "lifestyle",
+    "health"
+  ],
+  "icons": [
+    {
+      "src": "./assets/logo-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "New Entry",
+      "short_name": "New",
+      "description": "Open the capture surface",
+      "url": "./#write"
+    },
+    {
+      "name": "Journals",
+      "short_name": "Journals",
+      "description": "Jump to the current journal view",
+      "url": "./#journals"
+    }
+  ]
+}
