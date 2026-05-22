@@ -1,4 +1,4 @@
-const CACHE_NAME = 'photo-chronicles-cache-v11';
+const CACHE_NAME = 'photo-chronicles-cache-v12';
 const OFFLINE_ASSETS = [
   './',
   './index.html',
