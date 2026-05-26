@@ -652,6 +652,7 @@ const Settings = {
         syncCursors: {},
         onboardingHasExistingData: false,
         uploadCapMb: 5,
+        defaultTimezone: '',
         defaultPetId: null,
         calendarView: 'month',
         theme: 'light',
@@ -689,6 +690,7 @@ const Settings = {
             };
             merged.workerUrl = Settings.normalizeWorkerUrl(merged.workerUrl);
             merged.uploadCapMb = Number(merged.uploadCapMb) >= 20 ? 20 : 5;
+            merged.defaultTimezone = String(merged.defaultTimezone || '').trim();
             return merged;
         } catch (e) {
             console.error('[Settings] Error reading:', e);
@@ -722,6 +724,7 @@ const Settings = {
                 : { ...(current.quickAddPrefixes || Settings.defaults.quickAddPrefixes || {}) }
         };
         merged.uploadCapMb = Number(merged.uploadCapMb) >= 20 ? 20 : 5;
+        merged.defaultTimezone = String(merged.defaultTimezone || '').trim();
         localStorage.setItem(Settings.KEYS.SETTINGS, JSON.stringify(merged));
         return merged;
     },

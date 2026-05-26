@@ -431,7 +431,7 @@ Parse the following input:`;
                 // Build start date
                 let startDate = entry.date;
                 if (entry.time) {
-                    startDate = `${entry.date}T${entry.time}:00`;
+                    startDate = PetTracker.UI.localDateTimeWithOffset(entry.date, entry.time);
                 }
 
                 const normalizedStatus = AI.normalizeStatus(entry.status);

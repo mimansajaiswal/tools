@@ -6,7 +6,7 @@
 
 const Care = {
     advanceDateByInterval: (date, eventType) => {
-        const d = new Date(date);
+        const d = PetTracker.UI.parseLocalDate(date);
         switch (eventType.intervalUnit) {
             case 'Days':
                 d.setDate(d.getDate() + (eventType.intervalValue || 1));
@@ -28,11 +28,11 @@ const Care = {
 
     getFixedOccurrenceIndex: (dateValue, eventType) => {
         if (!eventType?.anchorDate) return null;
-        const anchor = new Date(eventType.anchorDate);
-        const target = new Date(dateValue);
+        const anchor = PetTracker.UI.parseLocalDate(eventType.anchorDate);
+        const target = PetTracker.UI.parseLocalDate(dateValue);
         if (Number.isNaN(anchor.getTime()) || Number.isNaN(target.getTime()) || target < anchor) return null;
         let idx = 1;
-        let cursor = new Date(anchor);
+        let cursor = PetTracker.UI.parseLocalDate(anchor);
         while (cursor < target && idx <= 2000) {
             cursor = Care.advanceDateByInterval(cursor, eventType);
             idx += 1;
@@ -46,7 +46,7 @@ const Care = {
     calculateNextDue: (eventType) => {
         if (!eventType.isRecurring) return null;
 
-        const now = new Date();
+        const today = PetTracker.UI.parseLocalDate(PetTracker.UI.localDateYYYYMMDD());
 
         if (eventType.scheduleType === 'One-off') {
             return eventType.anchorDate;
@@ -59,13 +59,13 @@ const Care = {
         // Fixed schedule
         if (!eventType.anchorDate) return null;
 
-        const anchor = new Date(eventType.anchorDate);
-        let nextDue = new Date(anchor);
+        const anchor = PetTracker.UI.parseLocalDate(eventType.anchorDate);
+        let nextDue = PetTracker.UI.parseLocalDate(anchor);
 
         let occurrenceIndex = 1;
         const maxOccurrences = Number(eventType.endAfterOccurrences) || null;
 
-        while (nextDue <= now) {
+        while (nextDue < today) {
             nextDue = Care.advanceDateByInterval(nextDue, eventType);
             occurrenceIndex += 1;
             if (maxOccurrences && occurrenceIndex > maxOccurrences) {
@@ -85,7 +85,7 @@ const Care = {
             return Care.calculateNextDue(eventType);
         }
 
-        const endDateLimit = eventType.endDate ? new Date(eventType.endDate) : null;
+        const endDateLimit = eventType.endDate ? PetTracker.UI.parseLocalDate(eventType.endDate) : null;
 
         // Find last completed event for this event type, optionally filtered by pet
         const events = await PetTracker.DB.query(
@@ -96,7 +96,7 @@ const Care = {
 
         if (events.length === 0) {
             if (!eventType.anchorDate) return null;
-            const anchorDate = new Date(eventType.anchorDate);
+            const anchorDate = PetTracker.UI.parseLocalDate(eventType.anchorDate);
             if (endDateLimit && !Number.isNaN(endDateLimit.getTime()) && anchorDate > endDateLimit) {
                 return null;
             }
@@ -109,9 +109,9 @@ const Care = {
         }
 
         // Sort by date descending
-        events.sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
+        events.sort((a, b) => PetTracker.UI.parseLocalDate(b.startDate) - PetTracker.UI.parseLocalDate(a.startDate));
         const lastEvent = events[0];
-        const lastDate = new Date(lastEvent.startDate);
+        const lastDate = PetTracker.UI.parseLocalDate(lastEvent.startDate);
 
         // Add interval
         const nextDate = Care.advanceDateByInterval(lastDate, eventType);
@@ -141,7 +141,7 @@ const Care = {
             if (due) dueDates.push(due);
         }
         if (dueDates.length === 0) return null;
-        dueDates.sort((a, b) => new Date(a) - new Date(b));
+        dueDates.sort((a, b) => PetTracker.UI.compareLocalDates(a, b));
         return dueDates[0];
     },
 
@@ -150,7 +150,7 @@ const Care = {
      */
     advanceDueByInterval: (baseDate, eventType) => {
         if (!baseDate) return null;
-        const d = Care.advanceDateByInterval(new Date(baseDate), eventType);
+        const d = Care.advanceDateByInterval(PetTracker.UI.parseLocalDate(baseDate), eventType);
         const maxOccurrences = Number(eventType.endAfterOccurrences) || null;
         if (maxOccurrences) {
             const occurrenceIndex = Care.getFixedOccurrenceIndex(d, eventType);
@@ -174,8 +174,8 @@ const Care = {
         const eventTypes = await PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES);
         const recurringTypes = eventTypes.filter(et => et.isRecurring && et.active !== false);
 
-        const now = new Date();
-        const endDate = new Date(now);
+        const today = PetTracker.UI.parseLocalDate(PetTracker.UI.localDateYYYYMMDD());
+        const endDate = PetTracker.UI.parseLocalDate(today);
         endDate.setDate(endDate.getDate() + horizon);
 
         const upcoming = [];
@@ -187,7 +187,7 @@ const Care = {
             }
 
             // Check if schedule has ended
-            if (eventType.endDate && new Date(eventType.endDate) < now) {
+            if (eventType.endDate && PetTracker.UI.parseLocalDate(eventType.endDate) < today) {
                 continue;
             }
 
@@ -212,7 +212,7 @@ const Care = {
 
                 if (!nextDue) continue;
 
-                const dueDate = new Date(nextDue);
+                const dueDate = PetTracker.UI.parseLocalDate(nextDue);
 
                 // Check if within horizon
                 if (dueDate <= endDate) {
@@ -227,7 +227,7 @@ const Care = {
                         dueTime: eventType.dueTime,
                         windowBefore: eventType.windowBefore,
                         windowAfter: eventType.windowAfter,
-                        isOverdue: dueDate < now,
+                        isOverdue: dueDate < today,
                         icon: eventType.defaultIcon,
                         color: eventType.defaultColor
                     });
@@ -236,7 +236,7 @@ const Care = {
         }
 
         // Sort by due date
-        upcoming.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+        upcoming.sort((a, b) => PetTracker.UI.compareLocalDates(a.dueDate, b.dueDate));
 
         return upcoming;
     },
@@ -494,9 +494,9 @@ const Care = {
             }
 
             for (const [date, items] of Object.entries(byDate)) {
-                const dateObj = new Date(date);
+                const dateObj = PetTracker.UI.parseLocalDate(date);
                 const isToday = date === PetTracker.UI.localDateYYYYMMDD();
-                const isTomorrow = date === PetTracker.UI.localDateYYYYMMDD(new Date(Date.now() + 86400000));
+                const isTomorrow = date === PetTracker.UI.localDateYYYYMMDD(PetTracker.UI.addLocalDays(new Date(), 1));
 
                 let dateLabel = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
                 if (isToday) dateLabel = 'Today';

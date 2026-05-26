@@ -922,6 +922,8 @@ const Calendar = {
 
             entries.push({
                 name: media.name || `Attachment ${i + 1}`,
+                type: media.type || 'file',
+                status: media.fileUploadId || remoteUrl ? 'Synced' : 'Local',
                 previewUrl,
                 retrieveUrl: remoteUrl,
                 showPlaceholder
@@ -947,7 +949,8 @@ const Calendar = {
                                        <i data-lucide="file" class="w-5 h-5 text-earth-metal"></i>
                                    </div>`
             }
-                            <p class="text-[10px] text-earth-metal truncate">${PetTracker.UI.escapeHtml(entry.name)}</p>
+                            <p class="text-[10px] text-charcoal truncate">${PetTracker.UI.escapeHtml(entry.name)}</p>
+                            <p class="text-[9px] text-earth-metal truncate">${PetTracker.UI.escapeHtml(entry.type)} // ${entry.status}</p>
                             ${entry.retrieveUrl
                 ? `<a href="${entry.retrieveUrl}" target="_blank" rel="noopener" class="btn-secondary w-full px-2 py-1 font-mono text-[10px] uppercase inline-flex items-center justify-center gap-1">
                                        <i data-lucide="${entry.showPlaceholder ? 'download-cloud' : 'external-link'}" class="w-3 h-3"></i>

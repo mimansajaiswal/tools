@@ -193,6 +193,7 @@
                             required: true,
                             prefixes: petPrefixes,
                             exhaustive: true,
+                            allowCustom: true,
                             autoDetectWithoutPrefix: true,
                             reduceInferredOptions: true,
                             options: petOptions
@@ -204,6 +205,7 @@
                             required: true,
                             prefixes: typePrefixes,
                             exhaustive: true,
+                            allowCustom: true,
                             autoDetectWithoutPrefix: true,
                             reduceInferredOptions: true,
                             options: typeOptions
@@ -303,6 +305,7 @@
                             type: 'options',
                             required: false,
                             exhaustive: false,
+                            allowCustom: true,
                             options: providerOptions,
                             prefixes: pf('provider')
                         },
@@ -350,10 +353,130 @@
                     '--qa-pill-border': '#d4c8b8',
                     '--qa-radius': '2px'
                 },
+                options: {
+                    onCreateOption: QuickAddModal.createOptionFromQuickAdd
+                },
                 onParse: function (result) {
                     QuickAddModal._onParse(result);
                 }
             };
+        },
+
+        createOptionFromQuickAdd: async function (context) {
+            var fieldKey = context && context.fieldKey;
+            var rawValue = String((context && context.value) || '').trim();
+            if (!rawValue) return false;
+
+            if (fieldKey === 'pet') {
+                var existingPet = QuickAddModal.state.pets.find(function (p) {
+                    return (p.name || '').toLowerCase() === rawValue.toLowerCase();
+                });
+                var pet = existingPet || await Pets.save({
+                    name: rawValue,
+                    species: 'Other',
+                    notes: 'Created from Quick Add'
+                });
+                if (!existingPet) {
+                    QuickAddModal.state.pets.push(pet);
+                    App.state.pets = await PetTracker.DB.getAll(PetTracker.STORES.PETS);
+                    PetTracker.UI.toast('Pet created from Quick Add', 'success', 1800);
+                }
+                return {
+                    value: pet.name,
+                    label: pet.name,
+                    color: pet.color || '#8b7b8e'
+                };
+            }
+
+            if (fieldKey === 'type') {
+                var existingType = QuickAddModal.state.eventTypes.find(function (t) {
+                    return (t.name || '').toLowerCase() === rawValue.toLowerCase();
+                });
+                var eventType = existingType;
+                if (!eventType) {
+                    var now = new Date().toISOString();
+                    eventType = {
+                        id: PetTracker.generateId(),
+                        name: rawValue,
+                        category: 'Other',
+                        trackingMode: 'Stamp',
+                        defaultIcon: 'circle',
+                        defaultColor: 'purple',
+                        usesSeverity: false,
+                        defaultScaleId: null,
+                        allowAttachments: true,
+                        defaultValueKind: null,
+                        defaultUnit: null,
+                        defaultTags: [],
+                        correlationGroup: null,
+                        defaultRoute: null,
+                        isRecurring: false,
+                        scheduleType: null,
+                        intervalValue: null,
+                        intervalUnit: null,
+                        anchorDate: null,
+                        nextDue: null,
+                        endDate: null,
+                        endAfterOccurrences: null,
+                        dueTime: null,
+                        timeOfDayPreference: null,
+                        timezone: PetTracker.UI.defaultTimezone(),
+                        defaultDose: null,
+                        windowBefore: null,
+                        windowAfter: null,
+                        needsSetup: true,
+                        relatedPetIds: [],
+                        active: true,
+                        activeStart: null,
+                        activeEnd: null,
+                        todoistSync: false,
+                        todoistProject: null,
+                        todoistSection: null,
+                        todoistLabels: null,
+                        todoistLeadTime: null,
+                        createdAt: now,
+                        updatedAt: now,
+                        synced: false
+                    };
+                    await PetTracker.DB.put(PetTracker.STORES.EVENT_TYPES, eventType);
+                    await PetTracker.SyncQueue.add({
+                        type: 'create',
+                        store: 'eventTypes',
+                        recordId: eventType.id,
+                        data: eventType
+                    });
+                    if (PetTracker.Sync?.updatePendingCount) PetTracker.Sync.updatePendingCount();
+                    QuickAddModal.state.eventTypes.push(eventType);
+                    App.state.eventTypes = await PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES);
+                    PetTracker.UI.toast('Event type created from Quick Add; finish setup in Setup', 'success', 2400);
+                }
+                return {
+                    value: eventType.name,
+                    label: eventType.needsSetup ? eventType.name + ' (needs setup)' : eventType.name
+                };
+            }
+
+            if (fieldKey === 'provider') {
+                var existingContact = QuickAddModal.state.contacts.find(function (c) {
+                    return (c.name || '').toLowerCase() === rawValue.toLowerCase();
+                });
+                var contact = existingContact || await Contacts.create({
+                    name: rawValue,
+                    role: 'Other',
+                    notes: 'Created from Quick Add'
+                });
+                if (!existingContact) {
+                    QuickAddModal.state.contacts.push(contact);
+                    App.state.contacts = await PetTracker.DB.getAll(PetTracker.STORES.CONTACTS);
+                    PetTracker.UI.toast('Contact created from Quick Add', 'success', 1800);
+                }
+                return {
+                    value: contact.name,
+                    label: contact.role ? contact.name + ' (' + contact.role + ')' : contact.name
+                };
+            }
+
+            return false;
         },
 
         _onParse: function (result) {
@@ -884,7 +1007,7 @@
 
                     var dateVal = QuickAddModal._fieldValue(fields.date) || PetTracker.UI.localDateYYYYMMDD();
                     var timeVal = QuickAddModal._fieldValue(fields.time);
-                    var startDate = timeVal ? dateVal + 'T' + timeVal + ':00' : dateVal;
+                    var startDate = timeVal ? PetTracker.UI.localDateTimeWithOffset(dateVal, timeVal) : dateVal;
 
                     var status = QuickAddModal.normalizeStatus(QuickAddModal._fieldValue(fields.status));
                     var notes = QuickAddModal._fieldValue(fields.notes) || '';

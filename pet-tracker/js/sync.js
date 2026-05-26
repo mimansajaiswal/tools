@@ -143,9 +143,9 @@ const Sync = {
                 indicator.title = `${Sync.failedCount} failed syncs - click to manage`;
                 indicator.onclick = () => App.showSyncQueue?.();
             } else if (Sync.pendingCount > 0) {
-                indicator.innerHTML = '<i data-lucide="cloud" class="w-4 h-4 text-muted-pink"></i>';
-                indicator.title = `${Sync.pendingCount} pending changes`;
-                indicator.onclick = null;
+                indicator.innerHTML = '<i data-lucide="cloud" class="w-4 h-4 text-muted-pink cursor-pointer"></i>';
+                indicator.title = `${Sync.pendingCount} pending changes - click to inspect queue`;
+                indicator.onclick = () => App.showSyncQueue?.();
             } else {
                 indicator.innerHTML = '<i data-lucide="cloud" class="w-4 h-4 text-dull-purple"></i>';
                 indicator.title = 'Synced';
@@ -1179,6 +1179,7 @@ const Sync = {
                     'Anchor Date': P.date(data.anchorDate),
                     'Due Time': P.richText(data.dueTime),
                     'Time of Day Preference': P.select(data.timeOfDayPreference),
+                    'Timezone': P.richText(data.isRecurring || data.needsSetup ? (data.timezone || PetTracker.UI.defaultTimezone()) : data.timezone),
                     'Window Before': P.number(data.windowBefore),
                     'Window After': P.number(data.windowAfter),
                     'End Date': P.date(data.endDate),
@@ -1191,6 +1192,7 @@ const Sync = {
                     'Todoist Lead Time': P.number(data.todoistLeadTime),
                     'Default Dose': P.richText(data.defaultDose),
                     'Default Route': P.select(data.defaultRoute),
+                    'Needs Setup': P.checkbox(data.needsSetup),
                     'Active': P.checkbox(data.active),
                     'Active Start': P.date(data.activeStart),
                     'Active End': P.date(data.activeEnd),
@@ -1321,6 +1323,7 @@ const Sync = {
                     anchorDate: E.date(props['Anchor Date']),
                     dueTime: E.richText(props['Due Time']),
                     timeOfDayPreference: E.select(props['Time of Day Preference']),
+                    timezone: E.richText(props['Timezone']),
                     windowBefore: E.number(props['Window Before']),
                     windowAfter: E.number(props['Window After']),
                     endDate: E.date(props['End Date']),
@@ -1333,6 +1336,7 @@ const Sync = {
                     todoistLeadTime: E.number(props['Todoist Lead Time']),
                     defaultDose: E.richText(props['Default Dose']),
                     defaultRoute: E.select(props['Default Route']),
+                    needsSetup: E.checkbox(props['Needs Setup']),
                     active: E.checkbox(props['Active']),
                     activeStart: E.date(props['Active Start']),
                     activeEnd: E.date(props['Active End']),

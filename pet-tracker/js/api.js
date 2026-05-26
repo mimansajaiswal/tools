@@ -46,11 +46,15 @@ const API = {
         if (!res.ok) {
             const txt = await res.text();
             let errorMsg = `API Error ${res.status}`;
+            const isWorkerAuthError = res.status === 403 && txt.trim() === 'Unauthorized';
+            if (isWorkerAuthError) {
+                errorMsg = 'Worker rejected the request. Check the proxy token for this Worker.';
+            }
             try {
                 const json = JSON.parse(txt);
                 errorMsg = json.message || json.error?.message || errorMsg;
             } catch (e) {
-                if (txt.length < 100) errorMsg += `: ${txt}`;
+                if (!isWorkerAuthError && txt.length < 100) errorMsg += `: ${txt}`;
             }
             throw new Error(errorMsg);
         }

@@ -152,6 +152,7 @@ const Onboarding = {
             onboardingInProgress: true,
             onboardingStep: Onboarding.currentStep
         });
+        Onboarding.syncFieldsFromSettings();
 
         // Update step indicators
         document.querySelectorAll('#onboardingSteps [data-step]').forEach(el => {
@@ -200,6 +201,26 @@ const Onboarding = {
         }
 
         if (window.lucide) lucide.createIcons();
+    },
+
+    syncFieldsFromSettings: () => {
+        const settings = PetTracker.Settings.get();
+        const workerUrl = document.getElementById('onboardingWorkerUrl');
+        if (workerUrl && !workerUrl.value && settings.workerUrl) {
+            workerUrl.value = settings.workerUrl;
+        }
+        const proxyToken = document.getElementById('onboardingProxyToken');
+        if (proxyToken && !proxyToken.value && settings.proxyToken) {
+            proxyToken.value = settings.proxyToken;
+        }
+        const devPassword = document.getElementById('onboardingOAuthDevPassword');
+        if (devPassword && !devPassword.value) {
+            devPassword.value = localStorage.getItem(ONBOARDING_OAUTH_DEV_PASSWORD_KEY) || '';
+        }
+        const token = document.getElementById('onboardingNotionToken');
+        if (token && !token.value && settings.authMode === 'token' && settings.notionToken) {
+            token.value = settings.notionToken;
+        }
     },
 
     /**
@@ -501,8 +522,15 @@ const Onboarding = {
             if (proxyToken) headers['X-Proxy-Token'] = proxyToken;
             const res = await fetch(url.toString(), { headers });
 
-            if (res.status === 401 && proxyToken === '') {
-                throw new Error('Worker requires Proxy Token');
+            if (res.status === 403) {
+                throw new Error('Worker rejected the request. Enter the proxy token for this Worker.');
+            }
+            if (res.status >= 500) {
+                throw new Error(`Worker returned ${res.status}. Check the Worker URL.`);
+            }
+            if (!res.ok && res.status !== 401) {
+                const txt = await res.text().catch(() => '');
+                throw new Error(txt || `Worker verification failed (${res.status})`);
             }
 
             PetTracker.UI.hideLoading();
@@ -511,9 +539,9 @@ const Onboarding = {
             if (statusDiv) {
                 statusDiv.classList.remove('hidden');
                 statusDiv.className = 'mt-2 p-2 bg-dull-purple/20 border border-dull-purple text-xs text-charcoal';
-                statusDiv.innerHTML = '<i data-lucide="check" class="w-3 h-3 inline mr-1"></i>Worker Verified';
+                statusDiv.innerHTML = '<i data-lucide="check" class="w-3 h-3 inline mr-1"></i>Worker reachable';
             }
-            PetTracker.UI.toast('Worker Verified', 'success');
+            PetTracker.UI.toast('Worker reachable', 'success');
             Onboarding.updateUI();
 
         } catch (e) {
@@ -553,10 +581,12 @@ const Onboarding = {
 
         try {
             if (isLocal) {
-                const devPassword = (localStorage.getItem(ONBOARDING_OAUTH_DEV_PASSWORD_KEY) || '').trim();
+                const inputPassword = document.getElementById('onboardingOAuthDevPassword')?.value?.trim() || '';
+                if (inputPassword) localStorage.setItem(ONBOARDING_OAUTH_DEV_PASSWORD_KEY, inputPassword);
+                const devPassword = inputPassword || (localStorage.getItem(ONBOARDING_OAUTH_DEV_PASSWORD_KEY) || '').trim();
                 if (!devPassword) {
                     PetTracker.UI.hideLoading();
-                    PetTracker.UI.toast(`Set localStorage.${ONBOARDING_OAUTH_DEV_PASSWORD_KEY} first`, 'warning');
+                    PetTracker.UI.toast('Enter the local OAuth dev password first', 'warning');
                     return;
                 }
 
@@ -597,14 +627,14 @@ const Onboarding = {
             'Severity Level', 'Value', 'Unit', 'Duration', 'Notes', 'Tags',
             'Media',
             'Source', 'Provider', 'Cost', 'Cost Category', 'Cost Currency',
-            'Todoist Task ID', 'Client Updated At'
+            'Todoist Task ID', 'Google Calendar Event ID', 'Client Updated At'
         ],
         'Event Types': [
             'Name', 'Category', 'Tracking Mode', 'Uses Severity', 'Default Scale',
             'Default Color', 'Default Icon', 'Default Tags', 'Allow Attachments',
             'Default Value Kind', 'Default Unit', 'Correlation Group', 'Is Recurring',
             'Schedule Type', 'Interval Value', 'Interval Unit', 'Anchor Date', 'Due Time',
-            'Time of Day Preference', 'Window Before', 'Window After', 'End Date',
+            'Time of Day Preference', 'Timezone', 'Window Before', 'Window After', 'End Date',
             'End After Occurrences', 'Next Due', 'Todoist Sync', 'Todoist Project',
             'Todoist Section', 'Todoist Labels', 'Todoist Lead Time', 'Default Dose', 'Default Route',
             'Active', 'Active Start', 'Active End', 'Related Pets'
@@ -1036,6 +1066,7 @@ const Onboarding = {
                     intervalValue: template.intervalValue,
                     intervalUnit: template.intervalUnit,
                     anchorDate: PetTracker.UI.localDateYYYYMMDD(),
+                    timezone: PetTracker.UI.currentTimezone(),
                     defaultDose: template.defaultDose || '',
                     active: true,
                     createdAt: new Date().toISOString(),

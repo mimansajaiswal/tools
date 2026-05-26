@@ -1,5 +1,21 @@
 /* Pet Tracker Custom Styles */
 
+body {
+    font-variant-numeric: tabular-nums;
+}
+
+input,
+select,
+textarea,
+button,
+.font-mono,
+.meta-row,
+.badge,
+.section-header,
+.calendar-event-meta {
+    font-variant-numeric: tabular-nums;
+}
+
 /* Masked input - shows dots like password but not treated as password by browsers */
 /* Note: text-security is non-standard, -webkit-text-security works in WebKit browsers */
 .masked-input {

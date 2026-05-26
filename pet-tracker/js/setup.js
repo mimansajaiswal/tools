@@ -191,7 +191,10 @@ const Setup = {
         const scales = await PetTracker.DB.getAll(PetTracker.STORES.SCALES);
         const scalesById = Object.fromEntries(scales.map(s => [s.id, s]));
 
-        eventTypes.sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name));
+        eventTypes.sort((a, b) => {
+            if (!!b.needsSetup !== !!a.needsSetup) return b.needsSetup ? 1 : -1;
+            return (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name);
+        });
 
         // Group by category
         const grouped = {};
@@ -243,7 +246,10 @@ const Setup = {
                                 <i data-lucide="${et.defaultIcon || 'circle'}" class="w-5 h-5"></i>
                             </div>
                             <div class="flex-1 min-w-0">
-                                <p class="text-sm text-charcoal font-medium truncate">${PetTracker.UI.escapeHtml(et.name)}</p>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <p class="text-sm text-charcoal font-medium truncate">${PetTracker.UI.escapeHtml(et.name)}</p>
+                                    ${et.needsSetup ? '<span class="badge badge-pink text-[9px]">NEEDS SETUP</span>' : ''}
+                                </div>
                                 <p class="text-xs text-earth-metal">${et.trackingMode || 'Stamp'}${severityText ? ' • ' + severityText : ''}</p>
                             </div>
                             <button onclick="event.stopPropagation(); Setup.deleteEventType('${et.id}')" class="p-2 text-earth-metal hover:text-muted-pink">
@@ -282,6 +288,7 @@ const Setup = {
             endAfterOccurrences: null,
             dueTime: '',
             timeOfDayPreference: '',
+            timezone: PetTracker.UI.defaultTimezone(),
             defaultDose: '',
             defaultRoute: '',
             windowBefore: 0,
@@ -340,6 +347,8 @@ const Setup = {
         document.getElementById('eventTypeDueTime').value = data.dueTime || '';
         const timeOfDayEl = document.getElementById('eventTypeTimeOfDayPreference');
         if (timeOfDayEl) timeOfDayEl.value = data.timeOfDayPreference || '';
+        const timezoneEl = document.getElementById('eventTypeTimezone');
+        if (timezoneEl) timezoneEl.value = data.timezone || PetTracker.UI.defaultTimezone();
         document.getElementById('eventTypeDefaultDose').value = data.defaultDose || '';
         document.getElementById('eventTypeWindowBefore').value = data.windowBefore || 0;
         document.getElementById('eventTypeWindowAfter').value = data.windowAfter || 0;
@@ -511,6 +520,7 @@ const Setup = {
         const endAfterOccurrences = parseInt(document.getElementById('eventTypeEndAfterOccurrences')?.value) || null;
         const dueTime = document.getElementById('eventTypeDueTime')?.value || null;
         const timeOfDayPreference = document.getElementById('eventTypeTimeOfDayPreference')?.value || null;
+        const timezone = document.getElementById('eventTypeTimezone')?.value?.trim() || PetTracker.UI.defaultTimezone();
         const defaultDose = document.getElementById('eventTypeDefaultDose')?.value?.trim() || null;
         const windowBefore = parseInt(document.getElementById('eventTypeWindowBefore')?.value) || 0;
         const windowAfter = parseInt(document.getElementById('eventTypeWindowAfter')?.value) || 0;
@@ -559,7 +569,9 @@ const Setup = {
             endAfterOccurrences: isRecurring ? endAfterOccurrences : null,
             dueTime: isRecurring ? dueTime : null,
             timeOfDayPreference: isRecurring ? timeOfDayPreference : null,
+            timezone: isRecurring ? timezone : null,
             defaultDose,
+            needsSetup: false,
             windowBefore: isRecurring ? windowBefore : null,
             windowAfter: isRecurring ? windowAfter : null,
             relatedPetIds,
@@ -1212,8 +1224,8 @@ const Setup = {
     calculateNextDue: (eventType) => {
         if (!eventType.isRecurring || !eventType.anchorDate) return null;
 
-        const now = new Date();
-        const anchor = new Date(eventType.anchorDate);
+        const today = PetTracker.UI.parseLocalDate(PetTracker.UI.localDateYYYYMMDD());
+        const anchor = PetTracker.UI.parseLocalDate(eventType.anchorDate);
         const interval = eventType.intervalValue || 1;
         const unit = eventType.intervalUnit || 'Months';
         const maxOccurrences = Number(eventType.endAfterOccurrences) || null;
@@ -1224,11 +1236,11 @@ const Setup = {
             return eventType.anchorDate;
         }
 
-        let nextDue = new Date(anchor);
+        let nextDue = PetTracker.UI.parseLocalDate(anchor);
         let occurrenceIndex = 1;
 
         // Find the next occurrence that is in the future
-        while (nextDue <= now) {
+        while (nextDue < today) {
             switch (unit) {
                 case 'Days':
                     nextDue.setDate(nextDue.getDate() + interval);
@@ -1250,7 +1262,7 @@ const Setup = {
         }
 
         // Check if past end date
-        if (eventType.endDate && nextDue > new Date(eventType.endDate)) {
+        if (eventType.endDate && nextDue > PetTracker.UI.parseLocalDate(eventType.endDate)) {
             return null;
         }
 

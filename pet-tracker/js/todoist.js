@@ -156,6 +156,7 @@ const Todoist = {
         const eventTypes = await PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES);
         const pets = await PetTracker.DB.getAll(PetTracker.STORES.PETS);
         const now = new Date();
+        const today = PetTracker.UI.parseLocalDate(PetTracker.UI.localDateYYYYMMDD());
 
         // Filter to recurring event types with Todoist sync enabled
         const recurringTypes = eventTypes.filter(et => et.isRecurring && et.todoistSync);
@@ -163,15 +164,15 @@ const Todoist = {
         for (const eventType of recurringTypes) {
             try {
                 // Calculate nextDue if not set (reuse Setup.calculateNextDue logic)
-                let nextDue = eventType.nextDue ? new Date(eventType.nextDue) : null;
+                let nextDue = eventType.nextDue ? PetTracker.UI.parseLocalDate(eventType.nextDue) : null;
 
                 // If nextDue is missing or stale, recalculate it
-                if (!nextDue || nextDue < now) {
+                if (!nextDue || nextDue < today) {
                     const calculatedDue = eventType.scheduleType === 'Rolling' && typeof Care !== 'undefined'
                         ? await Care.computeNextDueForEventType(eventType)
                         : Todoist.calculateNextDue(eventType);
                     if (calculatedDue) {
-                        nextDue = new Date(calculatedDue);
+                        nextDue = PetTracker.UI.parseLocalDate(calculatedDue);
                         // Update the event type with the new nextDue
                         eventType.nextDue = calculatedDue;
                         eventType.updatedAt = new Date().toISOString();
@@ -183,7 +184,7 @@ const Todoist = {
                 if (!nextDue) continue;
 
                 const leadDays = eventType.todoistLeadTime || 1;
-                const createDate = new Date(nextDue);
+                const createDate = PetTracker.UI.parseLocalDate(nextDue);
                 createDate.setDate(createDate.getDate() - leadDays);
 
                 if (now < createDate) {
@@ -359,22 +360,22 @@ const Todoist = {
     calculateNextDue: (eventType) => {
         if (!eventType.isRecurring || !eventType.anchorDate) return null;
 
-        const now = new Date();
-        const anchor = new Date(eventType.anchorDate);
+        const today = PetTracker.UI.parseLocalDate(PetTracker.UI.localDateYYYYMMDD());
+        const anchor = PetTracker.UI.parseLocalDate(eventType.anchorDate);
         const interval = eventType.intervalValue || 1;
         const unit = eventType.intervalUnit || 'Months';
         const maxOccurrences = Number(eventType.endAfterOccurrences) || null;
 
         if (eventType.scheduleType === 'One-off') {
             // For one-off, return anchor date only if it's in the future
-            return anchor > now ? eventType.anchorDate : null;
+            return anchor >= today ? eventType.anchorDate : null;
         }
 
-        let nextDue = new Date(anchor);
+        let nextDue = PetTracker.UI.parseLocalDate(anchor);
         let occurrenceIndex = 1;
 
         // Find the next occurrence that is in the future
-        while (nextDue <= now) {
+        while (nextDue < today) {
             switch (unit) {
                 case 'Days':
                     nextDue.setDate(nextDue.getDate() + interval);
@@ -396,7 +397,7 @@ const Todoist = {
         }
 
         // Check if past end date
-        if (eventType.endDate && nextDue > new Date(eventType.endDate)) {
+        if (eventType.endDate && nextDue > PetTracker.UI.parseLocalDate(eventType.endDate)) {
             return null;
         }
 

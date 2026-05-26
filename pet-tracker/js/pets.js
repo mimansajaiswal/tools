@@ -6,6 +6,14 @@
 const Pets = {
     photoObjectUrls: new Set(),
     modalPreviewUrl: null,
+    timelineFilters: {
+        meds: true,
+        symptoms: true,
+        vet: true,
+        weight: true,
+        costs: true,
+        attachments: true
+    },
 
     /**
      * Save a new pet
@@ -501,6 +509,7 @@ const Pets = {
         Pets.populateContactSelectors(null, []);
 
         PetTracker.UI.openModal('addPetModal');
+        setTimeout(() => document.getElementById('addPetName')?.focus(), 120);
         if (window.lucide) lucide.createIcons();
     },
 
@@ -584,6 +593,7 @@ const Pets = {
         if (header) header.textContent = 'Edit Pet';
 
         PetTracker.UI.openModal('addPetModal');
+        setTimeout(() => document.getElementById('addPetName')?.focus(), 120);
         if (window.lucide) lucide.createIcons();
     },
 
@@ -687,7 +697,9 @@ const Pets = {
             e => e.petIds?.includes(id)
         );
         events.sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
-        const recentEvents = events.slice(0, 10);
+        const timelineEvents = Pets.buildHealthTimeline(events);
+        const filteredTimelineEvents = Pets.filterHealthTimeline(timelineEvents);
+        const protocol = await App.getPetCareProtocolSummary(pet);
 
         // Get weight history using proper weight type
         const weightEvents = await Pets.getWeightHistory(id, 10);
@@ -809,35 +821,29 @@ const Pets = {
                     </div>
                 </div>
 
-                <!-- Recent Events -->
+                <!-- Care Protocol -->
                 <div>
-                    ${PetTracker.UI.sectionHeader(3, 'Recent Events')}
+                    ${PetTracker.UI.sectionHeader(3, 'Care Protocol')}
+                    <div class="card p-4 mt-3">
+                        ${App.renderCareProtocolSummary(protocol, { showDivider: false, petId: pet.id })}
+                    </div>
+                </div>
+
+                <!-- Health Timeline -->
+                <div>
+                    ${PetTracker.UI.sectionHeader(4, 'Health Timeline')}
+                    <div class="flex flex-wrap gap-2 mt-3">
+                        ${Pets.renderTimelineFilterButton('meds', 'Meds')}
+                        ${Pets.renderTimelineFilterButton('symptoms', 'Symptoms')}
+                        ${Pets.renderTimelineFilterButton('vet', 'Vet Visits')}
+                        ${Pets.renderTimelineFilterButton('weight', 'Weight')}
+                        ${Pets.renderTimelineFilterButton('costs', 'Costs')}
+                        ${Pets.renderTimelineFilterButton('attachments', 'Attachments')}
+                    </div>
                     <div class="mt-3 space-y-2">
-                        ${recentEvents.length === 0 ? `
-                            <p class="text-earth-metal text-sm py-4">No events recorded</p>
-                        ` : recentEvents.map(event => {
-                const eventType = App.state.eventTypes.find(t => t.id === event.eventTypeId);
-                const defaultIcon = eventType?.defaultIcon || 'activity';
-                let iconHtml;
-                if (event.icon) {
-                    iconHtml = PetTracker.UI.renderIcon(event.icon, defaultIcon, 'w-4 h-4');
-                } else if (eventType?.icon) {
-                    iconHtml = PetTracker.UI.renderIcon(eventType.icon, defaultIcon, 'w-4 h-4');
-                } else {
-                    iconHtml = `<i data-lucide="${defaultIcon}" class="w-4 h-4 text-earth-metal"></i>`;
-                }
-                return `
-                            <div class="card card-hover p-3 flex items-center gap-3 cursor-pointer" onclick="Calendar.showEventDetail('${event.id}')">
-                                <div class="w-8 h-8 bg-oatmeal flex items-center justify-center">
-                                    ${iconHtml}
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <p class="text-sm text-charcoal truncate">${PetTracker.UI.escapeHtml(event.title || 'Event')}</p>
-                                    <p class="meta-row text-xs">${PetTracker.UI.formatRelative(event.startDate)}</p>
-                                </div>
-                                <span class="badge ${event.status === 'Completed' ? 'badge-accent' : 'badge-light'}">${event.status}</span>
-                            </div>
-                        `}).join('')}
+                        ${filteredTimelineEvents.length === 0 ? `
+                            <p class="text-earth-metal text-sm py-4">${timelineEvents.length === 0 ? 'No events recorded' : 'No events match these filters'}</p>
+                        ` : filteredTimelineEvents.map(item => Pets.renderTimelineItem(item)).join('')}
                     </div>
                 </div>
             </div>
@@ -846,6 +852,130 @@ const Pets = {
         if (window.lucide) lucide.createIcons();
         Pets.revokePhotoObjectUrls();
         await Pets.hydrateLocalPhotoPreviews(container);
+    },
+
+    buildHealthTimeline: (events) => {
+        return (events || []).map(event => {
+            const eventType = App.state.eventTypes.find(t => t.id === event.eventTypeId);
+            return { event, eventType };
+        });
+    },
+
+    renderTimelineFilterButton: (key, label) => {
+        const active = Pets.timelineFilters[key] !== false;
+        return `
+            <button type="button" onclick="Pets.toggleTimelineFilter('${key}')"
+                class="${active ? 'btn-primary' : 'btn-secondary'} px-3 py-1.5 font-mono text-[10px] uppercase">
+                ${PetTracker.UI.escapeHtml(label)}
+            </button>
+        `;
+    },
+
+    toggleTimelineFilter: (key) => {
+        if (!Object.prototype.hasOwnProperty.call(Pets.timelineFilters, key)) return;
+        Pets.timelineFilters[key] = Pets.timelineFilters[key] === false;
+        if (App.state.activePetId) Pets.showDetail(App.state.activePetId);
+    },
+
+    timelineItemMatchesFilter: ({ event, eventType }) => {
+        const enabled = Pets.timelineFilters;
+        const category = String(eventType?.category || '').toLowerCase();
+        const name = String(eventType?.name || event.title || '').toLowerCase();
+        const hasCost = event.cost !== null && event.cost !== undefined;
+        const hasAttachment = Array.isArray(event.media) && event.media.length > 0;
+        const matches = [];
+
+        if (/med|dose|pill|drug/.test(category + ' ' + name)) matches.push('meds');
+        if (/symptom|pain|vomit|wheez|cough|sneeze|itch|limp/.test(category + ' ' + name)) matches.push('symptoms');
+        if (/vet|visit|checkup|exam|clinic/.test(category + ' ' + name)) matches.push('vet');
+        if (/weight|weigh|scale/.test(category + ' ' + name)) matches.push('weight');
+        if (hasCost) matches.push('costs');
+        if (hasAttachment) matches.push('attachments');
+
+        if (matches.length === 0) return true;
+        return matches.some(key => enabled[key] !== false);
+    },
+
+    filterHealthTimeline: (items) => {
+        return (items || []).filter(item => Pets.timelineItemMatchesFilter(item));
+    },
+
+    renderTimelineItem: ({ event, eventType }) => {
+        const defaultIcon = eventType?.defaultIcon || eventType?.icon || 'activity';
+        const iconHtml = event.icon
+            ? PetTracker.UI.renderIcon(event.icon, defaultIcon, 'w-4 h-4')
+            : eventType?.icon
+                ? PetTracker.UI.renderIcon(eventType.icon, defaultIcon, 'w-4 h-4')
+                : `<i data-lucide="${defaultIcon}" class="w-4 h-4 text-earth-metal"></i>`;
+        const meta = [
+            eventType?.category,
+            PetTracker.UI.formatRelative(event.startDate),
+            event.providerId ? 'Provider linked' : '',
+            event.cost ? `${event.costCurrency || 'USD'} ${event.cost}` : '',
+            event.media?.length ? `${event.media.length} attachment${event.media.length === 1 ? '' : 's'}` : ''
+        ].filter(Boolean);
+        const value = event.value !== null && event.value !== undefined
+            ? `${event.value} ${event.unit || ''}`.trim()
+            : '';
+        const attachmentHtml = Pets.renderTimelineAttachments(event.media || []);
+
+        return `
+            <div class="card card-hover p-3 cursor-pointer" onclick="Calendar.showEventDetail('${event.id}')">
+                <div class="flex items-start gap-3">
+                    <div class="w-8 h-8 bg-oatmeal flex items-center justify-center flex-shrink-0">
+                        ${iconHtml}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                            <div class="min-w-0">
+                                <p class="text-sm text-charcoal truncate">${PetTracker.UI.escapeHtml(event.title || eventType?.name || 'Event')}</p>
+                                <p class="meta-row text-xs">${meta.map(PetTracker.UI.escapeHtml).join('<span class="meta-separator">//</span>')}</p>
+                            </div>
+                            <div class="flex items-center gap-1 flex-shrink-0" onclick="event.stopPropagation()">
+                                <button type="button" onclick="Calendar.showEventDetail('${event.id}')" class="p-1 text-earth-metal hover:text-dull-purple" title="Open">
+                                    <i data-lucide="external-link" class="w-4 h-4"></i>
+                                </button>
+                                <button type="button" onclick="Events.showEditModal('${event.id}')" class="p-1 text-earth-metal hover:text-dull-purple" title="Edit">
+                                    <i data-lucide="pencil" class="w-4 h-4"></i>
+                                </button>
+                                <button type="button" onclick="Events.confirmDelete('${event.id}')" class="p-1 text-earth-metal hover:text-muted-pink" title="Delete">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                                <span class="badge ${event.status === 'Completed' ? 'badge-accent' : 'badge-light'}">${event.status}</span>
+                            </div>
+                        </div>
+                        ${value ? `<p class="text-xs text-charcoal mt-2">${PetTracker.UI.escapeHtml(value)}</p>` : ''}
+                        ${event.notes ? `<p class="text-xs text-earth-metal mt-2 line-clamp-2">${PetTracker.UI.escapeHtml(event.notes)}</p>` : ''}
+                        ${attachmentHtml}
+                        ${event.tags?.length ? `<div class="flex flex-wrap gap-1 mt-2">${event.tags.map(tag => `<span class="badge badge-light text-[9px]">${PetTracker.UI.escapeHtml(tag)}</span>`).join('')}</div>` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    renderTimelineAttachments: (media = []) => {
+        if (!Array.isArray(media) || media.length === 0) return '';
+        return `
+            <div class="mt-2 flex flex-wrap gap-2">
+                ${media.slice(0, 3).map((m) => {
+            const name = m.name || 'Attachment';
+            const type = m.type || 'file';
+            const status = m.fileUploadId || m.url ? 'Synced' : 'Local';
+            const isImage = type.startsWith('image') || /\.(png|jpe?g|gif|webp|heic)$/i.test(name || m.url || '');
+            return `
+                    <div class="border border-oatmeal bg-oatmeal/20 p-1 w-24">
+                        ${isImage && m.url
+                    ? `<img src="${PetTracker.UI.escapeHtml(m.url)}" alt="${PetTracker.UI.escapeHtml(name)}" class="w-full h-12 object-cover border border-oatmeal">`
+                    : `<div class="w-full h-12 flex items-center justify-center bg-white-linen border border-oatmeal"><i data-lucide="file" class="w-4 h-4 text-earth-metal"></i></div>`
+                }
+                        <p class="text-[9px] text-charcoal truncate mt-1">${PetTracker.UI.escapeHtml(name)}</p>
+                        <p class="text-[8px] text-earth-metal truncate">${PetTracker.UI.escapeHtml(type)} // ${status}</p>
+                    </div>
+                `;
+        }).join('')}
+            </div>
+        `;
     },
 
     /**

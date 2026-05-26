@@ -137,24 +137,11 @@ const Events = {
      * Note: endDate is treated as end-of-day to include same-day timed events
      */
     getForDateRange: async (startDate, endDate) => {
-        const start = new Date(startDate);
-        start.setHours(0, 0, 0, 0);
-        const startIso = start.toISOString();
-
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999); // End of day to include same-day events
-        const endIso = end.toISOString();
-
-        const range = IDBKeyRange.bound(startIso, endIso);
-        const indexed = await PetTracker.DB.getByIndexRange(PetTracker.STORES.EVENTS, 'startDate', range);
-        if (indexed !== null) return indexed;
-
-        // Fallback for older DBs without startDate index
-        const startTime = start.getTime();
-        const endTime = end.getTime();
+        const start = PetTracker.UI.localDateYYYYMMDD(PetTracker.UI.parseLocalDate(startDate));
+        const end = PetTracker.UI.localDateYYYYMMDD(PetTracker.UI.parseLocalDate(endDate));
         return PetTracker.DB.query(PetTracker.STORES.EVENTS, e => {
-            const eventDate = new Date(e.startDate).getTime();
-            return eventDate >= startTime && eventDate <= endTime;
+            const eventDate = (e.startDate || '').slice(0, 10);
+            return eventDate >= start && eventDate <= end;
         });
     },
 
@@ -242,7 +229,8 @@ const Events = {
             costCategory: event.costCategory || '',
             costCurrency: event.costCurrency || '',
             providerId: event.providerId || null,
-            tags: event.tags || []
+            tags: event.tags || [],
+            media: event.media || []
         });
 
         // Mark form as editing after openAddModal reset

@@ -15,6 +15,7 @@ const App = {
         isOnline: navigator.onLine,
         pendingAttachments: [],
         attachmentPreviews: [],
+        existingEventMedia: [],
         deferredPrompt: null,
         addEventTypeOptions: [],
         addEventSelectedTypeId: null,
@@ -50,6 +51,7 @@ const App = {
         PetTracker.UI.setupModalOverlays();
         PetTracker.UI.setupTabs();
         App.setupEventListeners();
+        App.setupLocalOAuthDevFields();
 
         // Initialize Lucide icons
         if (window.lucide) lucide.createIcons();
@@ -183,6 +185,26 @@ const App = {
             if (!e.target.closest('#petFilterDesktopDropdown')) {
                 App.closeSidebarPetFilterMenu();
             }
+        });
+    },
+
+    setupLocalOAuthDevFields: () => {
+        const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+        const saved = (localStorage.getItem(APP_OAUTH_DEV_PASSWORD_KEY) || '').trim();
+
+        document.querySelectorAll('[data-local-oauth-dev]').forEach(el => {
+            el.classList.toggle('hidden', !isLocal);
+        });
+
+        ['settingsOAuthDevPassword', 'onboardingOAuthDevPassword'].forEach(id => {
+            const input = document.getElementById(id);
+            if (!input) return;
+            input.value = saved;
+            input.addEventListener('change', () => {
+                const value = input.value.trim();
+                if (value) localStorage.setItem(APP_OAUTH_DEV_PASSWORD_KEY, value);
+                else localStorage.removeItem(APP_OAUTH_DEV_PASSWORD_KEY);
+            });
         });
     },
 
@@ -423,6 +445,8 @@ const App = {
         if (!prefill.keepAttachments) {
             App.clearAttachments();
         }
+        App.state.existingEventMedia = Array.isArray(prefill.media) ? prefill.media.map(m => ({ ...m })) : [];
+        App.renderAttachmentPreviews();
 
         // Update header
         const header = document.querySelector('#addEventModal .section-header');
@@ -899,12 +923,7 @@ const App = {
 
         const eventType = App.state.eventTypes.find(t => t.id === eventTypeId);
 
-        // Get existing media if editing an existing event
-        let existingMedia = [];
-        if (editId) {
-            const existingEvent = await PetTracker.DB.get(PetTracker.STORES.EVENTS, editId);
-            existingMedia = existingEvent?.media || [];
-        }
+        const existingMedia = App.state.existingEventMedia || [];
 
         // FIX #8: Read advanced fields
         const endDate = document.getElementById('addEventEndDate')?.value || null;
@@ -923,7 +942,7 @@ const App = {
             title: eventType?.name || 'Event',
             petIds: [petId],
             eventTypeId: eventTypeId || null,
-            startDate: time ? `${date}T${time}:00` : date,
+            startDate: time ? PetTracker.UI.localDateTimeWithOffset(date, time) : date,
             endDate: endDate || null,
             notes: notes || '',
             value: value ? parseFloat(value) : null,
@@ -1101,14 +1120,31 @@ const App = {
         if (!container) return;
 
         const previews = App.state.attachmentPreviews;
-        if (previews.length === 0) {
+        const existing = App.state.existingEventMedia || [];
+        if (previews.length === 0 && existing.length === 0) {
             container.innerHTML = '';
             container.classList.add('hidden');
             return;
         }
 
         container.classList.remove('hidden');
-        container.innerHTML = previews.map((p, idx) => `
+        const existingHtml = existing.map((m, idx) => {
+            const isImage = (m.type || '').startsWith('image') || /\.(png|jpe?g|gif|webp|heic)$/i.test(m.name || m.url || '');
+            const status = m.fileUploadId || m.url ? 'Synced' : 'Local';
+            return `
+            <div class="relative group w-28 border border-oatmeal p-1">
+                ${isImage && m.url
+                    ? `<img src="${PetTracker.UI.escapeHtml(m.url)}" alt="${PetTracker.UI.escapeHtml(m.name || 'Attachment')}" class="w-full h-16 object-cover border border-oatmeal">`
+                    : `<div class="w-full h-16 bg-oatmeal flex items-center justify-center border border-earth-metal">
+                       <i data-lucide="file" class="w-6 h-6 text-earth-metal"></i>
+                       </div>`
+                }
+                <p class="text-[10px] text-charcoal truncate mt-1">${PetTracker.UI.escapeHtml(m.name || 'Attachment')}</p>
+                <p class="text-[9px] text-earth-metal truncate">${PetTracker.UI.escapeHtml(m.type || 'file')} // ${status}</p>
+                <button type="button" onclick="App.removeExistingAttachment(${idx})" class="absolute -top-1 -right-1 w-5 h-5 bg-muted-pink text-charcoal flex items-center justify-center text-xs hover:bg-opacity-80" aria-label="Remove attachment">×</button>
+            </div>`;
+        }).join('');
+        const newHtml = previews.map((p, idx) => `
             <div class="relative group">
                 ${p.previewUrl
                 ? `<img src="${p.previewUrl}" alt="${PetTracker.UI.escapeHtml(p.name)}" class="w-16 h-16 object-cover border border-oatmeal">`
@@ -1118,9 +1154,11 @@ const App = {
             }
                 ${p.type === 'video' ? '<span class="absolute bottom-1 left-1 bg-charcoal text-white-linen text-[8px] px-1 font-mono">VIDEO</span>' : ''}
                 ${p.type === 'file' ? '<span class="absolute bottom-1 left-1 bg-earth-metal text-white-linen text-[8px] px-1 font-mono">FILE</span>' : ''}
+                <span class="absolute bottom-1 right-1 bg-dull-purple text-white-linen text-[8px] px-1 font-mono">LOCAL</span>
                 <button type="button" onclick="App.removeAttachment(${idx})" class="absolute -top-1 -right-1 w-5 h-5 bg-muted-pink text-charcoal flex items-center justify-center text-xs hover:bg-opacity-80">×</button>
             </div>
         `).join('');
+        container.innerHTML = existingHtml + newHtml;
 
         if (window.lucide) lucide.createIcons();
     },
@@ -1138,6 +1176,11 @@ const App = {
         App.renderAttachmentPreviews();
     },
 
+    removeExistingAttachment: (index) => {
+        App.state.existingEventMedia.splice(index, 1);
+        App.renderAttachmentPreviews();
+    },
+
     /**
      * Clear all pending attachments
      */
@@ -1146,6 +1189,7 @@ const App = {
         Media.revokePreviewUrls(urls);
         App.state.pendingAttachments = [];
         App.state.attachmentPreviews = [];
+        App.state.existingEventMedia = [];
         App.renderAttachmentPreviews();
     },
 
@@ -1276,6 +1320,8 @@ const App = {
 
         const uploadCap = document.getElementById('settingsUploadCapMb');
         if (uploadCap) uploadCap.value = String(Number(settings.uploadCapMb) >= 20 ? 20 : 5);
+        const defaultTimezone = document.getElementById('settingsDefaultTimezone');
+        if (defaultTimezone) defaultTimezone.value = settings.defaultTimezone || PetTracker.UI.currentTimezone();
 
         if (typeof App.updateTodoistUI === 'function') App.updateTodoistUI();
         App.updateGcalUI();
@@ -1326,6 +1372,10 @@ const App = {
 
         const pets = App.state.pets;
         const recentEvents = await Events.getRecent(10);
+        const protocolSummaries = {};
+        for (const pet of pets) {
+            protocolSummaries[pet.id] = await App.getPetCareProtocolSummary(pet);
+        }
         const getActivityTileStyle = (hex) => {
             if (!hex || typeof hex !== 'string') {
                 return 'background:#f8f6f3; border:1px solid rgba(212, 200, 184, 0.9); border-radius:8px;';
@@ -1369,6 +1419,7 @@ const App = {
             } else {
                 petAvatarHtml = `<i data-lucide="${speciesIcon}" class="w-6 h-6 text-earth-metal"></i>`;
             }
+            const protocol = protocolSummaries[pet.id];
             return `
                             <div class="card card-hover p-4 cursor-pointer" onclick="App.showPetDetail('${pet.id}')">
                                 <div class="flex items-center gap-3">
@@ -1384,6 +1435,7 @@ const App = {
                                     </div>
                                     <div class="pet-dot" style="background-color: ${pet.color || '#8b7b8e'}"></div>
                                 </div>
+                                ${App.renderCareProtocolSummary(protocol, { petId: pet.id })}
                             </div>
                         `}).join('')}
                     </div>
@@ -1429,6 +1481,118 @@ const App = {
         `;
 
         if (window.lucide) lucide.createIcons();
+    },
+
+    getPetCareProtocolSummary: async (pet) => {
+        const eventTypes = App.state.eventTypes || [];
+        const events = await PetTracker.DB.query(
+            PetTracker.STORES.EVENTS,
+            e => e.petIds?.includes(pet.id)
+        );
+        const typeById = new Map(eventTypes.map(t => [t.id, t]));
+        const byCategory = (category) => events
+            .filter(e => typeById.get(e.eventTypeId)?.category === category)
+            .sort((a, b) => new Date(b.startDate || 0) - new Date(a.startDate || 0));
+
+        const activeMeds = eventTypes.filter(t =>
+            t.active !== false &&
+            t.isRecurring &&
+            t.category === 'Medication' &&
+            (!t.relatedPetIds?.length || t.relatedPetIds.includes(pet.id))
+        );
+        const upcoming = typeof Care !== 'undefined'
+            ? await Care.getUpcoming({ horizon: 90, petIds: [pet.id] })
+            : [];
+        const dueVaccines = upcoming.filter(item => item.category === 'Vaccine');
+        const lastVet = byCategory('Vet Visit')[0] || null;
+        const weightType = eventTypes.find(t => t.category === 'Weight' || t.name?.toLowerCase().includes('weight'));
+        const lastWeight = weightType
+            ? events
+                .filter(e => e.eventTypeId === weightType.id && e.value !== null && e.value !== undefined)
+                .sort((a, b) => new Date(b.startDate || 0) - new Date(a.startDate || 0))[0] || null
+            : null;
+
+        return {
+            activeMeds,
+            dueVaccines,
+            lastVet,
+            lastWeight,
+            nextTodo: upcoming[0] || null
+        };
+    },
+
+    renderCareProtocolSummary: (summary, options = {}) => {
+        if (!summary) return '';
+        const showDivider = options.showDivider !== false;
+        const nextTodo = summary.nextTodo
+            ? `${PetTracker.UI.escapeHtml(summary.nextTodo.eventTypeName)} ${PetTracker.UI.formatDate(summary.nextTodo.dueDate)}`
+            : 'None scheduled';
+        const dueVaccine = summary.dueVaccines?.[0]
+            ? `${PetTracker.UI.escapeHtml(summary.dueVaccines[0].eventTypeName)} ${PetTracker.UI.formatDate(summary.dueVaccines[0].dueDate)}`
+            : 'None due';
+        const lastVet = summary.lastVet
+            ? PetTracker.UI.formatDate(summary.lastVet.startDate)
+            : 'Not logged';
+        const lastWeight = summary.lastWeight
+            ? `${summary.lastWeight.value} ${summary.lastWeight.unit || ''}`.trim()
+            : 'Not logged';
+        const petId = options.petId || '';
+        const actionAttrs = (action) => petId
+            ? `role="button" tabindex="0" onclick="event.stopPropagation(); App.${action}('${petId}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();App.${action}('${petId}')}"`
+            : '';
+
+        return `
+            <div class="${showDivider ? 'mt-4 pt-3 border-t border-oatmeal' : ''} grid grid-cols-1 gap-1.5 text-xs">
+                <div class="flex justify-between gap-2 ${petId ? 'cursor-pointer hover:text-dull-purple' : ''}" ${actionAttrs('openProtocolActiveMeds')}><span class="text-earth-metal">Active meds</span><span class="text-charcoal text-right">${summary.activeMeds?.length || 0}</span></div>
+                <div class="flex justify-between gap-2 ${petId ? 'cursor-pointer hover:text-dull-purple' : ''}" ${actionAttrs('openProtocolDueVaccines')}><span class="text-earth-metal">Due vaccine</span><span class="text-charcoal text-right truncate">${dueVaccine}</span></div>
+                <div class="flex justify-between gap-2"><span class="text-earth-metal">Last vet</span><span class="text-charcoal text-right">${lastVet}</span></div>
+                <div class="flex justify-between gap-2"><span class="text-earth-metal">Last weight</span><span class="text-charcoal text-right">${lastWeight}</span></div>
+                <div class="flex justify-between gap-2 ${petId ? 'cursor-pointer hover:text-dull-purple' : ''}" ${actionAttrs('logProtocolNextTodo')}><span class="text-earth-metal">Next todo</span><span class="text-charcoal text-right truncate">${nextTodo}</span></div>
+            </div>
+        `;
+    },
+
+    openProtocolActiveMeds: async (petId) => {
+        const pet = App.state.pets.find(p => p.id === petId);
+        const summary = pet ? await App.getPetCareProtocolSummary(pet) : null;
+        const first = summary?.activeMeds?.[0];
+        App.showView('setup');
+        if (typeof Setup !== 'undefined') {
+            Setup.switchTab('eventTypes');
+            setTimeout(() => Setup.showEventTypeModal(first?.id || null), 0);
+        }
+    },
+
+    openProtocolDueVaccines: async (petId) => {
+        const pet = App.state.pets.find(p => p.id === petId);
+        const summary = pet ? await App.getPetCareProtocolSummary(pet) : null;
+        const first = summary?.dueVaccines?.[0];
+        if (first?.eventTypeId && typeof Setup !== 'undefined') {
+            App.showView('setup');
+            Setup.switchTab('eventTypes');
+            setTimeout(() => Setup.showEventTypeModal(first.eventTypeId), 0);
+            return;
+        }
+        App.openAddModal({ pet: petId });
+    },
+
+    logProtocolNextTodo: async (petId) => {
+        const pet = App.state.pets.find(p => p.id === petId);
+        const summary = pet ? await App.getPetCareProtocolSummary(pet) : null;
+        const item = summary?.nextTodo;
+        if (!item) {
+            App.openAddModal({ pet: petId });
+            return;
+        }
+        const due = String(item.dueDate || '');
+        const match = due.match(/^(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2}))?/);
+        App.openAddModal({
+            pet: petId,
+            type: item.eventTypeId,
+            date: match?.[1] || PetTracker.UI.localDateYYYYMMDD(),
+            time: match?.[2] || '',
+            status: 'Completed'
+        });
     },
 
     /**
@@ -1589,10 +1753,12 @@ const App = {
 
         try {
             if (isLocal) {
-                const devPassword = (localStorage.getItem(APP_OAUTH_DEV_PASSWORD_KEY) || '').trim();
+                const inputPassword = document.getElementById('settingsOAuthDevPassword')?.value?.trim() || '';
+                if (inputPassword) localStorage.setItem(APP_OAUTH_DEV_PASSWORD_KEY, inputPassword);
+                const devPassword = inputPassword || (localStorage.getItem(APP_OAUTH_DEV_PASSWORD_KEY) || '').trim();
                 if (!devPassword) {
                     PetTracker.UI.hideLoading();
-                    PetTracker.UI.toast(`Set localStorage.${APP_OAUTH_DEV_PASSWORD_KEY} first`, 'warning');
+                    PetTracker.UI.toast('Enter the local OAuth dev password first', 'warning');
                     return;
                 }
 
@@ -1773,6 +1939,7 @@ const App = {
         const existing = PetTracker.Settings.get();
         const uploadCapRaw = Number(document.getElementById('settingsUploadCapMb')?.value || existing.uploadCapMb || 5);
         const uploadCapMb = uploadCapRaw >= 20 ? 20 : 5;
+        const defaultTimezone = (document.getElementById('settingsDefaultTimezone')?.value || '').trim() || PetTracker.UI.currentTimezone();
         const existingOAuthToken = existing.notionOAuthData?.access_token || '';
         const usingOAuthToken = !!existingOAuthToken && notionToken === existingOAuthToken;
 
@@ -1810,6 +1977,7 @@ const App = {
             todoistAuthMode,
             todoistOAuthData: nextTodoistOAuthData,
             todoistLastCompletedSyncAt: todoistTokenChanged ? '' : (existing.todoistLastCompletedSyncAt || ''),
+            defaultTimezone,
             uploadCapMb,
             gcalEnabled,
             gcalCalendarId: document.getElementById('settingsGcalCalendarId')?.value || '',
@@ -1820,6 +1988,12 @@ const App = {
         PetTracker.Settings.set(settings);
         PetTracker.UI.toast('Settings saved', 'success');
         PetTracker.UI.closeModal('settingsModal');
+    },
+
+    inferDefaultTimezone: () => {
+        const input = document.getElementById('settingsDefaultTimezone');
+        if (input) input.value = PetTracker.UI.currentTimezone();
+        PetTracker.UI.toast('Timezone inferred from this browser', 'success', 1600);
     },
 
     /**
@@ -1912,22 +2086,23 @@ const App = {
                     'Severity Level', 'Value', 'Unit', 'Duration', 'Notes', 'Tags',
                     'Media',
                     'Source', 'Provider', 'Cost', 'Cost Category', 'Cost Currency',
-                    'Todoist Task ID', 'Client Updated At'
+                    'Todoist Task ID', 'Google Calendar Event ID', 'Client Updated At'
                 ],
                 'EventTypes': [
                     'Name', 'Category', 'Tracking Mode', 'Uses Severity', 'Default Scale',
                     'Default Color', 'Default Icon', 'Default Tags', 'Allow Attachments',
                     'Default Value Kind', 'Default Unit', 'Correlation Group', 'Is Recurring',
                     'Schedule Type', 'Interval Value', 'Interval Unit', 'Anchor Date', 'Due Time',
-                    'Time of Day Preference', 'Window Before', 'Window After', 'End Date',
+                    'Time of Day Preference', 'Timezone', 'Window Before', 'Window After', 'End Date',
                     'End After Occurrences', 'Next Due', 'Todoist Sync', 'Todoist Project',
                     'Todoist Section', 'Todoist Labels', 'Todoist Lead Time', 'Default Dose', 'Default Route',
-                    'Active', 'Active Start', 'Active End', 'Related Pets'
+                    'Needs Setup', 'Active', 'Active Start', 'Active End', 'Related Pets'
                 ],
                 'Scales': ['Name', 'Value Type', 'Unit', 'Notes'],
                 'ScaleLevels': ['Name', 'Scale', 'Order', 'Color', 'Numeric Value', 'Description'],
                 'Contacts': ['Name', 'Role', 'Phone', 'Email', 'Address', 'Notes', 'Related Pets']
             };
+            App.requiredSchemaProps = requiredProps;
 
             const storeKeyMap = {
                 'Pets': 'pets',
@@ -2001,13 +2176,18 @@ const App = {
                     );
                     const ok = missing.length === 0;
 
+                    const repairable = App.getRepairableSchemaProps(key, missing);
                     return `
                         <div class="text-xs border border-oatmeal p-2">
                             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
                                 <span class="font-mono uppercase text-earth-metal">${key}</span>
-                                <span class="${ok ? 'text-dull-purple' : 'text-muted-pink'}">${ok ? 'OK' : `Missing ${missing.length}`}</span>
+                                <div class="flex items-center gap-2">
+                                    <span class="${ok ? 'text-dull-purple' : 'text-muted-pink'}">${ok ? 'OK' : `Missing ${missing.length}`}</span>
+                                    ${repairable.length ? `<button type="button" onclick="App.repairSchema('${key}')" class="btn-secondary px-2 py-1 font-mono text-[10px] uppercase">Add Missing</button>` : ''}
+                                </div>
                             </div>
                             ${ok ? '' : `<p class="mt-1 text-earth-metal">Missing: ${PetTracker.UI.escapeHtml(missing.slice(0, 4).join(', '))}${missing.length > 4 ? '...' : ''}</p>`}
+                            ${repairable.length && repairable.length < missing.length ? `<p class="mt-1 text-earth-metal">Auto-repair skips relation/title fields.</p>` : ''}
                         </div>
                     `;
                 }).join('');
@@ -2024,6 +2204,87 @@ const App = {
         }
     },
 
+    getSchemaPropertyDefinition: (storeLabel, propName) => {
+        const richText = () => ({ rich_text: {} });
+        const number = () => ({ number: {} });
+        const select = () => ({ select: {} });
+        const multiSelect = () => ({ multi_select: {} });
+        const checkbox = () => ({ checkbox: {} });
+        const date = () => ({ date: {} });
+        const files = () => ({ files: {} });
+
+        const textProps = new Set([
+            'Breed', 'Microchip ID', 'Notes', 'Color', 'Default Icon', 'Due Time',
+            'Timezone', 'Todoist Project', 'Todoist Section', 'Todoist Labels',
+            'Default Dose', 'Phone', 'Email', 'Address', 'Description'
+        ]);
+        const numberProps = new Set([
+            'Target Weight Min', 'Target Weight Max', 'Value', 'Duration',
+            'Cost', 'Interval Value', 'Window Before', 'Window After', 'End After Occurrences',
+            'Todoist Lead Time', 'Order', 'Numeric Value'
+        ]);
+        const selectProps = new Set([
+            'Species', 'Sex', 'Status', 'Weight Unit', 'Unit', 'Source', 'Cost Category',
+            'Cost Currency', 'Category', 'Tracking Mode', 'Default Color', 'Default Value Kind',
+            'Default Unit', 'Correlation Group', 'Schedule Type', 'Interval Unit',
+            'Time of Day Preference', 'Default Route', 'Value Type', 'Role'
+        ]);
+        const checkboxProps = new Set(['Is Primary', 'Uses Severity', 'Allow Attachments', 'Is Recurring', 'Todoist Sync', 'Needs Setup', 'Active']);
+        const dateProps = new Set(['Birth Date', 'Adoption Date', 'Start Date', 'Client Updated At', 'Anchor Date', 'Next Due', 'End Date', 'Active Start', 'Active End']);
+        const multiProps = new Set(['Tags', 'Default Tags']);
+        const fileProps = new Set(['Photo', 'Media']);
+
+        if (textProps.has(propName)) return richText();
+        if (numberProps.has(propName)) return number();
+        if (selectProps.has(propName)) return select();
+        if (checkboxProps.has(propName)) return checkbox();
+        if (dateProps.has(propName)) return date();
+        if (multiProps.has(propName)) return multiSelect();
+        if (fileProps.has(propName)) return files();
+        return null;
+    },
+
+    getRepairableSchemaProps: (storeLabel, missingProps) => {
+        return (missingProps || [])
+            .map(name => ({ name, definition: App.getSchemaPropertyDefinition(storeLabel, name) }))
+            .filter(item => !!item.definition);
+    },
+
+    repairSchema: async (storeLabel) => {
+        const selectEl = document.getElementById(`dsMap${storeLabel}`);
+        const dataSourceId = selectEl?.value || '';
+        if (!dataSourceId) {
+            PetTracker.UI.toast('Map the data source first', 'error');
+            return;
+        }
+
+        try {
+            PetTracker.UI.showLoading('Checking schema...');
+            const ds = await PetTracker.API.getDataSource(dataSourceId);
+            const required = App.requiredSchemaProps?.[storeLabel] || [];
+            const existingNames = Object.keys(ds.properties || {}).map(p => p.toLowerCase());
+            const missing = required.filter(prop => !existingNames.includes(prop.toLowerCase()));
+            const repairable = App.getRepairableSchemaProps(storeLabel, missing);
+            if (repairable.length === 0) {
+                PetTracker.UI.hideLoading();
+                PetTracker.UI.toast('No safe additive properties to add', 'info');
+                return;
+            }
+
+            const properties = {};
+            repairable.forEach(item => {
+                properties[item.name] = item.definition;
+            });
+            await PetTracker.API.request('PATCH', `/data_sources/${dataSourceId}`, { properties });
+            PetTracker.UI.hideLoading();
+            PetTracker.UI.toast(`Added ${repairable.length} missing propert${repairable.length === 1 ? 'y' : 'ies'}`, 'success');
+            await App.scanDataSources();
+        } catch (e) {
+            PetTracker.UI.hideLoading();
+            PetTracker.UI.toast('Schema repair failed: ' + e.message, 'error');
+        }
+    },
+
     // FIX #12: Sync queue management
     showSyncQueue: async () => {
         const container = document.getElementById('syncQueueContent');
@@ -2031,32 +2292,86 @@ const App = {
 
         const pending = await PetTracker.SyncQueue.getPending();
         const failed = await PetTracker.DB.query(PetTracker.STORES.SYNC_QUEUE, i => i.status === 'failed');
-        const allItems = [...pending, ...failed];
+        const active = await PetTracker.DB.query(PetTracker.STORES.SYNC_QUEUE, i => i.status === 'processing');
+        const allItems = [...active, ...pending, ...failed].sort((a, b) =>
+            new Date(b.lastAttempt || b.createdAt || 0) - new Date(a.lastAttempt || a.createdAt || 0)
+        );
 
         if (allItems.length === 0) {
             container.innerHTML = '<p class="text-earth-metal text-sm text-center py-4">Queue is empty</p>';
         } else {
-            container.innerHTML = allItems.map(item => `
-                <div class="flex items-center gap-3 p-3 border border-oatmeal mb-2 ${item.status === 'failed' ? 'border-muted-pink bg-muted-pink/5' : ''}">
-                    <div class="flex-1 min-w-0">
-                        <p class="text-sm text-charcoal font-medium truncate">${item.type} ${item.store}</p>
-                        <p class="text-xs text-earth-metal truncate">${item.status} • ${item.retryCount || 0} retries</p>
-                        ${item.error ? `<p class="text-xs text-muted-pink truncate mt-1">${PetTracker.UI.escapeHtml(item.error)}</p>` : ''}
+            const hydrated = await Promise.all(allItems.map(item => App.hydrateSyncQueueItem(item)));
+            const lastError = failed
+                .slice()
+                .sort((a, b) => new Date(b.lastAttempt || b.createdAt || 0) - new Date(a.lastAttempt || a.createdAt || 0))[0]?.error;
+            container.innerHTML = `
+                <div class="mb-3 p-3 border border-oatmeal bg-oatmeal/20">
+                    <div class="flex flex-wrap gap-3 text-xs">
+                        <span><span class="font-mono uppercase text-earth-metal">Pending</span> ${pending.length}</span>
+                        <span><span class="font-mono uppercase text-earth-metal">Processing</span> ${active.length}</span>
+                        <span><span class="font-mono uppercase text-earth-metal">Failed</span> ${failed.length}</span>
                     </div>
-                    ${item.status === 'failed' ? `
+                    ${lastError ? `<p class="text-xs text-muted-pink mt-2"><span class="font-mono uppercase">Last Error</span> ${PetTracker.UI.escapeHtml(lastError)}</p>` : ''}
+                </div>
+                ${hydrated.map(({ item, label, notionId }) => `
+                <div class="flex items-start gap-3 p-3 border border-oatmeal mb-2 ${item.status === 'failed' ? 'border-muted-pink bg-muted-pink/5' : ''}">
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm text-charcoal font-medium truncate">${PetTracker.UI.escapeHtml(item.type)} ${PetTracker.UI.escapeHtml(item.store)}</p>
+                        <p class="text-xs text-earth-metal truncate">${PetTracker.UI.escapeHtml(item.status)} // ${item.retryCount || 0} retries // ${PetTracker.UI.escapeHtml(App.formatQueueDate(item.lastAttempt || item.createdAt))}</p>
+                        <p class="text-xs text-charcoal truncate mt-1"><span class="font-mono uppercase text-earth-metal">Record</span> ${PetTracker.UI.escapeHtml(label)}</p>
+                        ${item.error ? `<p class="text-xs text-muted-pink mt-1 break-words">${PetTracker.UI.escapeHtml(item.error)}</p>` : ''}
+                        ${notionId ? `<a href="${PetTracker.UI.escapeHtml(App.notionPageUrl(notionId))}" target="_blank" rel="noopener" class="text-xs text-dull-purple underline mt-1 inline-flex items-center gap-1"><i data-lucide="external-link" class="w-3 h-3"></i>Notion page</a>` : ''}
+                    </div>
+                    <div class="flex gap-1 flex-shrink-0">
+                    ${item.status === 'failed' || item.status === 'pending' ? `
                         <button onclick="App.retryQueueItem('${item.id}')" class="p-1 text-earth-metal hover:text-dull-purple" title="Retry">
                             <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                         </button>
+                    ` : ''}
+                    ${item.status === 'failed' ? `
                         <button onclick="App.dropQueueItem('${item.id}')" class="p-1 text-earth-metal hover:text-muted-pink" title="Drop">
                             <i data-lucide="trash-2" class="w-4 h-4"></i>
                         </button>
                     ` : ''}
+                    </div>
                 </div>
-            `).join('');
+                `).join('')}
+            `;
         }
 
         PetTracker.UI.openModal('syncQueueModal');
         if (window.lucide) lucide.createIcons();
+    },
+
+    hydrateSyncQueueItem: async (item) => {
+        const storeMap = {
+            pets: PetTracker.STORES.PETS,
+            events: PetTracker.STORES.EVENTS,
+            eventTypes: PetTracker.STORES.EVENT_TYPES,
+            scales: PetTracker.STORES.SCALES,
+            scaleLevels: PetTracker.STORES.SCALE_LEVELS,
+            contacts: PetTracker.STORES.CONTACTS
+        };
+        const storeName = storeMap[item.store];
+        const record = storeName ? await PetTracker.DB.get(storeName, item.recordId) : null;
+        const data = item.data || {};
+        const label = record?.name || record?.title || data.name || data.title || item.recordId || 'Unknown record';
+        const notionId = record?.notionId || data.notionId || null;
+        return { item, label, notionId };
+    },
+
+    notionPageUrl: (notionId) => {
+        const clean = String(notionId || '').replace(/-/g, '');
+        return `https://www.notion.so/${clean}`;
+    },
+
+    formatQueueDate: (value) => {
+        if (!value) return 'not attempted';
+        try {
+            return new Date(value).toLocaleString();
+        } catch (_) {
+            return String(value);
+        }
     },
 
     retryQueueItem: async (id) => {

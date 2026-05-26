@@ -258,7 +258,7 @@ const UI = {
      */
     formatDate: (dateStr) => {
         if (!dateStr) return '';
-        const d = new Date(dateStr);
+        const d = UI.parseLocalDate(dateStr);
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     },
 
@@ -276,15 +276,18 @@ const UI = {
      */
     formatRelative: (dateStr) => {
         if (!dateStr) return '';
-        const d = new Date(dateStr);
-        const now = new Date();
-        const diffMs = now - d;
-        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const eventDate = UI.localDateYYYYMMDD(UI.parseLocalDate(dateStr));
+        const todayDate = UI.localDateYYYYMMDD();
+        const yesterdayDate = UI.localDateYYYYMMDD(UI.addLocalDays(new Date(), -1));
+        const diffDays = Math.floor(
+            (UI.parseLocalDate(todayDate).getTime() - UI.parseLocalDate(eventDate).getTime()) /
+            (1000 * 60 * 60 * 24)
+        );
 
-        if (diffDays === 0) return 'Today';
-        if (diffDays === 1) return 'Yesterday';
-        if (diffDays < 7) return `${diffDays} days ago`;
-        if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+        if (eventDate === todayDate) return 'Today';
+        if (eventDate === yesterdayDate) return 'Yesterday';
+        if (diffDays > 1 && diffDays < 7) return `${diffDays} days ago`;
+        if (diffDays >= 7 && diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
         return UI.formatDate(dateStr);
     },
 
@@ -332,11 +335,66 @@ const UI = {
      * Get local date in YYYY-MM-DD format (avoids timezone issues from toISOString)
      */
     localDateYYYYMMDD: (date = new Date()) => {
-        const d = date instanceof Date ? date : new Date(date);
+        const d = date instanceof Date ? date : UI.parseLocalDate(date);
         const yyyy = d.getFullYear();
         const mm = String(d.getMonth() + 1).padStart(2, '0');
         const dd = String(d.getDate()).padStart(2, '0');
         return `${yyyy}-${mm}-${dd}`;
+    },
+
+    /**
+     * Parse date-only strings as local dates. Native Date parses YYYY-MM-DD as UTC,
+     * which can shift due dates by one day in local timezones.
+     */
+    parseLocalDate: (value = new Date()) => {
+        if (value instanceof Date) return new Date(value.getTime());
+        if (typeof value === 'string') {
+            const dateOnly = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (dateOnly) {
+                return new Date(
+                    Number(dateOnly[1]),
+                    Number(dateOnly[2]) - 1,
+                    Number(dateOnly[3])
+                );
+            }
+        }
+        return new Date(value);
+    },
+
+    localDateTimeWithOffset: (dateStr, timeStr) => {
+        if (!dateStr || !timeStr) return dateStr || '';
+        const [year, month, day] = dateStr.split('-').map(Number);
+        const [hour, minute] = timeStr.split(':').map(Number);
+        const date = new Date(year, month - 1, day, hour, minute || 0, 0, 0);
+        const offsetMinutes = -date.getTimezoneOffset();
+        const sign = offsetMinutes >= 0 ? '+' : '-';
+        const abs = Math.abs(offsetMinutes);
+        const offsetHours = String(Math.floor(abs / 60)).padStart(2, '0');
+        const offsetMins = String(abs % 60).padStart(2, '0');
+        return `${dateStr}T${String(hour).padStart(2, '0')}:${String(minute || 0).padStart(2, '0')}:00${sign}${offsetHours}:${offsetMins}`;
+    },
+
+    compareLocalDates: (a, b) => {
+        const left = UI.parseLocalDate(a);
+        const right = UI.parseLocalDate(b);
+        left.setHours(0, 0, 0, 0);
+        right.setHours(0, 0, 0, 0);
+        return left.getTime() - right.getTime();
+    },
+
+    addLocalDays: (date, days) => {
+        const d = UI.parseLocalDate(date);
+        d.setDate(d.getDate() + Number(days || 0));
+        return d;
+    },
+
+    currentTimezone: () => {
+        return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    },
+
+    defaultTimezone: () => {
+        const settings = PetTracker?.Settings?.get ? PetTracker.Settings.get() : {};
+        return settings.defaultTimezone || UI.currentTimezone();
     },
 
     /**

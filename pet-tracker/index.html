@@ -57,10 +57,10 @@
     </script>
 
     <!-- Quick Add Component -->
-    <link rel="stylesheet" data-qa-style="1" href="../components/quick-add/quick-add-component.css">
+    <link rel="stylesheet" data-qa-style="1" href="../components/quick-add/quick-add-component.css?v=2">
 
     <!-- Custom Styles -->
-    <link rel="stylesheet" href="./css/styles.css">
+    <link rel="stylesheet" href="./css/styles.css?v=2">
 </head>
 
 <body
@@ -146,15 +146,15 @@
 
         <!-- Sidebar Footer -->
         <div class="p-3 border-t border-oatmeal space-y-1">
-            <button onclick="App.openAddModal()"
-                class="w-full flex items-center gap-3 px-3 py-2 text-dull-purple hover:bg-oatmeal/30 transition-fast">
-                <i data-lucide="plus-circle" class="w-5 h-5"></i>
-                <span class="font-mono text-xs uppercase">Add Event</span>
-            </button>
             <button onclick="PetTracker.QuickAddModal.open()"
-                class="w-full flex items-center gap-3 px-3 py-2 text-earth-metal hover:bg-oatmeal/30 transition-fast">
+                class="w-full flex items-center gap-3 px-3 py-2 text-dull-purple hover:bg-oatmeal/30 transition-fast">
                 <i data-lucide="zap" class="w-5 h-5"></i>
                 <span class="font-mono text-xs uppercase">Quick Add</span>
+            </button>
+            <button onclick="App.openAddModal()"
+                class="w-full flex items-center gap-3 px-3 py-2 text-earth-metal hover:bg-oatmeal/30 transition-fast">
+                <i data-lucide="plus-circle" class="w-5 h-5"></i>
+                <span class="font-mono text-xs uppercase">Add Event</span>
             </button>
             <button id="installPwaBtn" onclick="App.promptInstall()"
                 class="hidden w-full flex items-center gap-3 px-3 py-2 text-dull-purple hover:bg-oatmeal/30 transition-fast">
@@ -224,15 +224,15 @@
 
         <!-- Mobile Floating Actions -->
         <div class="mobile-action-stack md:hidden" aria-label="Quick actions">
-            <button type="button" class="mobile-action-btn mobile-action-btn-primary" onclick="App.openAddModal()"
-                aria-label="Add Event" title="Add Event">
-                <i data-lucide="plus-circle" class="w-4 h-4" aria-hidden="true"></i>
-                <span>Add Event</span>
-            </button>
-            <button type="button" class="mobile-action-btn mobile-action-btn-secondary"
+            <button type="button" class="mobile-action-btn mobile-action-btn-primary"
                 onclick="PetTracker.QuickAddModal.open()" aria-label="Quick Add" title="Quick Add">
                 <i data-lucide="zap" class="w-4 h-4" aria-hidden="true"></i>
                 <span>Quick Add</span>
+            </button>
+            <button type="button" class="mobile-action-btn mobile-action-btn-secondary" onclick="App.openAddModal()"
+                aria-label="Add Event" title="Add Event">
+                <i data-lucide="plus-circle" class="w-4 h-4" aria-hidden="true"></i>
+                <span>Add Event</span>
             </button>
         </div>
 
@@ -494,6 +494,8 @@
                         <input type="text" id="settingsProxyToken" class="input-field masked-input"
                             placeholder="Optional auth token" autocomplete="off" data-lpignore="true"
                             data-form-type="other">
+                        <p class="text-xs text-earth-metal mt-1">Required when the Worker has
+                            ALL_CORS_PROXY_MATCH_TOKEN set. This is separate from the OAuth dev password.</p>
                     </div>
 
                     <!-- Template Link -->
@@ -519,6 +521,12 @@
                             class="btn-primary w-full px-4 py-2 font-mono text-xs uppercase flex items-center justify-center gap-2">
                             <i data-lucide="zap" class="w-4 h-4"></i>Connect with Notion
                         </button>
+                        <div data-local-oauth-dev class="hidden">
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Local OAuth Dev Password</label>
+                            <input type="password" id="settingsOAuthDevPassword" class="input-field"
+                                placeholder="Required only on localhost" autocomplete="off" data-lpignore="true"
+                                data-form-type="other">
+                        </div>
                         <p class="text-xs text-earth-metal">Securely connect via Notion's OAuth. Redirects to Notion
                             for authorization.</p>
                     </div>
@@ -611,7 +619,21 @@
                     </div>
 
                     <div>
-                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Attachment Upload
+                        <label for="settingsDefaultTimezone"
+                            class="font-mono text-xs uppercase text-earth-metal block mb-1">Default Timezone</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="settingsDefaultTimezone" name="defaultTimezone" class="input-field text-sm"
+                                placeholder="America/Los_Angeles" autocomplete="off">
+                            <button type="button" onclick="App.inferDefaultTimezone()"
+                                class="btn-secondary px-3 py-2 font-mono text-xs uppercase flex-shrink-0">
+                                Infer
+                            </button>
+                        </div>
+                        <p class="text-xs text-earth-metal mt-1">Used for recurring care schedules and quick-created event types.</p>
+                    </div>
+
+                    <div>
+                        <label for="settingsUploadCapMb" class="font-mono text-xs uppercase text-earth-metal block mb-1">Attachment Upload
                             Cap</label>
                         <select id="settingsUploadCapMb" class="select-field text-sm">
                             <option value="5">5 MB (Free Workspace)</option>
@@ -830,6 +852,8 @@
                             <input type="text" id="onboardingProxyToken" class="input-field masked-input"
                                 autocomplete="off" data-lpignore="true" data-form-type="other"
                                 placeholder="Your worker secret token">
+                            <p class="text-xs text-earth-metal mt-1">This is the Worker proxy token, not the local OAuth
+                                dev password.</p>
                         </div>
                         <input type="hidden" id="onboardingWorkerVerified" value="false">
                         <div id="onboardingWorkerStatus" class="hidden"></div>
@@ -869,6 +893,14 @@
                             class="btn-primary w-full px-4 py-2 font-mono text-xs uppercase flex items-center justify-center gap-2">
                             <i data-lucide="zap" class="w-4 h-4"></i>Connect with Notion
                         </button>
+                        <div data-local-oauth-dev class="hidden border border-oatmeal p-3 bg-oatmeal/10">
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Local OAuth Dev Password</label>
+                            <input type="password" id="onboardingOAuthDevPassword" class="input-field"
+                                placeholder="Required only on localhost" autocomplete="off" data-lpignore="true"
+                                data-form-type="other">
+                            <p class="text-xs text-earth-metal mt-1">Used only to unlock localhost OAuth during
+                                development.</p>
+                        </div>
 
                         <div class="flex items-center gap-4">
                             <div class="flex-1 border-t border-oatmeal"></div>
@@ -1085,24 +1117,25 @@
             </div>
             <form id="addPetForm" class="p-4 space-y-4">
                 <div class="flex gap-4 items-start">
+                    <div class="flex-1">
+                        <label for="addPetName" class="font-mono text-xs uppercase text-earth-metal block mb-1">Name *</label>
+                        <input type="text" id="addPetName" name="petName" class="input-field" required placeholder="Pet name"
+                            autocomplete="off" autofocus>
+                    </div>
                     <div>
-                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Icon</label>
-                        <button type="button" id="addPetIconPreview"
+                        <label for="addPetIconPreview" class="font-mono text-xs uppercase text-earth-metal block mb-1">Icon</label>
+                        <button type="button" id="addPetIconPreview" aria-label="Choose pet icon"
                             onclick="PetTracker.UI.showIconPicker('addPetIcon', 'addPetIconPreview', 'pet')"
                             class="w-12 h-12 bg-oatmeal border border-earth-metal/30 flex items-center justify-center hover:bg-oatmeal/70 transition-fast cursor-pointer">
                             <i data-lucide="image-plus" class="w-6 h-6 text-earth-metal"></i>
                         </button>
-                        <input type="hidden" id="addPetIcon">
-                    </div>
-                    <div class="flex-1">
-                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Name *</label>
-                        <input type="text" id="addPetName" class="input-field" required placeholder="Pet name">
+                        <input type="hidden" id="addPetIcon" name="petIcon">
                     </div>
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Species</label>
-                        <select id="addPetSpecies" class="select-field">
+                        <label for="addPetSpecies" class="font-mono text-xs uppercase text-earth-metal block mb-1">Species</label>
+                        <select id="addPetSpecies" name="species" class="select-field">
                             <option value="">Select...</option>
                             <option value="Dog">Dog</option>
                             <option value="Cat">Cat</option>
@@ -1116,8 +1149,8 @@
                         </select>
                     </div>
                     <div>
-                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Sex</label>
-                        <select id="addPetSex" class="select-field">
+                        <label for="addPetSex" class="font-mono text-xs uppercase text-earth-metal block mb-1">Sex</label>
+                        <select id="addPetSex" name="sex" class="select-field">
                             <option value="">Select...</option>
                             <option value="Male">Male</option>
                             <option value="Female">Female</option>
@@ -1126,22 +1159,22 @@
                     </div>
                 </div>
                 <div>
-                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Breed</label>
-                    <input type="text" id="addPetBreed" class="input-field" placeholder="Breed or type">
+                    <label for="addPetBreed" class="font-mono text-xs uppercase text-earth-metal block mb-1">Breed</label>
+                    <input type="text" id="addPetBreed" name="breed" class="input-field" placeholder="Breed or type">
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Birth Date</label>
-                        <input type="date" id="addPetBirthDate" class="input-field">
+                        <label for="addPetBirthDate" class="font-mono text-xs uppercase text-earth-metal block mb-1">Birth Date</label>
+                        <input type="date" id="addPetBirthDate" name="birthDate" class="input-field">
                     </div>
                     <div>
-                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Color (Calendar)</label>
-                        <input type="color" id="addPetColor" class="input-field h-10" value="#8b7b8e">
+                        <label for="addPetColor" class="font-mono text-xs uppercase text-earth-metal block mb-1">Color (Calendar)</label>
+                        <input type="color" id="addPetColor" name="color" class="input-field h-10" value="#8b7b8e">
                     </div>
                 </div>
                 <div>
-                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Notes</label>
-                    <textarea id="addPetNotes" class="input-field h-20 resize-none"
+                    <label for="addPetNotes" class="font-mono text-xs uppercase text-earth-metal block mb-1">Notes</label>
+                    <textarea id="addPetNotes" name="notes" class="input-field h-20 resize-none"
                         placeholder="Additional notes..."></textarea>
                 </div>
                 <!-- FIX #9: Advanced pet fields -->
@@ -1152,12 +1185,12 @@
                     </summary>
                     <div class="p-3 space-y-4 border-t border-oatmeal">
                         <div>
-                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Adoption Date</label>
-                            <input type="date" id="addPetAdoptionDate" class="input-field">
+                            <label for="addPetAdoptionDate" class="font-mono text-xs uppercase text-earth-metal block mb-1">Adoption Date</label>
+                            <input type="date" id="addPetAdoptionDate" name="adoptionDate" class="input-field">
                         </div>
                         <div>
-                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Status</label>
-                            <select id="addPetStatus" class="select-field">
+                            <label for="addPetStatus" class="font-mono text-xs uppercase text-earth-metal block mb-1">Status</label>
+                            <select id="addPetStatus" name="status" class="select-field">
                                 <option value="Active">Active</option>
                                 <option value="Deceased">Deceased</option>
                                 <option value="Rehomed">Rehomed</option>
@@ -1165,13 +1198,13 @@
                             </select>
                         </div>
                         <div>
-                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Microchip ID</label>
-                            <input type="text" id="addPetMicrochipId" class="input-field"
+                            <label for="addPetMicrochipId" class="font-mono text-xs uppercase text-earth-metal block mb-1">Microchip ID</label>
+                            <input type="text" id="addPetMicrochipId" name="microchipId" class="input-field"
                                 placeholder="Microchip number">
                         </div>
                         <div>
-                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Photo</label>
-                            <input type="file" id="addPetPhotoFile" class="input-field" accept="image/*"
+                            <label for="addPetPhotoFile" class="font-mono text-xs uppercase text-earth-metal block mb-1">Photo</label>
+                            <input type="file" id="addPetPhotoFile" name="photoFile" class="input-field" accept="image/*"
                                 onchange="Pets.handlePhotoFileChange(this)">
                             <input type="hidden" id="addPetPhotoMediaId">
                             <div id="addPetPhotoPreviewWrap" class="hidden mt-2">
@@ -1184,14 +1217,14 @@
                             </button>
                         </div>
                         <div>
-                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Photo URL
+                            <label for="addPetPhotoUrl" class="font-mono text-xs uppercase text-earth-metal block mb-1">Photo URL
                                 (optional)</label>
-                            <input type="url" id="addPetPhotoUrl" class="input-field"
+                            <input type="url" id="addPetPhotoUrl" name="photoUrl" class="input-field"
                                 placeholder="https://example.com/pet-photo.jpg">
                         </div>
                         <div>
-                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Primary Vet</label>
-                            <select id="addPetPrimaryVet" class="select-field">
+                            <label for="addPetPrimaryVet" class="font-mono text-xs uppercase text-earth-metal block mb-1">Primary Vet</label>
+                            <select id="addPetPrimaryVet" name="primaryVet" class="select-field">
                                 <option value="">None</option>
                             </select>
                         </div>
@@ -1203,21 +1236,21 @@
                         </div>
                         <div class="grid grid-cols-3 gap-4">
                             <div>
-                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Target Weight
+                                <label for="addPetWeightMin" class="font-mono text-xs uppercase text-earth-metal block mb-1">Target Weight
                                     Min</label>
-                                <input type="number" id="addPetWeightMin" class="input-field" step="0.1"
+                                <input type="number" id="addPetWeightMin" name="targetWeightMin" class="input-field" step="0.1"
                                     placeholder="Min">
                             </div>
                             <div>
-                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Target Weight
+                                <label for="addPetWeightMax" class="font-mono text-xs uppercase text-earth-metal block mb-1">Target Weight
                                     Max</label>
-                                <input type="number" id="addPetWeightMax" class="input-field" step="0.1"
+                                <input type="number" id="addPetWeightMax" name="targetWeightMax" class="input-field" step="0.1"
                                     placeholder="Max">
                             </div>
                             <div>
-                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Weight
+                                <label for="addPetWeightUnit" class="font-mono text-xs uppercase text-earth-metal block mb-1">Weight
                                     Unit</label>
-                                <select id="addPetWeightUnit" class="select-field">
+                                <select id="addPetWeightUnit" name="weightUnit" class="select-field">
                                     <option value="lb">lb</option>
                                     <option value="kg">kg</option>
                                     <option value="oz">oz</option>
@@ -1691,6 +1724,11 @@
                             </div>
                         </div>
                         <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Timezone</label>
+                            <input type="text" id="eventTypeTimezone" class="input-field" placeholder="America/Los_Angeles">
+                            <p class="text-xs text-earth-metal mt-1">Date-only schedules are interpreted in this timezone.</p>
+                        </div>
+                        <div>
                             <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Default
                                 Dose/Amount</label>
                             <input type="text" id="eventTypeDefaultDose" class="input-field"
@@ -1872,24 +1910,24 @@
 
     <!-- Scripts -->
     <script src="./js/storage.js"></script>
-    <script src="./js/ui.js"></script>
-    <script src="./js/api.js"></script>
-    <script src="./js/sync.js"></script>
-    <script src="./js/pets.js"></script>
-    <script src="./js/events.js"></script>
-    <script src="./js/calendar.js"></script>
-    <script src="./js/care.js"></script>
+    <script src="./js/ui.js?v=11"></script>
+    <script src="./js/api.js?v=11"></script>
+    <script src="./js/sync.js?v=10"></script>
+    <script src="./js/pets.js?v=12"></script>
+    <script src="./js/events.js?v=11"></script>
+    <script src="./js/calendar.js?v=10"></script>
+    <script src="./js/care.js?v=9"></script>
     <script src="./js/media.js"></script>
-    <script src="./js/ai.js"></script>
-    <script src="../components/quick-add/quick-add-component.js"></script>
-    <script src="./js/quick-add-modal.js"></script>
-    <script src="./js/todoist.js"></script>
+    <script src="./js/ai.js?v=10"></script>
+    <script src="../components/quick-add/quick-add-component.js?v=2"></script>
+    <script src="./js/quick-add-modal.js?v=12"></script>
+    <script src="./js/todoist.js?v=9"></script>
     <script src="./js/calendar-export.js"></script>
     <script src="./js/analytics.js"></script>
     <script src="./js/contacts.js"></script>
-    <script src="./js/setup.js"></script>
-    <script src="./js/onboarding.js"></script>
-    <script src="./js/app.js"></script>
+    <script src="./js/setup.js?v=10"></script>
+    <script src="./js/onboarding.js?v=11"></script>
+    <script src="./js/app.js?v=15"></script>
 
     <script>
         // Worker code template
