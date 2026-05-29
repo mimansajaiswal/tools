@@ -894,15 +894,33 @@ export default {
                         <i data-lucide="refresh-ccw" class="w-5 h-5 sm:w-6 sm:h-6"></i>
                     </button>
 
-                    <!-- 3. Insert Image (File Input) -->
+                    <!-- 3. Phone Camera (native high-quality capture) -->
+                    <button onclick="App.openPhoneCameraCapture()" aria-label="Use phone camera"
+                        class="bg-black/40 backdrop-blur-md p-2 sm:p-3 rounded-full hover:bg-black/60 text-white transition"
+                        title="Use phone camera for higher quality, then align after capture">
+                        <i data-lucide="smartphone" class="w-5 h-5 sm:w-6 sm:h-6"></i>
+                    </button>
+                    <input type="file" id="phoneCameraInput" accept="image/*" capture="environment" class="hidden"
+                        onchange="App.handleFileUpload(event, { alignAfterCapture: true })">
+
+                    <!-- 4. Gallery/File Picker -->
+                    <button onclick="App.openGalleryPicker()" aria-label="Choose from gallery"
+                        class="bg-black/40 backdrop-blur-md p-2 sm:p-3 rounded-full hover:bg-black/60 text-white transition"
+                        title="Choose an existing image">
+                        <i data-lucide="image" class="w-5 h-5 sm:w-6 sm:h-6"></i>
+                    </button>
+                    <input type="file" id="galleryInput" accept="image/*" class="hidden"
+                        onchange="App.handleFileUpload(event)">
+
+                    <!-- Legacy input kept for older cached UI paths -->
                     <label aria-label="Insert image"
-                        class="cursor-pointer bg-black/40 backdrop-blur-md p-2 sm:p-3 rounded-full hover:bg-black/60 text-white transition">
+                        class="hidden cursor-pointer bg-black/40 backdrop-blur-md p-2 sm:p-3 rounded-full hover:bg-black/60 text-white transition">
                         <i data-lucide="image" class="w-5 h-5 sm:w-6 sm:h-6"></i>
                         <input type="file" id="fileInput" accept="image/*" class="hidden"
                             onchange="App.handleFileUpload(event)">
                     </label>
 
-                    <!-- 4. Capture Button (Center) -->
+                    <!-- 5. Capture Button (Center) -->
                     <button onclick="App.captureSegment()" id="captureBtn" aria-label="Capture segment"
                         class="w-14 h-14 sm:w-16 sm:h-16 rounded-full border-4 border-white/80 bg-charcoal/60 shadow-[0_0_12px_rgba(0,0,0,0.5)] flex items-center justify-center hover:bg-black/70 transition active:scale-95 backdrop-blur-sm">
                         <div class="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-full shadow-inner"></div>
@@ -2087,6 +2105,11 @@ export default {
 
                 let diary = Storage.getData().find(d => d.id === diaryId);
                 if (!diary || !diary.dataSourceId) return;
+                const settings = Storage.getSettings();
+                if (!settings.workerUrl || !settings.authToken) {
+                    if (showUi) SyncManager.updateUI('error');
+                    return;
+                }
                 if (!navigator.onLine) {
                     if (showUi) SyncManager.updateUI('offline');
                     return;
@@ -2456,6 +2479,7 @@ export default {
                 draftSaveTimer: null,
                 pendingHighResEntry: null,
                 segmentEditUndo: null,
+                segmentEditReturn: null,
                 editPointers: new Map(),
                 editPrevPinchDist: 0,
                 editPrevPinchCenter: null
@@ -4491,9 +4515,11 @@ export default {
                 App.stopSegEditPreview();
                 document.getElementById('segmentEditOverlay').classList.add('hidden');
                 App.state.editingSegmentIdx = null;
+                App.state.segmentEditReturn = null;
                 App.state.editPointers.clear();
-                // Regenerate preview
-                App.regeneratePreview();
+                if (!document.getElementById('takenPhotoUI').classList.contains('hidden')) {
+                    App.regeneratePreview();
+                }
             },
 
             attachSegmentEditGestures: () => {
@@ -4565,6 +4591,38 @@ export default {
                 ctx.fillStyle = "#1a1a1a";
                 ctx.fillRect(0, 0, W, H);
 
+                if (App.state.ghostMode && App.state.ghostImageObj) {
+                    const ghost = App.state.ghostImageObj;
+                    const worldW = dims.width;
+                    const worldH = dims.height;
+                    const slotX = slot.x * worldW;
+                    const slotY = slot.y * worldH;
+                    const srcRatio = ghost.width / ghost.height;
+                    const dstRatio = worldW / worldH;
+                    let gx, gy, gw, gh;
+                    if (srcRatio > dstRatio) {
+                        gh = worldH;
+                        gw = gh * srcRatio;
+                        gx = (worldW - gw) / 2;
+                        gy = 0;
+                    } else {
+                        gw = worldW;
+                        gh = gw / srcRatio;
+                        gx = 0;
+                        gy = (worldH - gh) / 2;
+                    }
+                    ctx.save();
+                    ctx.globalAlpha = Math.max(0.15, App.state.ghostOpacity);
+                    ctx.drawImage(
+                        ghost,
+                        (gx - slotX) * scaleRatio,
+                        (gy - slotY) * scaleRatio,
+                        gw * scaleRatio,
+                        gh * scaleRatio
+                    );
+                    ctx.restore();
+                }
+
                 // Draw the segment with transforms
                 ctx.save();
                 const cx = W / 2;
@@ -4598,7 +4656,10 @@ export default {
                 const idx = App.state.editingSegmentIdx;
                 if (idx === null || !App.state.segments[idx]) return;
                 e.preventDefault();
-                e.currentTarget.setPointerCapture(e.pointerId);
+                try {
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                } catch (err) {
+                }
                 App.state.editPointers.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY, pointerId: e.pointerId });
                 if (App.state.editPointers.size === 2) {
                     const points = Array.from(App.state.editPointers.values());
@@ -4757,12 +4818,29 @@ export default {
                 App.state.segments[idx] = null;
                 document.getElementById('segmentEditOverlay').classList.add('hidden');
                 App.state.editingSegmentIdx = null;
+                App.state.segmentEditReturn = null;
                 App.scheduleEntryDraftSave();
                 App.retakePartial();
             },
 
             applySegmentEdit: () => {
+                const returnState = App.state.segmentEditReturn;
+                App.state.segmentEditReturn = null;
                 App.closeSegmentEdit();
+                if (returnState?.fromCapture && document.getElementById('takenPhotoUI').classList.contains('hidden')) {
+                    const layout = App.collageConfigs[App.state.collageMode];
+                    const nextEmpty = layout.findIndex((_, idx) => !App.state.segments[idx]);
+                    if (nextEmpty !== -1) {
+                        App.state.activeSegment = nextEmpty;
+                        App.updateManipControlsVisibility();
+                        App.updateSegmentControls();
+                    } else if (App.state.collageMode === 1) {
+                        App.setEntryLoading(true, "Finishing...");
+                        requestAnimationFrame(() => App.finalizeCollage());
+                    } else {
+                        App.showToast("All segments captured. Tap Done when ready.", "success");
+                    }
+                }
             },
 
             regeneratePreview: async () => {
@@ -4886,7 +4964,54 @@ export default {
                 }
             },
 
-            handleFileUpload: async (e) => {
+            openPhoneCameraCapture: () => {
+                const input = document.getElementById('phoneCameraInput');
+                if (input) input.click();
+            },
+
+            openGalleryPicker: () => {
+                const input = document.getElementById('galleryInput');
+                if (input) input.click();
+            },
+
+            afterManualSegmentInsert: (capturedIdx, options = {}) => {
+                const layout = App.collageConfigs[App.state.collageMode];
+                const total = layout.length;
+                let allFilled = true;
+                let nextEmpty = -1;
+                for (let i = 0; i < total; i++) {
+                    if (!App.state.segments[i]) {
+                        allFilled = false;
+                        if (nextEmpty === -1) nextEmpty = i;
+                    }
+                }
+
+                App.state.activeSegment = capturedIdx;
+                App.updateManipControlsVisibility();
+                App.updateSegmentControls();
+                App.scheduleEntryDraftSave();
+
+                if (options.alignAfterCapture) {
+                    App.state.segmentEditReturn = { fromCapture: true };
+                    App.openSegmentEdit(capturedIdx);
+                    return;
+                }
+
+                if (allFilled) {
+                    if (App.state.collageMode === 1) {
+                        App.setEntryLoading(true, "Finishing...");
+                        requestAnimationFrame(() => App.finalizeCollage());
+                    } else {
+                        App.showToast("All segments captured. Tap Done when ready.", "success");
+                    }
+                } else if (nextEmpty !== -1) {
+                    App.state.activeSegment = nextEmpty;
+                    App.updateManipControlsVisibility();
+                    App.updateSegmentControls();
+                }
+            },
+
+            handleFileUpload: async (e, options = {}) => {
                 const file = e.target.files[0];
                 if (file) {
                     const base64 = await UTILS.toBase64(file);
@@ -4912,14 +5037,8 @@ export default {
 
                         // We need to know the multiplier for the current mode to get true aspect?
                         // Actually App.getFinalCanvasDimensions does this.
-                        let multW = 1; let multH = 1;
                         const mode = App.state.collageMode;
-                        if (mode === 2) multW = 2;
-                        else if (mode === 3) multW = 3;
-                        else if (mode === 4) { multW = 2; multH = 2; }
-                        else if (mode === 5) { multH = 2; }
-                        else if (mode === 6) { multH = 3; }
-                        else if (mode === 7) { multW = 2; multH = 2; }
+                        const { multW, multH } = App.getLayoutMultipliers(mode);
 
                         // But wait, slot.w is percentage of Final Width.
                         // So we just need Final Width / Final Height ratio?
@@ -4937,7 +5056,8 @@ export default {
                         const scaleH = slotPixelH / imgH;
                         const scale = Math.max(scaleW, scaleH);
 
-                        App.state.segments[App.state.activeSegment] = {
+                        const capturedIdx = App.state.activeSegment;
+                        App.state.segments[capturedIdx] = {
                             source: img,
                             sourceDataURL: base64,
                             isManipulatable: true,
@@ -4956,34 +5076,10 @@ export default {
                             App.state.captureBase = { width: BaseW, height: BaseH };
                         }
 
-                        // Auto-advance
-                        const total = layout.length;
-                        let allFilled = true;
-                        let nextEmpty = -1;
-                        for (let i = 0; i < total; i++) {
-                            if (!App.state.segments[i]) {
-                                allFilled = false;
-                                if (nextEmpty === -1) nextEmpty = i;
-                            }
-                        }
-
-                        if (allFilled) {
-                            if (App.state.collageMode === 1) {
-                                App.setEntryLoading(true, "Finishing...");
-                                requestAnimationFrame(() => App.finalizeCollage());
-                            } else {
-                                App.showToast("All segments captured. Tap Done when ready.", "success");
-                            }
-                        } else {
-                            if (nextEmpty !== -1) {
-                                App.state.activeSegment = nextEmpty;
-                            }
-                        }
-                        App.updateManipControlsVisibility();
-                        App.updateSegmentControls();
-                        App.scheduleEntryDraftSave();
+                        App.afterManualSegmentInsert(capturedIdx, options);
                     }
                 }
+                e.target.value = '';
             },
             renderSettingsStatus: (settings) => {
                 const statusEl = document.getElementById('connectionStatus');
