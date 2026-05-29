@@ -1,0 +1,517 @@
+/**
+ * Pet Tracker - Media Pipeline
+ * Camera capture, file upload, WebP conversion, and IndexedDB caching
+ */
+
+const Media = {
+    // Quality settings per spec
+    UPLOAD_QUALITY: 0.8,
+    PREVIEW_QUALITY: 0.5,
+    MAX_UPLOAD_DIMENSION: 2560,
+    MAX_PREVIEW_DIMENSION: 1280,
+
+    /**
+     * Process an image file for upload
+     * Returns: { upload: Blob, preview: Blob, originalName: string }
+     */
+    processImage: async (file) => {
+        const img = await Media.loadImage(file);
+
+        // Create upload version (webp, quality 0.8, max 2560px)
+        const uploadBlob = await Media.resizeAndConvert(
+            img,
+            Media.MAX_UPLOAD_DIMENSION,
+            Media.UPLOAD_QUALITY
+        );
+
+        // Create preview version (webp, quality 0.5, max 1280px)
+        const previewBlob = await Media.resizeAndConvert(
+            img,
+            Media.MAX_PREVIEW_DIMENSION,
+            Media.PREVIEW_QUALITY
+        );
+
+        return {
+            upload: uploadBlob,
+            preview: previewBlob,
+            originalName: file.name,
+            originalType: file.type,
+            originalSize: file.size,
+            uploadSize: uploadBlob.size,
+            previewSize: previewBlob.size
+        };
+    },
+
+    /**
+     * Load an image file into an HTMLImageElement
+     * Note: Revokes object URL after load to prevent memory leaks
+     */
+    loadImage: (file) => {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            const objectUrl = URL.createObjectURL(file);
+            img.onload = () => {
+                URL.revokeObjectURL(objectUrl);
+                resolve(img);
+            };
+            img.onerror = (e) => {
+                URL.revokeObjectURL(objectUrl);
+                reject(e);
+            };
+            img.src = objectUrl;
+        });
+    },
+
+    /**
+     * Resize and convert image to WebP
+     */
+    resizeAndConvert: async (img, maxDimension, quality) => {
+        let { width, height } = img;
+
+        // Scale down if needed
+        if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+                height = Math.round((height / width) * maxDimension);
+                width = maxDimension;
+            } else {
+                width = Math.round((width / height) * maxDimension);
+                height = maxDimension;
+            }
+        }
+
+        // Draw to canvas
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Convert to WebP
+        return new Promise((resolve) => {
+            canvas.toBlob(resolve, 'image/webp', quality);
+        });
+    },
+
+    /**
+     * Process a video file (just extract poster frame)
+     */
+    processVideo: async (file) => {
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+
+        return new Promise((resolve, reject) => {
+            video.onloadeddata = async () => {
+                // Seek to 1 second or midpoint
+                video.currentTime = Math.min(1, video.duration / 2);
+            };
+
+            video.onseeked = async () => {
+                // Capture poster frame
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.min(video.videoWidth, Media.MAX_PREVIEW_DIMENSION);
+                canvas.height = Math.round((video.videoHeight / video.videoWidth) * canvas.width);
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                const posterBlob = await new Promise(r =>
+                    canvas.toBlob(r, 'image/webp', Media.PREVIEW_QUALITY)
+                );
+
+                URL.revokeObjectURL(video.src);
+
+                resolve({
+                    poster: posterBlob,
+                    originalName: file.name,
+                    originalType: file.type,
+                    originalSize: file.size,
+                    duration: video.duration
+                });
+            };
+
+            video.onerror = reject;
+            video.src = URL.createObjectURL(file);
+        });
+    },
+
+    /**
+     * Check if file size is within Notion limits
+     */
+    checkFileSize: (file, isPaidPlan = false) => {
+        const limitMb = typeof isPaidPlan === 'number'
+            ? isPaidPlan
+            : (isPaidPlan ? 20 : 5);
+        const limitBytes = limitMb * 1024 * 1024;
+
+        return {
+            ok: file.size <= limitBytes,
+            size: file.size,
+            limit: limitBytes,
+            limitMb,
+            exceededBy: Math.max(0, file.size - limitBytes)
+        };
+    },
+
+    /**
+     * Resolve and sanitize the configured upload cap (MiB)
+     * Allowed caps: 5 (free) or 20 (paid soft cap).
+     */
+    getUploadCapMb: (configuredCap = 5) => {
+        const cap = Number(configuredCap);
+        return cap >= 20 ? 20 : 5;
+    },
+
+    /**
+     * Store media in IndexedDB with metadata
+     * Has hard limit guard to prevent infinite retry loops for oversized blobs
+     */
+    storeLocal: async (id, blob, metadata = {}, _retryCount = 0) => {
+        const MAX_RETRIES = 3;
+        const MAX_SINGLE_BLOB_SIZE = 50 * 1024 * 1024; // 50MB hard limit per blob
+
+        // Hard guard: skip cache for blobs larger than practical limit
+        if (blob.size > MAX_SINGLE_BLOB_SIZE) {
+            console.warn(`[Media] Blob ${id} (${Math.round(blob.size / 1024 / 1024)}MB) exceeds max cache size, skipping local storage`);
+            return false;
+        }
+
+        try {
+            await PetTracker.MediaStore.set(id, blob, metadata);
+            console.log(`[Media] Stored ${id} (${Math.round(blob.size / 1024)}KB)`);
+            return true;
+        } catch (e) {
+            if (e.isQuotaExceeded && _retryCount < MAX_RETRIES) {
+                console.warn(`[Media] Storage quota exceeded, evicting old media (retry ${_retryCount + 1}/${MAX_RETRIES})`);
+                await PetTracker.MediaStore.evictIfNeeded(blob.size, metadata);
+                return Media.storeLocal(id, blob, metadata, _retryCount + 1);
+            }
+            if (_retryCount >= MAX_RETRIES) {
+                console.error(`[Media] Failed to store ${id} after ${MAX_RETRIES} retries, skipping`);
+                return false;
+            }
+            throw e;
+        }
+    },
+
+    /**
+     * Get media from local cache
+     */
+    getLocal: async (id) => {
+        const blob = await PetTracker.MediaStore.get(id);
+        if (blob) {
+            return URL.createObjectURL(blob);
+        }
+        return null;
+    },
+
+    /**
+     * Create placeholder for evicted media
+     */
+    createPlaceholder: () => {
+        const svg = `
+            <svg width="200" height="150" xmlns="http://www.w3.org/2000/svg">
+                <rect width="100%" height="100%" fill="#d4c8b8"/>
+                <text x="50%" y="40%" text-anchor="middle" fill="#6b6357" font-family="JetBrains Mono, monospace" font-size="10">
+                    MEDIA NOT STORED LOCALLY
+                </text>
+                <text x="50%" y="55%" text-anchor="middle" fill="#6b6357" font-family="JetBrains Mono, monospace" font-size="8">
+                    due to space constraints
+                </text>
+            </svg>
+        `;
+        return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+    },
+
+    /**
+     * Open camera for capture
+     */
+    openCamera: async (type = 'image') => {
+        return new Promise((resolve, reject) => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = type === 'video' ? 'video/*' : 'image/*';
+            input.capture = 'environment';
+
+            input.onchange = (e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                    resolve(file);
+                } else {
+                    reject(new Error('No file selected'));
+                }
+            };
+
+            input.click();
+        });
+    },
+
+    /**
+     * Open file picker
+     */
+    openFilePicker: async (accept = 'image/*,video/*', multiple = true) => {
+        return new Promise((resolve, reject) => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = accept;
+            input.multiple = multiple;
+
+            input.onchange = (e) => {
+                const files = Array.from(e.target.files || []);
+                if (files.length > 0) {
+                    resolve(files);
+                } else {
+                    reject(new Error('No files selected'));
+                }
+            };
+
+            input.click();
+        });
+    },
+
+    /**
+     * Process multiple files and return processed results
+     */
+    processFiles: async (files, onProgress = null) => {
+        const results = [];
+        let processed = 0;
+
+        for (const file of files) {
+            try {
+                let result;
+                if (file.type.startsWith('image/')) {
+                    result = await Media.processImage(file);
+                    result.type = 'image';
+                } else if (file.type.startsWith('video/')) {
+                    result = await Media.processVideo(file);
+                    result.type = 'video';
+                    // Warn about large videos
+                    if (file.size > 50 * 1024 * 1024) {
+                        result.warning = 'Video is large. Consider trimming before upload.';
+                    }
+                } else {
+                    result = {
+                        type: 'other',
+                        originalName: file.name,
+                        originalSize: file.size,
+                        file
+                    };
+                }
+
+                results.push(result);
+                processed++;
+
+                if (onProgress) {
+                    onProgress(processed, files.length);
+                }
+            } catch (e) {
+                console.error(`[Media] Error processing ${file.name}:`, e);
+                results.push({
+                    error: e.message,
+                    originalName: file.name
+                });
+            }
+        }
+
+        return results;
+    },
+
+    /**
+     * Upload to Notion (via proxy)
+     */
+    uploadToNotion: async (blob, filename) => {
+        const settings = PetTracker.Settings.get();
+
+        // Check size limit
+        const limitMb = Media.getUploadCapMb(settings.uploadCapMb);
+        const check = Media.checkFileSize(blob, limitMb);
+
+        if (!check.ok) {
+            throw new Error(`File exceeds ${check.limitMb}MB limit`);
+        }
+
+        // Get upload URL from Notion
+        const uploadInfo = await PetTracker.API.getFileUploadUrl(filename, blob.type);
+
+        if (!uploadInfo.upload_url) {
+            throw new Error('Failed to get upload URL');
+        }
+
+        let notionUploadEndpoint = false;
+        try {
+            const parsed = new URL(uploadInfo.upload_url);
+            notionUploadEndpoint = /(^|\.)api\.notion\.com$/i.test(parsed.hostname) &&
+                /\/v1\/file_uploads\/.+\/send$/i.test(parsed.pathname);
+        } catch (_) {
+            notionUploadEndpoint = false;
+        }
+
+        if (notionUploadEndpoint) {
+            await PetTracker.API.uploadFileContent(uploadInfo.upload_url, blob, filename || 'upload.bin');
+        } else {
+            const uploadRes = await fetch(uploadInfo.upload_url, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': blob.type
+                },
+                body: blob
+            });
+
+            if (!uploadRes.ok) {
+                throw new Error('Upload failed');
+            }
+        }
+
+        return {
+            id: uploadInfo.id || null,
+            url: uploadInfo.url,
+            expiresAt: uploadInfo.expiry_time
+        };
+    },
+
+    /**
+     * Generate a unique media ID
+     */
+    generateId: () => {
+        return `media_${PetTracker.generateId()}`;
+    },
+
+    /**
+     * Create a thumbnail preview URL from a File object
+     * Returns object URL for images, poster frame for videos
+     */
+    createThumbnailPreview: async (file) => {
+        if (file.type.startsWith('image/')) {
+            return URL.createObjectURL(file);
+        } else if (file.type.startsWith('video/')) {
+            try {
+                const result = await Media.processVideo(file);
+                if (result.poster) {
+                    return URL.createObjectURL(result.poster);
+                }
+            } catch (e) {
+                console.warn('[Media] Failed to create video thumbnail:', e);
+            }
+            return null;
+        }
+        return null;
+    },
+
+    /**
+     * Process and store media from File objects (handles share target files)
+     * Returns array of { id, type, previewUrl, ... }
+     */
+    processAndStoreMedia: async (files, onProgress = null) => {
+        const results = [];
+        let processed = 0;
+
+        for (const file of files) {
+            try {
+                const id = Media.generateId();
+                let result;
+
+                if (file.type.startsWith('image/')) {
+                    const processed = await Media.processImage(file);
+                    const uploadStored = await Media.storeLocal(
+                        `${id}_upload`,
+                        processed.upload,
+                        { role: 'upload', evictable: false, purpose: 'sync-upload' }
+                    );
+                    const previewStored = await Media.storeLocal(
+                        `${id}_preview`,
+                        processed.preview,
+                        { role: 'preview', evictable: true, purpose: 'ui-preview' }
+                    );
+                    if (!uploadStored) {
+                        throw new Error('Image could not be cached locally for upload. Free up storage and retry.');
+                    }
+                    // Create preview URL - caller should revoke when done
+                    const previewUrl = URL.createObjectURL(processed.preview);
+                    result = {
+                        id,
+                        type: 'image',
+                        previewUrl,
+                        _revokeUrl: previewUrl, // Mark for revocation
+                        originalName: file.name,
+                        uploadSize: processed.uploadSize,
+                        warning: !previewStored ? 'Preview cache is full. Image will still upload when synced.' : null
+                    };
+                } else if (file.type.startsWith('video/')) {
+                    const processed = await Media.processVideo(file);
+                    const uploadStored = await Media.storeLocal(
+                        `${id}_upload`,
+                        file,
+                        { role: 'upload', evictable: false, purpose: 'sync-upload' }
+                    );
+                    const posterStored = await Media.storeLocal(
+                        `${id}_poster`,
+                        processed.poster,
+                        { role: 'preview', evictable: true, purpose: 'ui-preview' }
+                    );
+                    if (!uploadStored) {
+                        throw new Error('Video could not be cached locally for upload. Trim it and retry.');
+                    }
+                    // Create preview URL - caller should revoke when done
+                    const previewUrl = URL.createObjectURL(processed.poster);
+                    result = {
+                        id,
+                        type: 'video',
+                        previewUrl,
+                        _revokeUrl: previewUrl, // Mark for revocation
+                        originalName: file.name,
+                        originalSize: file.size,
+                        duration: processed.duration,
+                        warning: file.size > 50 * 1024 * 1024
+                            ? 'Video is large. Consider trimming before upload.'
+                            : (!posterStored ? 'Preview cache is full. Video will still upload when synced.' : null)
+                    };
+                } else {
+                    const uploadStored = await Media.storeLocal(
+                        `${id}_upload`,
+                        file,
+                        { role: 'upload', evictable: false, purpose: 'sync-upload' }
+                    );
+                    if (!uploadStored) {
+                        throw new Error('File could not be cached locally for upload. Free up storage and retry.');
+                    }
+                    result = {
+                        id,
+                        type: 'file',
+                        originalName: file.name,
+                        originalSize: file.size,
+                        warning: null
+                    };
+                }
+
+                results.push(result);
+                processed++;
+
+                if (onProgress) {
+                    onProgress(processed, files.length);
+                }
+            } catch (e) {
+                console.error(`[Media] Error processing ${file.name}:`, e);
+                results.push({
+                    error: e.message,
+                    originalName: file.name
+                });
+            }
+        }
+
+        return results;
+    },
+
+    /**
+     * Revoke object URLs to free memory
+     */
+    revokePreviewUrls: (urls) => {
+        urls.forEach(url => {
+            if (url && url.startsWith('blob:')) {
+                URL.revokeObjectURL(url);
+            }
+        });
+    }
+};
+
+// Export
+window.PetTracker = window.PetTracker || {};
+window.PetTracker.Media = Media;
+window.Media = Media;
