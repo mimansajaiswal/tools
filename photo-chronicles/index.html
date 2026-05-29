@@ -192,7 +192,8 @@
         }
 
         /* Disable browser default touch behaviors on viewfinder canvas */
-        #viewfinder {
+        #viewfinder,
+        #segEditPreview {
             touch-action: none;
         }
 
@@ -870,6 +871,13 @@ export default {
                     class="text-charcoal/70 bg-white/80 px-2 py-1 rounded text-[10px] font-mono uppercase tracking-widest hidden shadow-sm">
                     Segment <span id="segCurrent">1</span>/<span id="segTotal">1</span>
                 </div>
+                <div id="segmentStrip"
+                    class="hidden bg-black/45 backdrop-blur-md px-3 py-2 rounded-full items-center gap-2 shadow-sm">
+                </div>
+                <div id="cameraConfigSummary"
+                    class="bg-white/80 text-charcoal/70 px-2 py-1 rounded text-[9px] font-display uppercase tracking-wider shadow-sm">
+                    Diary camera settings
+                </div>
 
                 <!-- Main Controls Row -->
                 <div class="flex items-center justify-center gap-2 sm:gap-4 md:gap-6">
@@ -886,18 +894,40 @@ export default {
                         <i data-lucide="refresh-ccw" class="w-5 h-5 sm:w-6 sm:h-6"></i>
                     </button>
 
-                    <!-- 3. Insert Image (File Input) -->
+                    <!-- 3. Phone Camera (native high-quality capture) -->
+                    <button onclick="App.openPhoneCameraCapture()" aria-label="Use phone camera"
+                        class="bg-black/40 backdrop-blur-md p-2 sm:p-3 rounded-full hover:bg-black/60 text-white transition"
+                        title="Use phone camera for higher quality, then align after capture">
+                        <i data-lucide="smartphone" class="w-5 h-5 sm:w-6 sm:h-6"></i>
+                    </button>
+                    <input type="file" id="phoneCameraInput" accept="image/*" capture="environment" class="hidden"
+                        onchange="App.handleFileUpload(event, { alignAfterCapture: true })">
+
+                    <!-- 4. Gallery/File Picker -->
+                    <button onclick="App.openGalleryPicker()" aria-label="Choose from gallery"
+                        class="bg-black/40 backdrop-blur-md p-2 sm:p-3 rounded-full hover:bg-black/60 text-white transition"
+                        title="Choose an existing image">
+                        <i data-lucide="image" class="w-5 h-5 sm:w-6 sm:h-6"></i>
+                    </button>
+                    <input type="file" id="galleryInput" accept="image/*" class="hidden"
+                        onchange="App.handleFileUpload(event)">
+
+                    <!-- Legacy input kept for older cached UI paths -->
                     <label aria-label="Insert image"
-                        class="cursor-pointer bg-black/40 backdrop-blur-md p-2 sm:p-3 rounded-full hover:bg-black/60 text-white transition">
+                        class="hidden cursor-pointer bg-black/40 backdrop-blur-md p-2 sm:p-3 rounded-full hover:bg-black/60 text-white transition">
                         <i data-lucide="image" class="w-5 h-5 sm:w-6 sm:h-6"></i>
                         <input type="file" id="fileInput" accept="image/*" class="hidden"
                             onchange="App.handleFileUpload(event)">
                     </label>
 
-                    <!-- 4. Capture Button (Center) -->
+                    <!-- 5. Capture Button (Center) -->
                     <button onclick="App.captureSegment()" id="captureBtn" aria-label="Capture segment"
                         class="w-14 h-14 sm:w-16 sm:h-16 rounded-full border-4 border-white/80 bg-charcoal/60 shadow-[0_0_12px_rgba(0,0,0,0.5)] flex items-center justify-center hover:bg-black/70 transition active:scale-95 backdrop-blur-sm">
                         <div class="w-10 h-10 sm:w-12 sm:h-12 bg-white rounded-full shadow-inner"></div>
+                    </button>
+                    <button onclick="App.doneCapturingSegments()" id="doneSegmentsBtn" aria-label="Finish collage"
+                        class="hidden bg-dull-purple backdrop-blur-md p-2 sm:p-3 rounded-full hover:bg-dull-purple-hover text-white transition disabled:opacity-40 disabled:cursor-not-allowed">
+                        <i data-lucide="check" class="w-5 h-5 sm:w-6 sm:h-6"></i>
                     </button>
 
                     <!-- 5. Layout Button (Grid Mode) -->
@@ -1020,6 +1050,10 @@ export default {
                         </div>
                     </div>
                     <div class="flex justify-center gap-2">
+                        <button onclick="App.replaceActivePreviewSegment()"
+                            class="text-xs bg-dull-purple text-white-linen px-4 py-2 hover:bg-dull-purple-hover flex items-center gap-2 transition font-display font-medium">
+                            <i data-lucide="replace" class="w-3 h-3"></i> Replace Segment
+                        </button>
                         <button onclick="App.retakeAll()"
                             class="text-xs bg-muted-pink text-white-linen px-4 py-2 hover:bg-muted-pink-dim flex items-center gap-2 transition font-display font-medium">
                             <i data-lucide="refresh-cw" class="w-3 h-3"></i> Retake All
@@ -1104,6 +1138,10 @@ export default {
 
                         <!-- Action buttons -->
                         <div class="flex gap-2 pt-2 border-t border-oatmeal-dark">
+                            <button onclick="App.undoEditSegment()"
+                                class="flex-1 p-2 bg-oatmeal hover:bg-oatmeal-dark transition text-xs font-display font-medium flex items-center justify-center gap-1">
+                                <i data-lucide="undo-2" class="w-3 h-3"></i> Undo
+                            </button>
                             <button onclick="App.resetEditSegment()"
                                 class="flex-1 p-2 bg-oatmeal hover:bg-oatmeal-dark transition text-xs font-display font-medium flex items-center justify-center gap-1">
                                 <i data-lucide="rotate-ccw" class="w-3 h-3"></i> Reset
@@ -1168,7 +1206,10 @@ export default {
                 </div>
 
                 <!-- Save Button -->
-                <div class="pt-4 flex justify-end">
+                <div class="pt-4 flex items-center justify-between gap-3">
+                    <div id="draftStatus" class="text-[10px] font-display uppercase tracking-wider text-earth-metal/50">
+                        Draft idle
+                    </div>
                     <button onclick="App.saveEntry()" id="saveEntryBtn" disabled
                         class="bg-charcoal hover:bg-dull-purple disabled:opacity-50 disabled:cursor-not-allowed text-white-linen px-8 py-3 transition-colors flex items-center justify-center gap-2 text-sm font-display font-semibold">
                         <span>Save Entry</span>
@@ -1481,6 +1522,24 @@ export default {
                     localStorage.removeItem('chronicles_last_diary');
                 }
             },
+            getEntryDraftKey: (diaryId) => `chronicles_entry_draft:${diaryId}`,
+            getEntryDraft: (diaryId) => {
+                if (!diaryId) return null;
+                try {
+                    const raw = localStorage.getItem(Storage.getEntryDraftKey(diaryId));
+                    return raw ? JSON.parse(raw) : null;
+                } catch (e) {
+                    return null;
+                }
+            },
+            setEntryDraft: (diaryId, draft) => {
+                if (!diaryId) return;
+                localStorage.setItem(Storage.getEntryDraftKey(diaryId), JSON.stringify(draft));
+            },
+            clearEntryDraft: (diaryId) => {
+                if (!diaryId) return;
+                localStorage.removeItem(Storage.getEntryDraftKey(diaryId));
+            },
 
             // Cache for valid Notion data sources
             dataSourceCachePrefix: 'chronicles_ds_cache:',
@@ -1688,7 +1747,32 @@ export default {
                 const entry = diary?.entries.find(e => e.id === entryId);
                 if (entry) {
                     entry.synced = status;
+                    entry.syncStatus = status ? 'uploaded' : (entry.syncStatus || 'local');
+                    if (status) entry.syncError = null;
                     if (notionId) entry.notionId = notionId;
+                    Storage.setData(data);
+                }
+            },
+            updateEntryLocalSyncState: (diaryId, entryId, status, error = null) => {
+                const data = Storage.getData();
+                const diary = data.find(d => d.id === diaryId);
+                const entry = diary?.entries.find(e => e.id === entryId);
+                if (entry) {
+                    entry.syncStatus = status;
+                    entry.syncError = error;
+                    if (status === 'failed') entry.synced = false;
+                    Storage.setData(data);
+                }
+            },
+            updateEntryUploadAsset: (diaryId, entryId, uploadKey, uploadDataURL = null) => {
+                const data = Storage.getData();
+                const diary = data.find(d => d.id === diaryId);
+                const entry = diary?.entries.find(e => e.id === entryId);
+                if (entry) {
+                    entry.uploadKey = uploadKey || null;
+                    entry.uploadDataURL = uploadDataURL || null;
+                    entry.uploadPending = false;
+                    entry.syncStatus = entry.synced ? 'uploaded' : 'local';
                     Storage.setData(data);
                 }
             },
@@ -1926,7 +2010,7 @@ export default {
                     .filter((diary) => {
                         const pendingEntries = Array.isArray(diary.pendingEntries) && diary.pendingEntries.length > 0;
                         const pendingDeletes = Array.isArray(diary.pendingDeleteOps) && diary.pendingDeleteOps.length > 0;
-                        const unsynced = (diary.entries || []).some((entry) => !entry.synced && !entry.deletedLocally);
+                        const unsynced = (diary.entries || []).some((entry) => !entry.synced && !entry.deletedLocally && !entry.uploadPending);
                         return pendingEntries || pendingDeletes || unsynced;
                     })
                     .map((diary) => diary.id);
@@ -2005,6 +2089,15 @@ export default {
                     await SyncManager.syncDiary(diaryId, { includePull: true, showUi: true });
                 });
             },
+            retryEntry: async (diaryId, entryId) => {
+                Storage.queuePendingEntry(diaryId, entryId);
+                Storage.updateEntryLocalSyncState(diaryId, entryId, 'local');
+                App.state.diaries = Storage.getData();
+                App.renderDiaryView();
+                await SyncManager.withSyncLock(async () => {
+                    await SyncManager.syncDiary(diaryId, { includePull: true, showUi: true });
+                });
+            },
             syncDiary: async (diaryId, options = {}) => {
                 if (!diaryId) return;
                 const includePull = options.includePull !== false;
@@ -2012,6 +2105,11 @@ export default {
 
                 let diary = Storage.getData().find(d => d.id === diaryId);
                 if (!diary || !diary.dataSourceId) return;
+                const settings = Storage.getSettings();
+                if (!settings.workerUrl || !settings.authToken) {
+                    if (showUi) SyncManager.updateUI('error');
+                    return;
+                }
                 if (!navigator.onLine) {
                     if (showUi) SyncManager.updateUI('offline');
                     return;
@@ -2031,8 +2129,8 @@ export default {
                     const pendingIds = Storage.getPendingEntries(diaryId);
                     const pendingEntries = pendingIds
                         .map((id) => diary.entries.find((e) => e.id === id))
-                        .filter((entry) => entry && !entry.deletedLocally);
-                    const unsynced = (diary.entries || []).filter((entry) => !entry.synced && !entry.deletedLocally);
+                        .filter((entry) => entry && !entry.deletedLocally && !entry.uploadPending);
+                    const unsynced = (diary.entries || []).filter((entry) => !entry.synced && !entry.deletedLocally && !entry.uploadPending);
                     const pushQueue = [];
                     const pushSeen = new Set();
                     for (const item of [...pendingEntries, ...unsynced]) {
@@ -2054,6 +2152,7 @@ export default {
                             entry.clientEntryId = generatedClientId;
                         }
                         try {
+                            Storage.updateEntryLocalSyncState(diaryId, entry.id, 'syncing');
                             const notionId = await SyncManager.pushEntryToNotion(diary.dataSourceId, entry);
                             Storage.updateEntrySyncStatus(diaryId, entry.id, true, notionId);
                             Storage.clearPendingEntry(diaryId, entry.id);
@@ -2061,6 +2160,7 @@ export default {
                         } catch (err) {
                             console.error("Failed to push entry", entry, err);
                             Storage.queuePendingEntry(diaryId, entry.id);
+                            Storage.updateEntryLocalSyncState(diaryId, entry.id, 'failed', err?.message || 'Upload failed');
                             SyncManager.scheduleRetry(diaryId);
                             if (showUi) {
                                 App.showToast(`Sync failed for entry "${entry.title}".`, "error");
@@ -2374,13 +2474,22 @@ export default {
                 imageUrlCache: new Map(),
                 isEntryModalOpen: false,
                 drawLoopHandle: null,
-                entryLoading: false
+                entryLoading: false,
+                viewWorld: { width: 0, height: 0 },
+                draftSaveTimer: null,
+                pendingHighResEntry: null,
+                segmentEditUndo: null,
+                segmentEditReturn: null,
+                editPointers: new Map(),
+                editPrevPinchDist: 0,
+                editPrevPinchCenter: null
             },
             getDiaryCameraConfig: (diary) => {
                 const s = Storage.getSettings();
                 const defaults = {
                     facingMode: 'environment',
                     mirrorVideo: false,
+                    orientation: s.orientation || 'landscape',
                     collageMode: s.collageMode || 1,
                     ghostOpacity: s.ghostOpacity || 0.3,
                     ghostMode: false
@@ -2390,6 +2499,7 @@ export default {
                 return {
                     facingMode: cfg.facingMode || defaults.facingMode,
                     mirrorVideo: typeof cfg.mirrorVideo === 'boolean' ? cfg.mirrorVideo : defaults.mirrorVideo,
+                    orientation: cfg.orientation || defaults.orientation,
                     collageMode: Number(cfg.collageMode) || defaults.collageMode,
                     ghostOpacity: typeof cfg.ghostOpacity === 'number' ? cfg.ghostOpacity : defaults.ghostOpacity,
                     ghostMode: typeof cfg.ghostMode === 'boolean' ? cfg.ghostMode : defaults.ghostMode
@@ -2399,9 +2509,17 @@ export default {
                 const cfg = App.getDiaryCameraConfig(diary);
                 App.state.facingMode = cfg.facingMode;
                 App.state.mirrorVideo = cfg.mirrorVideo;
+                App.state.orientation = cfg.orientation;
                 App.state.ghostOpacity = cfg.ghostOpacity;
                 App.state.ghostMode = cfg.ghostMode;
+                const oBtn = document.getElementById('orientationBtn');
+                if (oBtn) {
+                    const iconName = App.state.orientation === 'landscape' ? 'rectangle-horizontal' : 'rectangle-vertical';
+                    oBtn.innerHTML = `<i data-lucide="${iconName}" class="w-6 h-6"></i>`;
+                    lucide.createIcons();
+                }
                 App.setCollageMode(cfg.collageMode);
+                App.updateCameraConfigSummary();
             },
             persistActiveDiaryCameraConfig: (config) => {
                 if (!App.state.activeDiaryId) return;
@@ -2411,6 +2529,22 @@ export default {
             tagMatch: (list, tag) => list.find(t => UTILS.normalizeTag(t) === UTILS.normalizeTag(tag)),
             hasTag: (list, tag) => !!App.tagMatch(list, tag),
             getVisibleEntries: (diary) => (diary?.entries || []).filter((entry) => !entry.deletedLocally),
+            getEntrySyncMeta: (entry) => {
+                const status = entry.syncStatus || (entry.synced ? 'uploaded' : 'local');
+                if (status === 'uploaded' || entry.synced) {
+                    return { label: 'Uploaded to Notion', color: 'bg-dull-purple text-white-linen', dot: 'bg-dull-purple' };
+                }
+                if (status === 'failed') {
+                    return { label: 'Upload failed', color: 'bg-red-100 text-red-700', dot: 'bg-red-500', retry: true };
+                }
+                if (status === 'syncing') {
+                    return { label: 'Uploading', color: 'bg-dull-purple/10 text-dull-purple', dot: 'bg-dull-purple' };
+                }
+                if (status === 'preparing' || entry.uploadPending) {
+                    return { label: 'Preparing full-res', color: 'bg-amber-100 text-amber-800', dot: 'bg-amber-500' };
+                }
+                return { label: 'Saved locally', color: 'bg-oatmeal text-earth-metal', dot: 'bg-muted-pink' };
+            },
             getUploadCapBytes: () => {
                 const s = Storage.getSettings();
                 const mb = Number(s.uploadCapMb) || 5;
@@ -2459,6 +2593,76 @@ export default {
                     H = Math.max(1, Math.round(H * scale));
                 }
                 return { width: W, height: H };
+            },
+            getLayoutMultipliers: (mode = App.state.collageMode) => {
+                if (mode === 2) return { multW: 2, multH: 1 };
+                if (mode === 3) return { multW: 3, multH: 1 };
+                if (mode === 4) return { multW: 2, multH: 2 };
+                if (mode === 5) return { multW: 1, multH: 2 };
+                if (mode === 6) return { multW: 1, multH: 3 };
+                if (mode === 7) return { multW: 2, multH: 2 };
+                return { multW: 1, multH: 1 };
+            },
+            getWorldDimensions: (mode = App.state.collageMode, baseDims = null) => {
+                const base = baseDims || App.state.captureBase || App.getBaseDimensions(
+                    App.state.videoDims.width,
+                    App.state.videoDims.height
+                );
+                const { multW, multH } = App.getLayoutMultipliers(mode);
+                return App.getFinalCanvasDimensions(base.width, base.height, multW, multH);
+            },
+            getCanvasContentMetrics: (canvas, worldDims = null) => {
+                const rect = canvas.getBoundingClientRect();
+                const world = worldDims || App.state.viewWorld || { width: canvas.width, height: canvas.height };
+                const worldRatio = world.width && world.height ? world.width / world.height : 1;
+                const rectRatio = rect.width / rect.height;
+                let width = rect.width;
+                let height = rect.height;
+                let left = rect.left;
+                let top = rect.top;
+                if (rectRatio > worldRatio) {
+                    height = rect.height;
+                    width = height * worldRatio;
+                    left = rect.left + (rect.width - width) / 2;
+                } else {
+                    width = rect.width;
+                    height = width / worldRatio;
+                    top = rect.top + (rect.height - height) / 2;
+                }
+                return { left, top, width, height, worldWidth: world.width, worldHeight: world.height };
+            },
+            clientPointToWorld: (canvas, clientX, clientY) => {
+                const metrics = App.getCanvasContentMetrics(canvas);
+                return {
+                    x: ((clientX - metrics.left) / metrics.width) * metrics.worldWidth,
+                    y: ((clientY - metrics.top) / metrics.height) * metrics.worldHeight
+                };
+            },
+            getSlotForSegment: (mode, idx) => App.collageConfigs[mode]?.[idx] || null,
+            fitScaleForSlot: (sourceW, sourceH, slot, mode = App.state.collageMode, baseDims = null) => {
+                const dims = App.getWorldDimensions(mode, baseDims);
+                const slotPixelW = slot.w * dims.width;
+                const slotPixelH = slot.h * dims.height;
+                return Math.max(slotPixelW / sourceW, slotPixelH / sourceH);
+            },
+            resizeSegmentForSlot: (seg, oldSlot, newSlot, oldMode, newMode) => {
+                if (!seg?.isManipulatable || !oldSlot || !newSlot) return seg;
+                const oldBaseScale = seg.baseScale || 1;
+                const zoomRatio = seg.scale / oldBaseScale;
+                const newBaseScale = App.fitScaleForSlot(seg.width, seg.height, newSlot, newMode);
+                const oldDims = App.getWorldDimensions(oldMode);
+                const newDims = App.getWorldDimensions(newMode);
+                const oldSlotW = oldSlot.w * oldDims.width;
+                const oldSlotH = oldSlot.h * oldDims.height;
+                const newSlotW = newSlot.w * newDims.width;
+                const newSlotH = newSlot.h * newDims.height;
+                return {
+                    ...seg,
+                    x: oldSlotW ? seg.x * (newSlotW / oldSlotW) : seg.x,
+                    y: oldSlotH ? seg.y * (newSlotH / oldSlotH) : seg.y,
+                    scale: newBaseScale * zoomRatio,
+                    baseScale: newBaseScale
+                };
             },
             getVideoConstraints: () => {
                 const target = App.getTargetBaseDimensions();
@@ -2516,6 +2720,165 @@ export default {
                 const notes = document.getElementById('entryNotes')?.value?.trim() || '';
                 const hasSegments = Array.isArray(App.state.segments) && App.state.segments.some(Boolean);
                 return !!(App.state.capturedImage || hasSegments || App.state.currentTags.length || title || notes);
+            },
+            segmentToDraft: async (seg, idx) => {
+                if (!seg?.isManipulatable) return null;
+                const sourceData = seg.sourceDataURL || (() => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = seg.source.width;
+                    canvas.height = seg.source.height;
+                    canvas.getContext('2d').drawImage(seg.source, 0, 0);
+                    return canvas.toDataURL('image/webp', 0.88);
+                })();
+                const sourceKey = `draft_${App.state.activeDiaryId}_${idx}`;
+                if (ImageStore.isAvailable()) {
+                    await ImageStore.set(sourceKey, UTILS.dataURLtoBlob(sourceData));
+                    seg.sourceDataURL = null;
+                }
+                return {
+                    sourceKey: ImageStore.isAvailable() ? sourceKey : null,
+                    sourceDataURL: ImageStore.isAvailable() ? null : sourceData,
+                    x: seg.x,
+                    y: seg.y,
+                    scale: seg.scale,
+                    baseScale: seg.baseScale,
+                    rotation: seg.rotation,
+                    flipH: !!seg.flipH,
+                    flipV: !!seg.flipV,
+                    width: seg.width,
+                    height: seg.height
+                };
+            },
+            persistEntryDraftNow: async () => {
+                if (!App.state.isEntryModalOpen || !App.state.activeDiaryId || !App.hasUnsavedEntry()) return;
+                const segments = await Promise.all((App.state.segments || []).map((seg, idx) => App.segmentToDraft(seg, idx)));
+                Storage.setEntryDraft(App.state.activeDiaryId, {
+                    savedAt: UTILS.now(),
+                    title: document.getElementById('entryTitle')?.value || '',
+                    notes: document.getElementById('entryNotes')?.value || '',
+                    date: document.getElementById('entryDate')?.value || UTILS.toLocalISO(new Date()),
+                    tags: App.state.currentTags,
+                    orientation: App.state.orientation,
+                    collageMode: App.state.collageMode,
+                    activeSegment: App.state.activeSegment,
+                    captureBase: App.state.captureBase,
+                    segments
+                });
+                App.updateDraftStatus();
+            },
+            scheduleEntryDraftSave: () => {
+                const status = document.getElementById('draftStatus');
+                if (status && App.state.isEntryModalOpen) status.innerText = 'Saving draft...';
+                if (App.state.draftSaveTimer) clearTimeout(App.state.draftSaveTimer);
+                App.state.draftSaveTimer = setTimeout(() => {
+                    App.persistEntryDraftNow();
+                    App.state.draftSaveTimer = null;
+                }, 350);
+            },
+            loadDraftSegment: async (draftSeg) => {
+                if (!draftSeg) return null;
+                let source = draftSeg.sourceDataURL;
+                if (!source && draftSeg.sourceKey && ImageStore.isAvailable()) {
+                    const blob = await ImageStore.get(draftSeg.sourceKey);
+                    if (blob) source = URL.createObjectURL(blob);
+                }
+                if (!source) return null;
+                return await new Promise((resolve) => {
+                    const img = new Image();
+                    img.onload = () => resolve({
+                        source: img,
+                        sourceDataURL: draftSeg.sourceDataURL || null,
+                        isManipulatable: true,
+                        x: draftSeg.x || 0,
+                        y: draftSeg.y || 0,
+                        scale: draftSeg.scale || 1,
+                        baseScale: draftSeg.baseScale || 1,
+                        rotation: draftSeg.rotation || 0,
+                        flipH: !!draftSeg.flipH,
+                        flipV: !!draftSeg.flipV,
+                        width: draftSeg.width || img.width,
+                        height: draftSeg.height || img.height
+                    });
+                    img.onerror = () => resolve(null);
+                    img.src = source;
+                });
+            },
+            restoreEntryDraft: async () => {
+                const draft = Storage.getEntryDraft(App.state.activeDiaryId);
+                if (!draft) return false;
+                App.state.orientation = draft.orientation || App.state.orientation;
+                const orientationBtn = document.getElementById('orientationBtn');
+                if (orientationBtn) {
+                    const iconName = App.state.orientation === 'landscape' ? 'rectangle-horizontal' : 'rectangle-vertical';
+                    orientationBtn.innerHTML = `<i data-lucide="${iconName}" class="w-6 h-6"></i>`;
+                }
+                App.state.captureBase = draft.captureBase || null;
+                App.state.currentTags = Array.isArray(draft.tags) ? draft.tags : [];
+                App.setCollageMode(Number(draft.collageMode) || 1);
+                App.state.segments = await Promise.all((draft.segments || []).map(App.loadDraftSegment));
+                const firstEmpty = App.state.segments.findIndex(seg => !seg);
+                App.state.activeSegment = firstEmpty === -1 ? Math.min(draft.activeSegment || 0, App.state.segments.length - 1) : firstEmpty;
+                document.getElementById('entryTitle').value = draft.title || '';
+                document.getElementById('entryNotes').value = draft.notes || '';
+                document.getElementById('entryDate').value = draft.date || UTILS.toLocalISO(new Date());
+                App.renderTags();
+                App.updateManipControlsVisibility();
+                App.updateSegmentControls();
+                App.showToast("Restored unsaved entry draft.", "info");
+                return true;
+            },
+            updateDraftStatus: (label = 'Draft saved') => {
+                const status = document.getElementById('draftStatus');
+                if (status && App.state.isEntryModalOpen) status.innerText = label;
+            },
+            isCollageComplete: () => {
+                const layout = App.collageConfigs[App.state.collageMode] || [];
+                return layout.length > 0 && layout.every((_, idx) => !!App.state.segments[idx]);
+            },
+            updateSegmentControls: () => {
+                const layout = App.collageConfigs[App.state.collageMode] || [];
+                const total = layout.length;
+                const current = document.getElementById('segCurrent');
+                const totalEl = document.getElementById('segTotal');
+                if (current) current.innerText = Math.min(App.state.activeSegment + 1, total || 1);
+                if (totalEl) totalEl.innerText = total || 1;
+                const strip = document.getElementById('segmentStrip');
+                if (strip) {
+                    strip.classList.toggle('hidden', total <= 1);
+                    strip.classList.toggle('flex', total > 1);
+                    strip.innerHTML = layout.map((_, idx) => {
+                        const filled = !!App.state.segments[idx];
+                        const active = idx === App.state.activeSegment;
+                        const cls = active
+                            ? 'bg-white text-charcoal border-white'
+                            : filled
+                                ? 'bg-dull-purple text-white border-dull-purple'
+                                : 'bg-white/15 text-white border-white/30';
+                        return `<button onclick="App.selectSegment(${idx})" class="w-8 h-8 rounded-full border text-[10px] font-display font-semibold ${cls}" title="Segment ${idx + 1}">${idx + 1}</button>`;
+                    }).join('');
+                }
+                const doneBtn = document.getElementById('doneSegmentsBtn');
+                if (doneBtn) {
+                    doneBtn.classList.toggle('hidden', total <= 1);
+                    doneBtn.disabled = !App.isCollageComplete();
+                }
+                lucide.createIcons();
+            },
+            updateCameraConfigSummary: () => {
+                const el = document.getElementById('cameraConfigSummary');
+                if (!el) return;
+                const camera = App.state.facingMode === 'user' ? 'Front' : 'Back';
+                const mirror = App.state.facingMode === 'user' && App.state.mirrorVideo ? 'Mirror on' : 'Mirror off';
+                const ghost = App.state.ghostMode ? `Ghost ${Math.round(App.state.ghostOpacity * 100)}%` : 'Ghost off';
+                el.innerText = `${camera} / ${App.state.orientation} / ${document.getElementById('gridBtn')?.innerText || '1x'} / ${mirror} / ${ghost}`;
+            },
+            selectSegment: (idx) => {
+                const layout = App.collageConfigs[App.state.collageMode] || [];
+                if (idx < 0 || idx >= layout.length) return;
+                App.state.activeSegment = idx;
+                App.updateSegmentControls();
+                App.updateManipControlsVisibility();
+                App.scheduleEntryDraftSave();
             },
             startDrawLoop: () => {
                 if (App.state.drawLoopHandle) return;
@@ -2701,6 +3064,25 @@ export default {
                     }
                 });
 
+                ['entryTitle', 'entryDate', 'entryNotes'].forEach((id) => {
+                    const el = document.getElementById(id);
+                    if (el) el.addEventListener('input', App.scheduleEntryDraftSave);
+                });
+
+                document.addEventListener('visibilitychange', () => {
+                    if (document.hidden) {
+                        App.persistEntryDraftNow();
+                        App.stopDrawLoop();
+                    } else if (App.state.isEntryModalOpen) {
+                        const streamStopped = App.state.stream
+                            ? App.state.stream.getTracks().every(t => t.readyState === 'ended')
+                            : true;
+                        if (!App.state.stream || streamStopped) App.initCamera();
+                        App.startDrawLoop();
+                    }
+                });
+                window.addEventListener('pagehide', () => App.persistEntryDraftNow());
+
                 SyncManager.init();
             },
 
@@ -2833,7 +3215,10 @@ export default {
                     cameraConfig: {
                         facingMode: App.state.facingMode,
                         mirrorVideo: App.state.mirrorVideo,
-                        collageMode: App.state.collageMode
+                        orientation: App.state.orientation,
+                        collageMode: App.state.collageMode,
+                        ghostOpacity: App.state.ghostOpacity,
+                        ghostMode: App.state.ghostMode
                     }
                 };
                 Storage.saveDiary(newDiary);
@@ -2999,6 +3384,13 @@ export default {
                         : `<div class="w-full aspect-square bg-oatmeal flex items-center justify-center text-earth-metal/30"><i data-lucide="image-off"></i></div>`;
 
                     const dispTitle = entry.title || "Untitled";
+                    const syncMeta = App.getEntrySyncMeta(entry);
+                    const retryBtn = syncMeta.retry ? `
+                        <button onclick="event.stopPropagation(); SyncManager.retryEntry('${diary.id}', '${entry.id}')"
+                            class="mt-1 text-[9px] font-display uppercase tracking-wider text-red-700 hover:text-charcoal">
+                            Retry upload
+                        </button>
+                    ` : '';
 
                     const deleteBtn = `
                         <div class="absolute top-1 right-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10">
@@ -3014,9 +3406,13 @@ export default {
                         <div class="p-2.5 flex flex-col gap-1">
                             <div class="flex justify-between items-center">
                                 <span class="text-[9px] font-display text-earth-metal/50 truncate uppercase tracking-wide">${UTILS.formatDate(entry.date)}</span>
-                                <div class="w-1.5 h-1.5 ${entry.synced ? 'bg-dull-purple' : 'bg-muted-pink'}" title="${entry.synced ? 'Synced' : 'Local'}"></div>
+                                <div class="w-1.5 h-1.5 ${syncMeta.dot}" title="${syncMeta.label}"></div>
                             </div>
                             <h4 class="font-display font-semibold text-xs text-charcoal truncate leading-tight">${dispTitle}</h4>
+                            <div class="inline-flex w-fit px-1.5 py-0.5 text-[8px] font-display uppercase tracking-wider ${syncMeta.color}">
+                                ${syncMeta.label}
+                            </div>
+                            ${retryBtn}
                         </div>
                     `;
                     grid.appendChild(card);
@@ -3068,6 +3464,7 @@ export default {
                 document.getElementById('tagInput').value = '';
                 document.getElementById('saveEntryBtn').disabled = true;
                 document.getElementById('mirrorToggleBtn').classList.add('hidden');
+                App.updateDraftStatus('Draft idle');
 
                 document.getElementById('takenPhotoUI').classList.remove('flex');
                 document.getElementById('takenPhotoUI').classList.add('hidden');
@@ -3132,14 +3529,26 @@ export default {
                     document.getElementById('ghostSliderContainer').classList.add('hidden');
                 }
 
+                await App.restoreEntryDraft();
+                App.updateSegmentControls();
                 App.openModal('entryModal');
                 SyncManager.fetchTags(true);
             },
 
             setCollageMode: (mode) => {
+                const oldMode = App.state.collageMode;
+                const oldLayout = App.collageConfigs[oldMode] || [];
+                const oldSegments = App.state.segments || [];
+                const newLayout = App.collageConfigs[mode] || [];
+                const preservedSegments = new Array(newLayout.length).fill(null);
+                oldSegments.forEach((seg, idx) => {
+                    if (!seg || idx >= newLayout.length) return;
+                    preservedSegments[idx] = App.resizeSegmentForSlot(seg, oldLayout[idx], newLayout[idx], oldMode, mode);
+                });
                 App.state.collageMode = mode;
-                App.state.activeSegment = 0;
-                App.state.segments = [];
+                App.state.segments = preservedSegments;
+                const firstEmpty = preservedSegments.findIndex(seg => !seg);
+                App.state.activeSegment = firstEmpty === -1 ? 0 : firstEmpty;
                 App.persistActiveDiaryCameraConfig({ collageMode: mode });
                 document.querySelectorAll('.collage-btn').forEach(btn => {
                     btn.classList.add('bg-white/20', 'hover:bg-white/10');
@@ -3156,8 +3565,6 @@ export default {
                 const segInd = document.getElementById('segmentIndicator');
                 if (mode > 1) {
                     segInd.classList.remove('hidden');
-                    document.getElementById('segTotal').innerText = App.collageConfigs[mode].length;
-                    document.getElementById('segCurrent').innerText = 1;
                 } else {
                     segInd.classList.add('hidden');
                 }
@@ -3171,6 +3578,13 @@ export default {
                 if (mode === 6) label = "3x ↓";
                 if (mode === 7) label = "3x 1/2";
                 document.getElementById('gridBtn').innerText = label;
+                App.updateSegmentControls();
+                App.updateCameraConfigSummary();
+                App.updateManipControlsVisibility();
+                App.scheduleEntryDraftSave();
+                if (oldSegments.some(Boolean) && oldSegments.length > newLayout.length) {
+                    App.showToast(`Kept the first ${newLayout.length} segment${newLayout.length === 1 ? '' : 's'}.`, "info");
+                }
             },
 
             toggleCollageMenu: () => {
@@ -3191,12 +3605,14 @@ export default {
                 const s = Storage.getSettings();
                 s.orientation = next;
                 Storage.setSettings(s);
+                App.persistActiveDiaryCameraConfig({ orientation: next });
                 const btn = document.getElementById('orientationBtn');
                 if (btn) {
                     const iconName = next === 'landscape' ? 'rectangle-horizontal' : 'rectangle-vertical';
                     btn.innerHTML = `<i data-lucide="${iconName}" class="w-6 h-6"></i>`;
                     lucide.createIcons();
                 }
+                App.updateCameraConfigSummary();
             },
 
             pointers: new Map(),
@@ -3216,10 +3632,10 @@ export default {
                 cvs.setPointerCapture(e.pointerId);
                 App.state.pointers.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY, pointerId: e.pointerId });
 
-                // Find target segment
-                const rect = cvs.getBoundingClientRect();
-                const x = (e.clientX - rect.left) / rect.width;
-                const y = (e.clientY - rect.top) / rect.height;
+                const worldPoint = App.clientPointToWorld(cvs, e.clientX, e.clientY);
+                const world = App.state.viewWorld;
+                const x = world.width ? worldPoint.x / world.width : 0;
+                const y = world.height ? worldPoint.y / world.height : 0;
                 const layout = App.collageConfigs[App.state.collageMode];
 
                 // Check existing segments first
@@ -3228,7 +3644,7 @@ export default {
                 if (clickedIdx !== -1 && App.state.segments[clickedIdx]) {
                     App.state.interactionTarget = clickedIdx;
                     App.state.activeSegment = clickedIdx;
-                    document.getElementById('segCurrent').innerText = clickedIdx + 1;
+                    App.updateSegmentControls();
                     App.updateManipControlsVisibility();
                 } else {
                     App.state.interactionTarget = null;
@@ -3260,8 +3676,9 @@ export default {
 
                 const points = Array.from(App.state.pointers.values());
                 const cvs = document.getElementById('viewfinder');
-                const scaleX = cvs.width / cvs.clientWidth;
-                const scaleY = cvs.height / cvs.clientHeight;
+                const metrics = App.getCanvasContentMetrics(cvs);
+                const scaleX = metrics.worldWidth / metrics.width;
+                const scaleY = metrics.worldHeight / metrics.height;
 
                 if (points.length === 1) {
                     // Single finger pan
@@ -3275,18 +3692,36 @@ export default {
                     const dist = App.getDist(points[0], points[1]);
                     const angle = App.getAngle(points[0], points[1]);
                     const center = App.getCenter(points[0], points[1]);
+                    const centerWorld = App.clientPointToWorld(cvs, center.x, center.y);
+                    const slot = App.collageConfigs[App.state.collageMode][targetIdx];
+                    const slotCenterX = (slot.x + slot.w / 2) * metrics.worldWidth;
+                    const slotCenterY = (slot.y + slot.h / 2) * metrics.worldHeight;
+                    const anchorX = centerWorld.x - slotCenterX - seg.x;
+                    const anchorY = centerWorld.y - slotCenterY - seg.y;
 
                     // Zoom
                     if (App.state.prevPinchDist > 0) {
                         const scaleFactor = dist / App.state.prevPinchDist;
+                        const previousScale = seg.scale;
                         seg.scale *= scaleFactor;
                         // Clamp scale
                         seg.scale = Math.max(0.1, Math.min(seg.scale, 10));
+                        const appliedScaleFactor = seg.scale / previousScale;
+                        seg.x += anchorX * (1 - appliedScaleFactor);
+                        seg.y += anchorY * (1 - appliedScaleFactor);
                     }
 
                     // Rotate
                     const angleDelta = angle - App.state.prevPinchAngle;
                     seg.rotation += angleDelta;
+                    if (angleDelta) {
+                        const cos = Math.cos(angleDelta);
+                        const sin = Math.sin(angleDelta);
+                        const rotatedX = anchorX * cos - anchorY * sin;
+                        const rotatedY = anchorX * sin + anchorY * cos;
+                        seg.x += anchorX - rotatedX;
+                        seg.y += anchorY - rotatedY;
+                    }
 
                     // Pan (two-finger drag)
                     if (App.state.prevPinchCenter) {
@@ -3299,9 +3734,6 @@ export default {
                     App.state.prevPinchDist = dist;
                     App.state.prevPinchAngle = angle;
                     App.state.prevPinchCenter = center;
-
-                    // Update UI sliders to reflect changes
-                    App.updateManipControlsVisibility();
                 }
             },
 
@@ -3316,6 +3748,7 @@ export default {
                     App.state.interactionTarget = null;
                     App.state.lastPointerPos = null;
                     App.updateManipControlsVisibility();
+                    App.scheduleEntryDraftSave();
                 }
             },
 
@@ -3365,6 +3798,7 @@ export default {
                         btn.classList.remove('bg-white/40');
                         btn.classList.add('bg-black/40');
                     }
+                    App.updateCameraConfigSummary();
                 } catch (e) {
                     console.error("Camera init failed", e);
                     App.showToast("Camera access failed. Check permissions or use file upload.", "error");
@@ -3381,22 +3815,29 @@ export default {
                 const ctx = cvs.getContext('2d');
                 const mode = App.state.collageMode;
                 const baseDims = App.getBaseDimensions(video.videoWidth || App.state.videoDims.width, video.videoHeight || App.state.videoDims.height);
-                let multW = 1;
-                let multH = 1;
-                if (mode === 2) multW = 2;
-                else if (mode === 3) multW = 3;
-                else if (mode === 4) { multW = 2; multH = 2; }
-                else if (mode === 5) { multH = 2; }
-                else if (mode === 6) { multH = 3; }
-                else if (mode === 7) { multW = 2; multH = 2; }
+                const { multW, multH } = App.getLayoutMultipliers(mode);
                 const dims = App.getFinalCanvasDimensions(baseDims.width, baseDims.height, multW, multH);
                 const W = dims.width;
                 const H = dims.height;
-                if (cvs.width !== W || cvs.height !== H) {
-                    cvs.width = W;
-                    cvs.height = H;
+                App.state.viewWorld = { width: W, height: H };
+                const metrics = App.getCanvasContentMetrics(cvs, dims);
+                const dpr = window.devicePixelRatio || 1;
+                const maxPreviewEdge = 1600;
+                const previewScale = Math.min(
+                    dpr,
+                    maxPreviewEdge / Math.max(1, metrics.width),
+                    maxPreviewEdge / Math.max(1, metrics.height)
+                );
+                const canvasW = Math.max(1, Math.round(metrics.width * previewScale));
+                const canvasH = Math.max(1, Math.round(metrics.height * previewScale));
+                if (cvs.width !== canvasW || cvs.height !== canvasH) {
+                    cvs.width = canvasW;
+                    cvs.height = canvasH;
                 }
-                ctx.clearRect(0, 0, W, H);
+                const viewScale = canvasW / W;
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                ctx.clearRect(0, 0, canvasW, canvasH);
+                ctx.setTransform(viewScale, 0, 0, viewScale, 0, 0);
                 const layout = App.collageConfigs[App.state.collageMode];
                 if (App.state.ghostMode && App.state.ghostImageObj) {
                     ctx.save();
@@ -3471,13 +3912,14 @@ export default {
 
                     if (idx === App.state.activeSegment) {
                         ctx.strokeStyle = "rgba(145, 127, 179, 0.8)";
-                        ctx.lineWidth = 4;
+                        ctx.lineWidth = 4 / viewScale;
                     } else {
                         ctx.strokeStyle = "rgba(255,255,255,0.1)";
-                        ctx.lineWidth = 2;
+                        ctx.lineWidth = 2 / viewScale;
                     }
                     ctx.strokeRect(dx, dy, dw, dh);
                 });
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
                 App.state.drawLoopHandle = requestAnimationFrame(App.drawLoop);
             },
 
@@ -3490,6 +3932,7 @@ export default {
                     facingMode: App.state.facingMode,
                     mirrorVideo: App.state.mirrorVideo
                 });
+                App.updateCameraConfigSummary();
                 App.initCamera();
             },
 
@@ -3504,6 +3947,7 @@ export default {
                     btn.classList.add('bg-black/40');
                 }
                 App.persistActiveDiaryCameraConfig({ mirrorVideo: App.state.mirrorVideo });
+                App.updateCameraConfigSummary();
             },
 
             toggleGhost: () => {
@@ -3527,6 +3971,7 @@ export default {
                     slider.classList.remove('hidden');
                 }
                 App.persistActiveDiaryCameraConfig({ ghostMode: App.state.ghostMode });
+                App.updateCameraConfigSummary();
             },
 
             setGhostOpacity: (val) => {
@@ -3538,6 +3983,7 @@ export default {
                 s.ghostOpacity = newVal;
                 Storage.setSettings(s);
                 App.persistActiveDiaryCameraConfig({ ghostOpacity: newVal });
+                App.updateCameraConfigSummary();
             },
 
             handleTagInput: (e) => {
@@ -3613,6 +4059,7 @@ export default {
                     </span>
                 `).join('');
                 lucide.createIcons();
+                App.scheduleEntryDraftSave();
             },
 
             removeTag: (t) => {
@@ -3667,10 +4114,9 @@ export default {
                 if (!App.state.capturedImage) return App.showToast('An image is required.', 'error');
                 App.setEntryLoading(true, "Saving entry...");
 
-                // Generate both versions if not already done (though finalizeCollage creates UI version)
-                // We should ensure we save the Low Res version to local storage to save space
                 let photoToSave = App.state.capturedImage;
-                let photoToUpload = App.state.capturedImageHighRes || App.state.capturedImage;
+                let photoToUpload = App.state.capturedImageHighRes;
+                const uploadPending = !photoToUpload;
 
                 const entryId = UTILS.id();
                 let photoKey = null;
@@ -3684,9 +4130,11 @@ export default {
                         const uploadKeyName = `entry_${entryId}_upload`;
                         try {
                             await ImageStore.set(previewKey, UTILS.dataURLtoBlob(photoToSave));
-                            await ImageStore.set(uploadKeyName, UTILS.dataURLtoBlob(photoToUpload));
+                            if (photoToUpload) {
+                                await ImageStore.set(uploadKeyName, UTILS.dataURLtoBlob(photoToUpload));
+                                uploadKey = uploadKeyName;
+                            }
                             photoKey = previewKey;
-                            uploadKey = uploadKeyName;
                         } catch (e) {
                             if (e?.isQuotaExceeded) {
                                 App.showToast("Storage full; saving images inline.", "error");
@@ -3711,20 +4159,30 @@ export default {
                         photoKey: photoKey,
                         uploadKey: uploadKey,
                         uploadDataURL: uploadDataURL,
+                        uploadPending: uploadPending,
                         synced: false,
+                        syncStatus: uploadPending ? 'preparing' : 'local',
+                        syncError: null,
                         notionId: null,
                         deletedLocally: false
                     };
 
                     Storage.saveEntry(App.state.activeDiaryId, newEntry);
-                    Storage.queuePendingEntry(App.state.activeDiaryId, newEntry.id);
+                    if (uploadPending) {
+                        App.state.pendingHighResEntry = { diaryId: App.state.activeDiaryId, entryId: newEntry.id };
+                    } else {
+                        Storage.queuePendingEntry(App.state.activeDiaryId, newEntry.id);
+                    }
+                    Storage.clearEntryDraft(App.state.activeDiaryId);
                     App.state.diaries = Storage.getData();
 
                     App.closeModal('entryModal', { force: true });
                     App.renderDiaryView();
                     App.showToast("Saved locally", 'success');
-                    if (navigator.onLine) {
+                    if (navigator.onLine && !uploadPending) {
                         SyncManager.syncCurrentDiary();
+                    } else if (uploadPending) {
+                        App.showToast("Saved preview. Full-res upload will queue when ready.", "info");
                     } else {
                         SyncManager.updateUI('offline');
                     }
@@ -3779,7 +4237,8 @@ export default {
 
                 // Convert to Image for manipulation source
                 const img = new Image();
-                img.src = canvas.toDataURL('image/webp', 0.9);
+                const sourceDataURL = canvas.toDataURL('image/webp', 0.9);
+                img.src = sourceDataURL;
 
                 img.onload = () => {
                     // Calculate slot dimensions and scale
@@ -3809,6 +4268,7 @@ export default {
 
                     App.state.segments[App.state.activeSegment] = {
                         source: img,
+                        sourceDataURL: sourceDataURL,
                         isManipulatable: true,
                         x: 0,
                         y: 0,
@@ -3835,37 +4295,30 @@ export default {
                         }
                     }
                     if (allFilled) {
-                        App.finalizeCollage();
+                        if (App.state.collageMode === 1) {
+                            App.setEntryLoading(true, "Finishing...");
+                            requestAnimationFrame(() => App.finalizeCollage());
+                        } else {
+                            App.showToast("All segments captured. Tap Done when ready.", "success");
+                        }
                     } else {
                         App.state.activeSegment = nextEmpty;
-                        document.getElementById('segCurrent').innerText = App.state.activeSegment + 1;
                     }
                     App.updateManipControlsVisibility();
+                    App.updateSegmentControls();
+                    App.scheduleEntryDraftSave();
                 };
             },
+            doneCapturingSegments: () => {
+                if (!App.isCollageComplete()) {
+                    App.showToast("Capture every segment before finishing.", "error");
+                    return;
+                }
+                App.setEntryLoading(true, "Finishing...");
+                requestAnimationFrame(() => App.finalizeCollage());
+            },
 
-            finalizeCollage: async () => {
-                const layout = App.collageConfigs[App.state.collageMode];
-                const finalCanvas = document.getElementById('photoCanvas');
-                if (!finalCanvas) return;
-                App.setEntryLoading(true, "Processing photo...");
-                const mode = App.state.collageMode;
-                const baseDims = App.state.captureBase || App.getBaseDimensions(App.state.videoDims.width, App.state.videoDims.height);
-                const BaseW = baseDims.width;
-                const BaseH = baseDims.height;
-                let multW = 1;
-                let multH = 1;
-                if (mode === 2) multW = 2;
-                else if (mode === 3) multW = 3;
-                else if (mode === 4) { multW = 2; multH = 2; }
-                else if (mode === 5) { multH = 2; }
-                else if (mode === 6) { multH = 3; }
-                else if (mode === 7) { multW = 2; multH = 2; }
-                const dims = App.getFinalCanvasDimensions(BaseW, BaseH, multW, multH);
-                const W = dims.width;
-                const H = dims.height;
-                finalCanvas.width = W; finalCanvas.height = H;
-                const ctx = finalCanvas.getContext('2d');
+            drawCollageContent: (ctx, W, H, layout) => {
                 ctx.fillStyle = "black";
                 ctx.fillRect(0, 0, W, H);
                 layout.forEach((slot, idx) => {
@@ -3897,28 +4350,80 @@ export default {
                         ctx.restore();
                     }
                 });
+            },
 
+            drawCollageCanvas: (canvas, dims, scale = 1) => {
+                const layout = App.collageConfigs[App.state.collageMode];
+                const W = dims.width;
+                const H = dims.height;
+                canvas.width = Math.max(1, Math.round(W * scale));
+                canvas.height = Math.max(1, Math.round(H * scale));
+                const ctx = canvas.getContext('2d');
+                ctx.setTransform(scale, 0, 0, scale, 0, 0);
+                App.drawCollageContent(ctx, W, H, layout);
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+            },
+
+            getCurrentCollageDimensions: () => {
+                const mode = App.state.collageMode;
+                const baseDims = App.state.captureBase || App.getBaseDimensions(App.state.videoDims.width, App.state.videoDims.height);
+                const { multW, multH } = App.getLayoutMultipliers(mode);
+                return App.getFinalCanvasDimensions(baseDims.width, baseDims.height, multW, multH);
+            },
+
+            finalizeCollage: async () => {
+                const finalCanvas = document.getElementById('photoCanvas');
+                if (!finalCanvas) return;
+                App.setEntryLoading(true, "Preparing preview...");
+                const dims = App.getCurrentCollageDimensions();
+                const previewCanvas = document.createElement('canvas');
+                const previewScale = Math.min(1, 900 / Math.max(dims.width, dims.height));
+                App.drawCollageCanvas(previewCanvas, dims, previewScale);
+                App.state.capturedImage = previewCanvas.toDataURL('image/webp', 0.72);
+                App.state.capturedImageHighRes = null;
+
+                document.getElementById('cameraSection').classList.add('hidden');
+                document.getElementById('imageManipControls').classList.add('hidden');
+                document.getElementById('smallPreview').src = App.state.capturedImage;
+                document.getElementById('takenPhotoUI').classList.remove('hidden');
+                document.getElementById('takenPhotoUI').classList.add('flex');
+                document.getElementById('saveEntryBtn').disabled = false;
+                if (App.state.stream) App.state.stream.getTracks().forEach(t => t.stop());
+                App.setEntryLoading(false);
+
+                await new Promise(resolve => setTimeout(resolve, 0));
+                App.prepareHighResCollage(dims, finalCanvas);
+            },
+
+            prepareHighResCollage: async (dims, finalCanvas) => {
                 try {
-                    // 1. Generate High Res Version for Upload (WebP Max Quality)
-                    // We must ensure it's under the selected cap
+                    App.drawCollageCanvas(finalCanvas, dims);
                     const highResBase = finalCanvas.toDataURL('image/webp', 0.96);
                     const capBytes = App.getUploadCapBytes();
                     App.state.capturedImageHighRes = await UTILS.compressToLimit(highResBase, { maxBytes: capBytes });
-
-                    // 2. Generate Preview Version for UI (larger thumbnail for IndexedDB)
-                    App.state.capturedImage = await UTILS.processImage(highResBase, 640, 0.72);
-
-                    document.getElementById('cameraSection').classList.add('hidden');
-                    document.getElementById('imageManipControls').classList.add('hidden');
-                    document.getElementById('smallPreview').src = App.state.capturedImage; // Show low res preview
-                    document.getElementById('takenPhotoUI').classList.remove('hidden');
-                    document.getElementById('takenPhotoUI').classList.add('flex');
-                    document.getElementById('saveEntryBtn').disabled = false;
-
-                    if (App.state.stream) App.state.stream.getTracks().forEach(t => t.stop());
-                } finally {
-                    App.setEntryLoading(false);
+                    await App.attachPreparedHighResToSavedEntry();
+                } catch (e) {
+                    console.error('High-res collage preparation failed', e);
                 }
+            },
+
+            attachPreparedHighResToSavedEntry: async () => {
+                const pending = App.state.pendingHighResEntry;
+                if (!pending || !App.state.capturedImageHighRes) return;
+                let uploadKey = null;
+                let uploadDataURL = null;
+                if (ImageStore.isAvailable()) {
+                    uploadKey = `entry_${pending.entryId}_upload`;
+                    await ImageStore.set(uploadKey, UTILS.dataURLtoBlob(App.state.capturedImageHighRes));
+                } else {
+                    uploadDataURL = App.state.capturedImageHighRes;
+                }
+                Storage.updateEntryUploadAsset(pending.diaryId, pending.entryId, uploadKey, uploadDataURL);
+                Storage.queuePendingEntry(pending.diaryId, pending.entryId);
+                App.state.pendingHighResEntry = null;
+                App.state.diaries = Storage.getData();
+                App.renderDiaryView();
+                if (navigator.onLine) SyncManager.syncCurrentDiary();
             },
 
             handleCollageClick: (e) => {
@@ -3931,6 +4436,8 @@ export default {
                 const layout = App.collageConfigs[App.state.collageMode];
                 const clickedIdx = layout.findIndex(slot => x >= slot.x && x <= slot.x + slot.w && y >= slot.y && y <= slot.y + slot.h);
                 if (clickedIdx !== -1 && App.state.segments[clickedIdx]) {
+                    App.state.activeSegment = clickedIdx;
+                    App.updateSegmentControls();
                     App.openSegmentEdit(clickedIdx);
                 }
             },
@@ -3938,11 +4445,49 @@ export default {
             editingSegmentIdx: null,
             segEditAnimFrame: null,
 
+            cloneSegmentTransform: (seg) => ({
+                x: seg.x,
+                y: seg.y,
+                scale: seg.scale,
+                baseScale: seg.baseScale,
+                rotation: seg.rotation,
+                flipH: !!seg.flipH,
+                flipV: !!seg.flipV
+            }),
+
+            applySegmentTransform: (seg, snapshot) => {
+                seg.x = snapshot.x;
+                seg.y = snapshot.y;
+                seg.scale = snapshot.scale;
+                seg.baseScale = snapshot.baseScale;
+                seg.rotation = snapshot.rotation;
+                seg.flipH = snapshot.flipH;
+                seg.flipV = snapshot.flipV;
+            },
+
+            syncEditControlsFromSegment: () => {
+                const idx = App.state.editingSegmentIdx;
+                if (idx === null) return;
+                const seg = App.state.segments[idx];
+                if (!seg) return;
+                const zoomRatio = seg.scale / seg.baseScale;
+                const rotDeg = Math.round((seg.rotation * 180) / Math.PI);
+                document.getElementById('segEditZoom').value = zoomRatio;
+                document.getElementById('segEditZoomVal').textContent = zoomRatio.toFixed(2) + 'x';
+                document.getElementById('segEditRotation').value = rotDeg;
+                document.getElementById('segEditRotationVal').textContent = rotDeg + '°';
+                document.getElementById('segEditPanX').value = seg.x;
+                document.getElementById('segEditPanXVal').textContent = Math.round(seg.x);
+                document.getElementById('segEditPanY').value = seg.y;
+                document.getElementById('segEditPanYVal').textContent = Math.round(seg.y);
+            },
+
             openSegmentEdit: (idx) => {
                 const seg = App.state.segments[idx];
                 if (!seg || !seg.isManipulatable) return;
 
                 App.state.editingSegmentIdx = idx;
+                App.state.segmentEditUndo = App.cloneSegmentTransform(seg);
                 document.getElementById('editSegmentNum').textContent = idx + 1;
 
                 // Set current values
@@ -3960,6 +4505,7 @@ export default {
 
                 document.getElementById('segmentEditOverlay').classList.remove('hidden');
                 lucide.createIcons();
+                App.attachSegmentEditGestures();
 
                 // Start live preview loop
                 App.startSegEditPreview();
@@ -3969,8 +4515,21 @@ export default {
                 App.stopSegEditPreview();
                 document.getElementById('segmentEditOverlay').classList.add('hidden');
                 App.state.editingSegmentIdx = null;
-                // Regenerate preview
-                App.regeneratePreview();
+                App.state.segmentEditReturn = null;
+                App.state.editPointers.clear();
+                if (!document.getElementById('takenPhotoUI').classList.contains('hidden')) {
+                    App.regeneratePreview();
+                }
+            },
+
+            attachSegmentEditGestures: () => {
+                const canvas = document.getElementById('segEditPreview');
+                if (!canvas || canvas.dataset.listening) return;
+                canvas.addEventListener('pointerdown', App.handleSegmentEditPointerDown);
+                canvas.addEventListener('pointermove', App.handleSegmentEditPointerMove);
+                canvas.addEventListener('pointerup', App.handleSegmentEditPointerUp);
+                canvas.addEventListener('pointercancel', App.handleSegmentEditPointerUp);
+                canvas.dataset.listening = "true";
             },
 
             startSegEditPreview: () => {
@@ -4032,6 +4591,38 @@ export default {
                 ctx.fillStyle = "#1a1a1a";
                 ctx.fillRect(0, 0, W, H);
 
+                if (App.state.ghostMode && App.state.ghostImageObj) {
+                    const ghost = App.state.ghostImageObj;
+                    const worldW = dims.width;
+                    const worldH = dims.height;
+                    const slotX = slot.x * worldW;
+                    const slotY = slot.y * worldH;
+                    const srcRatio = ghost.width / ghost.height;
+                    const dstRatio = worldW / worldH;
+                    let gx, gy, gw, gh;
+                    if (srcRatio > dstRatio) {
+                        gh = worldH;
+                        gw = gh * srcRatio;
+                        gx = (worldW - gw) / 2;
+                        gy = 0;
+                    } else {
+                        gw = worldW;
+                        gh = gw / srcRatio;
+                        gx = 0;
+                        gy = (worldH - gh) / 2;
+                    }
+                    ctx.save();
+                    ctx.globalAlpha = Math.max(0.15, App.state.ghostOpacity);
+                    ctx.drawImage(
+                        ghost,
+                        (gx - slotX) * scaleRatio,
+                        (gy - slotY) * scaleRatio,
+                        gw * scaleRatio,
+                        gh * scaleRatio
+                    );
+                    ctx.restore();
+                }
+
                 // Draw the segment with transforms
                 ctx.save();
                 const cx = W / 2;
@@ -4051,6 +4642,81 @@ export default {
                 ctx.strokeRect(0, 0, W, H);
             },
 
+            getEditSlotDimensions: () => {
+                const idx = App.state.editingSegmentIdx;
+                const layout = App.collageConfigs[App.state.collageMode];
+                const slot = layout?.[idx];
+                if (!slot) return null;
+                const baseDims = App.state.captureBase || App.getTargetBaseDimensions();
+                const dims = App.getWorldDimensions(App.state.collageMode, baseDims);
+                return { width: slot.w * dims.width, height: slot.h * dims.height };
+            },
+
+            handleSegmentEditPointerDown: (e) => {
+                const idx = App.state.editingSegmentIdx;
+                if (idx === null || !App.state.segments[idx]) return;
+                e.preventDefault();
+                try {
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                } catch (err) {
+                }
+                App.state.editPointers.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY, pointerId: e.pointerId });
+                if (App.state.editPointers.size === 2) {
+                    const points = Array.from(App.state.editPointers.values());
+                    App.state.editPrevPinchDist = App.getDist(points[0], points[1]);
+                    App.state.editPrevPinchCenter = App.getCenter(points[0], points[1]);
+                }
+            },
+
+            handleSegmentEditPointerMove: (e) => {
+                if (!App.state.editPointers.has(e.pointerId)) return;
+                const idx = App.state.editingSegmentIdx;
+                const seg = App.state.segments[idx];
+                const slotDims = App.getEditSlotDimensions();
+                if (idx === null || !seg || !slotDims) return;
+                const oldPointer = App.state.editPointers.get(e.pointerId);
+                App.state.editPointers.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY, pointerId: e.pointerId });
+                const canvas = document.getElementById('segEditPreview');
+                const metrics = App.getCanvasContentMetrics(canvas, { width: canvas.width, height: canvas.height });
+                const scaleX = slotDims.width / metrics.width;
+                const scaleY = slotDims.height / metrics.height;
+                const points = Array.from(App.state.editPointers.values());
+
+                if (points.length === 1) {
+                    seg.x += (e.clientX - oldPointer.clientX) * scaleX;
+                    seg.y += (e.clientY - oldPointer.clientY) * scaleY;
+                } else if (points.length === 2) {
+                    const dist = App.getDist(points[0], points[1]);
+                    const center = App.getCenter(points[0], points[1]);
+                    if (App.state.editPrevPinchDist > 0) {
+                        const previousScale = seg.scale;
+                        seg.scale *= dist / App.state.editPrevPinchDist;
+                        seg.scale = Math.max(seg.baseScale * 0.5, Math.min(seg.scale, seg.baseScale * 3));
+                        const applied = seg.scale / previousScale;
+                        const centerDx = (center.x - metrics.left - metrics.width / 2) * scaleX - seg.x;
+                        const centerDy = (center.y - metrics.top - metrics.height / 2) * scaleY - seg.y;
+                        seg.x += centerDx * (1 - applied);
+                        seg.y += centerDy * (1 - applied);
+                    }
+                    if (App.state.editPrevPinchCenter) {
+                        seg.x += (center.x - App.state.editPrevPinchCenter.x) * scaleX;
+                        seg.y += (center.y - App.state.editPrevPinchCenter.y) * scaleY;
+                    }
+                    App.state.editPrevPinchDist = dist;
+                    App.state.editPrevPinchCenter = center;
+                }
+                App.syncEditControlsFromSegment();
+            },
+
+            handleSegmentEditPointerUp: (e) => {
+                App.state.editPointers.delete(e.pointerId);
+                if (App.state.editPointers.size < 2) {
+                    App.state.editPrevPinchDist = 0;
+                    App.state.editPrevPinchCenter = null;
+                }
+                if (App.state.editPointers.size === 0) App.scheduleEntryDraftSave();
+            },
+
             setEditSegmentZoom: (val) => {
                 const idx = App.state.editingSegmentIdx;
                 if (idx === null) return;
@@ -4059,6 +4725,7 @@ export default {
                 const r = parseFloat(val);
                 seg.scale = seg.baseScale * r;
                 document.getElementById('segEditZoomVal').textContent = r.toFixed(2) + 'x';
+                App.scheduleEntryDraftSave();
             },
 
             setEditSegmentRotation: (val) => {
@@ -4068,6 +4735,7 @@ export default {
                 if (!seg || !seg.isManipulatable) return;
                 seg.rotation = (parseFloat(val) * Math.PI) / 180;
                 document.getElementById('segEditRotationVal').textContent = val + '°';
+                App.scheduleEntryDraftSave();
             },
 
             setEditSegmentPanX: (val) => {
@@ -4077,6 +4745,7 @@ export default {
                 if (!seg || !seg.isManipulatable) return;
                 seg.x = parseFloat(val);
                 document.getElementById('segEditPanXVal').textContent = Math.round(seg.x);
+                App.scheduleEntryDraftSave();
             },
 
             setEditSegmentPanY: (val) => {
@@ -4086,6 +4755,7 @@ export default {
                 if (!seg || !seg.isManipulatable) return;
                 seg.y = parseFloat(val);
                 document.getElementById('segEditPanYVal').textContent = Math.round(seg.y);
+                App.scheduleEntryDraftSave();
             },
 
             flipEditSegmentH: () => {
@@ -4094,6 +4764,7 @@ export default {
                 const seg = App.state.segments[idx];
                 if (!seg || !seg.isManipulatable) return;
                 seg.flipH = !seg.flipH;
+                App.scheduleEntryDraftSave();
             },
 
             flipEditSegmentV: () => {
@@ -4102,6 +4773,7 @@ export default {
                 const seg = App.state.segments[idx];
                 if (!seg || !seg.isManipulatable) return;
                 seg.flipV = !seg.flipV;
+                App.scheduleEntryDraftSave();
             },
 
             resetEditSegment: () => {
@@ -4124,6 +4796,18 @@ export default {
                 document.getElementById('segEditPanXVal').textContent = '0';
                 document.getElementById('segEditPanY').value = 0;
                 document.getElementById('segEditPanYVal').textContent = '0';
+                App.scheduleEntryDraftSave();
+            },
+
+            undoEditSegment: () => {
+                const idx = App.state.editingSegmentIdx;
+                if (idx === null || !App.state.segmentEditUndo) return;
+                const seg = App.state.segments[idx];
+                if (!seg || !seg.isManipulatable) return;
+                App.applySegmentTransform(seg, App.state.segmentEditUndo);
+                App.state.segmentEditUndo = null;
+                App.syncEditControlsFromSegment();
+                App.scheduleEntryDraftSave();
             },
 
             retakeEditSegment: () => {
@@ -4134,71 +4818,41 @@ export default {
                 App.state.segments[idx] = null;
                 document.getElementById('segmentEditOverlay').classList.add('hidden');
                 App.state.editingSegmentIdx = null;
+                App.state.segmentEditReturn = null;
+                App.scheduleEntryDraftSave();
                 App.retakePartial();
             },
 
             applySegmentEdit: () => {
+                const returnState = App.state.segmentEditReturn;
+                App.state.segmentEditReturn = null;
                 App.closeSegmentEdit();
+                if (returnState?.fromCapture && document.getElementById('takenPhotoUI').classList.contains('hidden')) {
+                    const layout = App.collageConfigs[App.state.collageMode];
+                    const nextEmpty = layout.findIndex((_, idx) => !App.state.segments[idx]);
+                    if (nextEmpty !== -1) {
+                        App.state.activeSegment = nextEmpty;
+                        App.updateManipControlsVisibility();
+                        App.updateSegmentControls();
+                    } else if (App.state.collageMode === 1) {
+                        App.setEntryLoading(true, "Finishing...");
+                        requestAnimationFrame(() => App.finalizeCollage());
+                    } else {
+                        App.showToast("All segments captured. Tap Done when ready.", "success");
+                    }
+                }
             },
 
             regeneratePreview: async () => {
-                // Re-render the collage to smallPreview after edits
-                const layout = App.collageConfigs[App.state.collageMode];
                 const tempCanvas = document.createElement('canvas');
-                const mode = App.state.collageMode;
-                const baseDims = App.state.captureBase || App.getTargetBaseDimensions();
-                const BaseW = baseDims.width;
-                const BaseH = baseDims.height;
-                let multW = 1, multH = 1;
-                if (mode === 2) multW = 2;
-                else if (mode === 3) multW = 3;
-                else if (mode === 4) { multW = 2; multH = 2; }
-                else if (mode === 5) { multH = 2; }
-                else if (mode === 6) { multH = 3; }
-                else if (mode === 7) { multW = 2; multH = 2; }
-                const dims = App.getFinalCanvasDimensions(BaseW, BaseH, multW, multH);
-                const W = dims.width;
-                const H = dims.height;
-                tempCanvas.width = W;
-                tempCanvas.height = H;
-                const ctx = tempCanvas.getContext('2d');
-                ctx.fillStyle = "black";
-                ctx.fillRect(0, 0, W, H);
-
-                layout.forEach((slot, idx) => {
-                    const seg = App.state.segments[idx];
-                    if (seg) {
-                        const dx = slot.x * W;
-                        const dy = slot.y * H;
-                        const dw = slot.w * W;
-                        const dh = slot.h * H;
-                        ctx.save();
-                        ctx.beginPath();
-                        ctx.rect(dx, dy, dw, dh);
-                        ctx.clip();
-                        if (seg.isManipulatable) {
-                            const cx = dx + dw / 2;
-                            const cy = dy + dh / 2;
-                            ctx.translate(cx, cy);
-                            ctx.translate(seg.x, seg.y);
-                            ctx.rotate(seg.rotation);
-                            const flipScaleX = seg.flipH ? -1 : 1;
-                            const flipScaleY = seg.flipV ? -1 : 1;
-                            ctx.scale(seg.scale * flipScaleX, seg.scale * flipScaleY);
-                            ctx.drawImage(seg.source, -seg.source.width / 2, -seg.source.height / 2);
-                        } else {
-                            ctx.drawImage(seg, 0, 0, seg.width, seg.height, dx, dy, dw, dh);
-                        }
-                        ctx.restore();
-                    }
-                });
-
-                // Generate preview and high-res versions
-                const highResBase = tempCanvas.toDataURL('image/webp', 0.96);
-                const capBytes = App.getUploadCapBytes();
-                App.state.capturedImageHighRes = await UTILS.compressToLimit(highResBase, { maxBytes: capBytes });
-                App.state.capturedImage = await UTILS.processImage(highResBase, 640, 0.72);
+                const dims = App.getCurrentCollageDimensions();
+                const previewScale = Math.min(1, 900 / Math.max(dims.width, dims.height));
+                App.drawCollageCanvas(tempCanvas, dims, previewScale);
+                App.state.capturedImage = tempCanvas.toDataURL('image/webp', 0.72);
+                App.state.capturedImageHighRes = null;
                 document.getElementById('smallPreview').src = App.state.capturedImage;
+                await new Promise(resolve => setTimeout(resolve, 0));
+                App.prepareHighResCollage(dims, document.getElementById('photoCanvas'));
             },
 
             retakePartial: () => {
@@ -4207,14 +4861,28 @@ export default {
                 document.getElementById('cameraSection').classList.remove('hidden');
                 App.initCamera();
 
-                document.getElementById('segCurrent').innerText = App.state.activeSegment + 1;
+                App.updateSegmentControls();
                 App.updateManipControlsVisibility();
+            },
+
+            replaceActivePreviewSegment: () => {
+                const idx = App.state.activeSegment || 0;
+                if (!App.state.segments[idx]) {
+                    const firstFilled = App.state.segments.findIndex(Boolean);
+                    if (firstFilled !== -1) App.state.activeSegment = firstFilled;
+                }
+                App.state.segments[App.state.activeSegment] = null;
+                App.state.capturedImage = null;
+                App.state.capturedImageHighRes = null;
+                App.updateSegmentControls();
+                App.retakePartial();
             },
 
             retakeAll: () => {
                 App.state.activeSegment = 0;
                 App.state.segments = [];
                 App.state.captureBase = null;
+                Storage.clearEntryDraft(App.state.activeDiaryId);
                 document.getElementById('takenPhotoUI').classList.add('hidden');
                 document.getElementById('takenPhotoUI').classList.remove('flex');
                 document.getElementById('cameraSection').classList.remove('hidden');
@@ -4252,6 +4920,7 @@ export default {
                 if (seg && seg.isManipulatable) {
                     seg.rotation = (parseFloat(deg) * Math.PI) / 180;
                     document.getElementById('rotationValue').textContent = deg + '°';
+                    App.scheduleEntryDraftSave();
                 }
             },
 
@@ -4261,6 +4930,7 @@ export default {
                     const r = parseFloat(ratio);
                     seg.scale = seg.baseScale * r;
                     document.getElementById('zoomValue').textContent = r.toFixed(1) + 'x';
+                    App.scheduleEntryDraftSave();
                 }
             },
 
@@ -4268,6 +4938,7 @@ export default {
                 const seg = App.state.segments[App.state.activeSegment];
                 if (seg && seg.isManipulatable) {
                     seg.flipH = !seg.flipH;
+                    App.scheduleEntryDraftSave();
                 }
             },
 
@@ -4275,6 +4946,7 @@ export default {
                 const seg = App.state.segments[App.state.activeSegment];
                 if (seg && seg.isManipulatable) {
                     seg.flipV = !seg.flipV;
+                    App.scheduleEntryDraftSave();
                 }
             },
 
@@ -4288,10 +4960,58 @@ export default {
                     seg.flipH = false;
                     seg.flipV = false;
                     App.updateManipControlsVisibility();
+                    App.scheduleEntryDraftSave();
                 }
             },
 
-            handleFileUpload: async (e) => {
+            openPhoneCameraCapture: () => {
+                const input = document.getElementById('phoneCameraInput');
+                if (input) input.click();
+            },
+
+            openGalleryPicker: () => {
+                const input = document.getElementById('galleryInput');
+                if (input) input.click();
+            },
+
+            afterManualSegmentInsert: (capturedIdx, options = {}) => {
+                const layout = App.collageConfigs[App.state.collageMode];
+                const total = layout.length;
+                let allFilled = true;
+                let nextEmpty = -1;
+                for (let i = 0; i < total; i++) {
+                    if (!App.state.segments[i]) {
+                        allFilled = false;
+                        if (nextEmpty === -1) nextEmpty = i;
+                    }
+                }
+
+                App.state.activeSegment = capturedIdx;
+                App.updateManipControlsVisibility();
+                App.updateSegmentControls();
+                App.scheduleEntryDraftSave();
+
+                if (options.alignAfterCapture) {
+                    App.state.segmentEditReturn = { fromCapture: true };
+                    App.openSegmentEdit(capturedIdx);
+                    return;
+                }
+
+                if (allFilled) {
+                    if (App.state.collageMode === 1) {
+                        App.setEntryLoading(true, "Finishing...");
+                        requestAnimationFrame(() => App.finalizeCollage());
+                    } else {
+                        App.showToast("All segments captured. Tap Done when ready.", "success");
+                    }
+                } else if (nextEmpty !== -1) {
+                    App.state.activeSegment = nextEmpty;
+                    App.updateManipControlsVisibility();
+                    App.updateSegmentControls();
+                }
+            },
+
+            handleFileUpload: async (e, options = {}) => {
                 const file = e.target.files[0];
                 if (file) {
                     const base64 = await UTILS.toBase64(file);
@@ -4317,14 +5037,8 @@ export default {
 
                         // We need to know the multiplier for the current mode to get true aspect?
                         // Actually App.getFinalCanvasDimensions does this.
-                        let multW = 1; let multH = 1;
                         const mode = App.state.collageMode;
-                        if (mode === 2) multW = 2;
-                        else if (mode === 3) multW = 3;
-                        else if (mode === 4) { multW = 2; multH = 2; }
-                        else if (mode === 5) { multH = 2; }
-                        else if (mode === 6) { multH = 3; }
-                        else if (mode === 7) { multW = 2; multH = 2; }
+                        const { multW, multH } = App.getLayoutMultipliers(mode);
 
                         // But wait, slot.w is percentage of Final Width.
                         // So we just need Final Width / Final Height ratio?
@@ -4342,8 +5056,10 @@ export default {
                         const scaleH = slotPixelH / imgH;
                         const scale = Math.max(scaleW, scaleH);
 
-                        App.state.segments[App.state.activeSegment] = {
+                        const capturedIdx = App.state.activeSegment;
+                        App.state.segments[capturedIdx] = {
                             source: img,
+                            sourceDataURL: base64,
                             isManipulatable: true,
                             x: 0,
                             y: 0,
@@ -4360,28 +5076,10 @@ export default {
                             App.state.captureBase = { width: BaseW, height: BaseH };
                         }
 
-                        // Auto-advance
-                        const total = layout.length;
-                        let allFilled = true;
-                        let nextEmpty = -1;
-                        for (let i = 0; i < total; i++) {
-                            if (!App.state.segments[i]) {
-                                allFilled = false;
-                                if (nextEmpty === -1) nextEmpty = i;
-                            }
-                        }
-
-                        if (allFilled) {
-                            App.finalizeCollage();
-                        } else {
-                            if (nextEmpty !== -1) {
-                                App.state.activeSegment = nextEmpty;
-                                document.getElementById('segCurrent').innerText = App.state.activeSegment + 1;
-                            }
-                        }
-                        App.updateManipControlsVisibility();
+                        App.afterManualSegmentInsert(capturedIdx, options);
                     }
                 }
+                e.target.value = '';
             },
             renderSettingsStatus: (settings) => {
                 const statusEl = document.getElementById('connectionStatus');
@@ -4584,6 +5282,7 @@ export default {
                         const ok = confirm("Discard this entry? Your captured photo and notes will be lost.");
                         if (!ok) return false;
                     }
+                    Storage.clearEntryDraft(App.state.activeDiaryId);
                     App.state.isEntryModalOpen = false;
                     App.stopDrawLoop();
                     if (App.state.stream) {
