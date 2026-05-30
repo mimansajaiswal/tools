@@ -4933,7 +4933,7 @@
                 item.currentValue ? c.fieldActionBtnExpanded : '',
                 metaBadges.length ? c.fieldActionBtnWithMeta : ''
             ].filter(Boolean).join(' ');
-            return `<button type="button" class="${classList}" data-field-action-btn="1" data-field-key="${escHtml(item.fieldKey)}" aria-label="${escHtml(item.label)}">${metaHtml}${iconHtml}${labelHtml}${valueHtml}</button>`;
+            return `<button type="button" class="${classList}" data-field-action-btn="1" data-field-key="${escHtml(item.fieldKey)}" aria-label="${escHtml(item.label)}">${iconHtml}${labelHtml}${valueHtml}${metaHtml}</button>`;
         }).join('');
         const applyAllEnabled = this.isFieldActionApplyAllActive();
         const applyAllToggleHtml = this.config.fieldActionBarApplyToAllToggle === true
@@ -7362,7 +7362,9 @@
     QuickAddComponent.prototype.normalizeInsertedText = function normalizeInsertedText(text) {
         return String(text || '')
             .replace(/\r\n/g, '\n')
-            .replace(/\r/g, '\n');
+            .replace(/\r/g, '\n')
+            .replace(/[\u2028\u2029]/g, '\n')
+            .replace(/\u00a0/g, ' ');
     };
 
     QuickAddComponent.prototype.getPlainTextFromEvent = function getPlainTextFromEvent(event) {
@@ -7370,7 +7372,31 @@
         if (!clipboard || typeof clipboard.getData !== 'function') {
             return null;
         }
-        return this.normalizeInsertedText(clipboard.getData('text/plain') || '');
+        const plain = clipboard.getData('text/plain');
+        if (plain) {
+            return this.normalizeInsertedText(plain);
+        }
+        const html = clipboard.getData('text/html');
+        if (!html) {
+            return '';
+        }
+        const template = document.createElement('template');
+        template.innerHTML = html;
+        const blockTags = new Set(['DIV', 'P', 'LI', 'TR']);
+        const walk = (node) => {
+            if (!node) return '';
+            if (node.nodeType === Node.TEXT_NODE) return node.nodeValue || '';
+            if (node.nodeType !== Node.ELEMENT_NODE && node.nodeType !== Node.DOCUMENT_FRAGMENT_NODE) return '';
+            if (node.nodeName === 'BR') return '\n';
+            let out = '';
+            const children = node.childNodes || [];
+            for (let i = 0; i < children.length; i++) {
+                out += walk(children[i]);
+            }
+            if (blockTags.has(node.nodeName) && out && !out.endsWith('\n')) out += '\n';
+            return out;
+        };
+        return this.normalizeInsertedText(walk(template.content)).replace(/\n+$/g, '');
     };
 
     QuickAddComponent.prototype.replaceTextInInput = function replaceTextInInput(start, end, replacement, options) {
@@ -12980,7 +13006,7 @@
     };
 
     QuickAddComponent.prototype.setInput = function setInput(text) {
-        this.inputText = text || '';
+        this.inputText = this.normalizeInsertedText(text || '');
         this.dismissedSelections.clear();
         this.closeAttachmentSourceMenu({ restoreFocus: false });
         this.closeConflictModal();

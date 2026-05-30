@@ -1,0 +1,2226 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pet Tracker</title>
+    <meta name="description" content="Offline-first pet health tracker with Notion backend">
+    <meta name="theme-color" content="#2d2926">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Pet Tracker">
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="apple-touch-icon" sizes="180x180" href="./icons/icon-192.png">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.561.0/dist/umd/lucide.min.js"></script>
+
+    <!-- Chart.js for analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+    <!-- Fonts: Playfair Display (serif), Inter (sans), JetBrains Mono (mono) -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+
+    <!-- Tailwind Config -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'oatmeal': '#d4c8b8',
+                        'earth-metal': '#6b6357',
+                        'charcoal': '#2d2926',
+                        'white-linen': '#f8f6f3',
+                        'dull-purple': '#8b7b8e',
+                        'muted-pink': '#c9a9a6'
+                    },
+                    fontFamily: {
+                        'serif': ['"Playfair Display"', 'serif'],
+                        'sans': ['Inter', 'sans-serif'],
+                        'mono': ['"JetBrains Mono"', 'monospace']
+                    },
+                    borderRadius: {
+                        'none': '0',
+                        'sm': '2px',
+                        'DEFAULT': '2px'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Quick Add Component -->
+    <link rel="stylesheet" data-qa-style="1" href="../components/quick-add/quick-add-component.css?v=2">
+
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="./css/styles.css?v=2">
+</head>
+
+<body
+    class="bg-white-linen text-charcoal font-sans min-h-screen flex flex-col md:flex-row overflow-x-hidden md:overflow-hidden selection:bg-dull-purple selection:text-white-linen">
+
+    <!-- Skip Link -->
+    <a href="#mainContent"
+        class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[110] focus:bg-charcoal focus:text-white-linen focus:px-4 focus:py-2 focus:font-mono focus:text-xs focus:uppercase">
+        Skip to main content
+    </a>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" role="status" aria-live="polite" aria-atomic="true"
+        class="fixed top-4 right-4 z-[100] flex flex-col gap-2 w-full max-w-xs pointer-events-none"></div>
+
+    <!-- Sidebar (Desktop) -->
+    <aside class="hidden md:flex md:w-64 h-screen flex-col border-r border-oatmeal bg-white-linen flex-shrink-0">
+        <!-- Logo -->
+        <div class="h-16 px-4 border-b border-oatmeal flex items-center gap-3">
+            <div class="w-9 h-9 bg-charcoal flex items-center justify-center">
+                <i data-lucide="heart-pulse" class="w-5 h-5 text-white-linen"></i>
+            </div>
+            <div>
+                <h1 class="font-serif text-lg text-charcoal leading-tight">Pet Tracker</h1>
+                <span class="font-mono text-[9px] uppercase tracking-widest text-earth-metal">with Notion</span>
+            </div>
+        </div>
+
+        <!-- Pet Filter -->
+        <div class="p-3 border-b border-oatmeal">
+            <label class="font-mono text-[10px] uppercase text-earth-metal block mb-1">Pet Scope</label>
+            <div class="multiselect-dropdown" id="petFilterDesktopDropdown">
+                <button type="button" class="multiselect-trigger input-field flex items-center justify-between"
+                    onclick="App.toggleSidebarPetFilterMenu()" aria-expanded="false">
+                    <span id="petFilterDesktopLabel" class="multiselect-label text-sm text-earth-metal">All Pets</span>
+                    <i data-lucide="chevron-down" class="w-4 h-4 text-earth-metal transition-transform"></i>
+                </button>
+                <div id="petFilterDesktopMenu"
+                    class="multiselect-menu hidden absolute z-20 mt-1 w-full bg-white-linen border border-oatmeal shadow-lg max-h-72 overflow-y-auto p-2 space-y-1">
+                    <div id="petFilterDesktopOptions" class="space-y-1"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation -->
+        <nav role="navigation" aria-label="Main navigation" class="flex-1 p-3 space-y-1 overflow-y-auto">
+            <button data-nav="dashboard" aria-current="page"
+                class="w-full flex items-center gap-3 px-3 py-2 text-left text-dull-purple hover:bg-oatmeal/30 transition-fast">
+                <i data-lucide="layout-dashboard" class="w-5 h-5" aria-hidden="true"></i>
+                <span class="font-mono text-xs uppercase">Dashboard</span>
+            </button>
+            <button data-nav="calendar"
+                class="w-full flex items-center gap-3 px-3 py-2 text-left text-earth-metal hover:bg-oatmeal/30 transition-fast">
+                <i data-lucide="calendar" class="w-5 h-5" aria-hidden="true"></i>
+                <span class="font-mono text-xs uppercase">Calendar</span>
+            </button>
+            <button data-nav="upcoming"
+                class="w-full flex items-center gap-3 px-3 py-2 text-left text-earth-metal hover:bg-oatmeal/30 transition-fast">
+                <i data-lucide="clock" class="w-5 h-5" aria-hidden="true"></i>
+                <span class="font-mono text-xs uppercase">Upcoming</span>
+            </button>
+            <button data-nav="analytics"
+                class="w-full flex items-center gap-3 px-3 py-2 text-left text-earth-metal hover:bg-oatmeal/30 transition-fast">
+                <i data-lucide="bar-chart-3" class="w-5 h-5" aria-hidden="true"></i>
+                <span class="font-mono text-xs uppercase">Analytics</span>
+            </button>
+            <button data-nav="pets"
+                class="w-full flex items-center gap-3 px-3 py-2 text-left text-earth-metal hover:bg-oatmeal/30 transition-fast">
+                <i data-lucide="paw-print" class="w-5 h-5" aria-hidden="true"></i>
+                <span class="font-mono text-xs uppercase">Pets</span>
+            </button>
+            <button data-nav="contacts"
+                class="w-full flex items-center gap-3 px-3 py-2 text-left text-earth-metal hover:bg-oatmeal/30 transition-fast">
+                <i data-lucide="users" class="w-5 h-5" aria-hidden="true"></i>
+                <span class="font-mono text-xs uppercase">Contacts</span>
+            </button>
+            <button data-nav="setup"
+                class="w-full flex items-center gap-3 px-3 py-2 text-left text-earth-metal hover:bg-oatmeal/30 transition-fast">
+                <i data-lucide="sliders-horizontal" class="w-5 h-5" aria-hidden="true"></i>
+                <span class="font-mono text-xs uppercase">Setup</span>
+            </button>
+        </nav>
+
+        <!-- Sidebar Footer -->
+        <div class="p-3 border-t border-oatmeal space-y-1">
+            <button onclick="PetTracker.QuickAddModal.open()"
+                class="w-full flex items-center gap-3 px-3 py-2 text-dull-purple hover:bg-oatmeal/30 transition-fast">
+                <i data-lucide="zap" class="w-5 h-5"></i>
+                <span class="font-mono text-xs uppercase">Quick Add</span>
+            </button>
+            <button onclick="App.openAddModal()"
+                class="w-full flex items-center gap-3 px-3 py-2 text-earth-metal hover:bg-oatmeal/30 transition-fast">
+                <i data-lucide="plus-circle" class="w-5 h-5"></i>
+                <span class="font-mono text-xs uppercase">Add Event</span>
+            </button>
+            <button id="installPwaBtn" onclick="App.promptInstall()"
+                class="hidden w-full flex items-center gap-3 px-3 py-2 text-dull-purple hover:bg-oatmeal/30 transition-fast">
+                <i data-lucide="download" class="w-5 h-5"></i>
+                <span class="font-mono text-xs uppercase">Install App</span>
+            </button>
+            <button onclick="App.openSettings()"
+                class="w-full flex items-center gap-3 px-3 py-2 text-earth-metal hover:bg-oatmeal/30 transition-fast">
+                <i data-lucide="settings" class="w-5 h-5"></i>
+                <span class="font-mono text-xs uppercase">Settings</span>
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col min-h-[100svh] md:min-h-0 md:h-screen">
+        <!-- Header -->
+        <header
+            class="h-14 md:h-16 border-b border-oatmeal flex items-center justify-between px-4 bg-white-linen flex-shrink-0 sticky top-0 z-30">
+            <div class="flex items-center gap-3">
+                <!-- Mobile menu toggle -->
+                <button class="md:hidden p-2 -ml-2 text-earth-metal" onclick="App.toggleMobileMenu()">
+                    <i data-lucide="menu" class="w-5 h-5"></i>
+                </button>
+                <h2 id="headerTitle" class="font-serif text-xl text-charcoal">Dashboard</h2>
+                <span id="syncStatus"
+                    class="hidden text-[10px] font-mono uppercase px-2 py-1 bg-oatmeal text-earth-metal flex items-center gap-1">
+                    <span class="w-2 h-2 rounded-full bg-earth-metal"></span>
+                    <span>Offline</span>
+                </span>
+            </div>
+            <div class="flex items-center gap-2">
+                <!-- Sync Status Indicator -->
+                <div class="relative">
+                    <button id="manualSyncBtn" onclick="PetTracker.Sync?.manualSync()" title="Sync now"
+                        class="p-2 text-earth-metal hover:text-dull-purple transition-fast">
+                        <span id="syncStatusIndicator">
+                            <i data-lucide="cloud" class="w-5 h-5"></i>
+                        </span>
+                    </button>
+                    <span id="syncPendingBadge"
+                        class="hidden absolute -top-1 -right-1 bg-muted-pink text-white-linen text-[9px] font-mono min-w-[16px] h-4 flex items-center justify-center px-1">
+                        0
+                    </span>
+                </div>
+                <span id="lastSyncTime" class="hidden md:inline text-[10px] font-mono text-earth-metal">
+                    Never synced
+                </span>
+                <button id="installPwaBtnMobile" onclick="App.promptInstall()"
+                    class="hidden md:hidden p-2 text-earth-metal hover:text-dull-purple transition-fast"
+                    title="Install app">
+                    <i data-lucide="download" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- View Container -->
+        <div id="mainScrollView" class="flex-1 min-h-0 overflow-y-auto overscroll-auto">
+            <div data-view="dashboard"></div>
+            <div data-view="calendar" class="hidden"></div>
+            <div data-view="upcoming" class="hidden"></div>
+            <div data-view="analytics" class="hidden"></div>
+            <div data-view="pets" class="hidden"></div>
+            <div data-view="contacts" class="hidden"></div>
+            <div data-view="setup" class="hidden"></div>
+        </div>
+
+        <!-- Mobile Floating Actions -->
+        <div class="mobile-action-stack md:hidden" aria-label="Quick actions">
+            <button type="button" class="mobile-action-btn mobile-action-btn-primary"
+                onclick="PetTracker.QuickAddModal.open()" aria-label="Quick Add" title="Quick Add">
+                <i data-lucide="zap" class="w-4 h-4" aria-hidden="true"></i>
+                <span>Quick Add</span>
+            </button>
+            <button type="button" class="mobile-action-btn mobile-action-btn-secondary" onclick="App.openAddModal()"
+                aria-label="Add Event" title="Add Event">
+                <i data-lucide="plus-circle" class="w-4 h-4" aria-hidden="true"></i>
+                <span>Add Event</span>
+            </button>
+        </div>
+
+        <!-- Bottom Nav (Mobile) -->
+        <nav
+            class="mobile-bottom-nav md:hidden fixed bottom-0 inset-x-0 h-16 border-t border-oatmeal flex items-center justify-around bg-white-linen z-30">
+            <button data-nav="dashboard" class="flex flex-col items-center gap-1 p-2 text-dull-purple">
+                <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+                <span class="font-mono text-[9px] uppercase">Home</span>
+            </button>
+            <button data-nav="calendar" class="flex flex-col items-center gap-1 p-2 text-earth-metal">
+                <i data-lucide="calendar" class="w-5 h-5"></i>
+                <span class="font-mono text-[9px] uppercase">Calendar</span>
+            </button>
+            <button data-nav="pets" class="flex flex-col items-center gap-1 p-2 text-earth-metal">
+                <i data-lucide="paw-print" class="w-5 h-5"></i>
+                <span class="font-mono text-[9px] uppercase">Pets</span>
+            </button>
+            <button data-nav="setup" class="flex flex-col items-center gap-1 p-2 text-earth-metal">
+                <i data-lucide="sliders-horizontal" class="w-5 h-5"></i>
+                <span class="font-mono text-[9px] uppercase">Setup</span>
+            </button>
+            <button onclick="App.openSettings()" class="flex flex-col items-center gap-1 p-2 text-earth-metal">
+                <i data-lucide="settings" class="w-5 h-5"></i>
+                <span class="font-mono text-[9px] uppercase">Settings</span>
+            </button>
+        </nav>
+    </main>
+
+    <!-- ========== MODALS ========== -->
+
+    <!-- FIX #12: Sync Queue Modal -->
+    <div id="syncQueueModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
+        aria-modal="true">
+        <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
+        <div class="relative bg-white-linen border border-oatmeal w-full max-w-lg max-h-[90vh] overflow-y-auto z-10">
+            <div class="sticky top-0 bg-white-linen border-b border-oatmeal p-4 flex items-center justify-between">
+                <span class="section-header">Sync Queue</span>
+                <button onclick="PetTracker.UI.closeModal('syncQueueModal')"
+                    class="p-1 text-earth-metal hover:text-charcoal">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div id="syncQueueContent" class="p-4"></div>
+            <div class="p-4 border-t border-oatmeal flex gap-3 justify-end">
+                <button onclick="App.retryAllFailed()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
+                    <i data-lucide="refresh-cw" class="w-3 h-3 inline mr-1"></i>Retry All
+                </button>
+                <button onclick="App.dropAllFailed()"
+                    class="btn-secondary px-4 py-2 font-mono text-xs uppercase text-muted-pink">
+                    <i data-lucide="trash-2" class="w-3 h-3 inline mr-1"></i>Drop All Failed
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Event Modal -->
+    <div id="addEventModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
+        aria-modal="true" aria-labelledby="addEventModalTitle">
+        <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
+        <div class="relative bg-white-linen border border-oatmeal w-full max-w-lg max-h-[90vh] overflow-y-auto z-10">
+            <div class="sticky top-0 bg-white-linen border-b border-oatmeal p-4 flex items-center justify-between">
+                <span class="section-header">Add Event</span>
+                <button onclick="App.confirmCloseAddModal()" class="p-1 text-earth-metal hover:text-charcoal">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <form id="addEventForm" class="p-4 space-y-4" onsubmit="event.preventDefault(); App.saveEvent();">
+                <div>
+                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Pet *</label>
+                    <select id="addEventPet" class="select-field" required></select>
+                </div>
+                <div>
+                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Event Type *</label>
+                    <div class="combobox-container">
+                        <input type="text" id="addEventTypeInput" class="input-field combobox-input"
+                            placeholder="Select event type..." autocomplete="off" required>
+                        <input type="hidden" id="addEventType">
+                        <div class="combobox-dropdown" id="addEventTypeDropdown"></div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Date *</label>
+                        <input type="date" id="addEventDate" class="input-field" required>
+                    </div>
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Time</label>
+                        <input type="time" id="addEventTime" class="input-field">
+                    </div>
+                </div>
+                <div>
+                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Status</label>
+                    <select id="addEventStatus" class="select-field">
+                        <option value="Completed">Completed</option>
+                        <option value="Planned">Planned</option>
+                        <option value="Missed">Missed</option>
+                    </select>
+                </div>
+                <div id="addEventSeverityContainer" class="hidden">
+                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Severity/Rating</label>
+                    <select id="addEventSeverity" class="select-field">
+                        <option value="">-- Select Level --</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Value</label>
+                        <input type="number" id="addEventValue" class="input-field" placeholder="e.g., weight, dose">
+                    </div>
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Unit</label>
+                        <input type="text" id="addEventUnit" class="input-field" placeholder="e.g., lb, mg, mL">
+                    </div>
+                </div>
+                <div>
+                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Notes</label>
+                    <textarea id="addEventNotes" class="input-field h-24 resize-none"
+                        placeholder="Additional notes..."></textarea>
+                </div>
+                <!-- FIX #8: Advanced fields section -->
+                <details class="border border-oatmeal">
+                    <summary
+                        class="p-3 font-mono text-xs uppercase text-earth-metal cursor-pointer hover:bg-oatmeal/30">
+                        Advanced Fields
+                    </summary>
+                    <div class="p-3 space-y-4 border-t border-oatmeal">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">End Date</label>
+                                <input type="date" id="addEventEndDate" class="input-field">
+                            </div>
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Duration
+                                    (min)</label>
+                                <input type="number" id="addEventDuration" class="input-field" placeholder="Minutes">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4">
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Cost</label>
+                                <input type="number" id="addEventCost" class="input-field" step="0.01"
+                                    placeholder="0.00">
+                            </div>
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Cost
+                                    Category</label>
+                                <select id="addEventCostCategory" class="select-field">
+                                    <option value="">Select...</option>
+                                    <option value="Routine">Routine</option>
+                                    <option value="Emergency">Emergency</option>
+                                    <option value="Preventive">Preventive</option>
+                                    <option value="Surgery">Surgery</option>
+                                    <option value="Medication">Medication</option>
+                                    <option value="Supplies">Supplies</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Currency</label>
+                                <select id="addEventCostCurrency" class="select-field">
+                                    <option value="">Select...</option>
+                                    <option value="USD">USD</option>
+                                    <option value="EUR">EUR</option>
+                                    <option value="GBP">GBP</option>
+                                    <option value="CAD">CAD</option>
+                                    <option value="AUD">AUD</option>
+                                    <option value="INR">INR</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Provider</label>
+                            <select id="addEventProvider" class="select-field">
+                                <option value="">None</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Tags</label>
+                            <div class="multiselect-dropdown" id="addEventTagsDropdown">
+                                <button type="button"
+                                    class="multiselect-trigger input-field flex items-center justify-between"
+                                    onclick="App.toggleEventTagsMenu()" aria-expanded="false">
+                                    <span id="addEventTagsLabel"
+                                        class="multiselect-label text-sm text-earth-metal">Select or add tags...</span>
+                                    <i data-lucide="chevron-down"
+                                        class="w-4 h-4 text-earth-metal transition-transform"></i>
+                                </button>
+                                <div id="addEventTagsMenu"
+                                    class="multiselect-menu hidden absolute z-20 mt-1 w-full bg-white-linen border border-oatmeal shadow-lg max-h-56 overflow-y-auto p-2 space-y-2">
+                                    <input type="text" id="addEventTagsSearch" class="input-field"
+                                        placeholder="Search or add tag..." oninput="App.renderEventTagOptions()">
+                                    <div id="addEventTagsOptions" class="space-y-1"></div>
+                                </div>
+                                <div id="addEventTagsChips" class="multiselect-tags mt-2 hidden"></div>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+                <div>
+                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Attachments</label>
+                    <div id="attachmentPreviewContainer" class="hidden flex flex-wrap gap-2 mb-3"></div>
+                    <div class="border border-dashed border-oatmeal p-4 text-center">
+                        <input type="file" id="addEventFiles" class="hidden" multiple accept="*/*"
+                            onchange="App.handleFileInputChange(this)">
+                        <button type="button" onclick="document.getElementById('addEventFiles').click()"
+                            class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
+                            <i data-lucide="upload" class="w-4 h-4 inline mr-2"></i>Choose Files
+                        </button>
+                        <p class="text-xs text-earth-metal mt-2">Or use camera on mobile</p>
+                    </div>
+                </div>
+                <div class="flex gap-3 justify-end pt-4 border-t border-oatmeal">
+                    <button type="button" onclick="App.confirmCloseAddModal()"
+                        class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Cancel</button>
+                    <button type="submit" class="btn-primary px-4 py-2 font-mono text-xs uppercase">Save Event</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
+        aria-modal="true" aria-labelledby="settingsModalTitle">
+        <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
+        <div
+            class="relative bg-white-linen border border-oatmeal w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col z-10">
+            <div class="border-b border-oatmeal p-4 flex items-center justify-between flex-shrink-0">
+                <span class="section-header">Settings</span>
+                <button onclick="PetTracker.UI.closeModal('settingsModal')"
+                    class="p-1 text-earth-metal hover:text-charcoal">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Settings Tabs -->
+            <div class="border-b border-oatmeal flex overflow-x-auto flex-shrink-0">
+                <button data-tab-group="settings" data-tab="connection" class="tab-nav active">Connection</button>
+                <button data-tab-group="settings" data-tab="database" class="tab-nav">Database</button>
+                <button data-tab-group="settings" data-tab="ai" class="tab-nav">AI Config</button>
+                <button data-tab-group="settings" data-tab="todoist" class="tab-nav">Todoist</button>
+                <button data-tab-group="settings" data-tab="gcal" class="tab-nav">Calendar</button>
+                <button data-tab-group="settings" data-tab="danger" class="tab-nav">Danger Zone</button>
+            </div>
+
+            <form class="flex-1 overflow-y-auto p-4" autocomplete="off" onsubmit="return false;">
+                <!-- Connection Tab -->
+                <div data-tab-panel="settings" data-panel="connection" class="space-y-4">
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Cloudflare Worker URL
+                            *</label>
+                        <input type="url" id="settingsWorkerUrl" class="input-field"
+                            placeholder="https://your-worker.workers.dev">
+                        <p class="text-xs text-earth-metal mt-1">Your CORS proxy worker URL</p>
+                    </div>
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Proxy Token
+                            (optional)</label>
+                        <input type="text" id="settingsProxyToken" class="input-field masked-input"
+                            placeholder="Optional auth token" autocomplete="off" data-lpignore="true"
+                            data-form-type="other">
+                        <p class="text-xs text-earth-metal mt-1">Required when the Worker has
+                            ALL_CORS_PROXY_MATCH_TOKEN set. This is separate from the OAuth dev password.</p>
+                    </div>
+
+                    <!-- Template Link -->
+                    <div class="border border-dull-purple/30 p-3 bg-dull-purple/5">
+                        <p class="text-sm text-charcoal">
+                            <i data-lucide="copy" class="w-4 h-4 inline mr-1"></i>
+                            Need the template? Duplicate this <a
+                                href="https://mimansajaiswal-embedded-dbs.notion.site/pet-tracker-template"
+                                target="_blank" rel="noopener noreferrer"
+                                class="underline text-dull-purple font-medium">Notion template</a> to your workspace.
+                        </p>
+                    </div>
+
+                    <!-- OAuth Section -->
+                    <div class="border border-oatmeal p-4 space-y-3">
+                        <span class="font-mono text-xs uppercase text-earth-metal">Notion OAuth (Recommended)</span>
+                        <div id="notionConnectionStatus"
+                            class="hidden p-2 bg-dull-purple/10 border border-dull-purple text-sm text-charcoal">
+                            <i data-lucide="check-circle" class="w-4 h-4 inline mr-1 text-dull-purple"></i>
+                            <span id="notionConnectionStatusText">Connected via OAuth</span>
+                        </div>
+                        <button id="notionConnectBtn" onclick="App.startNotionOAuth()"
+                            class="btn-primary w-full px-4 py-2 font-mono text-xs uppercase flex items-center justify-center gap-2">
+                            <i data-lucide="zap" class="w-4 h-4"></i>Connect with Notion
+                        </button>
+                        <div data-local-oauth-dev class="hidden">
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Local OAuth Dev Password</label>
+                            <input type="password" id="settingsOAuthDevPassword" class="input-field"
+                                placeholder="Required only on localhost" autocomplete="off" data-lpignore="true"
+                                data-form-type="other">
+                        </div>
+                        <p class="text-xs text-earth-metal">Securely connect via Notion's OAuth. Redirects to Notion
+                            for authorization.</p>
+                    </div>
+
+                    <!-- Divider -->
+                    <div class="flex items-center gap-4">
+                        <div class="flex-1 border-t border-oatmeal"></div>
+                        <span class="font-mono text-xs uppercase text-earth-metal">OR</span>
+                        <div class="flex-1 border-t border-oatmeal"></div>
+                    </div>
+
+                    <!-- Manual Token Section -->
+                    <div class="border border-oatmeal p-4 space-y-3">
+                        <span class="font-mono text-xs uppercase text-earth-metal">Manual Token (Internal
+                            Integrations)</span>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Notion Integration
+                                Token</label>
+                            <input type="text" id="settingsNotionToken" class="input-field masked-input"
+                                placeholder="secret_..." autocomplete="off" data-lpignore="true" data-form-type="other"
+                                autocomplete="off">
+                            <p class="text-xs text-earth-metal mt-1">From your Notion integration settings</p>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap gap-3">
+                        <button onclick="App.testConnection()"
+                            class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
+                            <i data-lucide="plug" class="w-4 h-4 inline mr-2"></i>Test Connection
+                        </button>
+                        <button onclick="App.showWorkerCode()"
+                            class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
+                            <i data-lucide="code" class="w-4 h-4 inline mr-2"></i>View Worker Code
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Database Tab -->
+                <div data-tab-panel="settings" data-panel="database" class="hidden space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div>
+                            <span class="font-mono text-xs uppercase text-earth-metal">Data Source Mapping</span>
+                            <p class="text-xs text-earth-metal mt-1">Click Scan to detect and map your Notion databases
+                            </p>
+                        </div>
+                        <button onclick="App.scanDataSources()"
+                            class="btn-primary px-4 py-2 font-mono text-xs uppercase flex items-center gap-2">
+                            <i data-lucide="scan" class="w-4 h-4"></i>Scan
+                        </button>
+                    </div>
+
+                    <div id="dataSourceMapping" class="space-y-3">
+                        <span class="font-mono text-xs uppercase text-earth-metal">Data Source Mapping</span>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="font-mono text-[10px] uppercase text-earth-metal block mb-1">Pets</label>
+                                <select id="dsMapPets" class="select-field text-sm"></select>
+                            </div>
+                            <div>
+                                <label
+                                    class="font-mono text-[10px] uppercase text-earth-metal block mb-1">Events</label>
+                                <select id="dsMapEvents" class="select-field text-sm"></select>
+                            </div>
+                            <div>
+                                <label class="font-mono text-[10px] uppercase text-earth-metal block mb-1">Event
+                                    Types</label>
+                                <select id="dsMapEventTypes" class="select-field text-sm"></select>
+                            </div>
+                            <div>
+                                <label
+                                    class="font-mono text-[10px] uppercase text-earth-metal block mb-1">Contacts</label>
+                                <select id="dsMapContacts" class="select-field text-sm"></select>
+                            </div>
+                            <div>
+                                <label
+                                    class="font-mono text-[10px] uppercase text-earth-metal block mb-1">Scales</label>
+                                <select id="dsMapScales" class="select-field text-sm"></select>
+                            </div>
+                            <div>
+                                <label class="font-mono text-[10px] uppercase text-earth-metal block mb-1">Scale
+                                    Levels</label>
+                                <select id="dsMapScaleLevels" class="select-field text-sm"></select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="schemaStatus" class="hidden">
+                        <span class="font-mono text-xs uppercase text-earth-metal">Schema Status</span>
+                        <div id="schemaStatusList" class="mt-2 space-y-1"></div>
+                    </div>
+
+                    <div>
+                        <label for="settingsDefaultTimezone"
+                            class="font-mono text-xs uppercase text-earth-metal block mb-1">Default Timezone</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="settingsDefaultTimezone" name="defaultTimezone" class="input-field text-sm"
+                                placeholder="America/Los_Angeles" autocomplete="off">
+                            <button type="button" onclick="App.inferDefaultTimezone()"
+                                class="btn-secondary px-3 py-2 font-mono text-xs uppercase flex-shrink-0">
+                                Infer
+                            </button>
+                        </div>
+                        <p class="text-xs text-earth-metal mt-1">Used for recurring care schedules and quick-created event types.</p>
+                    </div>
+
+                    <div>
+                        <label for="settingsUploadCapMb" class="font-mono text-xs uppercase text-earth-metal block mb-1">Attachment Upload
+                            Cap</label>
+                        <select id="settingsUploadCapMb" class="select-field text-sm">
+                            <option value="5">5 MB (Free Workspace)</option>
+                            <option value="20">20 MB (Paid Soft Cap)</option>
+                        </select>
+                        <p class="text-xs text-earth-metal mt-1">Files above this cap are rejected before upload.</p>
+                    </div>
+                </div>
+
+                <!-- AI Tab -->
+                <div data-tab-panel="settings" data-panel="ai" class="hidden space-y-4">
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">AI Provider</label>
+                        <select id="settingsAiProvider" class="select-field" onchange="App.toggleAiEndpoint?.()">
+                            <option value="openai">OpenAI</option>
+                            <option value="anthropic">Anthropic</option>
+                            <option value="google">Google Gemini</option>
+                            <option value="custom">Custom Endpoint</option>
+                        </select>
+                    </div>
+                    <div id="aiEndpointField" class="hidden">
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Custom Endpoint
+                            URL</label>
+                        <input type="url" id="settingsAiEndpoint" class="input-field"
+                            placeholder="https://your-api.com/v1/chat/completions">
+                        <p class="text-xs text-earth-metal mt-1">OpenAI-compatible API endpoint</p>
+                    </div>
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Model</label>
+                        <input type="text" id="settingsAiModel" class="input-field" placeholder="gpt-4o-mini">
+                    </div>
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">API Key</label>
+                        <input type="text" id="settingsAiApiKey" class="input-field masked-input"
+                            placeholder="Your API key" autocomplete="off" data-lpignore="true" data-form-type="other"
+                            autocomplete="off">
+                    </div>
+                </div>
+
+                <!-- Todoist Tab -->
+                <div data-tab-panel="settings" data-panel="todoist" class="hidden space-y-4">
+                    <div class="flex items-center gap-3">
+                        <input type="checkbox" id="settingsTodoistEnabled" class="w-4 h-4">
+                        <label for="settingsTodoistEnabled" class="font-mono text-xs uppercase text-charcoal">Enable
+                            Todoist Integration</label>
+                    </div>
+                    <div class="border border-oatmeal p-4 space-y-3">
+                        <span class="font-mono text-xs uppercase text-earth-metal">Todoist Account</span>
+                        <div id="todoistConnectionStatus" class="text-sm text-earth-metal">Not connected</div>
+                        <button onclick="App.startTodoistOAuth()"
+                            class="btn-secondary w-full px-4 py-2 font-mono text-xs uppercase flex items-center justify-center gap-2">
+                            <i data-lucide="check-square" class="w-4 h-4"></i>Connect with Todoist OAuth
+                        </button>
+                        <p class="text-xs text-earth-metal">OAuth token is preferred. Manual token still supported
+                            below.</p>
+                        <div id="todoistDisconnectSection" class="hidden">
+                            <button onclick="App.disconnectTodoistOAuth()"
+                                class="btn-secondary w-full px-4 py-2 font-mono text-xs uppercase">
+                                <i data-lucide="unlink" class="w-4 h-4 inline mr-2"></i>Disconnect Todoist OAuth
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Todoist API Token</label>
+                        <input type="text" id="settingsTodoistToken" class="input-field masked-input" autocomplete="off"
+                            data-lpignore="true" data-form-type="other" placeholder="Your Todoist token"
+                            autocomplete="off">
+                        <p class="text-xs text-earth-metal mt-1">Used when OAuth is not connected.</p>
+                    </div>
+                </div>
+
+                <!-- Google Calendar Tab -->
+                <div data-tab-panel="settings" data-panel="gcal" class="hidden space-y-4">
+                    <div class="flex items-center gap-3">
+                        <input type="checkbox" id="settingsGcalEnabled" class="w-4 h-4">
+                        <label for="settingsGcalEnabled" class="font-mono text-xs uppercase text-charcoal">Enable
+                            Google Calendar Sync</label>
+                    </div>
+
+                    <!-- OAuth Section -->
+                    <div class="border border-oatmeal p-4 space-y-3">
+                        <span class="font-mono text-xs uppercase text-earth-metal">Google Account</span>
+                        <div id="gcalConnectionStatus" class="text-sm text-earth-metal">
+                            Not connected
+                        </div>
+                        <button onclick="App.startGoogleOAuth()"
+                            class="btn-primary w-full px-4 py-2 font-mono text-xs uppercase flex items-center justify-center gap-2">
+                            <i data-lucide="calendar" class="w-4 h-4"></i>Connect with Google
+                        </button>
+                        <p class="text-xs text-earth-metal">Securely connect via Google OAuth to sync events to your
+                            calendar.</p>
+                    </div>
+
+                    <!-- Calendar Selection -->
+                    <div id="gcalCalendarSelect" class="hidden">
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Target Calendar</label>
+                        <select id="settingsGcalCalendarId" class="select-field">
+                            <option value="">Select a calendar...</option>
+                        </select>
+                        <p class="text-xs text-earth-metal mt-1">Events will be pushed to this calendar</p>
+                    </div>
+
+                    <!-- Sync Mode -->
+                    <div>
+                        <span class="font-mono text-xs uppercase text-earth-metal block mb-2">Sync Mode</span>
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="radio" name="gcalSyncMode" value="push" checked class="w-4 h-4">
+                            <div>
+                                <span class="text-sm text-charcoal font-medium">One-way push</span>
+                                <p class="text-xs text-earth-metal">Push pet events to Google Calendar</p>
+                            </div>
+                        </label>
+                    </div>
+
+                    <!-- Disconnect Button -->
+                    <div id="gcalDisconnectSection" class="hidden">
+                        <button onclick="App.disconnectGoogleCalendar()"
+                            class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
+                            <i data-lucide="unlink" class="w-4 h-4 inline mr-2"></i>Disconnect Google Calendar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Danger Zone Tab -->
+                <div data-tab-panel="settings" data-panel="danger" class="hidden space-y-4">
+                    <div class="border border-muted-pink p-4 bg-muted-pink/10">
+                        <h4 class="font-mono text-xs uppercase text-charcoal mb-2">Reset Application</h4>
+                        <p class="text-sm text-earth-metal mb-4">This will delete all local data including settings,
+                            cached pets, events, and media. Data already synced to Notion will not be affected.</p>
+                        <button onclick="App.confirmReset()" class="btn-danger px-4 py-2 font-mono text-xs uppercase">
+                            <i data-lucide="trash-2" class="w-4 h-4 inline mr-2"></i>Reset App
+                        </button>
+                    </div>
+                </div>
+            </form>
+
+            <div class="border-t border-oatmeal p-4 flex justify-end gap-3 flex-shrink-0">
+                <button onclick="PetTracker.UI.closeModal('settingsModal')"
+                    class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Cancel</button>
+                <button onclick="App.saveSettings()" class="btn-primary px-4 py-2 font-mono text-xs uppercase">Save
+                    Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Onboarding Modal (Multi-step Wizard) -->
+    <div id="onboardingModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
+        aria-modal="true" aria-labelledby="onboardingModalTitle" data-disable-escape-close="true"
+        data-disable-overlay-close="true">
+        <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
+        <div
+            class="relative bg-white-linen border border-oatmeal w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col z-10">
+            <div class="p-4 border-b border-oatmeal flex-shrink-0">
+                <div class="flex items-center justify-between">
+                    <span class="section-header">Setup Wizard</span>
+                    <div id="onboardingSteps" class="flex gap-1">
+                        <span class="w-6 h-1 bg-dull-purple" data-step="1"></span>
+                        <span class="w-6 h-1 bg-oatmeal" data-step="2"></span>
+                        <span class="w-6 h-1 bg-oatmeal" data-step="3"></span>
+                        <span class="w-6 h-1 bg-oatmeal" data-step="4"></span>
+                        <span class="w-6 h-1 bg-oatmeal" data-step="5"></span>
+                    </div>
+                </div>
+            </div>
+
+            <form class="flex-1 overflow-y-auto p-6" autocomplete="off" onsubmit="return false;">
+                <!-- Step 1: Welcome -->
+                <div id="onboardingStep1" class="onboarding-step">
+                    <div class="text-center mb-6">
+                        <div class="w-16 h-16 bg-charcoal flex items-center justify-center mx-auto mb-4">
+                            <i data-lucide="heart-pulse" class="w-8 h-8 text-white-linen"></i>
+                        </div>
+                        <h2 class="font-serif text-2xl text-charcoal mb-2">Welcome to Pet Tracker</h2>
+                        <p class="text-earth-metal">Track your pet's health, medications, and appointments with Notion
+                            as your backend.</p>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="flex items-start gap-3">
+                            <span class="badge badge-dark">1</span>
+                            <div>
+                                <p class="text-sm text-charcoal font-medium">Set up Cloudflare Worker</p>
+                                <p class="text-xs text-earth-metal">Deploy the CORS proxy for API calls</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <span class="badge badge-dark">2</span>
+                            <div>
+                                <p class="text-sm text-charcoal font-medium">Connect to Notion</p>
+                                <p class="text-xs text-earth-metal">Create an integration and get your token</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start gap-3">
+                            <span class="badge badge-dark">3</span>
+                            <div>
+                                <p class="text-sm text-charcoal font-medium">Add your first pet</p>
+                                <p class="text-xs text-earth-metal">Get started tracking right away</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2: Worker Setup -->
+                <div id="onboardingStep2" class="onboarding-step hidden">
+                    <h3 class="font-serif text-xl text-charcoal mb-4">Cloudflare Worker Setup</h3>
+                    <p class="text-earth-metal text-sm mb-4">Deploy a CORS proxy to enable API calls from this app.</p>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Worker URL *</label>
+                            <input type="url" id="onboardingWorkerUrl" class="input-field"
+                                placeholder="https://your-worker.workers.dev">
+                        </div>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Proxy Token
+                                (optional)</label>
+                            <input type="text" id="onboardingProxyToken" class="input-field masked-input"
+                                autocomplete="off" data-lpignore="true" data-form-type="other"
+                                placeholder="Your worker secret token">
+                            <p class="text-xs text-earth-metal mt-1">This is the Worker proxy token, not the local OAuth
+                                dev password.</p>
+                        </div>
+                        <input type="hidden" id="onboardingWorkerVerified" value="false">
+                        <div id="onboardingWorkerStatus" class="hidden"></div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <button type="button" onclick="App.showWorkerCode()"
+                                class="btn-secondary px-3 py-2 font-mono text-xs uppercase">
+                                <i data-lucide="code" class="w-4 h-4 inline mr-2"></i>Code
+                            </button>
+                            <button id="onboardingVerifyWorkerBtn" type="button" onclick="Onboarding.verifyWorker()"
+                                class="btn-primary px-3 py-2 font-mono text-xs uppercase">
+                                <i data-lucide="plug" class="w-4 h-4 inline mr-2"></i>Verify
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 3: Notion Connection -->
+                <div id="onboardingStep3" class="onboarding-step hidden">
+                    <h3 class="font-serif text-xl text-charcoal mb-4">Connect to Notion</h3>
+                    <p class="text-earth-metal text-sm mb-4">Connect your workspace and map the required databases.</p>
+
+                    <div class="space-y-4">
+                        <!-- Template Link -->
+                        <div class="border border-oatmeal p-3 bg-oatmeal/10">
+                            <p class="text-sm text-charcoal">
+                                <i data-lucide="copy" class="w-4 h-4 inline mr-1"></i>
+                                First, duplicate this <a
+                                    href="https://mimansajaiswal-embedded-dbs.notion.site/pet-tracker-template"
+                                    target="_blank" rel="noopener noreferrer"
+                                    class="underline text-dull-purple font-medium">Notion template</a> to your
+                                workspace.
+                            </p>
+                        </div>
+
+                        <button onclick="Onboarding.startOAuth()"
+                            class="btn-primary w-full px-4 py-2 font-mono text-xs uppercase flex items-center justify-center gap-2">
+                            <i data-lucide="zap" class="w-4 h-4"></i>Connect with Notion
+                        </button>
+                        <div data-local-oauth-dev class="hidden border border-oatmeal p-3 bg-oatmeal/10">
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Local OAuth Dev Password</label>
+                            <input type="password" id="onboardingOAuthDevPassword" class="input-field"
+                                placeholder="Required only on localhost" autocomplete="off" data-lpignore="true"
+                                data-form-type="other">
+                            <p class="text-xs text-earth-metal mt-1">Used only to unlock localhost OAuth during
+                                development.</p>
+                        </div>
+
+                        <div class="flex items-center gap-4">
+                            <div class="flex-1 border-t border-oatmeal"></div>
+                            <span class="font-mono text-xs uppercase text-earth-metal">OR</span>
+                            <div class="flex-1 border-t border-oatmeal"></div>
+                        </div>
+
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Manual Token</label>
+                            <input type="text" id="onboardingNotionToken" class="input-field masked-input"
+                                autocomplete="off" data-lpignore="true" data-form-type="other" placeholder="secret_..."
+                                autocomplete="off"
+                                onchange="document.getElementById('onboardingDatabasesVerified').value = 'false'">
+                        </div>
+
+                        <button type="button" onclick="Onboarding.findDatabases()"
+                            class="btn-secondary px-4 py-2 font-mono text-xs uppercase w-full">
+                            <i data-lucide="scan" class="w-4 h-4 inline mr-2"></i>Find Data Sources
+                        </button>
+
+                        <div id="onboardingDbList" class="hidden"></div>
+                        <input type="hidden" id="onboardingDatabasesVerified" value="false">
+
+                        <button id="onboardingDbVerifyBtn" type="button" onclick="Onboarding.checkDbMapping()"
+                            class="hidden btn-secondary px-4 py-2 font-mono text-xs uppercase w-full mt-2">
+                            <i data-lucide="check-circle" class="w-4 h-4 inline mr-2"></i>Confirm Mapping
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Step 4: Customize Tracking -->
+                <div id="onboardingStep4" class="onboarding-step hidden">
+                    <h3 class="font-serif text-xl text-charcoal mb-2">Customize What to Track</h3>
+                    <p class="text-earth-metal text-sm mb-2">Select from common tracking options to get started quickly.
+                    </p>
+                    <div class="bg-dull-purple/10 border border-dull-purple/30 p-3 mb-4">
+                        <p class="text-xs text-charcoal">
+                            <i data-lucide="info" class="w-3 h-3 inline mr-1"></i>
+                            <strong>Create custom event types anytime!</strong> After setup, go to <strong>Setup → Event
+                                Types</strong> to add your own (e.g., "Vomiting", "Wheezing") with custom icons.
+                        </p>
+                    </div>
+
+                    <div class="space-y-5">
+                        <!-- Event Types Multi-Select -->
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-2">
+                                <i data-lucide="activity" class="w-3 h-3 inline mr-1"></i>Event Types (Ad-hoc Logging)
+                            </label>
+                            <div id="onboardingEventTypesDropdown" class="multiselect-dropdown"
+                                data-multiselect="eventTypes">
+                                <button type="button"
+                                    class="multiselect-trigger input-field flex items-center justify-between"
+                                    onclick="Onboarding.toggleDropdown('eventTypes')">
+                                    <span class="multiselect-label text-sm text-earth-metal">Select event
+                                        types...</span>
+                                    <i data-lucide="chevron-down"
+                                        class="w-4 h-4 text-earth-metal transition-transform"></i>
+                                </button>
+                                <div
+                                    class="multiselect-menu hidden absolute z-20 mt-1 w-full bg-white-linen border border-oatmeal shadow-lg max-h-48 overflow-y-auto">
+                                    <div class="p-2 border-b border-oatmeal">
+                                        <label
+                                            class="flex items-center gap-2 cursor-pointer text-xs text-dull-purple font-medium">
+                                            <input type="checkbox" class="multiselect-all"
+                                                onchange="Onboarding.toggleAll('eventTypes', this.checked)">
+                                            Select All
+                                        </label>
+                                    </div>
+                                    <div class="multiselect-options p-1"></div>
+                                </div>
+                            </div>
+                            <p class="text-[10px] text-earth-metal mt-1">For manual logging as-needed (not scheduled)
+                            </p>
+                        </div>
+
+                        <!-- Scales Multi-Select -->
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-2">
+                                <i data-lucide="gauge" class="w-3 h-3 inline mr-1"></i>Scales & Severity Levels
+                            </label>
+                            <div id="onboardingScalesDropdown" class="multiselect-dropdown" data-multiselect="scales">
+                                <button type="button"
+                                    class="multiselect-trigger input-field flex items-center justify-between"
+                                    onclick="Onboarding.toggleDropdown('scales')">
+                                    <span class="multiselect-label text-sm text-earth-metal">Select scales...</span>
+                                    <i data-lucide="chevron-down"
+                                        class="w-4 h-4 text-earth-metal transition-transform"></i>
+                                </button>
+                                <div
+                                    class="multiselect-menu hidden absolute z-20 mt-1 w-full bg-white-linen border border-oatmeal shadow-lg max-h-48 overflow-y-auto">
+                                    <div class="p-2 border-b border-oatmeal">
+                                        <label
+                                            class="flex items-center gap-2 cursor-pointer text-xs text-dull-purple font-medium">
+                                            <input type="checkbox" class="multiselect-all"
+                                                onchange="Onboarding.toggleAll('scales', this.checked)">
+                                            Select All
+                                        </label>
+                                    </div>
+                                    <div class="multiselect-options p-1"></div>
+                                </div>
+                            </div>
+                            <p class="text-[10px] text-earth-metal mt-1">Rate symptom severity, activity levels, mood,
+                                and appetite</p>
+                        </div>
+
+                        <!-- Recurring Items Multi-Select (Scheduled with reminders) -->
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-2">
+                                <i data-lucide="repeat" class="w-3 h-3 inline mr-1"></i>Scheduled Items (Auto-reminders)
+                            </label>
+                            <div id="onboardingRecurringTypesDropdown" class="multiselect-dropdown"
+                                data-multiselect="recurringTypes">
+                                <button type="button"
+                                    class="multiselect-trigger input-field flex items-center justify-between"
+                                    onclick="Onboarding.toggleDropdown('recurringTypes')">
+                                    <span class="multiselect-label text-sm text-earth-metal">Select recurring
+                                        items...</span>
+                                    <i data-lucide="chevron-down"
+                                        class="w-4 h-4 text-earth-metal transition-transform"></i>
+                                </button>
+                                <div
+                                    class="multiselect-menu hidden absolute z-20 mt-1 w-full bg-white-linen border border-oatmeal shadow-lg max-h-48 overflow-y-auto">
+                                    <div class="p-2 border-b border-oatmeal">
+                                        <label
+                                            class="flex items-center gap-2 cursor-pointer text-xs text-dull-purple font-medium">
+                                            <input type="checkbox" class="multiselect-all"
+                                                onchange="Onboarding.toggleAll('recurringTypes', this.checked)">
+                                            Select All
+                                        </label>
+                                    </div>
+                                    <div class="multiselect-options p-1"></div>
+                                </div>
+                            </div>
+                            <p class="text-[10px] text-earth-metal mt-1">Vaccines, medications, and appointments with
+                                automatic due date tracking</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 5: First Pet & Sample Events -->
+                <div id="onboardingStep5" class="onboarding-step hidden">
+                    <h3 class="font-serif text-xl text-charcoal mb-4">Add Your First Pet</h3>
+                    <p class="text-earth-metal text-sm mb-4">Let's add your pet to get started. You can add more later.
+                    </p>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Pet Name *</label>
+                            <input type="text" id="onboardingPetName" class="input-field"
+                                placeholder="e.g., Luna, Max, Bella">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Species</label>
+                                <select id="onboardingPetSpecies" class="select-field">
+                                    <option value="Dog">Dog</option>
+                                    <option value="Cat">Cat</option>
+                                    <option value="Bird">Bird</option>
+                                    <option value="Fish">Fish</option>
+                                    <option value="Rabbit">Rabbit</option>
+                                    <option value="Reptile">Reptile</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Color</label>
+                                <input type="color" id="onboardingPetColor" class="input-field h-10" value="#8b7b8e">
+                            </div>
+                        </div>
+
+                        <div class="border border-oatmeal p-4 bg-oatmeal/10 space-y-3">
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" id="onboardingCreateSampleEvents" checked class="w-4 h-4">
+                                <div>
+                                    <span class="text-sm text-charcoal font-medium flex items-center gap-2">
+                                        <i data-lucide="calendar-check" class="w-4 h-4 text-dull-purple"></i>
+                                        Add sample events
+                                    </span>
+                                    <p class="text-xs text-earth-metal">Create example events like walks and checkups to
+                                        explore the app</p>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </form>
+
+            <div class="border-t border-oatmeal p-4 flex justify-between flex-shrink-0">
+                <button id="onboardingBack" onclick="Onboarding.prevStep()"
+                    class="btn-secondary px-4 py-2 font-mono text-xs uppercase hidden">
+                    <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>Back
+                </button>
+                <div class="flex gap-3 ml-auto">
+                    <button id="onboardingNext" onclick="Onboarding.nextStep()"
+                        class="btn-primary px-4 py-2 font-mono text-xs uppercase">
+                        Next<i data-lucide="arrow-right" class="w-4 h-4 inline ml-1"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Pet Modal -->
+    <div id="addPetModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
+        aria-modal="true" aria-labelledby="addPetModalTitle">
+        <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
+        <div class="relative bg-white-linen border border-oatmeal w-full max-w-lg max-h-[90vh] overflow-y-auto z-10">
+            <div class="sticky top-0 bg-white-linen border-b border-oatmeal p-4 flex items-center justify-between">
+                <span class="section-header">Add Pet</span>
+                <button onclick="Pets.requestCloseModal()" class="p-1 text-earth-metal hover:text-charcoal">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <form id="addPetForm" class="p-4 space-y-4">
+                <div class="flex gap-4 items-start">
+                    <div class="flex-1">
+                        <label for="addPetName" class="font-mono text-xs uppercase text-earth-metal block mb-1">Name *</label>
+                        <input type="text" id="addPetName" name="petName" class="input-field" required placeholder="Pet name"
+                            autocomplete="off" autofocus>
+                    </div>
+                    <div>
+                        <label for="addPetIconPreview" class="font-mono text-xs uppercase text-earth-metal block mb-1">Icon</label>
+                        <button type="button" id="addPetIconPreview" aria-label="Choose pet icon"
+                            onclick="PetTracker.UI.showIconPicker('addPetIcon', 'addPetIconPreview', 'pet')"
+                            class="w-12 h-12 bg-oatmeal border border-earth-metal/30 flex items-center justify-center hover:bg-oatmeal/70 transition-fast cursor-pointer">
+                            <i data-lucide="image-plus" class="w-6 h-6 text-earth-metal"></i>
+                        </button>
+                        <input type="hidden" id="addPetIcon" name="petIcon">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="addPetSpecies" class="font-mono text-xs uppercase text-earth-metal block mb-1">Species</label>
+                        <select id="addPetSpecies" name="species" class="select-field">
+                            <option value="">Select...</option>
+                            <option value="Dog">Dog</option>
+                            <option value="Cat">Cat</option>
+                            <option value="Bird">Bird</option>
+                            <option value="Fish">Fish</option>
+                            <option value="Rabbit">Rabbit</option>
+                            <option value="Reptile">Reptile</option>
+                            <option value="Hamster">Hamster</option>
+                            <option value="Guinea Pig">Guinea Pig</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="addPetSex" class="font-mono text-xs uppercase text-earth-metal block mb-1">Sex</label>
+                        <select id="addPetSex" name="sex" class="select-field">
+                            <option value="">Select...</option>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                            <option value="Unknown">Unknown</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label for="addPetBreed" class="font-mono text-xs uppercase text-earth-metal block mb-1">Breed</label>
+                    <input type="text" id="addPetBreed" name="breed" class="input-field" placeholder="Breed or type">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="addPetBirthDate" class="font-mono text-xs uppercase text-earth-metal block mb-1">Birth Date</label>
+                        <input type="date" id="addPetBirthDate" name="birthDate" class="input-field">
+                    </div>
+                    <div>
+                        <label for="addPetColor" class="font-mono text-xs uppercase text-earth-metal block mb-1">Color (Calendar)</label>
+                        <input type="color" id="addPetColor" name="color" class="input-field h-10" value="#8b7b8e">
+                    </div>
+                </div>
+                <div>
+                    <label for="addPetNotes" class="font-mono text-xs uppercase text-earth-metal block mb-1">Notes</label>
+                    <textarea id="addPetNotes" name="notes" class="input-field h-20 resize-none"
+                        placeholder="Additional notes..."></textarea>
+                </div>
+                <!-- FIX #9: Advanced pet fields -->
+                <details class="border border-oatmeal">
+                    <summary
+                        class="p-3 font-mono text-xs uppercase text-earth-metal cursor-pointer hover:bg-oatmeal/30">
+                        Advanced Fields
+                    </summary>
+                    <div class="p-3 space-y-4 border-t border-oatmeal">
+                        <div>
+                            <label for="addPetAdoptionDate" class="font-mono text-xs uppercase text-earth-metal block mb-1">Adoption Date</label>
+                            <input type="date" id="addPetAdoptionDate" name="adoptionDate" class="input-field">
+                        </div>
+                        <div>
+                            <label for="addPetStatus" class="font-mono text-xs uppercase text-earth-metal block mb-1">Status</label>
+                            <select id="addPetStatus" name="status" class="select-field">
+                                <option value="Active">Active</option>
+                                <option value="Deceased">Deceased</option>
+                                <option value="Rehomed">Rehomed</option>
+                                <option value="Lost">Lost</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="addPetMicrochipId" class="font-mono text-xs uppercase text-earth-metal block mb-1">Microchip ID</label>
+                            <input type="text" id="addPetMicrochipId" name="microchipId" class="input-field"
+                                placeholder="Microchip number">
+                        </div>
+                        <div>
+                            <label for="addPetPhotoFile" class="font-mono text-xs uppercase text-earth-metal block mb-1">Photo</label>
+                            <input type="file" id="addPetPhotoFile" name="photoFile" class="input-field" accept="image/*"
+                                onchange="Pets.handlePhotoFileChange(this)">
+                            <input type="hidden" id="addPetPhotoMediaId">
+                            <div id="addPetPhotoPreviewWrap" class="hidden mt-2">
+                                <img id="addPetPhotoPreviewImg" src="" alt="Pet photo preview"
+                                    class="w-24 h-24 object-cover border border-oatmeal">
+                            </div>
+                            <button type="button" id="addPetPhotoClearBtn" onclick="Pets.clearPhotoSelection()"
+                                class="hidden mt-2 btn-secondary px-3 py-1 font-mono text-[10px] uppercase">
+                                Remove Photo
+                            </button>
+                        </div>
+                        <div>
+                            <label for="addPetPhotoUrl" class="font-mono text-xs uppercase text-earth-metal block mb-1">Photo URL
+                                (optional)</label>
+                            <input type="url" id="addPetPhotoUrl" name="photoUrl" class="input-field"
+                                placeholder="https://example.com/pet-photo.jpg">
+                        </div>
+                        <div>
+                            <label for="addPetPrimaryVet" class="font-mono text-xs uppercase text-earth-metal block mb-1">Primary Vet</label>
+                            <select id="addPetPrimaryVet" name="primaryVet" class="select-field">
+                                <option value="">None</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Related
+                                Contacts</label>
+                            <div id="addPetRelatedContacts"
+                                class="space-y-2 max-h-32 overflow-y-auto border border-oatmeal p-2"></div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4">
+                            <div>
+                                <label for="addPetWeightMin" class="font-mono text-xs uppercase text-earth-metal block mb-1">Target Weight
+                                    Min</label>
+                                <input type="number" id="addPetWeightMin" name="targetWeightMin" class="input-field" step="0.1"
+                                    placeholder="Min">
+                            </div>
+                            <div>
+                                <label for="addPetWeightMax" class="font-mono text-xs uppercase text-earth-metal block mb-1">Target Weight
+                                    Max</label>
+                                <input type="number" id="addPetWeightMax" name="targetWeightMax" class="input-field" step="0.1"
+                                    placeholder="Max">
+                            </div>
+                            <div>
+                                <label for="addPetWeightUnit" class="font-mono text-xs uppercase text-earth-metal block mb-1">Weight
+                                    Unit</label>
+                                <select id="addPetWeightUnit" name="weightUnit" class="select-field">
+                                    <option value="lb">lb</option>
+                                    <option value="kg">kg</option>
+                                    <option value="oz">oz</option>
+                                    <option value="g">g</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="addPetIsPrimary" class="w-4 h-4">
+                            <label for="addPetIsPrimary" class="font-mono text-xs uppercase text-earth-metal">Primary
+                                Pet</label>
+                        </div>
+                    </div>
+                </details>
+                <div class="flex gap-3 justify-end pt-4 border-t border-oatmeal">
+                    <button type="button" onclick="Pets.requestCloseModal()"
+                        class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Cancel</button>
+                    <button type="submit" class="btn-primary px-4 py-2 font-mono text-xs uppercase">Save Pet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Worker Code Modal -->
+    <div id="workerCodeModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
+        aria-modal="true" aria-labelledby="workerCodeModalTitle">
+        <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
+        <div
+            class="relative bg-white-linen border border-oatmeal w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col z-10">
+            <div class="border-b border-oatmeal p-4 flex items-center justify-between flex-shrink-0">
+                <span class="section-header">Cloudflare Worker Code</span>
+                <button onclick="PetTracker.UI.closeModal('workerCodeModal')"
+                    class="p-1 text-earth-metal hover:text-charcoal">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-4">
+                <div class="mb-4">
+                    <p class="text-sm text-earth-metal mb-2">Deploy this code as a Cloudflare Worker to proxy API
+                        requests:</p>
+                    <ol class="text-xs text-earth-metal list-decimal list-inside space-y-1">
+                        <li>Go to Cloudflare Dashboard → Workers & Pages</li>
+                        <li>Create a new Worker</li>
+                        <li>Paste the code below and deploy</li>
+                        <li>Optionally set <code class="bg-oatmeal px-1">ALL_CORS_PROXY_MATCH_TOKEN</code> and send it
+                            as <code class="bg-oatmeal px-1">X-Proxy-Token</code> (query <code
+                                class="bg-oatmeal px-1">?token=</code> still works)</li>
+                        <li>Copy your Worker URL to settings</li>
+                    </ol>
+                </div>
+                <div class="relative">
+                    <pre id="workerCodeBlock"
+                        class="bg-charcoal text-white-linen p-4 text-xs font-mono overflow-x-auto whitespace-pre"></pre>
+                    <button onclick="App.copyWorkerCode()"
+                        class="absolute top-2 right-2 btn-accent px-3 py-1 font-mono text-xs uppercase">
+                        <i data-lucide="copy" class="w-3 h-3 inline mr-1"></i>Copy
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Add Modal (Combined: Quick Add + AI) -->
+    <div id="quickAddModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
+        aria-modal="true" aria-labelledby="quickAddModalTitle">
+        <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
+        <div
+            class="relative bg-white-linen border border-oatmeal w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col z-10">
+            <div class="border-b border-oatmeal p-4 flex items-center justify-between flex-shrink-0">
+                <span id="quickAddModalTitle" class="section-header">Quick Add</span>
+                <button onclick="PetTracker.QuickAddModal.close()" class="p-1 text-earth-metal hover:text-charcoal">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Tabs -->
+            <div class="border-b border-oatmeal flex flex-wrap items-center gap-1 px-3 md:px-4 flex-shrink-0">
+                <button type="button" id="qaTabQuick" onclick="PetTracker.QuickAddModal.selectTab('quick')"
+                    class="px-4 py-2.5 font-mono text-xs uppercase border-b-2 border-dull-purple text-dull-purple bg-dull-purple/10 transition-all">
+                    <i data-lucide="zap" class="w-3.5 h-3.5 inline mr-1"></i>Quick Add
+                </button>
+                <button type="button" id="qaTabAI" onclick="PetTracker.QuickAddModal.selectTab('ai')"
+                    class="px-4 py-2.5 font-mono text-xs uppercase border-b-2 border-transparent text-earth-metal bg-transparent transition-all">
+                    <i data-lucide="sparkles" class="w-3.5 h-3.5 inline mr-1"></i>AI Add
+                </button>
+                <span id="qaAiDisabledHint" class="sm:ml-auto text-[10px] text-earth-metal font-mono hidden">
+                    Set AI key in Settings
+                </span>
+            </div>
+
+            <!-- Shared Attachment Staging -->
+            <div class="border-b border-oatmeal p-4 space-y-2 flex-shrink-0">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <span class="font-mono text-xs uppercase text-earth-metal">Attachments (Optional)</span>
+                    <div class="flex flex-wrap gap-2 w-full sm:w-auto">
+                        <input type="file" id="qaAttachmentInput" class="hidden" multiple
+                            onchange="PetTracker.QuickAddModal.handleAttachmentInputChange(this)">
+                        <button type="button" onclick="document.getElementById('qaAttachmentInput')?.click()"
+                            class="btn-secondary px-3 py-1 font-mono text-[10px] uppercase">
+                            <i data-lucide="paperclip" class="w-3 h-3 inline mr-1"></i>Add Files
+                        </button>
+                        <button type="button" onclick="PetTracker.QuickAddModal.clearAttachments()"
+                            class="btn-secondary px-3 py-1 font-mono text-[10px] uppercase">
+                            Clear
+                        </button>
+                    </div>
+                </div>
+                <p class="text-[10px] text-earth-metal">
+                    Reference files in entries with <span class="font-mono text-charcoal">attach:1</span>,
+                    <span class="font-mono text-charcoal">attach:1,2</span>, <span
+                        class="font-mono text-charcoal">attach:2-4</span>, or <span
+                        class="font-mono text-charcoal">attach:all</span>.
+                </p>
+                <div id="qaAttachmentPreviewList" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+            </div>
+
+            <!-- Quick Add Panel -->
+            <section id="qaPanelQuick" class="flex-1 overflow-y-auto">
+                <div class="p-4 space-y-4">
+                    <div id="qaMount"></div>
+                    <div class="flex flex-wrap items-center gap-2 pt-3 border-t border-oatmeal">
+                        <button type="button" id="qaUndoBtn" onclick="PetTracker.QuickAddModal.undo()"
+                            class="btn-secondary px-3 py-1 font-mono text-[10px] uppercase" disabled>
+                            Undo
+                        </button>
+                        <button type="button" id="qaRedoBtn" onclick="PetTracker.QuickAddModal.redo()"
+                            class="btn-secondary px-3 py-1 font-mono text-[10px] uppercase" disabled>
+                            Redo
+                        </button>
+                        <button type="button" id="qaRestoreDraftBtn" onclick="PetTracker.QuickAddModal.restoreDraft()"
+                            class="btn-secondary px-3 py-1 font-mono text-[10px] uppercase" disabled>
+                            Restore Draft
+                        </button>
+                        <button type="button" id="qaClearBtn" onclick="PetTracker.QuickAddModal.clearQuickInput()"
+                            class="btn-secondary px-3 py-1 font-mono text-[10px] uppercase" disabled>
+                            Clear Input
+                        </button>
+                        <span class="sm:ml-auto text-[10px] text-earth-metal font-mono">
+                            Ctrl/Cmd+Z to undo, Shift+Ctrl/Cmd+Z to redo
+                        </span>
+                    </div>
+                    <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-3 border-t border-oatmeal">
+                        <button type="button" onclick="PetTracker.QuickAddModal.close()"
+                            class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Close</button>
+                        <button type="button" id="qaSaveBtn" onclick="PetTracker.QuickAddModal.save()"
+                            class="btn-primary px-4 py-2 font-mono text-xs uppercase" disabled>
+                            Save Events
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- AI Add Panel -->
+            <section id="qaPanelAI" class="hidden flex-1 overflow-y-auto">
+                <div id="qaAiMount" class="p-4 space-y-4">
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-2">Type or Dictate</label>
+                        <textarea id="aiInputText" class="input-field h-32 resize-none"
+                            placeholder="e.g., Luna threw up this morning, gave Max his heartworm meds yesterday at 8am..."
+                            oninput="AI.onInputChange(this.value)"></textarea>
+                        <p class="text-xs text-earth-metal mt-1">AI will parse automatically after 5 seconds of
+                            inactivity. Offline? Queue for later.</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="AI.parse()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
+                            <i data-lucide="sparkles" class="w-4 h-4 inline mr-2"></i>Parse Now
+                        </button>
+                        <button onclick="AI.queueForLater()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase"
+                            title="Save for later when offline or busy">
+                            <i data-lucide="clock" class="w-4 h-4 inline mr-2"></i>Queue for Later
+                        </button>
+                        <button onclick="AI.processQueue()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase"
+                            title="Process all pending queued items">
+                            <i data-lucide="play" class="w-4 h-4 inline mr-2"></i>Process Queue
+                        </button>
+                        <button onclick="AI.showQueueModal()"
+                            class="btn-secondary px-4 py-2 font-mono text-xs uppercase relative" title="View Queue">
+                            <i data-lucide="list-todo" class="w-4 h-4 inline mr-2"></i>Queue
+                            <span id="aiQueueBadge"
+                                class="hidden absolute -top-1 -right-1 w-5 h-5 bg-dull-purple text-white-linen text-[10px] font-mono flex items-center justify-center">0</span>
+                        </button>
+                    </div>
+                    <div>
+                        <span class="font-mono text-xs uppercase text-earth-metal">Extracted Entries</span>
+                        <div id="aiEntriesList" class="mt-2 space-y-2">
+                            <p class="text-earth-metal text-sm py-4">
+                                Type or dictate entries above. AI will parse them after 5 seconds of inactivity.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-3 pt-3 border-t border-oatmeal">
+                        <button onclick="AI.reset(); PetTracker.QuickAddModal.close()"
+                            class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
+                            Cancel
+                        </button>
+                        <button onclick="AI.saveAll()" class="btn-primary px-4 py-2 font-mono text-xs uppercase">
+                            <i data-lucide="check" class="w-4 h-4 inline mr-2"></i>Save All
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- AI Queue Modal -->
+    <div id="aiQueueModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
+        aria-modal="true" aria-labelledby="aiQueueModalTitle">
+        <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
+        <div
+            class="relative bg-white-linen border border-oatmeal w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col z-10">
+            <div class="border-b border-oatmeal p-4 flex items-center justify-between flex-shrink-0">
+                <span id="aiQueueModalTitle" class="section-header">AI Queue</span>
+                <button onclick="PetTracker.UI.closeModal('aiQueueModal')"
+                    class="p-1 text-earth-metal hover:text-charcoal">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-4">
+                <p class="text-xs text-earth-metal mb-4">Items queued for later AI processing. Process when online and
+                    ready.</p>
+                <div id="aiQueueList" class="space-y-2">
+                    <p class="text-earth-metal text-sm py-4">No items in queue.</p>
+                </div>
+            </div>
+            <div class="border-t border-oatmeal p-4 flex justify-between gap-3 flex-shrink-0">
+                <button onclick="AI.retryFailed()" class="btn-secondary px-4 py-2 font-mono text-xs uppercase">
+                    <i data-lucide="rotate-ccw" class="w-4 h-4 inline mr-2"></i>Retry Failed
+                </button>
+                <div class="flex gap-2">
+                    <button onclick="PetTracker.UI.closeModal('aiQueueModal')"
+                        class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Close</button>
+                    <button onclick="PetTracker.UI.closeModal('aiQueueModal'); AI.processQueue()"
+                        class="btn-primary px-4 py-2 font-mono text-xs uppercase">
+                        <i data-lucide="play" class="w-4 h-4 inline mr-2"></i>Process All
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Contact Modal -->
+    <div id="contactModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
+        aria-modal="true" aria-labelledby="contactModalTitle">
+        <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
+        <div class="relative bg-white-linen border border-oatmeal w-full max-w-lg max-h-[90vh] overflow-y-auto z-10">
+            <div class="sticky top-0 bg-white-linen border-b border-oatmeal p-4 flex items-center justify-between">
+                <span id="contactModalTitle" class="section-header">Add Contact</span>
+                <button onclick="PetTracker.UI.closeModal('contactModal')"
+                    class="p-1 text-earth-metal hover:text-charcoal">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <form id="contactForm" class="p-4 space-y-4" onsubmit="event.preventDefault(); Contacts.save();">
+                <input type="hidden" id="contactEditId">
+                <div>
+                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Name *</label>
+                    <input type="text" id="contactName" class="input-field" placeholder="Contact name" required>
+                </div>
+                <div>
+                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Role *</label>
+                    <select id="contactRole" class="select-field" required>
+                        <option value="Vet">Vet</option>
+                        <option value="Groomer">Groomer</option>
+                        <option value="Sitter">Sitter</option>
+                        <option value="Breeder">Breeder</option>
+                        <option value="Emergency">Emergency</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Phone</label>
+                        <input type="tel" id="contactPhone" class="input-field" placeholder="Phone number">
+                    </div>
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Email</label>
+                        <input type="email" id="contactEmail" class="input-field" placeholder="Email address">
+                    </div>
+                </div>
+                <div>
+                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Address</label>
+                    <textarea id="contactAddress" class="input-field h-16 resize-none" placeholder="Address"></textarea>
+                </div>
+                <div>
+                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Notes</label>
+                    <textarea id="contactNotes" class="input-field h-20 resize-none"
+                        placeholder="Additional notes..."></textarea>
+                </div>
+                <div>
+                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Related Pets</label>
+                    <div id="contactPetCheckboxes" class="space-y-2 max-h-32 overflow-y-auto border border-oatmeal p-2">
+                    </div>
+                </div>
+                <div class="flex gap-3 justify-end pt-4 border-t border-oatmeal">
+                    <button type="button" onclick="PetTracker.UI.closeModal('contactModal')"
+                        class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Cancel</button>
+                    <button type="submit" class="btn-primary px-4 py-2 font-mono text-xs uppercase">Save
+                        Contact</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Event Type Modal -->
+    <div id="eventTypeModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
+        aria-modal="true" aria-labelledby="eventTypeModalTitle">
+        <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
+        <div class="relative bg-white-linen border border-oatmeal w-full max-w-lg max-h-[90vh] overflow-y-auto z-10">
+            <div class="sticky top-0 bg-white-linen border-b border-oatmeal p-4 flex items-center justify-between">
+                <span id="eventTypeModalTitle" class="section-header">Add Event Type</span>
+                <button onclick="PetTracker.UI.closeModal('eventTypeModal')"
+                    class="p-1 text-earth-metal hover:text-charcoal">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <form class="p-4 space-y-4" onsubmit="event.preventDefault(); Setup.saveEventType();">
+                <div>
+                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Name *</label>
+                    <input type="text" id="eventTypeName" class="input-field"
+                        placeholder="e.g., Vomiting, Wheezing, Morning Walk" required>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Category</label>
+                        <div class="combobox-container" id="eventTypeCategoryCombobox">
+                            <input type="text" id="eventTypeCategory" class="input-field combobox-input"
+                                placeholder="Select or type category" autocomplete="off">
+                            <div class="combobox-dropdown" id="eventTypeCategoryDropdown"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Tracking Mode</label>
+                        <select id="eventTypeTrackingMode" class="select-field">
+                            <option value="Stamp">Stamp (point in time)</option>
+                            <option value="Timed">Timed (has duration)</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="eventTypeIconPicker"></div>
+                <div id="eventTypeColorPicker"></div>
+                <div>
+                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Default Value Kind</label>
+                    <select id="eventTypeValueKind" class="select-field">
+                        <option value="">None</option>
+                        <option value="Weight">Weight</option>
+                        <option value="Duration">Duration</option>
+                        <option value="Count">Count</option>
+                        <option value="Temperature">Temperature</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Default Unit</label>
+                        <input type="text" id="eventTypeDefaultUnit" class="input-field" placeholder="e.g., lb, mg, mL">
+                    </div>
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Default Route</label>
+                        <select id="eventTypeDefaultRoute" class="select-field">
+                            <option value="">None</option>
+                            <option value="Oral">Oral</option>
+                            <option value="Topical">Topical</option>
+                            <option value="Injection">Injection</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Default Tags</label>
+                        <input type="text" id="eventTypeDefaultTags" class="input-field"
+                            placeholder="comma-separated tags">
+                    </div>
+                    <div>
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Correlation Group</label>
+                        <input type="text" id="eventTypeCorrelationGroup" class="input-field"
+                            placeholder="e.g., Meds, Symptoms">
+                    </div>
+                </div>
+                <div class="space-y-3">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="eventTypeUsesSeverity" class="w-4 h-4"
+                            onchange="Setup.toggleScaleSelector()">
+                        <span class="text-sm">Uses Severity/Rating Scale</span>
+                    </label>
+                    <div id="eventTypeScaleSelector" class="hidden pl-6">
+                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Default Scale</label>
+                        <select id="eventTypeDefaultScale" class="select-field">
+                            <option value="">-- Select Scale --</option>
+                        </select>
+                        <p class="text-xs text-earth-metal mt-1">When logging this event type, user will select from
+                            this scale's levels</p>
+                    </div>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="eventTypeAllowAttachments" class="w-4 h-4">
+                        <span class="text-sm">Allow Attachments</span>
+                    </label>
+                </div>
+
+                <!-- Recurring Schedule Section -->
+                <div class="border border-oatmeal p-4 space-y-4">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="eventTypeIsRecurring" class="w-4 h-4"
+                            onchange="Setup.toggleRecurringFields()">
+                        <span class="text-sm font-medium">
+                            <i data-lucide="repeat" class="w-4 h-4 inline mr-1"></i>
+                            Recurring Schedule (Auto-reminders)
+                        </span>
+                    </label>
+                    <div id="eventTypeRecurringFields" class="hidden space-y-4 pt-2 border-t border-oatmeal mt-3">
+                        <p class="text-xs text-earth-metal">Events with recurring schedules appear in Upcoming Care with
+                            auto-reminders.</p>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Schedule Type</label>
+                            <select id="eventTypeScheduleType" class="select-field">
+                                <option value="Fixed">Regular (from anchor/start date)</option>
+                                <option value="Rolling">From completion date</option>
+                            </select>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Repeat
+                                    Every</label>
+                                <input type="number" id="eventTypeIntervalValue" class="input-field" value="1" min="1">
+                            </div>
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Interval
+                                    Unit</label>
+                                <select id="eventTypeIntervalUnit" class="select-field">
+                                    <option value="Days">Days</option>
+                                    <option value="Weeks">Weeks</option>
+                                    <option value="Months" selected>Months</option>
+                                    <option value="Years">Years</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Anchor/Start
+                                    Date</label>
+                                <input type="date" id="eventTypeAnchorDate" class="input-field">
+                            </div>
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">End Date
+                                    (optional)</label>
+                                <input type="date" id="eventTypeEndDate" class="input-field">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">End After
+                                Occurrences</label>
+                            <input type="number" id="eventTypeEndAfterOccurrences" class="input-field" min="1"
+                                placeholder="Optional max occurrences">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Preferred
+                                    Time</label>
+                                <input type="time" id="eventTypeDueTime" class="input-field">
+                            </div>
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Time of Day
+                                    Preference</label>
+                                <select id="eventTypeTimeOfDayPreference" class="select-field">
+                                    <option value="">Any</option>
+                                    <option value="Morning">Morning</option>
+                                    <option value="Afternoon">Afternoon</option>
+                                    <option value="Evening">Evening</option>
+                                    <option value="Night">Night</option>
+                                    <option value="Any">Any</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Timezone</label>
+                            <input type="text" id="eventTypeTimezone" class="input-field" placeholder="America/Los_Angeles">
+                            <p class="text-xs text-earth-metal mt-1">Date-only schedules are interpreted in this timezone.</p>
+                        </div>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Default
+                                Dose/Amount</label>
+                            <input type="text" id="eventTypeDefaultDose" class="input-field"
+                                placeholder="e.g., 1 tablet">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Window Before
+                                    (days)</label>
+                                <input type="number" id="eventTypeWindowBefore" class="input-field" value="0" min="0"
+                                    placeholder="Days before due">
+                            </div>
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Window After
+                                    (days)</label>
+                                <input type="number" id="eventTypeWindowAfter" class="input-field" value="0" min="0"
+                                    placeholder="Days after due">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Assign to Pets
+                                (optional)</label>
+                            <div id="eventTypePetCheckboxes" class="flex flex-wrap gap-3 mt-2"></div>
+                        </div>
+
+                        <!-- Todoist Integration -->
+                        <div class="border-t border-oatmeal pt-4 mt-4">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" id="eventTypeTodoistSync" class="w-4 h-4">
+                                <span class="text-sm font-medium">
+                                    <i data-lucide="check-square" class="w-4 h-4 inline mr-1"></i>
+                                    Sync to Todoist
+                                </span>
+                            </label>
+                            <p class="text-xs text-earth-metal mt-1">Create Todoist tasks for upcoming occurrences</p>
+                            <div id="eventTypeTodoistFields" class="space-y-3 mt-3">
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Project
+                                            ID (optional)</label>
+                                        <input type="text" id="eventTypeTodoistProject" class="input-field"
+                                            onchange="Setup.handleTodoistProjectChange()"
+                                            placeholder="Leave empty for Inbox">
+                                    </div>
+                                    <div>
+                                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Section
+                                            ID (optional)</label>
+                                        <input type="text" id="eventTypeTodoistSection" class="input-field"
+                                            list="eventTypeTodoistSectionOptions" placeholder="Section within project">
+                                        <datalist id="eventTypeTodoistSectionOptions"></datalist>
+                                        <p id="eventTypeTodoistSectionHint" class="text-[10px] text-earth-metal mt-1">
+                                            Enter Project ID to load section suggestions.</p>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Lead Time
+                                            (days)</label>
+                                        <input type="number" id="eventTypeTodoistLeadTime" class="input-field" value="1"
+                                            min="0">
+                                    </div>
+                                    <div></div>
+                                </div>
+                                <div>
+                                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Labels
+                                        (comma-separated)</label>
+                                    <input type="text" id="eventTypeTodoistLabels" class="input-field"
+                                        placeholder="pet-care, recurring">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="border border-oatmeal p-4 space-y-4">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="eventTypeActive" class="w-4 h-4">
+                        <span class="text-sm font-medium">Active</span>
+                    </label>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Active Start</label>
+                            <input type="date" id="eventTypeActiveStart" class="input-field">
+                        </div>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Active End</label>
+                            <input type="date" id="eventTypeActiveEnd" class="input-field">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex gap-3 justify-end pt-4 border-t border-oatmeal">
+                    <button type="button" onclick="PetTracker.UI.closeModal('eventTypeModal')"
+                        class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Cancel</button>
+                    <button type="submit" class="btn-primary px-4 py-2 font-mono text-xs uppercase">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Scale Modal -->
+    <div id="scaleModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
+        aria-modal="true" aria-labelledby="scaleModalTitle">
+        <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
+        <div class="relative bg-white-linen border border-oatmeal w-full max-w-md max-h-[90vh] overflow-y-auto z-10">
+            <div class="sticky top-0 bg-white-linen border-b border-oatmeal p-4 flex items-center justify-between">
+                <span id="scaleModalTitle" class="section-header">Add Scale</span>
+                <button onclick="PetTracker.UI.closeModal('scaleModal')"
+                    class="p-1 text-earth-metal hover:text-charcoal">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <form class="p-4 space-y-4" onsubmit="event.preventDefault(); Setup.saveScale();">
+                <div>
+                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Name *</label>
+                    <input type="text" id="scaleName" class="input-field" placeholder="e.g., Symptom Severity, Mood"
+                        required>
+                </div>
+                <div>
+                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Value Type</label>
+                    <select id="scaleValueType" class="select-field" onchange="Setup.toggleScaleValueTypeHelp()">
+                        <option value="Labels">Labels (named options)</option>
+                        <option value="Numeric">Numeric (number range)</option>
+                    </select>
+                </div>
+                <div id="scaleValueTypeHelp" class="border border-oatmeal p-3 bg-oatmeal/10">
+                    <p id="scaleLabelsHelp" class="text-xs text-earth-metal">
+                        <strong>Labels:</strong> User picks from named options like "Mild", "Moderate", "Severe".
+                        Each level has a numeric value for ordering and analytics.
+                    </p>
+                    <p id="scaleNumericHelp" class="text-xs text-earth-metal hidden">
+                        <strong>Numeric:</strong> User picks from a number scale (e.g., 1-5 or 1-10).
+                        Add levels for each number with optional labels.
+                    </p>
+                </div>
+                <p class="text-xs text-earth-metal">After creating the scale, add levels to define the options.</p>
+                <div class="flex gap-3 justify-end pt-4 border-t border-oatmeal">
+                    <button type="button" onclick="PetTracker.UI.closeModal('scaleModal')"
+                        class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Cancel</button>
+                    <button type="submit" class="btn-primary px-4 py-2 font-mono text-xs uppercase">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Scale Level Modal -->
+    <div id="scaleLevelModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4" role="dialog"
+        aria-modal="true" aria-labelledby="scaleLevelModalTitle">
+        <div class="absolute inset-0 modal-overlay" data-modal-overlay></div>
+        <div class="relative bg-white-linen border border-oatmeal w-full max-w-md max-h-[90vh] overflow-y-auto z-10">
+            <div class="sticky top-0 bg-white-linen border-b border-oatmeal p-4 flex items-center justify-between">
+                <span id="scaleLevelModalTitle" class="section-header">Add Level</span>
+                <button onclick="PetTracker.UI.closeModal('scaleLevelModal')"
+                    class="p-1 text-earth-metal hover:text-charcoal">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <form class="p-4 space-y-4" onsubmit="event.preventDefault(); Setup.saveScaleLevel();">
+                <div>
+                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Label *</label>
+                    <input type="text" id="scaleLevelName" class="input-field"
+                        placeholder="e.g., Mild, Moderate, Severe" required>
+                </div>
+                <div>
+                    <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Numeric Value</label>
+                    <input type="number" id="scaleLevelNumericValue" class="input-field" value="1" min="1">
+                </div>
+                <div id="scaleLevelColorPicker"></div>
+                <div class="flex gap-3 justify-end pt-4 border-t border-oatmeal">
+                    <button type="button" onclick="PetTracker.UI.closeModal('scaleLevelModal')"
+                        class="btn-secondary px-4 py-2 font-mono text-xs uppercase">Cancel</button>
+                    <button type="submit" class="btn-primary px-4 py-2 font-mono text-xs uppercase">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Note: Care Item and Care Plan modals have been removed. -->
+    <!-- Scheduling is now handled via Event Types with isRecurring=true -->
+
+    <!-- Scripts -->
+    <script src="./js/storage.js"></script>
+    <script src="./js/ui.js?v=11"></script>
+    <script src="./js/api.js?v=11"></script>
+    <script src="./js/sync.js?v=10"></script>
+    <script src="./js/pets.js?v=12"></script>
+    <script src="./js/events.js?v=11"></script>
+    <script src="./js/calendar.js?v=10"></script>
+    <script src="./js/care.js?v=9"></script>
+    <script src="./js/media.js"></script>
+    <script src="./js/ai.js?v=10"></script>
+    <script src="../components/quick-add/quick-add-component.js?v=2"></script>
+    <script src="./js/quick-add-modal.js?v=12"></script>
+    <script src="./js/todoist.js?v=9"></script>
+    <script src="./js/calendar-export.js"></script>
+    <script src="./js/analytics.js"></script>
+    <script src="./js/contacts.js"></script>
+    <script src="./js/setup.js?v=10"></script>
+    <script src="./js/onboarding.js?v=11"></script>
+    <script src="./js/app.js?v=15"></script>
+
+    <script>
+        // Worker code template
+        const WORKER_CODE = `// Pet Tracker CORS Proxy Worker
+// Deploy to Cloudflare Workers
+// Optional secret: ALL_CORS_PROXY_MATCH_TOKEN
+// Optional var: ALLOWED_ORIGINS (comma-separated)
+
+function getAllowedOrigins(env) {
+  const raw = (env.ALLOWED_ORIGINS || "https://mimansajaiswal.github.io").trim();
+  return raw.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+function isLocalDevOrigin(origin) {
+  if (!origin) return false;
+  try {
+    const parsed = new URL(origin);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+    return parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
+  } catch (_) {
+    return false;
+  }
+}
+
+function isAllowedOrigin(origin, allowed) {
+  if (!origin) return false;
+  return allowed.includes(origin) || isLocalDevOrigin(origin);
+}
+
+function getCorsHeaders(request, env) {
+  const origin = request.headers.get("Origin");
+  const allowed = getAllowedOrigins(env);
+  const allowOrigin = isAllowedOrigin(origin, allowed) ? origin : allowed[0];
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Methods": "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, Notion-Version, X-Proxy-Token",
+    "Vary": "Origin",
+  };
+}
+
+function withCors(request, env, response) {
+  const cors = getCorsHeaders(request, env);
+  const out = new Response(response.body, response);
+  for (const [key, value] of Object.entries(cors)) out.headers.set(key, value);
+  out.headers.set("Cache-Control", "no-store");
+  return out;
+}
+
+function unauthorized(request, env) {
+  return withCors(request, env, new Response("Unauthorized", { status: 403 }));
+}
+
+function getProxyToken(request) {
+  const url = new URL(request.url);
+  return request.headers.get("X-Proxy-Token") || url.searchParams.get("token");
+}
+
+function buildProxyRequest(targetUrl, request) {
+  const headers = new Headers();
+  for (const [key, value] of request.headers.entries()) {
+    const k = key.toLowerCase();
+    if (k === "host") continue;
+    if (k === "cookie") continue;
+    if (k.startsWith("cf-")) continue;
+    if (k === "x-proxy-token") continue;
+    headers.set(key, value);
+  }
+
+  return new Request(targetUrl, {
+    method: request.method,
+    headers,
+    body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
+    redirect: "follow",
+  });
+}
+
+export default {
+  async fetch(request, env) {
+    if (request.method === "OPTIONS") {
+      return new Response(null, { headers: getCorsHeaders(request, env) });
+    }
+
+    const url = new URL(request.url);
+    const requiredToken = (env.ALL_CORS_PROXY_MATCH_TOKEN || "").trim();
+    if (requiredToken) {
+      const provided = getProxyToken(request);
+      if (!provided || provided !== requiredToken) return unauthorized(request, env);
+    }
+
+    const targetUrlParam = url.searchParams.get("url");
+    if (!targetUrlParam) {
+      return withCors(request, env, new Response("Missing url parameter", { status: 400 }));
+    }
+
+    let targetUrl;
+    try {
+      targetUrl = new URL(targetUrlParam).toString();
+    } catch (_) {
+      return withCors(request, env, new Response("Invalid target URL", { status: 400 }));
+    }
+
+    try {
+      const upstream = await fetch(buildProxyRequest(targetUrl, request));
+      return withCors(request, env, upstream);
+    } catch (e) {
+      return withCors(request, env, new Response(\`Upstream request failed: \${e?.message || "unknown error"}\`, { status: 502 }));
+    }
+  },
+};`;
+
+        // Add worker code display function
+        App.showWorkerCode = () => {
+            document.getElementById('workerCodeBlock').textContent = WORKER_CODE;
+            PetTracker.UI.openModal('workerCodeModal');
+            if (window.lucide) lucide.createIcons();
+        };
+
+        App.copyWorkerCode = () => {
+            navigator.clipboard.writeText(WORKER_CODE).then(() => {
+                PetTracker.UI.toast('Worker code copied!', 'success');
+            }).catch(() => {
+                PetTracker.UI.toast('Failed to copy', 'error');
+            });
+        };
+
+        // NOTE: saveSettings is defined in js/app.js - this override is intentionally removed
+        // The app.js version includes dataSourceNames and better validation
+        // Original (removed) saveSettings override was here
+
+        // REMOVED: App.saveSettings override - using js/app.js version instead
+        // Keep this comment as a marker that the override was intentionally removed
+
+        // Temporary compatibility shim - remove if app.js version works
+        if (!App.saveSettings) {
+            console.error('[index.html] App.saveSettings not found - js/app.js may not be loaded');
+        }
+
+        // Google Calendar OAuth - redirect-based flow
+        App.startTodoistOAuth = () => {
+            const workerUrl = document.getElementById('settingsWorkerUrl')?.value?.trim();
+            if (!workerUrl) {
+                PetTracker.UI.toast('Please enter Worker URL first in Connection tab', 'error');
+                return;
+            }
+            PetTracker.Settings.set({ workerUrl });
+            const returnUrl = encodeURIComponent(new URL('index.html', window.location.href).toString());
+            window.location.href = `https://notion-oauth-handler.mimansa-jaiswal.workers.dev/todoist/auth?from=${returnUrl}`;
+        };
+
+        App.disconnectTodoistOAuth = () => {
+            PetTracker.UI.confirm('Disconnect Todoist OAuth?', () => {
+                PetTracker.Settings.set({
+                    todoistOAuthData: null,
+                    todoistAuthMode: 'token',
+                    todoistToken: '',
+                    todoistLastCompletedSyncAt: ''
+                });
+                App.updateTodoistUI();
+                PetTracker.UI.toast('Todoist OAuth disconnected', 'success');
+            });
+        };
+
+        App.updateTodoistUI = () => {
+            const settings = PetTracker.Settings.get();
+            const statusEl = document.getElementById('todoistConnectionStatus');
+            const disconnectDiv = document.getElementById('todoistDisconnectSection');
+            const oauthEmail = settings.todoistOAuthData?.email || '';
+            const hasOAuth = !!settings.todoistOAuthData?.access_token;
+            const hasManual = !!settings.todoistToken;
+
+            if (statusEl) {
+                if (hasOAuth) {
+                    statusEl.innerHTML = `<span class="text-dull-purple">Connected via OAuth</span>${oauthEmail ? ` as ${PetTracker.UI.escapeHtml(oauthEmail)}` : ''}`;
+                } else if (hasManual) {
+                    statusEl.textContent = 'Using manual token';
+                } else {
+                    statusEl.textContent = 'Not connected';
+                }
+            }
+
+            if (disconnectDiv) disconnectDiv.classList.toggle('hidden', !hasOAuth);
+        };
+
+        // Google Calendar OAuth - redirect-based flow
+        App.startGoogleOAuth = () => {
+            const workerUrl = document.getElementById('settingsWorkerUrl')?.value?.trim();
+            if (!workerUrl) {
+                PetTracker.UI.toast('Please enter Worker URL first in Connection tab', 'error');
+                return;
+            }
+            PetTracker.Settings.set({ workerUrl });
+            const returnUrl = encodeURIComponent(new URL('index.html', window.location.href).toString());
+            window.location.href = `https://notion-oauth-handler.mimansa-jaiswal.workers.dev/gcal/auth?from=${returnUrl}`;
+        };
+
+        // Disconnect Google Calendar
+        App.disconnectGoogleCalendar = () => {
+            PetTracker.UI.confirm('Disconnect Google Calendar?', () => {
+                const settings = PetTracker.Settings.get();
+                delete settings.gcalAccessToken;
+                delete settings.gcalRefreshToken;
+                delete settings.gcalUserEmail;
+                settings.gcalEnabled = false;
+                settings.gcalCalendarId = '';
+                PetTracker.Settings.set(settings);
+                App.updateGcalUI();
+                PetTracker.UI.toast('Google Calendar disconnected', 'success');
+            });
+        };
+
+        // Update Google Calendar UI based on connection status
+        App.updateGcalUI = () => {
+            const settings = PetTracker.Settings.get();
+            const statusEl = document.getElementById('gcalConnectionStatus');
+            const calendarSelectDiv = document.getElementById('gcalCalendarSelect');
+            const disconnectDiv = document.getElementById('gcalDisconnectSection');
+
+            if (settings.gcalAccessToken) {
+                if (statusEl) statusEl.innerHTML = `<span class="text-dull-purple">Connected</span>${settings.gcalUserEmail ? ` as ${settings.gcalUserEmail}` : ''}`;
+                if (calendarSelectDiv) calendarSelectDiv.classList.remove('hidden');
+                if (disconnectDiv) disconnectDiv.classList.remove('hidden');
+                App.loadGoogleCalendars();
+            } else {
+                if (statusEl) statusEl.textContent = 'Not connected';
+                if (calendarSelectDiv) calendarSelectDiv.classList.add('hidden');
+                if (disconnectDiv) disconnectDiv.classList.add('hidden');
+            }
+        };
+
+        // Load user's Google Calendars
+        App.loadGoogleCalendars = async () => {
+            const settings = PetTracker.Settings.get();
+            if (!settings.gcalAccessToken || !settings.workerUrl) return;
+
+            try {
+                const proxyUrl = new URL(settings.workerUrl);
+                proxyUrl.searchParams.append('url', 'https://www.googleapis.com/calendar/v3/users/me/calendarList');
+                const headers = { 'Authorization': `Bearer ${settings.gcalAccessToken}` };
+                if (settings.proxyToken) headers['X-Proxy-Token'] = settings.proxyToken;
+                const response = await fetch(proxyUrl.toString(), { headers });
+
+                if (!response.ok) throw new Error('Failed to fetch calendars');
+                const data = await response.json();
+
+                const select = document.getElementById('settingsGcalCalendarId');
+                if (select && data.items) {
+                    select.innerHTML = '<option value="">Select a calendar...</option>' +
+                        data.items.map(cal => `<option value="${cal.id}" ${cal.id === settings.gcalCalendarId ? 'selected' : ''}>${PetTracker.UI.escapeHtml(cal.summary)}</option>`).join('');
+                }
+            } catch (e) {
+                console.warn('[App] Failed to load Google calendars:', e);
+            }
+        };
+
+        // NOTE: testConnection and scanDataSources are defined in js/app.js
+        // The app.js versions include better validation and smart matching logic
+        // Do not redefine them here to avoid overwriting the more complete versions.
+
+        // Load saved settings into form
+        document.addEventListener('DOMContentLoaded', () => {
+            const s = PetTracker.Settings.get();
+            if (document.getElementById('settingsWorkerUrl')) {
+                document.getElementById('settingsWorkerUrl').value = s.workerUrl || '';
+                document.getElementById('settingsProxyToken').value = s.proxyToken || '';
+                document.getElementById('settingsNotionToken').value = s.notionToken || '';
+                document.getElementById('settingsAiProvider').value = s.aiProvider || 'openai';
+                document.getElementById('settingsAiModel').value = s.aiModel || 'gpt-4o-mini';
+                document.getElementById('settingsAiApiKey').value = s.aiApiKey || '';
+                document.getElementById('settingsAiEndpoint').value = s.aiEndpoint || '';
+                document.getElementById('settingsTodoistEnabled').checked = s.todoistEnabled || false;
+                document.getElementById('settingsTodoistToken').value = (s.todoistAuthMode || 'token') === 'token' ? (s.todoistToken || '') : '';
+                document.getElementById('settingsGcalEnabled').checked = s.gcalEnabled || false;
+                document.getElementById('settingsGcalCalendarId').value = s.gcalCalendarId || '';
+                const uploadCap = document.getElementById('settingsUploadCapMb');
+                if (uploadCap) uploadCap.value = String(Number(s.uploadCapMb) >= 20 ? 20 : 5);
+                setTimeout(() => App.updateTodoistUI?.(), 100);
+                // Update Google Calendar UI
+                setTimeout(() => App.updateGcalUI(), 100);
+                // Update AI endpoint visibility
+                setTimeout(() => App.toggleAiEndpoint?.(), 100);
+            }
+        });
+
+        // Toggle AI endpoint field visibility based on provider
+        App.toggleAiEndpoint = () => {
+            const provider = document.getElementById('settingsAiProvider')?.value;
+            const field = document.getElementById('aiEndpointField');
+            if (field) {
+                field.classList.toggle('hidden', provider !== 'custom');
+            }
+        };
+    </script>
+</body>
+
+</html>
