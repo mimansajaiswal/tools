@@ -314,6 +314,11 @@ function isDesktopViewport() {
 
 function syncShellState() {
     const shouldShowRightRail = state.settings.showRightPanel === true && state.activeView === 'write';
+    const theme = state.settings.theme === 'night' ? 'night' : 'linen';
+    document.body.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme === 'night' ? 'dark' : 'light';
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeMeta) themeMeta.setAttribute('content', theme === 'night' ? '#18151a' : '#f8f5f0');
     document.body.dataset.rightPanelHidden = shouldShowRightRail ? 'false' : 'true';
     document.body.dataset.leftRailOpen = state.leftRailOpen ? 'true' : 'false';
     $$('[data-rail-section]').forEach((section) => {
@@ -1724,6 +1729,7 @@ function renderSavedSearchList() {
 }
 
 function renderSettingsPanel() {
+    setFieldValue('[name="theme"]', state.settings.theme || 'linen');
     setFieldValue('[name="imageMaxEdge"]', state.settings.media?.imageMaxEdge ?? 2200);
     setFieldValue('[name="imageQuality"]', state.settings.media?.imageQuality ?? 0.82);
     setCheckboxValue('[name="keepOriginalImages"]', state.settings.media?.preserveOriginalImages === true);
@@ -2049,6 +2055,7 @@ async function saveSettings(event) {
             imageQuality: Number(form.get('imageQuality') || 0.82),
             preserveOriginalImages: form.get('keepOriginalImages') === 'on'
         },
+        theme: String(form.get('theme') || 'linen'),
         ai: {
             ...state.settings.ai,
             provider: String(form.get('aiProvider') || 'local-reflection'),

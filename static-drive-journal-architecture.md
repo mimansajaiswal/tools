@@ -3129,3 +3129,18 @@ Current prototype UI rules now being enforced:
 - the shell now honors the URL hash immediately for initial page visibility, even before the full app boot finishes
 - Quick Add and Details are now treated as secondary utilities, not permanent first-class panels in the write view
 - the visible write page should present one dominant document column with minimal surrounding chrome
+
+Current implementation verification pass:
+
+- the app now has explicit linen and night themes, controlled from Settings and applied to the document body, browser color scheme, and theme-color meta tag
+- light mode uses a linen/oatmeal surface system with muted plum actions; dark mode uses a deep plum-black surface system with muted purple/pink accents
+- the write surface is now a Notion-like document editor surface instead of a visible block-card editor; block controls are intentionally secondary to the prose document
+- Lucide-style static SVG icons are used for shell navigation, topbar actions, editor actions, settings, reminders, templates, health, transcription, map, sync, import/export, and AI controls
+- left rail remains collapsible, and each rail section can collapse independently
+- Library remains its own page and is no longer treated as sidebar content
+- right rail is hidden on small screens by default and opens as a fixed overlay when requested, avoiding the previous mobile "sandwich" layout
+- Quick Add and Details panels still exist and can be toggled, but they no longer dominate the write page
+- automated smoke coverage now checks the write route, editor persistence, Quick Add toggle, Details toggle, linen theme screenshot, night theme screenshot, mobile night screenshot, route rendering, horizontal overflow, and browser console/page errors
+- routes covered by smoke test: Write, Library, Journals, Reflect, Insights, Highlights, Tags, People, Map, Templates, Reminders, Health, and Transcribe
+- syntax checks pass for `journaling-app/js/app.js`, `journaling-app/js/editor.js`, `journaling-app/js/ui.js`, and `journaling-app/sw.js`
+- visual screenshots generated during verification: `/tmp/journaling-smoke-write-light.png`, `/tmp/journaling-smoke-write-dark.png`, and `/tmp/journaling-smoke-write-mobile-dark.png`
