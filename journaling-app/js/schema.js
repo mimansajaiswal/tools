@@ -55,28 +55,28 @@ const DEFAULT_JOURNALS = Object.freeze([
     {
         id: 'journal_personal',
         name: 'Personal',
-        color: 'plum',
+        color: '',
         description: 'Daily writing, memory, people, and highlights.',
         icon: '✎'
     },
     {
         id: 'journal_lab',
         name: 'Practice',
-        color: 'pink',
+        color: '',
         description: 'Ideas, experiments, product notes, and AI workflows.',
         icon: '◫'
     },
     {
         id: 'journal_health',
         name: 'Health',
-        color: 'oat',
+        color: '',
         description: 'Symptoms, recovery, body signals, and treatments.',
         icon: '•'
     },
     {
         id: 'journal_field',
         name: 'Field',
-        color: 'sage',
+        color: '',
         description: 'Travel, map-linked entries, and environmental notes.',
         icon: '◉'
     }
@@ -123,6 +123,7 @@ const DEFAULT_REMINDERS = Object.freeze([
         date: '',
         time: '19:00',
         frequency: 'weekly',
+        weekday: 1,
         active: true
     }
 ]);
@@ -135,20 +136,40 @@ const DEFAULT_SAVED_SEARCHES = Object.freeze([
 
 export const DEFAULT_SETTINGS = Object.freeze({
     version: 2,
-    theme: 'linen',
     showRightPanel: false,
     activeJournalId: 'journal_personal',
     journals: DEFAULT_JOURNALS,
     templates: DEFAULT_TEMPLATES,
     reminders: DEFAULT_REMINDERS,
+    notifications: {
+        enabled: false,
+        periodicRegistered: false,
+        permission: 'default'
+    },
     drive: {
         enabled: false,
+        clientId: '',
+        accessToken: '',
         rootFolderId: '',
         rootFolderName: APP_NAME,
+        assetsFolderId: '',
+        libraryManifestId: '',
+        libraryManifestUrl: '',
+        lastFileUrl: '',
         lastConnectedAt: null,
-        syncMode: 'manual',
+        lastPullAt: null,
+        syncMode: 'background',
         mediaStrategy: 'optimized',
         audioStrategy: 'keep-original'
+    },
+    notion: {
+        enabled: false,
+        workerUrl: '',
+        authToken: '',
+        proxyToken: '',
+        parentPageId: '',
+        lastSyncedAt: null,
+        lastPageUrl: ''
     },
     editor: {
         blockBehavior: 'notion-like',
@@ -163,10 +184,17 @@ export const DEFAULT_SETTINGS = Object.freeze({
         model: '',
         transcriptionProvider: 'browser_native',
         transcriptionApiKey: '',
+        transcriptionEndpoint: '',
+        transcriptionModel: '',
+        transcriptionLanguage: 'en-US',
+        transcriptionInstructions: 'Transcribe accurately, remove filler words, and preserve speaker changes when clear.',
+        transcriptionInsertMode: 'collapsible',
         dailyChatInstruction: 'Reflect gently, notice patterns, and suggest one next action.'
     },
     health: {
         fitbitEnabled: false,
+        fitbitAccessToken: '',
+        fitbitLastImportedAt: null,
         googleFitEnabled: false,
         appleHealthBridgeEnabled: false
     },
@@ -324,7 +352,7 @@ const normalizeJournal = (raw = {}) => {
     return {
         id: toString(candidate.id, createId('journal')),
         name: toString(candidate.name, 'Untitled journal'),
-        color: toString(candidate.color, 'plum'),
+        color: toString(candidate.color, ''),
         description: toString(candidate.description, ''),
         icon: toString(candidate.icon, '✎')
     };
@@ -350,6 +378,10 @@ const normalizeReminder = (raw = {}) => {
         date: toString(candidate.date, ''),
         time: toString(candidate.time, ''),
         frequency: toString(candidate.frequency, 'none'),
+        weekday: candidate.weekday === null || candidate.weekday === undefined || candidate.weekday === ''
+            ? null : (Number.isInteger(Number(candidate.weekday)) ? Number(candidate.weekday) : null),
+        dayOfMonth: candidate.dayOfMonth === null || candidate.dayOfMonth === undefined || candidate.dayOfMonth === ''
+            ? null : (Number.isInteger(Number(candidate.dayOfMonth)) ? Number(candidate.dayOfMonth) : null),
         active: candidate.active !== false
     };
 };
@@ -377,6 +409,49 @@ const normalizeCustomField = (raw = {}) => {
     };
 };
 
+const RICH_TEXT_BLOCK_TYPES = new Set(['paragraph', 'heading', 'bullet', 'numbered', 'checklist', 'quote', 'callout', 'toggle']);
+
+function normalizeMark(raw = {}) {
+    const candidate = toObject(raw);
+    const type = toString(candidate.type, '');
+    if (!type) return null;
+    const mark = { type };
+    if (candidate.attrs && typeof candidate.attrs === 'object' && !Array.isArray(candidate.attrs)) {
+        mark.attrs = { ...candidate.attrs };
+    }
+    return mark;
+}
+
+function normalizeInlineNode(raw = {}) {
+    const candidate = toObject(raw);
+    if (toString(candidate.type, 'text') !== 'text') return null;
+    const node = { type: 'text', text: toString(candidate.text, '') };
+    const marks = toArray(candidate.marks).map(normalizeMark).filter(Boolean);
+    if (marks.length) node.marks = marks;
+    return node;
+}
+
+function normalizeRichText(value) {
+    return toArray(value).map(normalizeInlineNode).filter(Boolean);
+}
+
+function normalizeBlock(raw = {}) {
+    const block = { ...toObject(raw) };
+    if (!block.id) block.id = createId('block');
+    if (!block.type) block.type = 'paragraph';
+    if (!block.richText && block.text !== undefined && RICH_TEXT_BLOCK_TYPES.has(block.type)) {
+        block.richText = [{ type: 'text', text: String(block.text || '') }];
+        delete block.text;
+    }
+    if (RICH_TEXT_BLOCK_TYPES.has(block.type)) block.richText = normalizeRichText(block.richText);
+    if (block.captionRichText !== undefined) block.captionRichText = normalizeRichText(block.captionRichText);
+    if (block.type === 'toggle') block.children = toArray(block.children).map(normalizeBlock);
+    if (block.type === 'table') {
+        block.rows = toArray(block.rows).map((row) => toArray(row).map((cell) => normalizeRichText(cell)));
+    }
+    return block;
+}
+
 export const normalizeSettings = (raw = {}) => {
     const candidate = toObject(raw);
     const editor = toObject(candidate.editor);
@@ -384,18 +459,26 @@ export const normalizeSettings = (raw = {}) => {
         ...DEFAULT_SETTINGS,
         ...candidate,
         activeJournalId: toString(candidate.activeJournalId, DEFAULT_SETTINGS.activeJournalId),
-        journals: (toArray(candidate.journals).length ? toArray(candidate.journals) : DEFAULT_SETTINGS.journals).map(normalizeJournal),
-        templates: (toArray(candidate.templates).length ? toArray(candidate.templates) : DEFAULT_SETTINGS.templates).map(normalizeTemplate),
-        reminders: (toArray(candidate.reminders).length ? toArray(candidate.reminders) : DEFAULT_SETTINGS.reminders).map(normalizeReminder),
+        journals: (Array.isArray(candidate.journals) ? candidate.journals : DEFAULT_SETTINGS.journals).map(normalizeJournal),
+        templates: (Array.isArray(candidate.templates) ? candidate.templates : DEFAULT_SETTINGS.templates).map(normalizeTemplate),
+        reminders: (Array.isArray(candidate.reminders) ? candidate.reminders : DEFAULT_SETTINGS.reminders).map(normalizeReminder),
+        notifications: {
+            ...DEFAULT_SETTINGS.notifications,
+            ...toObject(candidate.notifications)
+        },
         drive: {
             ...DEFAULT_SETTINGS.drive,
             ...toObject(candidate.drive)
         },
+        notion: {
+            ...DEFAULT_SETTINGS.notion,
+            ...toObject(candidate.notion)
+        },
         editor: {
             ...DEFAULT_SETTINGS.editor,
             ...editor,
-            customFields: (toArray(editor.customFields).length ? toArray(editor.customFields) : DEFAULT_SETTINGS.editor.customFields).map(normalizeCustomField),
-            savedSearches: (toArray(editor.savedSearches).length ? toArray(editor.savedSearches) : DEFAULT_SETTINGS.editor.savedSearches).map(normalizeSavedSearch)
+            customFields: (Array.isArray(editor.customFields) ? editor.customFields : DEFAULT_SETTINGS.editor.customFields).map(normalizeCustomField),
+            savedSearches: (Array.isArray(editor.savedSearches) ? editor.savedSearches : DEFAULT_SETTINGS.editor.savedSearches).map(normalizeSavedSearch)
         },
         ai: {
             ...DEFAULT_SETTINGS.ai,
@@ -447,7 +530,7 @@ export const normalizeDocument = (raw = {}) => {
         people: toArray(candidate.people).map((item) => String(item).trim()).filter(Boolean),
         categories: toArray(candidate.categories).map((item) => String(item).trim()).filter(Boolean),
         attachments: toArray(candidate.attachments),
-        blocks: toArray(candidate.blocks),
+        blocks: toArray(candidate.blocks).map(normalizeBlock),
         linkedDocumentIds: toArray(candidate.linkedDocumentIds),
         transcripts: toArray(candidate.transcripts),
         locationName: toString(candidate.locationName, ''),

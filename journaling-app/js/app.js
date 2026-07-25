@@ -1,14 +1,23 @@
 import { Storage, createJournalDocument, createAssetEntry } from './storage.js';
 import { APP_NAME, normalizeSettings } from './schema.js';
-import { createGoogleSync } from './google-sync.js';
+import { syncDocumentToNotion, verifyNotionConnection } from './notion-sync.js';
+import { requestDriveToken, restoreJournalFromDrive } from './drive-sync.js';
+import { DRIVE_BACKGROUND_SYNC_TAG, buildDriveWorkspaceSettings, syncDriveLibrarySnapshot } from './drive-library-sync.js';
+import { importFitbitDay } from './fitbit-sync.js';
+import { transcribeAudio } from './transcription-service.js';
 import { createSampleState } from './sample-data.js';
-import { mountDocumentEditor } from './editor.js';
+import { mountDocumentEditor, richTextToPlain } from './editor.js?v=10';
+import {
+    REMINDER_META_KEY,
+    REMINDER_PERIODIC_INTERVAL,
+    REMINDER_PERIODIC_TAG,
+    evaluateDueReminders
+} from './reminders.js';
 import {
     esc,
     prettyDate,
     prettyDateTime,
     renderDocumentList,
-    renderPropertySummary,
     renderTimeline,
     renderCalendar,
     renderInsightBars,
@@ -33,6 +42,57 @@ import {
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 const blankArray = (value) => Array.isArray(value) ? value : [];
+
+function makeRichText(text = '') {
+    const value = String(text ?? '');
+    return value ? [{ type: 'text', text: value }] : [];
+}
+
+function createTextBlock(type, text = '', extra = {}) {
+    return {
+        id: Storage.createId('block'),
+        type,
+        richText: makeRichText(text),
+        ...extra
+    };
+}
+
+function blockToPlainText(block = {}) {
+    if (!block || typeof block !== 'object') return '';
+    if (Array.isArray(block.richText)) return richTextToPlain(block.richText);
+    if (block.type === 'code') return String(block.text || '');
+    if (block.type === 'table') {
+        return blankArray(block.rows).map((row) => blankArray(row).map((cell) => richTextToPlain(cell)).join(' | ')).join(' ');
+    }
+    if (Array.isArray(block.captionRichText)) {
+        const caption = richTextToPlain(block.captionRichText);
+        if (caption) return caption;
+    }
+    return String(block.text || block.name || block.alt || '');
+}
+
+function blocksToPlainText(blocks = [], separator = '\n') {
+    return blankArray(blocks).map((block) => {
+        if (block?.type === 'toggle') {
+            const head = blockToPlainText(block);
+            const children = blocksToPlainText(block.children || [], separator);
+            return [head, children].filter(Boolean).join(separator);
+        }
+        return blockToPlainText(block);
+    }).filter(Boolean).join(separator);
+}
+
+function collectBlockAssetIds(blocks = []) {
+    const ids = new Set();
+    const visit = (items) => {
+        blankArray(items).forEach((block) => {
+            if (block?.assetId) ids.add(block.assetId);
+            if (block?.type === 'toggle') visit(block.children);
+        });
+    };
+    visit(blocks);
+    return [...ids];
+}
 
 function formatLocalYmd(date = new Date()) {
     return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -65,7 +125,8 @@ const state = {
     calendarCursor: new Date(),
     editor: null,
     quickAdd: null,
-    googleSync: null,
+    notionStatus: '',
+    driveStatus: '',
     mediaRecorder: null,
     mediaStream: null,
     recordingSession: null,
@@ -87,7 +148,17 @@ const state = {
     writePanels: {
         quickAdd: false,
         details: false
-    }
+    },
+    autosaveTimer: null,
+    pendingAutosave: null,
+    lastSavedDocumentSnapshot: '',
+    reminderTimer: null,
+    reminderCheckInFlight: false,
+    reminderNotificationStatus: '',
+    fitbitStatus: '',
+    fitbitAccessTokenDraft: null,
+    fitbitImportDate: '',
+    transcriptionDraft: null
 };
 
 function splitCsv(value) {
@@ -111,8 +182,14 @@ function slugify(value) {
 
 function mapViewHashToState(view) {
     if (!view) return 'write';
+    view = String(view).split(':')[0];
     if (view === 'journal') return 'journals';
     return view;
+}
+
+function parseAppHash() {
+    const [view = 'write', encodedTarget = ''] = location.hash.replace(/^#/, '').split(':');
+    return { view: mapViewHashToState(view), targetId: encodedTarget ? decodeURIComponent(encodedTarget) : '' };
 }
 
 function refreshIcons() {
@@ -133,6 +210,25 @@ function setIconName(icon, name) {
     if (icon.tagName === 'IMG') {
         icon.setAttribute('src', `./assets/lucide/${name}.svg`);
     }
+}
+
+function resolvedThemeMode(theme = 'auto') {
+    if (theme === 'dark' || theme === 'light') return theme;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function applyThemePreference(theme = 'auto') {
+    if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+    else if (theme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+    else document.documentElement.removeAttribute('data-theme');
+
+    const themeToggleBtn = $('#themeToggleBtn');
+    if (!themeToggleBtn) return;
+    const icon = themeToggleBtn.querySelector('.app-icon');
+    const activeTheme = resolvedThemeMode(theme);
+    setIconName(icon, activeTheme === 'dark' ? 'lightbulb' : 'circle');
+    themeToggleBtn.setAttribute('aria-label', activeTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+    themeToggleBtn.title = activeTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
 }
 
 function setFieldValue(selector, value) {
@@ -180,7 +276,7 @@ function downloadFile(name, contents, type = 'text/plain;charset=utf-8') {
     document.body.appendChild(link);
     link.click();
     link.remove();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function journalMap() {
@@ -277,34 +373,38 @@ function findJournalByNameOrId(value) {
 
 function parseTemplateBody(body = '') {
     const lines = String(body || '').split('\n').map((line) => line.trim()).filter(Boolean);
-    if (!lines.length) {
-        return [{ id: Storage.createId('block'), type: 'paragraph', text: '' }];
-    }
+    if (!lines.length) return [createTextBlock('paragraph', '')];
     return lines.map((line) => {
         const match = line.match(/^([A-Za-z]+)\s*:\s*(.*)$/);
         const kind = match ? match[1].trim().toLowerCase() : 'paragraph';
-        const text = match ? match[2] : line;
-        const blockType = ({
-            heading: 'heading',
-            bullet: 'bullet',
-            checklist: 'checklist',
-            quote: 'quote',
-            callout: 'callout',
-            paragraph: 'paragraph'
-        })[kind] || 'paragraph';
-        return {
-            id: Storage.createId('block'),
-            type: blockType,
-            text,
-            checked: false,
-            depth: 0
-        };
+        const value = match ? match[2] : line;
+        switch (kind) {
+            case 'heading':
+                return createTextBlock('heading', value, { level: 2 });
+            case 'bullet':
+                return createTextBlock('bullet', value, { depth: 0 });
+            case 'numbered':
+                return createTextBlock('numbered', value, { depth: 0 });
+            case 'checklist':
+            case 'todo':
+                return createTextBlock('checklist', value, { checked: false, depth: 0 });
+            case 'quote':
+                return createTextBlock('quote', value);
+            case 'callout':
+                return createTextBlock('callout', value, { icon: '💡' });
+            case 'divider':
+                return { id: Storage.createId('block'), type: 'divider' };
+            case 'code':
+                return { id: Storage.createId('block'), type: 'code', text: value, language: '' };
+            default:
+                return createTextBlock('paragraph', value);
+        }
     });
 }
 
 function buildDefaultBlocks(templateId = '') {
     const template = templateMap().get(templateId);
-    if (!template) return [{ id: Storage.createId('block'), type: 'paragraph', text: '' }];
+    if (!template) return [createTextBlock('paragraph', '')];
     return parseTemplateBody(template.body);
 }
 
@@ -313,18 +413,20 @@ function isDesktopViewport() {
 }
 
 function syncShellState() {
-    const shouldShowRightRail = state.settings.showRightPanel === true && state.activeView === 'write';
-    const theme = state.settings.theme === 'night' ? 'night' : 'linen';
-    document.body.dataset.theme = theme;
-    document.documentElement.style.colorScheme = theme === 'night' ? 'dark' : 'light';
-    const themeMeta = document.querySelector('meta[name="theme-color"]');
-    if (themeMeta) themeMeta.setAttribute('content', theme === 'night' ? '#18151a' : '#f8f5f0');
+    const shouldShowRightRail = state.settings.showRightPanel === true && state.activeView === 'write' && isDesktopViewport();
+    const leftRail = $('.rail-left');
+    const rightRail = $('.rail-right');
+    if (leftRail) leftRail.hidden = !state.leftRailOpen;
+    if (rightRail) rightRail.hidden = !shouldShowRightRail;
+    document.body.dataset.activeView = state.activeView;
     document.body.dataset.rightPanelHidden = shouldShowRightRail ? 'false' : 'true';
     document.body.dataset.leftRailOpen = state.leftRailOpen ? 'true' : 'false';
     $$('[data-rail-section]').forEach((section) => {
         const key = section.getAttribute('data-rail-section');
         const isOpen = state.railSections[key] !== false;
         section.dataset.collapsed = isOpen ? 'false' : 'true';
+        const body = section.querySelector('.rail-section-body');
+        if (body) body.hidden = !isOpen;
         const toggle = section.querySelector('[data-toggle-rail-section]');
         if (toggle) {
             const icon = toggle.querySelector('.app-icon');
@@ -346,6 +448,7 @@ function syncShellState() {
     }
     const studioToggle = $('#toggleStudioBtn');
     if (studioToggle) {
+        studioToggle.hidden = state.activeView !== 'write';
         const icon = studioToggle.querySelector('.app-icon');
         studioToggle.setAttribute('aria-expanded', shouldShowRightRail ? 'true' : 'false');
         studioToggle.setAttribute('aria-label', shouldShowRightRail ? 'Hide right sidebar' : 'Show right sidebar');
@@ -369,16 +472,16 @@ function syncWriteSurfaceState() {
         quickAddToggle.setAttribute('aria-expanded', state.writePanels.quickAdd ? 'true' : 'false');
         quickAddToggle.classList.toggle('btn-primary', state.writePanels.quickAdd);
         quickAddToggle.classList.toggle('btn-secondary', !state.writePanels.quickAdd);
-        quickAddToggle.title = state.writePanels.quickAdd ? 'Hide quick add' : 'Open quick add';
-        quickAddToggle.setAttribute('aria-label', state.writePanels.quickAdd ? 'Hide quick add' : 'Open quick add');
+        quickAddToggle.title = state.writePanels.quickAdd ? 'Hide quick capture' : 'Quick capture';
+        quickAddToggle.setAttribute('aria-label', state.writePanels.quickAdd ? 'Hide quick capture' : 'Quick capture');
     }
 
     if (detailsToggle) {
         detailsToggle.setAttribute('aria-expanded', state.writePanels.details ? 'true' : 'false');
         detailsToggle.classList.toggle('btn-primary', state.writePanels.details);
         detailsToggle.classList.toggle('btn-secondary', !state.writePanels.details);
-        detailsToggle.title = state.writePanels.details ? 'Hide page details' : 'Open page details';
-        detailsToggle.setAttribute('aria-label', state.writePanels.details ? 'Hide page details' : 'Open page details');
+        detailsToggle.title = state.writePanels.details ? 'Hide entry details' : 'Entry details';
+        detailsToggle.setAttribute('aria-label', state.writePanels.details ? 'Hide entry details' : 'Entry details');
     }
 }
 
@@ -387,7 +490,9 @@ function renderVisiblePanels() {
         link.classList.toggle('active', link.getAttribute('data-view-link') === state.activeView);
     });
     $$('.workspace-section').forEach((section) => {
-        section.classList.toggle('is-hidden', section.getAttribute('data-view') !== state.activeView);
+        const isHidden = section.getAttribute('data-view') !== state.activeView;
+        section.classList.toggle('is-hidden', isHidden);
+        if (section.id !== 'today') section.hidden = isHidden;
     });
 }
 
@@ -403,7 +508,7 @@ function documentSearchHaystack(doc) {
         blankArray(doc.tags).join(' '),
         blankArray(doc.people).join(' '),
         blankArray(doc.categories).join(' '),
-        blankArray(doc.blocks).map((block) => block.text).join(' '),
+        blocksToPlainText(doc.blocks, ' '),
         Object.values(doc.customFields || {}).flat().join(' ')
     ].join(' ').toLowerCase();
 }
@@ -489,7 +594,7 @@ function buildTopbarContext() {
 function buildEntryLead(doc) {
     const summary = String(doc.summary || '').trim();
     if (summary) return summary;
-    const blockText = blankArray(doc.blocks).map((block) => String(block.text || '').trim()).find(Boolean) || '';
+    const blockText = blankArray(doc.blocks).map((block) => blockToPlainText(block).trim()).find(Boolean) || '';
     const compact = [
         doc.locationName ? `From ${doc.locationName}` : '',
         doc.weather || '',
@@ -498,6 +603,49 @@ function buildEntryLead(doc) {
         blockText
     ].filter(Boolean).join(' • ');
     return compact || 'No summary yet.';
+}
+
+function buildDocumentExcerpt(doc) {
+    return String(doc.summary || blocksToPlainText(doc.blocks, ' ') || 'No excerpt yet.')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function groupDocsByMonth(docs) {
+    const groups = new Map();
+    docs.forEach((doc) => {
+        const date = doc.date ? new Date(`${doc.date}T12:00:00`) : new Date(doc.updatedAt || Date.now());
+        const validDate = Number.isNaN(date.getTime()) ? new Date() : date;
+        const key = validDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(doc);
+    });
+    return groups;
+}
+
+function renderLibraryDocuments(docs) {
+    if (!docs.length) return '<div class="inspector-empty">No entries match your search.</div>';
+    const journalsById = journalMap();
+    return Array.from(groupDocsByMonth(docs).entries()).map(([label, entries]) => `
+        <section class="library-month-group">
+            <div class="library-month-label">${esc(label)}</div>
+            ${entries.map((doc) => {
+                const journal = journalsById.get(doc.journalId);
+                return `
+                    <button class="doc-list-item ${doc.id === state.currentDocumentId ? 'is-active' : ''}" type="button" data-open-doc="${esc(doc.id)}">
+                        <div class="doc-list-item-inner">
+                            <span class="doc-list-item-top">
+                                <span class="doc-type-pill">${esc(journal?.name || doc.type)}</span>
+                                <span class="doc-list-date">${esc(prettyDate(doc.date || doc.updatedAt))}</span>
+                            </span>
+                            <strong>${esc(doc.smartTitle || doc.title || 'Untitled')}</strong>
+                            <span class="doc-list-excerpt">${esc(buildDocumentExcerpt(doc))}</span>
+                        </div>
+                    </button>
+                `;
+            }).join('')}
+        </section>
+    `).join('');
 }
 
 function renderTodayHero(doc) {
@@ -527,16 +675,22 @@ function getJournalCardModel() {
 
 function renderJournalRail() {
     const rows = getJournalCardModel();
-    $('#journalList').innerHTML = rows.map((journal) => `
+    $('#journalList').innerHTML = rows.map((journal) => {
+        const color = journal.color || 'blue';
+        const colorVarMap = { gray: '#787774', brown: '#9F6B53', orange: '#D9730D', yellow: '#CB912F', green: '#448361', blue: '#337EA9', purple: '#9065B0', pink: '#C14C8A', red: '#D44C47' };
+        const dotColor = colorVarMap[color] || colorVarMap.blue;
+        return `
         <button class="doc-list-item ${journal.active ? 'is-active' : ''}" type="button" data-select-journal="${esc(journal.id)}">
-            <span class="doc-list-item-top">
-                <span class="doc-type-pill">${esc(journal.name)}</span>
-                <span class="doc-list-date">${journal.count}</span>
-            </span>
-            <strong>${esc(journal.description || 'Untitled journal')}</strong>
-            <span class="doc-list-meta">${esc(journal.latest ? prettyDate(journal.latest.date || journal.latest.updatedAt) : 'No entries yet')}</span>
-        </button>
-    `).join('');
+            <div class="doc-list-item-inner">
+                <span class="doc-list-item-top">
+                    <span class="journal-dot" style="background:${dotColor}"></span>
+                    <span class="doc-list-title">${esc(journal.name)}</span>
+                    <span class="doc-list-date">${journal.count}</span>
+                </span>
+                <span class="doc-list-meta">${esc(journal.latest ? prettyDate(journal.latest.date || journal.latest.updatedAt) : 'No entries yet')}</span>
+            </div>
+        </button>`;
+    }).join('');
 }
 
 function renderLibrary() {
@@ -555,7 +709,7 @@ function renderLibrary() {
             <span class="metric-label">${item.label}</span>
         </div>
     `).join('');
-    $('#docList').innerHTML = renderDocumentList(docs, state.currentDocumentId, journalMap());
+    $('#docList').innerHTML = renderLibraryDocuments(docs);
     renderJournalRail();
 }
 
@@ -661,6 +815,13 @@ function renderDocumentChrome(doc) {
     const journal = journalById(doc.journalId);
     const date = doc.date ? new Date(doc.date) : new Date();
     const validDate = Number.isNaN(date.getTime()) ? new Date() : date;
+
+    const cover = $('#entryCover');
+    if (cover) {
+        const coverColor = journal?.color || 'blue';
+        cover.setAttribute('data-color', coverColor);
+    }
+
     const title = doc.smartTitle || doc.title || 'Untitled';
     const pageMeta = [
         journal?.name || 'Journal',
@@ -671,7 +832,23 @@ function renderDocumentChrome(doc) {
         })
     ].join(' · ');
     $('#editorPageMeta').textContent = pageMeta;
-    $('#editorMetaChips').innerHTML = renderPropertySummary(doc, journal);
+    const chips = [];
+    const chipIcon = (name) => `<img class="app-icon" src="./assets/lucide/${name}.svg" alt="" aria-hidden="true" />`;
+    if (doc.weather) chips.push(`<span class="entry-property"><span class="entry-property-icon">${chipIcon('cloud-sun')}</span><span class="entry-property-value">${esc(doc.weather)}</span></span>`);
+    if (doc.locationName) chips.push(`<span class="entry-property"><span class="entry-property-icon">${chipIcon('map-pin')}</span><span class="entry-property-value">${esc(doc.locationName)}</span></span>`);
+    if (doc.activity) chips.push(`<span class="entry-property"><span class="entry-property-icon">${chipIcon('activity')}</span><span class="entry-property-value">${esc(doc.activity)}</span></span>`);
+    const mood = Number(doc.mood);
+    if (doc.mood !== null && doc.mood !== undefined && doc.mood !== '' && Number.isFinite(mood)) {
+        const moodIcon = mood >= 7 ? 'smile' : mood >= 4 ? 'meh' : 'frown';
+        chips.push(`<span class="entry-property"><span class="entry-property-icon">${chipIcon(moodIcon)}</span><span class="entry-property-value">${mood}/10</span></span>`);
+    }
+    if (doc.favorite) chips.push(`<span class="entry-property"><span class="entry-property-icon">${chipIcon('star')}</span><span class="entry-property-value">Favorite</span></span>`);
+    if (doc.highlighted) chips.push(`<span class="entry-property"><span class="entry-property-icon">${chipIcon('bookmark')}</span><span class="entry-property-value">Highlighted</span></span>`);
+    const metaChips = $('#editorMetaChips');
+    if (metaChips) {
+        metaChips.innerHTML = chips.join('');
+        metaChips.style.display = chips.length ? 'flex' : 'none';
+    }
     const subtitle = $('#editorSubtitle');
     if (subtitle) {
         subtitle.textContent = doc.summary || '';
@@ -701,6 +878,11 @@ function renderDocumentChrome(doc) {
 }
 
 function renderDocumentEditor(doc) {
+    clearTimeout(state.autosaveTimer);
+    state.autosaveTimer = null;
+    state.pendingAutosave = null;
+    state.lastSavedDocumentSnapshot = documentSnapshot(doc);
+    syncAutosaveIndicator('');
     applyDocumentFields(doc);
     renderDocumentChrome(doc);
     renderCustomFieldInputs(doc);
@@ -725,6 +907,8 @@ function collectDocumentDraft() {
     const startAt = $('#docDateInput')?.value && timeValue
         ? new Date(`${$('#docDateInput').value}T${timeValue}`).toISOString()
         : existing.startAt || '';
+    const blocks = state.editor ? state.editor.getValue() : blankArray(existing.blocks);
+    const attachments = [...new Set(blankArray(existing.attachments).concat(collectBlockAssetIds(blocks)))];
     return {
         ...existing,
         journalId: $('#docJournalInput').value || activeJournalId(),
@@ -745,8 +929,8 @@ function collectDocumentDraft() {
         mood: toNullableNumber($('#docMoodInput').value),
         energy: toNullableNumber($('#docEnergyInput').value),
         reminderAt: fromLocalDateTimeValue($('#docReminderInput').value),
-        blocks: state.editor ? state.editor.getValue() : blankArray(existing.blocks),
-        attachments: blankArray(existing.attachments),
+        blocks,
+        attachments,
         linkedDocumentIds: blankArray(existing.linkedDocumentIds),
         transcripts: blankArray(existing.transcripts),
         customFields: collectCustomFieldValues()
@@ -797,9 +981,16 @@ function buildQuickAddSchema() {
 function mountEditor() {
     state.editor = mountDocumentEditor({
         container: $('#documentEditorRoot'),
+        getAssetUrl,
+        createAsset: async (file, kind) => {
+            const doc = currentDocument();
+            if (!doc || !file) return null;
+            return saveSingleAssetFile(file, doc, kind);
+        },
         onChange: () => {
             const draft = collectDocumentDraft();
             renderDocumentChrome(draft);
+            scheduleAutosave();
         }
     });
 }
@@ -870,9 +1061,6 @@ async function loadState() {
     state.syncQueue = blankArray(all.syncQueue);
     state.syncState = all.syncState;
     state.currentDocumentId = preferredDocumentId(state.documents);
-    state.googleSync = createGoogleSync({
-        rootFolderName: state.settings.drive.rootFolderName || APP_NAME
-    });
 }
 
 async function refreshFromStorage(preferredDocId) {
@@ -886,22 +1074,167 @@ async function refreshFromStorage(preferredDocId) {
     state.syncState = all.syncState;
     const existing = preferredDocId || state.currentDocumentId;
     state.currentDocumentId = state.documents.some((doc) => doc.id === existing) ? existing : preferredDocumentId(state.documents);
+    state.lastSavedDocumentSnapshot = currentDocument() ? documentSnapshot(currentDocument()) : '';
     populateReferenceSelects();
     mountQuickAdd();
     renderAll();
 }
 
-async function persistDocument(doc) {
+function syncAutosaveIndicator(status = '') {
+    const indicator = $('#autosaveIndicator');
+    if (!indicator) return;
+    clearTimeout(indicator._t);
+    if (!status) {
+        indicator.textContent = '';
+        indicator.className = 'autosave-indicator';
+        return;
+    }
+    if (status === 'saving') {
+        indicator.textContent = 'Saving…';
+        indicator.className = 'autosave-indicator saving';
+        return;
+    }
+    indicator.textContent = 'Saved';
+    indicator.className = 'autosave-indicator saved';
+    indicator._t = setTimeout(() => {
+        indicator.textContent = '';
+        indicator.className = 'autosave-indicator';
+    }, 1500);
+}
+
+function documentSnapshot(doc = {}) {
+    const snapshot = JSON.parse(JSON.stringify(doc || {}));
+    delete snapshot.updatedAt;
+    return JSON.stringify(snapshot);
+}
+
+function upsertLocalDocument(saved) {
+    state.documents = [saved, ...state.documents.filter((doc) => doc.id !== saved.id)]
+        .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+    state.currentDocumentId = saved.id;
+    state.lastSavedDocumentSnapshot = documentSnapshot(saved);
+}
+
+function upsertLocalSyncJob(job) {
+    state.syncQueue = [job, ...state.syncQueue.filter((item) => item.id !== job.id)]
+        .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+}
+
+function refreshAfterDocumentSave(saved) {
+    renderLibrary();
+    if (saved && state.currentDocumentId === saved.id) {
+        renderDocumentChrome(saved);
+        renderAssets(saved);
+        renderInspector(saved);
+    }
+    renderJournalSections();
+    renderTimelineView();
+    renderCalendarView();
+    renderReflectView();
+    renderInsights();
+    renderHighlightsView();
+    renderTagsView();
+    renderPeopleView();
+    renderTemplatesView();
+    renderRemindersView();
+    renderTranscriptView();
+    renderMapView();
+    renderSyncPanel();
+    refreshIcons();
+}
+
+async function registerDriveBackgroundSync() {
+    const drive = state.settings.drive || {};
+    if (drive.enabled !== true || drive.syncMode !== 'background' || !drive.accessToken || !('serviceWorker' in navigator)) return false;
+    const registration = await navigator.serviceWorker.getRegistration();
+    if (!registration) {
+        state.driveStatus = 'Background Drive sync is waiting for PWA registration.';
+        renderSyncPanel();
+        return false;
+    }
+    if (!('sync' in registration)) {
+        state.driveStatus = 'Background Drive sync is unavailable in this browser.';
+        renderSyncPanel();
+        return false;
+    }
+    try {
+        await registration.sync.register(DRIVE_BACKGROUND_SYNC_TAG);
+    } catch (error) {
+        state.driveStatus = `Background Drive sync is unavailable: ${error.message}`;
+        renderSyncPanel();
+        return false;
+    }
+    state.driveStatus = 'Drive changes queued for background delivery.';
+    renderSyncPanel();
+    return true;
+}
+
+async function queueDriveLibraryChange(type, targetId, payload = {}) {
+    if (state.settings.drive?.enabled !== true) return null;
+    const job = await Storage.enqueueSyncJob({
+        type,
+        action: 'upsert',
+        targetId,
+        status: 'queued',
+        payload
+    });
+    upsertLocalSyncJob(job);
+    await registerDriveBackgroundSync();
+    return job;
+}
+
+async function persistDocument(doc, { refresh = true } = {}) {
     const saved = await Storage.saveDocument(doc);
-    await Storage.enqueueSyncJob({
+    const syncJob = await Storage.enqueueSyncJob({
         type: 'document',
         action: 'upsert',
         targetId: saved.id,
         status: 'queued',
         payload: { updatedAt: saved.updatedAt }
     });
-    await state.googleSync.enqueueDocument(saved);
-    await refreshFromStorage(saved.id);
+    await registerDriveBackgroundSync();
+    if (refresh) {
+        state.lastSavedDocumentSnapshot = documentSnapshot(saved);
+        await refreshFromStorage(saved.id);
+        return saved;
+    }
+    upsertLocalDocument(saved);
+    upsertLocalSyncJob(syncJob);
+    refreshAfterDocumentSave(saved);
+    return saved;
+}
+
+function scheduleAutosave() {
+    if (!currentDocument()) return;
+    const draft = collectDocumentDraft();
+    const snapshot = documentSnapshot(draft);
+    if (snapshot === state.lastSavedDocumentSnapshot) return;
+    state.pendingAutosave = draft;
+    syncAutosaveIndicator('saving');
+    clearTimeout(state.autosaveTimer);
+    state.autosaveTimer = window.setTimeout(() => {
+        flushAutosave().catch((error) => {
+            console.error(error);
+            syncAutosaveIndicator('');
+        });
+    }, 600);
+}
+
+async function flushAutosave() {
+    clearTimeout(state.autosaveTimer);
+    state.autosaveTimer = null;
+    const draft = state.pendingAutosave;
+    state.pendingAutosave = null;
+    if (!draft) return null;
+    const snapshot = documentSnapshot(draft);
+    if (snapshot === state.lastSavedDocumentSnapshot) {
+        syncAutosaveIndicator('');
+        return null;
+    }
+    syncAutosaveIndicator('saving');
+    const saved = await persistDocument(draft, { refresh: false });
+    syncAutosaveIndicator('saved');
+    return saved;
 }
 
 function revokeObjectUrls() {
@@ -917,6 +1250,19 @@ function makeBlobUrl(blob) {
 
 function getAssetById(id) {
     return state.assets.find((asset) => asset.id === id) || null;
+}
+
+function getAssetUrl(assetId = '') {
+    const asset = getAssetById(assetId);
+    if (!asset) return '';
+    if (asset.remoteUrl) return asset.remoteUrl;
+    if (asset.previewUrl) return asset.previewUrl;
+    const blob = asset.metadata?.blob;
+    return blob ? makeBlobUrl(blob) : '';
+}
+
+function resolveBlockAssetUrl(block = {}) {
+    return block.src || getAssetUrl(block.assetId) || block.assetId || '';
 }
 
 function loadImageElement(file) {
@@ -955,50 +1301,73 @@ async function optimizeImageFile(file) {
     };
 }
 
+async function saveSingleAssetFile(file, doc = currentDocument(), forcedKind = '') {
+    if (!doc || !file) return null;
+    let blob = file;
+    let mimeType = file.type || 'application/octet-stream';
+    let name = file.name || `asset-${Date.now()}`;
+    let width = null;
+    let height = null;
+    let storageMode = 'original';
+    if ((forcedKind === 'image' || mimeType.startsWith('image/')) && state.settings.media.preserveOriginalImages === false) {
+        const optimized = await optimizeImageFile(file);
+        blob = optimized.blob;
+        mimeType = optimized.mimeType;
+        name = optimized.name;
+        width = optimized.width;
+        height = optimized.height;
+        storageMode = 'optimized';
+    }
+    const kind = forcedKind || (mimeType.startsWith('image/') ? 'image' : mimeType.startsWith('audio/') ? 'audio' : mimeType.startsWith('video/') ? 'video' : 'file');
+    const asset = await Storage.saveAsset(createAssetEntry({
+        documentId: doc.id,
+        kind,
+        name,
+        originalName: file.name,
+        mimeType,
+        size: blob.size,
+        width,
+        height,
+        storageMode,
+        metadata: { blob }
+    }));
+    state.assets = [asset, ...state.assets.filter((item) => item.id !== asset.id)];
+    await Storage.enqueueSyncJob({
+        type: 'asset',
+        action: 'upsert',
+        targetId: asset.id,
+        status: 'queued',
+        payload: { documentId: doc.id }
+    });
+    await registerDriveBackgroundSync();
+    return asset;
+}
+
 async function saveAssetFiles(files) {
     const doc = currentDocument();
     if (!doc || !files.length) return;
     const nextAttachmentIds = new Set(doc.attachments || []);
+    const addedAssets = [];
     for (const file of files) {
-        let blob = file;
-        let mimeType = file.type || 'application/octet-stream';
-        let name = file.name || `asset-${Date.now()}`;
-        let width = null;
-        let height = null;
-        let storageMode = 'original';
-        if (mimeType.startsWith('image/') && state.settings.media.preserveOriginalImages === false) {
-            const optimized = await optimizeImageFile(file);
-            blob = optimized.blob;
-            mimeType = optimized.mimeType;
-            name = optimized.name;
-            width = optimized.width;
-            height = optimized.height;
-            storageMode = 'optimized';
-        }
-        const asset = await Storage.saveAsset(createAssetEntry({
-            documentId: doc.id,
-            kind: mimeType.startsWith('image/') ? 'image' : mimeType.startsWith('audio/') ? 'audio' : mimeType.startsWith('video/') ? 'video' : 'file',
-            name,
-            originalName: file.name,
-            mimeType,
-            size: blob.size,
-            width,
-            height,
-            storageMode,
-            metadata: { blob }
-        }));
+        const asset = await saveSingleAssetFile(file, doc);
+        if (!asset) continue;
         nextAttachmentIds.add(asset.id);
-        await Storage.enqueueSyncJob({
-            type: 'asset',
-            action: 'upsert',
-            targetId: asset.id,
-            status: 'queued',
-            payload: { documentId: doc.id }
-        });
-        await state.googleSync.enqueueAsset(asset);
+        addedAssets.push(asset);
     }
+    const draft = collectDocumentDraft() || doc;
+    const addedBlocks = addedAssets.map((asset) => ({
+        id: `block_${asset.id}`,
+        type: asset.kind,
+        assetId: asset.id,
+        ...(asset.kind === 'image' ? { alt: asset.name } : {}),
+        ...(asset.kind === 'file' ? { name: asset.name, mimeType: asset.mimeType } : {}),
+        captionRichText: []
+    }));
+    const blocks = [...blankArray(draft.blocks), ...addedBlocks];
+    state.editor.setValue(blocks);
     await persistDocument({
-        ...doc,
+        ...draft,
+        blocks,
         attachments: [...nextAttachmentIds]
     });
 }
@@ -1099,11 +1468,6 @@ async function createNewDocument(options = {}) {
     location.hash = '#write';
 }
 
-async function saveCurrentDocument() {
-    const draft = collectDocumentDraft();
-    await persistDocument(draft);
-}
-
 async function toggleCurrentHighlight() {
     const doc = currentDocument();
     if (!doc) return;
@@ -1129,7 +1493,7 @@ async function createDraftDocumentFromForm(event) {
         title: $('#draftTitle').value.trim() || 'Untitled draft',
         date: $('#draftDate').value || todayYmd(),
         tags: splitCsv($('#draftTags').value),
-        blocks: [{ id: Storage.createId('block'), type: 'paragraph', text: $('#draftBody').value.trim() }],
+        blocks: [createTextBlock('paragraph', $('#draftBody').value.trim())],
         status: 'active'
     });
     await persistDocument(doc);
@@ -1161,10 +1525,10 @@ function buildQuickAddInsertionBlocks(entry, summaryText) {
         entry.reminder ? `Reminder ${String(entry.reminder).replace('T', ' ').slice(0, 16)}` : ''
     ].filter(Boolean).join(' • ');
     const blocks = [
-        { id: Storage.createId('block'), type: 'callout', text: title, depth: 0 }
+        createTextBlock('callout', title, { icon: '💡' })
     ];
-    if (meta) blocks.push({ id: Storage.createId('block'), type: 'paragraph', text: meta, depth: 0 });
-    if (summaryText) blocks.push({ id: Storage.createId('block'), type: 'paragraph', text: summaryText, depth: 0 });
+    if (meta) blocks.push(createTextBlock('paragraph', meta));
+    if (summaryText) blocks.push(createTextBlock('paragraph', summaryText));
     return blocks;
 }
 
@@ -1287,8 +1651,8 @@ function renderJournalSections() {
             </div>
             <strong>${esc(journal.description)}</strong>
             <div class="composer-actions">
-                <button class="btn btn-secondary" type="button" data-select-journal="${esc(journal.id)}"><img class="app-icon" data-lucide="book-open" src="./assets/lucide/book-open.svg" alt="" aria-hidden="true" /><span>Open journal</span></button>
-                <button class="btn btn-secondary" type="button" data-new-entry-for-journal="${esc(journal.id)}"><img class="app-icon" data-lucide="plus" src="./assets/lucide/plus.svg" alt="" aria-hidden="true" /><span>New entry</span></button>
+                <button class="btn btn-secondary btn-icon" type="button" data-select-journal="${esc(journal.id)}" aria-label="Open ${esc(journal.name)}"><img class="app-icon" data-lucide="book-open" src="./assets/lucide/book-open.svg" alt="" aria-hidden="true" /></button>
+                <button class="btn btn-secondary btn-icon" type="button" data-new-entry-for-journal="${esc(journal.id)}" aria-label="New entry in ${esc(journal.name)}"><img class="app-icon" data-lucide="plus" src="./assets/lucide/plus.svg" alt="" aria-hidden="true" /></button>
             </div>
         </article>
     `).join('');
@@ -1329,13 +1693,11 @@ function renderHighlightsView() {
 
 function renderAggregateRows(items) {
     return items.map((item) => `
-        <button class="doc-list-item" type="button" data-run-search="${esc(item.query || '')}">
-            <span class="doc-list-item-top">
-                <span class="doc-type-pill">${esc(item.name)}</span>
-                <span class="doc-list-date">${item.count}</span>
-            </span>
+        <button class="doc-list-item doc-list-item--compact" type="button" data-run-search="${esc(item.query || '')}">
+            <span class="doc-type-pill">${esc(item.name)}</span>
             <strong>${esc(item.subtitle || 'Open collection')}</strong>
             <span class="doc-list-meta">${esc(item.preview || '')}</span>
+            <span class="doc-list-date">${item.count}</span>
         </button>
     `).join('');
 }
@@ -1380,7 +1742,7 @@ function renderTemplatesView() {
             <strong>${esc(template.name)}</strong>
             <span class="doc-list-meta">${esc(blankArray(template.tags).join(' • ') || 'No tags')}</span>
             <div class="composer-actions">
-                <button class="btn btn-secondary" type="button" data-apply-template="${esc(template.id)}"><img class="app-icon" data-lucide="layout-template" src="./assets/lucide/layout-template.svg" alt="" aria-hidden="true" /><span>Use template</span></button>
+                <button class="btn btn-secondary btn-icon" type="button" data-apply-template="${esc(template.id)}" aria-label="Use ${esc(template.name)} template"><img class="app-icon" data-lucide="layout-template" src="./assets/lucide/layout-template.svg" alt="" aria-hidden="true" /></button>
             </div>
         </article>
     `).join('');
@@ -1410,10 +1772,141 @@ function renderRemindersView() {
                 <span class="doc-list-date">${esc(item.docId ? prettyDateTime(item.date) : recurringReminderDate(item))}</span>
             </span>
             <strong>${esc(item.title)}</strong>
-            <span class="doc-list-meta">${esc(item.frequency)}</span>
-            ${item.docId ? `<div class="composer-actions"><button class="btn btn-secondary" type="button" data-open-doc="${esc(item.docId)}"><img class="app-icon" data-lucide="arrow-up-right" src="./assets/lucide/arrow-up-right.svg" alt="" aria-hidden="true" /><span>Open entry</span></button></div>` : ''}
+            <span class="doc-list-meta">${esc(item.active === false ? `${item.frequency} · paused` : item.frequency)}</span>
+            ${item.docId
+                ? `<div class="composer-actions"><button class="btn btn-secondary btn-icon" type="button" data-open-doc="${esc(item.docId)}" aria-label="Open entry"><img class="app-icon" data-lucide="arrow-up-right" src="./assets/lucide/arrow-up-right.svg" alt="" aria-hidden="true" /></button></div>`
+                : `<div class="composer-actions">
+                    <button class="btn btn-secondary btn-icon" type="button" data-toggle-reminder="${esc(item.id)}" aria-label="${item.active === false ? 'Resume' : 'Pause'} ${esc(item.title)}"><img class="app-icon" data-lucide="${item.active === false ? 'bell' : 'circle'}" src="./assets/lucide/${item.active === false ? 'bell' : 'circle'}.svg" alt="" aria-hidden="true" /></button>
+                    <button class="btn btn-secondary btn-icon" type="button" data-delete-reminder="${esc(item.id)}" aria-label="Delete ${esc(item.title)}"><img class="app-icon" data-lucide="x" src="./assets/lucide/x.svg" alt="" aria-hidden="true" /></button>
+                </div>`}
         </article>
     `).join('') : '<div class="inspector-empty">No reminders yet.</div>';
+    const notifications = state.settings.notifications || {};
+    const status = state.reminderNotificationStatus || (notifications.enabled
+        ? notifications.periodicRegistered ? 'Notifications on · background checks browser-managed' : 'Notifications on · while app is open'
+        : 'Notifications off');
+    $('#reminderNotificationStatus').textContent = status;
+    $('#enableRemindersBtn').setAttribute('aria-label', notifications.enabled ? 'Disable reminder notifications' : 'Enable reminder notifications');
+    $('#enableRemindersBtn').setAttribute('title', notifications.enabled ? 'Disable reminder notifications' : 'Enable reminder notifications');
+}
+
+async function checkDueReminderNotifications() {
+    if (state.reminderCheckInFlight || state.settings.notifications?.enabled !== true) return [];
+    if (!('Notification' in window) || Notification.permission !== 'granted' || !('serviceWorker' in navigator)) return [];
+    state.reminderCheckInFlight = true;
+    try {
+        const registration = await navigator.serviceWorker.ready;
+        const deliveryState = await Storage.getMeta(REMINDER_META_KEY) || {};
+        const result = evaluateDueReminders({ settings: state.settings, documents: state.documents, now: new Date(), deliveryState });
+        for (const reminder of result.due) {
+            await registration.showNotification(reminder.title, {
+                body: reminder.body,
+                tag: `journaling-reminder-${reminder.deliveryKey}`,
+                icon: './assets/logo-mark.svg',
+                badge: './assets/logo-mark.svg',
+                data: {
+                    url: reminder.url,
+                    documentId: reminder.documentId || '',
+                    journalId: reminder.journalId || ''
+                }
+            });
+        }
+        await Storage.saveMeta(REMINDER_META_KEY, result.deliveryState);
+        if (result.due.length) {
+            state.reminderNotificationStatus = `Delivered ${result.due.length} reminder${result.due.length === 1 ? '' : 's'}`;
+            renderRemindersView();
+        }
+        return result.due;
+    } finally {
+        state.reminderCheckInFlight = false;
+    }
+}
+
+async function enableReminderNotifications() {
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) throw new Error('This browser does not support PWA notifications');
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') throw new Error(`Notification permission is ${permission}`);
+    const registration = await navigator.serviceWorker.ready;
+    let periodicRegistered = false;
+    if ('periodicSync' in registration) {
+        const periodicPermission = await navigator.permissions.query({ name: 'periodic-background-sync' });
+        if (periodicPermission.state === 'granted') {
+            await registration.periodicSync.register(REMINDER_PERIODIC_TAG, { minInterval: REMINDER_PERIODIC_INTERVAL });
+            periodicRegistered = true;
+        }
+    }
+    state.settings = normalizeSettings({
+        ...state.settings,
+        notifications: { enabled: true, periodicRegistered, permission }
+    });
+    await Storage.saveSettings(state.settings);
+    state.reminderNotificationStatus = periodicRegistered
+        ? 'Notifications on · background checks browser-managed'
+        : 'Notifications on · while app is open';
+    if (state.reminderTimer) clearInterval(state.reminderTimer);
+    state.reminderTimer = window.setInterval(checkDueReminderNotifications, 30 * 1000);
+    renderRemindersView();
+    return checkDueReminderNotifications();
+}
+
+async function disableReminderNotifications() {
+    const registration = await navigator.serviceWorker.ready;
+    if (state.settings.notifications?.periodicRegistered === true) {
+        await registration.periodicSync.unregister(REMINDER_PERIODIC_TAG);
+    }
+    state.settings = normalizeSettings({
+        ...state.settings,
+        notifications: { enabled: false, periodicRegistered: false, permission: Notification.permission }
+    });
+    await Storage.saveSettings(state.settings);
+    if (state.reminderTimer) clearInterval(state.reminderTimer);
+    state.reminderTimer = null;
+    state.reminderNotificationStatus = 'Notifications off';
+    renderRemindersView();
+}
+
+async function openReminderTarget(data = {}) {
+    await flushAutosave();
+    if (data.documentId && state.documents.some((document) => document.id === data.documentId)) {
+        state.currentDocumentId = data.documentId;
+        state.activeView = 'write';
+        location.hash = `#write:${encodeURIComponent(data.documentId)}`;
+    } else if (data.journalId && journalById(data.journalId)) {
+        state.settings = normalizeSettings({ ...state.settings, activeJournalId: data.journalId });
+        await Storage.saveSettings(state.settings);
+        state.activeView = 'journals';
+        location.hash = `#journals:${encodeURIComponent(data.journalId)}`;
+    } else {
+        state.activeView = 'write';
+        location.hash = '#write';
+    }
+    renderAll();
+}
+
+function startReminderRuntime() {
+    if (state.reminderTimer) clearInterval(state.reminderTimer);
+    if (state.settings.notifications?.enabled === true) {
+        checkDueReminderNotifications();
+        state.reminderTimer = window.setInterval(checkDueReminderNotifications, 30 * 1000);
+    }
+    navigator.serviceWorker?.addEventListener('message', async (event) => {
+        if (event.data?.type === 'open-reminder') {
+            await openReminderTarget(event.data);
+            return;
+        }
+        if (event.data?.type === 'drive-sync-complete') {
+            state.driveStatus = `Background Drive sync completed for ${event.data.documentCount} page${event.data.documentCount === 1 ? '' : 's'}.`;
+            await refreshFromStorage(state.currentDocumentId);
+            return;
+        }
+        if (event.data?.type === 'drive-sync-error') {
+            state.driveStatus = `Background Drive sync failed: ${event.data.message}`;
+            renderSyncPanel();
+        }
+    });
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') checkDueReminderNotifications();
+    });
 }
 
 function renderHealth() {
@@ -1442,6 +1935,18 @@ function renderHealth() {
                 date: item.recordedAt
             }))
     );
+    const tokenControl = $('#fitbitAccessTokenInput');
+    const dateControl = $('#fitbitImportDateInput');
+    if (tokenControl?.value) state.fitbitAccessTokenDraft = tokenControl.value;
+    if (dateControl?.value) state.fitbitImportDate = dateControl.value;
+    if (state.fitbitAccessTokenDraft === null) state.fitbitAccessTokenDraft = state.settings.health?.fitbitAccessToken || '';
+    if (!state.fitbitImportDate) state.fitbitImportDate = todayYmd();
+    setFieldValue('#fitbitAccessTokenInput', state.fitbitAccessTokenDraft);
+    setFieldValue('#fitbitImportDateInput', state.fitbitImportDate);
+    $('#fitbitImportStatus').textContent = state.fitbitStatus
+        || (state.settings.health?.fitbitLastImportedAt
+            ? `Last imported ${prettyDateTime(state.settings.health.fitbitLastImportedAt)}`
+            : 'Not imported yet');
 }
 
 function renderTranscriptView() {
@@ -1472,7 +1977,7 @@ function renderInsights() {
 }
 
 function buildLocalSummary(doc) {
-    const firstParagraph = blankArray(doc.blocks).map((block) => block.text).find(Boolean) || '';
+    const firstParagraph = blocksToPlainText(doc.blocks, ' ').trim();
     const parts = [
         doc.locationName ? `Set in ${doc.locationName}.` : '',
         Number.isFinite(doc.mood) ? `Mood ${doc.mood}/10.` : '',
@@ -1489,7 +1994,7 @@ function buildLocalTitle(doc) {
     if (tag && place) return `${tag[0].toUpperCase()}${tag.slice(1)} in ${place}`;
     if (tag) return `${tag[0].toUpperCase()}${tag.slice(1)} check-in`;
     if (place) return `Notes from ${place}`;
-    const firstWords = blankArray(doc.blocks).map((block) => block.text).join(' ').trim().split(/\s+/).slice(0, 5).join(' ');
+    const firstWords = blocksToPlainText(doc.blocks, ' ').trim().split(/\s+/).slice(0, 5).join(' ');
     return firstWords || 'Untitled reflection';
 }
 
@@ -1509,23 +2014,33 @@ async function runAiChatCompletion(messages) {
         return buildLocalChat(doc || {});
     }
     if (provider === 'prompt_api') {
-        if (!window.ai?.languageModel?.create) {
+        if (!window.LanguageModel?.create) {
             throw new Error('Chrome Prompt API is not available in this browser.');
         }
-        const session = await window.ai.languageModel.create();
-        const result = await session.prompt(messages.map((item) => `${item.role}: ${item.content}`).join('\n\n'));
-        return String(result || '');
+        const availability = await window.LanguageModel.availability();
+        if (availability === 'unavailable') throw new Error('Chrome Prompt API model is unavailable on this device.');
+        const initialPrompts = messages
+            .filter((item) => item.role === 'system')
+            .map((item) => ({ role: 'system', content: item.content }));
+        const prompts = messages
+            .filter((item) => item.role !== 'system')
+            .map((item) => ({ role: item.role, content: item.content }));
+        const session = await window.LanguageModel.create({ initialPrompts });
+        try {
+            const result = await session.prompt(prompts.length === 1 ? prompts[0].content : prompts);
+            return String(result || '');
+        } finally {
+            session.destroy?.();
+        }
     }
     if (provider === 'byok' || provider === 'local_model') {
-        if (!state.settings.ai.apiKey || !state.settings.ai.model || !state.settings.ai.endpoint) {
-            throw new Error('AI provider needs an API key, endpoint, and model.');
-        }
+        if (!state.settings.ai.model || !state.settings.ai.endpoint) throw new Error('AI provider needs an endpoint and model.');
+        if (provider === 'byok' && !state.settings.ai.apiKey) throw new Error('BYOK AI provider needs an API key.');
+        const headers = { 'Content-Type': 'application/json' };
+        if (state.settings.ai.apiKey) headers.Authorization = `Bearer ${state.settings.ai.apiKey}`;
         const response = await fetch(state.settings.ai.endpoint, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${state.settings.ai.apiKey}`
-            },
+            headers,
             body: JSON.stringify({
                 model: state.settings.ai.model,
                 temperature: 0.4,
@@ -1534,7 +2049,9 @@ async function runAiChatCompletion(messages) {
         });
         if (!response.ok) throw new Error(`AI request failed: ${response.status}`);
         const payload = await response.json();
-        return payload.choices?.[0]?.message?.content || payload.output_text || '';
+        const result = payload.choices?.[0]?.message?.content || payload.output_text || payload.text || payload.response || '';
+        if (!result) throw new Error('AI endpoint returned no response text.');
+        return String(result);
     }
     throw new Error('Choose an AI provider in settings first.');
 }
@@ -1550,7 +2067,7 @@ async function runAiAction(action) {
                 ? buildLocalSummary(doc)
                 : await runAiChatCompletion([
                     { role: 'system', content: 'Summarize this journal entry in 2 concise sentences.' },
-                    { role: 'user', content: blankArray(doc.blocks).map((block) => block.text).join('\n') }
+                    { role: 'user', content: blocksToPlainText(doc.blocks, '\n') }
                 ]);
             await persistDocument({ ...doc, summary });
             state.aiResponse = summary;
@@ -1559,7 +2076,7 @@ async function runAiAction(action) {
                 ? buildLocalTitle(doc)
                 : await runAiChatCompletion([
                     { role: 'system', content: 'Suggest one short strong title for this journal entry.' },
-                    { role: 'user', content: blankArray(doc.blocks).map((block) => block.text).join('\n') }
+                    { role: 'user', content: blocksToPlainText(doc.blocks, '\n') }
                 ]);
             await persistDocument({ ...doc, smartTitle: String(smartTitle).trim() });
             state.aiResponse = String(smartTitle).trim();
@@ -1569,7 +2086,7 @@ async function runAiAction(action) {
                 ? buildLocalChat(doc)
                 : await runAiChatCompletion([
                     { role: 'system', content: 'You are a reflective journaling assistant. Ground answers in the provided journal entry and keep them concise.' },
-                    { role: 'user', content: `Prompt: ${prompt}\n\nEntry:\n${blankArray(doc.blocks).map((block) => block.text).join('\n')}` }
+                    { role: 'user', content: `Prompt: ${prompt}\n\nEntry:\n${blocksToPlainText(doc.blocks, '\n')}` }
                 ]);
             const history = blankArray(doc.metadata?.aiHistory).concat([{ prompt, reply, at: new Date().toISOString() }]);
             await persistDocument({ ...doc, metadata: { ...(doc.metadata || {}), aiHistory: history } });
@@ -1688,13 +2205,40 @@ function renderMapView() {
 }
 
 function renderSyncPanel() {
-    const snapshot = state.googleSync.getSnapshot();
+    const notion = state.settings.notion || {};
+    const drive = state.settings.drive || {};
+    const hasRecentSync = Boolean(notion.lastSyncedAt || drive.lastPushAt || drive.lastPullAt);
+    // Compute status only from enabled providers — avoid Drive "disabled" bleeding through
+    let syncStatus;
+    if (!notion.enabled && !drive.enabled) {
+        syncStatus = 'inactive';
+    } else if ((notion.enabled && state.notionStatus?.startsWith('Syncing')) ||
+               (drive.enabled && state.driveStatus?.startsWith('Syncing'))) {
+        syncStatus = 'syncing';
+    } else if (hasRecentSync) {
+        syncStatus = 'synced';
+    } else {
+        syncStatus = 'ready';
+    }
+    const queuedJobs = blankArray(state.syncQueue).filter((job) => job.status === 'queued');
+    const notionLine = notion.enabled
+        ? state.notionStatus || `Notion ready${notion.lastSyncedAt ? ` · last sync ${prettyDateTime(notion.lastSyncedAt)}` : ''}`
+        : 'Notion sync is off. Add worker URL, token, and parent page in Settings.';
+    const driveActivity = drive.lastPullAt
+        ? ` · last restore ${prettyDateTime(drive.lastPullAt)}`
+        : drive.lastPushAt ? ` · last push ${prettyDateTime(drive.lastPushAt)}` : '';
+    const driveLine = drive.enabled
+        ? state.driveStatus || `Drive ready${driveActivity}`
+        : 'Drive sync is off. Add a Google OAuth client ID or access token in Settings.';
     $('#syncStatusCard').innerHTML = `
-        <span class="status-pill status-pill--${snapshot.state.status === 'ready' ? 'ready' : snapshot.state.status === 'error' ? 'error' : 'queued'}">${esc(snapshot.state.status)}</span>
-        <p>${esc(snapshot.state.lastError || 'Local save is active. Google Drive connection will be added when you wire OAuth later.')}</p>
-        <span class="sync-help">${snapshot.state.pendingDocumentIds.length} documents and ${snapshot.state.pendingAssetIds.length} assets queued.</span>
+        <span class="status-pill status-pill--${syncStatus}">${esc(syncStatus)}</span>
+        <p>${esc(notionLine)}</p>
+        ${drive.enabled ? `<p>${esc(driveLine)}</p>` : ''}
+        ${notion.lastPageUrl ? `<a class="sync-help" href="${esc(notion.lastPageUrl)}" target="_blank" rel="noreferrer">Open latest Notion page ↗</a>` : ''}
+        ${drive.lastFileUrl ? `<a class="sync-help" href="${esc(drive.lastFileUrl)}" target="_blank" rel="noreferrer">Open latest Drive file ↗</a>` : ''}
+        ${queuedJobs.length ? `<span class="sync-help">${queuedJobs.length} queued job${queuedJobs.length > 1 ? 's' : ''}.</span>` : ''}
     `;
-    $('#syncQueueList').innerHTML = blankArray(state.syncQueue).slice(0, 6).map((job) => `
+    $('#syncQueueList').innerHTML = queuedJobs.slice(0, 6).map((job) => `
         <div class="sync-job">
             <strong>${esc(job.type)}</strong>
             <span class="stack-meta">${esc(`${job.action} • ${job.status}`)}</span>
@@ -1728,19 +2272,86 @@ function renderSavedSearchList() {
     if (libraryMount) libraryMount.innerHTML = html;
 }
 
+function transcriptionSettingsFromAi(ai = state.settings.ai || {}) {
+    return {
+        provider: ai.transcriptionProvider || 'browser_native',
+        apiKey: ai.transcriptionApiKey || '',
+        endpoint: ai.transcriptionEndpoint || '',
+        model: ai.transcriptionModel || '',
+        language: ai.transcriptionLanguage || 'en-US',
+        instructions: ai.transcriptionInstructions || '',
+        insertMode: ai.transcriptionInsertMode || 'collapsible'
+    };
+}
+
+function readTranscriptionControls() {
+    return {
+        provider: $('#transcriptionProviderInput').value || 'browser_native',
+        apiKey: $('#transcriptionApiKeyInput').value.trim(),
+        endpoint: $('#transcriptionEndpointInput').value.trim(),
+        model: $('#transcriptionModelInput').value.trim(),
+        language: $('#transcriptionLanguageInput').value.trim() || 'auto',
+        instructions: $('#transcriptionInstructionsInput').value.trim(),
+        insertMode: $('#transcriptionInsertModeInput').value || 'collapsible'
+    };
+}
+
+function ensureTranscriptionDraft() {
+    if (!state.transcriptionDraft) state.transcriptionDraft = transcriptionSettingsFromAi();
+    return state.transcriptionDraft;
+}
+
+async function saveTranscriptionSettings(event) {
+    event?.preventDefault();
+    state.transcriptionDraft = readTranscriptionControls();
+    const draft = state.transcriptionDraft;
+    state.settings = normalizeSettings({
+        ...state.settings,
+        ai: {
+            ...state.settings.ai,
+            transcriptionProvider: draft.provider,
+            transcriptionApiKey: draft.apiKey,
+            transcriptionEndpoint: draft.endpoint,
+            transcriptionModel: draft.model,
+            transcriptionLanguage: draft.language,
+            transcriptionInstructions: draft.instructions,
+            transcriptionInsertMode: draft.insertMode
+        }
+    });
+    await Storage.saveSettings(state.settings);
+    await queueDriveLibraryChange('workspace', 'transcription-settings', { changedAt: new Date().toISOString() });
+    $('#recordingStatus').textContent = 'Transcription settings saved.';
+    return draft;
+}
+
 function renderSettingsPanel() {
-    setFieldValue('[name="theme"]', state.settings.theme || 'linen');
     setFieldValue('[name="imageMaxEdge"]', state.settings.media?.imageMaxEdge ?? 2200);
     setFieldValue('[name="imageQuality"]', state.settings.media?.imageQuality ?? 0.82);
     setCheckboxValue('[name="keepOriginalImages"]', state.settings.media?.preserveOriginalImages === true);
     setCheckboxValue('[name="storeOriginalAudio"]', true);
     setCheckboxValue('[name="showRightPanel"]', state.settings.showRightPanel === true);
+    setCheckboxValue('[name="notionEnabled"]', state.settings.notion?.enabled === true);
+    setFieldValue('[name="notionWorkerUrl"]', state.settings.notion?.workerUrl || '');
+    setFieldValue('[name="notionParentPageId"]', state.settings.notion?.parentPageId || '');
+    setFieldValue('[name="notionAuthToken"]', state.settings.notion?.authToken || '');
+    setFieldValue('[name="notionProxyToken"]', state.settings.notion?.proxyToken || '');
+    setCheckboxValue('[name="driveEnabled"]', state.settings.drive?.enabled === true);
+    setFieldValue('[name="driveClientId"]', state.settings.drive?.clientId || '');
+    setFieldValue('[name="driveAccessToken"]', state.settings.drive?.accessToken || '');
+    setFieldValue('[name="driveRootFolderName"]', state.settings.drive?.rootFolderName || APP_NAME);
+    setFieldValue('[name="driveSyncMode"]', state.settings.drive?.syncMode || 'background');
     setFieldValue('[name="aiProvider"]', state.settings.ai?.provider || 'local-reflection');
     setFieldValue('[name="aiModel"]', state.settings.ai?.model || '');
     setFieldValue('[name="aiEndpoint"]', state.settings.ai?.endpoint || '');
     setFieldValue('[name="aiApiKey"]', state.settings.ai?.apiKey || '');
-    setFieldValue('#transcriptionProviderInput', state.settings.ai?.transcriptionProvider || 'browser_native');
-    setFieldValue('#transcriptionLanguageInput', 'en-US');
+    const transcription = ensureTranscriptionDraft();
+    setFieldValue('#transcriptionProviderInput', transcription.provider);
+    setFieldValue('#transcriptionApiKeyInput', transcription.apiKey);
+    setFieldValue('#transcriptionEndpointInput', transcription.endpoint);
+    setFieldValue('#transcriptionModelInput', transcription.model);
+    setFieldValue('#transcriptionLanguageInput', transcription.language);
+    setFieldValue('#transcriptionInstructionsInput', transcription.instructions);
+    setFieldValue('#transcriptionInsertModeInput', transcription.insertMode);
     renderCustomFieldList();
     renderSavedSearchList();
 }
@@ -1776,7 +2387,7 @@ function renderAll() {
 
 async function createHealthLogFromForm(event) {
     event.preventDefault();
-    await Storage.saveHealthLog({
+    const saved = await Storage.saveHealthLog({
         kind: $('#healthKindInput').value,
         title: $('#healthTitleInput').value.trim() || $('#healthKindInput').value,
         value: toNullableNumber($('#healthValueInput').value),
@@ -1787,37 +2398,113 @@ async function createHealthLogFromForm(event) {
         linkedDocumentId: currentDocument()?.id || '',
         metadata: {}
     });
+    await queueDriveLibraryChange('health', saved.id, { recordedAt: saved.recordedAt });
     await refreshFromStorage();
     event.target.reset();
 }
 
-function appendTranscriptToCurrentDocument(text, assetId = null) {
+async function importFitbitHealthData() {
+    const accessToken = String(state.fitbitAccessTokenDraft || '').trim();
+    const date = state.fitbitImportDate || todayYmd();
+    state.fitbitStatus = `Importing Fitbit data for ${date}...`;
+    $('#fitbitImportStatus').textContent = state.fitbitStatus;
+    try {
+        const result = await importFitbitDay({ accessToken }, date);
+        for (const log of result.logs) {
+            const saved = await Storage.saveHealthLog(log);
+            await queueDriveLibraryChange('health', saved.id, { recordedAt: saved.recordedAt, source: 'fitbit' });
+        }
+        state.settings = normalizeSettings({
+            ...state.settings,
+            health: {
+                ...state.settings.health,
+                fitbitEnabled: true,
+                fitbitAccessToken: accessToken,
+                fitbitLastImportedAt: result.importedAt
+            }
+        });
+        await Storage.saveSettings(state.settings);
+        state.fitbitStatus = `Imported ${result.logs.length} Fitbit measurements for ${date}`;
+        await refreshFromStorage(state.currentDocumentId);
+    } catch (error) {
+        state.fitbitStatus = `Fitbit import failed: ${error.message}`;
+        renderHealth();
+    }
+}
+
+async function attachAudioAssetToCurrentDocument(asset) {
+    const doc = currentDocument();
+    if (!doc || !asset) return;
+    const draft = collectDocumentDraft() || doc;
+    const blocks = blankArray(draft.blocks).some((block) => block.assetId === asset.id)
+        ? blankArray(draft.blocks)
+        : blankArray(draft.blocks).concat([{
+            id: `block_${asset.id}`,
+            type: 'audio',
+            assetId: asset.id,
+            captionRichText: []
+        }]);
+    state.editor.setValue(blocks);
+    await persistDocument({
+        ...draft,
+        blocks,
+        attachments: [...new Set(blankArray(draft.attachments).concat([asset.id]))]
+    });
+}
+
+async function appendTranscriptToCurrentDocument(text, assetId = null, settings = ensureTranscriptionDraft()) {
     const doc = currentDocument();
     if (!doc || !text) return;
     const job = createTranscriptionJob({
         documentId: doc.id,
         sourceAudioId: assetId,
-        provider: $('#transcriptionProviderInput').value,
-        language: $('#transcriptionLanguageInput').value || 'en-US',
+        settings: {
+            provider: settings.provider,
+            apiKey: settings.apiKey,
+            endpoint: settings.endpoint,
+            model: settings.model,
+            language: settings.language,
+            cleanupInstructions: settings.instructions,
+            autoInsertTranscript: settings.insertMode
+        },
         transcriptText: text
     });
     const bundle = buildTranscriptBundle(job, createTranscriptArtifact({
         documentId: doc.id,
         text,
-        language: $('#transcriptionLanguageInput').value || 'en-US',
-        status: 'ready'
+        language: settings.language,
+        sourceAudioId: assetId,
+        status: 'ready',
+        metadata: { provider: settings.provider, model: settings.model || '' }
     }));
-    const insertion = buildTranscriptInsertion(bundle.transcript, $('#transcriptionInsertModeInput').checked ? 'collapsible' : 'body');
-    persistDocument({
+    const insertion = buildTranscriptInsertion(bundle.transcript, settings.insertMode);
+    const mappedBlocks = insertion.blocks.map((block) => {
+        if (block.type === 'collapsible') {
+            return {
+                id: Storage.createId('block'),
+                type: 'toggle',
+                open: true,
+                richText: makeRichText(block.title || 'Transcript'),
+                children: blankArray(block.blocks).map((child) => createTextBlock(child.type || 'paragraph', child.text || `${child.title || 'Transcript'} ${child.path || ''}`.trim()))
+            };
+        }
+        return createTextBlock(block.type || 'paragraph', block.text || `${block.title || 'Transcript'} ${block.path || ''}`.trim());
+    });
+    await persistDocument({
         ...doc,
-        blocks: blankArray(doc.blocks).concat(insertion.blocks.map((block) => ({
-            id: Storage.createId('block'),
-            type: block.type === 'collapsible' ? 'callout' : (block.type || 'paragraph'),
-            text: block.text || `${block.title || 'Transcript'} ${block.path || ''}`.trim(),
-            depth: 0
-        }))),
+        blocks: blankArray(doc.blocks).concat(mappedBlocks),
         transcripts: blankArray(doc.transcripts).concat([bundle.transcript])
     });
+    return bundle.transcript;
+}
+
+async function transcribeStoredAudio(asset, blob, filename) {
+    const settings = await saveTranscriptionSettings();
+    if (settings.provider === 'browser_native') return null;
+    $('#recordingStatus').textContent = 'Transcribing audio...';
+    const result = await transcribeAudio(settings, blob, filename);
+    await appendTranscriptToCurrentDocument(result.text, asset.id, settings);
+    return result;
 }
 
 function initSpeechRecognition() {
@@ -1846,6 +2533,7 @@ async function startRecording() {
         $('#recordingStatus').textContent = 'Audio recording is not available in this browser.';
         return;
     }
+    const transcriptionSettings = await saveTranscriptionSettings();
     state.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     state.recordingSession = createRecordingSessionDraft({
         documentId: currentDocument()?.id || '',
@@ -1864,44 +2552,48 @@ async function startRecording() {
         state.recordingSession._chunks.push(event.data);
     };
     state.mediaRecorder.onstop = async () => {
-        const blob = new Blob(state.recordingSession._chunks || [], { type: state.mediaRecorder.mimeType || 'audio/webm' });
-        const finished = finalizeRecordingSession(state.recordingSession, {
-            documentId: currentDocument()?.id || '',
-            mimeType: blob.type,
-            size: blob.size,
-            durationMs: state.recordingSession.durationMs
-        });
-        const asset = await Storage.saveAsset(createAssetEntry({
-            documentId: finished.documentId,
-            kind: 'audio',
-            name: `voice-${Date.now()}.webm`,
-            mimeType: blob.type,
-            size: blob.size,
-            storageMode: 'original',
-            metadata: { blob }
-        }));
-        const doc = currentDocument();
-        if (doc) {
-            await persistDocument({
-                ...doc,
-                attachments: [...new Set(blankArray(doc.attachments).concat([asset.id]))]
+        const recorder = state.mediaRecorder;
+        const session = state.recordingSession;
+        const blob = new Blob(session?._chunks || [], { type: recorder?.mimeType || 'audio/webm' });
+        const filename = `voice-${Date.now()}.webm`;
+        try {
+            finalizeRecordingSession(session, {
+                documentId: currentDocument()?.id || '',
+                mimeType: blob.type,
+                size: blob.size,
+                durationMs: session?.durationMs || 0
             });
-        }
-        if (state.speechTranscript) appendTranscriptToCurrentDocument(state.speechTranscript, asset.id);
-        $('#recordingStatus').textContent = state.speechTranscript ? 'Recording saved and transcript inserted.' : 'Recording saved.';
-        $('#stopAudioBtn').disabled = true;
-        $('#recordAudioBtn').disabled = false;
-        state.mediaStream?.getTracks().forEach((track) => track.stop());
-        state.mediaStream = null;
-        state.mediaRecorder = null;
-        state.recordingSession = null;
-        if (state.speechRecognition) {
-            try { state.speechRecognition.stop(); } catch (_) {}
-            state.speechRecognition = null;
+            const file = new File([blob], filename, { type: blob.type });
+            const asset = await saveSingleAssetFile(file, currentDocument(), 'audio');
+            await attachAudioAssetToCurrentDocument(asset);
+            if (transcriptionSettings.provider === 'browser_native') {
+                if (state.speechTranscript) {
+                    await appendTranscriptToCurrentDocument(state.speechTranscript, asset.id, transcriptionSettings);
+                    $('#recordingStatus').textContent = 'Recording saved and transcript inserted.';
+                } else {
+                    $('#recordingStatus').textContent = 'Recording saved without a browser transcript.';
+                }
+            } else {
+                await transcribeStoredAudio(asset, blob, filename);
+                $('#recordingStatus').textContent = 'Recording saved and API transcript inserted.';
+            }
+        } catch (error) {
+            $('#recordingStatus').textContent = `Recording saved; transcription failed: ${error.message}`;
+        } finally {
+            $('#stopAudioBtn').disabled = true;
+            $('#recordAudioBtn').disabled = false;
+            state.mediaStream?.getTracks().forEach((track) => track.stop());
+            state.mediaStream = null;
+            state.mediaRecorder = null;
+            state.recordingSession = null;
+            if (state.speechRecognition) {
+                try { state.speechRecognition.stop(); } catch (_) {}
+                state.speechRecognition = null;
+            }
         }
     };
     state.mediaRecorder.start(700);
-    state.speechRecognition = initSpeechRecognition();
+    state.speechRecognition = transcriptionSettings.provider === 'browser_native' ? initSpeechRecognition() : null;
     if (state.speechRecognition) {
         try { state.speechRecognition.start(); } catch (_) {}
     }
@@ -1917,24 +2609,21 @@ function stopRecording() {
 async function handleAudioUpload(event) {
     const file = event.target.files?.[0];
     if (!file) return;
-    const asset = await Storage.saveAsset(createAssetEntry({
-        documentId: currentDocument()?.id || '',
-        kind: 'audio',
-        name: file.name,
-        originalName: file.name,
-        mimeType: file.type,
-        size: file.size,
-        metadata: { blob: file }
-    }));
-    const doc = currentDocument();
-    if (doc) {
-        await persistDocument({
-            ...doc,
-            attachments: [...new Set(blankArray(doc.attachments).concat([asset.id]))]
-        });
+    try {
+        const asset = await saveSingleAssetFile(file, currentDocument(), 'audio');
+        await attachAudioAssetToCurrentDocument(asset);
+        const settings = await saveTranscriptionSettings();
+        if (settings.provider === 'browser_native') {
+            $('#recordingStatus').textContent = 'Audio uploaded and attached. Browser-native transcription requires live recording.';
+        } else {
+            await transcribeStoredAudio(asset, file, file.name);
+            $('#recordingStatus').textContent = 'Audio uploaded, attached, and transcribed.';
+        }
+    } catch (error) {
+        $('#recordingStatus').textContent = `Audio saved; transcription failed: ${error.message}`;
+    } finally {
+        event.target.value = '';
     }
-    $('#recordingStatus').textContent = 'Audio uploaded and attached.';
-    event.target.value = '';
 }
 
 async function saveJournal(event) {
@@ -1946,12 +2635,13 @@ async function saveJournal(event) {
         journals: blankArray(state.settings.journals).concat([{
             id: `journal_${slugify(name)}`,
             name,
-            color: $('#journalColorInput').value.trim() || 'plum',
+            color: $('#journalColorInput').value.trim(),
             description: $('#journalDescriptionInput').value.trim(),
             icon: '✎'
         }])
     });
     await Storage.saveSettings(state.settings);
+    await queueDriveLibraryChange('workspace', 'journals');
     event.target.reset();
     await refreshFromStorage();
 }
@@ -1971,6 +2661,7 @@ async function saveTemplate(event) {
         }])
     });
     await Storage.saveSettings(state.settings);
+    await queueDriveLibraryChange('workspace', 'templates');
     event.target.reset();
     await refreshFromStorage();
 }
@@ -1979,21 +2670,28 @@ async function saveReminder(event) {
     event.preventDefault();
     const title = $('#reminderTitleInput').value.trim();
     if (!title) return;
+    const date = $('#reminderDateInput').value;
+    const frequency = $('#reminderFrequencyInput').value;
+    const anchor = date ? new Date(`${date}T12:00:00`) : new Date();
     state.settings = normalizeSettings({
         ...state.settings,
         reminders: blankArray(state.settings.reminders).concat([{
             id: `reminder_${slugify(title)}_${Date.now().toString(36)}`,
             title,
             journalId: $('#reminderJournalInput').value || '',
-            date: $('#reminderDateInput').value,
+            date,
             time: $('#reminderTimeInput').value,
-            frequency: $('#reminderFrequencyInput').value,
+            frequency,
+            weekday: frequency === 'weekly' ? anchor.getDay() : null,
+            dayOfMonth: frequency === 'monthly' ? anchor.getDate() : null,
             active: true
         }])
     });
     await Storage.saveSettings(state.settings);
+    await queueDriveLibraryChange('workspace', 'reminders');
     event.target.reset();
     await refreshFromStorage();
+    await checkDueReminderNotifications();
 }
 
 async function addCustomField() {
@@ -2017,6 +2715,7 @@ async function addCustomField() {
         }
     });
     await Storage.saveSettings(state.settings);
+    await queueDriveLibraryChange('workspace', 'custom-fields');
     ['#customFieldNameInput', '#customFieldKeyInput', '#customFieldPrefixesInput', '#customFieldOptionsInput', '#customFieldMaxInput'].forEach((selector) => setFieldValue(selector, ''));
     setFieldValue('#customFieldTypeInput', 'string');
     setCheckboxValue('#customFieldMultipleInput', false);
@@ -2039,6 +2738,7 @@ async function addSavedSearch() {
         }
     });
     await Storage.saveSettings(state.settings);
+    await queueDriveLibraryChange('workspace', 'saved-searches');
     setFieldValue('#savedSearchNameInput', '');
     setFieldValue('#savedSearchQueryInput', '');
     await refreshFromStorage();
@@ -2055,44 +2755,466 @@ async function saveSettings(event) {
             imageQuality: Number(form.get('imageQuality') || 0.82),
             preserveOriginalImages: form.get('keepOriginalImages') === 'on'
         },
-        theme: String(form.get('theme') || 'linen'),
+        notion: {
+            ...state.settings.notion,
+            enabled: form.get('notionEnabled') === 'on',
+            workerUrl: String(form.get('notionWorkerUrl') || '').trim(),
+            parentPageId: String(form.get('notionParentPageId') || '').trim(),
+            authToken: String(form.get('notionAuthToken') || '').trim(),
+            proxyToken: String(form.get('notionProxyToken') || '').trim()
+        },
+        drive: {
+            ...state.settings.drive,
+            enabled: form.get('driveEnabled') === 'on',
+            clientId: String(form.get('driveClientId') || '').trim(),
+            accessToken: String(form.get('driveAccessToken') || '').trim(),
+            rootFolderName: String(form.get('driveRootFolderName') || APP_NAME).trim(),
+            syncMode: String(form.get('driveSyncMode') || 'background')
+        },
         ai: {
             ...state.settings.ai,
             provider: String(form.get('aiProvider') || 'local-reflection'),
             model: String(form.get('aiModel') || ''),
             endpoint: String(form.get('aiEndpoint') || ''),
             apiKey: String(form.get('aiApiKey') || ''),
-            transcriptionProvider: String($('#transcriptionProviderInput').value || 'browser_native')
+            transcriptionProvider: ensureTranscriptionDraft().provider,
+            transcriptionApiKey: ensureTranscriptionDraft().apiKey,
+            transcriptionEndpoint: ensureTranscriptionDraft().endpoint,
+            transcriptionModel: ensureTranscriptionDraft().model,
+            transcriptionLanguage: ensureTranscriptionDraft().language,
+            transcriptionInstructions: ensureTranscriptionDraft().instructions,
+            transcriptionInsertMode: ensureTranscriptionDraft().insertMode
         },
         showRightPanel: form.get('showRightPanel') === 'on'
     });
     await Storage.saveSettings(state.settings);
+    await queueDriveLibraryChange('workspace', 'settings', { changedAt: new Date().toISOString() });
     await refreshFromStorage();
 }
 
-function buildMarkdownForDocument(doc) {
-    const lines = [
-        `# ${doc.smartTitle || doc.title || 'Untitled'}`,
-        '',
-        `- Journal: ${journalById(doc.journalId)?.name || doc.journalId}`,
-        `- Date: ${doc.date || ''}`,
-        doc.locationName ? `- Location: ${doc.locationName}` : '',
-        doc.weather ? `- Weather: ${doc.weather}` : '',
-        doc.activity ? `- Activity: ${doc.activity}` : '',
-        blankArray(doc.tags).length ? `- Tags: ${blankArray(doc.tags).join(', ')}` : '',
-        blankArray(doc.people).length ? `- People: ${blankArray(doc.people).join(', ')}` : '',
-        '',
-        ...(doc.summary ? [`> ${doc.summary}`, ''] : []),
-        ...blankArray(doc.blocks).map((block) => {
-            if (block.type === 'heading') return `## ${block.text}`;
-            if (block.type === 'bullet') return `- ${block.text}`;
-            if (block.type === 'checklist') return `- [${block.checked ? 'x' : ' '}] ${block.text}`;
-            if (block.type === 'quote') return `> ${block.text}`;
-            if (block.type === 'callout') return `> ${block.text}`;
-            return block.text;
-        })
+// Local Markdown export. Drive and Notion use their shared provider serializers.
+function buildMarkdownForDocument(doc, assetRecords = state.assets) {
+    if (!doc) return '';
+    const parts = [];
+    const assetsById = new Map(blankArray(assetRecords).map((asset) => [asset.id, asset]));
+
+    function durableAssetUrl(block = {}) {
+        const asset = assetsById.get(block.assetId);
+        const candidate = asset?.metadata?.driveWebViewLink || asset?.remoteUrl || block.src || '';
+        return /^https:\/\//i.test(candidate) ? candidate : '';
+    }
+
+    function assetLabel(block = {}) {
+        const asset = assetsById.get(block.assetId);
+        return asset?.name || block.name || block.alt || 'Attachment';
+    }
+
+    // Title
+    parts.push(`# ${doc.smartTitle || doc.title || 'Untitled'}`);
+    parts.push('');
+
+    // Metadata callout
+    const metaLines = [
+        `Journal: ${journalById(doc.journalId)?.name || doc.journalId || ''}`,
+        doc.date ? `Date: ${doc.date}` : '',
+        doc.locationName ? `Location: ${doc.locationName}` : '',
+        doc.weather ? `Weather: ${doc.weather}` : '',
+        doc.activity ? `Activity: ${doc.activity}` : '',
+        Number.isFinite(Number(doc.mood)) ? `Mood: ${doc.mood}/10` : '',
+        Number.isFinite(Number(doc.energy)) ? `Energy: ${doc.energy}/10` : '',
+        blankArray(doc.tags).length ? `Tags: ${blankArray(doc.tags).join(', ')}` : '',
+        blankArray(doc.people).length ? `People: ${blankArray(doc.people).join(', ')}` : '',
     ].filter(Boolean);
-    return lines.join('\n');
+
+    if (metaLines.length) {
+        parts.push('<callout icon="📋">');
+        metaLines.forEach((l) => parts.push(`\t${l}`));
+        parts.push('</callout>');
+        parts.push('');
+    }
+
+    // Summary
+    if (doc.summary) {
+        parts.push(`> ${doc.summary}`);
+        parts.push('');
+    }
+
+    // --- inline serializer ---
+    function inlineToMd(richText = []) {
+        return blankArray(richText).map((node) => {
+            if (!node || node.type !== 'text') return '';
+            let t = node.text || '';
+            const marks = node.marks || [];
+
+            // Code span takes priority (no other marks inside)
+            if (marks.some((m) => m.type === 'code')) return `\`${t}\``;
+
+            // Standard marks
+            if (marks.some((m) => m.type === 'bold'))      t = `**${t}**`;
+            if (marks.some((m) => m.type === 'italic'))    t = `*${t}*`;
+            if (marks.some((m) => m.type === 'strike'))    t = `~~${t}~~`;
+            if (marks.some((m) => m.type === 'underline')) t = `<span underline="true">${t}</span>`;
+
+            // Notion Enhanced Markdown color spans
+            const bgMark   = marks.find((m) => m.type === 'bgColor');
+            const txtMark  = marks.find((m) => m.type === 'textColor');
+            if (bgMark?.attrs?.color)  t = `<span color="${bgMark.attrs.color}_bg">${t}</span>`;
+            else if (txtMark?.attrs?.color) t = `<span color="${txtMark.attrs.color}">${t}</span>`;
+
+            // Link
+            const link = marks.find((m) => m.type === 'link');
+            if (link?.attrs?.href) t = `[${t}](${link.attrs.href})`;
+
+            return t;
+        }).join('');
+    }
+
+    // --- block serializer ---
+    function processBlocks(blocks, indent = '') {
+        blankArray(blocks).forEach((block) => {
+            const colorAttr = block.color ? ` {color="${block.color}"}` : '';
+
+            switch (block.type) {
+                case 'paragraph': {
+                    const t = inlineToMd(block.richText);
+                    parts.push(`${indent}${t || '<empty-block/>'}${colorAttr}`);
+                    break;
+                }
+                case 'heading': {
+                    const lvl = Math.min(4, Math.max(1, Number(block.level || 2)));
+                    parts.push(`${indent}${'#'.repeat(lvl)} ${inlineToMd(block.richText)}${colorAttr}`);
+                    break;
+                }
+                case 'bullet':
+                    parts.push(`${indent}${'  '.repeat(block.depth || 0)}- ${inlineToMd(block.richText)}${colorAttr}`);
+                    break;
+                case 'numbered':
+                    parts.push(`${indent}${'  '.repeat(block.depth || 0)}1. ${inlineToMd(block.richText)}${colorAttr}`);
+                    break;
+                case 'checklist':
+                    parts.push(`${indent}- [${block.checked ? 'x' : ' '}] ${inlineToMd(block.richText)}${colorAttr}`);
+                    break;
+                case 'quote':
+                    parts.push(`${indent}> ${inlineToMd(block.richText)}${colorAttr}`);
+                    break;
+                case 'callout': {
+                    const icon = block.icon || '💡';
+                    const col  = block.color ? ` color="${block.color}"` : '';
+                    parts.push(`${indent}<callout icon="${icon}"${col}>`);
+                    parts.push(`${indent}\t${inlineToMd(block.richText)}`);
+                    parts.push(`${indent}</callout>`);
+                    break;
+                }
+                case 'toggle': {
+                    const col = block.color ? ` color="${block.color}"` : '';
+                    parts.push(`${indent}<details${col}>`);
+                    parts.push(`${indent}<summary>${inlineToMd(block.richText)}</summary>`);
+                    processBlocks(block.children, `${indent}\t`);
+                    parts.push(`${indent}</details>`);
+                    break;
+                }
+                case 'code':
+                    parts.push(`${indent}\`\`\`${block.language || ''}`);
+                    (block.text || '').split('\n').forEach((l) => parts.push(`${indent}${l}`));
+                    parts.push(`${indent}\`\`\``);
+                    break;
+                case 'divider':
+                    parts.push(`${indent}---`);
+                    break;
+                case 'image': {
+                    const src     = durableAssetUrl(block);
+                    const caption = inlineToMd(block.captionRichText) || block.alt || '';
+                    parts.push(src ? `${indent}![${caption}](${src})${colorAttr}` : `${indent}Attachment: ${assetLabel(block)}`);
+                    break;
+                }
+                case 'video': {
+                    const src     = durableAssetUrl(block);
+                    const caption = inlineToMd(block.captionRichText) || '';
+                    parts.push(src ? `${indent}<video src="${src}"${colorAttr}>${caption}</video>` : `${indent}Attachment: ${assetLabel(block)}`);
+                    break;
+                }
+                case 'audio': {
+                    const src     = durableAssetUrl(block);
+                    const caption = inlineToMd(block.captionRichText) || '';
+                    parts.push(src ? `${indent}<audio src="${src}"${colorAttr}>${caption}</audio>` : `${indent}Attachment: ${assetLabel(block)}`);
+                    break;
+                }
+                case 'file': {
+                    const src = durableAssetUrl(block);
+                    parts.push(src ? `${indent}<file src="${src}"${colorAttr}>${block.name || assetLabel(block)}</file>` : `${indent}Attachment: ${assetLabel(block)}`);
+                    break;
+                }
+                case 'table': {
+                    const rows = block.rows || [];
+                    if (!rows.length) break;
+                    parts.push(`${indent}<table header-row="true">`);
+                    rows.forEach((row) => {
+                        parts.push(`${indent}\t<tr>`);
+                        blankArray(row).forEach((cell) => {
+                            parts.push(`${indent}\t\t<td>${inlineToMd(cell)}</td>`);
+                        });
+                        parts.push(`${indent}\t</tr>`);
+                    });
+                    parts.push(`${indent}</table>`);
+                    break;
+                }
+                default: {
+                    const t = blockToPlainText(block);
+                    if (t) parts.push(`${indent}${t}`);
+                }
+            }
+            parts.push('');
+        });
+    }
+
+    processBlocks(doc.blocks);
+    return parts.join('\n').trim();
+}
+
+async function verifyNotionSettings() {
+    const settings = state.settings.notion || {};
+    state.notionStatus = 'Verifying Notion connection...';
+    renderSyncPanel();
+    try {
+        const user = await verifyNotionConnection(settings);
+        state.notionStatus = `Notion verified as ${user.name || user.person?.email || user.id || 'integration'}`;
+    } catch (error) {
+        state.notionStatus = `Notion verification failed: ${error.message}`;
+    }
+    renderSyncPanel();
+}
+
+async function markDocumentQueueSynced(documentId, assets = [], syncedAt = new Date().toISOString(), includeAssets = false) {
+    const assetIds = includeAssets ? new Set(blankArray(assets).map((asset) => asset.id)) : new Set();
+    const queued = blankArray(state.syncQueue).filter((job) => {
+        if (job.status !== 'queued') return false;
+        if (job.type === 'document' && job.targetId === documentId) return true;
+        if (job.type === 'asset' && assetIds.has(job.targetId)) return true;
+        return false;
+    });
+    await Promise.all(queued.map((job) => Storage.updateSyncJob({
+        ...job,
+        status: 'synced',
+        payload: {
+            ...(job.payload || {}),
+            syncedAt
+        }
+    })));
+}
+
+async function markDriveLibraryQueueSynced(result, notionEnabled) {
+    if (!result) return;
+    const documentIds = new Set(blankArray(result.documentIds));
+    const assetIds = new Set(blankArray(result.assets).map((asset) => asset.id));
+    const queued = blankArray(state.syncQueue).filter((job) => {
+        if (job.status !== 'queued') return false;
+        if (job.type === 'document') return notionEnabled !== true && documentIds.has(job.targetId);
+        if (job.type === 'asset') return assetIds.has(job.targetId);
+        return ['health', 'workspace', 'library'].includes(job.type);
+    });
+    await Promise.all(queued.map((job) => Storage.updateSyncJob({
+        ...job,
+        status: 'synced',
+        payload: { ...(job.payload || {}), driveSyncedAt: result.syncedAt }
+    })));
+}
+
+async function syncCurrentDocumentToNotion() {
+    const doc = collectDocumentDraft();
+    if (!doc) return;
+    const settings = state.settings.notion || {};
+    if (settings.enabled !== true) {
+        state.notionStatus = 'Turn on Notion sync in Settings first.';
+        renderSyncPanel();
+        return;
+    }
+
+    state.notionStatus = 'Syncing current page to Notion...';
+    renderSyncPanel();
+    const saved = await Storage.saveDocument(doc);
+    const assets = state.assets.filter((asset) => asset.documentId === saved.id);
+    const result = await syncDocumentToNotion(settings, saved, {
+        journalName: journalById(saved.journalId)?.name || '',
+        assets
+    });
+    const syncedAt = new Date().toISOString();
+    const notionUploads = new Map(blankArray(result.assets).map((item) => [item.assetId, item.fileUploadId]));
+    for (const asset of assets) {
+        const fileUploadId = notionUploads.get(asset.id);
+        if (!fileUploadId) continue;
+        await Storage.saveAsset({
+            ...asset,
+            metadata: {
+                ...(asset.metadata || {}),
+                notionFileUploadId: fileUploadId,
+                notionSyncedAt: syncedAt
+            }
+        });
+    }
+    const nextDoc = {
+        ...saved,
+        metadata: {
+            ...(saved.metadata || {}),
+            notionPageId: result.pageId,
+            notionUrl: result.url,
+            notionSyncedAt: syncedAt
+        },
+        updatedAt: syncedAt
+    };
+    state.settings = normalizeSettings({
+        ...state.settings,
+        notion: {
+            ...settings,
+            lastSyncedAt: syncedAt,
+            lastPageUrl: result.url
+        }
+    });
+    await Storage.saveSettings(state.settings);
+    await Storage.saveDocument(nextDoc);
+    await Storage.enqueueSyncJob({
+        type: 'notion-document',
+        action: 'upsert',
+        targetId: nextDoc.id,
+        status: 'synced',
+        payload: { notionPageId: result.pageId, notionUrl: result.url, syncedAt }
+    });
+    const mediaCount = notionUploads.size;
+    state.notionStatus = `Synced to Notion${mediaCount ? ` with ${mediaCount} attachment${mediaCount === 1 ? '' : 's'}` : ''} at ${prettyDateTime(syncedAt)}`;
+    await refreshFromStorage(nextDoc.id);
+}
+
+async function connectGoogleDrive() {
+    const settings = state.settings.drive || {};
+    if (settings.accessToken) {
+        state.settings = normalizeSettings({
+            ...state.settings,
+            drive: {
+                ...settings,
+                enabled: true,
+                lastConnectedAt: new Date().toISOString()
+            }
+        });
+        await Storage.saveSettings(state.settings);
+        await registerDriveBackgroundSync();
+        state.driveStatus = 'Google Drive access token is saved.';
+        renderSyncPanel();
+        return;
+    }
+    state.driveStatus = 'Opening Google authorization...';
+    renderSyncPanel();
+    try {
+        const accessToken = await requestDriveToken(settings.clientId);
+        const connectedAt = new Date().toISOString();
+        state.settings = normalizeSettings({
+            ...state.settings,
+            drive: {
+                ...settings,
+                enabled: true,
+                accessToken,
+                lastConnectedAt: connectedAt
+            }
+        });
+        await Storage.saveSettings(state.settings);
+        await registerDriveBackgroundSync();
+        state.driveStatus = `Google Drive connected at ${prettyDateTime(connectedAt)}`;
+    } catch (error) {
+        state.driveStatus = `Google Drive connection failed: ${error.message}`;
+    }
+    renderSyncPanel();
+}
+async function syncLibraryToDrive() {
+    await flushAutosave();
+    const settings = state.settings.drive || {};
+    if (settings.enabled !== true) {
+        state.driveStatus = 'Turn on Google Drive sync in Settings first.';
+        renderSyncPanel();
+        return;
+    }
+
+    state.driveStatus = 'Syncing library to Google Drive...';
+    renderSyncPanel();
+    const library = await Storage.getAllData();
+    const result = await syncDriveLibrarySnapshot({
+        settings,
+        documents: library.documents,
+        assets: library.assets,
+        healthLogs: library.healthLogs,
+        views: library.views,
+        workspaceSettings: buildDriveWorkspaceSettings(library.settings)
+    });
+    for (const document of result.documents) await Storage.saveDocument(document);
+    for (const asset of result.assets) await Storage.saveAsset(asset);
+    state.settings = normalizeSettings({ ...state.settings, drive: result.driveSettings });
+    await Storage.saveSettings(state.settings);
+    await Storage.enqueueSyncJob({
+        type: 'drive-library',
+        action: 'upsert',
+        targetId: result.manifestResult.manifestId,
+        status: 'synced',
+        payload: {
+            documentCount: result.documents.length,
+            assetCount: result.assets.length,
+            syncedAt: result.syncedAt
+        }
+    });
+    state.driveStatus = `Synced ${result.documents.length} page${result.documents.length === 1 ? '' : 's'} and ${result.assets.length} attachment${result.assets.length === 1 ? '' : 's'} to Google Drive`;
+    await refreshFromStorage(state.currentDocumentId);
+    return {
+        documentIds: result.documents.map((document) => document.id),
+        assets: result.assets,
+        syncedAt: result.syncedAt
+    };
+}
+
+async function restoreLibraryFromDrive() {
+    const settings = state.settings.drive || {};
+    if (settings.enabled !== true) {
+        state.driveStatus = 'Turn on Google Drive sync in Settings first.';
+        renderSyncPanel();
+        return;
+    }
+    await flushAutosave();
+    state.driveStatus = 'Restoring library from Google Drive...';
+    renderSyncPanel();
+    const result = await restoreJournalFromDrive(settings);
+    if (!result.documents.length) throw new Error('Google Drive did not contain any journal documents');
+
+    await Storage.replaceLibrary({
+        documents: result.documents,
+        healthLogs: result.library.healthLogs,
+        assets: result.assets,
+        views: result.library.views
+    });
+
+    const restoredSettings = result.library.workspace.settings;
+    const localAi = state.settings.ai || {};
+    const localHealth = state.settings.health || {};
+    state.settings = normalizeSettings({
+        ...state.settings,
+        ...restoredSettings,
+        notion: state.settings.notion,
+        ai: {
+            ...localAi,
+            ...(restoredSettings.ai || {}),
+            apiKey: localAi.apiKey,
+            transcriptionApiKey: localAi.transcriptionApiKey
+        },
+        health: {
+            ...localHealth,
+            ...(restoredSettings.health || {}),
+            fitbitAccessToken: localHealth.fitbitAccessToken || ''
+        },
+        drive: {
+            ...settings,
+            rootFolderId: result.rootFolderId,
+            libraryManifestId: result.manifestId,
+            libraryManifestUrl: result.manifestUrl,
+            lastPullAt: result.restoredAt
+        }
+    });
+    await Storage.saveSettings(state.settings);
+    state.driveStatus = `Restored ${result.documents.length} page${result.documents.length === 1 ? '' : 's'}, ${result.assets.length} attachment${result.assets.length === 1 ? '' : 's'}, and ${result.library.healthLogs.length} health log${result.library.healthLogs.length === 1 ? '' : 's'} from Google Drive`;
+    await refreshFromStorage(result.documents[0].id);
 }
 
 async function blobToDataUrl(blob) {
@@ -2155,28 +3277,42 @@ async function importJsonDump(event) {
     try {
         const text = await file.text();
         const payload = JSON.parse(text);
-        await Storage.clearAll();
-        await Storage.seedDefaults();
-        for (const doc of blankArray(payload.documents)) await Storage.saveDocument(doc);
-        for (const log of blankArray(payload.healthLogs)) await Storage.saveHealthLog(log);
-        for (const asset of blankArray(payload.assets)) {
+        if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('Import must contain a Journaling workspace object');
+        for (const key of ['documents', 'healthLogs', 'assets', 'views', 'syncQueue']) {
+            if (!Array.isArray(payload[key])) throw new Error(`Import is missing the ${key} array`);
+        }
+        if (!payload.settings || typeof payload.settings !== 'object') throw new Error('Import is missing workspace settings');
+        if (!payload.syncState || typeof payload.syncState !== 'object') throw new Error('Import is missing sync state');
+        const assets = payload.assets.map((asset) => {
+            const blobDataUrl = asset?.metadata?.blobDataUrl || '';
+            if (blobDataUrl && !/^data:[^,]+;base64,/.test(blobDataUrl)) throw new Error(`Asset ${asset?.id || ''} has invalid embedded media`);
             const hydrated = {
                 ...asset,
                 metadata: {
                     ...asset.metadata,
-                    blob: asset.metadata?.blobDataUrl ? dataUrlToBlob(asset.metadata.blobDataUrl) : undefined
+                    blob: blobDataUrl ? dataUrlToBlob(blobDataUrl) : undefined
                 }
             };
             delete hydrated.metadata.blobDataUrl;
-            await Storage.saveAsset(hydrated);
-        }
-        for (const view of blankArray(payload.views)) await Storage.saveView(view);
-        for (const job of blankArray(payload.syncQueue)) await Storage.updateSyncJob(job);
-        if (payload.settings) await Storage.saveSettings(payload.settings);
-        if (payload.syncState) await Storage.saveSyncState(payload.syncState);
+            return hydrated;
+        });
+        await Storage.replaceWorkspace({
+            documents: payload.documents,
+            healthLogs: payload.healthLogs,
+            assets,
+            views: payload.views,
+            settings: payload.settings,
+            syncQueue: payload.syncQueue,
+            syncState: payload.syncState
+        });
         await refreshFromStorage(payload.documents?.[0]?.id || null);
         state.activeView = 'write';
         location.hash = '#write';
+        state.driveStatus = `Imported ${payload.documents.length} page${payload.documents.length === 1 ? '' : 's'} from JSON.`;
+        renderAll();
+    } catch (error) {
+        state.driveStatus = `Import failed: ${error.message}`;
+        renderSyncPanel();
     } finally {
         event.target.value = '';
     }
@@ -2213,38 +3349,65 @@ function bindEvents() {
         syncShellState();
         renderAll();
     });
-    $('#libraryCreateDocumentBtn').addEventListener('click', () => createNewDocument());
+    $('#closeRailRightBtn')?.addEventListener('click', () => $('#toggleStudioBtn').click());
+    $('#libraryCreateDocumentBtn').addEventListener('click', async () => {
+        await flushAutosave();
+        await createNewDocument();
+    });
     $('#createJournalBtn').addEventListener('click', () => {
         state.activeView = 'journals';
         renderAll();
     });
-    $('#topNewEntryBtn').addEventListener('click', () => createNewDocument());
+    $('#topNewEntryBtn').addEventListener('click', async () => {
+        await flushAutosave();
+        await createNewDocument();
+    });
     $('#topMarkdownBtn').addEventListener('click', exportMarkdownDump);
     $('#topImportBtn').addEventListener('click', () => $('#importJsonInput').click());
     $('#topExportBtn').addEventListener('click', exportJsonDump);
     $('#importJsonInput').addEventListener('change', importJsonDump);
     $('#toggleFavoriteBtn').addEventListener('click', toggleCurrentFavorite);
     $('#toggleHighlightBtn').addEventListener('click', toggleCurrentHighlight);
-    $('#saveDocBtn').addEventListener('click', saveCurrentDocument);
+    $('#attachMediaBtn').addEventListener('click', () => $('#assetInput').click());
     $('#toggleQuickAddBtn').addEventListener('click', () => {
         state.writePanels.quickAdd = !state.writePanels.quickAdd;
         syncWriteSurfaceState();
     });
-    $('#toggleDetailsBtn').addEventListener('click', () => {
+    $('#toggleDetailsBtn').addEventListener('click', async () => {
+        if (!state.settings.showRightPanel) {
+            state.settings = normalizeSettings({ ...state.settings, showRightPanel: true });
+            await Storage.saveSettings(state.settings);
+            syncShellState();
+        }
         state.writePanels.details = !state.writePanels.details;
         syncWriteSurfaceState();
     });
+    const themeToggleBtn = $('#themeToggleBtn');
+    if (themeToggleBtn) {
+        const storedTheme = localStorage.getItem('theme') || 'auto';
+        applyThemePreference(storedTheme);
+        themeToggleBtn.addEventListener('click', () => {
+            const current = document.documentElement.getAttribute('data-theme') || 'auto';
+            const next = current === 'dark' ? 'light' : 'dark';
+            localStorage.setItem('theme', next);
+            applyThemePreference(next);
+        });
+    }
     $('#docTemplateInput').addEventListener('change', (event) => {
         const doc = currentDocument();
         if (!doc) return;
         const templateId = event.target.value;
-        if (!templateId) return;
+        if (!templateId) {
+            scheduleAutosave();
+            return;
+        }
         const template = templateMap().get(templateId);
         if (!template) return;
         setFieldValue('#docTitleInput', template.name);
         setFieldValue('#docTagsInput', blankArray(template.tags).join(', '));
         state.editor.setValue(buildDefaultBlocks(templateId));
         renderDocumentChrome(collectDocumentDraft());
+        scheduleAutosave();
     });
     $('#draftForm').addEventListener('submit', createDraftDocumentFromForm);
     $('#insertQuickAddBtn').addEventListener('click', () => saveQuickAddResult('append'));
@@ -2255,22 +3418,72 @@ function bindEvents() {
         event.target.value = '';
     });
     $('#healthLogForm').addEventListener('submit', createHealthLogFromForm);
+    $('#fitbitAccessTokenInput').addEventListener('input', (event) => {
+        state.fitbitAccessTokenDraft = event.target.value;
+    });
+    $('#fitbitImportDateInput').addEventListener('input', (event) => {
+        state.fitbitImportDate = event.target.value;
+    });
+    $('#importFitbitBtn').addEventListener('pointerdown', () => {
+        state.fitbitAccessTokenDraft = $('#fitbitAccessTokenInput').value;
+        state.fitbitImportDate = $('#fitbitImportDateInput').value;
+    });
+    $('#importFitbitBtn').addEventListener('click', importFitbitHealthData);
     $('#recordAudioBtn').addEventListener('click', startRecording);
     $('#stopAudioBtn').addEventListener('click', stopRecording);
     $('#audioUploadInput').addEventListener('change', handleAudioUpload);
+    $('#transcriptionSettingsForm').addEventListener('submit', saveTranscriptionSettings);
     $('#settingsForm').addEventListener('submit', saveSettings);
     $('#templateForm').addEventListener('submit', saveTemplate);
     $('#reminderForm').addEventListener('submit', saveReminder);
+    $('#enableRemindersBtn').addEventListener('click', async () => {
+        try {
+            if (state.settings.notifications?.enabled) await disableReminderNotifications();
+            else await enableReminderNotifications();
+        } catch (error) {
+            state.reminderNotificationStatus = `Notifications unavailable: ${error.message}`;
+            renderRemindersView();
+        }
+    });
     $('#journalForm').addEventListener('submit', saveJournal);
     $('#addCustomFieldBtn').addEventListener('click', addCustomField);
     $('#addSavedSearchBtn').addEventListener('click', addSavedSearch);
     $('#runSyncBtn').addEventListener('click', async () => {
-        await state.googleSync.syncNow();
-        renderSyncPanel();
+        try {
+            const driveEnabled = state.settings.drive?.enabled === true;
+            const notionEnabled = state.settings.notion?.enabled === true;
+            let driveResult = null;
+            if (driveEnabled) driveResult = await syncLibraryToDrive();
+            if (notionEnabled) await syncCurrentDocumentToNotion();
+            if (driveEnabled || notionEnabled) {
+                const doc = currentDocument();
+                const assets = driveResult?.assets || [];
+                if (driveEnabled) await markDriveLibraryQueueSynced(driveResult, notionEnabled);
+                await markDocumentQueueSynced(doc.id, assets, new Date().toISOString(), driveEnabled);
+                await refreshFromStorage(doc.id);
+            }
+            if (!notionEnabled && !driveEnabled) {
+                state.notionStatus = 'Enable Notion or Google Drive sync in Settings first.';
+                state.driveStatus = '';
+                renderSyncPanel();
+            }
+        } catch (error) {
+            if (state.settings.drive?.enabled === true) state.driveStatus = `Sync failed: ${error.message}`;
+            if (state.settings.notion?.enabled === true) state.notionStatus = `Sync failed: ${error.message}`;
+            renderSyncPanel();
+        }
     });
+    $('#verifyNotionBtn').addEventListener('click', verifyNotionSettings);
     $('#connectDriveBtn').addEventListener('click', () => {
-        state.aiStatus = 'Google Drive wiring is deferred until you add OAuth credentials.';
-        renderSyncPanel();
+        connectGoogleDrive();
+    });
+    $('#restoreDriveBtn').addEventListener('click', async () => {
+        try {
+            await restoreLibraryFromDrive();
+        } catch (error) {
+            state.driveStatus = `Restore failed: ${error.message}`;
+            renderSyncPanel();
+        }
     });
     $('#searchInput').addEventListener('input', (event) => {
         state.search = event.target.value.trim();
@@ -2285,7 +3498,27 @@ function bindEvents() {
         renderCalendarView();
     });
 
+    window.addEventListener('hashchange', () => {
+        const nextView = mapViewHashToState(window.location.hash.replace(/^#/, '') || 'write');
+        if (nextView === state.activeView) return;
+        state.activeView = nextView;
+        if (!isDesktopViewport()) state.leftRailOpen = false;
+        renderAll();
+    });
+
     document.body.addEventListener('input', (event) => {
+        if (event.target.closest('#transcriptionSettingsForm')) {
+            state.transcriptionDraft = readTranscriptionControls();
+            return;
+        }
+        if (event.target.id === 'fitbitAccessTokenInput') {
+            state.fitbitAccessTokenDraft = event.target.value;
+            return;
+        }
+        if (event.target.id === 'fitbitImportDateInput') {
+            state.fitbitImportDate = event.target.value;
+            return;
+        }
         if (event.target.id === 'aiPromptInput') {
             state.aiDraft = event.target.value;
             return;
@@ -2296,14 +3529,55 @@ function bindEvents() {
         if (event.target.closest('#detailsPanel') || event.target.id === 'docTitleInput') {
             const draft = collectDocumentDraft();
             renderDocumentChrome(draft);
+            scheduleAutosave();
+        }
+    });
+
+    document.body.addEventListener('change', (event) => {
+        if (event.target.closest('#transcriptionSettingsForm')) {
+            state.transcriptionDraft = readTranscriptionControls();
+            return;
+        }
+        if (event.target.closest('#detailsPanel')) {
+            const draft = collectDocumentDraft();
+            renderDocumentChrome(draft);
+            scheduleAutosave();
         }
     });
 
     document.body.addEventListener('click', async (event) => {
+        const toggleReminder = event.target.closest('[data-toggle-reminder]');
+        if (toggleReminder) {
+            const id = toggleReminder.getAttribute('data-toggle-reminder');
+            state.settings = normalizeSettings({
+                ...state.settings,
+                reminders: reminders().map((reminder) => reminder.id === id ? { ...reminder, active: reminder.active === false } : reminder)
+            });
+            await Storage.saveSettings(state.settings);
+            await queueDriveLibraryChange('workspace', 'reminders');
+            await refreshFromStorage();
+            await checkDueReminderNotifications();
+            return;
+        }
+
+        const deleteReminder = event.target.closest('[data-delete-reminder]');
+        if (deleteReminder) {
+            const id = deleteReminder.getAttribute('data-delete-reminder');
+            state.settings = normalizeSettings({
+                ...state.settings,
+                reminders: reminders().filter((reminder) => reminder.id !== id)
+            });
+            await Storage.saveSettings(state.settings);
+            await queueDriveLibraryChange('workspace', 'reminders');
+            await refreshFromStorage();
+            return;
+        }
+
         const docButton = event.target.closest('[data-open-doc]');
         if (docButton) {
             const id = docButton.getAttribute('data-open-doc');
             if (id) {
+                await flushAutosave();
                 state.currentDocumentId = id;
                 state.activeView = 'write';
                 if (!isDesktopViewport()) state.leftRailOpen = false;
@@ -2315,11 +3589,13 @@ function bindEvents() {
 
         const journalButton = event.target.closest('[data-select-journal]');
         if (journalButton) {
+            await flushAutosave();
             state.settings = normalizeSettings({
                 ...state.settings,
                 activeJournalId: journalButton.getAttribute('data-select-journal')
             });
             await Storage.saveSettings(state.settings);
+            await queueDriveLibraryChange('workspace', 'active-journal');
             state.activeView = 'journals';
             await refreshFromStorage();
             location.hash = '#journals';
@@ -2328,6 +3604,7 @@ function bindEvents() {
 
         const newEntryJournal = event.target.closest('[data-new-entry-for-journal]');
         if (newEntryJournal) {
+            await flushAutosave();
             await createNewDocument({ journalId: newEntryJournal.getAttribute('data-new-entry-for-journal') });
             return;
         }
@@ -2356,6 +3633,9 @@ function bindEvents() {
     });
 
     window.addEventListener('resize', () => {
+        if (!isDesktopViewport() && state.leftRailOpen) {
+            state.leftRailOpen = false;
+        }
         syncShellState();
         if (state.map) requestAnimationFrame(() => state.map.invalidateSize());
     });
@@ -2364,7 +3644,15 @@ function bindEvents() {
 async function main() {
     await loadState();
     document.documentElement.removeAttribute('data-initial-view');
-    state.activeView = mapViewHashToState(location.hash.replace(/^#/, '')) || 'write';
+    const navigation = parseAppHash();
+    state.activeView = navigation.view || 'write';
+    if (state.activeView === 'write' && navigation.targetId && state.documents.some((document) => document.id === navigation.targetId)) {
+        state.currentDocumentId = navigation.targetId;
+    }
+    if (state.activeView === 'journals' && navigation.targetId && journalById(navigation.targetId)) {
+        state.settings = normalizeSettings({ ...state.settings, activeJournalId: navigation.targetId });
+        await Storage.saveSettings(state.settings);
+    }
     state.leftRailOpen = false;
     mountEditor();
     populateReferenceSelects();
@@ -2372,11 +3660,11 @@ async function main() {
     bindEvents();
     setFieldValue('#draftDate', todayYmd());
     setFieldValue('#docDateInput', todayYmd());
-    state.googleSync.state.subscribe(() => renderSyncPanel());
     renderAll();
+    startReminderRuntime();
 }
 
 main().catch((error) => {
     console.error(error);
-    document.body.innerHTML = `<main style="padding:24px;font-family:sans-serif"><h1>Failed to start</h1><pre>${esc(String(error.stack || error.message || error))}</pre></main>`;
+    document.body.innerHTML = `<main><h1>Failed to start</h1><pre>${esc(String(error.stack || error.message || error))}</pre></main>`;
 });

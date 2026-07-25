@@ -3144,3 +3144,77 @@ Current implementation verification pass:
 - routes covered by smoke test: Write, Library, Journals, Reflect, Insights, Highlights, Tags, People, Map, Templates, Reminders, Health, and Transcribe
 - syntax checks pass for `journaling-app/js/app.js`, `journaling-app/js/editor.js`, `journaling-app/js/ui.js`, and `journaling-app/sw.js`
 - visual screenshots generated during verification: `/tmp/journaling-smoke-write-light.png`, `/tmp/journaling-smoke-write-dark.png`, and `/tmp/journaling-smoke-write-mobile-dark.png`
+
+Current sync implementation pass:
+
+- the `journal` branch has been merged with `origin/main`
+- Notion sync now follows the same worker contract used by Photo Chronicles and GhostInk: the browser calls the user-provided Worker URL with `?url=https://api.notion.com/v1/...`, sends the Notion token as `Authorization: Bearer ...`, and optionally sends `X-Proxy-Token`
+- Notion settings now include enabled state, worker URL, token, proxy token, and parent page id
+- manual sync creates a readable child page under the configured Notion parent and stores the Notion page id/url back into the local document metadata
+- a second sync updates the same Notion page by updating the title, archiving existing child blocks, and appending the current readable journal blocks again
+- real Notion worker-contract test passed through a local worker-compatible proxy and created/updated this page: `https://www.notion.so/Journaling-App-Worker-Sync-Test-370817d05c928122bfe4c24b2f0b1ded`
+- Google Drive sync now has a real browser OAuth path through Google Identity Services, plus a Drive file writer that creates/fetches the app folder and uploads both Markdown and JSON versions of the current document
+- Drive settings now include enabled state, OAuth client id, folder name, access token, root folder id, and last pushed file url
+- Drive module test passed with mocked Drive API calls covering folder lookup, folder creation, and two multipart uploads for Markdown and JSON
+- PWA cache now includes the new `drive-sync.js` and `notion-sync.js` modules
+- full E2E browser test passed for editor slash command flow, image upload/rendering, Notion settings, Notion worker sync, night theme, route rendering, mobile write layout, console errors, and viewport overflow
+- E2E screenshots generated during verification: `/tmp/journaling-e2e-write-start.png`, `/tmp/journaling-e2e-write-night-synced.png`, and `/tmp/journaling-e2e-mobile-night.png`
+- screenshot critique found and fixed a mobile overflow bug caused by the closed topbar menu sheet and a mobile right-rail persistence bug that could show settings instead of the journal document
+
+Current polish correction:
+
+- design references checked again: Journalistic's public product/docs positioning emphasizes a pristine minimal micro-journal, and Notion editor references emphasize a dominant document surface with controls kept out of the writing path
+- the right rail is now a utility drawer instead of a reserved layout column, so opening Sync/Settings does not shrink the journal document or create dead right-side layout space
+- the right rail is suppressed on mobile even when the setting is persisted, keeping mobile focused on the journal page
+- night theme contrast has been raised so body copy, headings, and muted metadata read more clearly
+- the Details panel now renders like a compact Notion-style property list instead of a four-column form grid
+- post-polish E2E passed again after these changes, including editor slash flow, image upload/rendering, Notion worker sync, route rendering, mobile layout, and overflow checks
+
+Current second polish correction:
+
+- reduced the artificial editor minimum height so details/properties follow the document naturally instead of appearing after a fake blank writing zone
+- muted the document action buttons so they behave as quiet page chrome instead of primary purple controls competing with the title
+- post-correction E2E passed again for editor slash flow, image upload/rendering, Notion worker sync, route rendering, mobile layout, and overflow checks
+- syntax checks passed again for `app.js`, `drive-sync.js`, `notion-sync.js`, `schema.js`, and `sw.js`
+- no Google OAuth client id is present in the repo, so live Google Drive authorization cannot be completed from local evidence yet; the Drive sync module path is implemented and covered by mocked Drive API tests for folder lookup, folder creation, and Markdown/JSON multipart upload
+
+Current third polish correction:
+
+- removed the remaining "paper deck" feeling by moving the shell toward a near-white Codex/Notion-style workspace instead of a beige stationery canvas
+- tightened the topbar, logo scale, icon buttons, collapsed rail width, and navigation density so the app reads as software chrome, not a themed landing page
+- found and fixed the global typography bug where `body { font: inherit; }` caused large parts of the app to compute as Times instead of the intended sans font
+- verified computed typography in Chromium: `body`, editor metadata, subtitles, title, and ProseMirror content now resolve to `Instrument Sans`
+- fixed a mobile layout bug where `[data-right-panel-hidden="true"]` still forced a desktop two-column grid, creating a blank strip and squeezing the editor to roughly 212px
+- mobile write layout now computes as a single `390px` app-shell column with a `358px` editor on the test viewport
+- sync status copy now reports configured Notion/Drive state and actual queued jobs instead of stale pending counters from the older Google sync placeholder
+- visual verification screenshots generated: `/tmp/journaling-polish-write-font-fixed.png`, `/tmp/journaling-polish-mobile-fixed-layout.png`, and `/tmp/journaling-polish-dark-css-verified.png`
+- full E2E passed again after the typography/mobile fixes; refreshed screenshots: `/tmp/journaling-e2e-write-start.png`, `/tmp/journaling-e2e-write-night-synced.png`, and `/tmp/journaling-e2e-mobile-night.png`
+- Drive module test passed again after the sync status polish, covering folder lookup, folder creation, Markdown multipart upload, and JSON multipart upload
+- real Notion worker-contract integration passed again and created/updated `https://www.notion.so/Journaling-App-Worker-Sync-Test-370817d05c928171b19fc9216afb627a`
+
+Current fourth polish correction:
+
+- screenshot critique found that the app still felt like a dashboard because the write route kept permanent topbar/left-rail borders and a visible brand label
+- write route now hides the brand text, makes topbar actions lower-emphasis until hover/focus, and removes the hard top/left dashboard borders only on the write route
+- document centering is now measured in the strict browser test: at `1440px`, the rail ends at `44px`, the editor spans `278px` to `1206px`, and left/right workspace blanks both measure `234px`
+- fixed a real Notion-like editor bug: `/hea` opened the slash menu, but Enter was handled too late and inserted plain text instead of converting to a heading; the editor now captures slash-menu keys before ProseMirror handles Enter
+- added a direct editor media action so image/audio/video attachment is available from the write chrome instead of being buried in Details
+- strict browser test now verifies slash-command heading creation, continuous typing after the command, direct media attachment through the editor media icon, rendered local image media, real Notion worker sync, clean synced view, mobile full-width layout, no console errors, and no viewport overflow
+- successful strict screenshots: `/tmp/journaling-strict-write-light.png`, `/tmp/journaling-strict-write-night-synced.png`, `/tmp/journaling-strict-write-night-clean.png`, and `/tmp/journaling-strict-write-mobile.png`
+- real Notion worker-contract integration passed again and created/updated `https://www.notion.so/Journaling-App-Worker-Sync-Test-370817d05c92817aa569cfed34a69c87`
+- Drive module test passed again, covering folder lookup, folder creation, Markdown multipart upload, and JSON multipart upload
+
+Current fifth polish correction:
+
+- applied another UI pass against the Journalistic/Notion/Codex cleanliness target and the Uncodixify constraints: no decorative panels, no oversized radii, no dashboard hero treatment, no gradient/shadow dependence, and icon-first controls where actions are secondary chrome
+- non-write pages now use a centered journal/library column instead of full-width dashboard slabs, with compact row lists for Library, Tags, People, Highlights, Reminders, Templates, Map locations, and journal history
+- Tags and People rows were rebuilt as compact three-column rows with tag/person chip, latest date/title context, preview text, and count; a mobile overlap bug that clipped the first preview character was found in screenshot review and fixed
+- Journals, Timeline, and Calendar were flattened so journal management reads as a journal/history surface rather than nested cards; calendar cells now use a quieter table grid and mobile keeps only actual entry dates visible
+- Health was changed from a KPI-card grid to inline stat rows above the form and table, keeping the feature available without making the app feel like an analytics dashboard
+- dark-mode primary button contrast was fixed by using a stable light foreground instead of `var(--linen)`, because `--linen` becomes dark in night theme
+- the all-route visual audit was hardened to write the desired theme into IndexedDB before route load, so dark screenshots now exercise the same persisted settings path as the real app instead of temporary DOM overrides
+- visual audit passed for 19 desktop screenshots and 13 mobile screenshots covering Write, Library, Journals, Reflect, Insights, Highlights, Tags, People, Map, Templates, Reminders, Health, and Transcribe in linen/night where applicable
+- strict E2E passed again after the UI changes, verifying slash-command heading creation, continuous Notion-like editor typing, direct media add/rendering, real Notion worker sync, clean synced night view, mobile write layout, no console/page errors, and no viewport overflow
+- latest strict measurements still show balanced write centering at `1440px`: rail right `44px`, editor `278px` to `1206px`, and equal left/right blanks of `234px`
+- Drive module test passed again with folder lookup, folder creation, Markdown multipart upload, and JSON multipart upload
+- real Notion integration passed again and created/updated `https://www.notion.so/Journaling-App-Worker-Sync-Test-370817d05c928124972dc7380289c894`

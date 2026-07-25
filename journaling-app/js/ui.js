@@ -135,7 +135,7 @@ export function renderCalendar(documents, year, month) {
         const date = new Date(year, month, day).toISOString().slice(0, 10);
         const dayDocs = docsByDay.get(date) || [];
         cells.push(`
-            <div class="calendar-cell">
+            <div class="calendar-cell ${dayDocs.length ? 'calendar-cell--has-entry' : 'calendar-cell--no-entry'}">
                 <div class="calendar-cell-head">
                     <strong>${day}</strong>
                     <span>${dayDocs.length ? `${dayDocs.length} entries` : ''}</span>
@@ -161,13 +161,16 @@ export function renderCalendar(documents, year, month) {
 
 export function renderInsightBars(items) {
     const max = Math.max(1, ...items.map((item) => Number(item.value) || 0));
-    return items.map((item) => `
+    return items.map((item) => {
+        const pct = Math.round((Number(item.value) || 0) / max * 100);
+        return `
         <div class="insight-bar-row">
             <div class="insight-bar-label">${esc(item.label)}</div>
-            <div class="insight-bar-track"><span class="insight-bar-fill" style="width:${Math.max(8, Math.round((Number(item.value) || 0) / max * 100))}%"></span></div>
+            <div class="insight-bar-track"><span class="insight-bar-fill" style="width:${pct}%"></span></div>
             <div class="insight-bar-value">${esc(item.display || item.value)}</div>
         </div>
-    `).join('');
+    `;
+    }).join('');
 }
 
 export function renderMeasurementsTable(measurements) {

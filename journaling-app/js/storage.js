@@ -190,6 +190,20 @@ export const Storage = {
         return value;
     },
 
+    async getMeta(key) {
+        await this.ensureReady();
+        const store = this._store(STORE_NAMES.meta);
+        const raw = await openRequest(store, 'get', key);
+        return raw?.value || null;
+    },
+
+    async saveMeta(key, value) {
+        await this.ensureReady();
+        const store = this._store(STORE_NAMES.meta, 'readwrite');
+        await openRequest(store, 'put', { key, value });
+        return value;
+    },
+
     async getDocument(id) {
         await this.ensureReady();
         const store = this._store(STORE_NAMES.documents);
@@ -333,6 +347,66 @@ export const Storage = {
         await this.ensureReady();
         const store = this._store(STORE_NAMES.syncQueue, 'readwrite');
         await openRequest(store, 'clear');
+    },
+
+    async replaceLibrary(snapshot = {}) {
+        const documents = (snapshot.documents || []).map(buildDocumentRecord);
+        const healthLogs = (snapshot.healthLogs || []).map(buildHealthLogRecord);
+        const assets = (snapshot.assets || []).map(buildAssetRecord);
+        const views = (snapshot.views || []).map(buildViewRecord);
+        await this.withTransaction([
+            STORE_NAMES.documents,
+            STORE_NAMES.healthLogs,
+            STORE_NAMES.assets,
+            STORE_NAMES.views,
+            STORE_NAMES.syncQueue
+        ], 'readwrite', (stores) => {
+            stores.documents.clear();
+            stores.healthLogs.clear();
+            stores.assets.clear();
+            stores.views.clear();
+            stores.syncQueue.clear();
+            documents.forEach((record) => stores.documents.put(record));
+            healthLogs.forEach((record) => stores.healthLogs.put(record));
+            assets.forEach((record) => stores.assets.put(record));
+            views.forEach((record) => stores.views.put(record));
+        });
+    },
+
+    async replaceWorkspace(snapshot = {}) {
+        const documents = snapshot.documents.map(buildDocumentRecord);
+        const healthLogs = snapshot.healthLogs.map(buildHealthLogRecord);
+        const assets = snapshot.assets.map(buildAssetRecord);
+        const views = snapshot.views.map(buildViewRecord);
+        const settings = normalizeSettings(snapshot.settings);
+        const syncQueue = snapshot.syncQueue.map(buildSyncJobRecord);
+        const syncState = normalizeSyncState(snapshot.syncState);
+        await this.withTransaction([
+            STORE_NAMES.documents,
+            STORE_NAMES.healthLogs,
+            STORE_NAMES.assets,
+            STORE_NAMES.views,
+            STORE_NAMES.syncQueue,
+            STORE_NAMES.settings,
+            STORE_NAMES.meta
+        ], 'readwrite', (stores) => {
+            Object.values(stores).forEach((store) => store.clear());
+            documents.forEach((record) => stores.documents.put(record));
+            healthLogs.forEach((record) => stores.healthLogs.put(record));
+            assets.forEach((record) => stores.assets.put(record));
+            views.forEach((record) => stores.views.put(record));
+            syncQueue.forEach((record) => {
+                const payload = { ...record };
+                if (payload.id === null || payload.id === undefined) {
+                    delete payload.id;
+                    stores.syncQueue.add(payload);
+                } else {
+                    stores.syncQueue.put(payload);
+                }
+            });
+            stores.settings.put({ key: 'current', value: settings });
+            stores.meta.put({ key: STORAGE_KEYS.syncState, value: syncState });
+        });
     },
 
     async getAllData() {

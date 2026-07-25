@@ -27,6 +27,12 @@ function dtLocal(offsetDays = 0, hour = 9, minute = 0) {
     return new Date(date.getTime() - (date.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
 }
 
+const rt = (text, marks) => {
+    const node = { type: 'text', text: String(text || '') };
+    if (Array.isArray(marks) && marks.length) node.marks = marks;
+    return node.text ? [node] : [];
+};
+
 export function createSampleState() {
     const localToday = ymd(0);
     const currentWeekday = weekdayFromYmd(localToday);
@@ -90,11 +96,14 @@ export function createSampleState() {
                     }
                 ],
                 blocks: [
-                    { id: 'b1', type: 'heading', text: 'What feels real today?', depth: 0 },
-                    { id: 'b2', type: 'paragraph', text: 'The writing surface needs to disappear so the journal can feel like a room instead of a dashboard.', depth: 0 },
-                    { id: 'b3', type: 'bullet', text: 'Keep journals separate but searchable together.', depth: 0 },
-                    { id: 'b4', type: 'bullet', text: 'Treat tags, people, places, and custom fields as one metadata language.', depth: 0 },
-                    { id: 'b5', type: 'quote', text: 'Useful software should calm the hand before it tries to impress the eye.', depth: 0 }
+                    { id: 'b1', type: 'heading', level: 2, richText: rt('What feels real today?') },
+                    { id: 'b2', type: 'paragraph', richText: rt('The writing surface needs to disappear so the journal can feel like a room instead of a dashboard.') },
+                    { id: 'b3', type: 'bullet', depth: 0, richText: rt('Keep journals separate but searchable together.') },
+                    { id: 'b4', type: 'bullet', depth: 0, richText: rt('Treat tags, people, places, and custom fields as one metadata language.') },
+                    { id: 'b5', type: 'quote', richText: rt('Useful software should calm the hand before it tries to impress the eye.') },
+                    { id: 'b6', type: 'divider' },
+                    { id: 'b7', type: 'code', language: 'markdown', text: 'focus: writing\nlocation: Home desk\nenergy: 6/10' },
+                    { id: 'b8', type: 'numbered', depth: 0, richText: rt('Save a version worth rereading tonight.') }
                 ]
             },
             {
@@ -132,10 +141,13 @@ export function createSampleState() {
                 linkedDocumentIds: ['doc_today_personal'],
                 transcripts: [],
                 blocks: [
-                    { id: 'b1', type: 'heading', text: 'Keep', depth: 0 },
-                    { id: 'b2', type: 'checklist', text: 'Inline QuickAdd with compact schema', checked: true, depth: 0 },
-                    { id: 'b3', type: 'checklist', text: 'Map view with location-linked entries', checked: true, depth: 0 },
-                    { id: 'b4', type: 'checklist', text: 'Day One-like reflection and AI surfaces', checked: false, depth: 0 }
+                    { id: 'b1', type: 'heading', level: 2, richText: rt('Keep') },
+                    { id: 'b2', type: 'checklist', checked: true, depth: 0, richText: rt('Inline QuickAdd with compact schema') },
+                    { id: 'b3', type: 'checklist', checked: true, depth: 0, richText: rt('Map view with location-linked entries') },
+                    { id: 'b4', type: 'checklist', checked: false, depth: 0, richText: rt('Day One-like reflection and AI surfaces') },
+                    { id: 'b5', type: 'callout', icon: '💡', richText: rt('Push the editor farther before touching sync polish.') },
+                    { id: 'b6', type: 'numbered', depth: 0, richText: rt('Ship the block expansion.') },
+                    { id: 'b7', type: 'numbered', depth: 0, richText: rt('Validate Notion export.') }
                 ]
             },
             {
@@ -170,9 +182,12 @@ export function createSampleState() {
                 linkedDocumentIds: [],
                 transcripts: [],
                 blocks: [
-                    { id: 'b1', type: 'paragraph', text: 'The pavement held light in sheets and the conversation kept drifting back to what kind of city feels livable.', depth: 0 },
-                    { id: 'b2', type: 'bullet', text: 'Warm ramen after the walk', depth: 0 },
-                    { id: 'b3', type: 'bullet', text: 'Talked about moving slower on purpose', depth: 0 }
+                    { id: 'b1', type: 'paragraph', richText: rt('The pavement held light in sheets and the conversation kept drifting back to what kind of city feels livable.') },
+                    { id: 'b2', type: 'bullet', depth: 0, richText: rt('Warm ramen after the walk') },
+                    { id: 'b3', type: 'bullet', depth: 0, richText: rt('Talked about moving slower on purpose') },
+                    { id: 'b4', type: 'toggle', open: true, richText: rt('Moments worth keeping'), children: [
+                        { id: 'b4c1', type: 'paragraph', richText: rt('The bridges felt brighter than the storefronts.') }
+                    ] }
                 ]
             },
             {
@@ -207,8 +222,13 @@ export function createSampleState() {
                 linkedDocumentIds: [],
                 transcripts: [],
                 blocks: [
-                    { id: 'b1', type: 'paragraph', text: 'Fell asleep too late and woke up foggy. Water and daylight helped more than coffee.', depth: 0 },
-                    { id: 'b2', type: 'callout', text: 'Pattern: late dinner + phone light = weaker sleep', depth: 0 }
+                    { id: 'b1', type: 'paragraph', richText: rt('Fell asleep too late and woke up foggy. Water and daylight helped more than coffee.') },
+                    { id: 'b2', type: 'callout', icon: '⚠️', richText: rt('Pattern: late dinner + phone light = weaker sleep') },
+                    { id: 'b3', type: 'table', rows: [
+                        [rt('Signal'), rt('Observation')],
+                        [rt('Sleep'), rt('6.3 hours')],
+                        [rt('HRV'), rt('47 ms')]
+                    ] }
                 ]
             }
         ],

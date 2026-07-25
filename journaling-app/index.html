@@ -7,8 +7,6 @@
   <title>Journaling</title>
   <meta name="description"
     content="A static, Journalistic-inspired journaling workspace with block editing, multiple journals, maps, health tracking, transcription, templates, reminders, and Drive-ready sync planning." />
-  <meta name="theme-color" content="#f6efe6" />
-  <meta name="color-scheme" content="light dark" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Journaling" />
@@ -16,15 +14,9 @@
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./assets/logo-mark.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./assets/logo-mark.svg" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link
-    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&display=swap"
-    rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <link rel="stylesheet" href="../components/quick-add/quick-add-component.css?v=16" data-qa-style="1" />
-  <link rel="stylesheet" href="./styles.css?v=18" />
   <script>
     (() => {
       const raw = window.location.hash.replace(/^#/, '');
@@ -32,16 +24,19 @@
       document.documentElement.dataset.initialView = view;
     })();
   </script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 
 <body data-right-panel-hidden="true" data-left-rail-open="false">
   <a class="skip-link" href="#main">Skip to content</a>
 
   <header class="topbar">
+    <button id="toggleSectionsBtn" class="btn btn-icon topbar-rail-toggle" type="button" aria-expanded="false" aria-label="Toggle journals" title="Toggle journals">
+      <img class="app-icon" data-lucide="panel-left-open" src="./assets/lucide/panel-left-open.svg" alt="" aria-hidden="true" />
+    </button>
     <a class="brand" href="./" aria-label="Journaling home">
       <img class="brand-mark" src="./assets/logo-mark.svg" alt="" aria-hidden="true" />
       <span class="brand-copy">
-        <span class="brand-kicker">Local-first journaling</span>
         <span class="brand-title">Journaling</span>
       </span>
     </a>
@@ -51,10 +46,7 @@
     </div>
 
     <div class="topbar-actions">
-      <button id="toggleSectionsBtn" class="btn btn-secondary btn-icon" type="button" aria-expanded="false" aria-label="Toggle left rail" title="Toggle left rail">
-        <img class="app-icon" data-lucide="panel-left-open" src="./assets/lucide/panel-left-open.svg" alt="" aria-hidden="true" />
-      </button>
-      <button id="toggleStudioBtn" class="btn btn-secondary btn-icon" type="button" aria-expanded="false" aria-label="Toggle sidebar" title="Toggle sidebar">
+      <button id="toggleStudioBtn" class="btn btn-icon topbar-studio-toggle" type="button" aria-expanded="false" aria-label="Toggle details" title="Toggle details" hidden>
         <img class="app-icon" data-lucide="panel-right-open" src="./assets/lucide/panel-right-open.svg" alt="" aria-hidden="true" />
       </button>
       <button id="topNewEntryBtn" class="btn btn-primary btn-icon" type="button" aria-label="New entry" title="New entry">
@@ -66,7 +58,7 @@
         </summary>
         <div class="topbar-menu-sheet">
           <button id="topMarkdownBtn" class="menu-action" type="button"><img class="app-icon" data-lucide="file-text" src="./assets/lucide/file-text.svg" alt="" aria-hidden="true" /><span>Export Markdown</span></button>
-          <button id="topImportBtn" class="menu-action" type="button"><img class="app-icon" data-lucide="upload" src="./assets/lucide/upload.svg" alt="" aria-hidden="true" /><span>Import JSON</span></button>
+          <button id="topImportBtn" class="menu-action" type="button"><img class="app-icon" data-lucide="folder-input" src="./assets/lucide/folder-input.svg" alt="" aria-hidden="true" /><span>Import JSON</span></button>
           <button id="topExportBtn" class="menu-action" type="button"><img class="app-icon" data-lucide="download" src="./assets/lucide/download.svg" alt="" aria-hidden="true" /><span>Export JSON</span></button>
         </div>
       </details>
@@ -127,24 +119,25 @@
           </a>
           <div class="nav-divider" aria-hidden="true"></div>
           <a class="nav-link nav-link--highlights" href="#highlights" data-view-link="highlights" title="Highlights">
-            <img class="app-icon nav-link-icon" data-lucide="heart" src="./assets/lucide/heart.svg" alt="" aria-hidden="true" />
+            <img class="app-icon nav-link-icon" data-lucide="bookmark" src="./assets/lucide/bookmark.svg" alt="" aria-hidden="true" />
             <span class="nav-link-label">Highlights</span>
           </a>
           <a class="nav-link nav-link--tags" href="#tags" data-view-link="tags" title="Tags">
             <img class="app-icon nav-link-icon" data-lucide="tags" src="./assets/lucide/tags.svg" alt="" aria-hidden="true" />
             <span class="nav-link-label">Tags</span>
           </a>
+          <a class="nav-link nav-link--templates" href="#templates" data-view-link="templates" title="Templates">
+            <img class="app-icon nav-link-icon" data-lucide="layout-template" src="./assets/lucide/layout-template.svg" alt="" aria-hidden="true" />
+            <span class="nav-link-label">Templates</span>
+          </a>
+          <div class="nav-divider" aria-hidden="true"></div>
           <a class="nav-link nav-link--people" href="#people" data-view-link="people" title="People">
-            <img class="app-icon nav-link-icon" data-lucide="at-sign" src="./assets/lucide/at-sign.svg" alt="" aria-hidden="true" />
+            <img class="app-icon nav-link-icon" data-lucide="users" src="./assets/lucide/users.svg" alt="" aria-hidden="true" />
             <span class="nav-link-label">People</span>
           </a>
           <a class="nav-link nav-link--map" href="#map" data-view-link="map" title="Map">
             <img class="app-icon nav-link-icon" data-lucide="map-pinned" src="./assets/lucide/map-pinned.svg" alt="" aria-hidden="true" />
             <span class="nav-link-label">Map</span>
-          </a>
-          <a class="nav-link nav-link--templates" href="#templates" data-view-link="templates" title="Templates">
-            <img class="app-icon nav-link-icon" data-lucide="layout-template" src="./assets/lucide/layout-template.svg" alt="" aria-hidden="true" />
-            <span class="nav-link-label">Templates</span>
           </a>
           <a class="nav-link nav-link--reminders" href="#reminders" data-view-link="reminders" title="Reminders">
             <img class="app-icon nav-link-icon" data-lucide="bell" src="./assets/lucide/bell.svg" alt="" aria-hidden="true" />
@@ -164,9 +157,14 @@
       <section class="panel brand-panel rail-section" data-rail-section="workspace">
         <div class="panel-head row rail-section-head">
           <h3>Workspace</h3>
-          <button class="btn btn-secondary btn-icon rail-section-toggle" type="button" data-toggle-rail-section="workspace" aria-expanded="false" aria-label="Expand workspace section" title="Expand workspace section">
-            <img class="app-icon" data-lucide="chevron-down" src="./assets/lucide/chevron-down.svg" alt="" aria-hidden="true" />
-          </button>
+          <div class="rail-section-actions">
+            <button id="themeToggleBtn" class="btn btn-secondary btn-icon" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
+              <img class="app-icon" data-lucide="circle" src="./assets/lucide/circle.svg" alt="" aria-hidden="true" />
+            </button>
+            <button class="btn btn-secondary btn-icon rail-section-toggle" type="button" data-toggle-rail-section="workspace" aria-expanded="true" aria-label="Collapse workspace section" title="Collapse workspace section">
+              <img class="app-icon" data-lucide="chevron-up" src="./assets/lucide/chevron-up.svg" alt="" aria-hidden="true" />
+            </button>
+          </div>
         </div>
         <div class="rail-section-body">
           <div id="workspaceStats" class="metric-row"></div>
@@ -187,7 +185,7 @@
         <div class="library-layout">
           <section class="subpanel">
             <div class="subpanel-head">
-              <h3>Pages</h3>
+              <h3>All Entries</h3>
             </div>
             <label class="field search-row">
               <span>Search</span>
@@ -207,6 +205,7 @@
       <section id="editor" class="panel reveal workspace-section" data-view="write">
         <div class="editor-layout">
           <section class="editor-main">
+            <div id="entryCover" class="entry-cover" aria-hidden="true"></div>
             <header class="entry-header">
               <div class="entry-header-copy">
                 <p id="editorPageMeta" class="entry-page-meta">Personal · Monday, Mar 30</p>
@@ -218,11 +217,14 @@
                 <div id="editorMetaChips" class="entry-property-row"></div>
               </div>
               <div class="entry-header-actions">
-                <button id="toggleQuickAddBtn" class="btn btn-secondary btn-icon" type="button" aria-label="Open quick add" title="Open quick add" aria-expanded="false">
-                  <img class="app-icon" data-lucide="sparkles" src="./assets/lucide/sparkles.svg" alt="" aria-hidden="true" />
+                <button id="toggleQuickAddBtn" class="btn btn-secondary btn-icon" type="button" aria-label="Quick capture" title="Quick capture" aria-expanded="false">
+                  <img class="app-icon" data-lucide="message-square" src="./assets/lucide/message-square.svg" alt="" aria-hidden="true" />
                 </button>
-                <button id="toggleDetailsBtn" class="btn btn-secondary btn-icon" type="button" aria-label="Open page details" title="Open page details" aria-expanded="false">
-                  <img class="app-icon" data-lucide="files" src="./assets/lucide/files.svg" alt="" aria-hidden="true" />
+                <button id="toggleDetailsBtn" class="btn btn-secondary btn-icon" type="button" aria-label="Entry details" title="Entry details" aria-expanded="false">
+                  <img class="app-icon" data-lucide="file-text" src="./assets/lucide/file-text.svg" alt="" aria-hidden="true" />
+                </button>
+                <button id="attachMediaBtn" class="btn btn-secondary btn-icon" type="button" aria-label="Add photo or media" title="Add photo or media">
+                  <img class="app-icon" data-lucide="image-plus" src="./assets/lucide/image-plus.svg" alt="" aria-hidden="true" />
                 </button>
                 <button id="toggleFavoriteBtn" class="btn btn-secondary btn-icon" type="button" aria-label="Favorite entry" title="Favorite entry">
                   <img class="app-icon" data-lucide="star" src="./assets/lucide/star.svg" alt="" aria-hidden="true" />
@@ -230,9 +232,7 @@
                 <button id="toggleHighlightBtn" class="btn btn-secondary btn-icon" type="button" aria-label="Highlight entry" title="Highlight entry">
                   <img class="app-icon" data-lucide="heart" src="./assets/lucide/heart.svg" alt="" aria-hidden="true" />
                 </button>
-                <button id="saveDocBtn" class="btn btn-primary btn-icon" type="button" aria-label="Save page" title="Save page">
-                  <img class="app-icon" data-lucide="check" src="./assets/lucide/check.svg" alt="" aria-hidden="true" />
-                </button>
+                <span id="autosaveIndicator" class="autosave-indicator" aria-live="polite" title="Changes save automatically"></span>
               </div>
             </header>
 
@@ -401,7 +401,7 @@
                 </label>
                 <label class="field">
                   <span>Color</span>
-                  <input id="journalColorInput" type="text" placeholder="plum, pink, oat" />
+                  <input id="journalColorInput" type="text" placeholder="Optional" />
                 </label>
               </div>
               <label class="field">
@@ -569,6 +569,10 @@
           <div>
             <h1>Reminders</h1>
           </div>
+          <div class="composer-actions">
+            <span id="reminderNotificationStatus" class="link-chip">Notifications off</span>
+            <button id="enableRemindersBtn" class="btn btn-secondary btn-icon" type="button" aria-label="Enable reminder notifications" title="Enable reminder notifications"><img class="app-icon" data-lucide="bell" src="./assets/lucide/bell.svg" alt="" aria-hidden="true" /></button>
+          </div>
         </div>
         <div class="capture-grid">
           <section class="subpanel">
@@ -585,7 +589,7 @@
               <div class="composer-grid">
                 <label class="field">
                   <span>Title</span>
-                  <input id="reminderTitleInput" type="text" placeholder="Journal at 7am" />
+                  <input id="reminderTitleInput" type="text" placeholder="Journal at 7am" required />
                 </label>
                 <label class="field">
                   <span>Journal</span>
@@ -599,7 +603,7 @@
                 </label>
                 <label class="field">
                   <span>Time</span>
-                  <input id="reminderTimeInput" type="time" />
+                  <input id="reminderTimeInput" type="time" required />
                 </label>
               </div>
               <label class="field">
@@ -627,6 +631,27 @@
         </div>
 
         <div id="healthSummaryGrid" class="health-grid"></div>
+
+        <section class="subpanel">
+          <div class="subpanel-head">
+            <h3>Fitbit import</h3>
+          </div>
+          <p>Uses a personal Fitbit Web API access token. Required scopes: activity and sleep.</p>
+          <div class="composer-grid">
+            <label class="field">
+              <span>Access token</span>
+              <input id="fitbitAccessTokenInput" type="password" autocomplete="off" />
+            </label>
+            <label class="field">
+              <span>Date</span>
+              <input id="fitbitImportDateInput" type="date" />
+            </label>
+          </div>
+          <div class="composer-actions">
+            <button id="importFitbitBtn" class="btn btn-secondary" type="button"><img class="app-icon" data-lucide="activity" src="./assets/lucide/activity.svg" alt="" aria-hidden="true" /><span>Import Fitbit day</span></button>
+            <span id="fitbitImportStatus" role="status">Not imported yet</span>
+          </div>
+        </section>
 
         <div class="capture-grid">
           <section class="subpanel">
@@ -714,7 +739,7 @@
             </label>
           </section>
 
-          <section class="subpanel">
+          <form id="transcriptionSettingsForm" class="subpanel">
             <div class="subpanel-head">
               <h3>Settings</h3>
             </div>
@@ -727,18 +752,40 @@
                   <option value="google_byo_key">Google BYOK</option>
                   <option value="deepgram_byo_key">Deepgram BYOK</option>
                   <option value="custom_endpoint">Custom endpoint</option>
+                  <option value="local_model">Local model endpoint</option>
                 </select>
               </label>
               <label class="field">
                 <span>Language</span>
                 <input id="transcriptionLanguageInput" type="text" value="en-US" />
               </label>
+              <label class="field">
+                <span>API key</span>
+                <input id="transcriptionApiKeyInput" type="password" autocomplete="off" />
+              </label>
+              <label class="field">
+                <span>Model</span>
+                <input id="transcriptionModelInput" type="text" placeholder="Provider default" />
+              </label>
+              <label class="field">
+                <span>Endpoint</span>
+                <input id="transcriptionEndpointInput" type="url" placeholder="Provider default or custom URL" />
+              </label>
+              <label class="field">
+                <span>Insert transcript</span>
+                <select id="transcriptionInsertModeInput">
+                  <option value="collapsible">Collapsible block</option>
+                  <option value="body">Body paragraph</option>
+                  <option value="off">Transcript record only</option>
+                </select>
+              </label>
             </div>
-            <label class="toggle">
-              <input id="transcriptionInsertModeInput" type="checkbox" checked />
-              Insert transcript as collapsible callout
+            <label class="field">
+              <span>Instructions</span>
+              <textarea id="transcriptionInstructionsInput" rows="4"></textarea>
             </label>
-          </section>
+            <button type="submit">Save transcription settings</button>
+          </form>
         </div>
 
         <section class="subpanel">
@@ -803,6 +850,12 @@
     </section>
 
     <aside class="rail rail-right">
+      <div class="rail-right-header">
+        <span class="rail-right-title">Details</span>
+        <button id="closeRailRightBtn" class="btn btn-icon btn-secondary" type="button" aria-label="Close details panel" title="Close details panel">
+          <img class="app-icon" data-lucide="x" src="./assets/lucide/x.svg" alt="" aria-hidden="true" />
+        </button>
+      </div>
       <section id="sync" class="panel sync-panel">
         <div class="panel-head">
           <h3>Sync</h3>
@@ -810,8 +863,9 @@
         <div id="syncStatusCard" class="sync-status"></div>
         <div id="syncQueueList" class="stack-list small"></div>
         <div class="composer-actions">
-          <button id="runSyncBtn" class="btn btn-secondary" type="button"><img class="app-icon" data-lucide="refresh-cw" src="./assets/lucide/refresh-cw.svg" alt="" aria-hidden="true" /><span>Refresh queue</span></button>
+          <button id="runSyncBtn" class="btn btn-secondary" type="button"><img class="app-icon" data-lucide="refresh-cw" src="./assets/lucide/refresh-cw.svg" alt="" aria-hidden="true" /><span>Sync library</span></button>
           <button id="connectDriveBtn" class="btn btn-secondary" type="button"><img class="app-icon" data-lucide="link" src="./assets/lucide/link.svg" alt="" aria-hidden="true" /><span>Connect Drive</span></button>
+          <button id="restoreDriveBtn" class="btn btn-secondary" type="button"><img class="app-icon" data-lucide="folder-input" src="./assets/lucide/folder-input.svg" alt="" aria-hidden="true" /><span>Restore Drive</span></button>
         </div>
       </section>
 
@@ -828,13 +882,6 @@
         </div>
         <form id="settingsForm" class="settings-form">
           <div class="composer-grid">
-            <label class="field">
-              <span>Theme</span>
-              <select name="theme">
-                <option value="linen">Linen</option>
-                <option value="night">Night</option>
-              </select>
-            </label>
             <label class="field">
               <span>Image max edge</span>
               <input name="imageMaxEdge" type="number" value="2560" min="640" step="10" />
@@ -856,6 +903,66 @@
             <input name="showRightPanel" type="checkbox" checked />
             Keep right rail visible
           </label>
+          <section class="subpanel">
+            <div class="subpanel-head">
+              <h3>Notion</h3>
+            </div>
+            <div class="composer-grid">
+              <label class="field">
+                <span>Worker URL</span>
+                <input name="notionWorkerUrl" type="url" placeholder="https://your-proxy.workers.dev" />
+              </label>
+              <label class="field">
+                <span>Parent page</span>
+                <input name="notionParentPageId" type="text" placeholder="Notion page ID" />
+              </label>
+              <label class="field">
+                <span>Notion token</span>
+                <input name="notionAuthToken" type="password" autocomplete="off" placeholder="ntn_..." />
+              </label>
+              <label class="field">
+                <span>Proxy token</span>
+                <input name="notionProxyToken" type="password" autocomplete="off" placeholder="optional" />
+              </label>
+            </div>
+            <label class="toggle">
+              <input name="notionEnabled" type="checkbox" />
+              Enable Notion sync
+            </label>
+            <div class="composer-actions">
+              <button id="verifyNotionBtn" class="btn btn-secondary" type="button"><img class="app-icon" data-lucide="check" src="./assets/lucide/check.svg" alt="" aria-hidden="true" /><span>Verify Notion</span></button>
+            </div>
+          </section>
+          <section class="subpanel">
+            <div class="subpanel-head">
+              <h3>Google Drive</h3>
+            </div>
+            <div class="composer-grid">
+              <label class="field">
+                <span>OAuth client ID</span>
+                <input name="driveClientId" type="text" placeholder="Google OAuth web client id" />
+              </label>
+              <label class="field">
+                <span>Access token</span>
+                <input name="driveAccessToken" type="password" autocomplete="off" placeholder="optional Google access token" />
+              </label>
+              <label class="field">
+                <span>Folder name</span>
+                <input name="driveRootFolderName" type="text" placeholder="Journaling" />
+              </label>
+              <label class="field">
+                <span>Delivery</span>
+                <select name="driveSyncMode">
+                  <option value="background">Background when online</option>
+                  <option value="manual">Manual only</option>
+                </select>
+              </label>
+            </div>
+            <label class="toggle">
+              <input name="driveEnabled" type="checkbox" />
+              Enable Google Drive sync
+            </label>
+          </section>
           <section class="subpanel">
             <div class="subpanel-head">
               <h3>AI</h3>
@@ -959,21 +1066,15 @@
 
   <script>
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', async () => {
-        const isLocalhost = ['127.0.0.1', 'localhost'].includes(window.location.hostname);
-        if (isLocalhost) {
-          const registrations = await navigator.serviceWorker.getRegistrations();
-          await Promise.all(registrations.map((registration) => registration.unregister()));
-          return;
-        }
-        navigator.serviceWorker.register('./sw.js');
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js', { type: 'module' });
       });
     }
   </script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="../components/quick-add/quick-add-component.js?v=16"></script>
-  <script type="module" src="./js/app.js?v=17"></script>
+  <script type="module" src="./js/app.js?v=35"></script>
 </body>
 
 </html>
