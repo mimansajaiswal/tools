@@ -15,6 +15,7 @@
 
     <!-- Tailwind CSS (CDN) -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="./photo-metadata.js"></script>
 
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@0.561.0/dist/umd/lucide.min.js"></script>
@@ -853,7 +854,7 @@ export default {
             class="relative w-full h-[40%] md:h-[50%] max-h-[600px] bg-charcoal/5 flex-shrink-0 flex items-center justify-center overflow-hidden group">
 
             <!-- Hidden Video Source -->
-            <video id="videoSource" autoplay playsinline class="hidden"></video>
+            <video id="videoSource" autoplay muted playsinline class="hidden"></video>
 
             <!-- The Viewfinder Canvas (Live Composite) -->
             <canvas id="viewfinder" class="w-full h-full object-contain z-10"></canvas>
@@ -901,7 +902,7 @@ export default {
                         <i data-lucide="smartphone" class="w-5 h-5 sm:w-6 sm:h-6"></i>
                     </button>
                     <input type="file" id="phoneCameraInput" accept="image/*" capture="environment" class="hidden"
-                        onchange="App.handleFileUpload(event, { alignAfterCapture: true })">
+                        onchange="App.handleFileUpload(event, { alignAfterCapture: true, origin: 'camera' })">
 
                     <!-- 4. Gallery/File Picker -->
                     <button onclick="App.openGalleryPicker()" aria-label="Choose from gallery"
@@ -1169,7 +1170,7 @@ export default {
 
                 <!-- Date -->
                 <div>
-                    <label
+                    <label for="entryDate"
                         class="block text-[10px] font-display font-semibold uppercase tracking-wider text-earth-metal mb-1.5">Date</label>
                     <input type="datetime-local" id="entryDate"
                         class="w-full bg-oatmeal border border-oatmeal-dark p-3 focus:border-dull-purple outline-none text-sm text-charcoal">
@@ -1363,56 +1364,34 @@ export default {
                     img.src = imageSource;
                 });
             },
-            // High Quality Compression with size cap
-            compressToLimit: async (dataUrl, options = {}) => {
+            canvasToBlob: (canvas, quality) => new Promise((resolve, reject) => {
+                canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Image encoding failed')), 'image/webp', quality);
+            }),
+            // Encode asynchronously. Large synchronous toDataURL calls block reset and input.
+            compressToLimit: async (canvas, options = {}) => {
                 const maxBytes = options.maxBytes ?? 5 * 1024 * 1024;
                 const minQuality = options.minQuality ?? 0.86;
                 const startQuality = options.startQuality ?? 0.96;
                 const step = options.step ?? 0.04;
-                const minScale = options.minScale ?? 0.7;
-
-                const originalSize = UTILS.estimateDataUrlSize(dataUrl);
-                if (originalSize <= maxBytes) return dataUrl;
-
-                return new Promise((resolve) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        const ctx = canvas.getContext('2d');
-                        canvas.width = img.width;
-                        canvas.height = img.height;
-                        ctx.drawImage(img, 0, 0);
-
-                        let quality = startQuality;
-                        let result = dataUrl;
-                        let size = originalSize;
-
-                        while (quality >= minQuality) {
-                            result = canvas.toDataURL('image/webp', quality);
-                            size = UTILS.estimateDataUrlSize(result);
-                            if (size <= maxBytes) {
-                                resolve(result);
-                                return;
-                            }
-                            quality -= step;
-                        }
-
-                        if (size > maxBytes) {
-                            const scale = Math.max(minScale, Math.sqrt(maxBytes / size));
-                            const newW = Math.max(1, Math.round(canvas.width * scale));
-                            const newH = Math.max(1, Math.round(canvas.height * scale));
-                            const scaledCanvas = document.createElement('canvas');
-                            scaledCanvas.width = newW;
-                            scaledCanvas.height = newH;
-                            const sctx = scaledCanvas.getContext('2d');
-                            sctx.drawImage(canvas, 0, 0, newW, newH);
-                            result = scaledCanvas.toDataURL('image/webp', minQuality);
-                        }
-
-                        resolve(result);
-                    };
-                    img.src = dataUrl;
-                });
+                const cancelled = options.cancelled || (() => false);
+                let blob;
+                for (let quality = startQuality; ; quality = Math.max(minQuality, quality - step)) {
+                    if (cancelled()) return null;
+                    blob = await UTILS.canvasToBlob(canvas, quality);
+                    if (blob.size <= maxBytes || quality === minQuality) break;
+                }
+                while (blob.size > maxBytes) {
+                    if (cancelled()) return null;
+                    const scale = Math.min(0.9, Math.sqrt(maxBytes / blob.size) * 0.95);
+                    const scaled = document.createElement('canvas');
+                    scaled.width = Math.max(1, Math.floor(canvas.width * scale));
+                    scaled.height = Math.max(1, Math.floor(canvas.height * scale));
+                    scaled.getContext('2d').drawImage(canvas, 0, 0, scaled.width, scaled.height);
+                    canvas = scaled;
+                    blob = await UTILS.canvasToBlob(canvas, minQuality);
+                    if (canvas.width === 1 && canvas.height === 1) break;
+                }
+                return cancelled() ? null : UTILS.toBase64(blob);
             }
         };
 
@@ -2477,7 +2456,15 @@ export default {
                 entryLoading: false,
                 viewWorld: { width: 0, height: 0 },
                 draftSaveTimer: null,
-                pendingHighResEntry: null,
+                entrySession: 0,
+                draftRevision: 0,
+                draftSources: new WeakMap(),
+                draftAssets: new Set(),
+                photoRevision: 0,
+                highResJob: null,
+                cameraRequest: 0,
+                dateEdited: false,
+                restoringDraft: false,
                 segmentEditUndo: null,
                 segmentEditReturn: null,
                 editPointers: new Map(),
@@ -2721,23 +2708,70 @@ export default {
                 const hasSegments = Array.isArray(App.state.segments) && App.state.segments.some(Boolean);
                 return !!(App.state.capturedImage || hasSegments || App.state.currentTags.length || title || notes);
             },
-            segmentToDraft: async (seg, idx) => {
+            updateEntryDate: () => {
+                if (App.state.dateEdited) return;
+                document.getElementById('entryDate').value = UTILS.toLocalISO(PhotoMetadata.entryDate(App.state.segments));
+            },
+            invalidatePhoto: () => {
+                App.state.photoRevision++;
+                if (App.state.highResJob && !App.state.highResJob.pendingEntry) App.state.highResJob.cancelled = true;
+                App.state.highResJob = null;
+                App.state.capturedImage = null;
+                App.state.capturedImageHighRes = null;
+                App.state.previewSignature = null;
+                App.state.segEditSignature = null;
+                document.getElementById('smallPreview').removeAttribute('src');
+                App.setEntryLoading(false);
+                document.getElementById('saveEntryBtn').disabled = true;
+            },
+            cancelDraftSave: () => {
+                clearTimeout(App.state.draftSaveTimer);
+                App.state.draftSaveTimer = null;
+                App.state.draftRevision++;
+            },
+            discardDraftAssets: () => {
+                const assets = App.state.draftAssets;
+                for (const seg of Storage.getEntryDraft(App.state.activeDiaryId)?.segments || []) {
+                    if (seg?.sourceKey) assets.add(seg.sourceKey);
+                }
+                App.state.draftAssets = new Set();
+                App.state.draftSources = new WeakMap();
+                assets.forEach(key => ImageStore.del(key).catch(error => console.warn('Draft asset cleanup failed', error)));
+            },
+            segmentToDraft: async (seg) => {
                 if (!seg?.isManipulatable) return null;
-                const sourceData = seg.sourceDataURL || (() => {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = seg.source.width;
-                    canvas.height = seg.source.height;
-                    canvas.getContext('2d').drawImage(seg.source, 0, 0);
-                    return canvas.toDataURL('image/webp', 0.88);
-                })();
-                const sourceKey = `draft_${App.state.activeDiaryId}_${idx}`;
-                if (ImageStore.isAvailable()) {
-                    await ImageStore.set(sourceKey, UTILS.dataURLtoBlob(sourceData));
-                    seg.sourceDataURL = null;
+                let asset = App.state.draftSources.get(seg.source);
+                if (!asset) {
+                    const assets = App.state.draftAssets;
+                    asset = (async () => {
+                        let blob = seg.sourceBlob;
+                        if (!blob && seg.sourceDataURL) blob = UTILS.dataURLtoBlob(seg.sourceDataURL);
+                        if (!blob) {
+                            const canvas = document.createElement('canvas');
+                            canvas.width = seg.source.width;
+                            canvas.height = seg.source.height;
+                            canvas.getContext('2d').drawImage(seg.source, 0, 0);
+                            blob = await UTILS.canvasToBlob(canvas, 0.88);
+                        }
+                        if (ImageStore.isAvailable()) {
+                            const sourceKey = `draft_${crypto.randomUUID()}`;
+                            await ImageStore.set(sourceKey, blob);
+                            if (assets !== App.state.draftAssets) {
+                                await ImageStore.del(sourceKey);
+                            } else {
+                                assets.add(sourceKey);
+                            }
+                            return { sourceKey, sourceDataURL: null };
+                        }
+                        return { sourceKey: null, sourceDataURL: await UTILS.toBase64(blob) };
+                    })();
+                    App.state.draftSources.set(seg.source, asset);
+                    asset.catch(() => App.state.draftSources.delete(seg.source));
                 }
                 return {
-                    sourceKey: ImageStore.isAvailable() ? sourceKey : null,
-                    sourceDataURL: ImageStore.isAvailable() ? null : sourceData,
+                    ...await asset,
+                    origin: seg.origin,
+                    createdAt: seg.createdAt,
                     x: seg.x,
                     y: seg.y,
                     scale: seg.scale,
@@ -2750,23 +2784,41 @@ export default {
                 };
             },
             persistEntryDraftNow: async () => {
-                if (!App.state.isEntryModalOpen || !App.state.activeDiaryId || !App.hasUnsavedEntry()) return;
-                const segments = await Promise.all((App.state.segments || []).map((seg, idx) => App.segmentToDraft(seg, idx)));
-                Storage.setEntryDraft(App.state.activeDiaryId, {
+                if (!App.state.isEntryModalOpen || App.state.restoringDraft || !App.state.activeDiaryId) return;
+                if (!App.hasUnsavedEntry()) {
+                    Storage.clearEntryDraft(App.state.activeDiaryId);
+                    App.updateDraftStatus('Draft idle');
+                    return;
+                }
+                const revision = ++App.state.draftRevision;
+                const session = App.state.entrySession;
+                const diaryId = App.state.activeDiaryId;
+                const sourceSegments = App.state.segments.map(seg => seg ? { ...seg } : null);
+                const draft = {
                     savedAt: UTILS.now(),
                     title: document.getElementById('entryTitle')?.value || '',
                     notes: document.getElementById('entryNotes')?.value || '',
                     date: document.getElementById('entryDate')?.value || UTILS.toLocalISO(new Date()),
+                    dateEdited: App.state.dateEdited,
                     tags: App.state.currentTags,
                     orientation: App.state.orientation,
                     collageMode: App.state.collageMode,
                     activeSegment: App.state.activeSegment,
                     captureBase: App.state.captureBase,
-                    segments
-                });
-                App.updateDraftStatus();
+                };
+                try {
+                    draft.segments = await Promise.all(sourceSegments.map(App.segmentToDraft));
+                    if (revision !== App.state.draftRevision || session !== App.state.entrySession || !App.state.isEntryModalOpen) return;
+                    Storage.setEntryDraft(diaryId, draft);
+                    App.updateDraftStatus();
+                } catch (error) {
+                    console.warn('Draft save failed', error);
+                    if (revision === App.state.draftRevision) App.updateDraftStatus('Draft could not be saved');
+                }
             },
             scheduleEntryDraftSave: () => {
+                if (!App.state.isEntryModalOpen || App.state.restoringDraft) return;
+                App.state.draftRevision++;
                 const status = document.getElementById('draftStatus');
                 if (status && App.state.isEntryModalOpen) status.innerText = 'Saving draft...';
                 if (App.state.draftSaveTimer) clearTimeout(App.state.draftSaveTimer);
@@ -2777,16 +2829,24 @@ export default {
             },
             loadDraftSegment: async (draftSeg) => {
                 if (!draftSeg) return null;
+                const assets = App.state.draftAssets;
                 let source = draftSeg.sourceDataURL;
+                let objectUrl = null;
                 if (!source && draftSeg.sourceKey && ImageStore.isAvailable()) {
                     const blob = await ImageStore.get(draftSeg.sourceKey);
-                    if (blob) source = URL.createObjectURL(blob);
+                    if (blob) source = objectUrl = URL.createObjectURL(blob);
                 }
                 if (!source) return null;
                 return await new Promise((resolve) => {
                     const img = new Image();
-                    img.onload = () => resolve({
+                    img.onload = () => {
+                        if (objectUrl) URL.revokeObjectURL(objectUrl);
+                        if (draftSeg.sourceKey && assets === App.state.draftAssets) assets.add(draftSeg.sourceKey);
+                        App.state.draftSources.set(img, Promise.resolve({ sourceKey: draftSeg.sourceKey, sourceDataURL: draftSeg.sourceDataURL || null }));
+                        resolve({
                         source: img,
+                        origin: draftSeg.origin || 'camera',
+                        createdAt: draftSeg.createdAt || null,
                         sourceDataURL: draftSeg.sourceDataURL || null,
                         isManipulatable: true,
                         x: draftSeg.x || 0,
@@ -2798,14 +2858,22 @@ export default {
                         flipV: !!draftSeg.flipV,
                         width: draftSeg.width || img.width,
                         height: draftSeg.height || img.height
-                    });
-                    img.onerror = () => resolve(null);
+                        });
+                    };
+                    img.onerror = () => {
+                        if (objectUrl) URL.revokeObjectURL(objectUrl);
+                        resolve(null);
+                    };
                     img.src = source;
                 });
             },
             restoreEntryDraft: async () => {
                 const draft = Storage.getEntryDraft(App.state.activeDiaryId);
                 if (!draft) return false;
+                const session = App.state.entrySession;
+                const revision = App.state.photoRevision;
+                const segments = await Promise.all((draft.segments || []).map(App.loadDraftSegment));
+                if (session !== App.state.entrySession || revision !== App.state.photoRevision || !App.state.isEntryModalOpen) return false;
                 App.state.orientation = draft.orientation || App.state.orientation;
                 const orientationBtn = document.getElementById('orientationBtn');
                 if (orientationBtn) {
@@ -2815,12 +2883,14 @@ export default {
                 App.state.captureBase = draft.captureBase || null;
                 App.state.currentTags = Array.isArray(draft.tags) ? draft.tags : [];
                 App.setCollageMode(Number(draft.collageMode) || 1);
-                App.state.segments = await Promise.all((draft.segments || []).map(App.loadDraftSegment));
+                App.state.segments = segments.slice(0, App.collageConfigs[App.state.collageMode].length);
+                while (App.state.segments.length < App.collageConfigs[App.state.collageMode].length) App.state.segments.push(null);
                 const firstEmpty = App.state.segments.findIndex(seg => !seg);
                 App.state.activeSegment = firstEmpty === -1 ? Math.min(draft.activeSegment || 0, App.state.segments.length - 1) : firstEmpty;
                 document.getElementById('entryTitle').value = draft.title || '';
                 document.getElementById('entryNotes').value = draft.notes || '';
                 document.getElementById('entryDate').value = draft.date || UTILS.toLocalISO(new Date());
+                App.state.dateEdited = draft.dateEdited ?? true;
                 App.renderTags();
                 App.updateManipControlsVisibility();
                 App.updateSegmentControls();
@@ -2859,7 +2929,7 @@ export default {
                 }
                 const doneBtn = document.getElementById('doneSegmentsBtn');
                 if (doneBtn) {
-                    doneBtn.classList.toggle('hidden', total <= 1);
+                    doneBtn.classList.toggle('hidden', total <= 1 && !App.isCollageComplete());
                     doneBtn.disabled = !App.isCollageComplete();
                 }
                 lucide.createIcons();
@@ -3066,14 +3136,17 @@ export default {
 
                 ['entryTitle', 'entryDate', 'entryNotes'].forEach((id) => {
                     const el = document.getElementById(id);
-                    if (el) el.addEventListener('input', App.scheduleEntryDraftSave);
+                    if (el) el.addEventListener('input', () => {
+                        if (id === 'entryDate') App.state.dateEdited = true;
+                        App.scheduleEntryDraftSave();
+                    });
                 });
 
                 document.addEventListener('visibilitychange', () => {
                     if (document.hidden) {
                         App.persistEntryDraftNow();
                         App.stopDrawLoop();
-                    } else if (App.state.isEntryModalOpen) {
+                    } else if (App.state.isEntryModalOpen && !document.getElementById('cameraSection').classList.contains('hidden')) {
                         const streamStopped = App.state.stream
                             ? App.state.stream.getTracks().every(t => t.readyState === 'ended')
                             : true;
@@ -3444,6 +3517,13 @@ export default {
             },
 
             initNewEntry: async () => {
+                if (App.state.isEntryModalOpen) return;
+                const diary = App.state.diaries.find(d => d.id === App.state.activeDiaryId);
+                if (!diary) return App.showToast("Select a diary first.", "error");
+                const session = ++App.state.entrySession;
+                App.cancelDraftSave();
+                App.invalidatePhoto();
+                App.state.dateEdited = false;
                 App.state.currentTags = [];
                 App.state.capturedImage = null;
                 App.state.capturedImageHighRes = null; // Reset High Res
@@ -3471,9 +3551,20 @@ export default {
                 document.getElementById('cameraSection').classList.remove('hidden');
                 document.getElementById('imageManipControls').classList.add('hidden');
 
-                const diary = App.state.diaries.find(d => d.id === App.state.activeDiaryId);
-                if (!diary) return App.showToast("Select a diary first.", "error");
                 App.applyDiaryCameraConfig(diary);
+                App.openModal('entryModal');
+                const hasDraft = !!Storage.getEntryDraft(diary.id);
+                App.state.restoringDraft = hasDraft;
+                if (hasDraft) App.setEntryLoading(true, 'Restoring draft...');
+                const restoration = App.restoreEntryDraft().catch(error => {
+                    console.warn('Draft restore failed', error);
+                }).finally(() => {
+                    if (session !== App.state.entrySession) return;
+                    App.state.restoringDraft = false;
+                    App.setEntryLoading(false);
+                    App.updateSegmentControls();
+                });
+                SyncManager.fetchTags(true);
 
                 const toggleBtn = document.getElementById('ghostToggleBtn');
                 const lastEntryWithPhoto = App.getVisibleEntries(diary).find(e => e.photoDataURL || e.photoKey);
@@ -3484,6 +3575,10 @@ export default {
 
                 if (lastEntryWithPhoto) {
                     const ghostData = await App.loadEntryImage(lastEntryWithPhoto);
+                    if (session !== App.state.entrySession || !App.state.isEntryModalOpen) {
+                        if (ghostData?.isObjectUrl) URL.revokeObjectURL(ghostData.src);
+                        return;
+                    }
                     if (!ghostData) {
                         toggleBtn.classList.add('hidden');
                         App.state.ghostMode = false;
@@ -3515,7 +3610,9 @@ export default {
                         if (sliderInput) sliderInput.value = savedOpacity;
                         document.getElementById('ghostSliderContainer').classList.add('hidden');
                         const img = new Image();
-                        img.onload = () => { App.state.ghostImageObj = img; };
+                        img.onload = () => {
+                            if (session === App.state.entrySession && App.state.isEntryModalOpen) App.state.ghostImageObj = img;
+                        };
                         img.src = ghostData.src;
                     }
                 } else {
@@ -3529,10 +3626,7 @@ export default {
                     document.getElementById('ghostSliderContainer').classList.add('hidden');
                 }
 
-                await App.restoreEntryDraft();
-                App.updateSegmentControls();
-                App.openModal('entryModal');
-                SyncManager.fetchTags(true);
+                await restoration;
             },
 
             setCollageMode: (mode) => {
@@ -3547,6 +3641,10 @@ export default {
                 });
                 App.state.collageMode = mode;
                 App.state.segments = preservedSegments;
+                if (App.state.isEntryModalOpen && !App.state.restoringDraft) {
+                    App.invalidatePhoto();
+                    App.updateEntryDate();
+                }
                 const firstEmpty = preservedSegments.findIndex(seg => !seg);
                 App.state.activeSegment = firstEmpty === -1 ? 0 : firstEmpty;
                 App.persistActiveDiaryCameraConfig({ collageMode: mode });
@@ -3753,8 +3851,11 @@ export default {
             },
 
             initCamera: async () => {
+                if (!App.state.isEntryModalOpen || document.getElementById('cameraSection').classList.contains('hidden')) return;
                 const video = document.getElementById('videoSource');
                 const cvs = document.getElementById('viewfinder');
+                const session = App.state.entrySession;
+                const request = ++App.state.cameraRequest;
 
                 // Attach pointer events if not already
                 if (!cvs.dataset.listening) {
@@ -3769,11 +3870,17 @@ export default {
                     if (App.state.stream) {
                         App.state.stream.getTracks().forEach(t => t.stop());
                     }
-                    App.state.stream = await navigator.mediaDevices.getUserMedia({
+                    const stream = await navigator.mediaDevices.getUserMedia({
                         video: App.getVideoConstraints(),
                         audio: false
                     });
-                    video.srcObject = App.state.stream;
+                    if (request !== App.state.cameraRequest || session !== App.state.entrySession || !App.state.isEntryModalOpen || document.getElementById('cameraSection').classList.contains('hidden')) {
+                        stream.getTracks().forEach(track => track.stop());
+                        return;
+                    }
+                    App.state.stream = stream;
+                    video.muted = true;
+                    video.srcObject = stream;
                     video.onloadedmetadata = () => {
                         App.state.videoDims = { width: video.videoWidth, height: video.videoHeight };
                     };
@@ -3799,14 +3906,16 @@ export default {
                         btn.classList.add('bg-black/40');
                     }
                     App.updateCameraConfigSummary();
+                    await video.play();
                 } catch (e) {
+                    if (request !== App.state.cameraRequest || session !== App.state.entrySession || !App.state.isEntryModalOpen) return;
                     console.error("Camera init failed", e);
                     App.showToast("Camera access failed. Check permissions or use file upload.", "error");
                 }
             },
 
             drawLoop: () => {
-                if (!App.state.isEntryModalOpen) {
+                if (!App.state.isEntryModalOpen || document.hidden || document.getElementById('cameraSection').classList.contains('hidden')) {
                     App.stopDrawLoop();
                     return;
                 }
@@ -3814,7 +3923,7 @@ export default {
                 const cvs = document.getElementById('viewfinder');
                 const ctx = cvs.getContext('2d');
                 const mode = App.state.collageMode;
-                const baseDims = App.getBaseDimensions(video.videoWidth || App.state.videoDims.width, video.videoHeight || App.state.videoDims.height);
+                const baseDims = App.state.captureBase || App.getBaseDimensions(video.videoWidth || App.state.videoDims.width, video.videoHeight || App.state.videoDims.height);
                 const { multW, multH } = App.getLayoutMultipliers(mode);
                 const dims = App.getFinalCanvasDimensions(baseDims.width, baseDims.height, multW, multH);
                 const W = dims.width;
@@ -3830,6 +3939,14 @@ export default {
                 );
                 const canvasW = Math.max(1, Math.round(metrics.width * previewScale));
                 const canvasH = Math.max(1, Math.round(metrics.height * previewScale));
+                const signature = [canvasW, canvasH, W, H, mode, App.state.activeSegment, App.state.ghostMode, App.state.ghostOpacity, App.state.ghostImageObj];
+                App.state.segments.forEach(seg => signature.push(seg?.source, seg?.x, seg?.y, seg?.scale, seg?.rotation, seg?.flipH, seg?.flipV));
+                const liveCamera = !App.state.segments[App.state.activeSegment] && video.readyState >= 2;
+                if (!liveCamera && signature.length === App.state.previewSignature?.length && signature.every((value, idx) => value === App.state.previewSignature[idx])) {
+                    App.state.drawLoopHandle = requestAnimationFrame(App.drawLoop);
+                    return;
+                }
+                App.state.previewSignature = signature;
                 if (cvs.width !== canvasW || cvs.height !== canvasH) {
                     cvs.width = canvasW;
                     cvs.height = canvasH;
@@ -4100,6 +4217,9 @@ export default {
             },
 
             saveEntry: async () => {
+                if (App.state.entryLoading) return;
+                const job = App.state.highResJob;
+                if (job?.error) return App.showToast('Full-resolution preparation failed. Please capture the photo again.', 'error');
                 const notes = document.getElementById('entryNotes').value;
                 const titleInput = document.getElementById('entryTitle').value;
                 const dateVal = document.getElementById('entryDate').value;
@@ -4169,7 +4289,12 @@ export default {
 
                     Storage.saveEntry(App.state.activeDiaryId, newEntry);
                     if (uploadPending) {
-                        App.state.pendingHighResEntry = { diaryId: App.state.activeDiaryId, entryId: newEntry.id };
+                        job.pendingEntry = { diaryId: App.state.activeDiaryId, entryId: newEntry.id };
+                        // The export may have completed while IndexedDB saved the preview.
+                        App.attachPreparedHighResToSavedEntry(job).catch(error => {
+                            console.error('Could not store full-resolution photo', error);
+                            App.showToast('Could not store the full-resolution photo.', 'error');
+                        });
                     } else {
                         Storage.queuePendingEntry(App.state.activeDiaryId, newEntry.id);
                     }
@@ -4215,99 +4340,31 @@ export default {
 
             captureSegment: () => {
                 const video = document.getElementById('videoSource');
-                const canvas = document.createElement('canvas');
-
-                // Use full resolution from video or base dims
-                // Actually, let's just capture the full video frame to allow manipulation
-                const vidW = video.videoWidth;
-                const vidH = video.videoHeight;
-                canvas.width = vidW;
-                canvas.height = vidH;
-                const ctx = canvas.getContext('2d');
-
-                if (App.state.mirrorVideo && App.state.facingMode === 'user') {
-                    ctx.save();
-                    ctx.translate(vidW, 0);
-                    ctx.scale(-1, 1);
-                    ctx.drawImage(video, 0, 0, vidW, vidH);
-                    ctx.restore();
-                } else {
-                    ctx.drawImage(video, 0, 0, vidW, vidH);
+                if (App.state.entryLoading || video.readyState < 2 || !video.videoWidth || !video.videoHeight) {
+                    App.showToast('Camera is not ready yet.', 'info');
+                    return;
                 }
-
-                // Convert to Image for manipulation source
-                const img = new Image();
-                const sourceDataURL = canvas.toDataURL('image/webp', 0.9);
-                img.src = sourceDataURL;
-
-                img.onload = () => {
-                    // Calculate slot dimensions and scale
-                    const baseDims = App.state.captureBase || App.getBaseDimensions(vidW, vidH);
-                    const BaseW = baseDims.width;
-                    const BaseH = baseDims.height;
-
-                    const layout = App.collageConfigs[App.state.collageMode];
-                    const slot = layout[App.state.activeSegment];
-
-                    let multW = 1; let multH = 1;
-                    const mode = App.state.collageMode;
-                    if (mode === 2) multW = 2;
-                    else if (mode === 3) multW = 3;
-                    else if (mode === 4) { multW = 2; multH = 2; }
-                    else if (mode === 5) { multH = 2; }
-                    else if (mode === 6) { multH = 3; }
-                    else if (mode === 7) { multW = 2; multH = 2; }
-
-                    const finalDims = App.getFinalCanvasDimensions(BaseW, BaseH, multW, multH);
-                    const slotPixelW = slot.w * finalDims.width;
-                    const slotPixelH = slot.h * finalDims.height;
-
-                    const scaleW = slotPixelW / vidW;
-                    const scaleH = slotPixelH / vidH;
-                    const scale = Math.max(scaleW, scaleH);
-
-                    App.state.segments[App.state.activeSegment] = {
-                        source: img,
-                        sourceDataURL: sourceDataURL,
-                        isManipulatable: true,
-                        x: 0,
-                        y: 0,
-                        scale: scale,
-                        baseScale: scale,
-                        rotation: 0,
-                        flipH: false,
-                        flipV: false,
-                        width: vidW,
-                        height: vidH
-                    };
-
-                    if (!App.state.captureBase) {
-                        App.state.captureBase = { width: BaseW, height: BaseH };
-                    }
-
-                    const total = layout.length;
-                    let allFilled = true;
-                    let nextEmpty = -1;
-                    for (let i = 0; i < total; i++) {
-                        if (!App.state.segments[i]) {
-                            allFilled = false;
-                            if (nextEmpty === -1) nextEmpty = i;
-                        }
-                    }
-                    if (allFilled) {
-                        if (App.state.collageMode === 1) {
-                            App.setEntryLoading(true, "Finishing...");
-                            requestAnimationFrame(() => App.finalizeCollage());
-                        } else {
-                            App.showToast("All segments captured. Tap Done when ready.", "success");
-                        }
-                    } else {
-                        App.state.activeSegment = nextEmpty;
-                    }
-                    App.updateManipControlsVisibility();
-                    App.updateSegmentControls();
-                    App.scheduleEntryDraftSave();
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext('2d');
+                if (App.state.mirrorVideo && App.state.facingMode === 'user') {
+                    ctx.translate(canvas.width, 0);
+                    ctx.scale(-1, 1);
+                }
+                ctx.drawImage(video, 0, 0);
+                const idx = App.state.activeSegment;
+                const base = App.state.captureBase || App.getBaseDimensions(canvas.width, canvas.height);
+                App.invalidatePhoto();
+                App.state.captureBase = base;
+                const scale = App.fitScaleForSlot(canvas.width, canvas.height, App.collageConfigs[App.state.collageMode][idx]);
+                App.state.segments[idx] = {
+                    source: canvas, origin: 'camera', createdAt: UTILS.now(),
+                    isManipulatable: true, x: 0, y: 0, scale, baseScale: scale,
+                    rotation: 0, flipH: false, flipV: false, width: canvas.width, height: canvas.height
                 };
+                App.updateEntryDate();
+                App.afterManualSegmentInsert(idx);
             },
             doneCapturingSegments: () => {
                 if (!App.isCollageComplete()) {
@@ -4318,11 +4375,11 @@ export default {
                 requestAnimationFrame(() => App.finalizeCollage());
             },
 
-            drawCollageContent: (ctx, W, H, layout) => {
+            drawCollageContent: (ctx, W, H, layout, segments = App.state.segments) => {
                 ctx.fillStyle = "black";
                 ctx.fillRect(0, 0, W, H);
                 layout.forEach((slot, idx) => {
-                    const seg = App.state.segments[idx];
+                    const seg = segments[idx];
                     if (seg) {
                         const dx = slot.x * W;
                         const dy = slot.y * H;
@@ -4352,15 +4409,14 @@ export default {
                 });
             },
 
-            drawCollageCanvas: (canvas, dims, scale = 1) => {
-                const layout = App.collageConfigs[App.state.collageMode];
+            drawCollageCanvas: (canvas, dims, scale = 1, layout = App.collageConfigs[App.state.collageMode], segments = App.state.segments) => {
                 const W = dims.width;
                 const H = dims.height;
                 canvas.width = Math.max(1, Math.round(W * scale));
                 canvas.height = Math.max(1, Math.round(H * scale));
                 const ctx = canvas.getContext('2d');
                 ctx.setTransform(scale, 0, 0, scale, 0, 0);
-                App.drawCollageContent(ctx, W, H, layout);
+                App.drawCollageContent(ctx, W, H, layout, segments);
                 ctx.setTransform(1, 0, 0, 1, 0, 0);
             },
 
@@ -4372,58 +4428,92 @@ export default {
             },
 
             finalizeCollage: async () => {
-                const finalCanvas = document.getElementById('photoCanvas');
-                if (!finalCanvas) return;
-                App.setEntryLoading(true, "Preparing preview...");
-                const dims = App.getCurrentCollageDimensions();
-                const previewCanvas = document.createElement('canvas');
-                const previewScale = Math.min(1, 900 / Math.max(dims.width, dims.height));
-                App.drawCollageCanvas(previewCanvas, dims, previewScale);
-                App.state.capturedImage = previewCanvas.toDataURL('image/webp', 0.72);
-                App.state.capturedImageHighRes = null;
-
-                document.getElementById('cameraSection').classList.add('hidden');
-                document.getElementById('imageManipControls').classList.add('hidden');
-                document.getElementById('smallPreview').src = App.state.capturedImage;
-                document.getElementById('takenPhotoUI').classList.remove('hidden');
-                document.getElementById('takenPhotoUI').classList.add('flex');
-                document.getElementById('saveEntryBtn').disabled = false;
-                if (App.state.stream) App.state.stream.getTracks().forEach(t => t.stop());
-                App.setEntryLoading(false);
-
-                await new Promise(resolve => setTimeout(resolve, 0));
-                App.prepareHighResCollage(dims, finalCanvas);
-            },
-
-            prepareHighResCollage: async (dims, finalCanvas) => {
+                if (!App.state.isEntryModalOpen || !App.isCollageComplete()) {
+                    App.setEntryLoading(false);
+                    return;
+                }
+                App.invalidatePhoto();
+                const job = {
+                    session: App.state.entrySession,
+                    revision: App.state.photoRevision,
+                    segments: App.state.segments.map(seg => ({ ...seg })),
+                    layout: App.collageConfigs[App.state.collageMode],
+                    dims: App.getCurrentCollageDimensions(),
+                    maxBytes: App.getUploadCapBytes(),
+                    cancelled: false, result: null, pendingEntry: null
+                };
+                App.state.highResJob = job;
+                App.setEntryLoading(true, 'Preparing preview...');
                 try {
-                    App.drawCollageCanvas(finalCanvas, dims);
-                    const highResBase = finalCanvas.toDataURL('image/webp', 0.96);
-                    const capBytes = App.getUploadCapBytes();
-                    App.state.capturedImageHighRes = await UTILS.compressToLimit(highResBase, { maxBytes: capBytes });
-                    await App.attachPreparedHighResToSavedEntry();
-                } catch (e) {
-                    console.error('High-res collage preparation failed', e);
+                    const previewCanvas = document.createElement('canvas');
+                    const scale = Math.min(1, 900 / Math.max(job.dims.width, job.dims.height));
+                    App.drawCollageCanvas(previewCanvas, job.dims, scale, job.layout, job.segments);
+                    const preview = await UTILS.toBase64(await UTILS.canvasToBlob(previewCanvas, 0.72));
+                    if (job.cancelled || App.state.highResJob !== job) return;
+                    App.state.capturedImage = preview;
+                    document.getElementById('cameraSection').classList.add('hidden');
+                    document.getElementById('imageManipControls').classList.add('hidden');
+                    document.getElementById('smallPreview').src = preview;
+                    document.getElementById('takenPhotoUI').classList.remove('hidden');
+                    document.getElementById('takenPhotoUI').classList.add('flex');
+                    App.stopDrawLoop();
+                    App.state.cameraRequest++;
+                    if (App.state.stream) App.state.stream.getTracks().forEach(track => track.stop());
+                    App.state.stream = null;
+                    App.setEntryLoading(false);
+                    document.getElementById('saveEntryBtn').disabled = false;
+                    // Allow the preview to paint before drawing the export canvas.
+                    requestAnimationFrame(() => setTimeout(() => App.prepareHighResCollage(job), 0));
+                } catch (error) {
+                    if (App.state.highResJob === job) {
+                        App.setEntryLoading(false);
+                        App.showToast('Could not prepare the photo. Please try again.', 'error');
+                    }
+                    console.error('Collage preview failed', error);
                 }
             },
 
-            attachPreparedHighResToSavedEntry: async () => {
-                const pending = App.state.pendingHighResEntry;
-                if (!pending || !App.state.capturedImageHighRes) return;
-                let uploadKey = null;
-                let uploadDataURL = null;
-                if (ImageStore.isAvailable()) {
-                    uploadKey = `entry_${pending.entryId}_upload`;
-                    await ImageStore.set(uploadKey, UTILS.dataURLtoBlob(App.state.capturedImageHighRes));
-                } else {
-                    uploadDataURL = App.state.capturedImageHighRes;
+            prepareHighResCollage: async (job) => {
+                if (job.cancelled) return;
+                const canvas = document.createElement('canvas');
+                try {
+                    App.drawCollageCanvas(canvas, job.dims, 1, job.layout, job.segments);
+                    job.result = await UTILS.compressToLimit(canvas, { maxBytes: job.maxBytes, cancelled: () => job.cancelled });
+                    if (!job.result || job.cancelled) return;
+                    if (App.state.highResJob === job) App.state.capturedImageHighRes = job.result;
+                    await App.attachPreparedHighResToSavedEntry(job);
+                } catch (error) {
+                    job.error = error;
+                    if (App.state.highResJob === job || job.pendingEntry) App.showToast('Full-resolution photo could not be prepared. Please capture it again.', 'error');
+                    console.error('High-res collage preparation failed', error);
+                } finally {
+                    canvas.width = canvas.height = 1;
+                    job.segments = [];
                 }
-                Storage.updateEntryUploadAsset(pending.diaryId, pending.entryId, uploadKey, uploadDataURL);
-                Storage.queuePendingEntry(pending.diaryId, pending.entryId);
-                App.state.pendingHighResEntry = null;
-                App.state.diaries = Storage.getData();
-                App.renderDiaryView();
-                if (navigator.onLine) SyncManager.syncCurrentDiary();
+            },
+
+            attachPreparedHighResToSavedEntry: async (job) => {
+                const pending = job.pendingEntry;
+                if (!pending || !job.result || job.attaching) return;
+                job.attaching = true;
+                try {
+                    let uploadKey = null;
+                    let uploadDataURL = null;
+                    if (ImageStore.isAvailable()) {
+                        uploadKey = `entry_${pending.entryId}_upload`;
+                        await ImageStore.set(uploadKey, UTILS.dataURLtoBlob(job.result));
+                    } else {
+                        uploadDataURL = job.result;
+                    }
+                    Storage.updateEntryUploadAsset(pending.diaryId, pending.entryId, uploadKey, uploadDataURL);
+                    Storage.queuePendingEntry(pending.diaryId, pending.entryId);
+                    job.pendingEntry = null;
+                    App.state.diaries = Storage.getData();
+                    App.renderDiaryView();
+                    if (navigator.onLine) SyncManager.syncCurrentDiary();
+                } finally {
+                    job.attaching = false;
+                }
             },
 
             handleCollageClick: (e) => {
@@ -4533,6 +4623,8 @@ export default {
             },
 
             startSegEditPreview: () => {
+                App.stopSegEditPreview();
+                App.state.segEditSignature = null;
                 const render = () => {
                     App.renderSegEditPreview();
                     App.state.segEditAnimFrame = requestAnimationFrame(render);
@@ -4572,16 +4664,18 @@ export default {
                 const dims = App.getFinalCanvasDimensions(baseDims.width, baseDims.height, multW, multH);
                 const slotW = slot.w * dims.width;
                 const slotH = slot.h * dims.height;
+                const signature = [idx, mode, slotW, slotH, seg.source, seg.x, seg.y, seg.scale, seg.rotation, seg.flipH, seg.flipV, App.state.ghostMode, App.state.ghostOpacity, App.state.ghostImageObj];
+                if (signature.length === App.state.segEditSignature?.length && signature.every((value, index) => value === App.state.segEditSignature[index])) return;
+                App.state.segEditSignature = signature;
 
                 // Set canvas to match slot aspect ratio
                 const previewSize = 300;
                 const slotAspect = slotW / slotH;
-                if (slotAspect >= 1) {
-                    canvas.width = previewSize;
-                    canvas.height = previewSize / slotAspect;
-                } else {
-                    canvas.height = previewSize;
-                    canvas.width = previewSize * slotAspect;
+                const previewW = Math.round(slotAspect >= 1 ? previewSize : previewSize * slotAspect);
+                const previewH = Math.round(slotAspect >= 1 ? previewSize / slotAspect : previewSize);
+                if (canvas.width !== previewW || canvas.height !== previewH) {
+                    canvas.width = previewW;
+                    canvas.height = previewH;
                 }
 
                 const W = canvas.width;
@@ -4843,23 +4937,18 @@ export default {
                 }
             },
 
-            regeneratePreview: async () => {
-                const tempCanvas = document.createElement('canvas');
-                const dims = App.getCurrentCollageDimensions();
-                const previewScale = Math.min(1, 900 / Math.max(dims.width, dims.height));
-                App.drawCollageCanvas(tempCanvas, dims, previewScale);
-                App.state.capturedImage = tempCanvas.toDataURL('image/webp', 0.72);
-                App.state.capturedImageHighRes = null;
-                document.getElementById('smallPreview').src = App.state.capturedImage;
-                await new Promise(resolve => setTimeout(resolve, 0));
-                App.prepareHighResCollage(dims, document.getElementById('photoCanvas'));
-            },
+            regeneratePreview: async () => App.finalizeCollage(),
 
             retakePartial: () => {
+                App.invalidatePhoto();
+                App.cancelDraftSave();
                 document.getElementById('takenPhotoUI').classList.add('hidden');
                 document.getElementById('takenPhotoUI').classList.remove('flex');
                 document.getElementById('cameraSection').classList.remove('hidden');
-                App.initCamera();
+                if (!App.state.stream?.getTracks().some(track => track.readyState === 'live')) App.initCamera();
+                App.startDrawLoop();
+                App.updateEntryDate();
+                App.scheduleEntryDraftSave();
 
                 App.updateSegmentControls();
                 App.updateManipControlsVisibility();
@@ -4879,6 +4968,12 @@ export default {
             },
 
             retakeAll: () => {
+                App.cancelDraftSave();
+                App.discardDraftAssets();
+                App.invalidatePhoto();
+                App.stopSegEditPreview();
+                document.getElementById('segmentEditOverlay').classList.add('hidden');
+                App.state.editingSegmentIdx = null;
                 App.state.activeSegment = 0;
                 App.state.segments = [];
                 App.state.captureBase = null;
@@ -4888,7 +4983,8 @@ export default {
                 document.getElementById('cameraSection').classList.remove('hidden');
                 document.getElementById('imageManipControls').classList.add('hidden');
                 document.getElementById('saveEntryBtn').disabled = true;
-                App.initCamera();
+                if (!App.state.stream?.getTracks().some(track => track.readyState === 'live')) App.initCamera();
+                App.startDrawLoop();
                 App.setCollageMode(App.state.collageMode);
             },
 
@@ -5013,73 +5109,43 @@ export default {
 
             handleFileUpload: async (e, options = {}) => {
                 const file = e.target.files[0];
-                if (file) {
-                    const base64 = await UTILS.toBase64(file);
-                    const img = new Image();
-                    img.src = base64;
-                    img.onload = () => {
-                        // Calculate slot dimensions
-                        const baseDims = App.state.captureBase || App.getTargetBaseDimensions();
-                        const layout = App.collageConfigs[App.state.collageMode];
-                        const slot = layout[App.state.activeSegment];
-
-                        // We need the absolute dimensions of the slot in the "virtual" canvas
-                        // But wait, the virtual canvas size depends on the mode multW/multH.
-                        // However, simpler approach:
-                        // The 'scale' should be relative to the image itself being drawn into the slot.
-                        // We want the image to COVER the slot.
-                        // We need to know the slot's aspect ratio.
-                        // Slot W relative = slot.w, Slot H relative = slot.h
-                        // But we need the aspect ratio of the slot in pixels.
-                        // Assume BaseW/BaseH is the 1x1 size.
-                        const BaseW = baseDims.width;
-                        const BaseH = baseDims.height;
-
-                        // We need to know the multiplier for the current mode to get true aspect?
-                        // Actually App.getFinalCanvasDimensions does this.
-                        const mode = App.state.collageMode;
-                        const { multW, multH } = App.getLayoutMultipliers(mode);
-
-                        // But wait, slot.w is percentage of Final Width.
-                        // So we just need Final Width / Final Height ratio?
-                        // Actually, let's just use the current canvas dimensions if available, or estimate.
-                        // Safest is to use the logic from drawLoop:
-                        const finalDims = App.getFinalCanvasDimensions(BaseW, BaseH, multW, multH);
-                        const slotPixelW = slot.w * finalDims.width;
-                        const slotPixelH = slot.h * finalDims.height;
-
-                        const imgW = img.width;
-                        const imgH = img.height;
-
-                        // Calculate Scale to COVER
-                        const scaleW = slotPixelW / imgW;
-                        const scaleH = slotPixelH / imgH;
-                        const scale = Math.max(scaleW, scaleH);
-
-                        const capturedIdx = App.state.activeSegment;
-                        App.state.segments[capturedIdx] = {
-                            source: img,
-                            sourceDataURL: base64,
-                            isManipulatable: true,
-                            x: 0,
-                            y: 0,
-                            scale: scale,
-                            baseScale: scale,
-                            rotation: 0,
-                            flipH: false,
-                            flipV: false,
-                            width: imgW,
-                            height: imgH
-                        };
-
-                        if (!App.state.captureBase) {
-                            App.state.captureBase = { width: BaseW, height: BaseH };
-                        }
-
-                        App.afterManualSegmentInsert(capturedIdx, options);
-                    }
-                }
                 e.target.value = '';
+                if (!file || !App.state.isEntryModalOpen || App.state.entryLoading) return;
+                const session = App.state.entrySession;
+                const idx = App.state.activeSegment;
+                App.invalidatePhoto();
+                const revision = App.state.photoRevision;
+                const current = () => session === App.state.entrySession && revision === App.state.photoRevision && App.state.isEntryModalOpen;
+                const url = URL.createObjectURL(file);
+                App.setEntryLoading(true, 'Loading photo...');
+                try {
+                    const img = new Image();
+                    const decoded = new Promise((resolve, reject) => {
+                        img.onload = () => resolve(img);
+                        img.onerror = () => reject(new Error('This photo could not be opened. Try a JPEG, PNG or WebP image.'));
+                        img.src = url;
+                    });
+                    const origin = options.origin || 'file';
+                    const [, createdAt] = await Promise.all([decoded, origin === 'file' ? PhotoMetadata.createdAt(file) : Promise.resolve(UTILS.now())]);
+                    if (!current()) return;
+                    App.state.captureBase ||= App.getTargetBaseDimensions();
+                    const scale = App.fitScaleForSlot(img.width, img.height, App.collageConfigs[App.state.collageMode][idx]);
+                    App.state.segments[idx] = {
+                        source: img, sourceBlob: file, origin, createdAt,
+                        isManipulatable: true, x: 0, y: 0, scale, baseScale: scale,
+                        rotation: 0, flipH: false, flipV: false, width: img.width, height: img.height
+                    };
+                    App.setEntryLoading(false);
+                    App.updateEntryDate();
+                    App.afterManualSegmentInsert(idx, options);
+                } catch (error) {
+                    if (current()) {
+                        App.setEntryLoading(false);
+                        App.showToast(error.message, 'error');
+                    }
+                } finally {
+                    URL.revokeObjectURL(url);
+                }
             },
             renderSettingsStatus: (settings) => {
                 const statusEl = document.getElementById('connectionStatus');
@@ -5282,6 +5348,16 @@ export default {
                         const ok = confirm("Discard this entry? Your captured photo and notes will be lost.");
                         if (!ok) return false;
                     }
+                    App.cancelDraftSave();
+                    App.discardDraftAssets();
+                    App.state.entrySession++;
+                    App.state.cameraRequest++;
+                    App.state.restoringDraft = false;
+                    App.invalidatePhoto();
+                    App.stopSegEditPreview();
+                    document.getElementById('segmentEditOverlay').classList.add('hidden');
+                    App.state.editingSegmentIdx = null;
+                    App.state.segments = [];
                     Storage.clearEntryDraft(App.state.activeDiaryId);
                     App.state.isEntryModalOpen = false;
                     App.stopDrawLoop();
@@ -5301,7 +5377,7 @@ export default {
             }
         };
 
-        window.addEventListener('load', () => {
+        window.addEventListener('DOMContentLoaded', () => {
             App.init();
             registerServiceWorker();
         });
