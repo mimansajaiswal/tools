@@ -200,66 +200,20 @@
 
         /* Header Sync Widget */
         .sync-status {
-            min-width: 128px;
-            max-width: 160px;
+            width: 32px;
+            height: 32px;
             padding: 5px 8px 6px;
             border: 1px solid #D9D2C7;
             background: rgba(248, 246, 243, 0.85);
             display: flex;
-            flex-direction: column;
+            align-items: center;
+            justify-content: center;
             gap: 4px;
             transition: border-color 0.2s ease, background 0.2s ease;
         }
 
-        .sync-status-meta {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-family: 'Space Grotesk', system-ui, sans-serif;
-            font-size: 9px;
-            font-weight: 600;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            color: #5C5650;
-        }
-
-        .sync-status-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 9999px;
-            background: #B8B0A4;
-            transition: background 0.2s ease;
-            flex-shrink: 0;
-        }
-
-        .sync-status-icon {
+        .sync-status.hidden {
             display: none;
-            width: 14px;
-            height: 14px;
-            border-radius: 9999px;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            line-height: 1;
-            font-weight: 700;
-            color: #fff;
-            background: #857593;
-            flex-shrink: 0;
-        }
-
-        .sync-status-track {
-            width: 100%;
-            height: 3px;
-            background: #E8E2D9;
-            overflow: hidden;
-        }
-
-        .sync-status-bar {
-            display: block;
-            width: 0%;
-            height: 100%;
-            background: #857593;
-            transition: width 0.35s ease, background 0.2s ease;
         }
 
         .sync-status[data-state="syncing"] {
@@ -267,25 +221,9 @@
             background: rgba(133, 117, 147, 0.08);
         }
 
-        .sync-status[data-state="syncing"] .sync-status-dot {
-            background: #857593;
-        }
-
         .sync-status[data-state="synced"] {
             border-color: #B8AFC1;
             background: rgba(133, 117, 147, 0.12);
-        }
-
-        .sync-status[data-state="synced"] .sync-status-dot {
-            display: none;
-        }
-
-        .sync-status[data-state="synced"] .sync-status-icon {
-            display: inline-flex;
-        }
-
-        .sync-status[data-state="synced"] .sync-status-track {
-            display: none;
         }
 
         .sync-status[data-state="offline"],
@@ -294,9 +232,63 @@
             background: rgba(251, 235, 235, 0.75);
         }
 
-        .sync-status[data-state="offline"] .sync-status-dot,
-        .sync-status[data-state="error"] .sync-status-dot {
-            background: #C24D4D;
+        .status-hint {
+            position: relative;
+        }
+
+        .status-hint::after {
+            content: attr(aria-label);
+            position: absolute;
+            bottom: calc(100% + 6px);
+            right: 0;
+            width: max-content;
+            max-width: 220px;
+            padding: 6px 9px;
+            border-radius: 6px;
+            background: #2C2926;
+            color: #F8F6F3;
+            font: 11px/1.4 Inter, sans-serif;
+            pointer-events: none;
+            opacity: 0;
+            z-index: 30;
+        }
+
+        .status-hint:hover::after,
+        .status-hint:focus::after {
+            opacity: 1;
+        }
+
+        header .status-hint::after {
+            top: calc(100% + 6px);
+            bottom: auto;
+        }
+
+        .entry-card .status-hint::after {
+            max-width: 140px;
+            white-space: normal;
+        }
+
+        #draftStatus::after {
+            left: 0;
+            right: auto;
+        }
+
+        :focus-visible {
+            outline: 2px solid #857593;
+            outline-offset: 3px;
+        }
+
+        #batchPhotoList input[type="datetime-local"] {
+            min-width: 0;
+            max-width: 100%;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+
+            .animate-spin,
+            .toast-enter {
+                animation: none;
+            }
         }
     </style>
 </head>
@@ -305,8 +297,8 @@
     class="bg-oatmeal text-earth-metal font-sans h-[100dvh] flex flex-col md:flex-row overflow-hidden selection:bg-dull-purple selection:text-white">
 
     <!-- Toast Container -->
-    <div id="toastContainer"
-        class="fixed top-4 right-4 z-[100] flex flex-col gap-2 w-full max-w-sm pointer-events-none"></div>
+    <div id="toastContainer" aria-live="polite" aria-atomic="false"
+        class="fixed top-4 right-4 z-[100] flex flex-col gap-2 w-[calc(100%-2rem)] max-w-sm pointer-events-none"></div>
 
     <!-- Hidden Canvas for Processing (Global) -->
     <canvas id="photoCanvas" class="hidden"></canvas>
@@ -336,10 +328,8 @@
             <!-- Data Safety Notice (Sidebar) -->
             <div class="p-3 text-[10px] text-earth-metal/40 leading-relaxed border-t border-oatmeal-dark bg-oatmeal/20">
                 <i data-lucide="info" class="w-3 h-3 inline mb-0.5 mr-1"></i>
-                This app stores the last 25 images locally for fast loading. Data is safely synced to Notion.
-                <br><br>
-                <span class="font-display font-medium text-earth-metal/50">Note:</span> Images shown here are compressed
-                thumbnails. For full quality, please check your Notion data source.
+                25 recent previews on this device.
+                <span class="block mt-1">Full-size photos sync to Notion.</span>
             </div>
         </div>
 
@@ -383,7 +373,7 @@
         <!-- Header -->
         <header
             class="h-14 border-b border-oatmeal-dark flex items-center justify-between px-4 md:px-5 bg-white-linen z-10 flex-shrink-0">
-            <div class="flex items-center gap-2.5 overflow-hidden">
+            <div class="flex items-center gap-2.5 min-w-0">
                 <!-- Mobile Diary Switcher Trigger -->
                 <button id="mobileDiaryToggleBtn" onclick="App.toggleMobileDiaryMenu(event)"
                     aria-label="Toggle diary list"
@@ -394,19 +384,11 @@
                 <h2 id="activeDiaryTitle"
                     class="font-display text-lg md:text-xl font-semibold text-charcoal truncate tracking-tight">Select a
                     Diary</h2>
-                <div id="syncStatus" data-state="idle" class="sync-status hidden sm:flex flex-shrink-0">
-                    <div class="sync-status-meta">
-                        <span id="syncStatusDot" class="sync-status-dot"></span>
-                        <span id="syncStatusIcon" class="sync-status-icon" aria-hidden="true">✓</span>
-                        <span id="syncStatusText">Init</span>
-                    </div>
-                    <div class="sync-status-track">
-                        <span id="syncStatusBar" class="sync-status-bar"></span>
-                    </div>
-                </div>
             </div>
 
             <div class="flex items-center gap-2">
+                <button id="syncStatus" type="button" data-state="idle" aria-label="Sync status" title="Sync status"
+                    class="sync-status status-hint hidden flex-shrink-0"></button>
                 <button onclick="SyncManager.syncCurrentDiary()" title="Refresh Sync" aria-label="Refresh sync"
                     class="border border-oatmeal-dark w-8 h-8 text-earth-metal hover:bg-oatmeal transition-colors flex items-center justify-center">
                     <i data-lucide="refresh-cw" class="w-4 h-4"></i>
@@ -831,13 +813,17 @@ export default {
     </div>
 
     <!-- 5. Entry Modal (Live Composite Layout) -->
-    <div id="entryModal" role="dialog" aria-modal="true"
+    <div id="entryModal" role="dialog" aria-modal="true" aria-label="New entry"
         class="fixed inset-0 bg-oatmeal z-50 hidden flex-col overflow-hidden">
 
         <!-- Close Button -->
         <button onclick="App.closeModal('entryModal')" aria-label="Close entry"
             class="absolute top-4 left-4 z-50 bg-charcoal text-white-linen p-2 hover:bg-dull-purple transition">
             <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+        <button id="openBatchBtn" onclick="BatchEntries.open()" aria-label="Batch import: one entry per photo"
+            class="absolute top-4 right-4 z-40 bg-white-linen text-charcoal border border-oatmeal-dark px-3 py-2 hover:bg-oatmeal transition flex items-center gap-2 text-sm font-display font-medium">
+            <i data-lucide="images" class="w-4 h-4" aria-hidden="true"></i> Batch
         </button>
 
         <div id="entryLoadingOverlay"
@@ -875,9 +861,8 @@ export default {
                 <div id="segmentStrip"
                     class="hidden bg-black/45 backdrop-blur-md px-3 py-2 rounded-full items-center gap-2 shadow-sm">
                 </div>
-                <div id="cameraConfigSummary"
-                    class="bg-white/80 text-charcoal/70 px-2 py-1 rounded text-[9px] font-display uppercase tracking-wider shadow-sm">
-                    Diary camera settings
+                <div id="cameraConfigSummary" aria-label="Camera settings"
+                    class="bg-white/80 text-charcoal/70 px-2 py-1 rounded flex items-center gap-2 shadow-sm">
                 </div>
 
                 <!-- Main Controls Row -->
@@ -1208,15 +1193,78 @@ export default {
 
                 <!-- Save Button -->
                 <div class="pt-4 flex items-center justify-between gap-3">
-                    <div id="draftStatus" class="text-[10px] font-display uppercase tracking-wider text-earth-metal/50">
-                        Draft idle
-                    </div>
+                    <button type="button" id="draftStatus" aria-label="No draft yet" title="No draft yet"
+                        class="status-hint text-earth-metal/50 p-2"><i data-lucide="file-pen-line" class="w-4 h-4"
+                            aria-hidden="true"></i></button>
                     <button onclick="App.saveEntry()" id="saveEntryBtn" disabled
                         class="bg-charcoal hover:bg-dull-purple disabled:opacity-50 disabled:cursor-not-allowed text-white-linen px-8 py-3 transition-colors flex items-center justify-center gap-2 text-sm font-display font-semibold">
                         <span>Save Entry</span>
                         <i data-lucide="arrow-right" class="w-4 h-4"></i>
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Separate-photo import. Files remain local until the user saves. -->
+    <div id="batchModal" role="dialog" aria-modal="true" aria-labelledby="batchTitle"
+        class="fixed inset-0 bg-charcoal/40 hidden items-center justify-center z-[70] p-3 sm:p-6"
+        onclick="if(event.target===this) App.closeModal('batchModal')">
+        <section
+            class="bg-white-linen border border-oatmeal-dark w-full max-w-2xl max-h-[90dvh] flex flex-col shadow-xl">
+            <header class="p-4 sm:p-5 border-b border-oatmeal-dark flex items-start justify-between gap-3">
+                <div>
+                    <h3 id="batchTitle"
+                        class="font-display text-lg font-semibold text-charcoal flex items-center gap-2">
+                        <i data-lucide="images" class="w-5 h-5 text-dull-purple" aria-hidden="true"></i> Add photos
+                    </h3>
+                    <p class="text-xs text-earth-metal/70 mt-1">One photo, one entry. Dates come from your photos.</p>
+                </div>
+                <button id="batchCloseBtn" onclick="App.closeModal('batchModal')" aria-label="Close batch import"
+                    class="p-2 hover:bg-oatmeal text-earth-metal disabled:opacity-30"><i data-lucide="x" class="w-5 h-5"
+                        aria-hidden="true"></i></button>
+            </header>
+            <div class="p-4 sm:p-5 overflow-y-auto flex-1 min-h-0">
+                <button id="batchChooseBtn" onclick="document.getElementById('batchFileInput').click()"
+                    class="w-full border border-dashed border-dull-purple/60 bg-oatmeal/40 hover:bg-oatmeal p-5 flex items-center justify-center gap-2 font-display text-sm text-charcoal disabled:opacity-50">
+                    <i data-lucide="image-plus" class="w-5 h-5 text-dull-purple" aria-hidden="true"></i> Choose photos
+                </button>
+                <input type="file" id="batchFileInput" accept="image/*" multiple class="hidden"
+                    onchange="BatchEntries.select(event)">
+                <div id="batchPhotoList" class="space-y-3 mt-4"></div>
+                <p id="batchEmptyHint" class="text-xs text-earth-metal/60 text-center mt-4">Choose several from your
+                    gallery. Review dates before saving.</p>
+            </div>
+            <footer class="p-4 sm:p-5 border-t border-oatmeal-dark flex items-center justify-between gap-3">
+                <span id="batchProgress" role="status" class="text-xs text-earth-metal/70 font-display">No photos
+                    selected</span>
+                <div class="flex items-center gap-2 shrink-0">
+                    <button id="batchStopBtn" onclick="BatchEntries.stop()"
+                        class="hidden p-2 text-sm font-display hover:bg-oatmeal disabled:opacity-40"
+                        title="Stop after the current photo">Stop</button>
+                    <button id="batchSaveBtn" onclick="BatchEntries.save()" disabled
+                        class="bg-charcoal hover:bg-dull-purple text-white-linen px-4 py-3 text-sm font-display font-medium flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
+                        <i data-lucide="plus" class="w-4 h-4" aria-hidden="true"></i><span id="batchSaveLabel">Add
+                            entries</span>
+                    </button>
+                </div>
+            </footer>
+        </section>
+    </div>
+
+    <div id="confirmationModal" role="alertdialog" aria-modal="true" aria-labelledby="confirmationTitle"
+        aria-describedby="confirmationMessage"
+        class="fixed inset-0 bg-charcoal/40 hidden items-center justify-center z-[90] p-4"
+        onclick="if(event.target===this) App.resolveConfirmation(false)">
+        <div class="bg-white-linen border border-oatmeal-dark w-full max-w-sm p-6 shadow-xl">
+            <i data-lucide="circle-help" class="w-6 h-6 text-dull-purple mb-3" aria-hidden="true"></i>
+            <h3 id="confirmationTitle" class="font-display text-lg font-semibold text-charcoal"></h3>
+            <p id="confirmationMessage" class="text-sm text-earth-metal/70 mt-2 mb-6"></p>
+            <div class="flex justify-end gap-2">
+                <button id="confirmationCancel" onclick="App.resolveConfirmation(false)"
+                    class="px-4 py-2 hover:bg-oatmeal text-sm font-display">Keep editing</button>
+                <button id="confirmationAccept" onclick="App.resolveConfirmation(true)"
+                    class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-display">Discard</button>
             </div>
         </div>
     </div>
@@ -1267,6 +1315,7 @@ export default {
         };
 
         const UTILS = {
+            escapeHTML: (value) => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char])),
             id: () => Math.random().toString(36).substr(2, 9),
             now: () => new Date().toISOString(),
             hash: (value) => {
@@ -1391,7 +1440,7 @@ export default {
                     blob = await UTILS.canvasToBlob(canvas, minQuality);
                     if (canvas.width === 1 && canvas.height === 1) break;
                 }
-                return cancelled() ? null : UTILS.toBase64(blob);
+                return cancelled() ? null : options.returnBlob ? blob : UTILS.toBase64(blob);
             }
         };
 
@@ -1430,7 +1479,7 @@ export default {
                 const tx = db.transaction(ImageStore.storeName, 'readwrite');
                 const store = tx.objectStore(ImageStore.storeName);
                 const req = store.put(blob, key);
-                req.onsuccess = () => resolve(true);
+                tx.oncomplete = () => resolve(true);
                 req.onerror = () => {
                     const err = req.error;
                     if (err && (err.name === 'QuotaExceededError' || err.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
@@ -1694,10 +1743,11 @@ export default {
                 if (removed) Storage.cleanupEntryAssets(removed);
                 return removed;
             },
-            saveEntry: (diaryId, entry) => {
+            saveEntry: (diaryId, entry, { queue = false } = {}) => {
                 const data = Storage.getData();
                 const diary = data.find(d => d.id === diaryId);
                 if (diary) {
+                    if (queue) diary.pendingEntries = [...new Set([...(diary.pendingEntries || []), entry.id])];
                     diary.entries.unshift(entry);
                     const unique = [];
                     const map = new Map();
@@ -1718,7 +1768,9 @@ export default {
                         if (!diary.tags.includes(t)) diary.tags.push(t);
                     });
                     Storage.setData(data);
+                    return true;
                 }
+                return false;
             },
             updateEntrySyncStatus: (diaryId, entryId, status, notionId = null) => {
                 const data = Storage.getData();
@@ -1927,8 +1979,6 @@ export default {
 
         const SyncManager = {
             statusEl: null,
-            statusTextEl: null,
-            statusBarEl: null,
             hideTimer: null,
             tagSyncQueues: new Map(),
             tagSyncTimers: new Map(),
@@ -1937,8 +1987,6 @@ export default {
             isSyncing: false,
             init: () => {
                 SyncManager.statusEl = document.getElementById('syncStatus');
-                SyncManager.statusTextEl = document.getElementById('syncStatusText');
-                SyncManager.statusBarEl = document.getElementById('syncStatusBar');
                 window.addEventListener('online', SyncManager.syncAllDiaries);
                 SyncManager.syncAllDiaries();
             },
@@ -1951,27 +1999,17 @@ export default {
                     SyncManager.hideTimer = null;
                 }
 
-                const textEl = SyncManager.statusTextEl;
-                const barEl = SyncManager.statusBarEl;
-
-                const setState = (state, label, progress, color) => {
-                    statusEl.setAttribute('data-state', state);
-                    if (textEl) textEl.innerText = label;
-                    if (barEl) {
-                        barEl.style.width = `${progress}%`;
-                        if (color) barEl.style.background = color;
-                    }
-                };
-
-                if (status === 'syncing') {
-                    setState('syncing', 'Syncing', 72, '#857593');
-                } else if (status === 'offline') {
-                    setState('offline', 'Offline', 24, '#C24D4D');
-                } else if (status === 'synced') {
-                    setState('synced', 'Synced', 100, '#857593');
-                } else {
-                    setState('error', 'Error', 100, '#C24D4D');
-                }
+                const meta = {
+                    syncing: ['loader-circle', 'Syncing with Notion'],
+                    offline: ['cloud-off', 'Offline. Changes stay on this device.'],
+                    synced: ['cloud-check', 'Synced to Notion'],
+                    error: ['cloud-alert', 'Sync failed. Tap refresh to retry.']
+                }[status] || ['cloud-alert', 'Sync failed. Tap refresh to retry.'];
+                statusEl.dataset.state = status;
+                statusEl.setAttribute('aria-label', meta[1]);
+                statusEl.title = meta[1];
+                statusEl.innerHTML = `<i data-lucide="${meta[0]}" class="w-4 h-4 ${status === 'syncing' ? 'animate-spin' : ''}" aria-hidden="true"></i>`;
+                lucide.createIcons();
             },
             withSyncLock: async (fn) => {
                 if (SyncManager.isSyncing) return false;
@@ -2454,6 +2492,7 @@ export default {
                 isEntryModalOpen: false,
                 drawLoopHandle: null,
                 entryLoading: false,
+                savingEntry: false,
                 viewWorld: { width: 0, height: 0 },
                 draftSaveTimer: null,
                 entrySession: 0,
@@ -2469,7 +2508,9 @@ export default {
                 segmentEditReturn: null,
                 editPointers: new Map(),
                 editPrevPinchDist: 0,
-                editPrevPinchCenter: null
+                editPrevPinchCenter: null,
+                modalStack: [],
+                confirmation: null
             },
             getDiaryCameraConfig: (diary) => {
                 const s = Storage.getSettings();
@@ -2519,18 +2560,18 @@ export default {
             getEntrySyncMeta: (entry) => {
                 const status = entry.syncStatus || (entry.synced ? 'uploaded' : 'local');
                 if (status === 'uploaded' || entry.synced) {
-                    return { label: 'Uploaded to Notion', color: 'bg-dull-purple text-white-linen', dot: 'bg-dull-purple' };
+                    return { label: 'Synced to Notion', icon: 'cloud-check', color: 'text-dull-purple' };
                 }
                 if (status === 'failed') {
-                    return { label: 'Upload failed', color: 'bg-red-100 text-red-700', dot: 'bg-red-500', retry: true };
+                    return { label: 'Upload failed. Tap to retry.', icon: 'cloud-alert', color: 'text-red-700', retry: true };
                 }
                 if (status === 'syncing') {
-                    return { label: 'Uploading', color: 'bg-dull-purple/10 text-dull-purple', dot: 'bg-dull-purple' };
+                    return { label: 'Uploading', icon: 'loader-circle', color: 'text-dull-purple', spinning: true };
                 }
                 if (status === 'preparing' || entry.uploadPending) {
-                    return { label: 'Preparing full-res', color: 'bg-amber-100 text-amber-800', dot: 'bg-amber-500' };
+                    return { label: 'Preparing photo', icon: 'loader-circle', color: 'text-earth-metal', spinning: true };
                 }
-                return { label: 'Saved locally', color: 'bg-oatmeal text-earth-metal', dot: 'bg-muted-pink' };
+                return { label: 'On this device. Waiting to sync.', icon: 'cloud-upload', color: 'text-earth-metal/60' };
             },
             getUploadCapBytes: () => {
                 const s = Storage.getSettings();
@@ -2673,6 +2714,7 @@ export default {
             },
             setEntryLoading: (isLoading, message = "Processing...") => {
                 App.state.entryLoading = isLoading;
+                document.getElementById('openBatchBtn').disabled = isLoading;
                 const overlay = document.getElementById('entryLoadingOverlay');
                 const text = document.getElementById('entryLoadingText');
                 if (text) text.innerText = message;
@@ -2819,8 +2861,7 @@ export default {
             scheduleEntryDraftSave: () => {
                 if (!App.state.isEntryModalOpen || App.state.restoringDraft) return;
                 App.state.draftRevision++;
-                const status = document.getElementById('draftStatus');
-                if (status && App.state.isEntryModalOpen) status.innerText = 'Saving draft...';
+                App.updateDraftStatus('Saving draft');
                 if (App.state.draftSaveTimer) clearTimeout(App.state.draftSaveTimer);
                 App.state.draftSaveTimer = setTimeout(() => {
                     App.persistEntryDraftNow();
@@ -2844,20 +2885,20 @@ export default {
                         if (draftSeg.sourceKey && assets === App.state.draftAssets) assets.add(draftSeg.sourceKey);
                         App.state.draftSources.set(img, Promise.resolve({ sourceKey: draftSeg.sourceKey, sourceDataURL: draftSeg.sourceDataURL || null }));
                         resolve({
-                        source: img,
-                        origin: draftSeg.origin || 'camera',
-                        createdAt: draftSeg.createdAt || null,
-                        sourceDataURL: draftSeg.sourceDataURL || null,
-                        isManipulatable: true,
-                        x: draftSeg.x || 0,
-                        y: draftSeg.y || 0,
-                        scale: draftSeg.scale || 1,
-                        baseScale: draftSeg.baseScale || 1,
-                        rotation: draftSeg.rotation || 0,
-                        flipH: !!draftSeg.flipH,
-                        flipV: !!draftSeg.flipV,
-                        width: draftSeg.width || img.width,
-                        height: draftSeg.height || img.height
+                            source: img,
+                            origin: draftSeg.origin || 'camera',
+                            createdAt: draftSeg.createdAt || null,
+                            sourceDataURL: draftSeg.sourceDataURL || null,
+                            isManipulatable: true,
+                            x: draftSeg.x || 0,
+                            y: draftSeg.y || 0,
+                            scale: draftSeg.scale || 1,
+                            baseScale: draftSeg.baseScale || 1,
+                            rotation: draftSeg.rotation || 0,
+                            flipH: !!draftSeg.flipH,
+                            flipV: !!draftSeg.flipV,
+                            width: draftSeg.width || img.width,
+                            height: draftSeg.height || img.height
                         });
                     };
                     img.onerror = () => {
@@ -2899,7 +2940,12 @@ export default {
             },
             updateDraftStatus: (label = 'Draft saved') => {
                 const status = document.getElementById('draftStatus');
-                if (status && App.state.isEntryModalOpen) status.innerText = label;
+                if (!status || !App.state.isEntryModalOpen) return;
+                const failed = label === 'Draft could not be saved';
+                status.setAttribute('aria-label', label);
+                status.title = label;
+                status.innerHTML = `<i data-lucide="${failed ? 'file-warning' : label === 'Saving draft' ? 'loader-circle' : label === 'Draft saved' ? 'file-check-2' : 'file-pen-line'}" class="w-4 h-4 ${failed ? 'text-red-700' : label === 'Saving draft' ? 'animate-spin' : ''}" aria-hidden="true"></i>`;
+                lucide.createIcons();
             },
             isCollageComplete: () => {
                 const layout = App.collageConfigs[App.state.collageMode] || [];
@@ -2937,10 +2983,14 @@ export default {
             updateCameraConfigSummary: () => {
                 const el = document.getElementById('cameraConfigSummary');
                 if (!el) return;
-                const camera = App.state.facingMode === 'user' ? 'Front' : 'Back';
-                const mirror = App.state.facingMode === 'user' && App.state.mirrorVideo ? 'Mirror on' : 'Mirror off';
-                const ghost = App.state.ghostMode ? `Ghost ${Math.round(App.state.ghostOpacity * 100)}%` : 'Ghost off';
-                el.innerText = `${camera} / ${App.state.orientation} / ${document.getElementById('gridBtn')?.innerText || '1x'} / ${mirror} / ${ghost}`;
+                const settings = [
+                    ['switch-camera', App.state.facingMode === 'user' ? 'Front camera' : 'Back camera', true],
+                    [App.state.orientation === 'portrait' ? 'rectangle-vertical' : 'rectangle-horizontal', App.state.orientation, true],
+                    ['flip-horizontal', App.state.mirrorVideo ? 'Mirror on' : 'Mirror off', App.state.mirrorVideo],
+                    ['ghost', App.state.ghostMode ? `Ghost ${Math.round(App.state.ghostOpacity * 100)}%` : 'Ghost off', App.state.ghostMode]
+                ];
+                el.innerHTML = settings.map(([icon, label, active]) => `<button type="button" aria-label="${label}" title="${label}" class="status-hint p-1 ${active ? '' : 'opacity-40'}"><i data-lucide="${icon}" class="w-3 h-3" aria-hidden="true"></i></button>`).join('');
+                lucide.createIcons();
             },
             selectSegment: (idx) => {
                 const layout = App.collageConfigs[App.state.collageMode] || [];
@@ -3107,16 +3157,21 @@ export default {
                 }
 
                 document.addEventListener('keydown', (e) => {
+                    const top = App.state.modalStack.at(-1);
                     if (e.key === 'Escape') {
-                        const modals = ['settingsModal', 'newDiaryModal', 'workerHelpModal', 'deleteModal', 'entryModal'];
-                        for (const id of modals) {
-                            const el = document.getElementById(id);
-                            if (el && !el.classList.contains('hidden')) {
-                                const closed = App.closeModal(id);
-                                if (!closed) return;
-                            }
+                        e.preventDefault();
+                        if (top) App.closeModal(top.id);
+                        else document.getElementById('mobileDiaryMenu').classList.add('hidden');
+                    } else if (e.key === 'Tab' && top) {
+                        const modal = document.getElementById(top.id);
+                        const focusable = App.modalFocusTargets(modal);
+                        const first = focusable[0] || modal;
+                        const last = focusable.at(-1) || modal;
+                        if (e.shiftKey && (document.activeElement === first || !modal.contains(document.activeElement))) {
+                            e.preventDefault(); last.focus();
+                        } else if (!e.shiftKey && (document.activeElement === last || !modal.contains(document.activeElement))) {
+                            e.preventDefault(); first.focus();
                         }
-                        document.getElementById('mobileDiaryMenu').classList.add('hidden');
                     }
                 });
 
@@ -3146,7 +3201,7 @@ export default {
                     if (document.hidden) {
                         App.persistEntryDraftNow();
                         App.stopDrawLoop();
-                    } else if (App.state.isEntryModalOpen && !document.getElementById('cameraSection').classList.contains('hidden')) {
+                    } else if (App.state.isEntryModalOpen && !BatchEntries.session && !document.getElementById('cameraSection').classList.contains('hidden')) {
                         const streamStopped = App.state.stream
                             ? App.state.stream.getTracks().every(t => t.readyState === 'ended')
                             : true;
@@ -3350,8 +3405,8 @@ export default {
                 const el = document.createElement('div');
                 let bg = type === 'success' ? 'bg-white-linen border-dull-purple' : (type === 'error' ? 'bg-white-linen border-red-600' : 'bg-white-linen border-charcoal');
                 let icon = type === 'success' ? 'check-circle' : (type === 'error' ? 'alert-circle' : 'info');
-                el.className = `toast-enter pointer-events-auto p-4 flex gap-3 text-sm ${bg} border-l-2 transition-all font-display`;
-                el.innerHTML = `<i data-lucide="${icon}" class="w-5 h-5 mt-0.5"></i><div class="flex-1">${message}</div>`;
+                el.className = `toast-enter pointer-events-auto p-3 flex items-start gap-2 text-sm ${bg} border-l-2 transition-all font-display shadow-sm`;
+                el.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true"></i><div class="flex-1">${UTILS.escapeHTML(message)}</div>`;
                 container.appendChild(el);
                 lucide.createIcons();
                 let timeout = type === 'error' ? 3000 : 1500;
@@ -3437,7 +3492,9 @@ export default {
                     return;
                 }
 
-                const displayEntries = visibleEntries.slice(0, LOCAL_SYNCED_ENTRY_LIMIT);
+                // Keep every pending import visible, including older photos in large batches.
+                const displayEntries = [...visibleEntries.filter(entry => !entry.synced), ...visibleEntries.filter(entry => entry.synced).slice(0, LOCAL_SYNCED_ENTRY_LIMIT)]
+                    .sort((a, b) => new Date(b.date) - new Date(a.date));
                 const imageMap = await App.loadEntryImages(displayEntries);
 
                 // Clear gallery after async work to prevent race condition duplicates
@@ -3456,18 +3513,16 @@ export default {
                         ? `<img src="${imgSrc}" class="w-full aspect-square object-cover bg-oatmeal" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNjY2MiIHN0cm9rZS13aWR0aD0iMiI+PHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgcnk9IjIiPjwvcmVjdD48Y2lyY2xlIGN4PSI4LjUiIGN5PSI4LjUiIHI9IjEuNSI+PC9jaXJjbGU+PHBvbHlsaW5lIHBvaW50cz0iMjEgMTUgMTYgMTAgNSAyMSI+PC9wb2x5bGluZT48L3N2Zz4n">`
                         : `<div class="w-full aspect-square bg-oatmeal flex items-center justify-center text-earth-metal/30"><i data-lucide="image-off"></i></div>`;
 
-                    const dispTitle = entry.title || "Untitled";
+                    const dispTitle = UTILS.escapeHTML(entry.title || "Untitled");
                     const syncMeta = App.getEntrySyncMeta(entry);
-                    const retryBtn = syncMeta.retry ? `
-                        <button onclick="event.stopPropagation(); SyncManager.retryEntry('${diary.id}', '${entry.id}')"
-                            class="mt-1 text-[9px] font-display uppercase tracking-wider text-red-700 hover:text-charcoal">
-                            Retry upload
-                        </button>
-                    ` : '';
+                    const statusControl = `<button type="button" aria-label="${syncMeta.label}" title="${syncMeta.label}"
+                        ${syncMeta.retry ? `onclick="SyncManager.retryEntry('${diary.id}', '${entry.id}')"` : ''}
+                        class="status-hint shrink-0 p-1.5 ${syncMeta.color}">
+                        <i data-lucide="${syncMeta.icon}" class="w-4 h-4 ${syncMeta.spinning ? 'animate-spin' : ''}" aria-hidden="true"></i></button>`;
 
                     const deleteBtn = `
                         <div class="absolute top-1 right-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10">
-                            <button onclick="event.stopPropagation(); App.confirmDelete('${diary.id}', '${entry.id}')" class="bg-white-linen hover:bg-muted-pink hover:text-white-linen text-muted-pink-dim p-1.5 transition">
+                            <button onclick="event.stopPropagation(); App.confirmDelete('${diary.id}', '${entry.id}')" aria-label="Delete entry" title="Delete entry" class="bg-white-linen hover:bg-muted-pink hover:text-white-linen text-muted-pink-dim p-2 transition">
                                 <i data-lucide="trash-2" class="w-3 h-3"></i>
                             </button>
                         </div>
@@ -3479,22 +3534,16 @@ export default {
                         <div class="p-2.5 flex flex-col gap-1">
                             <div class="flex justify-between items-center">
                                 <span class="text-[9px] font-display text-earth-metal/50 truncate uppercase tracking-wide">${UTILS.formatDate(entry.date)}</span>
-                                <div class="w-1.5 h-1.5 ${syncMeta.dot}" title="${syncMeta.label}"></div>
+                                ${statusControl}
                             </div>
                             <h4 class="font-display font-semibold text-xs text-charcoal truncate leading-tight">${dispTitle}</h4>
-                            <div class="inline-flex w-fit px-1.5 py-0.5 text-[8px] font-display uppercase tracking-wider ${syncMeta.color}">
-                                ${syncMeta.label}
-                            </div>
-                            ${retryBtn}
                         </div>
                     `;
                     grid.appendChild(card);
                 });
                 gallery.appendChild(grid);
 
-                const footerMsg = visibleEntries.length >= LOCAL_SYNCED_ENTRY_LIMIT
-                    ? "Showing last 25 entries. (Thumbnails only - check Notion for full quality)"
-                    : "End of entries. (Thumbnails only - check Notion for full quality)";
+                const footerMsg = `${displayEntries.length} ${displayEntries.length === 1 ? 'entry' : 'entries'}`;
                 let footer = document.createElement('div');
                 footer.id = 'galleryFooter';
                 footer.className = "text-center text-[10px] text-earth-metal/40 py-8 font-display uppercase tracking-wide";
@@ -4209,9 +4258,8 @@ export default {
                 App.state.diaries = Storage.getData();
                 App.renderDiaryView();
                 App.renderSidebar();
-                App.showToast("Deleted locally", "success");
+                App.showToast("Entry deleted", "success");
                 if (notionId) {
-                    App.showToast("Delete queued for Notion sync.", "info");
                     SyncManager.syncCurrentDiary();
                 }
             },
@@ -4232,6 +4280,7 @@ export default {
                 const diaryTitle = diary?.title || "Diary";
 
                 if (!App.state.capturedImage) return App.showToast('An image is required.', 'error');
+                App.state.savingEntry = true;
                 App.setEntryLoading(true, "Saving entry...");
 
                 let photoToSave = App.state.capturedImage;
@@ -4303,15 +4352,14 @@ export default {
 
                     App.closeModal('entryModal', { force: true });
                     App.renderDiaryView();
-                    App.showToast("Saved locally", 'success');
+                    App.showToast("Entry saved", 'success');
                     if (navigator.onLine && !uploadPending) {
                         SyncManager.syncCurrentDiary();
-                    } else if (uploadPending) {
-                        App.showToast("Saved preview. Full-res upload will queue when ready.", "info");
-                    } else {
+                    } else if (!uploadPending) {
                         SyncManager.updateUI('offline');
                     }
                 } finally {
+                    App.state.savingEntry = false;
                     App.setEntryLoading(false);
                 }
             },
@@ -5321,12 +5369,43 @@ export default {
             },
             saveSettings: () => {
                 App.closeModal('settingsModal');
-                App.showToast("Settings Closed", "success");
                 App.renderWelcomeState();
             },
+            modalFocusTargets: (modal) => [...modal.querySelectorAll('button, input, select, textarea, summary, a[href], [tabindex="0"]')]
+                .filter(el => !el.disabled && !el.closest('[inert]') && el.getClientRects().length),
+            updateModalLayers: () => {
+                const top = App.state.modalStack.at(-1)?.id;
+                document.querySelectorAll('body > main, body > aside, body > [role="dialog"], body > [role="alertdialog"]').forEach(el => {
+                    el.inert = !!top && el.id !== top;
+                });
+            },
+            requestConfirmation: ({ title, message, accept = 'Discard', cancel = 'Keep editing', onConfirm }) => {
+                if (App.state.confirmation) return;
+                App.state.confirmation = onConfirm;
+                document.getElementById('confirmationTitle').textContent = title;
+                document.getElementById('confirmationMessage').textContent = message;
+                document.getElementById('confirmationAccept').textContent = accept;
+                document.getElementById('confirmationCancel').textContent = cancel;
+                App.openModal('confirmationModal');
+            },
+            resolveConfirmation: (accepted) => {
+                const action = App.state.confirmation;
+                App.state.confirmation = null;
+                App.closeModal('confirmationModal', { force: true });
+                if (accepted) action?.();
+            },
             openModal: (id) => {
+                const modal = document.getElementById(id);
+                if (!App.state.modalStack.some(item => item.id === id)) App.state.modalStack.push({ id, returnFocus: document.activeElement });
                 document.getElementById(id).classList.remove('hidden', 'flex');
                 document.getElementById(id).classList.add('flex');
+                if (!modal.hasAttribute('aria-label') && !modal.hasAttribute('aria-labelledby')) {
+                    const heading = modal.querySelector('h3');
+                    if (heading) { heading.id ||= `${id}Title`; modal.setAttribute('aria-labelledby', heading.id); }
+                }
+                App.updateModalLayers();
+                modal.tabIndex = -1;
+                (App.modalFocusTargets(modal)[0] || modal).focus();
                 if (id === 'settingsModal') {
                     App.populateSettingsInputs();
                     App.renderSettingsStatus();
@@ -5343,10 +5422,26 @@ export default {
             },
             closeModal: (id, options = {}) => {
                 const { force = false } = options;
+                if (id === 'confirmationModal' && !force) {
+                    App.resolveConfirmation(false);
+                    return true;
+                }
+                if (id === 'batchModal') {
+                    if (BatchEntries.session?.saving) {
+                        App.showToast('Use Stop to pause this import.', 'info');
+                        return false;
+                    }
+                    if (!force && BatchEntries.session?.items.length) {
+                        App.requestConfirmation({ title: 'Discard these photos?', message: 'These photos have not been added to your diary.', onConfirm: () => App.closeModal(id, { force: true }) });
+                        return false;
+                    }
+                    BatchEntries.close();
+                }
                 if (id === 'entryModal') {
+                    if (!force && App.state.savingEntry) return false;
                     if (!force && App.hasUnsavedEntry()) {
-                        const ok = confirm("Discard this entry? Your captured photo and notes will be lost.");
-                        if (!ok) return false;
+                        App.requestConfirmation({ title: 'Discard this entry?', message: 'Your photo, notes and unsaved changes will be removed.', onConfirm: () => App.closeModal(id, { force: true }) });
+                        return false;
                     }
                     App.cancelDraftSave();
                     App.discardDraftAssets();
@@ -5373,6 +5468,17 @@ export default {
                 }
                 document.getElementById(id).classList.add('hidden');
                 document.getElementById(id).classList.remove('flex');
+                const closed = App.state.modalStack.find(item => item.id === id);
+                App.state.modalStack = App.state.modalStack.filter(item => item.id !== id);
+                App.updateModalLayers();
+                if (closed?.returnFocus?.isConnected && !closed.returnFocus.closest('[inert]') && closed.returnFocus.getClientRects().length) closed.returnFocus.focus();
+                else {
+                    const top = App.state.modalStack.at(-1);
+                    if (top) {
+                        const modal = document.getElementById(top.id);
+                        (App.modalFocusTargets(modal)[0] || modal).focus();
+                    }
+                }
                 return true;
             }
         };
@@ -5382,6 +5488,7 @@ export default {
             registerServiceWorker();
         });
     </script>
+    <script src="./batch-entries.js"></script>
 </body>
 
 </html>
