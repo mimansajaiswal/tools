@@ -116,13 +116,19 @@ function stopRecordingSession() {
 
 function beginCaptureLoop() {
   const interval = window.innerWidth < 900 ? 1500 : 1000;
+  let snapshotInFlight = false;
   captureInterval = setInterval(() => {
-    if (!state.recording) return;
-    captureSnapshot().then((snapshot) => {
-      if (!snapshot) return;
-      state.recordingSession.snapshots.push(snapshot);
-      if (state.showMarkers) showViewportMarkers(snapshot);
-    });
+    if (!state.recording || !state.recordingSession || snapshotInFlight) return;
+    snapshotInFlight = true;
+    captureSnapshot()
+      .then((snapshot) => {
+        if (!snapshot || !state.recordingSession) return;
+        state.recordingSession.snapshots.push(snapshot);
+        if (state.showMarkers) showViewportMarkers(snapshot);
+      })
+      .finally(() => {
+        snapshotInFlight = false;
+      });
   }, interval);
 }
 
