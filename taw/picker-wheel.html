@@ -1,1253 +1,537 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Picker Wheel</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Added js-yaml for YAML processing -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class'
-        }
-    </script>
-    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600;700&display=swap" rel="stylesheet">
-    <style>
-        /* Theme Variables */
-        :root {
-            --bg-color: #FEFAF8;
-            /* Requested Light Background */
-            --text-color: #4A5568;
-            --card-bg: #FFFFFF;
-            --border-color: #E2E8F0;
-
-            /* Requested Accent: #AB6153 (Terracotta) */
-            --accent-color: #AB6153;
-            /* Darker variant for hover in light mode */
-            --accent-hover: #8F4637;
-
-            --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025);
-            --input-bg: #F7FAFC;
-        }
-
-        /* Dark Mode Overrides (Class-based) */
-        :root.dark {
-            --bg-color: #1B1917;
-            /* Warm Dark Stone */
-            --text-color: #E2E8F0;
-            --card-bg: #2D3748;
-            --border-color: #4A5568;
-
-            /* Lighter variant of #AB6153 for contrast on dark backgrounds */
-            --accent-color: #D99487;
-            /* Base color for hover in dark mode */
-            --accent-hover: #AB6153;
-
-            --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
-            --input-bg: #171923;
-        }
-
-        /* Typography Updates */
-        body {
-            font-family: 'Stack Sans Text', 'Quicksand', sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            transition: background-color 0.3s ease, color 0.3s ease;
-        }
-
-        /* Updated Title Font */
-        h1,
-        h2,
-        h3,
-        .headline-font,
-        .title-font {
-            font-family: 'Stack Sans Notch', 'Stack Sans Text', 'Quicksand', sans-serif;
-        }
-
-        button,
-        .btn-font {
-            font-family: 'Stack Sans Notch', 'Stack Sans Text', 'Quicksand', sans-serif;
-        }
-
-        .card {
-            background-color: var(--card-bg);
-            border: 1px solid var(--border-color);
-            box-shadow: var(--shadow);
-            transition: transform 0.2s ease, background-color 0.3s ease;
-        }
-
-        .btn-primary {
-            background-color: var(--accent-color);
-            color: #FFFFFF;
-            /* White text usually looks better on dark terracotta */
-            font-weight: 700;
-            transition: all 0.2s ease;
-        }
-
-        .btn-primary:hover {
-            background-color: var(--accent-hover);
-            transform: translateY(-1px);
-        }
-
-        .btn-secondary {
-            background-color: var(--input-bg);
-            border: 1px solid var(--border-color);
-            color: var(--text-color);
-            transition: all 0.2s ease;
-        }
-
-        .btn-secondary:hover {
-            background-color: var(--border-color);
-        }
-
-        input,
-        textarea {
-            background-color: var(--input-bg);
-            border: 1px solid var(--border-color);
-            color: var(--text-color);
-        }
-
-        input:focus,
-        textarea:focus {
-            outline: none;
-            border-color: var(--accent-color);
-            ring: 2px solid var(--accent-color);
-        }
-
-        /* Wheel Canvas Container */
-        .wheel-container {
-            position: relative;
-            width: 100%;
-            max-width: 500px;
-            aspect-ratio: 1 / 1;
-            margin: 0 auto;
-        }
-
-        canvas {
-            width: 100%;
-            height: 100%;
-            border-radius: 50%;
-            box-shadow: var(--shadow);
-            transition: transform 0.1s linear;
-        }
-
-        /* Updated Spin Button - Translucent */
-        #spinBtn {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 5rem;
-            height: 5rem;
-            border-radius: 9999px;
-            /* Translucent background */
-            background-color: rgba(255, 255, 255, 0.6);
-            backdrop-filter: blur(8px);
-            border: 4px solid var(--accent-color);
-            box-shadow: var(--shadow);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-            font-size: 1.125rem;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            color: var(--text-color);
-            z-index: 20;
-            transition: all 0.3s ease;
-        }
-
-        /* Dark mode override for spin button bg */
-        .dark #spinBtn {
-            background-color: rgba(31, 41, 55, 0.6);
-        }
-
-        #spinBtn:hover {
-            background-color: var(--card-bg);
-            /* Opaque on hover */
-            transform: translate(-50%, -50%) scale(1.05);
-            opacity: 1;
-            box-shadow: 0 0 20px var(--accent-color);
-            color: var(--accent-color);
-        }
-
-        #spinBtn:active {
-            transform: translate(-50%, -50%) scale(0.95);
-        }
-
-        /* The Needle SVG Container */
-        .needle-container {
-            position: absolute;
-            top: -25px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 50px;
-            height: 60px;
-            z-index: 30;
-            filter: drop-shadow(0 4px 3px rgba(0, 0, 0, 0.3));
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background-color: var(--border-color);
-            border-radius: 4px;
-        }
-
-        /* Animations */
-        @keyframes pop-in {
-            0% {
-                transform: scale(0.8);
-                opacity: 0;
-            }
-
-            100% {
-                transform: scale(1);
-                opacity: 1;
-            }
-        }
-
-        .modal-content {
-            animation: pop-in 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-        }
-
-        /* Toast Notification */
-        #toast {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%) translateY(100px);
-            background-color: var(--text-color);
-            color: var(--bg-color);
-            padding: 10px 20px;
-            border-radius: 20px;
-            font-weight: 600;
-            opacity: 0;
-            transition: all 0.3s ease;
-            z-index: 100;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-        }
-
-        #toast.show {
-            transform: translateX(-50%) translateY(0);
-            opacity: 1;
-        }
-
-        /* SVG Icon styling */
-        .icon {
-            width: 1.2em;
-            height: 1.2em;
-            stroke-width: 2;
-            fill: none;
-            stroke: currentColor;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="referrer" content="no-referrer" />
+  <title>Picker Wheel</title>
+  <link rel="icon"
+    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23AB6153'/%3E%3Cpath d='M16 2v28M2 16h28M6 6l20 20M6 26 26 6' stroke='white'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="picker-wheel.css?v=43" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+  <script src="https://unpkg.com/lucide@0.561.0/dist/umd/lucide.min.js"></script>
 </head>
 
-<body class="h-screen w-full overflow-hidden flex flex-col">
-
-    <!-- Header -->
-    <header class="p-4 flex justify-between items-center max-w-7xl mx-auto w-full z-10">
-        <!-- Font Updated to Stack Sans Notch via CSS class -->
-        <h1 class="text-2xl font-bold tracking-tight flex items-center gap-3 title-font">
-            <!-- Open Book SVG Icon -->
-            <svg class="w-9 h-9 text-[var(--accent-color)]" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
-                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+<body>
+  <header class="app-header">
+    <h1>
+      <svg class="brand-mark" viewBox="0 0 40 40" aria-hidden="true">
+        <circle cx="20" cy="20" r="17" />
+        <path d="M20 3v34M3 20h34M8 8l24 24M8 32 32 8" />
+      </svg>Picker Wheel
+    </h1>
+    <nav aria-label="Wheel tools">
+      <button class="text-button" onclick="app.openLibrary()">
+        My wheels</button><button class="text-button" onclick="app.openDialog('settingsDialog')">
+        Settings
+      </button>
+    </nav>
+  </header>
+  <div class="workspace">
+    <div class="wheel-toolbar" id="wheelToolbar">
+      <div class="wheel-identity">
+        <input id="wheelName" aria-label="Wheel name" maxlength="100" value="Reading list"
+          oninput="app.renameDraft(this.value)" /><span id="saveStatus" role="status">Saved on this device</span>
+      </div>
+      <div class="workspace-actions">
+        <button class="btn-secondary" onclick="app.newWheel()">
+          New wheel</button><button class="btn-primary" aria-label="Save wheel" onclick="app.saveWheel()">
+          Save</button><button class="btn-secondary" onclick="app.copyShareLink()">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="18" cy="5" r="3" />
+            <circle cx="6" cy="12" r="3" />
+            <circle cx="18" cy="19" r="3" />
+            <path d="m9 10 6-4M9 14l6 4" />
+          </svg>Share
+        </button>
+      </div>
+    </div>
+    <main>
+      <section class="wheel-stage" aria-label="Spin the wheel">
+        <div class="wheel-container">
+          <div id="needle" class="needle-container" aria-hidden="true">
+            <svg viewBox="0 0 40 44">
+              <path id="needleTip" d="M4 2H36L20 40Z" fill="#AB6153" />
             </svg>
-            <span>Rou-Lit Reviews</span>
-        </h1>
-        <div class="flex items-center gap-3">
-            <!-- Theme Switcher -->
-            <button id="themeBtn" onclick="app.cycleTheme()"
-                class="p-2 hover:bg-[var(--border-color)] rounded-full transition-colors"
-                title="Cycle Theme (Light/Dark/System)">
-                <!-- Icons injected via JS -->
-            </button>
-
-            <!-- Mute Button -->
-            <button id="muteBtn" onclick="app.toggleMute()"
-                class="p-2 hover:bg-[var(--border-color)] rounded-full transition-colors" title="Toggle Sound">
-                <!-- Icons injected via JS -->
-            </button>
-
-            <div class="h-6 w-px bg-[var(--border-color)] mx-2"></div>
-
-            <button onclick="app.requestReset()" class="text-xs font-bold opacity-60 hover:opacity-100 underline">
-                Reset Default
-            </button>
+          </div>
+          <canvas id="wheelCanvas" width="800" height="800" role="img"
+            aria-label="Weighted picker wheel. Options and weights are listed beside it."></canvas>
+          <button id="spinBtn" onclick="app.spin()">SPIN</button>
         </div>
-    </header>
-
-    <!-- Main Content -->
-    <main class="flex-1 flex flex-col lg:flex-row overflow-hidden max-w-7xl mx-auto w-full relative">
-
-        <!-- Left Column: Wheel -->
-        <section
-            class="flex-1 flex flex-col items-center justify-center p-4 lg:p-8 relative order-1 lg:order-1 shrink-0">
-            <div class="wheel-container">
-                <!-- 3D Needle SVG -->
-                <div class="needle-container">
-                    <svg viewBox="0 0 50 60" width="100%" height="100%">
-                        <defs>
-                            <!-- UPDATED GRADIENT: Bright Silver/White for contrast against dark background -->
-                            <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="0%">
-                                <stop offset="0%" style="stop-color:#E2E8F0;stop-opacity:1" />
-                                <stop offset="50%" style="stop-color:#FFFFFF;stop-opacity:1" />
-                                <stop offset="100%" style="stop-color:#E2E8F0;stop-opacity:1" />
-                            </linearGradient>
-                            <filter id="dropshadow" height="130%">
-                                <feGaussianBlur in="SourceAlpha" stdDeviation="3" />
-                                <feOffset dx="0" dy="2" result="offsetblur" />
-                                <feComponentTransfer>
-                                    <feFuncA type="linear" slope="0.5" />
-                                </feComponentTransfer>
-                                <feMerge>
-                                    <feMergeNode />
-                                    <feMergeNode in="SourceGraphic" />
-                                </feMerge>
-                            </filter>
-                        </defs>
-                        <!-- Triangle shape with slight curve at top -->
-                        <path d="M 10 0 L 40 0 L 25 55 Z" fill="url(#grad1)" filter="url(#dropshadow)" stroke="#CBD5E0"
-                            stroke-width="1" />
-                        <!-- Top cap detail -->
-                        <rect x="8" y="-5" width="34" height="8" rx="2" fill="#E2E8F0" />
-                    </svg>
-                </div>
-
-                <canvas id="wheelCanvas" width="800" height="800"></canvas>
-
-                <button id="spinBtn" onclick="app.spin()">
-                    SPIN
-                </button>
-            </div>
-            <div id="current-winner"
-                class="h-8 mt-4 font-bold text-xl opacity-0 transition-opacity duration-300 text-[var(--accent-color)] headline-font">
-                <!-- Dynamic text appears here -->
-            </div>
-        </section>
-
-        <!-- Right Column: Controls -->
-        <section class="flex-1 flex flex-col p-4 lg:p-6 min-w-0 order-2 lg:order-2 h-full overflow-hidden">
-            <div class="card rounded-2xl flex flex-col h-full overflow-hidden">
-
-                <!-- Add Section -->
-                <div class="p-4 border-b border-[var(--border-color)] bg-[var(--card-bg)] z-10 space-y-3">
-                    <h2 class="text-lg font-bold">Add Option</h2>
-                    <form id="addForm" onsubmit="app.addItem(event)" class="flex flex-col gap-2">
-                        <div class="flex gap-2">
-                            <input type="text" id="newItemName" placeholder="Name (e.g. Tacos)"
-                                class="flex-1 rounded-lg px-4 py-2" required autocomplete="off">
-                            <input type="number" id="newItemWeight" placeholder="Wgt" value="1" min="1" max="100"
-                                class="w-20 rounded-lg px-2 py-2 text-center" title="Weight/Probability">
-                        </div>
-                        <input type="text" id="newItemDesc" placeholder="Description (optional)"
-                            class="w-full rounded-lg px-4 py-2 text-sm opacity-80 focus:opacity-100">
-                        <!-- Updated Placeholder -->
-                        <input type="url" id="newItemLink" placeholder="Link URL (optional)"
-                            class="w-full rounded-lg px-4 py-2 text-sm opacity-80 focus:opacity-100">
-                        <button type="submit"
-                            class="btn-primary rounded-lg py-2 w-full shadow-sm flex items-center justify-center gap-2">
-                            <svg class="icon" viewBox="0 0 24 24">
-                                <line x1="12" y1="5" x2="12" y2="19"></line>
-                                <line x1="5" y1="12" x2="19" y2="12"></line>
-                            </svg>
-                            Add to Wheel
-                        </button>
-                    </form>
-
-                    <!-- Tools Toolbar (SVGs) -->
-                    <div class="flex gap-2 pt-2">
-                        <button onclick="app.copyShareLink()"
-                            class="btn-secondary flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2"
-                            title="Copy Shareable Link">
-                            <svg class="icon" viewBox="0 0 24 24">
-                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-                            </svg>
-                            Share
-                        </button>
-                        <button onclick="app.exportYAML()"
-                            class="btn-secondary flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2"
-                            title="Download YAML">
-                            <svg class="icon" viewBox="0 0 24 24">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                <polyline points="7 10 12 15 17 10"></polyline>
-                                <line x1="12" y1="15" x2="12" y2="3"></line>
-                            </svg>
-                            Export
-                        </button>
-                        <button onclick="document.getElementById('importInput').click()"
-                            class="btn-secondary flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2"
-                            title="Import YAML">
-                            <svg class="icon" viewBox="0 0 24 24">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                <polyline points="17 8 12 3 7 8"></polyline>
-                                <line x1="12" y1="3" x2="12" y2="15"></line>
-                            </svg>
-                            Import
-                        </button>
-                        <!-- Accept .yaml and .yml files -->
-                        <input type="file" id="importInput" class="hidden" accept=".yaml,.yml"
-                            onchange="app.importYAML(event)">
-                    </div>
-                </div>
-
-                <!-- List Section -->
-                <div class="flex-1 overflow-y-auto p-4 space-y-3" id="itemList">
-                    <!-- Items injected via JS -->
-                </div>
-
-                <div class="p-3 border-t border-[var(--border-color)] text-center text-xs opacity-50">
-                    <span id="total-items">0</span> items • <span id="total-weight">0</span> total weight
-                </div>
-            </div>
-        </section>
+        <p class="wheel-caption" id="idleCaption">Spin to pick an option.</p>
+        <div id="current-winner" role="status" aria-live="polite"></div>
+      </section>
+      <section class="options-panel" aria-labelledby="optionsHeading">
+        <div class="options-heading">
+          <div>
+            <h2 id="optionsHeading">Options</h2>
+            <span><span id="total-items">0</span> options</span>
+          </div>
+          <button class="btn-secondary" onclick="app.openDialog('addDialog')">
+            Add option
+          </button>
+        </div>
+        <div id="itemList" class="option-list"></div>
+        <div class="options-footnote">
+          <span>Weight sets the chance of winning</span><span id="weightSummary"><span id="total-weight">0</span> total
+            weight</span>
+        </div>
+        <div class="notion-invitation" id="notionInvitation">
+          <span class="notion-logo" aria-hidden="true">N</span>
+          <div>
+            <h3>Bring your list from Notion</h3>
+            <p>Choose a database and the rows to include.</p>
+          </div>
+          <button class="btn-secondary" onclick="app.notion.open()">
+            Connect Notion
+          </button>
+        </div>
+        <div id="sourceBar" class="source-bar" hidden>
+          <div>
+            <span class="notion-logo" aria-hidden="true">N</span><span id="sourceLabel"></span>
+          </div>
+          <div class="button-row">
+            <button class="btn-secondary" onclick="app.notion.refresh()">
+              Refresh</button><button class="text-button" onclick="app.notion.open()">
+              Choose rows</button><button class="text-button" onclick="app.detachNotion()">
+              Unlink
+            </button>
+          </div>
+        </div>
+        <div class="file-actions">
+          <button class="btn-secondary" onclick="document.getElementById('importFile').click()">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 16V3m-4 4 4-4 4 4M4 15v5h16v-5" />
+            </svg>Import file</button><button class="btn-secondary" onclick="app.exportYAML()">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3v13m-4-4 4 4 4-4M4 15v5h16v-5" />
+            </svg>Export file</button><input type="file" id="importFile" accept=".yaml,.yml,.json" hidden
+            onchange="app.importYAML(event)" />
+        </div>
+      </section>
     </main>
-
-    <!-- Winner Modal Overlay -->
-    <div id="resultModal" onclick="if(event.target === this) app.closeModal()"
-        class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm transition-opacity duration-300 opacity-0">
-        <div class="modal-content card max-w-md w-full rounded-2xl p-6 relative text-center transform scale-95">
-            <button onclick="app.closeModal()"
-                class="absolute top-4 right-4 text-2xl opacity-50 hover:opacity-100">&times;</button>
-
-            <div class="flex justify-center mb-4" id="modalIcon">
-                <!-- Winner Trophy SVG -->
-                <svg class="w-20 h-20 text-[var(--accent-color)]" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                    stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>
-                    <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>
-                    <path d="M4 22h16"></path>
-                    <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path>
-                    <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path>
-                    <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path>
-                </svg>
-            </div>
-            <h2 class="text-2xl font-bold mb-2">We have a winner!</h2>
-            <h3 id="winnerName"
-                class="text-3xl font-extrabold text-[var(--accent-color)] mb-4 break-words leading-tight headline-font">
-            </h3>
-
-            <p id="winnerDesc" class="text-sm mb-6 opacity-80 leading-relaxed break-words min-h-[20px]"></p>
-
-            <div class="flex flex-col gap-3">
-                <a id="winnerLink" href="#" target="_blank"
-                    class="hidden btn-primary rounded-xl py-3 px-4 w-full flex items-center justify-center gap-2">
-                    View Details <svg class="icon" viewBox="0 0 24 24">
-                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                        <polyline points="15 3 21 3 21 9"></polyline>
-                        <line x1="10" y1="14" x2="21" y2="3"></line>
-                    </svg>
-                </a>
-                <div class="flex gap-3">
-                    <button onclick="app.removeWinner()"
-                        class="flex-1 py-3 rounded-xl bg-red-100 text-red-600 font-bold hover:bg-red-200 dark:bg-red-900/30 dark:text-red-300 transition-colors">
-                        Remove
-                    </button>
-                    <button onclick="app.closeModal()"
-                        class="flex-1 py-3 rounded-xl border border-[var(--border-color)] font-bold hover:bg-[var(--bg-color)] transition-colors">
-                        Close
-                    </button>
-                </div>
-            </div>
-        </div>
+  </div>
+  <dialog id="addDialog" class="compact-dialog" aria-labelledby="addTitle">
+    <div class="dialog-heading">
+      <h2 id="addTitle">Add an option</h2>
+      <button class="icon-button" onclick="app.closeDialog('addDialog')" aria-label="Close add option">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m6 6 12 12M18 6 6 18" />
+        </svg>
+      </button>
     </div>
-
-    <!-- Reset Confirmation Modal -->
-    <div id="resetModal" onclick="if(event.target === this) app.closeResetModal()"
-        class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm transition-opacity duration-300 opacity-0">
-        <div class="modal-content card max-w-sm w-full rounded-2xl p-6 relative text-center transform scale-95">
-            <h2 class="text-xl font-bold mb-4">Reset List?</h2>
-            <p class="text-sm opacity-80 mb-6">This will delete all your current items and restore the default LLM
-                Papers list. This cannot be undone.</p>
-            <div class="flex gap-3">
-                <button onclick="app.confirmReset()"
-                    class="flex-1 py-2 rounded-lg bg-red-500 text-white font-bold hover:bg-red-600 transition-colors">
-                    Reset
-                </button>
-                <button onclick="app.closeResetModal()"
-                    class="flex-1 py-2 rounded-lg border border-[var(--border-color)] font-bold hover:bg-[var(--bg-color)] transition-colors">
-                    Cancel
-                </button>
-            </div>
-        </div>
+    <form id="addForm" onsubmit="app.addItem(event)">
+      <label>Name<input type="text" id="newItemName" aria-label="Option name" placeholder="What could you choose?"
+          maxlength="300" required autocomplete="off" /></label>
+      <div class="weight-setting">
+        <label>Weight<input type="number" id="newItemWeight" aria-label="Option weight" value="1" min="0" max="1000000"
+            step="any" required /></label>
+        <p>1 gives an equal chance.<br />Use 0 to leave it out of spins.</p>
+      </div>
+      <label class="icon-choice">Icon<select id="newItemIcon" aria-label="Option icon">
+          <option value="droplets">Droplets</option>
+          <option value="sparkles">Sparkles</option>
+          <option value="bookmark">Bookmark</option>
+          <option value="book-open">Book</option>
+          <option value="file-text">Document</option>
+          <option value="eye">Eye</option>
+          <option value="scale">Scale</option>
+          <option value="cloud">Cloud</option>
+          <option value="cat">Cat</option>
+          <option value="target">Target</option>
+          <option value="heart">Heart</option>
+          <option value="flag">Flag</option>
+          <option value="map-pin">Pin</option>
+          <option value="calendar">Calendar</option>
+          <option value="star">Star</option>
+        </select></label>
+      <details>
+        <summary>Description &amp; link <span>optional</span></summary>
+        <label>Description<textarea id="newItemDesc" aria-label="Option description" rows="2"
+            maxlength="4000"></textarea></label><label>Link<input id="newItemLink" type="url" aria-label="Option link"
+            placeholder="https://" /></label>
+      </details>
+      <div class="dialog-actions">
+        <button type="submit" class="btn-primary">Add to wheel</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="resultModal" class="compact-dialog result-dialog" aria-labelledby="winnerName">
+    <button class="icon-button corner-close" onclick="app.closeModal()" aria-label="Close result">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="m6 6 12 12M18 6 6 18" />
+      </svg>
+    </button>
+    <div id="winnerSymbol" class="winner-symbol" aria-hidden="true"></div>
+    <h2 id="winnerName"></h2>
+    <p id="winnerDesc"></p>
+    <div class="result-actions">
+      <button class="btn-primary" onclick="
+            app.closeModal();
+            app.spin();
+          ">
+        Spin again</button><a id="winnerLink" class="btn-secondary" href="#" target="_blank" rel="noopener noreferrer"
+        hidden>Open link</a><button id="winnerNotion" class="btn-secondary" hidden
+        onclick="app.notion.editPage(app.currentWinner.id)">
+        Update in Notion</button><button class="text-button" onclick="app.removeWinner()">
+        Remove from wheel
+      </button>
     </div>
-
-    <!-- Toast -->
-    <div id="toast">Notification</div>
-
-    <script>
-        /**
-         * Color Palette - Pastel "Dull" Tones
-         */
-        const PALETTE = [
-            '#FFB7B2', // Pastel Red/Rose
-            '#FFDAC1', // Peach
-            '#E2F0CB', // Pale Green
-            '#B5EAD7', // Mint
-            '#C7CEEA', // Periwinkle
-            '#F0E6EF', // Lavender
-            '#D4F1F4', // Sky
-            '#F4D4D4', // Tea Rose
-        ];
-
-        const DEFAULT_ITEMS = [
-            { id: '1', label: 'Attention Is All You Need', weight: 1, desc: 'The foundational paper introducing the Transformer architecture.', link: 'https://arxiv.org/abs/1706.03762' },
-            { id: '2', label: 'GPT-4 Technical Report', weight: 1, desc: 'OpenAI\'s report on the capabilities and safety of GPT-4.', link: 'https://arxiv.org/abs/2303.08774' },
-            { id: '3', label: 'Chain-of-Thought', weight: 1, desc: 'Eliciting reasoning in large language models.', link: 'https://arxiv.org/abs/2201.11903' },
-            { id: '4', label: 'Llama 3', weight: 1, desc: 'The latest open-weights model from Meta.', link: 'https://ai.meta.com/blog/meta-llama-3/' },
-            { id: '5', label: 'Scaling Laws', weight: 1, desc: 'Kaplan et al. on neural language model scaling.', link: 'https://arxiv.org/abs/2001.08361' },
-            { id: '6', label: 'RLHF', weight: 1, desc: 'Training language models to follow instructions.', link: 'https://arxiv.org/abs/2203.02155' }
-        ];
-
-        class PickerApp {
-            constructor() {
-                this.canvas = document.getElementById('wheelCanvas');
-                this.ctx = this.canvas.getContext('2d');
-                this.spinBtn = document.getElementById('spinBtn');
-                this.currentWinnerDisplay = document.getElementById('current-winner'); // Get the display element
-                this.items = [];
-                this.angle = 0;
-                this.isSpinning = false;
-                this.spinVelocity = 0;
-                this.lastTickIndex = -1;
-
-                // Edit state
-                this.editingId = null;
-                this.idCounter = 0;
-
-                // Audio State
-                this.isMuted = localStorage.getItem('destinyDialMuted') === 'true';
-                this.audioCtx = null;
-
-                // Theme State
-                this.themeMode = localStorage.getItem('destinyDialTheme') || 'system'; // light, dark, system
-
-                this.resizeCanvas();
-
-                // Init
-                this.initTheme();
-                this.updateMuteIcon();
-                this.loadData();
-                this.initEvents();
-
-                requestAnimationFrame(this.loop.bind(this));
-            }
-
-            // --- Theme Logic ---
-            initTheme() {
-                this.applyTheme();
-                // Watch for system changes if in system mode
-                window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-                    if (this.themeMode === 'system') {
-                        this.applyTheme();
-                    }
-                });
-            }
-
-            cycleTheme() {
-                if (this.themeMode === 'light') this.themeMode = 'dark';
-                else if (this.themeMode === 'dark') this.themeMode = 'system';
-                else this.themeMode = 'light';
-
-                localStorage.setItem('destinyDialTheme', this.themeMode);
-                this.applyTheme();
-            }
-
-            applyTheme() {
-                const root = document.documentElement;
-                let isDark = false;
-
-                if (this.themeMode === 'dark') {
-                    isDark = true;
-                } else if (this.themeMode === 'light') {
-                    isDark = false;
-                } else {
-                    // System
-                    isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-                }
-
-                if (isDark) {
-                    root.classList.add('dark');
-                } else {
-                    root.classList.remove('dark');
-                }
-
-                this.updateThemeIcon();
-                this.drawWheel(); // Redraw canvas to pick up new background color
-            }
-
-            updateThemeIcon() {
-                const btn = document.getElementById('themeBtn');
-                // Sun Icon
-                const sun = `<svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`;
-                // Moon Icon
-                const moon = `<svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
-                // System Icon
-                const system = `<svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>`;
-
-                if (this.themeMode === 'light') btn.innerHTML = sun;
-                else if (this.themeMode === 'dark') btn.innerHTML = moon;
-                else btn.innerHTML = system;
-            }
-
-            // --- Data Management ---
-
-            loadData() {
-                const params = new URLSearchParams(window.location.search);
-                const urlData = params.get('data');
-
-                if (urlData) {
-                    try {
-                        const parsed = JSON.parse(decodeURIComponent(urlData));
-                        const normalized = this.normalizeItems(parsed);
-                        if (normalized.length > 0) {
-                            this.items = normalized;
-                            this.showToast('Loaded shared wheel!');
-                            window.history.replaceState({}, document.title, window.location.pathname);
-                            this.saveData();
-                            return;
-                        }
-                    } catch (e) {
-                        console.error('Failed to parse URL data', e);
-                    }
-                }
-
-                const saved = localStorage.getItem('destinyWheelItems');
-                if (saved) {
-                    try {
-                        const normalized = this.normalizeItems(JSON.parse(saved));
-                        this.items = normalized.length > 0 ? normalized : JSON.parse(JSON.stringify(DEFAULT_ITEMS));
-                    } catch (e) {
-                        console.error('Failed to parse saved data', e);
-                        this.items = JSON.parse(JSON.stringify(DEFAULT_ITEMS));
-                    }
-                } else {
-                    this.items = JSON.parse(JSON.stringify(DEFAULT_ITEMS));
-                }
-                this.renderList();
-                this.drawWheel();
-            }
-
-            saveData() {
-                localStorage.setItem('destinyWheelItems', JSON.stringify(this.items));
-                this.renderList();
-                this.drawWheel();
-            }
-
-            requestReset() {
-                const modal = document.getElementById('resetModal');
-                modal.classList.remove('hidden');
-                requestAnimationFrame(() => {
-                    modal.style.opacity = '1';
-                    modal.querySelector('.modal-content').style.transform = 'scale(1)';
-                });
-            }
-
-            confirmReset() {
-                this.items = JSON.parse(JSON.stringify(DEFAULT_ITEMS));
-                this.saveData();
-                this.showToast('Reset to defaults');
-                this.closeResetModal();
-            }
-
-            closeResetModal() {
-                const modal = document.getElementById('resetModal');
-                modal.style.opacity = '0';
-                modal.querySelector('.modal-content').style.transform = 'scale(0.95)';
-                setTimeout(() => {
-                    modal.classList.add('hidden');
-                }, 300);
-            }
-
-            // --- Validation & Helpers ---
-
-            sanitizeWeight(value) {
-                if (value === undefined || value === null) return null;
-                const raw = typeof value === 'string' ? value.trim() : value;
-                if (raw === '') return null;
-                const num = Number(raw);
-                if (!Number.isFinite(num)) return null;
-                const rounded = Math.round(num);
-                const clamped = Math.min(99, Math.max(1, rounded));
-                return clamped;
-            }
-
-            normalizeItems(rawItems) {
-                if (!Array.isArray(rawItems)) return [];
-                const normalized = [];
-                rawItems.forEach((item) => {
-                    if (!item || typeof item !== 'object') return;
-                    const label = typeof item.label === 'string' ? item.label.trim() : '';
-                    if (!label) return;
-                    const desc = typeof item.desc === 'string' ? item.desc.trim() : '';
-                    const link = typeof item.link === 'string' ? item.link.trim() : '';
-                    const weight = this.sanitizeWeight(item.weight);
-                    normalized.push({
-                        id: typeof item.id === 'string' && item.id.trim() ? item.id.trim() : this.generateId(),
-                        label,
-                        weight: weight ?? 1,
-                        desc,
-                        link: link || null
-                    });
-                });
-                return normalized;
-            }
-
-            generateId() {
-                return `item-${Date.now().toString(36)}-${this.idCounter++}`;
-            }
-
-            addItem(e) {
-                e.preventDefault();
-                const nameInput = document.getElementById('newItemName');
-                const weightInput = document.getElementById('newItemWeight');
-                const descInput = document.getElementById('newItemDesc');
-                const linkInput = document.getElementById('newItemLink');
-
-                if (!nameInput.value.trim()) return;
-
-                const sanitizedWeight = this.sanitizeWeight(weightInput.value);
-                const newItem = {
-                    id: this.generateId(),
-                    label: nameInput.value.trim(),
-                    weight: sanitizedWeight ?? 1,
-                    desc: descInput.value.trim(),
-                    link: linkInput.value.trim() || null
-                };
-
-                this.items.push(newItem);
-                this.saveData();
-
-                nameInput.value = '';
-                descInput.value = '';
-                linkInput.value = '';
-                weightInput.value = 1;
-                nameInput.focus();
-            }
-
-            removeItem(id, e) {
-                if (e) e.stopPropagation();
-                this.items = this.items.filter(i => i.id !== id);
-                this.saveData();
-            }
-
-            updateWeight(id, newWeight) {
-                const item = this.items.find(i => i.id === id);
-                if (item) {
-                    const sanitized = this.sanitizeWeight(newWeight);
-                    if (sanitized === null) {
-                        // Re-render to reset the visual input back to the last valid value
-                        this.renderList();
-                        return;
-                    }
-                    item.weight = sanitized;
-                    this.saveData();
-                }
-            }
-
-            // --- Inline Editing ---
-
-            toggleEdit(id) {
-                if (this.editingId === id) {
-                    this.editingId = null;
-                } else {
-                    this.editingId = id;
-                }
-                this.renderList();
-            }
-
-            saveEdit(id) {
-                const nameVal = document.getElementById(`edit-name-${id}`).value;
-                const descVal = document.getElementById(`edit-desc-${id}`).value;
-                const linkVal = document.getElementById(`edit-link-${id}`).value;
-
-                if (!nameVal.trim()) return;
-
-                const item = this.items.find(i => i.id === id);
-                if (item) {
-                    item.label = nameVal.trim();
-                    item.desc = descVal.trim();
-                    item.link = linkVal.trim() || null;
-
-                    this.saveData(); // Re-renders list and closes edit because renderList reads from data
-                    this.editingId = null;
-                    this.renderList();
-                }
-            }
-
-            removeWinner() {
-                if (this.currentWinner) {
-                    this.removeItem(this.currentWinner.id);
-                    this.closeModal();
-                }
-            }
-
-            // --- Tools ---
-
-            copyShareLink() {
-                if (this.items.length === 0) return;
-                const json = JSON.stringify(this.items);
-                const encoded = encodeURIComponent(json);
-                const url = `${window.location.origin}${window.location.pathname}?data=${encoded}`;
-                navigator.clipboard.writeText(url).then(() => this.showToast('Link copied!')).catch(() => prompt("Copy:", url));
-            }
-
-            exportYAML() {
-                // Use jsyaml.dump to create YAML string
-                const yamlStr = jsyaml.dump(this.items);
-                const dataStr = "data:text/yaml;charset=utf-8," + encodeURIComponent(yamlStr);
-                const downloadAnchorNode = document.createElement('a');
-                downloadAnchorNode.setAttribute("href", dataStr);
-                downloadAnchorNode.setAttribute("download", "rou-lit_reviews.yaml");
-                document.body.appendChild(downloadAnchorNode);
-                downloadAnchorNode.click();
-                downloadAnchorNode.remove();
-            }
-
-            importYAML(event) {
-                const file = event.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    try {
-                        // Use jsyaml.load to parse YAML (or JSON since JSON is subset of YAML)
-                        const imported = jsyaml.load(e.target.result);
-                        if (Array.isArray(imported)) {
-                            const normalized = this.normalizeItems(imported);
-                            if (normalized.length === 0) {
-                                alert('No valid entries were found in the YAML file.');
-                            } else {
-                                this.items = normalized;
-                                this.saveData();
-                                this.showToast('Import successful!');
-                            }
-                        } else {
-                            alert('Invalid YAML data: Expected an array.');
-                        }
-                    } catch (err) {
-                        console.error(err);
-                        alert('Error reading or parsing YAML file.');
-                    }
-                    event.target.value = '';
-                };
-                reader.readAsText(file);
-            }
-
-            // --- Visual Rendering ---
-
-            renderList() {
-                const listEl = document.getElementById('itemList');
-                const totalEl = document.getElementById('total-items');
-                const weightEl = document.getElementById('total-weight');
-
-                listEl.innerHTML = '';
-                let totalWeight = 0;
-
-                if (this.items.length === 0) {
-                    listEl.innerHTML = `<div class="text-center p-8 opacity-50 italic">The wheel is empty.<br>Add something above!</div>`;
-                }
-
-                this.items.forEach((item, index) => {
-                    totalWeight += item.weight;
-                    const color = PALETTE[index % PALETTE.length];
-                    const isEditing = this.editingId === item.id;
-
-                    const rowContainer = document.createElement('div');
-                    rowContainer.className = 'border border-[var(--border-color)] rounded-xl overflow-hidden transition-all';
-
-                    // Header (Always Visible)
-                    const rowHeader = document.createElement('div');
-                    rowHeader.className = `flex items-center gap-2 p-3 bg-[var(--input-bg)] hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer ${isEditing ? 'bg-gray-100 dark:bg-gray-700' : ''}`;
-                    rowHeader.onclick = () => this.toggleEdit(item.id);
-
-                    rowHeader.innerHTML = `
-                <div class="w-3 h-full self-stretch rounded-full flex-shrink-0" style="background-color: ${color}"></div>
-                <div class="flex-1 min-w-0">
-                    <div class="font-bold truncate text-sm">${item.label}</div>
-                    ${item.desc ? `<div class="text-xs opacity-60 truncate">${item.desc}</div>` : ''}
-                </div>
-                <div onclick="event.stopPropagation()" class="flex items-center gap-1 bg-[var(--card-bg)] rounded-lg border border-[var(--border-color)] p-1">
-                    <span class="text-[10px] uppercase font-bold px-1 opacity-50">Wgt</span>
-                    <input type="number" min="1" max="99" value="${item.weight}" 
-                        class="w-8 text-center text-sm bg-transparent font-bold focus:text-[var(--accent-color)] outline-none appearance-none m-0"
-                        onchange="app.updateWeight('${item.id}', this.value)">
-                </div>
-                <button onclick="app.removeItem('${item.id}', event)" 
-                    class="w-8 h-8 flex items-center justify-center text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors flex-shrink-0">
-                    <!-- Trash SVG -->
-                    <svg class="icon" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                </button>
-            `;
-
-                    rowContainer.appendChild(rowHeader);
-
-                    // Edit Form (Conditional)
-                    if (isEditing) {
-                        const editForm = document.createElement('div');
-                        editForm.className = 'p-3 bg-[var(--card-bg)] border-t border-[var(--border-color)] flex flex-col gap-2 animate-[pop-in_0.2s_ease-out]';
-                        editForm.innerHTML = `
-                    <div class="flex flex-col gap-1">
-                        <label class="text-[10px] uppercase font-bold opacity-50">Label</label>
-                        <input id="edit-name-${item.id}" type="text" value="${item.label}" class="rounded-lg px-3 py-1.5 text-sm">
-                    </div>
-                    <div class="flex flex-col gap-1">
-                        <label class="text-[10px] uppercase font-bold opacity-50">Description</label>
-                        <input id="edit-desc-${item.id}" type="text" value="${item.desc || ''}" class="rounded-lg px-3 py-1.5 text-sm">
-                    </div>
-                    <div class="flex flex-col gap-1">
-                        <label class="text-[10px] uppercase font-bold opacity-50">Link URL</label>
-                        <!-- Updated Placeholder -->
-                        <input id="edit-link-${item.id}" type="text" value="${item.link || ''}" class="rounded-lg px-3 py-1.5 text-sm" placeholder="Link URL (optional)">
-                    </div>
-                    <div class="flex gap-2 mt-1">
-                        <button onclick="app.saveEdit('${item.id}')" class="flex-1 btn-primary rounded-lg py-1.5 text-xs">Update</button>
-                        <button onclick="app.toggleEdit('${item.id}')" class="flex-1 btn-secondary rounded-lg py-1.5 text-xs">Cancel</button>
-                    </div>
-                `;
-                        rowContainer.appendChild(editForm);
-                    }
-
-                    listEl.appendChild(rowContainer);
-                });
-
-                totalEl.innerText = this.items.length;
-                weightEl.innerText = totalWeight;
-            }
-
-            // --- Canvas Handling ---
-
-            resizeCanvas() {
-                if (!this.canvas) return;
-                const container = this.canvas.parentElement;
-                if (!container) return;
-                const rect = container.getBoundingClientRect();
-                const targetSize = Math.min(rect.width, rect.height || rect.width);
-                if (!targetSize) return;
-                const dpr = window.devicePixelRatio || 1;
-                const pixelSize = Math.floor(targetSize * dpr);
-                if (this.canvas.width !== pixelSize || this.canvas.height !== pixelSize) {
-                    this.canvas.width = pixelSize;
-                    this.canvas.height = pixelSize;
-                }
-                this.canvas.style.width = `${targetSize}px`;
-                this.canvas.style.height = `${targetSize}px`;
-            }
-
-            handleResize() {
-                this.resizeCanvas();
-                this.drawWheel();
-            }
-
-            drawWheel() {
-                const ctx = this.ctx;
-                const w = this.canvas.width;
-                const h = this.canvas.height;
-                const cx = w / 2;
-                const cy = h / 2;
-                const radius = w / 2 - 10;
-                const innerRadius = 60; // Estimated radius of the central hub button space
-
-                ctx.clearRect(0, 0, w, h);
-
-                if (this.items.length === 0) {
-                    ctx.beginPath();
-                    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-                    ctx.fillStyle = '#e2e8f0';
-                    ctx.fill();
-                    return;
-                }
-
-                const totalWeight = this.items.reduce((acc, i) => acc + i.weight, 0);
-                let startAngle = this.angle;
-
-                this.items.forEach((item, index) => {
-                    const sliceAngle = (item.weight / totalWeight) * (Math.PI * 2);
-                    const endAngle = startAngle + sliceAngle;
-
-                    ctx.beginPath();
-                    ctx.moveTo(cx, cy);
-                    ctx.arc(cx, cy, radius, startAngle, endAngle);
-                    ctx.closePath();
-
-                    ctx.fillStyle = PALETTE[index % PALETTE.length];
-                    ctx.fill();
-                    // Stroke logic handled by outer circle now
-
-                    ctx.save();
-                    ctx.translate(cx, cy);
-                    // Rotation logic update: 
-                    // + sliceAngle / 2 to get to the center of the slice
-                    // + Math.PI to flip the text direction 180 degrees
-                    ctx.rotate(startAngle + sliceAngle / 2 + Math.PI);
-
-                    // Alignment logic update:
-                    // Center alignment along the radial line
-                    ctx.textAlign = "center";
-                    ctx.fillStyle = "#333";
-                    ctx.textBaseline = "middle";
-
-                    const fontSize = 24;
-                    const lineHeight = 28;
-                    ctx.font = `bold ${fontSize}px 'Stack Sans Text', 'Quicksand', sans-serif`;
-
-                    // Usable width is the difference between outer and inner radius
-                    const maxWidth = radius - innerRadius - 20; // 20px padding
-
-                    // Text Position Calculation
-                    // We draw at negative coordinate because we rotated 180 degrees (X axis now points opposite to slice direction)
-                    // Midpoint = (radius + innerRadius) / 2
-                    const midRadius = (radius + innerRadius) / 2;
-                    const textX = -midRadius;
-
-                    const words = item.label.split(' ');
-                    let lines = [];
-                    let currentLine = words[0];
-
-                    for (let i = 1; i < words.length; i++) {
-                        const word = words[i];
-                        const width = ctx.measureText(currentLine + " " + word).width;
-                        if (width < maxWidth) {
-                            currentLine += " " + word;
-                        } else {
-                            lines.push(currentLine);
-                            currentLine = word;
-                        }
-                    }
-                    lines.push(currentLine);
-
-                    const totalHeight = lines.length * lineHeight;
-                    let startY = -((lines.length - 1) * lineHeight) / 2;
-
-                    lines.forEach((line, i) => {
-                        ctx.fillText(line, textX, startY + (i * lineHeight));
-                    });
-
-                    if (item.weight > 1) {
-                        ctx.font = "18px 'Stack Sans Text', sans-serif";
-                        ctx.fillStyle = "rgba(0,0,0,0.5)";
-                        ctx.fillText(`(x${item.weight})`, textX, startY + (lines.length * lineHeight) + 5);
-                    }
-
-                    ctx.restore();
-
-                    startAngle = endAngle;
-                });
-
-                // Draw External Border Circle
-                const isDark = document.documentElement.classList.contains('dark');
-                ctx.beginPath();
-                ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-                ctx.strokeStyle = '#E2E8F0';
-                ctx.lineWidth = 4;
-                ctx.stroke();
-            }
-
-            toggleMute() {
-                this.isMuted = !this.isMuted;
-                localStorage.setItem('destinyDialMuted', this.isMuted);
-                this.updateMuteIcon();
-            }
-
-            updateMuteIcon() {
-                const btn = document.getElementById('muteBtn');
-                if (this.isMuted) {
-                    // Muted Icon
-                    btn.innerHTML = `<svg class="w-6 h-6 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" y1="9" x2="17" y2="15"></line><line x1="17" y1="9" x2="23" y2="15"></line></svg>`;
-                } else {
-                    // Sound Icon
-                    btn.innerHTML = `<svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>`;
-                }
-            }
-
-            playTick() {
-                if (this.isMuted || !this.audioCtx) return;
-                const osc = this.audioCtx.createOscillator();
-                const gain = this.audioCtx.createGain();
-                osc.type = 'triangle';
-                osc.frequency.setValueAtTime(800, this.audioCtx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(100, this.audioCtx.currentTime + 0.05);
-                gain.gain.setValueAtTime(0.1, this.audioCtx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.05);
-                osc.connect(gain);
-                gain.connect(this.audioCtx.destination);
-                osc.start();
-                osc.stop(this.audioCtx.currentTime + 0.05);
-            }
-
-            playDing() {
-                if (this.isMuted || !this.audioCtx) return;
-                const osc = this.audioCtx.createOscillator();
-                const gain = this.audioCtx.createGain();
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(523.25, this.audioCtx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(523.25, this.audioCtx.currentTime + 1);
-                gain.gain.setValueAtTime(0, this.audioCtx.currentTime);
-                gain.gain.linearRampToValueAtTime(0.3, this.audioCtx.currentTime + 0.05);
-                gain.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + 1.5);
-                osc.connect(gain);
-                gain.connect(this.audioCtx.destination);
-                osc.start();
-                osc.stop(this.audioCtx.currentTime + 1.5);
-            }
-
-            initEvents() {
-                const enableAudio = () => {
-                    if (!this.audioCtx) {
-                        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                    }
-                    document.removeEventListener('click', enableAudio);
-                };
-                document.addEventListener('click', enableAudio);
-            }
-
-            spin() {
-                if (this.isSpinning || this.items.length === 0) return;
-
-                if (!this.audioCtx) {
-                    this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                }
-
-                this.isSpinning = true;
-                this.isAccelerating = true;
-                this.spinBtn.disabled = true;
-                this.spinBtn.style.opacity = "0.5";
-
-                // HIDE text while spinning
-                const feedback = document.getElementById('current-winner');
-                feedback.style.opacity = '0';
-
-                this.spinVelocity = 0;
-                this.maxSpeed = Math.random() * 0.2 + 0.35;
-                this.windUpFrames = 220 + Math.random() * 60;
-                this.currentWindUpFrame = 0;
-                this.deceleration = 0.985 + (Math.random() * 0.005);
-            }
-
-            loop() {
-                if (this.isSpinning) {
-                    if (this.isAccelerating) {
-                        this.currentWindUpFrame++;
-                        const t = Math.min(1, this.currentWindUpFrame / this.windUpFrames);
-                        const eased = t * t * t; // cubic ease-in for a smoother wind-up
-                        this.spinVelocity = this.maxSpeed * eased;
-                        if (this.currentWindUpFrame >= this.windUpFrames) {
-                            this.isAccelerating = false;
-                        }
-                    } else {
-                        this.spinVelocity *= this.deceleration;
-                    }
-
-                    this.angle += this.spinVelocity;
-                    if (this.angle >= Math.PI * 2) this.angle -= Math.PI * 2;
-
-                    const totalWeight = this.items.reduce((a, b) => a + b.weight, 0);
-                    const actualRotation = this.angle;
-                    const needleAngle = (Math.PI * 1.5) - actualRotation;
-
-                    let normalizedNeedle = needleAngle % (Math.PI * 2);
-                    if (normalizedNeedle < 0) normalizedNeedle += Math.PI * 2;
-
-                    let currentWeightSum = 0;
-                    let currentIndex = -1;
-
-                    for (let i = 0; i < this.items.length; i++) {
-                        const sliceSize = (this.items[i].weight / totalWeight) * (Math.PI * 2);
-                        if (normalizedNeedle >= currentWeightSum && normalizedNeedle < currentWeightSum + sliceSize) {
-                            currentIndex = i;
-                            break;
-                        }
-                        currentWeightSum += sliceSize;
-                    }
-
-                    if (currentIndex !== -1 && currentIndex !== this.lastTickIndex) {
-                        if (this.spinVelocity > 0.005) {
-                            this.playTick();
-                        }
-                        this.lastTickIndex = currentIndex;
-
-                        // Removed: Updating the text below the wheel here
-                        // The text stays invisible (opacity 0) until spin finishes
-                    }
-
-                    if (!this.isAccelerating && this.spinVelocity < 0.0015) {
-                        this.isSpinning = false;
-                        this.finishSpin(currentIndex);
-                    }
-                }
-
-                this.drawWheel();
-                requestAnimationFrame(this.loop.bind(this));
-            }
-
-            finishSpin(winningIndex) {
-                this.spinBtn.disabled = false;
-                this.spinBtn.style.opacity = "1";
-                this.playDing();
-
-                const winner = this.items[winningIndex];
-                this.currentWinner = winner;
-
-                // Show the text below the wheel now
-                const feedback = document.getElementById('current-winner');
-                feedback.innerText = winner.label;
-                feedback.style.opacity = '1';
-
-                const modal = document.getElementById('resultModal');
-                document.getElementById('winnerName').innerText = winner.label;
-                document.getElementById('winnerDesc').innerText = winner.desc || "Destiny has spoken!";
-
-                const wLink = document.getElementById('winnerLink');
-
-                // Explicit check for link existence
-                if (winner.link && winner.link.trim() !== "") {
-                    wLink.href = winner.link;
-                    wLink.classList.remove('hidden');
-                    // Ensure the text inside is updated too
-                    wLink.innerHTML = `View Details <svg class="icon" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>`;
-                } else {
-                    wLink.classList.add('hidden');
-                }
-
-                modal.classList.remove('hidden');
-                requestAnimationFrame(() => {
-                    modal.style.opacity = '1';
-                    modal.querySelector('.modal-content').style.transform = 'scale(1)';
-                });
-            }
-
-            closeModal() {
-                const modal = document.getElementById('resultModal');
-                modal.style.opacity = '0';
-                modal.querySelector('.modal-content').style.transform = 'scale(0.95)';
-                setTimeout(() => {
-                    modal.classList.add('hidden');
-                }, 300);
-            }
-
-            showToast(msg) {
-                const toast = document.getElementById('toast');
-                toast.innerText = msg;
-                toast.classList.add('show');
-                setTimeout(() => toast.classList.remove('show'), 2500);
-            }
-        }
-
-        const app = new PickerApp();
-        window.addEventListener('resize', () => app.handleResize());
-    </script>
+  </dialog>
+  <dialog id="resetModal" class="compact-dialog" aria-labelledby="resetTitle">
+    <div class="dialog-heading">
+      <h2 id="resetTitle">Restore the reading list?</h2>
+    </div>
+    <p class="help">
+      This replaces your current draft with the original six papers. Your
+      saved wheels stay in My wheels.
+    </p>
+    <div class="dialog-actions">
+      <button class="btn-secondary" onclick="app.closeResetModal()">
+        Cancel</button><button class="btn-primary" onclick="app.confirmReset()">
+        Restore list
+      </button>
+    </div>
+  </dialog>
+  <dialog id="settingsDialog" class="compact-dialog" aria-labelledby="settingsTitle">
+    <div class="dialog-heading">
+      <h2 id="settingsTitle">Settings</h2>
+      <button class="icon-button" onclick="app.closeDialog('settingsDialog')" aria-label="Close settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m6 6 12 12M18 6 6 18" />
+        </svg>
+      </button>
+    </div>
+    <div class="setting-row">
+      <div>
+        <h3>Appearance</h3>
+        <p>Light, dark, or your system setting.</p>
+      </div>
+      <button id="themeBtn" class="btn-secondary" onclick="app.cycleTheme()" title="Cycle theme"></button>
+    </div>
+    <div class="settings-section-label">Spin behavior</div>
+    <div class="setting-row setting-row-control">
+      <div>
+        <h3>Spin pace</h3>
+        <p>Choose a calm turn or a longer, more dramatic spin.</p>
+      </div>
+      <div class="motion-control" role="group" aria-label="Spin pace">
+        <button id="motionGentle" class="motion-choice" type="button" onclick="app.setMotion('gentle')">
+          <svg class="motion-glyph" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 16a8 8 0 0 1 16 0" />
+            <path d="M12 16V10" />
+          </svg>
+          <span>Slow</span>
+        </button>
+        <button id="motionFull" class="motion-choice" type="button" onclick="app.setMotion('full')">
+          <svg class="motion-glyph" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 16a9 9 0 0 1 18 0" />
+            <path d="M12 16V7M5 12l-2-2M19 12l2-2" />
+          </svg>
+          <span>Full</span>
+        </button>
+      </div>
+    </div>
+    <div class="setting-row setting-row-control">
+      <div>
+        <h3>Spin sound</h3>
+        <p>Play a soft tick as the wheel passes each option.</p>
+      </div>
+      <button id="muteBtn" class="btn-secondary setting-toggle" onclick="app.toggleMute()"
+        title="Toggle sound"></button>
+    </div>
+    <div class="setting-row setting-row-control">
+      <div>
+        <h3>Wheel icons</h3>
+        <p>Show each option's icon inside the wheel. The list keeps its icons.</p>
+      </div>
+      <button id="wheelIconsBtn" class="btn-secondary setting-toggle" onclick="app.toggleWheelIcons()"
+        title="Toggle wheel icons"></button>
+    </div>
+    <div class="setting-row setting-row-control">
+      <div>
+        <h3>Weight display</h3>
+        <p>Use a larger slice or spread extra chances around the wheel.</p>
+      </div>
+      <div class="motion-control weight-visual-control" role="group" aria-label="Weight display">
+        <button id="weightVisualProportional" class="motion-choice" type="button"
+          onclick="app.setWeightVisual('proportional')">
+          <span>Larger slice</span>
+        </button>
+        <button id="weightVisualDispersed" class="motion-choice" type="button"
+          onclick="app.setWeightVisual('dispersed')">
+          <span>Spread chances</span>
+        </button>
+      </div>
+    </div>
+    <div class="setting-row setting-row-control">
+      <div>
+        <h3>Dense wheel labels</h3>
+        <p>Use numbers for quick lookup or clipped labels for more context.</p>
+      </div>
+      <div class="motion-control dense-label-control" role="group" aria-label="Dense wheel labels">
+        <button id="denseLabelsNumbers" class="motion-choice" type="button" onclick="app.setDenseLabelMode('numbers')">
+          <span>Numbers</span>
+        </button>
+        <button id="denseLabelsText" class="motion-choice" type="button" onclick="app.setDenseLabelMode('text')">
+          <span>Clipped text</span>
+        </button>
+      </div>
+    </div>
+    <div class="setting-row">
+      <div>
+        <h3>Notion connection</h3>
+        <p>Optional. Your wheel works without it.</p>
+      </div>
+      <button class="btn-secondary" onclick="
+            app.closeDialog('settingsDialog');
+            app.notion.open();
+          ">
+        Manage
+      </button>
+    </div>
+    <div class="setting-row">
+      <div>
+        <h3>Original reading list</h3>
+        <p>Restore the six sample papers.</p>
+      </div>
+      <button class="text-button" onclick="
+            app.closeDialog('settingsDialog');
+            app.requestReset();
+          ">
+        Restore
+      </button>
+    </div>
+  </dialog>
+  <dialog id="libraryDialog" aria-labelledby="libraryTitle">
+    <div class="dialog-heading">
+      <h2 id="libraryTitle">My wheels</h2>
+      <button class="icon-button" onclick="app.closeDialog('libraryDialog')" aria-label="Close saved wheels">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m6 6 12 12M18 6 6 18" />
+        </svg>
+      </button>
+    </div>
+    <p class="help">
+      Your saved wheels live on this device. Export a file to keep a backup.
+    </p>
+    <div id="savedWheels" class="saved-wheels"></div>
+  </dialog>
+  <dialog id="confirmDialog" class="compact-dialog" aria-labelledby="confirmTitle">
+    <div class="dialog-heading">
+      <h2 id="confirmTitle">Replace this draft?</h2>
+    </div>
+    <p id="confirmMessage" class="help"></p>
+    <div class="dialog-actions">
+      <button class="btn-secondary" autofocus onclick="app.resolveConfirmation(false)">
+        Cancel</button><button id="confirmAccept" class="btn-primary" onclick="app.resolveConfirmation(true)">
+        Continue
+      </button>
+    </div>
+  </dialog>
+  <dialog id="shareDialog" class="compact-dialog" aria-labelledby="shareTitle">
+    <div class="dialog-heading">
+      <h2 id="shareTitle">Share this wheel</h2>
+      <button class="icon-button" onclick="app.closeDialog('shareDialog')" aria-label="Close sharing">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m6 6 12 12M18 6 6 18" />
+        </svg>
+      </button>
+    </div>
+    <p class="dialog-description">
+      Give someone their own copy of this wheel.
+    </p>
+    <div class="share-preview">
+      <svg class="share-wheel-mark" viewBox="0 0 48 48" aria-hidden="true">
+        <circle cx="24" cy="24" r="21" fill="#F2DED8" />
+        <path d="M24 3v42M3 24h42M9 9l30 30M9 39 39 9" stroke="white" stroke-width="2" />
+        <circle cx="24" cy="24" r="6" fill="white" />
+      </svg>
+      <div>
+        <strong id="shareWheelName"></strong><span id="shareWheelCount"></span>
+      </div>
+    </div>
+    <div class="share-facts">
+      <p>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m5 12 4 4L19 6" />
+        </svg>Includes options, descriptions, links and weights.
+      </p>
+      <p>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="5" y="10" width="14" height="11" rx="2" />
+          <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+        </svg>Your Notion connection stays private.
+      </p>
+    </div>
+    <p id="shareHint" class="help"></p>
+    <button id="copyShareButton" autofocus class="btn-primary wide-button" onclick="app.copyShareUrl()">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="8" y="8" width="12" height="12" rx="2" />
+        <path d="M15 8V4H4v11h4" />
+      </svg>Copy link
+    </button>
+    <button class="text-button wide-button" onclick="app.exportYAML()">
+      Download a wheel file
+    </button>
+    <details class="share-link-details">
+      <summary>View link</summary>
+      <label class="sr-only" for="shareUrl">Share link</label><input id="shareUrl" type="text" readonly
+        onclick="this.select()" />
+    </details>
+    <p class="privacy-note">
+      Anyone with the link can view this copy. Later edits stay on your wheel.
+    </p>
+  </dialog>
+  <dialog id="notionDialog" aria-labelledby="notionTitle">
+    <div class="dialog-heading">
+      <h2 id="notionTitle">Add from Notion</h2>
+      <button class="icon-button" onclick="app.closeDialog('notionDialog')" aria-label="Close Notion">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m6 6 12 12M18 6 6 18" />
+        </svg>
+      </button>
+    </div>
+    <div class="notion-dialog-scroll">
+      <p class="help">Choose a database, then pick the rows for your wheel.</p>
+      <details id="connectionDetails" open>
+        <summary>Connection settings</summary>
+        <div class="form-grid">
+          <label class="full-width">Proxy Worker URL<input id="notionProxy" type="url"
+              placeholder="https://your-proxy.workers.dev" autocomplete="off" /></label>
+          <label>Proxy token (if required)<input id="notionProxyToken" type="password" autocomplete="off" /></label>
+          <label>Notion integration token<input id="notionToken" type="password" placeholder="ntn_… or secret_…"
+              autocomplete="off" /></label>
+        </div>
+        <label class="check-label"><input id="notionRemember" type="checkbox" /> Remember credentials on
+          this device</label>
+        <p class="help">
+          Use your Photo Chronicles proxy or a Worker you trust. Your token
+          stays in this tab unless you choose to remember it.
+        </p>
+        <div class="button-row">
+          <button class="btn-primary" id="notionConnect" onclick="app.notion.connect()">
+            Connect with token</button><button class="btn-secondary" onclick="app.notion.oauth()">
+            Sign in with Notion</button><button class="btn-secondary" onclick="app.notion.disconnect()">
+            Disconnect
+          </button>
+        </div>
+        <details>
+          <summary>Setup help &amp; OAuth settings</summary>
+          <p class="help">
+            You can reuse your Photo Chronicles proxy. To host your own, use the
+            <a href="picker-wheel-notion-worker.mjs" download>Notion proxy Worker</a>
+            and follow the
+            <a href="picker-wheel-README.md" target="_blank" rel="noopener">setup notes</a>. OAuth uses the same sign-in
+            service as Photo Chronicles; its
+            return URL must allow this page.
+          </p>
+          <label>OAuth service URL<input id="notionOAuth" type="url" /></label>
+          <label>Local development unlock password (localhost only)<input id="notionDevPassword" type="password"
+              autocomplete="off" /></label>
+        </details>
+      </details>
+      <p id="notionStatus" role="status" aria-live="polite" class="help"></p>
+      <fieldset id="notionBrowser" disabled hidden>
+        <div class="button-row notion-database-search">
+          <label class="grow">Find a database<input id="notionDatabaseSearch" type="search"
+              placeholder="Database name" /></label><button class="btn-secondary" onclick="app.notion.search()">
+            Search databases
+          </button>
+        </div>
+        <label>Database / data source<select id="notionDatabase" onchange="app.notion.chooseSource(this.value)">
+            <option value="">Choose a database</option>
+          </select></label>
+        <p class="help">
+          Missing a database? Add this integration in its Notion Connections
+          menu.
+        </p>
+        <fieldset id="notionMapping" disabled hidden>
+          <div class="form-grid">
+            <label>Label property<select id="notionLabel" onchange="app.notion.renderRows()"></select></label>
+            <label>Weight property<select id="notionWeight" onchange="app.notion.renderRows()"></select></label>
+            <label>Description property<select id="notionDescription"
+                onchange="app.notion.renderRows()"></select></label>
+            <label>Link property<select id="notionLink" onchange="app.notion.renderRows()"></select></label>
+            <label>Filter by property<select id="notionFilterProperty"
+                onchange="app.notion.filterChanged()"></select></label>
+            <label>Filter value<select id="notionFilterValue" onchange="app.notion.renderRows()"></select></label>
+          </div>
+          <div class="notion-selection-card">
+            <div class="notion-selection-heading">
+              <div>
+                <h3>Choose rows</h3>
+                <p>Pick specific pages or create a smaller sample from the matches.</p>
+              </div>
+              <span id="notionSelectionCount" role="status"></span>
+            </div>
+            <div class="form-grid notion-selection-grid">
+              <label>Selection method<select id="notionSelectionMode" onchange="app.notion.selectionModeChanged()">
+                  <option value="manual">Choose manually</option>
+                  <option value="first">First N matching rows</option>
+                  <option value="random">Random N matching rows</option>
+                </select></label><label id="notionSelectionLimitWrap" hidden>Number of rows<input
+                  id="notionSelectionLimit" type="number" min="1" max="1000" step="1" value="20"
+                  inputmode="numeric" /></label>
+            </div>
+            <div class="notion-selection-actions">
+              <button id="notionApplySelection" class="btn-secondary" type="button"
+                onclick="app.notion.applySelection()" disabled>
+                Select rows
+              </button>
+              <span id="notionSelectionHint" class="help">Check individual rows below, or use a selection rule.</span>
+            </div>
+          </div>
+          <label>Search rows<input id="notionRowSearch" type="search" placeholder="Search labels and descriptions"
+              oninput="app.notion.renderRows()" /></label>
+          <div class="button-row">
+            <button class="btn-secondary" onclick="app.notion.selectVisible(true)">
+              Select visible</button><button class="btn-secondary" onclick="app.notion.selectVisible(false)">
+              Deselect visible</button>
+          </div>
+          <div id="notionRows" class="notion-rows"></div>
+          <p class="help">
+            Local options stay. Adding a row again updates it. A weight of 0
+            keeps it out of spins.
+          </p>
+          <button id="notionAdd" class="btn-primary" onclick="app.notion.addSelected()" disabled>
+            Add selected to wheel
+          </button>
+        </fieldset>
+      </fieldset>
+    </div>
+  </dialog>
+  <dialog id="notionEditDialog" aria-labelledby="notionEditTitle">
+    <div class="dialog-heading">
+      <h2 id="notionEditTitle">Update in Notion</h2>
+      <button class="icon-button" onclick="app.closeDialog('notionEditDialog')" aria-label="Close Notion editor">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m6 6 12 12M18 6 6 18" />
+        </svg>
+      </button>
+    </div>
+    <p id="notionEditLabel"></p>
+    <p class="help">
+      Changes are sent to this Notion page only when you save.
+    </p>
+    <form id="notionEditForm" onsubmit="app.notion.savePage(event)">
+      <div id="notionEditFields" class="form-grid"></div>
+      <p id="notionEditStatus" role="status" class="help"></p>
+      <button id="notionSavePage" class="btn-primary" type="submit">
+        Save to Notion
+      </button>
+    </form>
+  </dialog>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script src="picker-wheel-core.js?v=13"></script>
+  <script src="picker-wheel-notion.js?v=14"></script>
+  <script src="picker-wheel-app.js?v=20"></script>
 </body>
 
 </html>
