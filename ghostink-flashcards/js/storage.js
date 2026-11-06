@@ -23,6 +23,7 @@ const SETTINGS_VERSION = 1;
 const DEFAULT_SETTINGS = Object.freeze({
     settingsVersion: SETTINGS_VERSION,
     workerUrl: '',
+    useProxy: false,
     proxyToken: '',
     authToken: '',
     deckSource: '',

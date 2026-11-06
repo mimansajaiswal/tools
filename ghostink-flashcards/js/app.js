@@ -1879,7 +1879,7 @@ export const App = {
             toast('Notion token captured');
             safeHistoryReplace({}, document.title, location.pathname);
             this.openSettings();
-            if (this.state.settings.workerUrl) {
+            if (API.transportReady(this.state.settings)) {
                 this.verifyAuth().catch(() => { });
             } else {
                 toast('Add worker URL then scan sources');
@@ -2868,9 +2868,18 @@ export const App = {
         el('#openSettings').onclick = () => this.openSettings();
         el('#closeSettings').onclick = () => this.closeSettings();
         el('#saveSettings').onclick = () => this.saveSettings();
+        el('#settingUseProxy').onchange = () => {
+            this.state.settings.useProxy = el('#settingUseProxy').checked;
+            this.state.settings.workerUrl = el('#settingWorkerUrl').value.trim();
+            this.state.settings.proxyToken = el('#settingProxyToken').value.trim();
+            this.state.workerVerified = false;
+            this.state.settings.workerVerified = false;
+            Storage.setSettings(this.state.settings);
+            this.renderStatus(); this.renderGate();
+        };
         el('#verifyWorker').onclick = () => this.verifyWorker();
         el('#verifyAuth').onclick = () => this.verifyAuth();
-        el('#oauthBtn').onclick = () => { if (this.state.settings.workerUrl) this.startOAuth(); else toast('Add worker URL first'); };
+        el('#oauthBtn').onclick = () => this.startOAuth();
         el('#scanSources').onclick = () => this.scanSources();
         el('#saveSourcesChoice').onclick = () => {
             this.state.settings.deckSource = el('#deckSourceSelect').value;
@@ -3219,9 +3228,9 @@ export const App = {
         const oauth = el('#oauthBtn');
         const verifyAuthBtn = el('#verifyAuth');
         const tokenInput = el('#settingAuthToken');
-        if (oauth) oauth.disabled = !this.state.settings.workerUrl;
-        if (verifyAuthBtn) verifyAuthBtn.disabled = !this.state.settings.workerUrl;
-        if (tokenInput) tokenInput.disabled = !this.state.settings.workerUrl;
+        if (oauth) oauth.disabled = !API.transportReady(this.state.settings);
+        if (verifyAuthBtn) verifyAuthBtn.disabled = !API.transportReady(this.state.settings);
+        if (tokenInput) tokenInput.disabled = !API.transportReady(this.state.settings);
         this.updateSettingsButtons();
     },
     renderConnection() {
@@ -3229,8 +3238,8 @@ export const App = {
         const badgeText = el('#connectionBadgeText');
         const badgeIcon = el('#connectionBadgeIcon');
         const online = navigator.onLine;
-        const hasWorkerUrl = !!this.state.settings.workerUrl;
-        const workerOk = hasWorkerUrl && this.state.workerVerified;
+        const hasWorkerUrl = API.transportReady(this.state.settings);
+        const workerOk = this.state.settings.useProxy !== true || (hasWorkerUrl && this.state.workerVerified);
         const hasToken = !!this.state.settings.authToken;
         const authOk = workerOk && hasToken && (this.state.authVerified || this.state.settings.authVerified);
         const ready = online && workerOk && authOk;
@@ -9822,6 +9831,7 @@ export const App = {
         setLastFocusedElement(document.activeElement);
         const s = this.state.settings;
         el('#settingWorkerUrl').value = s.workerUrl;
+        el('#settingUseProxy').checked = s.useProxy === true;
         el('#settingProxyToken').value = s.proxyToken;
         el('#settingAuthToken').value = s.authToken.startsWith('secret_') ? s.authToken : s.authToken;
         const modal = el('#settingsModal');
@@ -9867,6 +9877,7 @@ export const App = {
         modal.classList.add('flex');
     },
     async saveSettings() {
+        const prevUseProxy = this.state.settings.useProxy;
         const prevWorkerUrl = this.state.settings.workerUrl;
         const prevProxyToken = this.state.settings.proxyToken;
         const prevAiProvider = this.state.settings.aiProvider || '';
@@ -9876,9 +9887,10 @@ export const App = {
         const prevDyProvider = this.state.settings.dyProvider || '';
         const prevDyModel = this.state.settings.dyModel || '';
         const prevDyKey = this.state.settings.dyKey || '';
+        this.state.settings.useProxy = el('#settingUseProxy').checked;
         this.state.settings.workerUrl = el('#settingWorkerUrl').value.trim();
         this.state.settings.proxyToken = el('#settingProxyToken').value.trim();
-        if (this.state.settings.workerUrl !== prevWorkerUrl || this.state.settings.proxyToken !== prevProxyToken) {
+        if (this.state.settings.useProxy !== prevUseProxy || this.state.settings.workerUrl !== prevWorkerUrl || this.state.settings.proxyToken !== prevProxyToken) {
             this.state.workerVerified = false;
             this.state.settings.workerVerified = false;
         }
@@ -10003,6 +10015,7 @@ export const App = {
             const res = await fetch(url.toString(), { headers });
             if (res.ok || res.status === 401) {
                 toast('Worker reachable');
+                this.state.settings.useProxy = el('#settingUseProxy').checked;
                 this.state.settings.workerUrl = workerUrl;
                 this.state.settings.proxyToken = proxyToken;
                 this.state.workerVerified = true;
@@ -10025,7 +10038,7 @@ export const App = {
             toast('Offline: connect to verify Notion token');
             return;
         }
-        if (!this.state.settings.workerUrl) { this.updateSettingsButtons(); return toast('Add worker URL first'); }
+        const useProxy = el('#settingUseProxy').checked;
         const workerUrl = (el('#settingWorkerUrl').value.trim()) || this.state.settings.workerUrl;
         const proxyToken = (el('#settingProxyToken').value.trim()) || this.state.settings.proxyToken;
         const authVal = (el('#settingAuthToken').value.trim()) || this.state.settings.authToken;
@@ -10033,10 +10046,12 @@ export const App = {
         try {
             showLoading('Verifying Notion token...', 'Checking access with Notion.');
             await API.request('GET', '/users/me', null, {
+                useProxy,
                 workerUrl,
                 proxyToken,
                 authToken: authVal
             });
+            this.state.settings.useProxy = el('#settingUseProxy').checked;
             this.state.settings.workerUrl = workerUrl;
             this.state.settings.proxyToken = proxyToken;
             this.state.settings.authToken = authVal;
@@ -10248,7 +10263,6 @@ export const App = {
         return '';
     },
     async startOAuth() {
-        if (!this.state.settings.workerUrl) return toast('Add worker URL first');
         this.saveSettings();
         showLoading('Starting Notion sign-in...', 'Redirecting to Notion authorization.');
         const oauthBase = 'https://notion-oauth-handler.mimansa-jaiswal.workers.dev';
@@ -10287,7 +10301,7 @@ export const App = {
             toast('Offline: cannot scan databases');
             return;
         }
-        if (!this.state.settings.workerUrl || !this.state.settings.authToken) return toast('Add worker URL and token first');
+        if (!API.transportReady(this.state.settings) || !this.state.settings.authToken) return toast('Connect to Notion first');
         try {
             showLoading('Scanning databases...', 'Finding valid deck and card sources.');
             toastLong('Scanning data sources...');
@@ -10448,14 +10462,14 @@ export const App = {
         location.reload();
     },
     renderStatus() {
-        const hasWorkerUrl = !!this.state.settings.workerUrl;
-        const workerOk = hasWorkerUrl && (this.state.workerVerified || this.state.settings.workerVerified);
+        const hasWorkerUrl = API.transportReady(this.state.settings);
+        const workerOk = this.state.settings.useProxy !== true || (hasWorkerUrl && (this.state.workerVerified || this.state.settings.workerVerified));
         const hasToken = !!this.state.settings.authToken;
         const authOk = workerOk && hasToken && (this.state.authVerified || this.state.settings.authVerified);
         const hasSources = !!(this.state.settings.deckSource && this.state.settings.cardSource && this.state.sourcesVerified);
         const sourcesSaved = this.state.settings.sourcesSaved === true;
 
-        el('#statusWorker').textContent = `Worker: ${workerOk ? 'verified' : hasWorkerUrl ? 'unverified' : 'missing'}`;
+        el('#statusWorker').textContent = this.state.settings.useProxy !== true ? 'API: direct browser connection' : `Proxy: ${workerOk ? 'verified' : hasWorkerUrl ? 'unverified' : 'missing'}`;
         el('#statusAuth').textContent = `Auth: ${authOk ? 'verified' : workerOk ? (hasToken ? 'unverified' : 'missing') : 'blocked (verify worker)'}`;
         el('#statusSources').textContent = `Sources: ${hasSources ? 'verified' : 'missing'}`;
 
@@ -10544,8 +10558,8 @@ export const App = {
     },
     updateSettingsButtons() {
         const s = this.state.settings;
-        // Block scan/save/sources until both worker AND Notion auth are verified
-        const workerOk = s.workerVerified || this.state.workerVerified;
+        // Proxy verification is required only when the proxy is enabled.
+        const workerOk = s.useProxy !== true || s.workerVerified || this.state.workerVerified;
         const notionOk = s.authVerified || this.state.authVerified;
         const blockScanSave = !(workerOk && notionOk);
         const online = navigator.onLine;
@@ -10558,7 +10572,7 @@ export const App = {
         const oa = el('#oauthBtn');
         const va = el('#verifyAuth');
         const tokenInput = el('#settingAuthToken');
-        const blockAuth = !this.state.settings.workerUrl;
+        const blockAuth = !API.transportReady(this.state.settings);
         if (oa) { oa.disabled = blockAuth; oa.classList.toggle('opacity-60', blockAuth); oa.classList.toggle('cursor-not-allowed', blockAuth); }
         if (va) { va.disabled = blockAuth; va.classList.toggle('opacity-60', blockAuth); va.classList.toggle('cursor-not-allowed', blockAuth); }
         if (tokenInput) tokenInput.disabled = blockAuth;
@@ -10575,6 +10589,7 @@ export const App = {
     async autoVerifyWorker() {
         const s = this.state.settings;
         // If already verified from storage, just re-render gate
+        if (s.useProxy !== true) { this.renderGate(); this.renderConnection(); return; }
         if (s.workerUrl && this.state.workerVerified && s.authToken && this.state.sourcesVerified) {
             this.renderGate();
             el('#workerSettingsDetails')?.removeAttribute('open');
@@ -10760,12 +10775,12 @@ export const App = {
     },
     isReady() {
         const s = this.state.settings;
-        const hasSettings = !!(s.workerUrl && s.authToken && s.deckSource && s.cardSource);
+        const hasSettings = !!(API.transportReady(s) && s.authToken && s.deckSource && s.cardSource);
         const hasSavedSources = s.sourcesSaved === true;
         // If offline, trust the stored settings (assume they were verified before)
         if (!navigator.onLine && hasSettings && hasSavedSources) return true;
         // If online, require full verification
-        return hasSettings && hasSavedSources && s.workerVerified && (s.authVerified || this.state.authVerified) && s.sourcesVerified;
+        return hasSettings && hasSavedSources && (s.useProxy !== true || s.workerVerified) && (s.authVerified || this.state.authVerified) && s.sourcesVerified;
     },
     loadAISettings() {
         const s = Storage.getSettings();

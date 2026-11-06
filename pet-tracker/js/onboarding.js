@@ -71,7 +71,7 @@ const Onboarding = {
     init: () => {
         const settings = PetTracker.Settings.get();
         if (settings.onboardingInProgress && settings.onboardingStep) {
-            Onboarding.currentStep = settings.onboardingStep;
+            Onboarding.currentStep = settings.onboardingStep === 2 ? 3 : settings.onboardingStep;
         } else {
             Onboarding.currentStep = 1;
         }
@@ -118,7 +118,7 @@ const Onboarding = {
         }
 
         if (Onboarding.currentStep < Onboarding.totalSteps) {
-            Onboarding.currentStep++;
+            Onboarding.currentStep += Onboarding.currentStep === 1 ? 2 : 1;
             Onboarding.updateUI();
 
             // Initialize multi-select dropdowns when entering step 4
@@ -135,7 +135,7 @@ const Onboarding = {
      */
     prevStep: () => {
         if (Onboarding.currentStep > 1) {
-            Onboarding.currentStep--;
+            Onboarding.currentStep -= Onboarding.currentStep === 3 ? 2 : 1;
             Onboarding.updateUI();
 
             if (Onboarding.currentStep === 4) {
@@ -184,12 +184,8 @@ const Onboarding = {
                 nextBtn.innerHTML = 'Next<i data-lucide="arrow-right" class="w-4 h-4 inline ml-1"></i>';
             }
 
-            // Disable next button on step 2 and 3 until verified
-            if (Onboarding.currentStep === 2) {
-                const verified = document.getElementById('onboardingWorkerVerified')?.value === 'true';
-                nextBtn.disabled = !verified;
-                nextBtn.classList.toggle('opacity-50', !verified);
-            } else if (Onboarding.currentStep === 3) {
+            // Verify the Notion databases before continuing.
+            if (Onboarding.currentStep === 3) {
                 const verified = document.getElementById('onboardingDatabasesVerified')?.value === 'true';
                 const disabled = !verified || Onboarding.existingDataCheckInFlight;
                 nextBtn.disabled = disabled;
@@ -205,6 +201,7 @@ const Onboarding = {
 
     syncFieldsFromSettings: () => {
         const settings = PetTracker.Settings.get();
+        document.getElementById('onboardingUseProxy').checked = settings.useProxy === true;
         const workerUrl = document.getElementById('onboardingWorkerUrl');
         if (workerUrl && !workerUrl.value && settings.workerUrl) {
             workerUrl.value = settings.workerUrl;
@@ -430,20 +427,6 @@ const Onboarding = {
      */
     validateStep: async (step) => {
         switch (step) {
-            case 2:
-                const workerUrl = document.getElementById('onboardingWorkerUrl')?.value;
-                const verified = document.getElementById('onboardingWorkerVerified')?.value === 'true';
-
-                if (!workerUrl) {
-                    PetTracker.UI.toast('Worker URL is required', 'error');
-                    return false;
-                }
-                if (!verified) {
-                    PetTracker.UI.toast('Please verify Worker first', 'warning');
-                    return false;
-                }
-                return true;
-
             case 3:
                 const notionToken = document.getElementById('onboardingNotionToken')?.value;
                 const dbVerified = document.getElementById('onboardingDatabasesVerified')?.value === 'true';
@@ -484,18 +467,19 @@ const Onboarding = {
      * Save step data
      */
     saveStepData: async (step) => {
-        switch (step) {
-            case 2:
-                const workerUrl = document.getElementById('onboardingWorkerUrl')?.value;
-                const proxyToken = document.getElementById('onboardingProxyToken')?.value;
-                PetTracker.Settings.set({ workerUrl, proxyToken });
-                break;
-        }
+        if (step === 3) Onboarding.saveProxySettings();
     },
 
     /**
      * Verify Worker connection
      */
+    saveProxySettings: () => {
+        PetTracker.Settings.set({
+            useProxy: document.getElementById('onboardingUseProxy').checked,
+            workerUrl: document.getElementById('onboardingWorkerUrl').value.trim(),
+            proxyToken: document.getElementById('onboardingProxyToken').value.trim()
+        });
+    },
     verifyWorker: async () => {
         const workerUrlInput = document.getElementById('onboardingWorkerUrl');
         const workerUrlRaw = workerUrlInput?.value?.trim();
@@ -514,7 +498,7 @@ const Onboarding = {
             PetTracker.UI.showLoading('Verifying Worker...');
             if (workerUrlInput) workerUrlInput.value = workerUrl;
 
-            PetTracker.Settings.set({ workerUrl, proxyToken });
+            PetTracker.Settings.set({ workerUrl, proxyToken, useProxy: document.getElementById('onboardingUseProxy').checked });
 
             const url = new URL(workerUrl.replace(/\/$/, ''));
             url.searchParams.append('url', 'https://api.notion.com/v1/users/me');
@@ -564,9 +548,7 @@ const Onboarding = {
         const workerUrl = document.getElementById('onboardingWorkerUrl')?.value?.trim();
         const proxyToken = document.getElementById('onboardingProxyToken')?.value?.trim();
 
-        if (workerUrl) {
-            PetTracker.Settings.set({ workerUrl, proxyToken: proxyToken || '' });
-        }
+        PetTracker.Settings.set({ workerUrl, proxyToken: proxyToken || '', useProxy: document.getElementById('onboardingUseProxy').checked });
 
         PetTracker.Settings.set({
             onboardingInProgress: true,
@@ -648,6 +630,7 @@ const Onboarding = {
      * Find and list Notion databases with smart matching
      */
     findDatabases: async () => {
+        Onboarding.saveProxySettings();
         const token = document.getElementById('onboardingNotionToken')?.value?.trim();
         const container = document.getElementById('onboardingDbList');
         const verifyBtn = document.getElementById('onboardingDbVerifyBtn');

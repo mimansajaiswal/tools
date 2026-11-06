@@ -330,7 +330,7 @@
                         class="rounded-lg bg-[color:var(--surface)] border border-[color:var(--card-border)] p-3 space-y-1">
                         <div class="flex items-center gap-2 text-accent font-semibold"><i data-lucide="link"
                                 class="w-4 h-4"></i>2. Connect</div>
-                        <p class="text-sub">Add worker URL, Notion token, and select your new databases.</p>
+                        <p class="text-sub">Connect to Notion and select your new databases.</p>
                     </div>
                     <div
                         class="rounded-lg bg-[color:var(--surface)] border border-[color:var(--card-border)] p-3 space-y-1">
@@ -1257,12 +1257,12 @@
             <div class="grid md:grid-cols-2 gap-6 text-sm mt-4">
                 <div class="space-y-4">
                     <!-- Worker Proxy Accordion -->
-                    <details id="workerSettingsDetails" class="group" open>
+                    <details id="workerSettingsDetails" class="group">
                         <summary
                             class="flex items-center gap-2 font-display text-base text-main cursor-pointer select-none py-1 mb-2 hover:text-accent transition-colors list-none outline-none">
                             <i data-lucide="chevron-right"
                                 class="w-4 h-4 transition-transform group-open:rotate-90"></i>
-                            <span>Worker Proxy</span>
+                            <span>Optional API proxy</span>
                         </summary>
                         <div class="space-y-4 pl-2 border-l-2 border-faint ml-1.5">
                             <div class="rounded-lg border border-card p-3 bg-surface ">
@@ -1273,10 +1273,10 @@
                                         <i data-lucide="code" class="w-4 h-4"></i> Worker code
                                     </button>
                                 </div>
-                                <p class="text-xs text-sub mt-1">Add Cloudflare Worker URL
-                                    even if you plan to sign in with Notion.</p>
+                                <p class="text-xs text-sub mt-1">Notion API calls go directly from your browser by default. OAuth sign-in uses our server. Enable the proxy below to use a trusted Worker.</p>
                             </div>
                             <div>
+                                <label class="flex items-center gap-2 text-xs text-sub"><input id="settingUseProxy" type="checkbox">Send Notion API calls through a proxy</label>
                                 <label class="text-xs text-sub">Cloudflare Worker URL</label>
                                 <input id="settingWorkerUrl" type="text" placeholder="https://your-proxy.workers.dev"
                                     class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2">
@@ -1574,7 +1574,7 @@
                         class="w-5 h-5"></i></button>
             </div>
             <div class="flex-1 overflow-y-auto space-y-3 text-sm text-main">
-                <p>Deploy this Worker to bypass CORS and forward Notion requests.</p>
+                <p>Notion supports direct browser calls. Deploy this optional Worker if you prefer to proxy requests. The Worker receives your Notion token.</p>
                 <ol class="list-decimal pl-6 space-y-2">
                     <li>Open <a class="text-accent underline" href="https://workers.cloudflare.com/"
                             target="_blank">Cloudflare Workers</a> and create a new Worker.</li>
@@ -1582,7 +1582,7 @@
                     <li>(Optional) Add variable <code>ALL_CORS_PROXY_MATCH_TOKEN</code> to require
                         <code>X-Proxy-Token</code> (query <code>?token=</code> still accepted).
                     </li>
-                    <li>Paste the Worker URL into Settings.</li>
+                    <li>Paste the Worker URL into Settings and enable the API proxy.</li>
                 </ol>
                 <div class="relative">
                     <button id="copyWorkerCode"

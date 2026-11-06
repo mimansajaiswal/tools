@@ -449,9 +449,14 @@
                     </p>
                 </div>
 
-                <!-- 1. Proxy Settings (Step 1) -->
-                <div class="space-y-3 bg-oatmeal/40 p-4 border border-oatmeal-dark relative">
-                    <span class="section-label absolute -top-3 left-3">STEP 1: PROXY</span>
+                <p class="text-xs text-earth-metal">Connects directly to Notion from your browser. Sign in below to
+                    start.</p>
+                <details class="space-y-3 bg-oatmeal/40 p-4 border border-oatmeal-dark relative">
+                    <summary class="text-xs font-display font-semibold cursor-pointer">Optional API proxy</summary>
+                    <label class="flex items-center gap-2 text-xs text-earth-metal">
+                        <input type="checkbox" id="settingUseProxy" onchange="App.onSettingInput()">
+                        Send Notion API calls through a proxy
+                    </label>
 
                     <div class="pt-2">
                         <div class="flex justify-between items-center mb-1">
@@ -479,12 +484,11 @@
                         class="w-full bg-dull-purple hover:bg-dull-purple-hover text-white-linen py-2.5 text-xs font-display font-semibold uppercase tracking-wider transition-colors flex items-center justify-center gap-2">
                         Verify Proxy
                     </button>
-                </div>
+                </details>
 
                 <!-- 2. Authentication (Step 2) -->
-                <div id="authSection"
-                    class="bg-oatmeal/40 p-4 border border-oatmeal-dark relative opacity-50 pointer-events-none transition-opacity">
-                    <span class="section-label absolute -top-3 left-3">STEP 2: AUTH</span>
+                <div id="authSection" class="bg-oatmeal/40 p-4 border border-oatmeal-dark relative transition-opacity">
+                    <span class="section-label absolute -top-3 left-3">NOTION CONNECTION</span>
 
                     <div class="flex justify-between items-center mb-2 mt-3">
                         <label
@@ -579,7 +583,9 @@
                 </button>
             </div>
             <div class="flex-1 overflow-y-auto space-y-4 text-sm text-earth-metal pr-2">
-                <p>To bypass Notion's CORS restrictions, you need a small proxy. We use Cloudflare Workers (Free).</p>
+                <p>Notion supports direct browser API calls. A proxy is optional. Enable it in settings if you prefer to
+                    use a trusted Cloudflare Worker. The Worker receives your Notion token for each request. OAuth code
+                    exchange uses our server sign-in service.</p>
                 <ol class="list-decimal pl-5 space-y-2">
                     <li>Go to <a href="https://workers.cloudflare.com/" target="_blank"
                             class="text-dull-purple underline">Cloudflare Workers</a> and create a new Worker.</li>
@@ -1508,6 +1514,7 @@ export default {
             getSettings: () => {
                 const fallback = {
                     workerUrl: "",
+                    useProxy: false,
                     authToken: "",
                     proxyToken: "",
                     orientation: "landscape",
@@ -1897,20 +1904,28 @@ export default {
         };
 
         const API = {
+            connectionReady: (settings) => !!settings.authToken &&
+                (settings.useProxy !== true || !!settings.workerUrl),
+            requestUrl: (target, settings) => {
+                if (settings.useProxy !== true) return new URL(target);
+                if (!settings.workerUrl?.trim()) throw new Error("Enter a proxy Worker URL or turn off the API proxy.");
+                const url = new URL(settings.workerUrl.trim().replace(/\/$/, ''));
+                url.searchParams.set('url', target);
+                return url;
+            },
             request: async (method, notionEndpoint, body = null, overrideSettings = null) => {
-                const { workerUrl, authToken, proxyToken } = overrideSettings || Storage.getSettings();
-                if (!workerUrl || !authToken) throw new Error("Missing Settings");
+                const settings = overrideSettings || Storage.getSettings();
+                const { authToken, proxyToken } = settings;
+                if (!authToken) throw new Error("Connect to Notion first.");
 
-                const cleanWorkerUrl = workerUrl.trim().replace(/\/$/, '');
                 const cleanToken = proxyToken ? proxyToken.trim() : null;
                 const cleanAuth = authToken.trim();
                 const target = `https://api.notion.com/v1${notionEndpoint}`;
 
-                const fetchUrl = new URL(cleanWorkerUrl);
-                fetchUrl.searchParams.append('url', target);
+                const fetchUrl = API.requestUrl(target, settings);
 
                 const headers = { 'Authorization': `Bearer ${cleanAuth}`, 'Notion-Version': '2025-09-03' };
-                if (cleanToken) headers['X-Proxy-Token'] = cleanToken;
+                if (settings.useProxy === true && cleanToken) headers['X-Proxy-Token'] = cleanToken;
                 if (!(body instanceof FormData)) {
                     headers['Content-Type'] = 'application/json';
                     body = body ? JSON.stringify(body) : null;
@@ -1936,22 +1951,24 @@ export default {
                         if (!navigator.onLine) {
                             throw new Error("Network Error: You're offline.");
                         }
-                        throw new Error("Network Error: Failed to reach proxy. Check Worker URL, CORS headers, or proxy token.");
+                        throw new Error(settings.useProxy === true
+                            ? "Network Error: Failed to reach proxy. Check Worker URL, CORS headers, or proxy token."
+                            : "Network Error: Failed to reach Notion. Check your connection.");
                     }
                     throw e;
                 }
             },
             uploadFileContent: async (uploadUrl, fileBlob) => {
-                const { workerUrl, authToken, proxyToken } = Storage.getSettings();
-                const cleanWorkerUrl = workerUrl.trim().replace(/\/$/, '');
+                const settings = Storage.getSettings();
+                const { authToken, proxyToken } = settings;
+                if (!authToken) throw new Error("Connect to Notion first.");
                 const cleanToken = proxyToken ? proxyToken.trim() : null;
-                const fetchUrl = new URL(cleanWorkerUrl);
-                fetchUrl.searchParams.append('url', uploadUrl);
+                const fetchUrl = API.requestUrl(uploadUrl, settings);
 
                 const formData = new FormData();
                 formData.append("file", fileBlob, "photo.jpg");
                 const headers = { 'Authorization': `Bearer ${authToken}`, 'Notion-Version': '2025-09-03' };
-                if (cleanToken) headers['X-Proxy-Token'] = cleanToken;
+                if (settings.useProxy === true && cleanToken) headers['X-Proxy-Token'] = cleanToken;
 
                 const res = await fetch(fetchUrl.toString(), { method: 'POST', headers, body: formData });
                 if (!res.ok) throw new Error(`Upload Failed`);
@@ -2123,7 +2140,7 @@ export default {
                 let diary = Storage.getData().find(d => d.id === diaryId);
                 if (!diary || !diary.dataSourceId) return;
                 const settings = Storage.getSettings();
-                if (!settings.workerUrl || !settings.authToken) {
+                if (!API.connectionReady(settings)) {
                     if (showUi) SyncManager.updateUI('error');
                     return;
                 }
@@ -3139,7 +3156,7 @@ export default {
                     cleanUrl.hash = '';
                     window.history.replaceState({}, document.title, cleanUrl.pathname + cleanUrl.search);
                     App.showToast(`Connected! Scanning data sources...`, 'success');
-                    if (newSettings.workerUrl) App.scanForDataSources(newSettings);
+                    if (API.connectionReady(newSettings)) App.scanForDataSources(newSettings);
                 }
 
                 if (App.state.diaries.length > 0) {
@@ -3312,7 +3329,7 @@ export default {
                 document.getElementById('dbSearchInput').value = '';
                 document.getElementById('selectedDbInfo').classList.add('hidden');
                 const s = Storage.getSettings();
-                if (!s.workerUrl || !s.authToken) {
+                if (!API.connectionReady(s)) {
                     App.showToast("Please connect to Notion first.", "error");
                     App.openModal('settingsModal');
                 } else {
@@ -3438,7 +3455,7 @@ export default {
             renderWelcomeState: () => {
                 const gallery = document.getElementById('entryGallery');
                 const s = Storage.getSettings();
-                const isConnected = s.workerUrl && s.authToken;
+                const isConnected = API.connectionReady(s);
                 const hasDiaries = App.state.diaries.length > 0;
                 if (!isConnected) {
                     gallery.innerHTML = `
@@ -5237,23 +5254,29 @@ export default {
                 document.getElementById('settingAuthToken').value = isSecret ? s.authToken : '';
                 document.getElementById('settingWorkerUrl').value = s.workerUrl || '';
                 document.getElementById('settingProxyToken').value = s.proxyToken || '';
+                document.getElementById('settingUseProxy').checked = s.useProxy === true;
                 const capValue = String(s.uploadCapMb || 5);
                 document.querySelectorAll('input[name="uploadCapMb"]').forEach((input) => {
                     input.checked = input.value === capValue;
                 });
-                const hasVerifiedWorker = !!s.workerUrl;
-                const authSection = document.getElementById('authSection');
-                if (hasVerifiedWorker) {
-                    authSection.classList.remove('opacity-50', 'pointer-events-none');
-                } else {
-                    authSection.classList.add('opacity-50', 'pointer-events-none');
-                }
+                App.updateProxyControls();
                 const isAuthVerified = !!s.authToken;
                 document.getElementById('saveSettingsBtn').disabled = !isAuthVerified;
             },
             onSettingInput: () => {
+                const current = Storage.getSettings();
+                Storage.setSettings({ ...current, ...App.readConnectionSettings() });
+                App.updateProxyControls();
+            },
+            readConnectionSettings: () => ({
+                useProxy: document.getElementById('settingUseProxy').checked,
+                workerUrl: document.getElementById('settingWorkerUrl').value.trim(),
+                proxyToken: document.getElementById('settingProxyToken').value.trim()
+            }),
+            updateProxyControls: () => {
                 const workerUrl = document.getElementById('settingWorkerUrl').value;
-                document.getElementById('verifyWorkerBtn').disabled = !workerUrl;
+                document.getElementById('verifyWorkerBtn').disabled =
+                    !document.getElementById('settingUseProxy').checked || !workerUrl.trim();
             },
             setUploadCap: (value) => {
                 const cap = Number(value) || 5;
@@ -5287,7 +5310,7 @@ export default {
                     if (res.ok || res.status === 401) {
                         App.showToast("Proxy Verified!", "success");
                         const current = Storage.getSettings();
-                        Storage.setSettings({ ...current, workerUrl, proxyToken });
+                        Storage.setSettings({ ...current, ...App.readConnectionSettings() });
                         document.getElementById('authSection').classList.remove('opacity-50', 'pointer-events-none');
                     } else {
                         throw new Error("Proxy returned status " + res.status);
@@ -5304,10 +5327,8 @@ export default {
                 return host === 'localhost' || host === '127.0.0.1';
             },
             saveBeforeOAuth: async () => {
-                const workerUrl = document.getElementById('settingWorkerUrl').value;
-                const proxyToken = document.getElementById('settingProxyToken').value;
                 const current = Storage.getSettings();
-                Storage.setSettings({ ...current, workerUrl, proxyToken });
+                Storage.setSettings({ ...current, ...App.readConnectionSettings() });
                 const returnTo = new URL('index.html', window.location.href).toString();
                 const loginUrl = new URL(`${OAUTH_HANDLER_URL}/auth/login`);
                 loginUrl.searchParams.set('from', returnTo);
@@ -5341,15 +5362,13 @@ export default {
                 window.location.href = loginUrl.toString();
             },
             testManualConnection: async (btn) => {
-                const workerUrl = document.getElementById('settingWorkerUrl').value;
                 const authToken = document.getElementById('settingAuthToken').value;
-                const proxyToken = document.getElementById('settingProxyToken').value;
-                if (!authToken || !workerUrl) return App.showToast("Token and Worker URL required", "error");
+                if (!authToken) return App.showToast("Notion token required", "error");
                 const originalText = btn.innerText;
                 btn.innerText = "Verifying...";
                 btn.disabled = true;
                 try {
-                    const tempSettings = { workerUrl, authToken, proxyToken };
+                    const tempSettings = { ...Storage.getSettings(), ...App.readConnectionSettings(), authToken };
                     const res = await API.request('GET', '/users/me', null, tempSettings);
                     App.showToast(`Verified: ${res.bot?.workspace_name || 'Connected'}`, 'success');
                     Storage.setSettings(tempSettings);

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pet-tracker-v18';
+const CACHE_NAME = 'pet-tracker-v19';
 const STATIC_ASSETS = [
     './',
     './index.html',

@@ -481,23 +481,32 @@
             <form class="flex-1 overflow-y-auto p-4" autocomplete="off" onsubmit="return false;">
                 <!-- Connection Tab -->
                 <div data-tab-panel="settings" data-panel="connection" class="space-y-4">
-                    <div>
-                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Cloudflare Worker URL
-                            *</label>
-                        <input type="url" id="settingsWorkerUrl" class="input-field"
-                            placeholder="https://your-worker.workers.dev">
-                        <p class="text-xs text-earth-metal mt-1">Your CORS proxy worker URL</p>
-                    </div>
-                    <div>
-                        <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Proxy Token
-                            (optional)</label>
-                        <input type="text" id="settingsProxyToken" class="input-field masked-input"
-                            placeholder="Optional auth token" autocomplete="off" data-lpignore="true"
-                            data-form-type="other">
-                        <p class="text-xs text-earth-metal mt-1">Required when the Worker has
-                            ALL_CORS_PROXY_MATCH_TOKEN set. This is separate from the OAuth dev password.</p>
-                    </div>
+                    <p class="text-xs text-earth-metal">Notion connects directly from your browser by default. OAuth
+                        sign-in uses our server.</p>
+                    <details>
+                        <summary class="text-sm cursor-pointer">Optional API proxy</summary>
+                        <label class="flex gap-2 items-center text-xs"><input id="settingsUseProxy" type="checkbox">Send
+                            Notion API calls through a proxy</label>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Cloudflare Worker
+                                URL</label>
+                            <input type="url" id="settingsWorkerUrl" class="input-field"
+                                placeholder="https://your-worker.workers.dev">
+                            <p class="text-xs text-earth-metal mt-1">Optional for Notion; required for Google Calendar
+                                and Todoist API calls. The Worker receives your Notion token when the API proxy is
+                                enabled.</p>
+                        </div>
+                        <div>
+                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Proxy Token
+                                (optional)</label>
+                            <input type="text" id="settingsProxyToken" class="input-field masked-input"
+                                placeholder="Optional auth token" autocomplete="off" data-lpignore="true"
+                                data-form-type="other">
+                            <p class="text-xs text-earth-metal mt-1">Required when the Worker has
+                                ALL_CORS_PROXY_MATCH_TOKEN set. This is separate from the OAuth dev password.</p>
+                        </div>
 
+                    </details>
                     <!-- Template Link -->
                     <div class="border border-dull-purple/30 p-3 bg-dull-purple/5">
                         <p class="text-sm text-charcoal">
@@ -794,7 +803,6 @@
                     <span class="section-header">Setup Wizard</span>
                     <div id="onboardingSteps" class="flex gap-1">
                         <span class="w-6 h-1 bg-dull-purple" data-step="1"></span>
-                        <span class="w-6 h-1 bg-oatmeal" data-step="2"></span>
                         <span class="w-6 h-1 bg-oatmeal" data-step="3"></span>
                         <span class="w-6 h-1 bg-oatmeal" data-step="4"></span>
                         <span class="w-6 h-1 bg-oatmeal" data-step="5"></span>
@@ -817,8 +825,8 @@
                         <div class="flex items-start gap-3">
                             <span class="badge badge-dark">1</span>
                             <div>
-                                <p class="text-sm text-charcoal font-medium">Set up Cloudflare Worker</p>
-                                <p class="text-xs text-earth-metal">Deploy the CORS proxy for API calls</p>
+                                <p class="text-sm text-charcoal font-medium">Use Notion in your browser</p>
+                                <p class="text-xs text-earth-metal">API calls connect directly by default</p>
                             </div>
                         </div>
                         <div class="flex items-start gap-3">
@@ -838,46 +846,51 @@
                     </div>
                 </div>
 
-                <!-- Step 2: Worker Setup -->
-                <div id="onboardingStep2" class="onboarding-step hidden">
-                    <h3 class="font-serif text-xl text-charcoal mb-4">Cloudflare Worker Setup</h3>
-                    <p class="text-earth-metal text-sm mb-4">Deploy a CORS proxy to enable API calls from this app.</p>
-
-                    <div class="space-y-4">
-                        <div>
-                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Worker URL *</label>
-                            <input type="url" id="onboardingWorkerUrl" class="input-field"
-                                placeholder="https://your-worker.workers.dev">
-                        </div>
-                        <div>
-                            <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Proxy Token
-                                (optional)</label>
-                            <input type="text" id="onboardingProxyToken" class="input-field masked-input"
-                                autocomplete="off" data-lpignore="true" data-form-type="other"
-                                placeholder="Your worker secret token">
-                            <p class="text-xs text-earth-metal mt-1">This is the Worker proxy token, not the local OAuth
-                                dev password.</p>
-                        </div>
-                        <input type="hidden" id="onboardingWorkerVerified" value="false">
-                        <div id="onboardingWorkerStatus" class="hidden"></div>
-
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <button type="button" onclick="App.showWorkerCode()"
-                                class="btn-secondary px-3 py-2 font-mono text-xs uppercase">
-                                <i data-lucide="code" class="w-4 h-4 inline mr-2"></i>Code
-                            </button>
-                            <button id="onboardingVerifyWorkerBtn" type="button" onclick="Onboarding.verifyWorker()"
-                                class="btn-primary px-3 py-2 font-mono text-xs uppercase">
-                                <i data-lucide="plug" class="w-4 h-4 inline mr-2"></i>Verify
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Step 3: Notion Connection -->
                 <div id="onboardingStep3" class="onboarding-step hidden">
                     <h3 class="font-serif text-xl text-charcoal mb-4">Connect to Notion</h3>
                     <p class="text-earth-metal text-sm mb-4">Connect your workspace and map the required databases.</p>
+
+                    <!-- Optional proxy setup -->
+                    <details class="mb-4">
+                        <summary class="text-sm cursor-pointer">Optional API proxy</summary>
+                        <label class="flex gap-2 items-center text-xs"><input id="onboardingUseProxy" type="checkbox"
+                                onchange="Onboarding.saveProxySettings()">Send Notion API calls through a proxy</label>
+                        <p class="text-earth-metal text-sm mb-4">Notion connects directly by default. Enable this option
+                            to use a trusted Worker.</p>
+
+                        <div class="space-y-4">
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Worker
+                                    URL</label>
+                                <input type="url" id="onboardingWorkerUrl" class="input-field"
+                                    placeholder="https://your-worker.workers.dev">
+                            </div>
+                            <div>
+                                <label class="font-mono text-xs uppercase text-earth-metal block mb-1">Proxy Token
+                                    (optional)</label>
+                                <input type="text" id="onboardingProxyToken" class="input-field masked-input"
+                                    autocomplete="off" data-lpignore="true" data-form-type="other"
+                                    placeholder="Your worker secret token">
+                                <p class="text-xs text-earth-metal mt-1">This is the Worker proxy token, not the local
+                                    OAuth
+                                    dev password.</p>
+                            </div>
+                            <input type="hidden" id="onboardingWorkerVerified" value="false">
+                            <div id="onboardingWorkerStatus" class="hidden"></div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <button type="button" onclick="App.showWorkerCode()"
+                                    class="btn-secondary px-3 py-2 font-mono text-xs uppercase">
+                                    <i data-lucide="code" class="w-4 h-4 inline mr-2"></i>Code
+                                </button>
+                                <button id="onboardingVerifyWorkerBtn" type="button" onclick="Onboarding.verifyWorker()"
+                                    class="btn-primary px-3 py-2 font-mono text-xs uppercase">
+                                    <i data-lucide="plug" class="w-4 h-4 inline mr-2"></i>Verify
+                                </button>
+                            </div>
+                        </div>
+                    </details>
 
                     <div class="space-y-4">
                         <!-- Template Link -->
@@ -1934,8 +1947,8 @@
     <!-- Scripts -->
     <script src="./js/storage.js"></script>
     <script src="./js/ui.js?v=11"></script>
-    <script src="./js/api.js?v=11"></script>
-    <script src="./js/sync.js?v=10"></script>
+    <script src="./js/api.js?v=12"></script>
+    <script src="./js/sync.js?v=11"></script>
     <script src="./js/pets.js?v=12"></script>
     <script src="./js/events.js?v=11"></script>
     <script src="./js/calendar.js?v=10"></script>
@@ -1949,8 +1962,8 @@
     <script src="./js/analytics.js"></script>
     <script src="./js/contacts.js"></script>
     <script src="./js/setup.js?v=10"></script>
-    <script src="./js/onboarding.js?v=11"></script>
-    <script src="./js/app.js?v=15"></script>
+    <script src="./js/onboarding.js?v=12"></script>
+    <script src="./js/app.js?v=16"></script>
 
     <script>
         // Worker code template

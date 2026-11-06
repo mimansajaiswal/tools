@@ -199,7 +199,7 @@ const Sync = {
             key => !!settings.dataSources?.[key]
         );
         const hasToken = settings.notionToken || settings.notionOAuthData?.access_token;
-        if (!settings.workerUrl || !hasToken || !hasDataSources) {
+        if (!PetTracker.API.transportReady(settings) || !hasToken || !hasDataSources) {
             console.log('[Sync] Not configured, skipping');
             return;
         }
