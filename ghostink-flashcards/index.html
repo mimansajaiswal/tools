@@ -1273,10 +1273,13 @@
                                         <i data-lucide="code" class="w-4 h-4"></i> Worker code
                                     </button>
                                 </div>
-                                <p class="text-xs text-sub mt-1">Notion API calls go directly from your browser by default. OAuth sign-in uses our server. Enable the proxy below to use a trusted Worker.</p>
+                                <p class="text-xs text-sub mt-1">Notion API calls go directly from your browser by
+                                    default. OAuth sign-in uses our server. Enable the proxy below to use a trusted
+                                    Worker.</p>
                             </div>
                             <div>
-                                <label class="flex items-center gap-2 text-xs text-sub"><input id="settingUseProxy" type="checkbox">Send Notion API calls through a proxy</label>
+                                <label class="flex items-center gap-2 text-xs text-sub"><input id="settingUseProxy"
+                                        type="checkbox">Send Notion API calls through a proxy</label>
                                 <label class="text-xs text-sub">Cloudflare Worker URL</label>
                                 <input id="settingWorkerUrl" type="text" placeholder="https://your-proxy.workers.dev"
                                     class="w-full rounded-lg border border-card bg-[var(--surface)] px-3 py-2">
@@ -1574,7 +1577,8 @@
                         class="w-5 h-5"></i></button>
             </div>
             <div class="flex-1 overflow-y-auto space-y-3 text-sm text-main">
-                <p>Notion supports direct browser calls. Deploy this optional Worker if you prefer to proxy requests. The Worker receives your Notion token.</p>
+                <p>Notion supports direct browser calls. Deploy this optional Worker if you prefer to proxy requests.
+                    The Worker receives your Notion token.</p>
                 <ol class="list-decimal pl-6 space-y-2">
                     <li>Open <a class="text-accent underline" href="https://workers.cloudflare.com/"
                             target="_blank">Cloudflare Workers</a> and create a new Worker.</li>
