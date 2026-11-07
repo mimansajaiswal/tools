@@ -143,8 +143,34 @@ const DB = {
             const store = tx.objectStore(storeName);
             record.updatedAt = record.updatedAt || new Date().toISOString();
             const request = store.put(record);
-            request.onsuccess = () => resolve(record);
-            request.onerror = () => reject(request.error);
+            tx.oncomplete = () => resolve(record);
+            tx.onerror = () => reject(tx.error || request.error);
+            tx.onabort = () => reject(tx.error || new Error('Write transaction aborted'));
+        });
+    },
+
+    // Read and change a record under the same write transaction. The callback is synchronous.
+    modify: async (storeName, id, change) => {
+        const db = await DB.open();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(storeName, 'readwrite');
+            const store = tx.objectStore(storeName);
+            const request = store.get(id);
+            let result = null;
+            let failure;
+            tx.oncomplete = () => resolve(result);
+            tx.onerror = () => reject(failure || tx.error);
+            tx.onabort = () => reject(failure || tx.error || new Error('Record change aborted'));
+            request.onsuccess = () => {
+                if (!request.result) return;
+                try {
+                    result = change(request.result);
+                    if (result) store.put(result);
+                } catch (error) {
+                    failure = error;
+                    tx.abort();
+                }
+            };
         });
     },
 
@@ -154,8 +180,9 @@ const DB = {
             const tx = db.transaction(storeName, 'readwrite');
             const store = tx.objectStore(storeName);
             const request = store.delete(id);
-            request.onsuccess = () => resolve(true);
-            request.onerror = () => reject(request.error);
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => reject(tx.error || request.error);
+            tx.onabort = () => reject(tx.error || new Error('Write transaction aborted'));
         });
     },
 
@@ -165,8 +192,9 @@ const DB = {
             const tx = db.transaction(storeName, 'readwrite');
             const store = tx.objectStore(storeName);
             const request = store.clear();
-            request.onsuccess = () => resolve(true);
-            request.onerror = () => reject(request.error);
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => reject(tx.error || request.error);
+            tx.onabort = () => reject(tx.error || new Error('Write transaction aborted'));
         });
     },
 
@@ -246,6 +274,9 @@ const SyncQueue = {
         });
         await previous;
         try {
+            if (typeof navigator !== 'undefined' && navigator.locks) {
+                return await navigator.locks.request('pettracker-queue-write', fn);
+            }
             return await fn();
         } finally {
             release();
@@ -267,104 +298,194 @@ const SyncQueue = {
         }
     },
 
-    add: async (operation) => {
-        return SyncQueue._withAddLock(async () => {
-            const existing = await SyncQueue.getActiveForRecord(operation.store, operation.recordId);
-            const now = new Date().toISOString();
+    _compact: (operation, existing) => {
+        const removeIds = new Set();
+        const write = item => ({ item, removeIds });
+        const now = new Date().toISOString();
 
-            const existingCreate = existing.find(item => item.type === 'create');
-            const existingUpdate = existing.find(item => item.type === 'update');
-            const existingDelete = existing.find(item => item.type === 'delete');
+        const existingCreate = existing.find(item => item.type === 'create');
+        const existingUpdate = existing.find(item => item.type === 'update');
+        const existingDelete = existing.find(item => item.type === 'delete');
 
-            // Queue compaction: collapse conflicting operations for same record.
-            if (operation.type === 'update') {
-                if (existingDelete) {
-                    return existingDelete;
-                }
-
-                if (existingCreate) {
-                    existingCreate.data = { ...(existingCreate.data || {}), ...(operation.data || {}) };
-                    existingCreate.status = 'pending';
-                    existingCreate.error = null;
-                    existingCreate.retryCount = existingCreate.retryCount || 0;
-                    existingCreate.lastAttempt = now;
-                    return DB.put(STORES.SYNC_QUEUE, existingCreate);
-                }
-
-                if (existingUpdate) {
-                    existingUpdate.data = { ...(existingUpdate.data || {}), ...(operation.data || {}) };
-                    existingUpdate.status = 'pending';
-                    existingUpdate.error = null;
-                    existingUpdate.lastAttempt = now;
-                    return DB.put(STORES.SYNC_QUEUE, existingUpdate);
-                }
+        // Queue compaction: collapse conflicting operations for same record.
+        if (operation.type === 'update') {
+            if (existingDelete) {
+                return write(existingDelete);
             }
 
-            if (operation.type === 'create') {
-                if (existingDelete) {
-                    await DB.delete(STORES.SYNC_QUEUE, existingDelete.id);
-                }
-
-                if (existingCreate) {
-                    existingCreate.data = { ...(existingCreate.data || {}), ...(operation.data || {}) };
-                    existingCreate.status = 'pending';
-                    existingCreate.error = null;
-                    existingCreate.lastAttempt = now;
-                    return DB.put(STORES.SYNC_QUEUE, existingCreate);
-                }
+            if (existingCreate) {
+                existingCreate.data = { ...(existingCreate.data || {}), ...(operation.data || {}) };
+                existingCreate.revision = (existingCreate.revision || 0) + 1;
+                existingCreate.status = existingCreate.uncertainCreate ? 'failed' : 'pending';
+                if (!existingCreate.uncertainCreate) existingCreate.error = null;
+                existingCreate.retryCount = existingCreate.retryCount || 0;
+                existingCreate.lastAttempt = now;
+                return write(existingCreate);
             }
 
-            if (operation.type === 'delete') {
-                const hasPendingCreateOrUpdate = existing.some(
-                    item => item.type === 'create' || item.type === 'update'
-                );
-                await SyncQueue.removeMany(existing.filter(
-                    item => item.type === 'create' || item.type === 'update'
-                ));
+            if (existingUpdate) {
+                existingUpdate.data = { ...(existingUpdate.data || {}), ...(operation.data || {}) };
+                existingUpdate.revision = (existingUpdate.revision || 0) + 1;
+                existingUpdate.status = 'pending';
+                existingUpdate.error = null;
+                existingUpdate.lastAttempt = now;
+                return write(existingUpdate);
+            }
+        }
 
-                // Created-and-deleted before first sync: remove queue noise and skip remote delete.
-                if (hasPendingCreateOrUpdate && !operation.data?.notionId) {
-                    if (existingDelete) {
-                        await DB.delete(STORES.SYNC_QUEUE, existingDelete.id);
-                    }
-                    return null;
-                }
-
-                if (existingDelete) {
-                    existingDelete.data = {
-                        ...(existingDelete.data || {}),
-                        ...(operation.data || {}),
-                        notionId: operation.data?.notionId || existingDelete.data?.notionId || null
-                    };
-                    existingDelete.status = 'pending';
-                    existingDelete.error = null;
-                    existingDelete.lastAttempt = now;
-                    return DB.put(STORES.SYNC_QUEUE, existingDelete);
-                }
-
-                // No known remote ID and no pending create/update to cancel -> skip.
-                if (!operation.data?.notionId) {
-                    return null;
-                }
+        if (operation.type === 'create') {
+            if (existingDelete) {
+                removeIds.add(existingDelete.id);
             }
 
-            const queueItem = {
-                ...operation,
-                id: generateId(),
-                status: 'pending',
-                createdAt: now,
-                retryCount: 0
-            };
-            return DB.put(STORES.SYNC_QUEUE, queueItem);
-        });
+            if (existingCreate) {
+                existingCreate.data = { ...(existingCreate.data || {}), ...(operation.data || {}) };
+                existingCreate.revision = (existingCreate.revision || 0) + 1;
+                existingCreate.status = existingCreate.uncertainCreate ? 'failed' : 'pending';
+                if (!existingCreate.uncertainCreate) existingCreate.error = null;
+                existingCreate.lastAttempt = now;
+                return write(existingCreate);
+            }
+        }
+
+        if (operation.type === 'delete') {
+            const hasPendingCreateOrUpdate = existing.some(
+                item => item.type === 'create' || item.type === 'update'
+            );
+            existing.filter(item => (item.type === 'create' || item.type === 'update') && !item.inFlight && !item.uncertainCreate)
+                .forEach(item => removeIds.add(item.id));
+
+            // Created-and-deleted before first sync: remove queue noise and skip remote delete.
+            if (hasPendingCreateOrUpdate && !existing.some(item => item.inFlight || item.uncertainCreate) && !operation.data?.notionId) {
+                if (existingDelete) {
+                    removeIds.add(existingDelete.id);
+                }
+                return write(null);
+            }
+
+            if (existingDelete) {
+                existingDelete.data = {
+                    ...(existingDelete.data || {}),
+                    ...(operation.data || {}),
+                    notionId: operation.data?.notionId || existingDelete.data?.notionId || null
+                };
+                existingDelete.revision = (existingDelete.revision || 0) + 1;
+                existingDelete.status = 'pending';
+                existingDelete.error = null;
+                existingDelete.lastAttempt = now;
+                return write(existingDelete);
+            }
+
+            // No known remote ID and no pending create/update to cancel -> skip.
+            if (!operation.data?.notionId && !existing.some(item => item.inFlight || item.uncertainCreate)) {
+                return write(null);
+            }
+        }
+
+        const queueItem = {
+            ...operation,
+            id: generateId(),
+            status: 'pending',
+            revision: 1,
+            createdAt: now,
+            retryCount: 0
+        };
+        return write(queueItem);
     },
+
+    add: async (operation) => SyncQueue._commit(operation, false),
+
+    // Save the local mutation and its outbox change in one durable transaction.
+    save: async (operation) => SyncQueue._commit(operation, true),
+
+    _commit: async (operation, saveRecord) => SyncQueue._withAddLock(async () => {
+        const db = await DB.open();
+        const storeNames = saveRecord ? [STORES.SYNC_QUEUE, operation.store] : [STORES.SYNC_QUEUE];
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(storeNames, 'readwrite');
+            const queue = tx.objectStore(STORES.SYNC_QUEUE);
+            const records = saveRecord ? tx.objectStore(operation.store) : null;
+            let result = null;
+            let record = null;
+            let failure;
+            tx.oncomplete = () => resolve(saveRecord ? record : result);
+            tx.onerror = () => reject(failure || tx.error);
+            tx.onabort = () => reject(failure || tx.error || new Error('Save transaction aborted'));
+
+            const write = current => {
+                const request = queue.getAll();
+                request.onsuccess = () => {
+                    try {
+                        let op = { ...operation };
+                        const existing = request.result.filter(item => item.store === op.store && item.recordId === op.recordId
+                            && (item.status === 'pending' || item.status === 'failed'));
+                        if (saveRecord) {
+                            if (op.type !== 'delete' && existing.some(item => item.type === 'delete')) throw new Error('Record was deleted before save');
+                            if (op.type === 'create' && current) {
+                                // A restored draft keeps the identity and current contents of its earlier save.
+                                record = current;
+                                if (current.synced) return;
+                                op = { ...op, type: current.notionId ? 'update' : 'create', data: current };
+                            } else if (op.type === 'update') {
+                                if (!current) throw new Error('Record was deleted before save');
+                                record = { ...op.data, notionId: current.notionId || op.data.notionId };
+                                op.data = record;
+                            } else if (op.type === 'delete') {
+                                op.data = { ...op.data, notionId: current?.notionId || op.data?.notionId };
+                            } else {
+                                record = op.data;
+                            }
+                        }
+                        const compacted = SyncQueue._compact(op, existing);
+                        for (const id of compacted.removeIds) queue.delete(id);
+                        if (compacted.item) queue.put(compacted.item);
+                        result = compacted.item;
+                        if (records) {
+                            if (op.type === 'delete') records.delete(op.recordId);
+                            else records.put(record);
+                        }
+                    } catch (error) {
+                        failure = error;
+                        tx.abort();
+                    }
+                };
+            };
+            if (records) {
+                const request = records.get(operation.recordId);
+                request.onsuccess = () => write(request.result);
+            } else {
+                write(null);
+            }
+        });
+    }),
 
     getPending: async () => {
         return DB.query(STORES.SYNC_QUEUE, item => item.status === 'pending');
     },
 
-    complete: async (id) => {
-        return DB.delete(STORES.SYNC_QUEUE, id);
+    claim: async (op) => SyncQueue._withAddLock(async () => {
+        const current = await DB.get(STORES.SYNC_QUEUE, op.id);
+        if (!current || current.status !== 'pending' || current.uncertainCreate
+            || (current.revision || 0) !== (op.revision || 0)) return null;
+        current.inFlight = true;
+        await DB.put(STORES.SYNC_QUEUE, current);
+        return current;
+    }),
+
+    complete: async (id, revision) => {
+        return SyncQueue._withAddLock(async () => {
+            const current = await DB.get(STORES.SYNC_QUEUE, id);
+            if (!current) return false;
+            if (revision !== undefined && (current.revision || 0) !== revision) {
+                // A newer edit was compacted into this operation while its older version was sent.
+                current.inFlight = false;
+                if (current.type === 'create') current.type = 'update';
+                await DB.put(STORES.SYNC_QUEUE, current);
+                return false;
+            }
+            await DB.delete(STORES.SYNC_QUEUE, id);
+            return true;
+        });
     },
 
     fail: async (id, error) => {
@@ -381,6 +502,7 @@ const SyncQueue = {
     resetFailed: async () => {
         const failed = await DB.query(STORES.SYNC_QUEUE, item => item.status === 'failed');
         for (const item of failed) {
+            if (item.uncertainCreate) continue;
             item.status = 'pending';
             await DB.put(STORES.SYNC_QUEUE, item);
         }

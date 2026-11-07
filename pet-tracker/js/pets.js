@@ -45,8 +45,7 @@ const Pets = {
             synced: false
         };
 
-        await PetTracker.DB.put(PetTracker.STORES.PETS, pet);
-        await PetTracker.SyncQueue.add({
+        await PetTracker.SyncQueue.save({
             type: 'create',
             store: 'pets',
             recordId: pet.id,
@@ -75,8 +74,7 @@ const Pets = {
             synced: false
         };
 
-        await PetTracker.DB.put(PetTracker.STORES.PETS, updated);
-        await PetTracker.SyncQueue.add({
+        await PetTracker.SyncQueue.save({
             type: 'update',
             store: 'pets',
             recordId: id,
@@ -104,23 +102,20 @@ const Pets = {
         );
 
         for (const event of events) {
-            await PetTracker.SyncQueue.add({
+            await PetTracker.SyncQueue.save({
                 type: 'delete',
                 store: 'events',
                 recordId: event.id,
                 data: { notionId: event.notionId }
             });
-            await PetTracker.DB.delete(PetTracker.STORES.EVENTS, event.id);
         }
 
-        await PetTracker.SyncQueue.add({
+        await PetTracker.SyncQueue.save({
             type: 'delete',
             store: 'pets',
             recordId: id,
             data: { notionId: pet.notionId }
         });
-
-        await PetTracker.DB.delete(PetTracker.STORES.PETS, id);
 
         // Update sync UI
         if (PetTracker.Sync?.updatePendingCount) {

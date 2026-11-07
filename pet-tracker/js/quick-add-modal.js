@@ -24,6 +24,8 @@
 
         open: async function (defaultTab) {
             await QuickAddModal._loadOptions();
+            await AI.restoreReview();
+            AI.renderEntries();
             QuickAddModal._applyAiState();
             QuickAddModal.clearAttachments();
             QuickAddModal.selectTab(defaultTab || 'quick');
@@ -32,6 +34,8 @@
         },
 
         close: async function () {
+            if (QuickAddModal.state.saving && !QuickAddModal.state.skipDraftOnClose) return;
+            if (AI.state.saving && AI.state.entries.some(e => !AI.state.deletedEntries.has(e._id))) return;
             if (QuickAddModal.state.tab === 'quick') {
                 var canClose = await QuickAddModal._prepareQuickClose();
                 if (!canClose) return;
@@ -42,6 +46,7 @@
         },
 
         selectTab: function (tab) {
+            if (QuickAddModal.state.saving || AI.state.saving) return;
             QuickAddModal.state.tab = tab;
 
             var quickBtn = document.getElementById('qaTabQuick');
@@ -438,8 +443,7 @@
                         updatedAt: now,
                         synced: false
                     };
-                    await PetTracker.DB.put(PetTracker.STORES.EVENT_TYPES, eventType);
-                    await PetTracker.SyncQueue.add({
+                    await PetTracker.SyncQueue.save({
                         type: 'create',
                         store: 'eventTypes',
                         recordId: eventType.id,
@@ -932,174 +936,197 @@
         },
 
         save: async function () {
-            var inst = QuickAddModal.state.qaInstance;
-            if (!inst || typeof inst.getResult !== 'function') {
-                PetTracker.UI.toast('Quick Add is not initialized', 'error');
-                return;
-            }
-
-            var result = inst.getResult();
-            if (!result || !result.entries || result.entries.length === 0) {
-                PetTracker.UI.toast('No entries to save', 'warning');
-                return;
-            }
-
-            if (typeof inst.exportResult !== 'function') {
-                PetTracker.UI.toast('Quick Add export is not available', 'error');
-                return;
-            }
-
-            var exportPayload = null;
+            if (QuickAddModal.state.saving) return;
+            QuickAddModal.state.saving = true;
+            var panel = typeof document !== 'undefined' ? document.getElementById('qaPanelQuick') : null;
             try {
-                exportPayload = await inst.exportResult({
-                    attachmentMode: 'metadata-only',
-                    includeUnlinked: false,
-                    runWarnings: true,
-                    runValidation: false
-                });
-            } catch (e) {
-                if (String(e && e.message || '').indexOf('warnings check') >= 0) return;
-                PetTracker.UI.toast('Could not prepare Quick Add entries', 'error');
-                return;
-            }
-
-            var validEntries = (exportPayload.entries || []).filter(function (e) { return e.isValid; });
-            if (validEntries.length === 0) {
-                PetTracker.UI.toast('No valid entries — fill required fields (pet, type)', 'error');
-                return;
-            }
-
-            var pets = QuickAddModal.state.pets;
-            var eventTypes = QuickAddModal.state.eventTypes;
-            var scaleLevels = QuickAddModal.state.scaleLevels;
-            var saved = 0;
-            var errors = [];
-
-            for (var i = 0; i < validEntries.length; i++) {
-                var entry = validEntries[i];
-                var fields = entry.fields || {};
-
-                try {
-                    var petName = QuickAddModal._fieldValue(fields.pet);
-                    var typeName = QuickAddModal._fieldValue(fields.type);
-
-                    var pet = pets.find(function (p) {
-                        return p.name.toLowerCase() === (petName || '').toLowerCase();
-                    });
-                    var eventType = eventTypes.find(function (t) {
-                        return t.name.toLowerCase() === (typeName || '').toLowerCase();
-                    });
-
-                    if (!pet) {
-                        errors.push('Pet "' + petName + '" not found');
-                        continue;
-                    }
-                    if (!eventType) {
-                        errors.push('Event type "' + typeName + '" not found');
-                        continue;
-                    }
-
-                    var validationErrors = QuickAddModal._validateEntry(fields, pet, eventType);
-                    if (validationErrors.length > 0) {
-                        validationErrors.forEach(function (ve) { errors.push(ve); });
-                        continue;
-                    }
-
-                    var dateVal = QuickAddModal._fieldValue(fields.date) || PetTracker.UI.localDateYYYYMMDD();
-                    var timeVal = QuickAddModal._fieldValue(fields.time);
-                    var startDate = timeVal ? PetTracker.UI.localDateTimeWithOffset(dateVal, timeVal) : dateVal;
-
-                    var status = QuickAddModal.normalizeStatus(QuickAddModal._fieldValue(fields.status));
-                    var notes = QuickAddModal._fieldValue(fields.notes) || '';
-                    var parsedValue = QuickAddModal._parseOptionalNumber(fields.value, 'Value');
-                    if (parsedValue.error) {
-                        errors.push(parsedValue.error);
-                        continue;
-                    }
-                    var valueNum = parsedValue.value;
-                    var unit = QuickAddModal._fieldValue(fields.unit) || eventType.defaultUnit || null;
-
-                    var tags = Array.isArray(fields.tags) ? fields.tags : [];
-                    tags = tags.map(function (t) { return String(t).trim(); }).filter(Boolean);
-
-                    var severityLevelId = null;
-                    var sevInput = QuickAddModal._fieldValue(fields.severity);
-                    if (sevInput && eventType.usesSeverity && eventType.defaultScaleId) {
-                        var matchedLevel = scaleLevels.find(function (l) {
-                            return l.scaleId === eventType.defaultScaleId &&
-                                l.name.toLowerCase() === sevInput.toLowerCase();
-                        });
-                        if (!matchedLevel) {
-                            matchedLevel = scaleLevels.find(function (l) {
-                                return l.scaleId === eventType.defaultScaleId &&
-                                    l.name.toLowerCase().includes(sevInput.toLowerCase());
-                            });
-                        }
-                        if (matchedLevel) {
-                            severityLevelId = matchedLevel.id;
-                        }
-                    }
-
-                    var endDateVal = QuickAddModal._fieldValue(fields.endDate) || null;
-                    var parsedDuration = QuickAddModal._parseOptionalNumber(fields.duration, 'Duration');
-                    if (parsedDuration.error) {
-                        errors.push(parsedDuration.error);
-                        continue;
-                    }
-                    var durationVal = parsedDuration.value;
-                    var providerInput = QuickAddModal._fieldValue(fields.provider) || null;
-                    var providerVal = QuickAddModal.resolveProviderId(providerInput);
-                    var parsedCost = QuickAddModal._parseOptionalNumber(fields.cost, 'Cost');
-                    if (parsedCost.error) {
-                        errors.push(parsedCost.error);
-                        continue;
-                    }
-                    var costVal = parsedCost.value;
-                    var costCatVal = QuickAddModal._fieldValue(fields.costCategory) || null;
-                    var costCurVal = QuickAddModal._fieldValue(fields.costCurrency) || null;
-                    var todoistVal = QuickAddModal._fieldValue(fields.todoistTaskId) || null;
-                    var mediaVal = await QuickAddModal.mapAttachmentRefsToMedia(fields.attachments);
-
-                    await Events.create({
-                        title: eventType.name,
-                        petIds: [pet.id],
-                        eventTypeId: eventType.id,
-                        startDate: startDate,
-                        endDate: endDateVal,
-                        status: status,
-                        severityLevelId: severityLevelId,
-                        value: valueNum,
-                        unit: unit,
-                        duration: durationVal,
-                        notes: notes,
-                        media: mediaVal,
-                        tags: tags,
-                        providerId: providerVal,
-                        cost: costVal,
-                        costCategory: costCatVal,
-                        costCurrency: costCurVal,
-                        todoistTaskId: todoistVal,
-                        source: 'QuickAdd'
-                    });
-
-                    saved++;
-                } catch (e) {
-                    console.error('[QuickAdd] Error saving entry:', e);
-                    errors.push(e.message);
+                var inst = QuickAddModal.state.qaInstance;
+                if (!inst || typeof inst.getResult !== 'function') {
+                    PetTracker.UI.toast('Quick Add is not initialized', 'error');
+                    return;
                 }
-            }
 
-            if (saved > 0) {
-                QuickAddModal.state.skipDraftOnClose = true;
-                QuickAddModal.clearDraft();
-                PetTracker.UI.toast('Saved ' + saved + ' event' + (saved > 1 ? 's' : ''), 'success');
-                QuickAddModal.close();
-                App.renderDashboard();
-                if (typeof Calendar !== 'undefined') Calendar.render?.();
-            }
+                var result = inst.getResult();
+                if (!result || !result.entries || result.entries.length === 0) {
+                    PetTracker.UI.toast('No entries to save', 'warning');
+                    return;
+                }
 
-            if (errors.length > 0) {
-                PetTracker.UI.toast(errors[0], 'error');
+                if (typeof inst.exportResult !== 'function') {
+                    PetTracker.UI.toast('Quick Add export is not available', 'error');
+                    return;
+                }
+
+                var exportPayload = null;
+                try {
+                    exportPayload = await inst.exportResult({
+                        attachmentMode: 'metadata-only',
+                        includeUnlinked: false,
+                        runWarnings: true,
+                        runValidation: false
+                    });
+                } catch (e) {
+                    if (String(e && e.message || '').indexOf('warnings check') >= 0) return;
+                    PetTracker.UI.toast('Could not prepare Quick Add entries', 'error');
+                    return;
+                }
+
+                if (panel) panel.inert = true;
+                var validEntries = (exportPayload.entries || []).filter(function (e) { return e.isValid; });
+                if (validEntries.length === 0) {
+                    PetTracker.UI.toast('No valid entries — fill required fields (pet, type)', 'error');
+                    return;
+                }
+
+                var pets = QuickAddModal.state.pets;
+                var eventTypes = QuickAddModal.state.eventTypes;
+                var scaleLevels = QuickAddModal.state.scaleLevels;
+                var saved = 0;
+                var savedEntries = [];
+                var errors = [];
+
+                for (var i = 0; i < validEntries.length; i++) {
+                    var entry = validEntries[i];
+                    var fields = entry.fields || {};
+
+                    try {
+                        var petName = QuickAddModal._fieldValue(fields.pet);
+                        var typeName = QuickAddModal._fieldValue(fields.type);
+
+                        var pet = pets.find(function (p) {
+                            return p.name.toLowerCase() === (petName || '').toLowerCase();
+                        });
+                        var eventType = eventTypes.find(function (t) {
+                            return t.name.toLowerCase() === (typeName || '').toLowerCase();
+                        });
+
+                        if (!pet) {
+                            errors.push('Pet "' + petName + '" not found');
+                            continue;
+                        }
+                        if (!eventType) {
+                            errors.push('Event type "' + typeName + '" not found');
+                            continue;
+                        }
+
+                        var validationErrors = QuickAddModal._validateEntry(fields, pet, eventType);
+                        if (validationErrors.length > 0) {
+                            validationErrors.forEach(function (ve) { errors.push(ve); });
+                            continue;
+                        }
+
+                        var dateVal = QuickAddModal._fieldValue(fields.date) || PetTracker.UI.localDateYYYYMMDD();
+                        var timeVal = QuickAddModal._fieldValue(fields.time);
+                        var startDate = timeVal ? PetTracker.UI.localDateTimeWithOffset(dateVal, timeVal) : dateVal;
+
+                        var status = QuickAddModal.normalizeStatus(QuickAddModal._fieldValue(fields.status));
+                        var notes = QuickAddModal._fieldValue(fields.notes) || '';
+                        var parsedValue = QuickAddModal._parseOptionalNumber(fields.value, 'Value');
+                        if (parsedValue.error) {
+                            errors.push(parsedValue.error);
+                            continue;
+                        }
+                        var valueNum = parsedValue.value;
+                        var unit = QuickAddModal._fieldValue(fields.unit) || eventType.defaultUnit || null;
+
+                        var tags = Array.isArray(fields.tags) ? fields.tags : [];
+                        tags = tags.map(function (t) { return String(t).trim(); }).filter(Boolean);
+
+                        var severityLevelId = null;
+                        var sevInput = QuickAddModal._fieldValue(fields.severity);
+                        if (sevInput && eventType.usesSeverity && eventType.defaultScaleId) {
+                            var matchedLevel = scaleLevels.find(function (l) {
+                                return l.scaleId === eventType.defaultScaleId &&
+                                    l.name.toLowerCase() === sevInput.toLowerCase();
+                            });
+                            if (!matchedLevel) {
+                                matchedLevel = scaleLevels.find(function (l) {
+                                    return l.scaleId === eventType.defaultScaleId &&
+                                        l.name.toLowerCase().includes(sevInput.toLowerCase());
+                                });
+                            }
+                            if (matchedLevel) {
+                                severityLevelId = matchedLevel.id;
+                            }
+                        }
+
+                        var endDateVal = QuickAddModal._fieldValue(fields.endDate) || null;
+                        var parsedDuration = QuickAddModal._parseOptionalNumber(fields.duration, 'Duration');
+                        if (parsedDuration.error) {
+                            errors.push(parsedDuration.error);
+                            continue;
+                        }
+                        var durationVal = parsedDuration.value;
+                        var providerInput = QuickAddModal._fieldValue(fields.provider) || null;
+                        var providerVal = QuickAddModal.resolveProviderId(providerInput);
+                        var parsedCost = QuickAddModal._parseOptionalNumber(fields.cost, 'Cost');
+                        if (parsedCost.error) {
+                            errors.push(parsedCost.error);
+                            continue;
+                        }
+                        var costVal = parsedCost.value;
+                        var costCatVal = QuickAddModal._fieldValue(fields.costCategory) || null;
+                        var costCurVal = QuickAddModal._fieldValue(fields.costCurrency) || null;
+                        var todoistVal = QuickAddModal._fieldValue(fields.todoistTaskId) || null;
+                        var mediaVal = await QuickAddModal.mapAttachmentRefsToMedia(fields.attachments);
+
+                        await Events.create({
+                            title: eventType.name,
+                            petIds: [pet.id],
+                            eventTypeId: eventType.id,
+                            startDate: startDate,
+                            endDate: endDateVal,
+                            status: status,
+                            severityLevelId: severityLevelId,
+                            value: valueNum,
+                            unit: unit,
+                            duration: durationVal,
+                            notes: notes,
+                            media: mediaVal,
+                            tags: tags,
+                            providerId: providerVal,
+                            cost: costVal,
+                            costCategory: costCatVal,
+                            costCurrency: costCurVal,
+                            todoistTaskId: todoistVal,
+                            source: 'QuickAdd'
+                        });
+
+                        saved++;
+                        savedEntries.push(entry);
+                    } catch (e) {
+                        console.error('[QuickAdd] Error saving entry:', e);
+                        errors.push(e.message);
+                    }
+                }
+
+                if (saved > 0) {
+                    // Remove only committed rows. Keep invalid rows, errors, and their attachments.
+                    if (saved === exportPayload.entries.length) {
+                        QuickAddModal.state.skipDraftOnClose = true;
+                        QuickAddModal.clearDraft();
+                        await QuickAddModal.close();
+                    } else {
+                        let input = exportPayload.input || result.input || '';
+                        for (const entry of savedEntries.slice().sort((a, b) => b.globalStart - a.globalStart)) {
+                            if (Number.isFinite(entry.globalStart) && Number.isFinite(entry.globalEnd)) {
+                                input = input.slice(0, entry.globalStart) + input.slice(entry.globalEnd);
+                            }
+                        }
+                        inst.setInput(input);
+                        await QuickAddModal._persistDraft();
+                    }
+                    PetTracker.UI.toast('Saved ' + saved + ' event' + (saved > 1 ? 's' : ''), 'success');
+                    App.renderDashboard();
+                    if (typeof Calendar !== 'undefined') Calendar.render?.();
+                }
+
+                if (errors.length > 0) {
+                    PetTracker.UI.toast(errors[0], 'error');
+                }
+            } finally {
+                QuickAddModal.state.saving = false;
+                if (panel) panel.inert = false;
             }
         },
 

@@ -27,16 +27,21 @@ function openDB() {
   });
 }
 
-function addToQueue(session) {
+async function addToQueue(session) {
   session.status = session.status || "queued";
   session.attempts = session.attempts || 0;
   session.lastError = session.lastError || "";
-  state.queue.push(session);
+  if (!db) throw new Error("Recording storage is not available.");
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction("queue", "readwrite");
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error("Recording save aborted."));
+    tx.objectStore("queue").put(session);
+  });
+  if (!state.queue.some(item => item.id === session.id)) state.queue.push(session);
   updateQueueIndicator();
   updateStorageUsage();
-  if (!db) return;
-  const tx = db.transaction("queue", "readwrite");
-  tx.objectStore("queue").put(session);
 }
 
 function updateQueueItem(session) {
@@ -70,7 +75,9 @@ function loadQueueFromDB() {
     const tx = db.transaction("queue", "readonly");
     const store = tx.objectStore("queue");
     const request = store.getAll();
-    request.onsuccess = () => resolve(request.result || []);
+    request.onsuccess = () => resolve((request.result || [])
+      .filter(session => session.status !== 'processed')
+      .map(session => ({ ...session, processing: false, status: session.status === 'processing' ? 'queued' : session.status })));
     request.onerror = () => resolve([]);
   });
 }

@@ -393,7 +393,8 @@ async function transcribeAudio(session) {
 }
 
 async function processSession(session) {
-  if (!session) return false;
+  if (!session || session.processing || session.status === 'processed') return false;
+  session.processing = true;
   const queued = state.queue.find((item) => item.id === session.id);
   if (queued) {
     session.status = "processing";
@@ -452,6 +453,8 @@ async function processSession(session) {
         anyResponse = true;
         await applyAnnotations(response, session);
         processedChunks.add(chunkIndex);
+        session.processedChunks = Array.from(processedChunks);
+        if (typeof updateQueueItem === 'function') updateQueueItem(session);
         logEvent({
           title: `AI response (chunk ${chunkIndex}/${chunks.length})`,
           detail: response,
@@ -461,7 +464,7 @@ async function processSession(session) {
     }
     elements.progressLabel.classList.add("hidden");
     session.processedChunks = Array.from(processedChunks).sort((a, b) => a - b);
-    if (!anyResponse || processedChunks.size < chunks.length) {
+    if (processedChunks.size < chunks.length) {
       session.status = "failed";
       session.lastError = "AI processing incomplete.";
       session.attempts = (session.attempts || 0) + 1;
@@ -506,6 +509,8 @@ async function processSession(session) {
       sessionId: session.id
     });
   } finally {
+    session.processing = false;
+    if (state.queue.some(item => item.id === session.id) && typeof updateQueueItem === 'function') updateQueueItem(session);
     setLoading(false);
   }
   return false;

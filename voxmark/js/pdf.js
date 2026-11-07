@@ -359,7 +359,7 @@ function needsWhitespace(prevItem, currItem, viewport) {
   return sameLine && hasGap;
 }
 
-const renderQueue = {
+const pdfRenderQueue = {
   high: [],
   low: [],
   processing: false,
@@ -368,7 +368,7 @@ const renderQueue = {
 
 function schedulePageRender(pdfState, pageData, priority = "low") {
   if (!pdfState || !pageData || pageData.rendered || pageData.rendering) return;
-  const queue = priority === "high" ? renderQueue.high : renderQueue.low;
+  const queue = priority === "high" ? pdfRenderQueue.high : pdfRenderQueue.low;
   const existing = queue.find((item) => item.pageData === pageData);
   if (existing) return;
   queue.push({ pdfState, pageData });
@@ -376,17 +376,17 @@ function schedulePageRender(pdfState, pageData, priority = "low") {
 }
 
 function processRenderQueue() {
-  if (renderQueue.processing) return;
-  const next = renderQueue.high.shift() || renderQueue.low.shift();
+  if (pdfRenderQueue.processing) return;
+  const next = pdfRenderQueue.high.shift() || pdfRenderQueue.low.shift();
   if (!next) return;
-  renderQueue.processing = true;
+  pdfRenderQueue.processing = true;
   const doRender = () => {
     renderPage(next.pdfState, next.pageData).finally(() => {
-      renderQueue.processing = false;
+      pdfRenderQueue.processing = false;
       processRenderQueue();
     });
   };
-  if (renderQueue.high.length === 0 && typeof requestIdleCallback !== "undefined") {
+  if (pdfRenderQueue.high.length === 0 && typeof requestIdleCallback !== "undefined") {
     requestIdleCallback(() => doRender(), { timeout: 100 });
   } else {
     doRender();
@@ -423,7 +423,7 @@ function setupPageObserver(pdfState) {
           const isCenterVisible = entry.intersectionRatio >= 0.5;
           const priority = isCenterVisible || distanceFromCenter < containerRect.height / 3 ? "high" : "low";
           schedulePageRender(pdfState, pageData, priority);
-          renderQueue.recentlyViewed.set(pageNum, Date.now());
+          pdfRenderQueue.recentlyViewed.set(pageNum, Date.now());
         }
       });
     },
@@ -1718,7 +1718,7 @@ function cleanupPageRendering(pdfState, visible = []) {
   pdfState.pages.forEach((pageData) => {
     if (pageData.pageNum >= minPage && pageData.pageNum <= maxPage) return;
     if (pageData.rendering) return;
-    const lastViewed = renderQueue.recentlyViewed.get(pageData.pageNum);
+    const lastViewed = pdfRenderQueue.recentlyViewed.get(pageData.pageNum);
     if (lastViewed && now - lastViewed < recentThreshold) return;
     if (!pageData.canvas && !pageData.textLayer && !pageData.annotationLayer) return;
     if (pageData.canvas) {
@@ -1736,7 +1736,7 @@ function cleanupPageRendering(pdfState, visible = []) {
     pageData.rendered = false;
     pageData.rendering = false;
     pageData.pageDiv.dataset.rendered = "false";
-    renderQueue.recentlyViewed.delete(pageData.pageNum);
+    pdfRenderQueue.recentlyViewed.delete(pageData.pageNum);
   });
 }
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = "voxmark-cache-v8";
+const CACHE_NAME = "voxmark-cache-v11";
 const LOCAL_ASSETS = [
   "./index.html",
   "./styles/main.css",
@@ -104,7 +104,7 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
+      Promise.all(keys.filter((key) => key.startsWith('voxmark-cache-') && key !== CACHE_NAME).map((key) => caches.delete(key)))
     )
   );
   self.clients.claim();

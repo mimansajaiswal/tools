@@ -1049,9 +1049,11 @@ const App = {
             }
             App.renderAttachmentPreviews();
             PetTracker.UI.toast(`${files.length} file(s) ready to attach`, 'success');
+            return true;
         } catch (e) {
             console.error('[App] Error processing shared files:', e);
             PetTracker.UI.toast('Error processing files', 'error');
+            return false;
         }
     },
 
@@ -1077,7 +1079,7 @@ const App = {
                 };
             });
 
-            const tx = db.transaction(STORE_NAME, 'readwrite');
+            const tx = db.transaction(STORE_NAME, 'readonly');
             const store = tx.objectStore(STORE_NAME);
 
             const allShares = await new Promise((resolve, reject) => {
@@ -1095,15 +1097,20 @@ const App = {
 
                 if (files.length > 0) {
                     console.log(`[App] Draining ${files.length} pending share files`);
-                    await App.handleShareTarget(files);
+                    if (!await App.handleShareTarget(files)) {
+                        db.close();
+                        return;
+                    }
                 }
 
-                // Clear the store
-                await new Promise((resolve, reject) => {
-                    const clearRequest = store.clear();
-                    clearRequest.onsuccess = () => resolve();
-                    clearRequest.onerror = () => reject(clearRequest.error);
+                const deletion = db.transaction(STORE_NAME, 'readwrite');
+                const committed = new Promise((resolve, reject) => {
+                    deletion.oncomplete = resolve;
+                    deletion.onerror = () => reject(deletion.error);
+                    deletion.onabort = () => reject(deletion.error);
                 });
+                for (const share of allShares) deletion.objectStore(STORE_NAME).delete(share.id);
+                await committed;
             }
 
             db.close();
@@ -2378,6 +2385,10 @@ const App = {
     retryQueueItem: async (id) => {
         const item = await PetTracker.DB.get(PetTracker.STORES.SYNC_QUEUE, id);
         if (item) {
+            if (item.uncertainCreate) {
+                PetTracker.UI.toast('Create outcome unknown. Check Notion before retrying this item.', 'warning');
+                return;
+            }
             item.status = 'pending';
             item.retryCount = 0;
             await PetTracker.DB.put(PetTracker.STORES.SYNC_QUEUE, item);
@@ -2396,7 +2407,7 @@ const App = {
 
     retryAllFailed: async () => {
         await PetTracker.SyncQueue.resetFailed();
-        PetTracker.UI.toast('All failed items queued for retry', 'success');
+        PetTracker.UI.toast('Retryable items queued. Unknown create outcomes still need review.', 'info');
         App.showSyncQueue();
         PetTracker.Sync?.updatePendingCount();
     },

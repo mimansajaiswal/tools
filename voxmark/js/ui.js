@@ -338,7 +338,7 @@ function renderQueue() {
 }
 
 async function processQueueItem(session) {
-  if (!session) return;
+  if (!session || session.processing || session.status === "processed") return;
   session.status = "processing";
   session.lastError = "";
   if (typeof updateQueueItem === "function") {

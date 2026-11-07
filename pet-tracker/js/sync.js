@@ -184,6 +184,15 @@ const Sync = {
      * Run full sync cycle
      */
     run: async (showToast = false) => {
+        if (Sync.runPromise) return Sync.runPromise;
+        const execute = () => Sync.runCycle(showToast);
+        Sync.runPromise = (typeof navigator !== 'undefined' && navigator.locks
+            ? navigator.locks.request('pettracker-sync', execute) : execute());
+        try { return await Sync.runPromise; }
+        finally { Sync.runPromise = null; }
+    },
+
+    runCycle: async (showToast = false) => {
         if (Sync.isRunning) {
             console.log('[Sync] Already running, skipping');
             return;
@@ -400,8 +409,7 @@ const Sync = {
                     synced: false,
                     updatedAt: new Date().toISOString()
                 };
-                await PetTracker.DB.put(PetTracker.STORES.PETS, updated);
-                await PetTracker.SyncQueue.add({
+                await PetTracker.SyncQueue.save({
                     type: 'update',
                     store: 'pets',
                     recordId: pet.id,
@@ -410,6 +418,12 @@ const Sync = {
             }
         }
 
+        for (const op of await PetTracker.SyncQueue.getActiveForRecord(store, localId)) {
+            if (op.type === 'delete') {
+                op.data = { ...op.data, notionId };
+                await PetTracker.DB.put(PetTracker.STORES.SYNC_QUEUE, op);
+            }
+        }
         console.log(`[Sync] Propagated notionId for ${store}:${localId} -> ${notionId}`);
     },
 
@@ -426,11 +440,14 @@ const Sync = {
         let failCount = 0;
         let lastError = null;
 
-        for (const op of sorted) {
+        for (const queued of sorted) {
+            const op = await PetTracker.SyncQueue.claim(queued);
+            if (!op) continue;
+            op.createStarted = false;
             try {
                 await Sync.waitForRateLimit();
                 const result = await Sync.processOperation(op);
-                await PetTracker.SyncQueue.complete(op.id);
+                await PetTracker.SyncQueue.complete(op.id, op.revision || 0);
                 successCount++;
 
                 // If this was a create, propagate the new notionId to dependent queue items
@@ -451,26 +468,44 @@ const Sync = {
                     await new Promise(r => setTimeout(r, (e.retryAfter || 1) * 1000));
                 }
 
-                if (e.isRetryable) {
-                    // Dependency retries should not be hard-capped.
-                    if (e.isDependency) {
-                        op.status = 'pending';
-                        op.error = null;
-                        op.lastAttempt = new Date().toISOString();
-                        await PetTracker.DB.put(PetTracker.STORES.SYNC_QUEUE, op);
-                    } else if ((op.retryCount || 0) < Sync.maxRetryCount) {
-                        // Retryable error - keep in queue for next sync cycle
-                        op.retryCount = (op.retryCount || 0) + 1;
-                        op.status = 'pending';
-                        op.error = null;
-                        op.lastAttempt = new Date().toISOString();
-                        await PetTracker.DB.put(PetTracker.STORES.SYNC_QUEUE, op);
+                await PetTracker.SyncQueue._withAddLock(async () => {
+                    const current = await PetTracker.DB.get(PetTracker.STORES.SYNC_QUEUE, op.id);
+                    if (!current) return;
+                    current.inFlight = false;
+                    // An interrupted create may already exist remotely. Keep its latest payload for inspection.
+                    if (op.createStarted && (!e.status || e.status >= 500)) {
+                        current.status = 'failed';
+                        current.uncertainCreate = true;
+                        current.error = `Create outcome unknown. Check Notion before retrying. ${e.message}`;
+                        await PetTracker.DB.put(PetTracker.STORES.SYNC_QUEUE, current);
+                        return;
+                    }
+                    if ((current.revision || 0) !== (op.revision || 0)) {
+                        await PetTracker.DB.put(PetTracker.STORES.SYNC_QUEUE, current);
+                        return;
+                    }
+                    op.inFlight = false;
+                    if (e.isRetryable) {
+                        // Dependency retries should not be hard-capped.
+                        if (e.isDependency) {
+                            op.status = 'pending';
+                            op.error = null;
+                            op.lastAttempt = new Date().toISOString();
+                            await PetTracker.DB.put(PetTracker.STORES.SYNC_QUEUE, op);
+                        } else if ((op.retryCount || 0) < Sync.maxRetryCount) {
+                            // Retryable error - keep in queue for next sync cycle
+                            op.retryCount = (op.retryCount || 0) + 1;
+                            op.status = 'pending';
+                            op.error = null;
+                            op.lastAttempt = new Date().toISOString();
+                            await PetTracker.DB.put(PetTracker.STORES.SYNC_QUEUE, op);
+                        } else {
+                            await PetTracker.SyncQueue.fail(op.id, e.message);
+                        }
                     } else {
                         await PetTracker.SyncQueue.fail(op.id, e.message);
                     }
-                } else {
-                    await PetTracker.SyncQueue.fail(op.id, e.message);
-                }
+                });
 
                 if (!navigator.onLine) {
                     console.log('[Sync] Went offline mid-sync; pausing queue processing');
@@ -516,17 +551,18 @@ const Sync = {
                     : data;
 
                 const properties = await Sync.toNotionProperties(store, payload);
+                op.createStarted = true;
                 const result = await PetTracker.API.createPage(dataSourceId, properties);
 
-                // Update local record with Notion ID
-                if (record) {
-                    record.notionId = result.id;
-                    record.synced = true;
-                    if (Array.isArray(payload?.media)) record.media = payload.media;
-                    if (Array.isArray(payload?.photo)) record.photo = payload.photo;
-                    await PetTracker.DB.put(storeConstant, record);
-                    await Sync.cleanupUploadedLocalBlobsForRecord(store, record);
-                }
+                const acknowledged = await PetTracker.DB.modify(storeConstant, recordId, current => {
+                    const unchanged = JSON.stringify(current) === JSON.stringify(record);
+                    current.notionId = result.id;
+                    current.synced = unchanged;
+                    if (unchanged && Array.isArray(payload?.media)) current.media = payload.media;
+                    if (unchanged && Array.isArray(payload?.photo)) current.photo = payload.photo;
+                    return current;
+                });
+                if (acknowledged?.synced) await Sync.cleanupUploadedLocalBlobsForRecord(store, acknowledged);
                 // Return notionId so caller can propagate to dependent queue items
                 return { notionId: result.id };
             }
@@ -560,11 +596,14 @@ const Sync = {
                 const properties = await Sync.toNotionProperties(store, payload);
                 await PetTracker.API.updatePage(record.notionId, properties);
 
-                record.synced = true;
-                if (Array.isArray(payload?.media)) record.media = payload.media;
-                if (Array.isArray(payload?.photo)) record.photo = payload.photo;
-                await PetTracker.DB.put(storeConstant, record);
-                await Sync.cleanupUploadedLocalBlobsForRecord(store, record);
+                const acknowledged = await PetTracker.DB.modify(storeConstant, recordId, current => {
+                    if (JSON.stringify(current) !== JSON.stringify(record)) return null;
+                    current.synced = true;
+                    if (Array.isArray(payload?.media)) current.media = payload.media;
+                    if (Array.isArray(payload?.photo)) current.photo = payload.photo;
+                    return current;
+                });
+                if (acknowledged) await Sync.cleanupUploadedLocalBlobsForRecord(store, acknowledged);
                 break;
             }
 
@@ -575,6 +614,11 @@ const Sync = {
                 const record = await PetTracker.DB.get(storeConstant, recordId);
                 // Use notionId from record if available, otherwise use from queued operation data
                 const notionId = record?.notionId || data?.notionId;
+                if (!notionId) {
+                    const unresolved = (await PetTracker.SyncQueue.getActiveForRecord(store, recordId))
+                        .some(item => item.type === 'create' && item.uncertainCreate);
+                    if (unresolved) throw new Error('Create outcome unknown. Check Notion before deleting remotely.');
+                }
                 if (notionId) {
                     await PetTracker.API.archivePage(notionId);
                 }
@@ -704,6 +748,11 @@ const Sync = {
         const notionId = page.id;
         const storeName = PetTracker.STORES[storeKey];
 
+        const pendingDeletes = await PetTracker.DB.query(PetTracker.STORES.SYNC_QUEUE, item =>
+            item.store === store && item.type === 'delete' && item.data?.notionId === notionId
+            && (item.status === 'pending' || item.status === 'failed'));
+        if (pendingDeletes.length) return;
+
         // Check if we have this record locally by notionId
         let local = await PetTracker.DB.getByNotionId(storeName, notionId);
 
@@ -715,6 +764,12 @@ const Sync = {
         const icon = PetTracker.NotionExtract.icon(page);
         if (icon) {
             remote.icon = icon;
+        }
+
+        if (local && (!local.synced || (await PetTracker.SyncQueue.getActiveForRecord(store, local.id)).length)) {
+            local.syncConflict = { remoteEditedAt: page.last_edited_time, archived: !!page.archived };
+            await PetTracker.DB.put(storeName, local);
+            return;
         }
 
         if (page.archived) {
@@ -734,6 +789,11 @@ const Sync = {
             local = Sync.findHeuristicLocalMatch(store, allRecords, remote);
             if (local) {
                 console.log(`[Sync] Matched ${store} by heuristic: ${local.id}`);
+                if (!local.synced || (await PetTracker.SyncQueue.getActiveForRecord(store, local.id)).length) {
+                    local.syncConflict = { remoteEditedAt: page.last_edited_time, notionId };
+                    await PetTracker.DB.put(storeName, local);
+                    return;
+                }
             }
         }
 
@@ -1582,24 +1642,16 @@ const Sync = {
         const uniqueIds = (arr) => [...new Set((Array.isArray(arr) ? arr : []).filter(Boolean))];
         const sameSet = (a, b) => JSON.stringify(uniqueIds(a).sort()) === JSON.stringify(uniqueIds(b).sort());
         const queueUpdate = async (store, record) => {
-            if (!record?.notionId) return;
-            await PetTracker.SyncQueue.add({
-                type: 'update',
-                store,
-                recordId: record.id,
-                data: { ...record }
-            });
-        };
-        const queueDelete = async (store, storeConstant, record, extraData = {}) => {
-            if (record?.notionId) {
-                await PetTracker.SyncQueue.add({
-                    type: 'delete',
-                    store,
-                    recordId: record.id,
-                    data: { notionId: record.notionId, ...extraData }
-                });
+            if (!record?.notionId) {
+                await PetTracker.DB.put(store, record);
+                return;
             }
-            await PetTracker.DB.delete(storeConstant, record.id);
+            await PetTracker.SyncQueue.save({ type: 'update', store, recordId: record.id, data: { ...record } });
+        };
+        const queueDelete = async (store, record, extraData = {}) => {
+            await PetTracker.SyncQueue.save({
+                type: 'delete', store, recordId: record.id, data: { notionId: record.notionId, ...extraData }
+            });
         };
 
         let fixed = 0;
@@ -1619,7 +1671,6 @@ const Sync = {
             if (changed) {
                 pet.updatedAt = nowIso;
                 if (pet.notionId) pet.synced = false;
-                await PetTracker.DB.put(PetTracker.STORES.PETS, pet);
                 await queueUpdate('pets', pet);
                 fixed++;
             }
@@ -1631,7 +1682,6 @@ const Sync = {
                 contact.relatedPetIds = nextRelated;
                 contact.updatedAt = nowIso;
                 if (contact.notionId) contact.synced = false;
-                await PetTracker.DB.put(PetTracker.STORES.CONTACTS, contact);
                 await queueUpdate('contacts', contact);
                 fixed++;
             }
@@ -1652,7 +1702,6 @@ const Sync = {
             if (changed) {
                 eventType.updatedAt = nowIso;
                 if (eventType.notionId) eventType.synced = false;
-                await PetTracker.DB.put(PetTracker.STORES.EVENT_TYPES, eventType);
                 await queueUpdate('eventTypes', eventType);
                 fixed++;
             }
@@ -1660,7 +1709,7 @@ const Sync = {
 
         for (const level of scaleLevels) {
             if (!level.scaleId || !scaleIds.has(level.scaleId)) {
-                await queueDelete('scaleLevels', PetTracker.STORES.SCALE_LEVELS, level);
+                await queueDelete('scaleLevels', level);
                 scaleLevelIds.delete(level.id);
                 removed++;
             }
@@ -1670,7 +1719,7 @@ const Sync = {
             const nextPetIds = uniqueIds((event.petIds || []).filter(id => petIds.has(id)));
             const hasEventType = !!(event.eventTypeId && eventTypeIds.has(event.eventTypeId));
             if (!hasEventType || nextPetIds.length === 0) {
-                await queueDelete('events', PetTracker.STORES.EVENTS, event, {
+                await queueDelete('events', event, {
                     googleCalendarEventId: event.googleCalendarEventId || null
                 });
                 removed++;
@@ -1693,7 +1742,6 @@ const Sync = {
             if (changed) {
                 event.updatedAt = nowIso;
                 if (event.notionId) event.synced = false;
-                await PetTracker.DB.put(PetTracker.STORES.EVENTS, event);
                 await queueUpdate('events', event);
                 fixed++;
             }

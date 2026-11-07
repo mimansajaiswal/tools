@@ -194,7 +194,7 @@ function bindInteractions() {
     notify("Storage", "Offline data cleared.");
   });
   elements.micButton.addEventListener("click", async () => {
-    if (state.recording) stopRecordingSession();
+    if (state.recording || state.recordingStarting || state.recordingSession) stopRecordingSession();
     else await startRecordingSession();
   });
   elements.processBatch.addEventListener("click", processBatchQueue);
@@ -881,7 +881,7 @@ function bindInteractions() {
     }
     if (window.innerWidth >= 960 && event.code === "KeyM") {
       event.preventDefault();
-      if (state.recording) stopRecordingSession();
+      if (state.recording || state.recordingStarting || state.recordingSession) stopRecordingSession();
       else startRecordingSession();
     }
     if ((event.ctrlKey || event.metaKey) && event.key === "z" && !event.shiftKey) {

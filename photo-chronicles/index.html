@@ -551,7 +551,7 @@
                         Files (media), Notes (text).</p>
                     <p>
                         Need a template? <a
-                            href="https://mimansajaiswal-embedded-dbs.notion.site/photo-chronicles-template?v=2b423941af7b8019977c000c05dd66cf"
+                            href="https://mimansajaiswal-embedded-dbs.notion.site/photo-chronicles-template"
                             target="_blank"
                             class="text-dull-purple underline hover:text-charcoal font-semibold">Duplicate this
                             one</a> and add your own tags to start.
@@ -1356,7 +1356,8 @@ export default {
                     gallery. Review dates before saving.</p>
                 <details class="text-[11px] text-earth-metal/60 mt-3">
                     <summary class="cursor-pointer w-fit">About duplicate checks</summary>
-                    <p class="mt-1">Checks this diary on this device and the selected photos. Older imports need a saved copy or a previous hash to be checked.</p>
+                    <p class="mt-1">Checks this diary on this device and the selected photos. Older imports need a saved
+                        copy or a previous hash to be checked.</p>
                 </details>
             </div>
             <footer class="p-4 sm:p-5 border-t border-oatmeal-dark flex items-center justify-between gap-3">
@@ -2158,12 +2159,16 @@ export default {
                 lucide.createIcons();
             },
             withSyncLock: async (fn) => {
-                if (SyncManager.isSyncing) return false;
+                if (SyncManager.isSyncing) { SyncManager.syncRequested = true; return false; }
                 SyncManager.isSyncing = true;
                 try {
                     await fn();
                 } finally {
                     SyncManager.isSyncing = false;
+                    if (SyncManager.syncRequested) {
+                        SyncManager.syncRequested = false;
+                        queueMicrotask(() => SyncManager.syncAllDiaries());
+                    }
                 }
                 return true;
             },
@@ -2435,7 +2440,11 @@ export default {
                     }
                     await SyncManager.syncPendingTags(diaryId);
 
-                    if (showUi) SyncManager.updateUI('synced');
+                    if (showUi) {
+                        const current = Storage.getData().find(d => d.id === diaryId);
+                        const failed = current?.entries?.some(e => !e.deletedLocally && !e.synced);
+                        SyncManager.updateUI(failed ? 'error' : 'synced');
+                    }
                 } catch (e) {
                     console.error("Sync Error", e);
                     if (showUi) {
@@ -2721,7 +2730,7 @@ export default {
                     return { label: 'Uploading', icon: 'loader-circle', color: 'text-dull-purple', spinning: true };
                 }
                 if (status === 'preparing' || entry.uploadPending) {
-                    return { label: 'Preparing photo', icon: 'loader-circle', color: 'text-earth-metal', spinning: true };
+                    return { label: 'Photo preparation was interrupted. Please add the original photo again.', icon: 'cloud-alert', color: 'text-red-700' };
                 }
                 return { label: 'On this device. Waiting to sync.', icon: 'cloud-upload', color: 'text-earth-metal/60' };
             },
@@ -4419,7 +4428,7 @@ export default {
             },
 
             saveEntry: async () => {
-                if (App.state.entryLoading) return;
+                if (App.state.entryLoading || App.state.savingEntry) return;
                 const job = App.state.highResJob;
                 if (job?.error) return App.showToast('Full-resolution preparation failed. Please capture the photo again.', 'error');
                 const notes = document.getElementById('entryNotes').value;
@@ -4439,7 +4448,7 @@ export default {
 
                 let photoToSave = App.state.capturedImage;
                 let photoToUpload = App.state.capturedImageHighRes;
-                const uploadPending = !photoToUpload;
+                const uploadPending = false;
 
                 const entryId = UTILS.id();
                 let photoKey = null;
@@ -4448,6 +4457,12 @@ export default {
                 let uploadDataURL = null;
 
                 try {
+                    if (!photoToUpload) {
+                        App.setEntryLoading(true, 'Finishing photo before saving...');
+                        await job?.preparation;
+                        if (!job?.result || job.error) throw job?.error || new Error('Photo is not ready. Please capture it again.');
+                        photoToUpload = job.result;
+                    }
                     if (ImageStore.isAvailable()) {
                         const previewKey = `entry_${entryId}_preview`;
                         const uploadKeyName = `entry_${entryId}_upload`;
@@ -4492,16 +4507,7 @@ export default {
                     };
 
                     Storage.saveEntry(App.state.activeDiaryId, newEntry);
-                    if (uploadPending) {
-                        job.pendingEntry = { diaryId: App.state.activeDiaryId, entryId: newEntry.id };
-                        // The export may have completed while IndexedDB saved the preview.
-                        App.attachPreparedHighResToSavedEntry(job).catch(error => {
-                            console.error('Could not store full-resolution photo', error);
-                            App.showToast('Could not store the full-resolution photo.', 'error');
-                        });
-                    } else {
-                        Storage.queuePendingEntry(App.state.activeDiaryId, newEntry.id);
-                    }
+                    Storage.queuePendingEntry(App.state.activeDiaryId, newEntry.id);
                     Storage.clearEntryDraft(App.state.activeDiaryId);
                     App.state.diaries = Storage.getData();
 
@@ -4514,6 +4520,8 @@ export default {
                     } else if (!uploadPending) {
                         SyncManager.updateUI('offline');
                     }
+                } catch (error) {
+                    App.showToast(error?.message || 'Entry could not be saved. Your draft is still open.', 'error');
                 } finally {
                     App.state.savingEntry = false;
                     App.setEntryLoading(false);
@@ -4667,7 +4675,11 @@ export default {
                     App.setEntryLoading(false);
                     document.getElementById('saveEntryBtn').disabled = false;
                     // Allow the preview to paint before drawing the export canvas.
-                    requestAnimationFrame(() => setTimeout(() => App.prepareHighResCollage(job), 0));
+                    job.preparation = new Promise(resolve => {
+                        requestAnimationFrame(() => setTimeout(() => {
+                            App.prepareHighResCollage(job).finally(resolve);
+                        }, 0));
+                    });
                 } catch (error) {
                     if (App.state.highResJob === job) {
                         App.setEntryLoading(false);
@@ -5390,7 +5402,7 @@ export default {
                             </div>
                         </div>
                     `;
-                } else if (s.authToken.startsWith('secret_')) {
+                } else if ((s.authToken.startsWith('secret_') || s.authToken.startsWith('ntn_'))) {
                     statusEl.innerHTML = `
                         <div class="flex items-start gap-3 text-green-700 bg-green-50 p-3 rounded-lg border border-green-100 text-xs">
                             <div class="bg-white p-1 rounded-full shadow-sm mt-0.5"><i data-lucide="key" class="w-4 h-4 text-green-600"></i></div>
@@ -5415,7 +5427,7 @@ export default {
             },
             populateSettingsInputs: () => {
                 const s = Storage.getSettings();
-                const isSecret = s.authToken && s.authToken.startsWith('secret_');
+                const isSecret = s.authToken && (s.authToken.startsWith('secret_') || s.authToken.startsWith('ntn_'));
                 document.getElementById('settingAuthToken').value = isSecret ? s.authToken : '';
                 document.getElementById('settingWorkerUrl').value = s.workerUrl || '';
                 document.getElementById('settingProxyToken').value = s.proxyToken || '';

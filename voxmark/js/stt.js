@@ -2,6 +2,7 @@ let recognition;
 let mediaRecorder;
 let mediaStream;
 let captureInterval;
+let captureAttempt = 0;
 
 async function ensureMediaStream() {
   if (mediaStream && mediaStream.active) {
@@ -10,117 +11,122 @@ async function ensureMediaStream() {
     });
     return mediaStream;
   }
-  mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  return mediaStream;
+  return navigator.mediaDevices.getUserMedia({ audio: true });
 }
 
 async function startRecordingSession() {
-  if (state.recording) return;
+  if (state.recording || state.recordingStarting || state.recordingStopping || state.recordingSession) return;
+  state.recordingStarting = true;
+  const attempt = ++captureAttempt;
   const provider = state.settings.sttProvider;
-  if (provider === "native") {
-    if (!("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) {
-      notify("Speech Recognition", "Speech Recognition not supported.");
-      return;
+  let session;
+  try {
+    if (provider === "native") {
+      if (!("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) {
+        notify("Speech Recognition", "Speech Recognition not supported.");
+        return;
+      }
+    } else {
+      const stream = await ensureMediaStream();
+      if (attempt !== captureAttempt) {
+        if (stream !== mediaStream) stream.getTracks().forEach(track => track.stop());
+        return;
+      }
+      mediaStream = stream;
     }
-  } else {
-    try {
-      await ensureMediaStream();
-    } catch (error) {
-      notify("Microphone", "Microphone access denied or unavailable.");
-      return;
+    session = {
+      id: crypto.randomUUID(), startedAt: Date.now(), transcript: "", snapshots: [], taps: [],
+      segments: [], audioChunks: [], pdfContextHistory: [], status: "recording", attempts: 0,
+      lastError: "", processedChunks: [], sttProvider: provider
+    };
+    if (state.activePdfId) {
+      session.pdfContextHistory.push({ timestamp: Date.now(), fromPdfId: null, toPdfId: state.activePdfId });
     }
+    state.recordingSession = session;
+    state.recording = true;
+    state.activeSessionId = session.id;
+    await beginSTT(session);
+    if (attempt !== captureAttempt || state.recordingSession !== session || !state.recording) return;
+    state.recordingStarting = false;
+    saveSessionState({ activeSessionId: session.id });
+    elements.micButton.classList.add("recording");
+    notify("Recording", "Recording started.");
+    logEvent({ title: "Recording started", detail: { sessionId: session.id, pdfId: state.activePdfId || null }, sessionId: session.id });
+    beginCaptureLoop();
+    // Audio starts before the potentially slow PDF snapshot.
+    const initialSnapshot = await captureSnapshot();
+    if (attempt !== captureAttempt || state.recordingSession !== session || !state.recording) return;
+    if (initialSnapshot) session.snapshots.push(initialSnapshot);
+  } catch (error) {
+    if (attempt !== captureAttempt) return;
+    notify("Recording", `Recording stopped: ${error?.message || 'Capture failed.'}`);
+    if (session) {
+      session.captureError = error?.message || "Capture failed.";
+      await stopRecordingSession();
+    } else {
+      mediaStream?.getTracks().forEach(track => track.stop());
+      mediaStream = null;
+    }
+  } finally {
+    if (attempt === captureAttempt) state.recordingStarting = false;
   }
-  state.recording = true;
-  const session = {
-    id: crypto.randomUUID(),
-    startedAt: Date.now(),
-    transcript: "",
-    snapshots: [],
-    taps: [],
-    segments: [],
-    audioChunks: [],
-    pdfContextHistory: [],
-    status: "recording",
-    attempts: 0,
-    lastError: "",
-    processedChunks: []
-  };
-  if (state.activePdfId) {
-    session.pdfContextHistory.push({
-      timestamp: Date.now(),
-      fromPdfId: null,
-      toPdfId: state.activePdfId
-    });
-  }
-  state.recordingSession = session;
-  state.activeSessionId = session.id;
-  saveSessionState({ activeSessionId: session.id });
-  elements.micButton.classList.add("recording");
-  notify("Recording", "Recording started.");
-  logEvent({
-    title: "Recording started",
-    detail: {
-      sessionId: session.id,
-      pdfId: state.activePdfId || null
-    },
-    sessionId: session.id
-  });
-  const initialSnapshot = await captureSnapshot();
-  if (initialSnapshot) session.snapshots.push(initialSnapshot);
-  beginCaptureLoop();
-  beginSTT(session);
 }
 
-function stopRecordingSession() {
+async function stopRecordingSession() {
+  if (state.recordingStopping) return;
+  ++captureAttempt;
+  state.recordingStarting = false;
   state.recording = false;
   elements.micButton.classList.remove("recording");
   if (!state.recordingSession) return;
-  state.recordingSession.status = "stopped";
-  endCaptureLoop();
-  endSTT();
-  notify("Recording", "Recording saved.");
   const session = state.recordingSession;
-  state.recordingSession = null;
-  if (!session.transcript && !session.audioChunks.length) {
-    notify("Recording", "No audio captured. Session discarded.");
+  state.recordingStopping = true;
+  session.status = "stopping";
+  try {
+    endCaptureLoop();
+    await endSTT();
+    if (!session.transcript && !session.audioChunks.length) {
+      state.recordingSession = null;
+      notify("Recording", "No audio captured. Session discarded.");
+      logEvent({ title: "Recording discarded", detail: { sessionId: session.id, reason: "No audio captured" }, sessionId: session.id });
+      return;
+    }
+    session.lastError = session.captureError || "";
+    session.status = session.lastError ? "failed" : "stopped";
+    await addToQueue(session);
+    state.recordingSession = null;
+    notify("Recording", "Recording saved.");
     logEvent({
-      title: "Recording discarded",
-      detail: {
-        sessionId: session.id,
-        reason: "No audio captured"
-      },
-      sessionId: session.id
+      title: "Recording stopped", detail: {
+        sessionId: session.id, durationMs: Date.now() - session.startedAt,
+        snapshots: session.snapshots.length, taps: session.taps.length
+      }, sessionId: session.id
     });
+    if (state.mode === "realtime" && !session.lastError) {
+      processSession(session).then(success => {
+        if (success) removeFromQueue(session.id);
+        else if (typeof updateQueueItem === "function") updateQueueItem(session);
+      });
+    }
+  } catch (error) {
+    session.status = "failed";
+    session.lastError = error?.message || "Recording could not be saved.";
+    notify("Recording", "Recording is still in memory. Click the microphone to retry saving before closing this tab.");
+    logEvent({ title: "Recording save failed", detail: session.lastError, sessionId: session.id });
+  } finally {
+    state.recordingStopping = false;
     clearFocusPins();
-    return;
   }
-  logEvent({
-    title: "Recording stopped",
-    detail: {
-      sessionId: session.id,
-      durationMs: Date.now() - session.startedAt,
-      snapshots: session.snapshots.length,
-      taps: session.taps.length
-    },
-    sessionId: session.id
-  });
-  addToQueue(session);
-  if (state.mode === "realtime") {
-    processSession(session).then((success) => {
-      if (success) removeFromQueue(session.id);
-      else if (typeof updateQueueItem === "function") updateQueueItem(session);
-    });
-  }
-  clearFocusPins();
 }
 
 function beginCaptureLoop() {
   const interval = window.innerWidth < 900 ? 1500 : 1000;
   captureInterval = setInterval(() => {
     if (!state.recording) return;
+    const session = state.recordingSession;
     captureSnapshot().then((snapshot) => {
-      if (!snapshot) return;
-      state.recordingSession.snapshots.push(snapshot);
+      if (!snapshot || !state.recording || state.recordingSession !== session) return;
+      session.snapshots.push(snapshot);
       if (state.showMarkers) showViewportMarkers(snapshot);
     });
   }, interval);
@@ -131,17 +137,20 @@ function endCaptureLoop() {
 }
 
 async function beginSTT(session) {
-  if (state.settings.sttProvider === "native") {
+  if ((session.sttProvider || state.settings.sttProvider) === "native") {
     if (!("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) {
       notify("Speech Recognition", "Speech Recognition not supported.");
       return;
     }
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = navigator.language || "en-US";
-    recognition.onresult = (event) => {
+    const owner = recognition;
+    owner.captureEnded = false;
+    owner.continuous = true;
+    owner.interimResults = true;
+    owner.lang = navigator.language || "en-US";
+    owner.onresult = (event) => {
+      if (state.recordingSession !== session || recognition !== owner) return;
       let fullTranscript = "";
       for (let i = 0; i < event.results.length; i++) {
         const text = event.results[i][0]?.transcript || "";
@@ -158,12 +167,13 @@ async function beginSTT(session) {
       }
       session.transcript = fullTranscript.trim();
     };
-    recognition.onerror = (event) => {
+    owner.onerror = (event) => {
+      if (state.recordingSession !== session || recognition !== owner) return;
       const errorType = event?.error || "Unknown error";
       if (errorType === "no-speech" || errorType === "aborted") {
-        if (state.recording) {
+        if (state.recording && state.recordingSession === session && recognition === owner) {
           try {
-            recognition.start();
+            owner.start();
           } catch (e) {
             logEvent({
               title: "Speech recognition restart failed",
@@ -174,6 +184,7 @@ async function beginSTT(session) {
         }
         return;
       }
+      owner.captureFailed = true;
       notify("Speech Recognition", `Speech recognition error: ${errorType}`);
       logEvent({
         title: "Speech recognition error",
@@ -181,16 +192,19 @@ async function beginSTT(session) {
         sessionId: session.id
       });
     };
-    recognition.onend = () => {
-      if (state.recording) {
+    owner.onend = () => {
+      owner.captureEnded = true;
+      if (state.recording && state.recordingSession === session && recognition === owner && !owner.captureFailed) {
         logEvent({
           title: "Speech recognition ended, restarting",
           detail: { sessionId: session.id },
           sessionId: session.id
         });
         try {
-          recognition.start();
+          owner.captureEnded = false;
+          owner.start();
         } catch (e) {
+          owner.captureEnded = true;
           notify("Speech Recognition", "Failed to restart recognition.");
           logEvent({
             title: "Speech recognition restart failed",
@@ -200,37 +214,52 @@ async function beginSTT(session) {
         }
       }
     };
-    recognition.start();
+    try {
+      owner.start();
+    } catch (error) {
+      owner.captureEnded = true;
+      throw error;
+    }
     return;
   }
 
-  try {
-    mediaStream = await ensureMediaStream();
-    mediaRecorder = new MediaRecorder(mediaStream);
-    mediaRecorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        session.audioChunks.push({ blob: event.data, timestamp: Date.now() });
-      }
-    };
-    mediaRecorder.start(1000);
-  } catch (error) {
-    notify("Microphone", "Microphone access denied or unavailable.");
+  const stream = await ensureMediaStream();
+  if (!state.recording || state.recordingSession !== session) {
+    if (stream !== mediaStream) stream.getTracks().forEach(track => track.stop());
+    return;
   }
+  mediaStream = stream;
+  mediaRecorder = new MediaRecorder(stream);
+  mediaRecorder.ondataavailable = (event) => {
+    if (event.data.size > 0) {
+      session.audioChunks.push({ blob: event.data, timestamp: Date.now() });
+    }
+  };
+  mediaRecorder.start(1000);
 }
 
-function endSTT() {
-  if (recognition) {
-    recognition.stop();
-    recognition = null;
-  }
-  if (mediaRecorder) {
-    mediaRecorder.stop();
-    mediaRecorder = null;
-  }
-  if (mediaStream) {
-    mediaStream.getTracks().forEach((track) => {
-      track.enabled = false;
-    });
+async function endSTT() {
+  const owner = recognition;
+  const recorder = mediaRecorder;
+  const stream = mediaStream;
+  try {
+    if (owner && !owner.captureEnded) {
+      await new Promise((resolve, reject) => {
+        owner.addEventListener('end', resolve, { once: true });
+        try { owner.stop(); } catch (error) { reject(error); }
+      });
+    }
+    if (recorder && recorder.state !== 'inactive') {
+      await new Promise((resolve, reject) => {
+        recorder.addEventListener('stop', resolve, { once: true });
+        try { recorder.stop(); } catch (error) { reject(error); }
+      });
+    }
+  } finally {
+    if (recognition === owner) recognition = null;
+    if (mediaRecorder === recorder) mediaRecorder = null;
+    if (mediaStream === stream) mediaStream = null;
+    stream?.getTracks().forEach(track => track.stop());
   }
 }
 

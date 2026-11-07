@@ -904,6 +904,7 @@
         ensureColorDefaults();
 
         let currentData = null;
+        let hasValidInput = false;
         let commentMap = {}; // Key -> [Comments]
         let commentUsage = {}; // Key -> usage count
         let missingCloses = [];
@@ -942,6 +943,7 @@
 
         /* --- Parsing Logic --- */
         function handleInput() {
+            hasValidInput = false;
             const raw = els.input.value.trim();
             missingCloses = [];
             commentMap = {};
@@ -1033,6 +1035,7 @@
         }
 
         function setStatus(type, msg) {
+            hasValidInput = type === 'valid';
             els.statusMsg.innerText = msg;
             els.statusMsg.title = msg;
             els.statusDot.className = 'status-dot ' + type;
@@ -1217,7 +1220,9 @@
         }
 
         function generateComponent() {
-            if (!currentData) return;
+            // Input parsing is debounced; export must validate the current text immediately.
+            handleInput();
+            if (!hasValidInput) return;
             const { palette } = buildPalette(true);
             const code = buildComponent(currentData, [...missingCloses], palette);
             els.exportCode.value = code;
