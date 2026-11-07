@@ -1,8 +1,9 @@
-const CACHE_NAME = 'photo-chronicles-cache-v18';
+const CACHE_NAME = 'photo-chronicles-cache-v21';
 const OFFLINE_ASSETS = [
   './',
   './index.html',
   './photo-metadata.js',
+  './photo-duplicates.js',
   './batch-entries.js',
   './manifest.webmanifest',
   './icons/icon-180.png',
