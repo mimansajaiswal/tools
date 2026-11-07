@@ -16,6 +16,7 @@
     <!-- Tailwind CSS (CDN) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="./photo-metadata.js"></script>
+    <script src="./photo-duplicates.js"></script>
 
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@0.561.0/dist/umd/lucide.min.js"></script>
@@ -278,9 +279,117 @@
             outline-offset: 3px;
         }
 
-        #batchPhotoList input[type="datetime-local"] {
+        #batchPhotoList input[type="datetime-local"],
+        #batchDuplicateList input[type="datetime-local"] {
             min-width: 0;
             max-width: 100%;
+        }
+
+        .batch-photo-row {
+            display: grid;
+            grid-template-columns: 48px minmax(0, 1fr) 28px;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            border: 1px solid #D9D2C7;
+            border-radius: 3px;
+        }
+
+        .batch-photo-row.is-duplicate {
+            grid-template-columns: 28px 48px minmax(0, 1fr) 28px;
+        }
+
+        .batch-photo-row.is-selected {
+            border-color: #857593;
+            background: #85759308;
+        }
+
+        .batch-include {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            align-self: stretch;
+            min-height: 48px;
+            cursor: pointer;
+        }
+
+        .batch-include input {
+            width: 17px;
+            height: 17px;
+            accent-color: #857593;
+            cursor: inherit;
+        }
+
+        .batch-thumbnail {
+            width: 48px;
+            height: 48px;
+            object-fit: contain;
+            background: #E8E2D9;
+            border-radius: 2px;
+        }
+
+        .batch-photo-info {
+            min-width: 0;
+        }
+
+        .batch-filename,
+        .batch-match {
+            display: block;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        .batch-filename {
+            font-size: 12px;
+            line-height: 18px;
+            font-weight: 500;
+        }
+
+        .batch-match {
+            font-size: 11px;
+            line-height: 17px;
+            color: #5C5650;
+        }
+
+        .batch-date-button {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            max-width: 100%;
+            min-height: 24px;
+            font-size: 11px;
+            color: #5C5650;
+        }
+
+        .batch-date-button span {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .batch-date-button:hover {
+            color: #2C2926;
+            text-decoration: underline;
+        }
+
+        .batch-remove {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 32px;
+            color: #5C5650;
+        }
+
+        .batch-remove:hover {
+            background: #E8E2D9;
+        }
+
+        .batch-date-editor {
+            display: flex;
+            gap: 8px;
+            grid-column: 1 / -1;
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -1232,14 +1341,23 @@ export default {
             </header>
             <div class="p-4 sm:p-5 overflow-y-auto flex-1 min-h-0">
                 <button id="batchChooseBtn" onclick="document.getElementById('batchFileInput').click()"
-                    class="w-full border border-dashed border-dull-purple/60 bg-oatmeal/40 hover:bg-oatmeal p-5 flex items-center justify-center gap-2 font-display text-sm text-charcoal disabled:opacity-50">
+                    class="border border-oatmeal-dark bg-oatmeal/40 hover:bg-oatmeal px-3 py-2 flex items-center justify-center gap-2 font-display text-sm text-charcoal disabled:opacity-50">
                     <i data-lucide="image-plus" class="w-5 h-5 text-dull-purple" aria-hidden="true"></i> Choose photos
                 </button>
                 <input type="file" id="batchFileInput" accept="image/*" multiple class="hidden"
                     onchange="BatchEntries.select(event)">
-                <div id="batchPhotoList" class="space-y-3 mt-4"></div>
+                <div id="batchPhotoList" class="space-y-2 mt-3"></div>
+                <section id="batchDuplicates" class="hidden mt-4" aria-labelledby="batchDuplicateCount">
+                    <h4 id="batchDuplicateCount" class="font-display text-sm font-semibold text-charcoal"></h4>
+                    <p class="text-xs text-earth-metal/70 mt-1 mb-2">Check only the photos you want to add again.</p>
+                    <div id="batchDuplicateList" class="space-y-2"></div>
+                </section>
                 <p id="batchEmptyHint" class="text-xs text-earth-metal/60 text-center mt-4">Choose several from your
                     gallery. Review dates before saving.</p>
+                <details class="text-[11px] text-earth-metal/60 mt-3">
+                    <summary class="cursor-pointer w-fit">About duplicate checks</summary>
+                    <p class="mt-1">Checks this diary on this device and the selected photos. Older imports need a saved copy or a previous hash to be checked.</p>
+                </details>
             </div>
             <footer class="p-4 sm:p-5 border-t border-oatmeal-dark flex items-center justify-between gap-3">
                 <span id="batchProgress" role="status" class="text-xs text-earth-metal/70 font-display">No photos
@@ -1548,7 +1666,10 @@ export default {
                     return [];
                 }
             },
-            setData: (d) => localStorage.setItem('chronicles_data', JSON.stringify(d)),
+            setData: (d) => {
+                d.forEach(diary => PhotoDuplicates.remember(diary));
+                localStorage.setItem('chronicles_data', JSON.stringify(d));
+            },
             getLastActiveDiaryId: () => localStorage.getItem('chronicles_last_diary'),
             setLastActiveDiaryId: (id) => {
                 if (id) {
@@ -1630,6 +1751,7 @@ export default {
             },
             pruneDiaryEntries: (diary, maxSyncedEntries = LOCAL_SYNCED_ENTRY_LIMIT) => {
                 if (!diary || !Array.isArray(diary.entries)) return [];
+                PhotoDuplicates.remember(diary);
                 const pendingEntryIds = new Set(diary.pendingEntries || []);
                 const pendingDeleteEntryIds = new Set((diary.pendingDeleteOps || []).map((op) => op.entryId).filter(Boolean));
                 const protectedEntries = [];
@@ -1676,6 +1798,7 @@ export default {
                     if (idx > -1) {
                         removed = diary.entries[idx];
                         diary.entries.splice(idx, 1);
+                        if (diary.photoIndex) delete diary.photoIndex[removed.id];
                     }
                     Storage.setData(data);
                 }
@@ -1744,6 +1867,12 @@ export default {
                     if (idx > -1) {
                         removed = diary.entries[idx];
                         diary.entries.splice(idx, 1);
+                    }
+                }
+                if (diary.photoIndex) {
+                    if (entryId) delete diary.photoIndex[entryId];
+                    for (const [id, indexed] of Object.entries(diary.photoIndex)) {
+                        if (notionId && indexed.notionId === notionId) delete diary.photoIndex[id];
                     }
                 }
                 Storage.setData(data);
@@ -2280,9 +2409,15 @@ export default {
                                 tags: getTags(props.Tags),
                                 photoDataURL: localPhotoData,
                                 photoKey: photoKey,
+                                photoFingerprints: existingEntry?.photoFingerprints || Object.values(activeDiary.photoIndex || {}).find(entry => entry.notionId === page.id)?.fingerprints,
                                 synced: true,
                                 deletedLocally: false
                             };
+                            try {
+                                await PhotoDuplicates.fingerprintEntry(syncedEntry);
+                            } catch (error) {
+                                console.warn('Could not index a synced preview', error);
+                            }
 
                             if (localIndex > -1) {
                                 Storage.cleanupReplacedEntryAssets(existingEntry, syncedEntry);
@@ -2830,6 +2965,7 @@ export default {
                 return {
                     ...await asset,
                     origin: seg.origin,
+                    fingerprint: seg.fingerprint,
                     createdAt: seg.createdAt,
                     x: seg.x,
                     y: seg.y,
@@ -2904,6 +3040,7 @@ export default {
                         resolve({
                             source: img,
                             origin: draftSeg.origin || 'camera',
+                            fingerprint: draftSeg.fingerprint || null,
                             createdAt: draftSeg.createdAt || null,
                             sourceDataURL: draftSeg.sourceDataURL || null,
                             isManipulatable: true,
@@ -4341,6 +4478,7 @@ export default {
                         notes: notes,
                         tags: App.state.currentTags,
                         diaryTitle: diaryTitle,
+                        photoFingerprints: App.state.segments.map(seg => seg?.fingerprint).filter(Boolean),
                         photoDataURL: photoDataURL,
                         photoKey: photoKey,
                         uploadKey: uploadKey,
@@ -4368,6 +4506,7 @@ export default {
                     App.state.diaries = Storage.getData();
 
                     App.closeModal('entryModal', { force: true });
+                    App.renderSidebar();
                     App.renderDiaryView();
                     App.showToast("Entry saved", 'success');
                     if (navigator.onLine && !uploadPending) {
@@ -5178,8 +5317,8 @@ export default {
                 if (!file || !App.state.isEntryModalOpen || App.state.entryLoading) return;
                 const session = App.state.entrySession;
                 const idx = App.state.activeSegment;
-                App.invalidatePhoto();
-                const revision = App.state.photoRevision;
+                const diaryId = App.state.activeDiaryId;
+                let revision = App.state.photoRevision;
                 const current = () => session === App.state.entrySession && revision === App.state.photoRevision && App.state.isEntryModalOpen;
                 const url = URL.createObjectURL(file);
                 App.setEntryLoading(true, 'Loading photo...');
@@ -5193,10 +5332,36 @@ export default {
                     const origin = options.origin || 'file';
                     const [, createdAt] = await Promise.all([decoded, origin === 'file' ? PhotoMetadata.createdAt(file) : Promise.resolve(UTILS.now())]);
                     if (!current()) return;
+                    const duplicateCanvas = BatchEntries.canvas(img, 350 * 350, 350);
+                    const duplicatePreview = await UTILS.canvasToBlob(duplicateCanvas, 0.65);
+                    duplicateCanvas.width = duplicateCanvas.height = 1;
+                    const fingerprint = await PhotoDuplicates.fingerprint(file, duplicatePreview);
+                    await PhotoDuplicates.prepare(diaryId);
+                    if (!current()) return;
+                    const pending = App.state.segments.flatMap((seg, index) => index !== idx && seg?.fingerprint ? [{ fingerprint: seg.fingerprint, name: `Photo ${index + 1} in this entry` }] : []);
+                    const duplicate = PhotoDuplicates.find(fingerprint, diaryId, pending);
+                    if (duplicate) {
+                        const accepted = await new Promise(resolve => {
+                            const opened = App.requestConfirmation({
+                                title: duplicate.kind === 'exact' ? 'Duplicate photo' : 'Matching saved preview',
+                                message: `${PhotoDuplicates.describe(duplicate)} Add this photo again?`,
+                                accept: 'Add again', cancel: 'Skip photo',
+                                onConfirm: () => resolve(true), onCancel: () => resolve(false)
+                            });
+                            if (!opened) resolve(false);
+                        });
+                        if (!current()) return;
+                        if (!accepted) {
+                            App.setEntryLoading(false);
+                            return;
+                        }
+                    }
+                    App.invalidatePhoto();
+                    revision = App.state.photoRevision;
                     App.state.captureBase ||= App.getTargetBaseDimensions();
                     const scale = App.fitScaleForSlot(img.width, img.height, App.collageConfigs[App.state.collageMode][idx]);
                     App.state.segments[idx] = {
-                        source: img, sourceBlob: file, origin, createdAt,
+                        source: img, sourceBlob: file, origin, createdAt, fingerprint,
                         isManipulatable: true, x: 0, y: 0, scale, baseScale: scale,
                         rotation: 0, flipH: false, flipV: false, width: img.width, height: img.height
                     };
@@ -5398,20 +5563,22 @@ export default {
                     el.inert = !!top && el.id !== top;
                 });
             },
-            requestConfirmation: ({ title, message, accept = 'Discard', cancel = 'Keep editing', onConfirm }) => {
-                if (App.state.confirmation) return;
-                App.state.confirmation = onConfirm;
+            requestConfirmation: ({ title, message, accept = 'Discard', cancel = 'Keep editing', onConfirm, onCancel }) => {
+                if (App.state.confirmation) return false;
+                App.state.confirmation = { onConfirm, onCancel };
                 document.getElementById('confirmationTitle').textContent = title;
                 document.getElementById('confirmationMessage').textContent = message;
                 document.getElementById('confirmationAccept').textContent = accept;
                 document.getElementById('confirmationCancel').textContent = cancel;
                 App.openModal('confirmationModal');
+                return true;
             },
             resolveConfirmation: (accepted) => {
                 const action = App.state.confirmation;
                 App.state.confirmation = null;
                 App.closeModal('confirmationModal', { force: true });
-                if (accepted) action?.();
+                if (accepted) action?.onConfirm?.();
+                else action?.onCancel?.();
             },
             openModal: (id) => {
                 const modal = document.getElementById(id);

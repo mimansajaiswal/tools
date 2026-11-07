@@ -39,6 +39,14 @@ const BatchEntries = {
         const added = files.map(file => ({ id: UTILS.id(), file, date: UTILS.toLocalISO(new Date()), ready: false, error: '', preview: null, url: null, dated: false }));
         session.items.push(...added);
         this.render();
+        try {
+            await PhotoDuplicates.prepare(session.diaryId);
+        } catch (error) {
+            added.forEach(item => { item.error = 'Could not check duplicates. Please choose these photos again.'; });
+            session.reading = false;
+            if (this.session === session) this.render();
+            return;
+        }
         for (const item of added) {
             if (this.session !== session) break;
             if (!session.items.includes(item)) continue;
@@ -47,77 +55,146 @@ const BatchEntries = {
                 const image = await this.decode(item.file);
                 const canvas = this.canvas(image, 350 * 350, 350);
                 const preview = await UTILS.canvasToBlob(canvas, 0.65);
+                const fingerprint = await PhotoDuplicates.fingerprint(item.file, preview);
                 canvas.width = canvas.height = 1;
                 if (this.session !== session || !session.items.includes(item)) continue;
                 item.dated = !!createdAt;
                 if (createdAt) item.date = UTILS.toLocalISO(new Date(createdAt));
                 item.preview = preview;
+                item.fingerprint = fingerprint;
                 item.url = URL.createObjectURL(preview);
                 item.ready = true;
             } catch (error) {
                 item.error = error.message || 'Could not read this photo.';
             }
-            if (this.session === session) this.updateRow(item);
+            if (this.session === session) this.render();
         }
         if (this.session !== session) return;
         session.reading = false;
-        this.updateControls();
+        this.render();
+    },
+    refreshMatches() {
+        const session = this.session;
+        if (!session || session.saving) return;
+        const pending = [];
+        for (const item of session.items) {
+            if (!item.ready) continue;
+            item.duplicate = PhotoDuplicates.find(item.fingerprint, session.diaryId, pending);
+            if (!item.duplicate) item.decision = null;
+            if (!item.duplicate || item.decision === 'add') pending.push({ fingerprint: item.fingerprint, name: item.file.name });
+        }
+    },
+    chooseDuplicate(id, decision) {
+        const item = this.session?.items.find(item => item.id === id);
+        if (!item || this.session.saving) return;
+        item.decision = decision;
+        this.render();
+        document.getElementById(`batchDecision-${id}`)?.focus();
+    },
+    dateLabel(item) {
+        if (!Number.isFinite(Date.parse(item.date))) return 'Set date';
+        const date = new Date(item.date);
+        if (!item.dated && !item.dateEdited && date.toDateString() === new Date().toDateString()) return 'Today · no photo date';
+        return date.toLocaleString(undefined, {
+            month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+            ...(date.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {})
+        });
     },
     rowHTML(item) {
         const escape = UTILS.escapeHTML;
         const session = this.session;
-        const status = item.error || (!item.ready ? 'Reading photo' : item.dateEdited ? 'Date set by you' : item.dated ? 'Photo creation date' : 'No photo date found. Using today; you can change it.');
+        const disabled = session.reading || session.saving;
+        const include = !item.duplicate || item.decision === 'add';
+        const status = item.error || (!item.ready ? 'Reading photo…' : item.dateEdited ? 'Date set by you' : item.dated ? 'Photo creation date' : 'No photo date found. Using today; you can change it.');
+        const match = item.duplicate && `${item.duplicate.location === 'this diary' ? 'Already in' : 'Also selected as'} “${item.duplicate.title}”`;
         return `
-            ${item.url ? `<img src="${item.url}" alt="" class="w-16 h-20 sm:w-20 sm:h-24 object-contain bg-oatmeal rounded shrink-0">` : '<div class="w-16 h-20 sm:w-20 sm:h-24 bg-oatmeal rounded shrink-0 flex items-center justify-center"><i data-lucide="image" class="w-5 h-5 text-earth-metal/40" aria-hidden="true"></i></div>'}
-            <div class="flex-1 min-w-0">
-                <p class="text-xs font-display font-medium text-charcoal truncate mb-2" title="${escape(item.file.name)}">${escape(item.file.name)}</p>
-                <label for="batchDate-${item.id}" class="sr-only">Date for ${escape(item.file.name)}</label>
-                <input id="batchDate-${item.id}" type="datetime-local" value="${escape(item.date)}" ${!item.ready || session.saving ? 'disabled' : ''}
-                    oninput="BatchEntries.setDate('${item.id}', this.value)" class="w-full text-xs bg-oatmeal/60 border border-oatmeal-dark p-2 text-charcoal disabled:opacity-50">
-                <p id="batchHint-${item.id}" title="${escape(status)}" class="text-[11px] mt-1.5 flex items-start gap-1 ${item.error || (!item.dated && !item.dateEdited && item.ready) ? 'text-amber-800' : 'text-earth-metal/60'}">
-                    <i data-lucide="${item.error ? 'circle-alert' : !item.ready ? 'loader-circle' : item.dateEdited ? 'pencil' : item.dated ? 'calendar-check' : 'calendar-clock'}" class="w-3.5 h-3.5 shrink-0 ${!item.ready && !item.error ? 'animate-spin' : ''}" aria-hidden="true"></i>
-                    <span>${item.ready || item.error ? escape(item.error || (item.dateEdited ? 'Your date' : item.dated ? 'Photo date' : 'No date · using today')) : 'Reading…'}</span>
-                </p>
+            ${item.duplicate ? `<label class="batch-include" for="batchDecision-${item.id}" title="Add this photo again">
+                <input id="batchDecision-${item.id}" type="checkbox" aria-label="Add ${escape(item.file.name)} again"
+                    onchange="BatchEntries.chooseDuplicate('${item.id}', this.checked ? 'add' : 'skip')" ${item.decision === 'add' ? 'checked' : ''} ${disabled ? 'disabled' : ''}>
+            </label>` : ''}
+            ${item.url ? `<img src="${item.url}" alt="" class="batch-thumbnail">` : '<div class="batch-thumbnail flex items-center justify-center"><i data-lucide="image" class="w-4 h-4 text-earth-metal/40" aria-hidden="true"></i></div>'}
+            <div class="batch-photo-info">
+                ${item.duplicate ? `<label for="batchDecision-${item.id}" class="batch-filename cursor-pointer" title="${escape(item.file.name)}">${escape(item.file.name)}</label>` : `<p class="batch-filename" title="${escape(item.file.name)}">${escape(item.file.name)}</p>`}
+                ${match ? `<p class="batch-match" title="${escape(PhotoDuplicates.describe(item.duplicate))}">${escape(match)}</p>` : ''}
+                ${include && item.ready ? `<button id="batchDateButton-${item.id}" type="button" onclick="BatchEntries.editDate('${item.id}')" ${disabled ? 'disabled' : ''}
+                    aria-label="Edit date for ${escape(item.file.name)}" title="${escape(status)}" class="batch-date-button">
+                    <span id="batchDateLabel-${item.id}">${escape(this.dateLabel(item))}</span><i data-lucide="pencil" class="w-3 h-3 shrink-0" aria-hidden="true"></i>
+                </button>` : ''}
+                ${include || item.error || !item.ready ? `<p id="batchHint-${item.id}" class="${item.error || !item.ready ? 'text-[11px] text-amber-800' : 'sr-only'}">${escape(status)}</p>` : ''}
             </div>
-            <button onclick="BatchEntries.remove('${item.id}')" ${session.saving ? 'disabled' : ''} aria-label="Remove ${escape(item.file.name)}" class="p-2 hover:bg-oatmeal text-earth-metal/60 disabled:opacity-30 self-start"><i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i></button>`;
+            <button onclick="BatchEntries.remove('${item.id}')" ${session.saving ? 'disabled' : ''} aria-label="Remove ${escape(item.file.name)}" class="batch-remove"><i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i></button>
+            ${include && item.editingDate ? `<div class="batch-date-editor">
+                <label for="batchDate-${item.id}" class="sr-only">Date for ${escape(item.file.name)}</label>
+                <input id="batchDate-${item.id}" type="datetime-local" value="${escape(item.date)}" ${disabled ? 'disabled' : ''}
+                    oninput="BatchEntries.setDate('${item.id}', this.value)" class="min-w-0 flex-1 text-xs bg-oatmeal/60 border border-oatmeal-dark p-2 text-charcoal">
+                <button type="button" onclick="BatchEntries.finishDate('${item.id}')" class="px-3 py-2 text-xs font-display hover:bg-oatmeal">Done</button>
+            </div>` : ''}`;
+    },
+    rowClasses(item) {
+        return `batch-photo-row${item.duplicate ? ' is-duplicate' : ''}${item.duplicate && item.decision === 'add' ? ' is-selected' : ''}`;
     },
     render() {
-        const list = document.getElementById('batchPhotoList');
-        list.innerHTML = this.session.items.map(item => `<div id="batchRow-${item.id}" class="flex gap-3 p-3 border border-oatmeal-dark rounded">${this.rowHTML(item)}</div>`).join('');
+        this.refreshMatches();
+        const duplicates = this.session.items.filter(item => item.duplicate);
+        const row = item => `<div id="batchRow-${item.id}" class="${this.rowClasses(item)}">${this.rowHTML(item)}</div>`;
+        document.getElementById('batchPhotoList').innerHTML = this.session.items.filter(item => !item.duplicate).map(row).join('');
+        document.getElementById('batchDuplicateList').innerHTML = duplicates.map(row).join('');
+        document.getElementById('batchDuplicates').classList.toggle('hidden', !duplicates.length);
+        document.getElementById('batchDuplicateCount').textContent = `Duplicates (${duplicates.length})`;
         lucide.createIcons();
         this.updateControls();
     },
     updateRow(item) {
         const row = document.getElementById(`batchRow-${item.id}`);
-        if (row) row.innerHTML = this.rowHTML(item);
+        if (row) {
+            row.className = this.rowClasses(item);
+            row.innerHTML = this.rowHTML(item);
+        }
         lucide.createIcons();
         this.updateControls();
+    },
+    editDate(id) {
+        const item = this.session?.items.find(item => item.id === id);
+        if (!item || this.session.reading || this.session.saving) return;
+        item.editingDate = true;
+        this.updateRow(item);
+        document.getElementById(`batchDate-${id}`)?.focus();
+    },
+    finishDate(id) {
+        const item = this.session?.items.find(item => item.id === id);
+        if (!item || this.session.saving) return;
+        if (!Number.isFinite(Date.parse(item.date))) {
+            App.showToast('Choose a valid date before continuing.', 'error');
+            return document.getElementById(`batchDate-${id}`)?.focus();
+        }
+        item.editingDate = false;
+        this.updateRow(item);
+        document.getElementById(`batchDateButton-${id}`)?.focus();
     },
     updateControls() {
         const session = this.session;
         if (!session) return;
-        const ready = session.items.filter(item => item.ready && Number.isFinite(Date.parse(item.date))).length;
+        const selected = session.items.filter(item => item.ready && (!item.duplicate || item.decision === 'add'));
+        const ready = selected.filter(item => Number.isFinite(Date.parse(item.date))).length;
+        const skipped = session.items.filter(item => item.ready && item.duplicate && item.decision !== 'add').length;
         document.getElementById('batchChooseBtn').disabled = session.reading || session.saving;
         document.getElementById('batchCloseBtn').disabled = session.saving;
         document.getElementById('batchStopBtn').classList.toggle('hidden', !session.saving);
         document.getElementById('batchStopBtn').disabled = !!session.stopRequested;
-        document.getElementById('batchSaveBtn').disabled = session.reading || session.saving || !ready || session.items.some(item => item.ready && !Number.isFinite(Date.parse(item.date)));
-        document.getElementById('batchSaveLabel').textContent = session.saving ? 'Saving…' : `Add ${ready || ''} ${ready === 1 ? 'entry' : 'entries'}`;
+        document.getElementById('batchSaveBtn').disabled = session.reading || session.saving || !(ready + skipped) || selected.some(item => !Number.isFinite(Date.parse(item.date)));
+        document.getElementById('batchSaveLabel').textContent = session.saving ? 'Saving…' : !ready && skipped ? 'Skip duplicates' : `Add ${ready || ''} ${ready === 1 ? 'entry' : 'entries'}`;
         document.getElementById('batchEmptyHint').classList.toggle('hidden', session.items.length > 0);
-        document.getElementById('batchProgress').textContent = session.saving ? session.stopRequested ? 'Stopping after this photo…' : session.progress : session.reading ? `Reading ${session.items.filter(item => item.ready || item.error).length} / ${session.items.length}` : session.items.length ? `${ready} ready${session.items.some(item => !item.ready) ? ' · remove unreadable photos' : ''}` : 'No photos selected';
+        document.getElementById('batchProgress').textContent = session.saving ? session.stopRequested ? 'Stopping after this photo…' : session.progress : session.reading ? `Reading ${session.items.filter(item => item.ready || item.error).length} / ${session.items.length}` : session.items.length ? `${ready} to add${skipped ? ` · ${skipped} skipped` : ''}${session.items.some(item => !item.ready) ? ' · remove unreadable photos' : ''}` : 'No photos selected';
     },
     setDate(id, value) {
         const item = this.session?.items.find(item => item.id === id);
         if (!item || this.session.saving) return;
         item.date = value;
         item.dateEdited = true;
-        if (!item.error) {
-            const hint = document.getElementById(`batchHint-${id}`);
-            hint.title = 'Date set by you';
-            hint.className = 'text-[11px] mt-1.5 flex items-start gap-1 text-earth-metal/60';
-            hint.innerHTML = '<i data-lucide="pencil" class="w-3.5 h-3.5 shrink-0" aria-hidden="true"></i><span>Your date</span>';
-            lucide.createIcons();
-        }
+        const hint = document.getElementById(`batchHint-${id}`);
+        if (hint && !item.error) hint.textContent = 'Date set by you';
+        const label = document.getElementById(`batchDateLabel-${id}`);
+        if (label) label.textContent = this.dateLabel(item);
         // Keep the field mounted while editing, including temporary incomplete values.
         this.updateControls();
     },
@@ -127,8 +204,7 @@ const BatchEntries = {
         const item = session.items.find(item => item.id === id);
         if (item?.url) URL.revokeObjectURL(item.url);
         session.items = session.items.filter(item => item.id !== id);
-        document.getElementById(`batchRow-${id}`)?.remove();
-        this.updateControls();
+        this.render();
         document.getElementById('batchChooseBtn').focus();
     },
     stop() {
@@ -139,11 +215,20 @@ const BatchEntries = {
     async save() {
         const session = this.session;
         if (!session || session.reading || session.saving) return;
-        const items = session.items.filter(item => item.ready);
-        if (!items.length || items.some(item => !Number.isFinite(Date.parse(item.date)))) return;
-        if (!ImageStore.isAvailable()) return App.showToast('Photo storage is unavailable in this browser.', 'error');
+        const reviewedDuplicates = new Set(session.items.filter(item => item.duplicate));
+        this.refreshMatches();
+        if (session.items.some(item => item.duplicate && !reviewedDuplicates.has(item))) {
+            this.render();
+            return App.showToast('New duplicates found. Review your choices before saving.', 'info');
+        }
+        const items = session.items.filter(item => item.ready && (!item.duplicate || item.decision === 'add'));
+        const skipped = session.items.filter(item => item.ready && item.duplicate && item.decision !== 'add');
+        if (!(items.length + skipped.length) || items.some(item => !Number.isFinite(Date.parse(item.date)))) return;
+        if (items.length && !ImageStore.isAvailable()) return App.showToast('Photo storage is unavailable in this browser.', 'error');
         const diary = Storage.getData().find(diary => diary.id === session.diaryId);
         if (!diary) return App.showToast('This diary is no longer available.', 'error');
+        skipped.forEach(item => { if (item.url) URL.revokeObjectURL(item.url); });
+        session.items = session.items.filter(item => !skipped.includes(item));
         session.saving = true;
         session.stopRequested = false;
         session.progress = `Saving 0 / ${items.length}`;
@@ -165,6 +250,7 @@ const BatchEntries = {
                     id: item.id, clientEntryId: crypto.randomUUID(), date,
                     title: new Date(date).toLocaleString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
                     notes: '', tags: [], diaryTitle: diary.title, photoKey, uploadKey,
+                    photoFingerprints: [item.fingerprint],
                     photoDataURL: null, uploadDataURL: null, uploadPending: false,
                     synced: false, syncStatus: 'local', syncError: null, notionId: null, deletedLocally: false
                 };
@@ -189,6 +275,8 @@ const BatchEntries = {
         if (saved) {
             App.showToast(`${saved} ${saved === 1 ? 'entry' : 'entries'} added`, 'success');
             SyncManager.syncCurrentDiary();
+        } else if (skipped.length) {
+            App.showToast(`${skipped.length} ${skipped.length === 1 ? 'duplicate' : 'duplicates'} skipped`, 'info');
         }
         if (!session.items.length) {
             App.closeModal('batchModal', { force: true });
@@ -201,6 +289,7 @@ const BatchEntries = {
         this.session.items.forEach(item => { if (item.url) URL.revokeObjectURL(item.url); });
         this.session = null;
         document.getElementById('batchPhotoList').replaceChildren();
+        document.getElementById('batchDuplicateList').replaceChildren();
         document.getElementById('batchFileInput').value = '';
         if (App.state.isEntryModalOpen) {
             App.startDrawLoop();
