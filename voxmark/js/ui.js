@@ -255,7 +255,12 @@ function renderLogs() {
         minute: "2-digit",
         second: "2-digit"
       });
-      summary.innerHTML = `<span>${entry.title}</span><span>${time}</span>`;
+      const title = document.createElement("span");
+      title.textContent = entry.title || "Event";
+      const stamp = document.createElement("span");
+      stamp.textContent = time;
+      summary.appendChild(title);
+      summary.appendChild(stamp);
       details.appendChild(summary);
       const pre = document.createElement("pre");
       pre.textContent = entry.detail || "";
@@ -296,11 +301,20 @@ function renderQueue() {
     const label = status === "failed" ? "Failed" : status === "processing" ? "Processing" : "Queued";
     const summary = document.createElement("div");
     summary.className = "queue-summary";
-    summary.innerHTML = `
-      <div class="queue-title">Session ${session.id.slice(0, 6).toUpperCase()}</div>
-      <div class="queue-subtitle">${formatRelativeTime(session.startedAt)} · ${session.snapshots?.length || 0} snapshots</div>
-      ${session.lastError ? `<div class="queue-error">${session.lastError}</div>` : ""}
-    `;
+    const title = document.createElement("div");
+    title.className = "queue-title";
+    title.textContent = `Session ${session.id.slice(0, 6).toUpperCase()}`;
+    const subtitle = document.createElement("div");
+    subtitle.className = "queue-subtitle";
+    subtitle.textContent = `${formatRelativeTime(session.startedAt)} · ${session.snapshots?.length || 0} snapshots`;
+    summary.appendChild(title);
+    summary.appendChild(subtitle);
+    if (session.lastError) {
+      const errorText = document.createElement("div");
+      errorText.className = "queue-error";
+      errorText.textContent = session.lastError;
+      summary.appendChild(errorText);
+    }
     const statusPill = document.createElement("div");
     statusPill.className = "queue-status";
     statusPill.textContent = label;

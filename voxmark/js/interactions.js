@@ -2,6 +2,8 @@ function bindInteractions() {
   let wheelCommitTimer = null;
   let wheelPreviewScale = null;
   let wheelOriginViewport = null;
+  let recordingScrollSnapshotTimer = null;
+  let recordingSnapshotInFlight = false;
 
   elements.pdfInput.addEventListener("change", (event) => handlePdfUpload(event.target.files));
   elements.uploadPdf.addEventListener("click", () => {
@@ -139,7 +141,17 @@ function bindInteractions() {
   if (elements.paletteRestoreDefault) {
     elements.paletteRestoreDefault.addEventListener("click", () => {
       const stored = localStorage.getItem("voxmark-default-palette");
-      const palette = stored ? JSON.parse(stored) : [...DEFAULT_SETTINGS.colorPalette];
+      let palette = [...DEFAULT_SETTINGS.colorPalette];
+      if (stored) {
+        try {
+          palette = JSON.parse(stored);
+        } catch (error) {
+          notify("Palette", "Saved palette is invalid. Restoring defaults.", {
+            type: "error",
+            duration: 3000
+          });
+        }
+      }
       state.settings.colorPalette = palette;
       renderPaletteEditor();
       persistSettings();
@@ -389,9 +401,21 @@ function bindInteractions() {
   elements.viewerArea.addEventListener("scroll", () => {
     scheduleActivePageUpdate();
     if (!state.recording) return;
-    captureSnapshot().then((snapshot) => {
-      if (snapshot) state.recordingSession.snapshots.push(snapshot);
-    });
+    if (recordingScrollSnapshotTimer || recordingSnapshotInFlight) return;
+    recordingScrollSnapshotTimer = setTimeout(() => {
+      recordingScrollSnapshotTimer = null;
+      if (!state.recording || !state.recordingSession || recordingSnapshotInFlight) return;
+      recordingSnapshotInFlight = true;
+      captureSnapshot()
+        .then((snapshot) => {
+          if (snapshot && state.recordingSession) {
+            state.recordingSession.snapshots.push(snapshot);
+          }
+        })
+        .finally(() => {
+          recordingSnapshotInFlight = false;
+        });
+    }, 420);
   });
   elements.viewerArea.addEventListener("dragover", (event) => {
     event.preventDefault();
@@ -994,18 +1018,48 @@ function resetDropdownPosition(menu) {
 }
 
 async function initApp() {
-  await openDB();
-  await loadSettings();
+  try {
+    await openDB();
+  } catch (error) {
+    db = null;
+    notify("Storage", "IndexedDB unavailable. Running without persistence.", {
+      type: "error",
+      duration: 5000
+    });
+  }
+  try {
+    await loadSettings();
+  } catch (error) {
+    state.settings = { ...DEFAULT_SETTINGS };
+    applyTheme(state.settings.theme || "system");
+    updateThemeToggleUI();
+    notify("Settings", "Failed to load saved settings. Using defaults.", {
+      type: "error",
+      duration: 5000
+    });
+  }
   updateHeaderOffset();
   const storedMode = localStorage.getItem("voxmark-mode");
   setMode(storedMode || state.mode);
   updateConnectionStatus();
-  updateStorageUsage();
-  const storedPdfs = await loadPdfsFromDB();
-  for (const pdf of storedPdfs) {
-    await restorePdfState(pdf);
+  updateStorageUsage().catch(() => { });
+  try {
+    const storedPdfs = await loadPdfsFromDB();
+    for (const pdf of storedPdfs) {
+      await restorePdfState(pdf);
+    }
+  } catch (error) {
+    notify("Restore", "Failed to restore one or more saved PDFs.", {
+      type: "error",
+      duration: 5000
+    });
   }
-  const sessionState = await loadSessionState();
+  let sessionState = null;
+  try {
+    sessionState = await loadSessionState();
+  } catch (error) {
+    sessionState = null;
+  }
   if (sessionState?.activePdfId) {
     setActivePdf(sessionState.activePdfId);
   } else if (state.pdfs.length) {
@@ -1014,20 +1068,28 @@ async function initApp() {
   if (sessionState?.activeSessionId) {
     state.activeSessionId = sessionState.activeSessionId;
   }
-  const storedLogs = await loadLogsFromDB();
-  if (storedLogs.length) {
-    state.logs = storedLogs;
-    updateLogIndicator();
-    renderLogs();
+  try {
+    const storedLogs = await loadLogsFromDB();
+    if (storedLogs.length) {
+      state.logs = storedLogs;
+      updateLogIndicator();
+      renderLogs();
+    }
+  } catch (error) {
+    state.logs = [];
   }
-  const queue = await loadQueueFromDB();
-  state.queue = queue.map((item) => ({
-    ...item,
-    status: item.status || "queued",
-    attempts: item.attempts || 0,
-    lastError: item.lastError || "",
-    processedChunks: item.processedChunks || []
-  }));
+  try {
+    const queue = await loadQueueFromDB();
+    state.queue = queue.map((item) => ({
+      ...item,
+      status: item.status || "queued",
+      attempts: item.attempts || 0,
+      lastError: item.lastError || "",
+      processedChunks: item.processedChunks || []
+    }));
+  } catch (error) {
+    state.queue = [];
+  }
   updateQueueIndicator();
   bindInteractions();
   setNavTab(state.navTab || "outline");
