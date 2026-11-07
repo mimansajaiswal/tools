@@ -1,6 +1,6 @@
 /**
  * GhostInk Flashcards - API Module
- * Notion API integration via Cloudflare Worker proxy.
+ * Direct Notion API calls with an optional Cloudflare Worker proxy.
  */
 
 import { Storage } from './storage.js';
@@ -32,15 +32,24 @@ const queueRequest = (fn) => {
 };
 
 export const API = {
+    transportReady(settings) {
+        return settings.useProxy !== true || !!settings.workerUrl;
+    },
+    requestUrl(target, settings) {
+        if (settings.useProxy !== true) return new URL(target);
+        if (!settings.workerUrl?.trim()) throw new Error('Enter a proxy Worker URL or turn off the API proxy');
+        const url = new URL(settings.workerUrl.trim().replace(/\/$/, ''));
+        url.searchParams.set('url', target);
+        return url;
+    },
     async request(method, endpoint, body = null, override = null) {
         return queueRequest(async () => {
-            const { workerUrl, authToken, proxyToken } = override || Storage.getSettings();
-            if (!workerUrl || !authToken) throw new Error('Missing worker URL or Notion token');
-            const cleanWorker = workerUrl.trim().replace(/\/$/, '');
-            const fetchUrl = new URL(cleanWorker);
-            fetchUrl.searchParams.append('url', `https://api.notion.com/v1${endpoint}`);
+            const settings = override || Storage.getSettings();
+            const { authToken, proxyToken } = settings;
+            if (!authToken) throw new Error('Missing Notion token');
+            const fetchUrl = API.requestUrl(`https://api.notion.com/v1${endpoint}`, settings);
             const headers = { 'Authorization': `Bearer ${authToken.trim()}`, 'Notion-Version': '2025-09-03' };
-            if (proxyToken) headers['X-Proxy-Token'] = proxyToken.trim();
+            if (settings.useProxy === true && proxyToken) headers['X-Proxy-Token'] = proxyToken.trim();
             let payload = body;
             if (body && !(body instanceof FormData)) {
                 headers['Content-Type'] = 'application/json';

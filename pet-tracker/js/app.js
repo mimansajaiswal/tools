@@ -1260,6 +1260,7 @@ const App = {
         // Populate connection tab
         const workerUrl = document.getElementById('settingsWorkerUrl');
         if (workerUrl) workerUrl.value = settings.workerUrl || '';
+        document.getElementById('settingsUseProxy').checked = settings.useProxy === true;
 
         const proxyToken = document.getElementById('settingsProxyToken');
         if (proxyToken) proxyToken.value = settings.proxyToken || '';
@@ -1741,9 +1742,7 @@ const App = {
         // Save any current settings before redirect
         const workerUrl = document.getElementById('settingsWorkerUrl')?.value?.trim();
         const proxyToken = document.getElementById('settingsProxyToken')?.value?.trim();
-        if (workerUrl) {
-            PetTracker.Settings.set({ workerUrl, proxyToken });
-        }
+        PetTracker.Settings.set({ workerUrl, proxyToken, useProxy: document.getElementById('settingsUseProxy').checked });
 
         PetTracker.UI.showLoading('Starting Notion sign-in...');
 
@@ -1830,7 +1829,7 @@ const App = {
                         Onboarding.findDatabases();
                     }
                 }, 300);
-            } else if (settings.workerUrl) {
+            } else if (PetTracker.API.transportReady(settings)) {
                 setTimeout(() => App.scanDataSources(), 500);
             }
             handled = true;
@@ -1961,6 +1960,7 @@ const App = {
         const todoistTokenChanged = existingTodoistEffectiveToken !== nextTodoistEffectiveToken;
 
         const settings = {
+            useProxy: document.getElementById('settingsUseProxy').checked,
             workerUrl: document.getElementById('settingsWorkerUrl')?.value?.trim() || '',
             proxyToken: document.getElementById('settingsProxyToken')?.value?.trim() || '',
             notionToken,
@@ -2008,13 +2008,14 @@ const App = {
         const existingOAuthToken = existing.notionOAuthData?.access_token || '';
         const usingOAuthToken = !!existingOAuthToken && notionToken === existingOAuthToken;
 
-        if (!workerUrl) {
-            PetTracker.UI.toast('Please enter Worker URL', 'error');
+        if (document.getElementById('settingsUseProxy').checked && !workerUrl) {
+            PetTracker.UI.toast('Please enter a proxy Worker URL or turn off the API proxy', 'error');
             return;
         }
 
         // Save temporarily for API call
         PetTracker.Settings.set({
+            useProxy: document.getElementById('settingsUseProxy').checked,
             workerUrl,
             notionToken,
             proxyToken,
@@ -2047,7 +2048,7 @@ const App = {
         const settings = PetTracker.Settings.get();
         // FIX #14: Use centralized token resolution
         const effectiveToken = PetTracker.API.getEffectiveToken();
-        if (!settings.workerUrl || !effectiveToken) {
+        if (!PetTracker.API.transportReady(settings) || !effectiveToken) {
             PetTracker.UI.toast('Configure connection first', 'error');
             return;
         }

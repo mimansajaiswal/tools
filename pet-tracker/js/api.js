@@ -1,35 +1,40 @@
 /**
  * Pet Tracker - Notion API Layer
- * All calls go through Cloudflare Worker proxy
+ * Direct browser calls with an optional Cloudflare Worker proxy
  */
 
 const API = {
+    transportReady: (settings) => settings.useProxy !== true || !!settings.workerUrl,
+    requestUrl: (target, settings) => {
+        if (settings.useProxy !== true) return new URL(target);
+        if (!settings.workerUrl?.trim()) throw new Error('Enter a proxy Worker URL or turn off the API proxy');
+        const url = new URL(settings.workerUrl.trim().replace(/\/$/, ''));
+        url.searchParams.set('url', target);
+        return url;
+    },
     /**
-     * Make a request to Notion API via proxy
+     * Make a request to Notion using the selected route
      */
     request: async (method, endpoint, body = null) => {
         const settings = PetTracker.Settings.get();
-        const { workerUrl, proxyToken, notionToken, notionOAuthData, authMode } = settings;
+        const { proxyToken, notionToken, notionOAuthData, authMode } = settings;
 
         // Honor selected auth mode first, then fall back to whichever token exists.
         const token = authMode === 'oauth'
             ? (notionOAuthData?.access_token || notionToken)
             : (notionToken || notionOAuthData?.access_token);
 
-        if (!workerUrl) throw new Error('Worker URL not configured');
         if (!token) throw new Error('Notion token not configured');
 
-        const cleanWorkerUrl = workerUrl.trim().replace(/\/$/, '');
         const target = `https://api.notion.com/v1${endpoint}`;
 
-        const fetchUrl = new URL(cleanWorkerUrl);
-        fetchUrl.searchParams.append('url', target);
+        const fetchUrl = API.requestUrl(target, settings);
 
         const headers = {
             'Authorization': `Bearer ${token.trim()}`,
             'Notion-Version': '2025-09-03'
         };
-        if (proxyToken) headers['X-Proxy-Token'] = proxyToken.trim();
+        if (settings.useProxy === true && proxyToken) headers['X-Proxy-Token'] = proxyToken.trim();
 
         if (!(body instanceof FormData)) {
             headers['Content-Type'] = 'application/json';
@@ -134,29 +139,26 @@ const API = {
     },
 
     /**
-     * Send file content to a Notion upload URL through proxy (multipart/form-data)
+     * Send file content to a Notion upload URL (multipart/form-data)
      */
     uploadFileContent: async (uploadUrl, fileBlob, fileName = 'upload.bin') => {
         const settings = PetTracker.Settings.get();
-        const { workerUrl, proxyToken, notionToken, notionOAuthData, authMode } = settings;
+        const { proxyToken, notionToken, notionOAuthData, authMode } = settings;
 
         const token = authMode === 'oauth'
             ? (notionOAuthData?.access_token || notionToken)
             : (notionToken || notionOAuthData?.access_token);
 
-        if (!workerUrl) throw new Error('Worker URL not configured');
         if (!token) throw new Error('Notion token not configured');
         if (!uploadUrl) throw new Error('Upload URL missing');
 
-        const cleanWorkerUrl = workerUrl.trim().replace(/\/$/, '');
-        const fetchUrl = new URL(cleanWorkerUrl);
-        fetchUrl.searchParams.append('url', uploadUrl);
+        const fetchUrl = API.requestUrl(uploadUrl, settings);
 
         const headers = {
             'Authorization': `Bearer ${token.trim()}`,
             'Notion-Version': '2025-09-03'
         };
-        if (proxyToken) headers['X-Proxy-Token'] = proxyToken.trim();
+        if (settings.useProxy === true && proxyToken) headers['X-Proxy-Token'] = proxyToken.trim();
 
         const formData = new FormData();
         formData.append('file', fileBlob, fileName);

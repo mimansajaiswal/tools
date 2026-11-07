@@ -624,6 +624,7 @@ const Settings = {
 
     defaults: {
         workerUrl: '',
+        useProxy: false,
         proxyToken: '',
         authMode: 'token',
         notionToken: '',
@@ -735,7 +736,7 @@ const Settings = {
             key => !!s.dataSources?.[key]
         );
         const hasToken = !!(s.notionToken || s.notionOAuthData?.access_token);
-        return !!(s.workerUrl && hasToken && hasDataSources);
+        return !!((s.useProxy !== true || s.workerUrl) && hasToken && hasDataSources);
     },
 
     isOnboardingDone: () => localStorage.getItem(Settings.KEYS.ONBOARDING_DONE) === 'true',
