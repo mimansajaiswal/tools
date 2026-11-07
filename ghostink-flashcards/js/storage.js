@@ -450,12 +450,13 @@ export const Storage = {
             req.onsuccess = () => resolve(req.result || []);
             req.onerror = () => {
                 console.warn('Failed to get sync queue:', req.error);
-                resolve([]);
+                reject(req.error);
             };
+            tx.onabort = () => reject(tx.error || new Error('Queue read aborted'));
         });
     },
 
-    async addToSyncQueue(item) {
+    async addToSyncQueue(item, replaceIds = []) {
         await this.ensureReady();
         if (!this.db.objectStoreNames.contains('syncQueue')) {
             console.warn('syncQueue store not available');
@@ -463,11 +464,16 @@ export const Storage = {
         }
         return new Promise((resolve, reject) => {
             const tx = this.db.transaction('syncQueue', 'readwrite');
-            const req = tx.objectStore('syncQueue').add({
+            const store = tx.objectStore('syncQueue');
+            const req = store.add({
                 ...item,
                 queuedAt: Date.now()
             });
-            req.onsuccess = () => resolve(req.result);
+            // Commit replacement and removal together. A failed write must retain the old work.
+            for (const id of replaceIds) store.delete(id);
+            tx.oncomplete = () => resolve(req.result);
+            tx.onabort = () => reject(tx.error || new Error('Queue replacement aborted'));
+            tx.onerror = () => reject(tx.error || new Error('Queue replacement failed'));
             req.onerror = () => reject(new Error(`Failed to add to sync queue: ${req.error?.message || 'Unknown error'}`));
         });
     },

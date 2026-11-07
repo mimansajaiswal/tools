@@ -92,6 +92,7 @@ export const API = {
                 return await this.request(method, endpoint, body, override);
             } catch (e) {
                 lastError = e;
+                if (method === 'POST' && endpoint === '/pages' && e.status !== 429) throw e;
                 // Retry on rate limit (429) or server errors (5xx)
                 if (e.status === 429 || (e.status >= 500 && e.status < 600)) {
                     const delay = e.status === 429 && Number.isFinite(e.retryAfterMs)

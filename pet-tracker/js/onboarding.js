@@ -942,8 +942,7 @@ const Onboarding = {
                     synced: false
                 };
 
-                await PetTracker.DB.put(PetTracker.STORES.SCALES, scale);
-                await PetTracker.SyncQueue.add({
+                await PetTracker.SyncQueue.save({
                     type: 'create',
                     store: 'scales',
                     recordId: scale.id,
@@ -967,8 +966,7 @@ const Onboarding = {
                         synced: false
                     };
 
-                    await PetTracker.DB.put(PetTracker.STORES.SCALE_LEVELS, level);
-                    await PetTracker.SyncQueue.add({
+                    await PetTracker.SyncQueue.save({
                         type: 'create',
                         store: 'scaleLevels',
                         recordId: level.id,
@@ -1016,8 +1014,7 @@ const Onboarding = {
                     synced: false
                 };
 
-                await PetTracker.DB.put(PetTracker.STORES.EVENT_TYPES, eventType);
-                await PetTracker.SyncQueue.add({
+                await PetTracker.SyncQueue.save({
                     type: 'create',
                     store: 'eventTypes',
                     recordId: eventType.id,
@@ -1057,8 +1054,7 @@ const Onboarding = {
                     synced: false
                 };
 
-                await PetTracker.DB.put(PetTracker.STORES.EVENT_TYPES, eventType);
-                await PetTracker.SyncQueue.add({
+                await PetTracker.SyncQueue.save({
                     type: 'create',
                     store: 'eventTypes',
                     recordId: eventType.id,
@@ -1143,8 +1139,7 @@ const Onboarding = {
                 synced: false
             };
 
-            await PetTracker.DB.put(PetTracker.STORES.EVENTS, event);
-            await PetTracker.SyncQueue.add({
+            await PetTracker.SyncQueue.save({
                 type: 'create',
                 store: 'events',
                 recordId: event.id,

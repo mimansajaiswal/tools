@@ -547,7 +547,10 @@
                     conn.send({ type: 'JOIN', payload: { id: myPlayerId, name: playerName, colorIdx: selectedColorIdx } });
                     conn.on('data', handleClientData);
                     conn.on('close', () => {
-                        // Connection closed logic handled elsewhere
+                        if (hostConnRef.current !== conn) return;
+                        hostConnRef.current = null;
+                        setView('waiting');
+                        showToast('Connection lost. Rejoining the host…', 'info');
                     });
                 });
                 conn.on('error', () => {
@@ -558,6 +561,8 @@
 
             const handleHostData = (data, conn) => {
                 const cur = stateRef.current;
+                if (!cur?.isHost || !data?.payload || data.payload.id && data.payload.id !== conn.peer) return;
+                if (data.type === 'CLICK_CELL' && data.payload.playerId !== conn.peer) return;
 
                 if (data.type === 'LEAVE') {
                     // Player clicked New Game -> Remove them explicitly
@@ -661,6 +666,7 @@
             const handleCellClickLogic = (index, pId, detailText = null) => {
                 const cur = stateRef.current;
                 const cell = cur.boardData[index];
+                if (!cell || !cur.players.some(player => player.id === pId)) return;
 
                 // Don't interact with free space
                 if (cell.content && cell.content.type === 'free') return;
@@ -696,6 +702,7 @@
                 }
 
                 newBoard[index] = newCell;
+                stateRef.current = { ...cur, boardData: newBoard };
                 setBoardData(newBoard);
                 if (!cur.isSolo) broadcast({
                     type: 'SYNC_STATE', payload: {
@@ -708,6 +715,7 @@
                 if (isHost || isSolo) {
                     handleCellClickLogic(index, myPlayerId);
                 } else {
+                    if (!hostConnRef.current?.open) { setView('waiting'); return; }
                     hostConnRef.current.send({ type: 'CLICK_CELL', payload: { cellIndex: index, playerId: myPlayerId } });
                 }
             };

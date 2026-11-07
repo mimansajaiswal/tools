@@ -2990,6 +2990,8 @@
         this.normalizedSchema = normalizeSchema(this.config.schema, this.config.fallbackField);
         this.mountEl = resolveMount(this.config.mount);
         this.timer = null;
+        this.destroyed = false;
+        this.inputRevision = 0;
         this.isRenderingInput = false;
         this.inputText = '';
         this.aiState = {
@@ -4370,7 +4372,7 @@
     };
 
     QuickAddComponent.prototype.parseAI = async function parseAI(options) {
-        if (!this.isAiMode()) {
+        if (this.destroyed || !this.isAiMode()) {
             return;
         }
         const currentInput = String(this.inputText || this.readInputText() || '');
@@ -4383,6 +4385,8 @@
         }
 
         const requestId = ++this.aiState.requestSeq;
+        const isCurrent = () => !this.destroyed && requestId === this.aiState.requestSeq
+            && input === String(this.inputText || this.readInputText() || '');
         this.aiState.activeRequestSeq = requestId;
         this.aiState.isProcessing = true;
         this.aiState.lastAttemptedInput = input;
@@ -4394,7 +4398,7 @@
 
         try {
             const batch = await this.buildAIDispatchBatch(input, requestId);
-            if (requestId !== this.aiState.requestSeq) {
+            if (!isCurrent()) {
                 return;
             }
             this.aiState.callerRequest = this.buildAICallerRequest(input, batch, requestId);
@@ -4405,7 +4409,7 @@
                 batch,
                 source: opts.force ? 'manual-parse' : 'auto-parse'
             });
-            if (requestId !== this.aiState.requestSeq) {
+            if (!isCurrent()) {
                 return;
             }
 
@@ -4433,7 +4437,7 @@
                 this.aiState.lastParsedInput = input;
             }
         } catch (err) {
-            if (requestId !== this.aiState.requestSeq) {
+            if (!isCurrent()) {
                 return;
             }
             const normalizedError = this.normalizeAIDispatchError(err);
@@ -4443,7 +4447,7 @@
             if (requestId === this.aiState.requestSeq) {
                 this.aiState.isProcessing = false;
             }
-            this.parseAndRender({ source: this.inputText });
+            if (isCurrent()) this.parseAndRender({ source: this.inputText });
         }
     };
 
@@ -5949,9 +5953,10 @@
 
     QuickAddComponent.prototype.bindEvents = function bindEvents() {
         this.onInput = () => {
-            if (this.isRenderingInput) {
+            if (this.destroyed || this.isRenderingInput) {
                 return;
             }
+            this.inputRevision++;
             const keepTypingDropdownOpen = !!(
                 this.dropdownState
                 && (this.dropdownState.source === 'typing' || this.dropdownState.source === 'field-menu')
@@ -5969,6 +5974,8 @@
                 clearTimeout(this.timer);
             }
             if (this.isAiMode()) {
+                this.aiState.requestSeq++;
+                this.aiState.isProcessing = false;
                 this.inputText = this.readInputText();
                 this.lastResult = this.syncEntryAttachmentMeta(this.buildAIResult());
                 if (typeof this.config.onParse === 'function') {
@@ -8295,8 +8302,10 @@
     };
 
     QuickAddComponent.prototype.parseAndRender = function parseAndRender(options) {
+        if (this.destroyed) return;
         const opts = options || {};
         if (typeof opts.source === 'string') {
+            if (opts.source !== this.inputText) this.inputRevision++;
             this.inputText = opts.source;
         } else {
             this.inputText = this.readInputText();
@@ -12124,7 +12133,10 @@
         if (typeof handler !== 'function') {
             return { allow: true, value: context.nextValue };
         }
+        const input = this.inputText;
+        const revision = this.inputRevision;
         const decision = await handler(context);
+        if (this.destroyed || input !== this.inputText || revision !== this.inputRevision) return { allow: false, reason: 'Input changed; choose the value again.' };
         if (!decision || typeof decision !== 'object') {
             return { allow: true, value: context.nextValue };
         }
@@ -12290,7 +12302,12 @@
         if (!this.dropdownState) {
             return;
         }
-        const state = Object.assign({}, this.dropdownState);
+        const owner = this.dropdownState;
+        const input = this.inputText || this.readInputText();
+        const revision = this.inputRevision;
+        const current = () => !this.destroyed && this.dropdownState === owner
+            && revision === this.inputRevision && input === (this.inputText || this.readInputText());
+        const state = Object.assign({}, owner);
         if (state.source === 'field-menu') {
             const menuOption = (state.options || []).find((option) => normValue(option && option.value) === normValue(nextValue)) || null;
             if (!menuOption || !menuOption.prefix) {
@@ -12317,6 +12334,7 @@
         const isMultiSelectOptions = !!(field && field.type === 'options' && field.multiple);
         let selectedOption = (state.options || []).find((option) => normValue(option.value) === normValue(nextValue)) || null;
         const customResult = await this.resolveCustomOptionSelection(state, nextValue, selectedOption);
+        if (!current()) return;
         if (!customResult.accepted) {
             this.statusEl.textContent = customResult.reason || 'Custom option not accepted';
             return;
@@ -12348,6 +12366,7 @@
             sourceRegion: state.sourceRegion,
             fieldType: state.fieldType
         });
+        if (!current()) return;
         if (!commitValidation.allow) {
             this.statusEl.textContent = commitValidation.reason || 'Value blocked';
             return;
@@ -13006,7 +13025,11 @@
     };
 
     QuickAddComponent.prototype.setInput = function setInput(text) {
+        this.inputRevision++;
+        this.aiState.requestSeq++;
+        this.aiState.isProcessing = false;
         this.inputText = this.normalizeInsertedText(text || '');
+        if (!this.inputText.trim() && this.isAiMode()) this.clearAIEntries();
         this.dismissedSelections.clear();
         this.closeAttachmentSourceMenu({ restoreFocus: false });
         this.closeConflictModal();
@@ -13030,6 +13053,9 @@
     };
 
     QuickAddComponent.prototype.updateConfig = function updateConfig(nextConfig) {
+        this.inputRevision++;
+        this.aiState.requestSeq++;
+        this.aiState.isProcessing = false;
         const wasAiMode = this.isAiMode();
         const previousVerification = Object.assign({}, this.aiVerificationState);
         this.config = mergeConfig(Object.assign({}, this.config, nextConfig || {}));
@@ -13068,6 +13094,10 @@
     };
 
     QuickAddComponent.prototype.destroy = function destroy() {
+        this.inputRevision++;
+        this.aiState.requestSeq++;
+        this.aiState.isProcessing = false;
+        this.destroyed = true;
         if (this.timer) {
             clearTimeout(this.timer);
         }

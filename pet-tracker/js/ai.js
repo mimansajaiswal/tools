@@ -16,6 +16,23 @@ const AI = {
         processingQueueId: null
     },
 
+    persistReview: async () => {
+        await PetTracker.DB.put(PetTracker.STORES.AI_QUEUE, {
+            id: 'review-draft', status: 'awaiting-review', createdAt: new Date().toISOString(),
+            text: AI.state.inputText, entries: AI.state.entries,
+            editedEntries: Array.from(AI.state.editedEntries), deletedEntries: Array.from(AI.state.deletedEntries)
+        });
+    },
+
+    restoreReview: async () => {
+        const draft = await PetTracker.DB.get(PetTracker.STORES.AI_QUEUE, 'review-draft');
+        if (!draft) return;
+        AI.state.entries = draft.entries || [];
+        AI.state.inputText = draft.text || '';
+        AI.state.editedEntries = new Set(draft.editedEntries || []);
+        AI.state.deletedEntries = new Set(draft.deletedEntries || []);
+    },
+
     /**
      * Check if AI is configured
      */
@@ -316,15 +333,17 @@ Parse the following input:`;
      * Parse current input
      */
     parse: async () => {
-        if (AI.state.isProcessing || !AI.state.inputText.trim()) {
+        if (AI.state.saving || AI.state.isProcessing || !AI.state.inputText.trim()) {
             return;
         }
 
+        const input = AI.state.inputText;
         AI.state.isProcessing = true;
         AI.renderEntries();
 
         try {
-            const result = await AI.callProvider(AI.state.inputText);
+            const result = await AI.callProvider(input);
+            if (AI.state.inputText !== input) return;
 
             // Merge with existing entries, preserving edited ones
             result.entries.forEach((entry, index) => {
@@ -333,6 +352,8 @@ Parse the following input:`;
                 entry.status = AI.normalizeStatus(entry.status);
                 entry.attachments = AI.normalizeAttachmentRefs(entry.attachments || entry.attachmentRefs);
 
+                if (AI.state.entries.some(e => (AI.state.editedEntries.has(e._id) || AI.state.deletedEntries.has(e._id))
+                    && e.petName === entry.petName && e.eventType === entry.eventType && e.date === entry.date)) return;
                 // Check if we already have a similar entry that was edited
                 const existingIndex = AI.state.entries.findIndex(e =>
                     !AI.state.editedEntries.has(e._id) &&
@@ -350,6 +371,7 @@ Parse the following input:`;
                 }
             });
 
+            await AI.persistReview();
             if (result.warnings.length > 0) {
                 result.warnings.forEach(w => PetTracker.UI.toast(w, 'warning'));
             }
@@ -365,7 +387,7 @@ Parse the following input:`;
                 /network|offline|ECONNREFUSED|Failed to fetch/i.test(e.message);
             if (isNetworkError || !navigator.onLine) {
                 try {
-                    var queued = await PetTracker.AIQueue.add(AI.state.inputText);
+                    var queued = await PetTracker.AIQueue.add(input);
                     if (queued) {
                         await AI.updateQueueCount();
                         AI.renderQueueIndicator();
@@ -391,6 +413,7 @@ Parse the following input:`;
      */
     markEdited: (entryId) => {
         AI.state.editedEntries.add(entryId);
+        AI.persistReview().catch(console.error);
         AI.renderEntries();
     },
 
@@ -399,6 +422,7 @@ Parse the following input:`;
      */
     markDeleted: (entryId) => {
         AI.state.deletedEntries.add(entryId);
+        AI.persistReview().catch(console.error);
         AI.renderEntries();
     },
 
@@ -406,95 +430,122 @@ Parse the following input:`;
      * Save all non-deleted entries
      */
     saveAll: async () => {
-        const pets = await PetTracker.DB.getAll(PetTracker.STORES.PETS);
-        const eventTypes = await PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES);
-
-        const toSave = AI.state.entries.filter(e => !AI.state.deletedEntries.has(e._id));
-        let saved = 0;
-
-        for (const entry of toSave) {
-            try {
-                // Resolve pet
-                const pet = pets.find(p =>
-                    p.name.toLowerCase() === entry.petName?.toLowerCase()
-                );
-                if (!pet) {
-                    console.warn(`[AI] Pet not found: ${entry.petName}`);
-                    continue;
-                }
-
-                // Resolve event type
-                const eventType = eventTypes.find(t =>
-                    t.name.toLowerCase() === entry.eventType?.toLowerCase()
-                );
-
-                // Build start date
-                let startDate = entry.date;
-                if (entry.time) {
-                    startDate = PetTracker.UI.localDateTimeWithOffset(entry.date, entry.time);
-                }
-
-                const normalizedStatus = AI.normalizeStatus(entry.status);
-                const attachmentRefs = AI.normalizeAttachmentRefs(entry.attachments || entry.attachmentRefs);
-                let media = [];
-                if (attachmentRefs.length > 0) {
-                    media = await PetTracker.QuickAddModal.mapAttachmentRefsToMedia(attachmentRefs);
-                }
-
-                let providerId = entry.provider || null;
-                if (providerId) {
-                    providerId = PetTracker.QuickAddModal.resolveProviderId(providerId);
-                }
-
-                // Resolve severityLabel to severityLevelId
-                let severityLevelId = null;
-                if (entry.severityLabel && eventType?.usesSeverity && eventType?.defaultScaleId) {
-                    const scaleLevels = await PetTracker.DB.getAll(PetTracker.STORES.SCALE_LEVELS);
-                    let matchedLevel = scaleLevels.find(l =>
-                        l.scaleId === eventType.defaultScaleId &&
-                        l.name.toLowerCase() === entry.severityLabel.toLowerCase()
-                    );
-                    if (!matchedLevel) {
-                        matchedLevel = scaleLevels.find(l =>
-                            l.scaleId === eventType.defaultScaleId &&
-                            l.name.toLowerCase().includes(entry.severityLabel.toLowerCase())
-                        );
-                    }
-                    if (matchedLevel) severityLevelId = matchedLevel.id;
-                }
-
-                await Events.create({
-                    title: entry.title || eventType?.name || 'Event',
-                    petIds: [pet.id],
-                    eventTypeId: eventType?.id || null,
-                    startDate,
-                    endDate: entry.endDate || null,
-                    status: normalizedStatus,
-                    severityLevelId,
-                    notes: entry.notes || '',
-                    value: entry.value,
-                    unit: entry.unit,
-                    duration: entry.durationMinutes,
-                    tags: entry.tags || [],
-                    media,
-                    providerId: providerId || null,
-                    cost: entry.cost || null,
-                    costCategory: entry.costCategory || null,
-                    costCurrency: entry.costCurrency || null,
-                    todoistTaskId: entry.todoistTaskId || null,
-                    source: 'AI'
-                });
-
-                saved++;
-            } catch (e) {
-                console.error(`[AI] Error saving entry:`, e);
-            }
+        if (AI.state.saving) return;
+        if (AI.state.isProcessing || AI.state.processingQueueId) {
+            PetTracker.UI.toast('Wait for AI processing to finish before saving.', 'info');
+            return;
         }
+        AI.state.saving = true;
+        const panel = typeof document !== 'undefined' ? document.getElementById('qaPanelAI') : null;
+        if (panel) panel.inert = true;
+        try {
+            const pets = await PetTracker.DB.getAll(PetTracker.STORES.PETS);
+            const eventTypes = await PetTracker.DB.getAll(PetTracker.STORES.EVENT_TYPES);
 
-        PetTracker.UI.toast(`Saved ${saved} entries`, 'success');
-        AI.reset();
-        PetTracker.QuickAddModal.close();
-        App.renderDashboard();
+            const toSave = AI.state.entries.filter(e => !AI.state.deletedEntries.has(e._id));
+            let saved = 0;
+
+            for (const entry of toSave) {
+                try {
+                    // Resolve pet
+                    const pet = pets.find(p =>
+                        p.name.toLowerCase() === entry.petName?.toLowerCase()
+                    );
+                    if (!pet) {
+                        console.warn(`[AI] Pet not found: ${entry.petName}`);
+                        continue;
+                    }
+
+                    // Resolve event type
+                    const eventType = eventTypes.find(t =>
+                        t.name.toLowerCase() === entry.eventType?.toLowerCase()
+                    );
+
+                    // Build start date
+                    let startDate = entry.date;
+                    if (entry.time) {
+                        startDate = PetTracker.UI.localDateTimeWithOffset(entry.date, entry.time);
+                    }
+
+                    const normalizedStatus = AI.normalizeStatus(entry.status);
+                    const attachmentRefs = AI.normalizeAttachmentRefs(entry.attachments || entry.attachmentRefs);
+                    let media = [];
+                    if (attachmentRefs.length > 0) {
+                        media = await PetTracker.QuickAddModal.mapAttachmentRefsToMedia(attachmentRefs);
+                    }
+
+                    let providerId = entry.provider || null;
+                    if (providerId) {
+                        providerId = PetTracker.QuickAddModal.resolveProviderId(providerId);
+                    }
+
+                    // Resolve severityLabel to severityLevelId
+                    let severityLevelId = null;
+                    if (entry.severityLabel && eventType?.usesSeverity && eventType?.defaultScaleId) {
+                        const scaleLevels = await PetTracker.DB.getAll(PetTracker.STORES.SCALE_LEVELS);
+                        let matchedLevel = scaleLevels.find(l =>
+                            l.scaleId === eventType.defaultScaleId &&
+                            l.name.toLowerCase() === entry.severityLabel.toLowerCase()
+                        );
+                        if (!matchedLevel) {
+                            matchedLevel = scaleLevels.find(l =>
+                                l.scaleId === eventType.defaultScaleId &&
+                                l.name.toLowerCase().includes(entry.severityLabel.toLowerCase())
+                            );
+                        }
+                        if (matchedLevel) severityLevelId = matchedLevel.id;
+                    }
+
+                    // Persist the identity before creating the event so a restored draft cannot duplicate it.
+                    if (!entry._eventId) {
+                        entry._eventId = PetTracker.generateId();
+                        await AI.persistReview();
+                    }
+                    await Events.create({
+                        id: entry._eventId,
+                        title: entry.title || eventType?.name || 'Event',
+                        petIds: [pet.id],
+                        eventTypeId: eventType?.id || null,
+                        startDate,
+                        endDate: entry.endDate || null,
+                        status: normalizedStatus,
+                        severityLevelId,
+                        notes: entry.notes || '',
+                        value: entry.value,
+                        unit: entry.unit,
+                        duration: entry.durationMinutes,
+                        tags: entry.tags || [],
+                        media,
+                        providerId: providerId || null,
+                        cost: entry.cost || null,
+                        costCategory: entry.costCategory || null,
+                        costCurrency: entry.costCurrency || null,
+                        todoistTaskId: entry.todoistTaskId || null,
+                        source: 'AI'
+                    });
+
+                    saved++;
+                    AI.state.entries = AI.state.entries.filter(e => e._id !== entry._id);
+                    await AI.persistReview();
+                } catch (e) {
+                    console.error(`[AI] Error saving entry:`, e);
+                }
+            }
+
+            PetTracker.UI.toast(`Saved ${saved} entries`, 'success');
+            if (!AI.state.entries.some(e => !AI.state.deletedEntries.has(e._id))) {
+                AI.reset();
+                await AI.persistReview();
+                PetTracker.QuickAddModal.close();
+            } else {
+                AI.renderEntries();
+                PetTracker.UI.toast('Unsaved entries are still available. Correct them and save again.', 'warning');
+            }
+            App.renderDashboard();
+        } finally {
+            AI.state.saving = false;
+            if (panel) panel.inert = false;
+        }
     },
 
     /**
@@ -672,7 +723,7 @@ Parse the following input:`;
      * Open AI entry modal
      */
     openModal: async () => {
-        AI.reset();
+        await AI.restoreReview();
         await AI.updateQueueCount();
         AI.renderEntries();
         AI.renderQueueIndicator();
@@ -739,61 +790,67 @@ Parse the following input:`;
             return;
         }
 
-        const pending = await PetTracker.AIQueue.getPending();
-        if (pending.length === 0) {
-            PetTracker.UI.toast('No items in queue', 'info');
-            return;
-        }
-
+        if (AI.state.saving || AI.state.isProcessing) return;
         AI.state.isProcessing = true;
-        AI.renderEntries();
-
-        let processed = 0;
-        let failed = 0;
-
-        for (const item of pending) {
-            try {
-                AI.state.processingQueueId = item.id;
-                await PetTracker.AIQueue.updateStatus(item.id, 'processing');
-                const result = await AI.callProvider(item.text);
-
-                result.entries.forEach((entry, index) => {
-                    entry._id = `ai_${Date.now()}_${index}`;
-                    entry._isNew = true;
-                    entry._fromQueue = item.id;
-                    entry.status = AI.normalizeStatus(entry.status);
-                    entry.attachments = AI.normalizeAttachmentRefs(entry.attachments || entry.attachmentRefs);
-                    AI.state.entries.push(entry);
-                });
-
-                await PetTracker.AIQueue.updateStatus(item.id, 'completed');
-                processed++;
-
-                if (result.warnings.length > 0) {
-                    result.warnings.forEach(w => PetTracker.UI.toast(w, 'warning'));
-                }
-                if (result.missing.length > 0) {
-                    PetTracker.UI.toast(`Unknown: ${result.missing.join(', ')}`, 'warning');
-                }
-            } catch (e) {
-                console.error('[AI] Queue item error:', e);
-                await PetTracker.AIQueue.updateStatus(item.id, 'failed', e.message);
-                failed++;
+        try {
+            await AI.restoreReview();
+            const pending = await PetTracker.AIQueue.getPending();
+            if (pending.length === 0) {
+                PetTracker.UI.toast('No items in queue', 'info');
+                return;
             }
-        }
 
-        AI.state.isProcessing = false;
-        AI.state.processingQueueId = null;
-        await AI.updateQueueCount();
-        AI.renderEntries();
-        AI.renderQueueIndicator();
+            AI.state.isProcessing = true;
+            AI.renderEntries();
 
-        if (processed > 0) {
-            PetTracker.UI.toast(`Processed ${processed} queued items`, 'success');
-        }
-        if (failed > 0) {
-            PetTracker.UI.toast(`${failed} items failed`, 'error');
-        }
+            let processed = 0;
+            let failed = 0;
+
+            for (const item of pending) {
+                try {
+                    AI.state.processingQueueId = item.id;
+                    await PetTracker.AIQueue.updateStatus(item.id, 'processing');
+                    const result = await AI.callProvider(item.text);
+
+                    result.entries.forEach((entry, index) => {
+                        entry._id = `queue_${item.id}_${index}`;
+                        entry._isNew = true;
+                        entry._fromQueue = item.id;
+                        entry.status = AI.normalizeStatus(entry.status);
+                        entry.attachments = AI.normalizeAttachmentRefs(entry.attachments || entry.attachmentRefs);
+                        if (!AI.state.entries.some(e => e._id === entry._id)) AI.state.entries.push(entry);
+                    });
+
+                    await AI.persistReview();
+                    await PetTracker.AIQueue.updateStatus(item.id, 'completed');
+                    processed++;
+
+                    if (result.warnings.length > 0) {
+                        result.warnings.forEach(w => PetTracker.UI.toast(w, 'warning'));
+                    }
+                    if (result.missing.length > 0) {
+                        PetTracker.UI.toast(`Unknown: ${result.missing.join(', ')}`, 'warning');
+                    }
+                } catch (e) {
+                    console.error('[AI] Queue item error:', e);
+                    await PetTracker.AIQueue.updateStatus(item.id, 'failed', e.message);
+                    failed++;
+                }
+            }
+
+            AI.state.isProcessing = false;
+            AI.state.processingQueueId = null;
+            await AI.updateQueueCount();
+            AI.renderEntries();
+            AI.renderQueueIndicator();
+
+            if (processed > 0) {
+                PetTracker.UI.toast(`Processed ${processed} queued items`, 'success');
+            }
+            if (failed > 0) {
+                PetTracker.UI.toast(`${failed} items failed`, 'error');
+            }
+        } finally { AI.state.isProcessing = false; AI.state.processingQueueId = null; }
     },
 
     /**

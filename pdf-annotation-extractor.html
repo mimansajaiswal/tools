@@ -463,6 +463,8 @@
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
         let pdfDoc = null;
+        let pdfLoadToken = 0;
+        let extractionBusy = false;
         let selectedPages = new Set();
         let splitCount = 1; // 1, 2, or 3 vertical splits
 
@@ -575,6 +577,7 @@
         }
 
         function setSplit(num) {
+            if (extractionBusy) return;
             splitCount = num;
             // Update UI
             document.querySelectorAll('.split-btn').forEach(btn => {
@@ -586,8 +589,12 @@
         // --- PDF Handling ---
 
         async function handlePdfUpload(event) {
+            if (extractionBusy) return;
+            const token = ++pdfLoadToken;
             const file = event.target.files[0];
             if (!file) return;
+            pdfDoc = null;
+            document.getElementById('processBtn').disabled = true;
 
             if (file.type !== 'application/pdf') {
                 alert("Please upload a valid PDF file.");
@@ -603,10 +610,13 @@
 
             try {
                 const arrayBuffer = await file.arrayBuffer();
-                pdfDoc = await pdfjsLib.getDocument(arrayBuffer).promise;
+                const loaded = await pdfjsLib.getDocument(arrayBuffer).promise;
+                if (token !== pdfLoadToken) return;
+                pdfDoc = loaded;
 
                 renderThumbnails();
             } catch (error) {
+                if (token !== pdfLoadToken) return;
                 console.error(error);
                 container.innerHTML = `<div class="col-span-full text-red-500 text-center">Error loading PDF: ${error.message}</div>`;
             }
@@ -674,6 +684,7 @@
         }
 
         function togglePageSelection(pageNum, wrapper) {
+            if (extractionBusy) return;
             const check = document.getElementById(`check-${pageNum}`);
             const canvas = document.getElementById(`page-canvas-${pageNum}`);
 
@@ -719,12 +730,17 @@
         }
 
         async function processDocuments() {
+            if (extractionBusy) return;
+            if (!pdfDoc) return;
             const apiKey = document.getElementById('apiKey').value.trim();
             if (!apiKey) {
                 alert("Please enter an API Key.");
                 return;
             }
 
+            extractionBusy = true;
+            const controls = Array.from(document.querySelectorAll("input, select, textarea")).filter(el => !el.disabled);
+            controls.forEach(el => el.disabled = true);
             // Reset Results
             sliceState = [];
             document.getElementById('processingLog').innerHTML = '';
@@ -830,6 +846,8 @@
             } catch (e) {
                 alert("An error occurred during processing: " + e.message);
             } finally {
+                extractionBusy = false;
+                controls.forEach(el => el.disabled = false);
                 btn.disabled = false;
                 btn.innerHTML = `<span>Start Extraction</span><i data-lucide="sparkles" class="w-4 h-4"></i>`;
                 lucide.createIcons();
@@ -1146,7 +1164,10 @@
         updateZoomUI();
 
         async function rerunSlice(index) {
+            if (extractionBusy) return;
             const slice = sliceState[index];
+            if (!slice) return;
+            extractionBusy = true;
             const btn = document.getElementById('rerunBtn');
 
             // Update UI for loading
@@ -1181,6 +1202,10 @@
                 sliceState[index].text = `[ERROR: ${err.message}]`;
                 sliceState[index].status = 'error';
                 updateLogEntry(slice.id, 'error');
+            } finally {
+                extractionBusy = false;
+                btn.disabled = false;
+                btn.innerHTML = 'Re-analyze';
             }
 
             // Re-render output

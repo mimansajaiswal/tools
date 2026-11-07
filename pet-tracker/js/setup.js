@@ -597,8 +597,7 @@ const Setup = {
             data.createdAt = now;
         }
 
-        await PetTracker.DB.put(PetTracker.STORES.EVENT_TYPES, data);
-        await PetTracker.SyncQueue.add({
+        await PetTracker.SyncQueue.save({
             type: Setup.editingId ? 'update' : 'create',
             store: 'eventTypes',
             recordId: data.id,
@@ -624,14 +623,12 @@ const Setup = {
                 const notionId = record?.notionId;
 
                 // Queue delete with notionId before local delete
-                await PetTracker.SyncQueue.add({
+                await PetTracker.SyncQueue.save({
                     type: 'delete',
                     store: 'eventTypes',
                     recordId: id,
                     data: { notionId }
                 });
-
-                await PetTracker.DB.delete(PetTracker.STORES.EVENT_TYPES, id);
 
                 if (PetTracker.Sync?.updatePendingCount) PetTracker.Sync.updatePendingCount();
                 PetTracker.UI.toast('Event type deleted', 'info');
@@ -864,8 +861,7 @@ const Setup = {
 
         if (!Setup.editingId) data.createdAt = now;
 
-        await PetTracker.DB.put(PetTracker.STORES.SCALES, data);
-        await PetTracker.SyncQueue.add({
+        await PetTracker.SyncQueue.save({
             type: Setup.editingId ? 'update' : 'create',
             store: 'scales',
             recordId: data.id,
@@ -886,24 +882,22 @@ const Setup = {
                 // Delete levels first - queue with notionId before local delete
                 const levels = await PetTracker.DB.query(PetTracker.STORES.SCALE_LEVELS, l => l.scaleId === id);
                 for (const level of levels) {
-                    await PetTracker.SyncQueue.add({
+                    await PetTracker.SyncQueue.save({
                         type: 'delete',
                         store: 'scaleLevels',
                         recordId: level.id,
                         data: { notionId: level.notionId }
                     });
-                    await PetTracker.DB.delete(PetTracker.STORES.SCALE_LEVELS, level.id);
                 }
 
                 // Get notionId before deleting locally
                 const scale = await PetTracker.DB.get(PetTracker.STORES.SCALES, id);
-                await PetTracker.SyncQueue.add({
+                await PetTracker.SyncQueue.save({
                     type: 'delete',
                     store: 'scales',
                     recordId: id,
                     data: { notionId: scale?.notionId }
                 });
-                await PetTracker.DB.delete(PetTracker.STORES.SCALES, id);
 
                 if (PetTracker.Sync?.updatePendingCount) PetTracker.Sync.updatePendingCount();
                 PetTracker.UI.toast('Scale deleted', 'info');
@@ -973,8 +967,7 @@ const Setup = {
 
         if (!Setup.editingId) data.createdAt = now;
 
-        await PetTracker.DB.put(PetTracker.STORES.SCALE_LEVELS, data);
-        await PetTracker.SyncQueue.add({
+        await PetTracker.SyncQueue.save({
             type: Setup.editingId ? 'update' : 'create',
             store: 'scaleLevels',
             recordId: data.id,

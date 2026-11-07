@@ -1315,7 +1315,14 @@ export const App = {
     async getMicStream() {
         // Request a fresh stream for actual recording; do not keep the mic open between actions.
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('Microphone unsupported');
-        return navigator.mediaDevices.getUserMedia({ audio: true });
+        const card = this.state.selectedCard;
+        const attempt = this.state.aiAttempt;
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (this.state.selectedCard !== card || this.state.aiAttempt !== attempt) {
+            stream.getTracks().forEach(track => track.stop());
+            return null;
+        }
+        return stream;
     },
     isMicActive() {
         return !!this.state.currentRecorder || (this.mediaRecorder && this.mediaRecorder.state === 'recording');
@@ -3609,6 +3616,7 @@ export const App = {
         this.renderCards();
     },
     renderStudy() {
+        this.state.aiAttempt = (this.state.aiAttempt || 0) + 1;
         // Ensure we never keep the mic open across cards/screens.
         if (this.isMicActive() || this.state.activeAudioStream) {
             this.stopMicActivity(true);
@@ -6875,6 +6883,14 @@ export const App = {
             if (loadingMsg && !el('#loadingOverlay').classList.contains('hidden')) {
                 loadingMsg.textContent = 'Pushing local changes...';
             }
+            for (const op of this.state.queue.values()) {
+                if (op.status === 'failed' && !op.uncertainCreate) {
+                    op.status = 'pending';
+                    op.retryCount = 0;
+                    await Storage.put('syncQueue', op);
+                }
+            }
+            await this.processDyContextQueue();
             const pushResult = await this.pushQueue();
             el('#syncProgress').style.width = '50%';
 
@@ -6919,12 +6935,18 @@ export const App = {
             setTimeout(() => el('#syncProgress').style.width = '0%', 700);
             this.state.syncing = false;
             this.updateSyncButtonState();
-            if (this.state.queue.size > 0) {
+            if (Array.from(this.state.queue.values()).some(op => op.type !== 'dy-generation' && op.status !== 'failed')) {
                 this.requestAutoSyncSoon(MIN_PUSH_INTERVAL_MS + 100);
             }
         }
     },
     async pullFromNotion(opts = {}) {
+        const execute = () => this.pullFromNotionLocked(opts);
+        return typeof navigator !== 'undefined' && navigator.locks
+            ? navigator.locks.request('ghostink-sync', execute) : execute();
+    },
+    async pullFromNotionLocked(opts = {}) {
+        if ((await Storage.getSyncQueue()).some(op => op.type !== 'dy-generation')) return;
         const { deckSource, cardSource } = this.state.settings;
         if (!deckSource || !cardSource) return;
         const forceFull = !!opts.forceFull;
@@ -7561,11 +7583,23 @@ export const App = {
         return `${op.type}:${entityId}`;
     },
     async pushQueue() {
+        const execute = () => this.pushQueueLocked();
+        return typeof navigator !== 'undefined' && navigator.locks
+            ? navigator.locks.request('ghostink-sync', execute) : execute();
+    },
+    async pushQueueLocked() {
+        const withQueueLock = fn => typeof navigator !== 'undefined' && navigator.locks
+            ? navigator.locks.request('ghostink-queue-write', fn) : fn();
+        const refreshQueue = async () => {
+            this.state.queue = new Map((await Storage.getSyncQueue()).map(op => [this.queueKey(op), op]));
+        };
+        const diskQueue = await Storage.getSyncQueue();
+        this.state.queue = new Map(diskQueue.map(op => [this.queueKey(op), op]));
         const { deckSource, cardSource } = this.state.settings;
 
         const rawQueue = [];
         for (const op of this.state.queue.values()) {
-            if (op.type !== 'dy-generation') rawQueue.push(op);
+            if (op.type !== 'dy-generation' && op.status !== 'failed') rawQueue.push(JSON.parse(JSON.stringify(op)));
         }
 
         const buckets = {
@@ -7616,27 +7650,35 @@ export const App = {
         for (let i = 0; i < queue.length; i++) {
             const op = queue[i];
             if (i > 0) await sleep(350);
+            if (!(await Storage.getSyncQueue()).some(item => item.id === op.id)) continue;
             if (op.type === 'card-upsert' && op.payload && op.payload.parentCard && this.isTempId(op.payload.parentCard)) {
                 const parent = this.state.cards.get(op.payload.parentCard);
                 if (parent && parent.notionId) op.payload.parentCard = parent.notionId;
             }
 
+            const originalKey = this.queueKey(op);
+            let createStarted = false;
             try {
                 if (op.type === 'deck-upsert') {
                     const props = NotionMapper.deckProps(op.payload);
                     if (op.payload.notionId) await API.updatePage(op.payload.notionId, props);
                     else {
                         const oldId = op.payload.id;
+                        createStarted = true;
                         const res = await API.createPage(deckSource, props);
                         op.payload.notionId = res.id;
                         op.payload.id = res.id;
-                        await Storage.put('decks', op.payload);
+                        const current = this.state.decks.find(d => d.id === oldId || d.id === op.payload.id);
+                        await Storage.put('decks', { ...op.payload, ...current, id: res.id, notionId: res.id });
                         if (oldId && oldId !== res.id) {
-                            await this.applyIdMappings({ deckIdMap: { [oldId]: res.id } });
+                            await withQueueLock(async () => {
+                                await refreshQueue();
+                                await this.applyIdMappings({ deckIdMap: { [oldId]: res.id } });
+                            });
                         }
                         const deckIdx = this.state.decks.findIndex(d => d.id === op.payload.id);
                         if (deckIdx >= 0) {
-                            this.state.decks[deckIdx] = { ...this.state.decks[deckIdx], ...op.payload };
+                            this.state.decks[deckIdx] = { ...this.state.decks[deckIdx], notionId: op.payload.notionId };
                         }
                     }
                 }
@@ -7644,18 +7686,24 @@ export const App = {
                 if (op.type === 'card-upsert') {
                     const deck = this.deckById(op.payload.deckId);
                     if (!op.payload.notionId && op.payload.deckId && (!deck || !deck.notionId)) {
-                        throw new Error('Deck not yet synced');
+                        const error = new Error('Deck not yet synced');
+                        error.isDependency = true;
+                        throw error;
                     }
                     const props = NotionMapper.cardProps(op.payload, deck);
                     if (op.payload.notionId) await API.updatePage(op.payload.notionId, props);
                     else {
                         const oldId = op.payload.id;
+                        createStarted = true;
                         const res = await API.createPage(cardSource, props);
                         op.payload.notionId = res.id;
                         op.payload.id = res.id;
                         op.payload.syncId = res.id;
                         if (oldId && oldId !== res.id) {
-                            await this.applyIdMappings({ cardIdMap: { [oldId]: res.id } });
+                            await withQueueLock(async () => {
+                                await refreshQueue();
+                                await this.applyIdMappings({ cardIdMap: { [oldId]: res.id } });
+                            });
                         }
                     }
                     op.payload.updatedInApp = false;
@@ -7667,22 +7715,27 @@ export const App = {
                     if (isClozeParent(op.payload)) {
                         op.payload._lastClozeReconcile = new Date().toISOString();
                     }
-                    const existingCard = this.state.cards.get(op.payload.id) || this.cardByNotionId(op.payload.notionId);
-                    if (existingCard) {
-                        this.setCard({ ...existingCard, ...op.payload });
-                    } else {
-                        this.setCard(op.payload);
-                    }
-                    await Storage.put('cards', op.payload);
+                    const storedCards = await Storage.getAll('cards');
+                    const existingCard = storedCards.find(card => card.id === op.payload.id)
+                        || this.state.cards.get(op.payload.id) || this.cardByNotionId(op.payload.notionId);
+                    const acknowledged = existingCard
+                        ? {
+                            ...existingCard, notionId: op.payload.notionId, syncId: op.payload.syncId || existingCard.syncId,
+                            _notionRichText: op.payload._notionRichText
+                        }
+                        : op.payload;
+                    this.setCard(acknowledged);
+                    await Storage.put('cards', acknowledged);
                 }
                 if (op.type === 'card-delete' && op.payload.notionId) await API.archivePage(op.payload.notionId);
                 if (op.type === 'block-append' && op.payload.pageId) {
                     await API.appendBlocks(op.payload.pageId, op.payload.blocks);
                 }
 
-                if (op.id) await Storage.removeFromSyncQueue(op.id).catch(() => { });
-                const key = this.queueKey(op);
-                if (key) this.state.queue.delete(key);
+                await withQueueLock(async () => {
+                    if (op.id) await Storage.removeFromSyncQueue(op.id);
+                    await refreshQueue();
+                });
                 succeeded.push(op);
             } catch (e) {
                 console.error(`Queue op failed: ${op.type}`, e);
@@ -7693,20 +7746,24 @@ export const App = {
                 };
                 Storage.setMeta('lastQueueError', this.state.lastQueueError).catch(() => { });
                 op.retryCount = (op.retryCount || 0) + 1;
-                if (op.retryCount <= 5) {
-                    failed.push(op);
-                    if (op.id) await Storage.put('syncQueue', op).catch(() => { });
-                } else {
-                    toast(`Sync dropped item after 5 attempts: ${e.message}`);
-                    if (op.id) await Storage.removeFromSyncQueue(op.id).catch(() => { });
-                    const key = this.queueKey(op);
-                    if (key) this.state.queue.delete(key);
-                }
+                const uncertainCreate = createStarted && (!e.status || e.status >= 500);
+                op.status = uncertainCreate || op.retryCount >= 5 ? 'failed' : 'pending';
+                op.uncertainCreate = uncertainCreate;
+                op.lastError = e?.message || String(e);
+                failed.push(op);
+                await withQueueLock(async () => {
+                    await refreshQueue();
+                    const stored = this.state.queue.get(this.queueKey(op)) || this.state.queue.get(originalKey);
+                    if (stored && (stored.id === op.id || uncertainCreate)) {
+                        Object.assign(stored, { retryCount: op.retryCount, status: op.status, lastError: op.lastError, uncertainCreate: op.uncertainCreate });
+                        await Storage.put('syncQueue', stored);
+                    }
+                });
             }
         }
 
         if (failed.length > 0) {
-            toast(`${failed.length} sync operation(s) failed, will retry`);
+            toast(`${failed.length} sync operation(s) failed. Work was retained for retry`);
             this.state.queueLastChangedAt = new Date().toISOString();
             Storage.setMeta('queueLastChangedAt', this.state.queueLastChangedAt).catch(() => { });
         } else if (hadQueue && succeeded.length > 0) {
@@ -7718,13 +7775,23 @@ export const App = {
 
         el('#queueCount').textContent = String(this.state.queue.size);
         this.renderConnection();
-        return { success: failed.length === 0, failedCount: failed.length };
+        const remaining = Array.from(this.state.queue.values()).filter(op => op.type !== 'dy-generation');
+        return { success: failed.length === 0 && remaining.length === 0, failedCount: Math.max(failed.length, remaining.filter(op => op.status === 'failed').length) };
     },
     async queueOp(op, reason = 'generic') {
+        const execute = () => this.queueOpLocked(op, reason);
+        return typeof navigator !== 'undefined' && navigator.locks
+            ? navigator.locks.request('ghostink-queue-write', execute) : execute();
+    },
+    async queueOpLocked(op, reason = 'generic') {
+        this.state.queue = new Map((await Storage.getSyncQueue()).map(item => [this.queueKey(item), item]));
+        op = JSON.parse(JSON.stringify(op));
         op.reason = reason;
+        op.status = 'pending';
 
         const key = this.queueKey(op);
         if (!key) return;
+        const replaced = [];
 
         const entityId = this.queueEntityId(op);
         if (entityId && (op.type.endsWith('-delete') || op.type.endsWith('-upsert'))) {
@@ -7734,23 +7801,27 @@ export const App = {
             const counterpartKey = `${counterpartType}:${entityId}`;
             if (this.state.queue.has(counterpartKey)) {
                 const existing = this.state.queue.get(counterpartKey);
-                if (existing.id) await Storage.removeFromSyncQueue(existing.id).catch(() => { });
-                this.state.queue.delete(counterpartKey);
+                replaced.push([counterpartKey, existing]);
             }
         }
 
         if (this.state.queue.has(key)) {
             const existing = this.state.queue.get(key);
-            if (existing.id) await Storage.removeFromSyncQueue(existing.id).catch(() => { });
-            this.state.queue.delete(key);
+            replaced.push([key, existing]);
         }
 
         if (op.type === 'card-upsert' && op.payload) {
             op.payload._lastUpdated = Date.now();
         }
 
-        const dbKey = await Storage.addToSyncQueue(op);
+        if (replaced.some(([, existing]) => existing.uncertainCreate)) {
+            op.uncertainCreate = true;
+            op.status = 'failed';
+            op.lastError = 'Create outcome unknown. Check Notion before sending more changes.';
+        }
+        const dbKey = await Storage.addToSyncQueue(op, replaced.map(([, existing]) => existing.id).filter(id => id != null));
         op.id = dbKey; // Assign DB key to in-memory obj
+        for (const [oldKey] of replaced) this.state.queue.delete(oldKey);
         this.state.queue.set(key, op);
 
         el('#queueCount').textContent = String(this.state.queue.size);
@@ -7874,7 +7945,7 @@ export const App = {
         if (this.state.dyContextProcessing) return;
         if (!navigator.onLine) return;
 
-        const queue = Array.from(this.state.queue.values()).filter(op => op.type === 'dy-generation');
+        const queue = Array.from(this.state.queue.values()).filter(op => op.type === 'dy-generation' && op.status !== 'failed');
         if (queue.length === 0) return;
 
         this.state.dyContextProcessing = true;
@@ -7926,9 +7997,11 @@ export const App = {
                         op.retryCount = retryCount;
                         await Storage.put('syncQueue', op).catch(() => { });
                     } else {
-                        toast(`DyContext job dropped: ${e?.message || 'error'}`);
-                        await Storage.removeFromSyncQueue(op.id).catch(() => { });
-                        if (key) this.state.queue.delete(key);
+                        op.status = 'failed';
+                        op.retryCount = retryCount;
+                        op.lastError = e?.message || String(e);
+                        await Storage.put('syncQueue', op);
+                        toast('Context generation failed. The job was kept for retry.');
                     }
                 }
             }
@@ -8118,42 +8191,7 @@ export const App = {
             .catch(e => console.error('DyContext generation failed', e));
     },
     async manualSync() {
-        if (!navigator.onLine) {
-            toast('Offline: sync will run when you are online');
-            return;
-        }
-        if (!this.isReady()) { toast('Complete setup first'); return; }
-        if (this.state.syncing) { toast('Sync already in progress'); return; }
-
-        this.state.syncing = true;
-        this.setRefreshDecksSpinning(true);
-
-        try {
-            // Always push first to save local progress
-            if (this.state.queue.size > 0) {
-                await this.pushQueue();
-                this.state.lastPush = new Date().toISOString();
-                await Storage.put('meta', { key: 'lastPush', value: this.state.lastPush });
-            }
-            // Then pull to get updates
-            await this.pullFromNotion({ forceFull: true });
-            this.state.lastPull = new Date().toISOString();
-            await Storage.put('meta', { key: 'lastPull', value: this.state.lastPull });
-
-            this.state.lastSync = new Date().toISOString();
-            await Storage.put('meta', { key: 'lastSync', value: this.state.lastSync });
-            this.renderConnection();
-            toast('Synced with Notion');
-        } catch (e) {
-            console.error('Manual sync failed', e);
-            toast('Sync failed - check connection');
-        } finally {
-            this.state.syncing = false;
-            this.setRefreshDecksSpinning(false);
-            if (this.state.queue.size > 0) {
-                this.requestAutoSyncSoon(MIN_PUSH_INTERVAL_MS + 100);
-            }
-        }
+        return this.syncNow();
     },
     startAutoSync() {
         if (this.state.autoSyncTimer) clearInterval(this.state.autoSyncTimer);
@@ -8192,7 +8230,7 @@ export const App = {
         const wantsPull = !this.state.session && (now - lastPullMs > MIN_PULL_INTERVAL_MS);
         // Never pull while there are pending local mutations; a pull can overwrite local edits or
         // break deck/card references before the queue finishes pushing.
-        const wantsPush = this.state.queue.size > 0;
+        const wantsPush = Array.from(this.state.queue.values()).some(op => op.type !== 'dy-generation' && op.status !== 'failed');
         const canPushNow = wantsPush && (this.state.lastPush == null || (now - lastPushMs > MIN_PUSH_INTERVAL_MS));
         if (!wantsPull && !wantsPush) return;
         // If we have pending work but are within the push cooldown, schedule another tick close to the allowed time.
@@ -8231,7 +8269,7 @@ export const App = {
             this.state.syncing = false;
             this.updateSyncButtonState();
             // If more work was added to the queue during sync, schedule another tick.
-            if (this.state.queue.size > 0) {
+            if (Array.from(this.state.queue.values()).some(op => op.type !== 'dy-generation' && op.status !== 'failed')) {
                 this.requestAutoSyncSoon(MIN_PUSH_INTERVAL_MS + 100);
             }
         }
@@ -8578,6 +8616,7 @@ export const App = {
         this.updateGhostInkControlsState();
     },
     async rate(rating) {
+        if (this.state.ratingPending || this.state._advancingSession) return;
         const card = this.state.selectedCard;
         if (!card) return;
         if (!this.state.answerRevealed) {
@@ -8610,6 +8649,8 @@ export const App = {
         // Preview mode: never modify scheduling (independent of due/all selection).
         const previewMode = !!this.state.session?.noScheduleChanges;
 
+        this.state.ratingPending = true;
+        this.setRatingEnabled(false);
         try {
 
             if (previewMode) {
@@ -8750,6 +8791,9 @@ export const App = {
             card.leech = previousState.leech;
             card.suspended = previousState.suspended ? 1 : 0;
             toast('Rating failed, please try again');
+            this.setRatingEnabled(true);
+        } finally {
+            this.state.ratingPending = false;
         }
     },
     nextCard() {
@@ -9651,7 +9695,7 @@ export const App = {
             toast(`Imported ${importedCount} cards from .apkg`);
 
             // Trigger sync if online
-            if (this.state.queue.size > 0) {
+            if (Array.from(this.state.queue.values()).some(op => op.type !== 'dy-generation' && op.status !== 'failed')) {
                 this.requestAutoSyncSoon(2000, 'import');
             }
         } catch (e) {
@@ -10992,6 +11036,10 @@ export const App = {
             return;
         }
         if (!this.state.settings.aiKey) { toast('Add an AI key in Settings'); return; }
+        const cardId = this.state.selectedCard.id;
+        const session = this.state.session;
+        const attempt = this.state.aiAttempt = (this.state.aiAttempt || 0) + 1;
+        const current = () => this.state.selectedCard?.id === cardId && this.state.session === session && this.state.aiAttempt === attempt;
         const deck = this.deckById(this.state.selectedCard.deckId);
         const promptTemplate = deck?.aiPrompt || DEFAULT_AI_PROMPT;
         // Swap question and answer if card is reversed
@@ -11015,6 +11063,7 @@ export const App = {
             el('#aiFeedback').classList.remove('hidden');
             el('#aiFeedback').innerHTML = 'Thinking...';
             const res = await this.callAI(provider, model, prompt, this.state.settings.aiKey);
+            if (!current()) return;
             // Validate response before rendering
             if (!res || typeof res !== 'string') {
                 throw new Error('Invalid response from AI');
@@ -11024,6 +11073,7 @@ export const App = {
             this.renderMath(el('#aiFeedback'));
             this.reveal();
         } catch (e) {
+            if (!current()) return;
             // Comprehensive error boundary - ensure all UI state is reset
             const feedback = el('#aiFeedback');
             if (feedback) {
@@ -11366,6 +11416,9 @@ export const App = {
         });
     },
     async recordAnswer() {
+        const card = this.state.selectedCard;
+        const attempt = this.state.aiAttempt;
+        const current = () => this.state.selectedCard === card && this.state.aiAttempt === attempt;
         const isAiMode = normalizeRevisionMode(el('#revisionMode')?.value) === REVISION_MODE_AI;
         if (!isAiMode) {
             toast('Mic is available in AI mode only.');
@@ -11408,6 +11461,7 @@ export const App = {
         } catch (_) {
             return;
         }
+        if (!current()) return;
         const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
         const rec = new SR();
         rec.lang = 'en-US';
@@ -11421,6 +11475,7 @@ export const App = {
         if (finalTranscript) finalTranscript += ' ';
 
         rec.onresult = (e) => {
+            if (!current()) return;
             let interim = '';
             for (let i = e.resultIndex; i < e.results.length; ++i) {
                 if (e.results[i].isFinal) {
@@ -11439,6 +11494,7 @@ export const App = {
         this.setAiControlsLocked(false);
 
         rec.onerror = (e) => {
+            if (!current() || this.state.currentRecorder !== rec) return;
             if (e.error !== 'aborted') {
                 el('#aiFeedback').innerHTML = '';
                 if (['not-allowed', 'service-not-allowed', 'permission-denied'].includes(e.error)) {
@@ -11453,6 +11509,7 @@ export const App = {
             this.setAiControlsLocked(this.state.aiLocked);
         };
         rec.onend = () => {
+            if (!current() || this.state.currentRecorder !== rec) return;
             if (el('#aiFeedback').innerHTML.includes('Listening') && this.state.userStoppedMic) {
                 el('#aiFeedback').innerHTML = 'Captured. Now send.';
             } else if (el('#aiFeedback').innerHTML.includes('Listening')) {
@@ -11466,6 +11523,9 @@ export const App = {
         rec.start();
     },
     async recordWithCloudSTT() {
+        const card = this.state.selectedCard;
+        const attempt = this.state.aiAttempt;
+        const current = () => this.state.selectedCard === card && this.state.aiAttempt === attempt;
         const provider = this.state.settings.sttProvider;
         const model = this.state.settings.sttModel || this.getDefaultSttModel(provider);
         const key = this.state.settings.sttKey;
@@ -11500,6 +11560,7 @@ export const App = {
                 };
 
                 cleanupStream();
+                if (!current()) return;
                 el('#aiFeedback').innerHTML = 'Transcribing...';
                 this.state.currentRecorder = null;
                 this.setAiControlsLocked(this.state.aiLocked);
@@ -11514,6 +11575,7 @@ export const App = {
                         transcript = await this.transcribeWithGemini(audioBlob, model, key, prompt);
                     }
 
+                    if (!current()) return;
                     if (transcript) {
                         const current = el('#aiAnswer').value.trim();
                         el('#aiAnswer').value = current ? `${current} ${transcript}` : transcript;
@@ -11526,6 +11588,7 @@ export const App = {
                     this.state.activeMicButton = null;
                     this.setAiControlsLocked(false);
                 } catch (e) {
+                    if (!current()) return;
                     el('#aiFeedback').innerHTML = '';
                     toast('Transcription failed: ' + e.message);
                     this.mediaRecorder = null;

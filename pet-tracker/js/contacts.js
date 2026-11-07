@@ -65,8 +65,7 @@ const Contacts = {
             synced: false
         };
 
-        await PetTracker.DB.put(PetTracker.STORES.CONTACTS, contact);
-        await PetTracker.SyncQueue.add({
+        await PetTracker.SyncQueue.save({
             type: 'create',
             store: 'contacts',
             recordId: contact.id,
@@ -95,8 +94,7 @@ const Contacts = {
             synced: false
         };
 
-        await PetTracker.DB.put(PetTracker.STORES.CONTACTS, updated);
-        await PetTracker.SyncQueue.add({
+        await PetTracker.SyncQueue.save({
             type: 'update',
             store: 'contacts',
             recordId: id,
@@ -118,14 +116,12 @@ const Contacts = {
         const contact = await PetTracker.DB.get(PetTracker.STORES.CONTACTS, id);
         if (!contact) return;
 
-        await PetTracker.SyncQueue.add({
+        await PetTracker.SyncQueue.save({
             type: 'delete',
             store: 'contacts',
             recordId: id,
             data: { notionId: contact.notionId }
         });
-
-        await PetTracker.DB.delete(PetTracker.STORES.CONTACTS, id);
 
         // Update sync UI
         if (PetTracker.Sync?.updatePendingCount) {

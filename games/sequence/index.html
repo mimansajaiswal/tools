@@ -1745,6 +1745,8 @@
 
     let peer = null;
     let connections = new Map();
+    const disconnectTimers = new Map();
+    const REJOIN_GRACE_MS = 60000;
     let hostConn = null;
     let isHost = false;
     let selfId = null;
@@ -3090,6 +3092,7 @@
     }
 
     function assignTeams() {
+      if (hostState.gameStarted) return;
       if (!hostState.teamMode) {
         hostState.teamCount = hostState.players.length;
         hostState.players.forEach((player, index) => {
@@ -3306,13 +3309,18 @@
     }
 
     function handleAction(playerId, action) {
+      if (!action || !hostState.players.some(p => p.id === playerId)) return;
+      const hostAction = playerId === selfId && isHost;
       if (action.type === "choose_team") {
+        if (hostState.gameStarted) return;
         const targetId = action.playerId || playerId;
+        if (targetId !== playerId && !hostAction) return;
         setPlayerTeam(targetId, Number(action.team));
         broadcastState();
         return;
       }
       if (action.type === "reset_game") {
+        if (!hostAction) return;
         resetGame();
         return;
       }
@@ -3689,30 +3697,39 @@
           handleIncoming(conn.peer, data);
         });
         conn.on("close", () => {
+          if (!isHost || connections.get(conn.peer) !== conn) return;
           connections.delete(conn.peer);
-          const currentTurnId = hostState.players[hostState.turnIndex]?.id || null;
-          hostState.players = hostState.players.filter(p => p.id !== conn.peer);
-          delete hostState.hands[conn.peer];
-          if (hostState.players.length === 0) {
-            hostState.turnIndex = 0;
-            hostState.turnEndsAt = null;
-          } else if (hostState.gameStarted) {
-            const currentIndex = hostState.players.findIndex(p => p.id === currentTurnId);
-            if (currentIndex === -1) {
-              hostState.turnIndex = hostState.turnIndex % hostState.players.length;
-            } else {
-              hostState.turnIndex = (currentIndex + 1) % hostState.players.length;
-            }
-            setTurnTimer();
-          } else if (hostState.turnIndex >= hostState.players.length) {
-            hostState.turnIndex = 0;
-          }
-          assignTeams();
-          logHost(`Player ${conn.peer} left the room.`, false);
-          updateLobbyControls();
+          const player = hostState.players.find(p => p.id === conn.peer);
+          if (!player) return;
+          player.connected = false;
+          disconnectTimers.set(conn.peer, setTimeout(() => {
+            disconnectTimers.delete(conn.peer);
+            if (player.connected === false) removeRoomPlayer(player.id);
+          }, REJOIN_GRACE_MS));
+          logHost(`${player.name} disconnected. Their place is held for 60 seconds.`, false);
           broadcastState();
         });
       });
+    }
+
+    function removeRoomPlayer(playerId) {
+      const currentId = hostState.players[hostState.turnIndex]?.id;
+      const oldIndex = hostState.turnIndex;
+      clearTimeout(disconnectTimers.get(playerId));
+      disconnectTimers.delete(playerId);
+      hostState.players = hostState.players.filter(p => p.id !== playerId);
+      delete hostState.hands[playerId];
+      if (!hostState.players.length) {
+        hostState.turnIndex = 0;
+        hostState.turnEndsAt = null;
+      } else {
+        const preserved = hostState.players.findIndex(p => p.id === currentId);
+        hostState.turnIndex = preserved >= 0 ? preserved : oldIndex % hostState.players.length;
+        if (preserved < 0) setTurnTimer();
+      }
+      assignTeams();
+      updateLobbyControls();
+      broadcastState();
     }
 
     function replaceHostId(newId) {
@@ -3802,12 +3819,21 @@
         }
         const existingIndex = hostState.players.findIndex(p => p.token && p.token === token);
         if (existingIndex !== -1) {
-          const oldId = hostState.players[existingIndex].id;
-          hostState.players[existingIndex].id = peerId;
-          if (hostState.hands[oldId]) {
-            hostState.hands[peerId] = hostState.hands[oldId];
-            delete hostState.hands[oldId];
+          const player = hostState.players[existingIndex];
+          const oldId = player.id;
+          clearTimeout(disconnectTimers.get(oldId));
+          disconnectTimers.delete(oldId);
+          if (oldId !== peerId) {
+            const oldConnection = connections.get(oldId);
+            connections.delete(oldId);
+            oldConnection?.close();
+            if (hostState.hands[oldId]) {
+              hostState.hands[peerId] = hostState.hands[oldId];
+              delete hostState.hands[oldId];
+            }
           }
+          player.id = peerId;
+          player.connected = true;
           logHost(`${playerName} rejoined the room.`, false);
           broadcastState();
           return;
@@ -3835,6 +3861,7 @@
         broadcastState();
         return;
       }
+      if (data.type === "leave") { removeRoomPlayer(peerId); return; }
       if (data.type === "action") {
         handleAction(peerId, data.action);
       }
@@ -4261,6 +4288,9 @@
 
     function leaveRoom({ preserveSession = false } = {}) {
       cancelAutoReconnect();
+      if (!isHost && hostConn?.open && !preserveSession) hostConn.send({ type: "leave" });
+      disconnectTimers.forEach(timer => clearTimeout(timer));
+      disconnectTimers.clear();
       if (peer) peer.destroy();
       if (preserveSession) {
         saveSession(buildLeaveSessionSnapshot());
@@ -4438,13 +4468,17 @@
     const RECONNECT_INTERVAL = 5000;
 
     function scheduleAutoReconnect() {
+      if (reconnectAttempts > 0) return;
       if (reconnectTimer) clearTimeout(reconnectTimer);
       reconnectAttempts = 0;
       attemptReconnect();
     }
 
     function attemptReconnect() {
-      if (isHost || hostConn) return;
+      if (isHost || (hostConn?.open && localState)) return;
+      if (hostConn && !hostConn.open) {
+        const pending = hostConn; hostConn = null; pending.close();
+      }
       const session = loadSession();
       if (!session || session.role !== "client" || !session.joinCode) return;
       if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
@@ -4463,6 +4497,7 @@
         connectToHost(session.joinCode);
       }
       reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
         if (!hostConn || !localState) {
           attemptReconnect();
         }
@@ -4480,11 +4515,14 @@
     function connectToHost(code) {
       if (!peer || !code) return;
       if (hostConn) {
-        hostConn.close();
+        const old = hostConn; hostConn = null; old.close();
       }
-      hostConn = peer.connect(code);
-      hostConn.on("data", data => {
+      const conn = peer.connect(code);
+      hostConn = conn;
+      conn.on("data", data => {
+        if (hostConn !== conn) return;
         if (data.type === "state") {
+          cancelAutoReconnect();
           const wasInRoom = !!(localState && localState.players && localState.players.length > 0);
           renderState(data.payload);
           const isNowInRoom = !!(data.payload.players && data.payload.players.length > 0);
@@ -4512,19 +4550,26 @@
           handleHostDisconnect();
         }
       });
-      hostConn.on("open", () => {
-        cancelAutoReconnect();
-        hostConn.send({
+      conn.on("open", () => {
+        if (hostConn !== conn) return;
+        conn.send({
           type: "join",
           name: pendingJoinName || playerNameInput.value || "Player",
           token: pendingJoinToken || ensureToken("client")
         });
       });
-      hostConn.on("close", () => {
-        handleHostDisconnect();
+      setTimeout(() => {
+        if (hostConn === conn && !localState) {
+          hostConn = null;
+          conn.close();
+          if (reconnectAttempts === 0) scheduleAutoReconnect();
+        }
+      }, RECONNECT_INTERVAL);
+      conn.on("close", () => {
+        if (hostConn === conn) handleHostDisconnect();
       });
-      hostConn.on("error", () => {
-        handleHostDisconnect();
+      conn.on("error", () => {
+        if (hostConn === conn) handleHostDisconnect();
       });
     }
 

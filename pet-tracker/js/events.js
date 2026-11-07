@@ -8,8 +8,8 @@ const Events = {
      * Create a new event
      */
     create: async (eventData) => {
-        const event = {
-            id: PetTracker.generateId(),
+        let event = {
+            id: eventData.id || PetTracker.generateId(),
             title: eventData.title || 'Event',
             petIds: Array.isArray(eventData.petIds) ? eventData.petIds : [eventData.petIds].filter(Boolean),
             eventTypeId: eventData.eventTypeId || null,
@@ -36,8 +36,7 @@ const Events = {
             synced: false
         };
 
-        await PetTracker.DB.put(PetTracker.STORES.EVENTS, event);
-        await PetTracker.SyncQueue.add({
+        event = await PetTracker.SyncQueue.save({
             type: 'create',
             store: 'events',
             recordId: event.id,
@@ -67,8 +66,7 @@ const Events = {
             synced: false
         };
 
-        await PetTracker.DB.put(PetTracker.STORES.EVENTS, updated);
-        await PetTracker.SyncQueue.add({
+        await PetTracker.SyncQueue.save({
             type: 'update',
             store: 'events',
             recordId: id,
@@ -90,7 +88,7 @@ const Events = {
         const event = await PetTracker.DB.get(PetTracker.STORES.EVENTS, id);
         if (!event) return;
 
-        await PetTracker.SyncQueue.add({
+        await PetTracker.SyncQueue.save({
             type: 'delete',
             store: 'events',
             recordId: id,
@@ -99,8 +97,6 @@ const Events = {
                 googleCalendarEventId: event.googleCalendarEventId || null
             }
         });
-
-        await PetTracker.DB.delete(PetTracker.STORES.EVENTS, id);
 
         // Update sync UI
         if (PetTracker.Sync?.updatePendingCount) {

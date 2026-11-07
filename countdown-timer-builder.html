@@ -1345,6 +1345,7 @@
 
         // Mock tick logic for preview
         let confettiInterval;
+        let completionTimeout;
 
         function tick() {
             const now = new Date();
@@ -1367,8 +1368,8 @@
                         if (state.showConfetti) confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#5A534D', '#8B8296', '#C5AFA8'] });
 
                         // Wait for hideDelay then dim
-                        setTimeout(() => {
-                            if (state.hideOnComplete) container.style.opacity = '0.2';
+                        completionTimeout = setTimeout(() => {
+                            if (state.finished && state.hideOnComplete) container.style.opacity = '0.2';
                             if (confettiInterval) clearInterval(confettiInterval);
                         }, state.hideDelay * 1000);
                     }
@@ -1383,6 +1384,7 @@
                     if (state.showConfetti && Math.random() > 0.8) confetti({ particleCount: 20, spread: 40, startVelocity: 20, origin: { y: 0.7 }, disableForReducedMotion: true });
                 }
             } else {
+                clearTimeout(completionTimeout);
                 state.finished = false;
                 container.style.opacity = '1';
                 if (confettiInterval) clearInterval(confettiInterval);

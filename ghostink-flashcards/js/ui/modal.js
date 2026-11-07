@@ -11,6 +11,7 @@ import { el } from '../config.js';
 const focusStack = [];
 let focusTimeout = null;
 let activeModal = null;
+const modalStack = [];
 
 const handleTabKey = (e) => {
     if (e.key !== 'Tab' || !activeModal) return;
@@ -44,6 +45,9 @@ const handleTabKey = (e) => {
 export const openModal = (id) => {
     const m = el('#' + id);
     if (!m) return;
+
+    if (modalStack.includes(m)) return;
+    modalStack.push(m);
 
     // Push current focus to stack if valid
     if (document.activeElement && document.body.contains(document.activeElement)) {
@@ -79,10 +83,10 @@ export const closeModal = (id) => {
     m.classList.remove('flex');
     m.removeAttribute('aria-modal');
 
-    if (activeModal === m) {
-        document.removeEventListener('keydown', handleTabKey);
-        activeModal = null;
-    }
+    const index = modalStack.indexOf(m);
+    if (index >= 0) modalStack.splice(index, 1);
+    activeModal = modalStack.at(-1) || null;
+    if (!activeModal) document.removeEventListener('keydown', handleTabKey);
 
     if (focusTimeout) clearTimeout(focusTimeout);
 

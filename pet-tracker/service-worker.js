@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pet-tracker-v19';
+const CACHE_NAME = 'pet-tracker-v21';
 const STATIC_ASSETS = [
     './',
     './index.html',
@@ -64,7 +64,7 @@ self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then((keys) => {
             return Promise.all(
-                keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+                keys.filter((key) => key.startsWith('pet-tracker-v') && key !== CACHE_NAME).map((key) => caches.delete(key))
             );
         })
     );
@@ -128,39 +128,21 @@ self.addEventListener('fetch', (event) => {
                 const files = formData.getAll('media');
 
                 if (files.length > 0) {
-                    // Try to send to an active client first
-                    const client = await self.clients.get(event.resultingClientId);
-                    if (client) {
-                        client.postMessage({
-                            type: 'SHARE_TARGET',
-                            files: files
-                        });
-                    } else {
-                        // No active client - persist to IDB for later consumption
-                        try {
-                            const db = await openShareDB();
-                            const tx = db.transaction('pendingShares', 'readwrite');
-                            const store = tx.objectStore('pendingShares');
-
-                            for (const file of files) {
-                                const arrayBuffer = await file.arrayBuffer();
-                                store.put({
-                                    id: `share_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-                                    name: file.name,
-                                    type: file.type,
-                                    data: arrayBuffer,
-                                    timestamp: Date.now()
-                                });
-                            }
-
-                            await new Promise((resolve, reject) => {
-                                tx.oncomplete = resolve;
-                                tx.onerror = () => reject(tx.error);
-                            });
-                        } catch (e) {
-                            console.error('[SW] Failed to persist shared files:', e);
-                        }
-                    }
+                    const records = await Promise.all(files.map(async file => ({
+                        id: crypto.randomUUID(), name: file.name, type: file.type,
+                        data: await file.arrayBuffer(), timestamp: Date.now()
+                    })));
+                    const db = await openShareDB();
+                    const tx = db.transaction('pendingShares', 'readwrite');
+                    const store = tx.objectStore('pendingShares');
+                    const committed = new Promise((resolve, reject) => {
+                        tx.oncomplete = resolve;
+                        tx.onerror = () => reject(tx.error);
+                        tx.onabort = () => reject(tx.error);
+                    });
+                    records.forEach(record => store.put(record));
+                    await committed;
+                    db.close();
                 }
 
                 return Response.redirect('./index.html?share=true', 303);

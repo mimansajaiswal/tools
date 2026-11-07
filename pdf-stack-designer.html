@@ -434,6 +434,7 @@
             pageImages: [], // Array of { canvas, width, height }
             config: { ...DEFAULT_CONFIG },
             renderToken: 0,
+            loadToken: 0,
             limitDebounce: null
         };
 
@@ -775,19 +776,27 @@
                 return;
             }
 
+            const loadToken = ++state.loadToken;
+            ++state.renderToken;
+            els.downloadBtn.disabled = true;
+            if (els.loadUrlBtn) els.loadUrlBtn.disabled = false;
             setStatus('Loading PDF...');
             els.placeholder.style.display = 'none';
 
             try {
                 const arrayBuffer = await file.arrayBuffer();
-                state.pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
+                if (loadToken !== state.loadToken) return;
+                state.pdfDoc = pdfDoc;
                 setStatus(`PDF Loaded (${state.pdfDoc.numPages} pages). Rendering...`);
                 await loadPagesFromDoc();
 
+                if (loadToken !== state.loadToken) return;
                 els.downloadBtn.disabled = false;
                 els.canvas.classList.remove('hidden');
             } catch (err) {
+                if (loadToken !== state.loadToken) return;
                 console.error(err);
                 setStatus(`Error loading PDF: ${err.message}`, 'error');
             }
@@ -817,23 +826,30 @@
                 return;
             }
 
+            const loadToken = ++state.loadToken;
+            ++state.renderToken;
+            els.downloadBtn.disabled = true;
             setStatus('Loading PDF from URL...');
             els.placeholder.style.display = 'none';
             if (els.loadUrlBtn) els.loadUrlBtn.disabled = true;
 
             try {
-                state.pdfDoc = await pdfjsLib.getDocument({ url: parsedUrl.toString(), withCredentials: false }).promise;
+                const pdfDoc = await pdfjsLib.getDocument({ url: parsedUrl.toString(), withCredentials: false }).promise;
 
+                if (loadToken !== state.loadToken) return;
+                state.pdfDoc = pdfDoc;
                 setStatus(`PDF Loaded (${state.pdfDoc.numPages} pages). Rendering...`);
                 await loadPagesFromDoc();
 
+                if (loadToken !== state.loadToken) return;
                 els.downloadBtn.disabled = false;
                 els.canvas.classList.remove('hidden');
             } catch (err) {
+                if (loadToken !== state.loadToken) return;
                 console.error(err);
                 setStatus(`Error loading PDF from URL: ${err.message}`, 'error');
             } finally {
-                if (els.loadUrlBtn) els.loadUrlBtn.disabled = false;
+                if (loadToken === state.loadToken && els.loadUrlBtn) els.loadUrlBtn.disabled = false;
             }
         }
 

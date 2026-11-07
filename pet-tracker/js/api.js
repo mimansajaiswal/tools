@@ -45,7 +45,7 @@ const API = {
 
         if (res.status === 429) {
             const retryAfter = parseInt(res.headers.get('Retry-After') || '1', 10);
-            throw { isRateLimit: true, retryAfter, message: `Rate limited. Retry after ${retryAfter}s` };
+            throw { status: 429, isRateLimit: true, retryAfter, message: `Rate limited. Retry after ${retryAfter}s` };
         }
 
         if (!res.ok) {
@@ -61,7 +61,9 @@ const API = {
             } catch (e) {
                 if (!isWorkerAuthError && txt.length < 100) errorMsg += `: ${txt}`;
             }
-            throw new Error(errorMsg);
+            const error = new Error(errorMsg);
+            error.status = res.status;
+            throw error;
         }
 
         return res.json();
